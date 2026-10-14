@@ -245,6 +245,82 @@ class TestPurchaseItemEditor(TestCase):
 		variant = get_or_create_variant(doc.name, {self.colour: "Red", self.size: "Small"})
 		self.assertEqual(frappe.db.get_value("Item", variant, "variant_of"), doc.name)
 
+	def test_template_create_accepts_attributes_without_values(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		values = self._values(
+			attributes=[
+				{"attribute": self.colour, "values": []},
+				{"attribute": self.size, "values": []},
+			],
+			primary_attribute=self.colour,
+		)
+		result = self._create_as("purchase_manager", values)
+		doc = frappe.get_doc("Item", result["name"])
+
+		self.assertEqual(doc.has_variants, 1)
+		self.assertEqual([row.attribute for row in doc.attributes], [self.colour, self.size])
+		self.assertTrue(all(row.mapping for row in doc.attributes))
+		self.assertEqual([get_mapping_values(row.mapping) for row in doc.attributes], [[], []])
+		payload = get_item_editor(doc.name)
+		rows = payload["values"]["attributes"]
+		self.assertEqual([row["all_values_allowed"] for row in rows], [True, True])
+		self.assertEqual([row["values"] for row in rows], [[], []])
+		self.assertEqual([row["value_count"] for row in rows], [3, 2])
+		self.assertNotIn("attributes", payload["options"])
+
+	def test_update_keeps_an_unrestricted_mapping_when_values_stay_empty(self):
+		from essdee_yrp.purchase.item_editor import update_item
+
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[{"attribute": self.colour, "values": []}]),
+		)
+		doc = frappe.get_doc("Item", created["name"])
+		payload = update_item(
+			doc.name,
+			self._values(
+				doc.item_name,
+				item_group=doc.item_group,
+				stock_uom=doc.stock_uom,
+				description="Renamed description",
+				attributes=[{"attribute": self.colour, "values": []}],
+			),
+			doc.modified,
+		)
+
+		self.assertTrue(payload["values"]["attributes"][0]["all_values_allowed"])
+		self.assertEqual(get_mapping_values(doc.attributes[0].mapping), [])
+
+	def test_update_adds_an_attribute_without_values(self):
+		from essdee_yrp.purchase.item_editor import update_item
+
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[self._attribute_row(self.colour, "Red")]),
+		)
+		doc = frappe.get_doc("Item", created["name"])
+		mapping_modified = frappe.db.get_value(
+			"YRP Item Item Attribute Mapping", doc.attributes[0].mapping, "modified"
+		)
+		payload = update_item(
+			doc.name,
+			self._values(
+				doc.item_name,
+				item_group=doc.item_group,
+				stock_uom=doc.stock_uom,
+				attributes=[
+					{**self._attribute_row(self.colour, "Red"), "mapping_modified": mapping_modified},
+					{"attribute": self.size, "values": []},
+				],
+			),
+			doc.modified,
+		)
+
+		rows = payload["values"]["attributes"]
+		self.assertEqual([row["attribute"] for row in rows], [self.colour, self.size])
+		self.assertEqual([row["all_values_allowed"] for row in rows], [False, True])
+
 	def test_mapping_fill_failure_is_atomic_when_the_request_rolls_back(self):
 		from essdee_yrp.purchase import item_editor
 
@@ -307,10 +383,6 @@ class TestPurchaseItemEditor(TestCase):
 			(self._values(created["name"]), "already exists"),
 			(self._values(item_group=self.group_node), "leaf Item Group"),
 			(self._values(stock_uom=self.secondary_uom), "Secondary UOM"),
-			(
-				self._values(attributes=[{"attribute": self.colour, "values": []}]),
-				"at least one value",
-			),
 			(
 				self._values(
 					attributes=[self._attribute_row(self.colour, "Red")],
@@ -427,10 +499,8 @@ class TestPurchaseItemEditor(TestCase):
 			unrestricted_payload = item_editor.get_item_editor(unrestricted.name)
 			unrestricted_values = unrestricted_payload["values"]["attributes"][0]
 			self.assertTrue(unrestricted_values["all_values_allowed"])
-			self.assertEqual(
-				unrestricted_values["values"],
-				[{"name": attribute_value_name(self.length, "1"), "label": "1"}],
-			)
+			self.assertEqual(unrestricted_values["values"], [])
+			self.assertEqual(unrestricted_values["value_count"], 1)
 			item_editor.update_item(
 				unrestricted.name,
 				self._values(
@@ -583,11 +653,7 @@ class TestPurchaseItemEditor(TestCase):
 		)
 
 	def test_update_appends_values_before_variants_then_locks_all_attribute_changes(self):
-		from essdee_yrp.purchase.item_editor import (
-			add_attribute_values,
-			get_item_editor,
-			update_item,
-		)
+		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
 
 		created = self._create_as(
 			"item_manager",
@@ -623,13 +689,6 @@ class TestPurchaseItemEditor(TestCase):
 		doc.reload()
 		with self.assertRaisesRegex(frappe.ValidationError, "Locked: variants exist"):
 			update_item(doc.name, values, doc.modified)
-		with self.assertRaisesRegex(frappe.ValidationError, "Locked: variants exist"):
-			add_attribute_values(
-				doc.name,
-				self.colour,
-				["Green"],
-				values["attributes"][0]["mapping_modified"],
-			)
 
 	def test_variant_items_are_not_exposed_or_updated(self):
 		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
@@ -646,36 +705,12 @@ class TestPurchaseItemEditor(TestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "Variant items are not shown here"):
 			update_item(variant, self._values(variant_doc.item_name), variant_doc.modified)
 
-	def test_removing_last_or_price_referenced_value_is_rejected(self):
-		from essdee_yrp.purchase.item_editor import update_item
-
-		created = self._create_as(
-			"item_manager",
-			self._values(attributes=[self._attribute_row(self.colour, "Red", "Blue")]),
-		)
-		doc = frappe.get_doc("Item", created["name"])
-		mapping = frappe.get_doc("YRP Item Item Attribute Mapping", doc.attributes[0].mapping)
-		base = self._values(
-			doc.item_name,
-			item_group=doc.item_group,
-			stock_uom=doc.stock_uom,
-			attributes=[
-				{
-					**self._attribute_row(self.colour, "Red", "Blue"),
-					"mapping_modified": mapping.modified,
-				}
-			],
-		)
-		frappe.set_user(self.fixture_users["item_manager"])
-		base["attributes"][0]["values"] = []
-		with self.assertRaisesRegex(frappe.ValidationError, "last value"):
-			update_item(doc.name, base, doc.modified)
-
+	def _make_colour_price(self, item, value):
 		frappe.set_user("Administrator")
 		frappe.get_doc(
 			{
 				"doctype": "YRP Item Price",
-				"item_name": doc.name,
+				"item_name": item,
 				"supplier": self.supplier,
 				"uom": self.uom,
 				"from_date": add_days(nowdate(), 10),
@@ -687,20 +722,83 @@ class TestPurchaseItemEditor(TestCase):
 						"moq": 0,
 						"price": 10,
 						"lead_time": 1,
-						"attribute_value": attribute_value_name(self.colour, "Blue"),
+						"attribute_value": attribute_value_name(self.colour, value),
 					}
 				],
 			}
 		).insert(ignore_permissions=True)
-		doc.reload()
-		mapping.reload()
-		base["attributes"][0] = {
-			**self._attribute_row(self.colour, "Red"),
-			"mapping_modified": mapping.modified,
-		}
+
+	def _update_colour_values(self, item, values, mapping_modified=None):
+		from essdee_yrp.purchase.item_editor import update_item
+
+		doc = frappe.get_doc("Item", item)
+		mapping = doc.attributes[0].mapping
 		frappe.set_user(self.fixture_users["item_manager"])
+		return update_item(
+			doc.name,
+			self._values(
+				doc.item_name,
+				item_group=doc.item_group,
+				stock_uom=doc.stock_uom,
+				attributes=[
+					{
+						"attribute": self.colour,
+						"values": values,
+						"mapping_modified": mapping_modified
+						or frappe.db.get_value("YRP Item Item Attribute Mapping", mapping, "modified"),
+					}
+				],
+			),
+			doc.modified,
+		)
+
+	def test_price_referenced_value_cannot_be_dropped_but_mapping_can_allow_all(self):
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[self._attribute_row(self.colour, "Red", "Blue")]),
+		)
+		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
+		self._make_colour_price(created["name"], "Blue")
+
 		with self.assertRaisesRegex(frappe.ValidationError, "price tier"):
-			update_item(doc.name, base, doc.modified)
+			self._update_colour_values(created["name"], ["Red"])
+		payload = self._update_colour_values(created["name"], [])
+
+		self.assertTrue(payload["values"]["attributes"][0]["all_values_allowed"])
+		self.assertEqual(get_mapping_values(mapping), [])
+		self.assertEqual(
+			frappe.db.count("YRP Item Item Attribute Mapping Value", {"parent": mapping}), 0
+		)
+
+	def test_update_narrows_an_empty_mapping_and_changes_a_restricted_one(self):
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[{"attribute": self.colour, "values": []}]),
+		)
+		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
+
+		payload = self._update_colour_values(created["name"], ["Blue", "Red"])
+		self.assertEqual(get_mapping_values(mapping), ["Blue", "Red"])
+		row = payload["values"]["attributes"][0]
+		self.assertFalse(row["all_values_allowed"])
+		self.assertEqual([value["label"] for value in row["values"]], ["Blue", "Red"])
+
+		self._update_colour_values(created["name"], ["Green"])
+		self.assertEqual(get_mapping_values(mapping), ["Green"])
+
+	def test_narrowing_an_empty_mapping_checks_prices_and_mapping_token(self):
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[{"attribute": self.colour, "values": []}]),
+		)
+		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
+
+		with self.assertRaises(frappe.TimestampMismatchError):
+			self._update_colour_values(created["name"], ["Red"], "2000-01-01 00:00:00")
+		self._make_colour_price(created["name"], "Blue")
+		with self.assertRaisesRegex(frappe.ValidationError, "price tier"):
+			self._update_colour_values(created["name"], ["Red"])
+		self.assertEqual(get_mapping_values(mapping), [])
 
 	def test_unreferenced_attribute_can_be_added_to_an_existing_template_with_a_price(self):
 		from essdee_yrp.purchase.item_editor import update_item
@@ -854,75 +952,103 @@ class TestPurchaseItemEditor(TestCase):
 			[("Red", 0.5, 12.345, 2), ("Blue", 5, 10, 4)],
 		)
 
-	def test_empty_mapping_adds_only_new_global_values_and_stays_empty(self):
-		from essdee_yrp.purchase.item_editor import add_attribute_values, update_item
-
-		frappe.set_user("Administrator")
-		item = frappe.get_doc(
-			{
-				"doctype": "Item",
-				"item_code": f"_Test All Values {frappe.generate_hash(length=8)}",
-				"item_name": f"_Test All Values {frappe.generate_hash(length=8)}",
-				"item_group": self.item_group,
-				"stock_uom": self.uom,
-				"is_stock_item": 1,
-				"is_purchase_item": 1,
-				"is_sales_item": 0,
-				"has_variants": 1,
-				"variant_based_on": "Item Attribute",
-				"attributes": [{"attribute": self.colour}],
-			}
-		).insert(ignore_permissions=True)
-		mapping = frappe.get_doc("YRP Item Item Attribute Mapping", item.attributes[0].mapping)
-		self.assertEqual(get_mapping_values(mapping.name), [])
-
+	def test_values_staged_in_the_dialog_are_created_on_save(self):
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[{"attribute": self.colour, "values": []}]),
+		)
+		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
 		new_value = f"Purple {frappe.generate_hash(length=6)}"
-		frappe.set_user(self.fixture_users["item_manager"])
-		result = add_attribute_values(item.name, self.colour, [new_value], mapping.modified)
-		self.assertTrue(result["all_values_allowed"])
-		self.assertEqual(get_mapping_values(mapping.name), [])
+
+		self._update_colour_values(created["name"], ["Red", new_value])
+
+		self.assertEqual(get_mapping_values(mapping), ["Red", new_value])
 		self.assertTrue(
 			frappe.db.exists(
 				"Item Attribute Value",
 				{"parent": self.colour, "attribute_value": new_value},
 			)
 		)
-		mapping.reload()
-		second_value = f"Orange {frappe.generate_hash(length=6)}"
-		item.reload()
-		update_item(
-			item.name,
+
+	def test_narrowing_a_row_without_a_mapping_record_creates_the_mapping(self):
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[{"attribute": self.colour, "values": []}]),
+		)
+		row = frappe.get_doc("Item", created["name"]).attributes[0]
+		frappe.db.set_value("Item Variant Attribute", row.name, "mapping", None)
+
+		self._update_colour_values(created["name"], ["Red"])
+
+		mapping = frappe.db.get_value("Item Variant Attribute", row.name, "mapping")
+		self.assertTrue(mapping)
+		self.assertEqual(get_mapping_values(mapping), ["Red"])
+
+	def test_values_that_differ_only_by_case_reuse_the_stored_value(self):
+		new_value = f"Purple {frappe.generate_hash(length=6)}"
+		created = self._create_as(
+			"item_manager",
 			self._values(
-				item.item_name,
-				item_group=item.item_group,
-				stock_uom=item.stock_uom,
 				attributes=[
 					{
 						"attribute": self.colour,
-						"mapping_modified": mapping.modified,
-						"values": ["Red", "Blue", "Green", new_value, second_value],
+						"values": ["red", "BLUE", "Red", new_value, new_value.upper()],
 					}
-				],
+				]
 			),
-			item.modified,
 		)
-		self.assertEqual(get_mapping_values(mapping.name), [])
-		self.assertTrue(
-			frappe.db.exists(
-				"Item Attribute Value",
-				{"parent": self.colour, "attribute_value": second_value},
+		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
+
+		self.assertEqual(get_mapping_values(mapping), ["Red", "Blue", new_value])
+		global_values = frappe.get_all(
+			"Item Attribute Value", filters={"parent": self.colour}, pluck="attribute_value"
+		)
+		self.assertNotIn("red", global_values)
+		self.assertEqual([value.casefold() for value in global_values].count(new_value.casefold()), 1)
+
+	def test_value_search_puts_an_exact_match_past_the_page_first(self):
+		from essdee_yrp.purchase.item_editor import search_attribute_values
+
+		attribute = self._make_attribute(
+			f"Many {frappe.generate_hash(length=6)}",
+			[f"Xm {index:03}" for index in range(120)] + ["M"],
+		)
+
+		labels = [row["label"] for row in search_attribute_values(attribute, "m")]
+
+		self.assertEqual(labels[0], "M")
+		self.assertEqual(len(labels), 99)
+
+	def test_reselected_attribute_saves_with_the_loaded_mapping_token(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
+
+		created = self._create_as(
+			"item_manager",
+			self._values(attributes=[self._attribute_row(self.colour, "Red")]),
+		)
+		for values in ([], ["Blue"]):
+			doc = frappe.get_doc("Item", created["name"])
+			loaded = get_item_editor(doc.name)["values"]["attributes"][0]
+			update_item(
+				doc.name,
+				self._values(
+					doc.item_name,
+					item_group=doc.item_group,
+					stock_uom=doc.stock_uom,
+					attributes=[
+						{
+							"attribute": self.colour,
+							"values": values,
+							"mapping_modified": loaded["mapping_modified"],
+						}
+					],
+				),
+				doc.modified,
 			)
-		)
-		mapping.reload()
-		with self.assertRaisesRegex(frappe.ValidationError, "All values are already allowed"):
-			add_attribute_values(item.name, self.colour, ["Red"], mapping.modified)
+			self.assertEqual(get_mapping_values(loaded["mapping"]), values)
 
 	def test_mutations_are_post_only(self):
-		from essdee_yrp.purchase.item_editor import (
-			add_attribute_values,
-			create_item,
-			update_item,
-		)
+		from essdee_yrp.purchase.item_editor import create_item, update_item
 
-		for method in (create_item, update_item, add_attribute_values):
+		for method in (create_item, update_item):
 			self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[method], ["POST"])

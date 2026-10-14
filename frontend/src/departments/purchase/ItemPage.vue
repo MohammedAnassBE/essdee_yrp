@@ -1,5 +1,6 @@
 <template>
 	<DepartmentPage title="Item" back-to="/purchase/items" back-label="Items" :show-title="false" flat full-width inline-navigation>
+		<div class="purchase-record-page erp-workspace">
 		<section class="purchase-record erp-card" aria-label="Item page" :aria-busy="loading">
 			<header class="purchase-record__header">
 				<InlinePageNavigation title-target="purchase-item-title" show-document-navigation :current-name="itemId" document-label="Item" :navigation-disabled="loading || acting" />
@@ -21,9 +22,7 @@
 				<section class="purchase-record-card">
 					<header><div><span>Configuration</span><h2>Attributes</h2></div><strong>{{ values.attributes?.length || 0 }}</strong></header>
 					<Message v-if="workspace.attributes_locked" severity="warn" :closable="false">{{ workspace.attribute_lock_message || "Locked: variants exist" }}</Message>
-					<div v-if="values.attributes?.length" class="item-attributes">
-						<div v-for="row in values.attributes" :key="row.attribute"><strong>{{ row.attribute }}</strong><div><span v-for="value in row.values" :key="value.name || value.label">{{ value.label || value }}</span></div></div>
-					</div>
+					<ItemAttributeValues v-if="values.attributes?.length" :attributes="values.attributes" />
 					<div v-else class="purchase-record-empty">No variant attributes. This is a plain item.</div>
 				</section>
 
@@ -43,6 +42,7 @@
 			</div>
 		</section>
 
+		</div>
 		<DocumentConfirmationDialog v-model:visible="toggleVisible" :title="`${pendingToggle?.label || toggleLabel} Item?`" :message="`${pendingToggle?.label || toggleLabel} ${pendingToggle?.name || itemId}?`" :confirm-label="pendingToggle?.label || toggleLabel" :confirm-icon="pendingToggle?.disabled ? 'pi pi-check' : 'pi pi-ban'" :severity="pendingToggle?.disabled ? 'success' : 'danger'" :busy="acting" @confirm="toggleDisabled" />
 		<DocumentErrorDialog :message="actionError" title="Item could not be updated" @dismiss="actionError = ''" />
 	</DepartmentPage>
@@ -65,6 +65,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
+import ItemAttributeValues from "./item/ItemAttributeValues.vue"
 import { PURCHASE_ROUTES, activePriceTiers, captureRecordTarget, isCurrentRecordRequest, itemSaveValues } from "./purchaseViews.js"
 
 const props = defineProps({ itemId: { type: String, required: true } })
@@ -167,7 +168,8 @@ watch(() => props.itemId, load, { immediate: true })
 </script>
 
 <style scoped>
-.purchase-record { display: flex; width: min(1380px, 100%); min-width: 0; min-height: 560px; margin: 0 auto; overflow: hidden; flex-direction: column; border-top: 3px solid var(--erp-accent); }
+.purchase-record-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
+.purchase-record { display: flex; width: 100%; min-width: 0; overflow: hidden; flex-direction: column; border-top: 3px solid var(--erp-accent); }
 .purchase-record__header { display: flex; min-width: 0; align-items: center; gap: 18px; padding: 13px clamp(16px, 2vw, 24px); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); }
 .purchase-record__identity { display: grid; min-width: 0; gap: 4px; }
 .purchase-record__identity > span, .purchase-record-card header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .045em; text-transform: uppercase; }
@@ -177,17 +179,12 @@ watch(() => props.itemId, load, { immediate: true })
 .purchase-record__facts div { display: grid; min-width: 90px; max-width: 180px; gap: 2px; padding: 0 12px; border-left: 1px solid var(--erp-border); }
 .purchase-record__facts dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; text-transform: uppercase; }
 .purchase-record__facts dd { margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
-.purchase-record__loading, .purchase-record__content { display: grid; gap: 16px; padding: clamp(14px, 2vw, 22px); }
+.purchase-record__loading, .purchase-record__content { display: grid; gap: 16px; padding: clamp(14px, 2vw, 22px) clamp(14px, 2vw, 22px) 14px; }
 .purchase-record__content { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: start; }
 .purchase-record-card { display: grid; min-width: 0; gap: 14px; padding: 17px; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-xs); }
 .purchase-record-card > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .purchase-record-card h2 { margin: 2px 0 0; color: var(--erp-text); font-size: 1rem; }
 .purchase-record-card header > strong { display: grid; width: 34px; height: 34px; color: var(--erp-accent-hover); border-radius: 50%; background: var(--erp-accent-soft); place-items: center; }
-.item-attributes { display: grid; gap: 10px; }
-.item-attributes > div { display: grid; gap: 8px; padding: 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface-muted); }
-.item-attributes strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
-.item-attributes > div > div { display: flex; gap: 6px; flex-wrap: wrap; }
-.item-attributes span { padding: 4px 8px; color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 700; border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-pill-radius); background: var(--erp-accent-soft); }
 .purchase-record-empty { display: grid; min-height: 90px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); place-items: center; }
 .active-prices-table { border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); overflow: hidden; }
 .active-prices-table a { color: var(--erp-accent); font-weight: 700; text-decoration: none; }
@@ -197,5 +194,14 @@ watch(() => props.itemId, load, { immediate: true })
 .active-price-tiers span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-caption); font-weight: 720; }
 .active-price-tiers small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); white-space: nowrap; }
 @media (max-width: 980px) { .purchase-record__header { align-items: flex-start; flex-wrap: wrap; } .purchase-record__facts { width: 100%; margin: 0; order: 3; } .purchase-record__facts div:first-child { padding-left: 0; border-left: 0; } .purchase-record__content { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .purchase-record__identity > div { align-items: flex-start; flex-wrap: wrap; } .purchase-record__header > :deep(.document-action-strip) { width: auto; margin-left: auto; } .purchase-record__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .purchase-record__facts div { min-width: 0; padding-inline: 8px; } .purchase-record__facts dd { white-space: normal; } }
+@media (max-width: 620px) {
+	.purchase-record__header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 10px; padding: 8px 14px; }
+	.purchase-record__header:has(> .document-action-strip) > .purchase-record__identity { grid-column: 1 / -1; grid-row: 2; }
+	.purchase-record__header > :deep(.document-action-strip) { grid-column: 2; grid-row: 1; width: auto; justify-self: end; }
+	.purchase-record__identity > span { display: none; }
+	.purchase-record__identity :deep(.document-status-badge) { flex-shrink: 0; }
+	.purchase-record__facts { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.purchase-record__facts div { min-width: 0; padding-inline: 8px; }
+	.purchase-record__facts dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+}
 </style>

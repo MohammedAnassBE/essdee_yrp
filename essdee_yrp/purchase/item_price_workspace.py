@@ -4,7 +4,13 @@ from collections.abc import Mapping
 
 import frappe
 from frappe import _
-from frappe.model.workflow import apply_workflow, get_transitions, get_workflow, has_approval_access
+from frappe.model.workflow import (
+	apply_workflow,
+	get_transitions,
+	get_workflow,
+	has_approval_access,
+	is_transition_condition_satisfied,
+)
 from frappe.utils import add_days, cint, format_date, nowdate
 from yrp.attribute_links import value as actual_attribute_value
 from yrp.attribute_value_identity import attribute_value_name
@@ -44,27 +50,27 @@ def _workflow_state(doc) -> str:
 	return doc.get(workflow.workflow_state_field) or ""
 
 
-def _state_allows_edit(doc) -> bool:
-	if _workflow_state(doc) != "Draft" or cint(doc.docstatus) != 0:
+def is_editable_by_user(doc) -> bool:
+	"""Desk parity: draft docstatus, the state's allow_edit role and write permission."""
+	if cint(doc.docstatus) != 0:
 		return False
 	workflow = get_workflow(DOCTYPE)
 	state = next((row for row in workflow.states if row.state == _workflow_state(doc)), None)
-	return bool(state and state.allow_edit in frappe.get_roles())
-
-
-def _can_edit(doc) -> bool:
 	return bool(
-		_state_allows_edit(doc)
+		state
+		and state.allow_edit in frappe.get_roles()
 		and frappe.has_permission(DOCTYPE, ptype="write", doc=doc)
 	)
 
 
-def _can_delete(doc) -> bool:
+def is_deletable_by_user(doc) -> bool:
 	return bool(
-		_workflow_state(doc) == "Draft"
-		and cint(doc.docstatus) == 0
-		and frappe.has_permission(DOCTYPE, ptype="delete", doc=doc)
+		is_editable_by_user(doc) and frappe.has_permission(DOCTYPE, ptype="delete", doc=doc)
 	)
+
+
+def _not_editable_message(doc) -> str:
+	return _("This Item Price cannot be edited in state {0}.").format(_workflow_state(doc))
 
 
 def _record(doc) -> dict:
@@ -149,7 +155,7 @@ def _timeline(doc) -> list[dict]:
 		}
 		for row in comments
 	]
-	if doc.approved_by:
+	if doc.approved_by and cint(doc.docstatus) in (1, 2):
 		approved_comment = next(
 			(
 				entry
@@ -205,17 +211,48 @@ def _action_preview(doc, action: str) -> str:
 	)
 
 
+def _state_doc_status(workflow, state: str) -> int:
+	return next((cint(row.doc_status) for row in workflow.states if row.state == state), 0)
+
+
+def _action_payload(doc, workflow, transition) -> dict:
+	return {
+		"action": transition.action,
+		"state": transition.state,
+		"next_state": transition.next_state,
+		"next_state_doc_status": _state_doc_status(workflow, transition.next_state),
+		"label": _(transition.action),
+		"preview": _action_preview(doc, transition.action),
+	}
+
+
 def _actions(doc) -> list[dict]:
 	user = frappe.session.user
+	workflow = get_workflow(DOCTYPE)
 	return [
-		{
-			"action": transition.action,
-			"next_state": transition.next_state,
-			"label": _(transition.action),
-			"preview": _action_preview(doc, transition.action),
-		}
-		for transition in get_transitions(doc)
+		_action_payload(doc, workflow, transition)
+		for transition in get_transitions(doc, workflow)
 		if has_approval_access(user, doc, transition)
+	]
+
+
+def get_save_actions(doc) -> list[dict]:
+	"""Transitions available right after saving: the doc's own, or the initial state's for a new doc."""
+	if not doc.is_new():
+		return _actions(doc)
+	user = frappe.session.user
+	roles = set(frappe.get_roles())
+	workflow = get_workflow(DOCTYPE)
+	initial_state = workflow.states[0].state
+	doc.set(workflow.workflow_state_field, initial_state)
+	new_doc_owner = frappe._dict(owner=user)
+	return [
+		_action_payload(doc, workflow, transition)
+		for transition in workflow.transitions
+		if transition.state == initial_state
+		and transition.allowed in roles
+		and has_approval_access(user, new_doc_owner, transition)
+		and is_transition_condition_satisfied(transition, doc)
 	]
 
 
@@ -227,8 +264,8 @@ def get_item_price_workspace(name: str) -> dict:
 		"record": _record(doc),
 		"tiers": _tiers(doc),
 		"actions": _actions(doc),
-		"can_edit": _can_edit(doc),
-		"can_delete": _can_delete(doc),
+		"can_edit": is_editable_by_user(doc),
+		"can_delete": is_deletable_by_user(doc),
 		"permissions": permission_flags(DOCTYPE, PERMISSION_TYPES, doc),
 		"history": _history(doc),
 		"timeline": _timeline(doc),
@@ -282,19 +319,6 @@ def _field_schema(fieldname: str) -> dict:
 	}
 
 
-def _can_send_for_approval(doc, *, existing: bool) -> bool:
-	if existing:
-		return any(action["action"] == "Submit" for action in _actions(doc))
-	roles = set(frappe.get_roles())
-	workflow = get_workflow(DOCTYPE)
-	return any(
-		transition.state == "Draft"
-		and transition.action == "Submit"
-		and transition.allowed in roles
-		for transition in workflow.transitions
-	)
-
-
 def _tier_field_schema(fieldname: str) -> dict:
 	field = frappe.get_meta("YRP Item Price Value").get_field(fieldname)
 	return {
@@ -326,13 +350,14 @@ def _editor_payload(doc, *, existing: bool, item=None) -> dict:
 		"modified": doc.modified if existing else None,
 		"permissions": permission_flags(DOCTYPE, PERMISSION_TYPES, doc if existing else None),
 		"workflow": {
-			"can_send_for_approval": _can_send_for_approval(doc, existing=existing),
+			"state": _workflow_state(doc) if existing else get_workflow(DOCTYPE).states[0].state,
+			"save_actions": get_save_actions(doc),
 		},
 		"item_uom": item.stock_uom if item else None,
 		"unit_mismatch": unit_mismatch,
 		"unit_mismatch_message": (
 			_(
-				"This draft uses {0}, but the Item now uses {1}. Re-enter the prices in a new Item Price."
+				"This Item Price uses {0}, but the Item now uses {1}. Re-enter the prices in a new Item Price."
 			).format(doc.uom, item.stock_uom)
 			if unit_mismatch
 			else ""
@@ -345,8 +370,8 @@ def get_item_price_editor(name: str | None = None, item: str | None = None) -> d
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		frappe.has_permission(DOCTYPE, ptype="write", doc=doc, throw=True)
-		if not _can_edit(doc):
-			frappe.throw(_("Only a Draft Item Price can be edited."))
+		if not is_editable_by_user(doc):
+			frappe.throw(_not_editable_message(doc))
 		item_doc = _item_for_editor(doc.item_name)
 		return _editor_payload(doc, existing=True, item=item_doc)
 	frappe.has_permission(DOCTYPE, ptype="create", throw=True)
@@ -384,8 +409,8 @@ def _load_price_for_save(name: str | None, expected_modified=None):
 	doc = frappe.get_doc(DOCTYPE, name, for_update=True)
 	frappe.has_permission(DOCTYPE, ptype="write", doc=doc, throw=True)
 	assert_expected_modified(doc, expected_modified)
-	if not _can_edit(doc):
-		frappe.throw(_("Only a Draft Item Price can be edited."))
+	if not is_editable_by_user(doc):
+		frappe.throw(_not_editable_message(doc))
 	return doc
 
 
@@ -457,7 +482,7 @@ def delete_item_price(name: str, expected_modified) -> dict:
 	doc = frappe.get_doc(DOCTYPE, name, for_update=True)
 	frappe.has_permission(DOCTYPE, ptype="delete", doc=doc, throw=True)
 	assert_expected_modified(doc, expected_modified)
-	if _workflow_state(doc) != "Draft" or cint(doc.docstatus) != 0:
-		frappe.throw(_("Only a Draft Item Price can be deleted."))
+	if not is_deletable_by_user(doc):
+		frappe.throw(_("This Item Price cannot be deleted in state {0}.").format(_workflow_state(doc)))
 	frappe.delete_doc(DOCTYPE, name)
 	return {"deleted": True, "name": name}

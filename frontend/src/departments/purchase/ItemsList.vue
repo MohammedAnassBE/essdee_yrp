@@ -6,18 +6,6 @@
 				You do not have permission to view Items.
 			</Message>
 			<template v-else>
-				<nav class="purchase-list-modes" aria-label="Item quick filters">
-					<button
-						v-for="option in modes"
-						:key="option.value"
-						type="button"
-						:class="{ 'purchase-list-modes__active': mode === option.value }"
-						:aria-pressed="mode === option.value"
-						@click="mode = option.value"
-					>
-						{{ option.label }}
-					</button>
-				</nav>
 				<ListView
 					:key="mode"
 					doctype="Item"
@@ -39,6 +27,7 @@
 					@row-click="openItem"
 				>
 					<template #toolbar-actions>
+						<Select v-model="mode" class="purchase-list-mode" :options="modes" option-label="label" option-value="value" aria-label="Item list view" />
 						<Button v-if="capability?.can_create" label="Create Item" icon="pi pi-plus" @click="createItem" />
 					</template>
 					<template #cell-has_variants="{ row }">
@@ -56,6 +45,7 @@
 <script setup>
 import Button from "primevue/button"
 import Message from "primevue/message"
+import Select from "primevue/select"
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 
@@ -126,10 +116,12 @@ onMounted(load)
 </script>
 
 <style scoped>
-.purchase-items-page { display: grid; min-width: 0; gap: 10px; }
-.purchase-list-modes { display: flex; width: fit-content; max-width: 100%; gap: 4px; padding: 4px; overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface-muted); }
-.purchase-list-modes button { min-height: 32px; padding: 5px 12px; color: var(--erp-text-muted); font: inherit; font-size: var(--erp-font-size-caption); font-weight: 700; white-space: nowrap; cursor: pointer; border: 0; border-radius: calc(var(--erp-control-radius) - 2px); background: transparent; }
-.purchase-list-modes button:hover { color: var(--erp-text); background: var(--erp-surface); }
-.purchase-list-modes__active { color: var(--erp-accent-hover) !important; background: var(--erp-surface) !important; box-shadow: var(--erp-shadow-xs); }
-@media (max-width: 620px) { .purchase-list-modes { width: 100%; } .purchase-list-modes button { flex: 1 0 auto; } }
+.purchase-items-page { min-width: 0; }
+.purchase-list-mode { min-width: 160px; }
+@media (max-width: 1024px) {
+	.purchase-items-page :deep(.list-toolbar__primary) { grid-column: 1 / -1; grid-row: 2; gap: 8px; }
+	.purchase-items-page :deep(.list-toolbar__secondary) { grid-row: 3; }
+	.purchase-items-page :deep(.list-search) { grid-column: 1 / -1; }
+	.purchase-list-mode { flex: 1 1 auto; }
+}
 </style>

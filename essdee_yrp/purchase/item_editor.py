@@ -69,10 +69,28 @@ def _clean_attribute_values(attribute: str, values) -> list[str]:
 		if label not in seen:
 			seen.add(label)
 			cleaned.append(label)
-	return cleaned
+	return _canonical_attribute_values(attribute, cleaned)
 
 
-def _parse_attributes(values, *, updating=False) -> list[dict]:
+def _canonical_attribute_values(attribute: str, labels: list[str]) -> list[str]:
+	"""Reuse the stored spelling of a value that differs only by case."""
+	if not labels:
+		return []
+	existing = _global_value_labels(attribute)
+	known = set(existing)
+	by_casefold = {}
+	for label in existing:
+		by_casefold.setdefault(cstr(label).casefold(), label)
+	canonical = []
+	for label in labels:
+		if label not in known:
+			label = by_casefold.setdefault(label.casefold(), label)
+		if label not in canonical:
+			canonical.append(label)
+	return canonical
+
+
+def _parse_attributes(values) -> list[dict]:
 	rows = _parse_list(values or [], _("Attributes"))
 	parsed = []
 	seen = set()
@@ -85,18 +103,10 @@ def _parse_attributes(values, *, updating=False) -> list[dict]:
 		if attribute in seen:
 			frappe.throw(_("Item Attribute {0} is repeated.").format(attribute))
 		seen.add(attribute)
-		attribute_values = _clean_attribute_values(attribute, row.get("values") or [])
-		if not attribute_values:
-			message = (
-				_("The last value of Item Attribute {0} cannot be removed.")
-				if updating
-				else _("Item Attribute {0} must have at least one value.")
-			)
-			frappe.throw(message.format(attribute))
 		parsed.append(
 			{
 				"attribute": attribute,
-				"values": attribute_values,
+				"values": _clean_attribute_values(attribute, row.get("values") or []),
 				"mapping_modified": row.get("mapping_modified"),
 			}
 		)
@@ -155,16 +165,15 @@ def _global_value_labels(attribute: str) -> list[str]:
 def _mapping_payload(attribute_row) -> dict:
 	mapping_name = attribute_row.get("mapping")
 	stored_values = get_mapping_values(mapping_name) if mapping_name else []
-	all_values_allowed = not stored_values
-	labels = stored_values or _global_value_labels(attribute_row.attribute)
 	return {
 		"attribute": attribute_row.attribute,
 		"mapping": mapping_name,
 		"mapping_modified": (
 			frappe.db.get_value(MAPPING_DOCTYPE, mapping_name, "modified") if mapping_name else None
 		),
-		"values": [_value_option(attribute_row.attribute, label) for label in labels],
-		"all_values_allowed": all_values_allowed,
+		"values": [_value_option(attribute_row.attribute, label) for label in stored_values],
+		"all_values_allowed": not stored_values,
+		"value_count": len(_global_value_labels(attribute_row.attribute)),
 	}
 
 
@@ -181,12 +190,6 @@ def _editor_options() -> dict:
 			"UOM",
 			filters={"secondary_only": 0},
 			fields=["name as value", "uom_name as label"],
-			order_by="name asc",
-			limit=0,
-		),
-		"attributes": frappe.get_all(
-			"Item Attribute",
-			fields=["name as value", "attribute_name as label"],
 			order_by="name asc",
 			limit=0,
 		),
@@ -313,7 +316,20 @@ def search_attribute_values(attribute: str, txt: str = "", item: str | None = No
 				for label in _global_value_labels(attribute)
 				if needle in cstr(label).lower()
 			][:99]
+	if not item:
+		labels = _exact_value_first(attribute, txt, labels)
 	return [_value_option(attribute, label) for label in labels]
+
+
+def _exact_value_first(attribute: str, txt: str, labels: list[str]) -> list[str]:
+	needle = cstr(txt).strip().casefold()
+	if not needle or any(cstr(label).casefold() == needle for label in labels):
+		return labels
+	exact = next(
+		(label for label in _global_value_labels(attribute) if cstr(label).casefold() == needle),
+		None,
+	)
+	return [exact, *labels[:98]] if exact else labels
 
 
 @frappe.whitelist()
@@ -448,7 +464,7 @@ def _attributes_changed(doc, requested, stored) -> bool:
 	if (doc.primary_attribute or None) != (cstr(requested.primary_attribute).strip() or None):
 		return True
 	return any(
-		stored[row["attribute"]]["effective_values"] != row["values"] for row in requested.rows
+		stored[row["attribute"]]["stored_values"] != row["values"] for row in requested.rows
 	)
 
 
@@ -500,7 +516,7 @@ def update_item(name: str, values, expected_modified) -> dict:
 	doc = _load_locked_item(name, expected_modified)
 	validated_values = {**values, "stock_uom": doc.stock_uom}
 	_validate_item_basics(validated_values)
-	attributes = _parse_attributes(values.get("attributes") or [], updating=True)
+	attributes = _parse_attributes(values.get("attributes") or [])
 	primary_attribute = cstr(values.get("primary_attribute")).strip() or None
 	if primary_attribute and primary_attribute not in {row["attribute"] for row in attributes}:
 		frappe.throw(_("Primary Attribute must be one of the selected Attributes."))
@@ -524,22 +540,16 @@ def update_item(name: str, values, expected_modified) -> dict:
 	locked_mappings = {}
 	for row in attributes:
 		stored_row = stored.get(row["attribute"])
-		if not stored_row or stored_row["effective_values"] == row["values"]:
+		if not stored_row or stored_row["stored_values"] == row["values"]:
 			continue
-		removed = set(stored_row["effective_values"]) - set(row["values"])
+		requested_values = row["values"] or _global_value_labels(row["attribute"])
+		removed = set(stored_row["effective_values"]) - set(requested_values)
 		if _price_references_value(doc.name, row["attribute"], removed):
 			frappe.throw(_("A price tier still references a value being removed."))
-		if not stored_row["stored_values"]:
-			if removed:
-				frappe.throw(
-					_("All values are already allowed for Item Attribute {0}; its mapping cannot be narrowed.").format(
-						row["attribute"]
-					)
-				)
-			continue
-		locked_mappings[row["attribute"]] = _lock_changed_mapping(
-			stored_row["mapping"], row.get("mapping_modified")
-		)
+		if stored_row["mapping"]:
+			locked_mappings[row["attribute"]] = _lock_changed_mapping(
+				stored_row["mapping"], row.get("mapping_modified")
+			)
 
 	for row in attributes:
 		_ensure_requested_values(row["attribute"], row["values"])
@@ -571,9 +581,7 @@ def update_item(name: str, values, expected_modified) -> dict:
 
 	for requested, attribute_row in zip(attributes, doc.get("attributes") or [], strict=True):
 		stored_row = stored.get(requested["attribute"])
-		if stored_row and stored_row["effective_values"] == requested["values"]:
-			continue
-		if stored_row and not stored_row["stored_values"]:
+		if stored_row and stored_row["stored_values"] == requested["values"]:
 			continue
 		mapping = locked_mappings.get(requested["attribute"])
 		if mapping is None:
@@ -589,57 +597,3 @@ def update_item(name: str, values, expected_modified) -> dict:
 		mapping.save()
 	return get_item_editor(doc.name)
 
-
-def _item_mapping(item: str, attribute: str):
-	doc = frappe.get_doc(ITEM_DOCTYPE, item, for_update=True)
-	_reject_variant(doc)
-	if template_has_variants(doc.name):
-		frappe.throw(_("Locked: variants exist. Item attributes cannot be changed."))
-	row = next((row for row in doc.get("attributes") or [] if row.attribute == attribute), None)
-	if not row or not row.get("mapping"):
-		frappe.throw(_("Item Attribute {0} is not configured on Item {1}.").format(attribute, item))
-	return row.mapping
-
-
-def _mapping_result(mapping, *, all_values_allowed=False) -> dict:
-	return {
-		"name": mapping.name,
-		"attribute_name": mapping.attribute_name,
-		"modified": mapping.modified,
-		"values": [
-			_value_option(mapping.attribute_name, label) for label in get_mapping_values(mapping.name)
-		],
-		"all_values_allowed": all_values_allowed,
-	}
-
-
-@frappe.whitelist(methods=["POST"])
-def add_attribute_values(item: str, attribute: str, values, mapping_modified) -> dict:
-	lock_pricing_policy()
-	mapping_name = _item_mapping(item, attribute)
-	mapping = _lock_changed_mapping(mapping_name, mapping_modified)
-	requested = _clean_attribute_values(attribute, values)
-	if not requested:
-		frappe.throw(_("Select at least one Attribute Value."))
-	stored = get_mapping_values(mapping.name)
-	global_values = set(_global_value_labels(attribute))
-	missing_global = [label for label in requested if label not in global_values]
-	if not stored:
-		if not missing_global:
-			frappe.throw(_("All values are already allowed; an empty mapping cannot be appended to."))
-		ensure_global_attribute_values(attribute, missing_global)
-		mapping.reload()
-		return _mapping_result(mapping, all_values_allowed=True)
-
-	if missing_global:
-		ensure_global_attribute_values(attribute, missing_global)
-	combined = list(stored)
-	for label in requested:
-		if label not in combined:
-			combined.append(label)
-	mapping.set(
-		"values",
-		[{"attribute_value": ensure_value_master(attribute, label)} for label in combined],
-	)
-	mapping.save()
-	return _mapping_result(mapping)

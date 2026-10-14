@@ -625,9 +625,10 @@ function sortFilterFields(fields) {
 	)
 }
 
-const standardFilterFields = computed(() =>
-	eligibleFields.value.filter((field) => field.inStandardFilter && !field.hidden),
-)
+const standardFilterFields = computed(() => {
+	const excluded = new Set(props.excludedFilterFields)
+	return eligibleFields.value.filter((field) => field.inStandardFilter && !field.hidden && !excluded.has(field.fieldname))
+})
 
 const hasActiveQuery = computed(
 	() => Boolean(

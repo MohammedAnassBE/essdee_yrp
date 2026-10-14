@@ -17,7 +17,7 @@
 				row-mark="ITP"
 				min-table-width="980px"
 				status-field="workflow_state"
-				:status-options="PURCHASE_ITEM_PRICE_STATUS_OPTIONS"
+				:status-options="capability.workflow_states || []"
 				:initial-status="itemPriceListInitialStatus(capability || {})"
 				:default-columns="columns"
 				:column-labels="columnLabels"
@@ -29,7 +29,7 @@
 				<template #toolbar-actions>
 					<Button v-if="capability?.can_create" label="Create Price" icon="pi pi-plus" @click="createPrice" />
 				</template>
-				<template #cell-workflow_state="{ value }"><DocumentStatusBadge :label="value || 'Draft'" /></template>
+				<template #cell-workflow_state="{ value }"><DocumentStatusBadge :label="value" /></template>
 			</ListView>
 		</section>
 	</DepartmentPage>
@@ -48,7 +48,7 @@ import ListView from "../../components/common/ListView.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
-import { PURCHASE_ITEM_PRICE_STATUS_OPTIONS, PURCHASE_ROUTES, itemPriceListInitialStatus } from "./purchaseViews.js"
+import { PURCHASE_ROUTES, itemPriceListInitialStatus } from "./purchaseViews.js"
 
 const router = useRouter()
 const loading = ref(true)

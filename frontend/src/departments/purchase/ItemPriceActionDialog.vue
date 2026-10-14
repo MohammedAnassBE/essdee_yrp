@@ -1,11 +1,11 @@
 <template>
 	<DocumentConfirmationDialog
 		:visible="visible"
-		:title="`${label} Item Price?`"
-		:message="message"
+		:title="`${label}: ${action?.documentName || 'Item Price'}`"
+		:message="itemPriceActionMessage(action || {})"
 		:confirm-label="label"
-		:confirm-icon="icon"
-		:severity="severity"
+		:confirm-icon="itemPriceActionIcon(action || {})"
+		:severity="itemPriceActionSeverity(action || {})"
 		:busy="busy"
 		@update:visible="emit('update:visible', $event)"
 		@confirm="emit('confirm')"
@@ -16,6 +16,7 @@
 import { computed } from "vue"
 
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import { itemPriceActionIcon, itemPriceActionMessage, itemPriceActionSeverity } from "./purchaseViews.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -25,12 +26,4 @@ const props = defineProps({
 const emit = defineEmits(["update:visible", "confirm"])
 
 const label = computed(() => props.action?.label || props.action?.action || "Continue")
-const message = computed(() => props.action?.preview || `${label.value} this Item Price?`)
-const icon = computed(() => ({
-	Approve: "pi pi-check-circle",
-	Reject: "pi pi-times-circle",
-	Expire: "pi pi-clock",
-	Submit: "pi pi-send",
-}[props.action?.action] || "pi pi-check"))
-const severity = computed(() => props.action?.action === "Reject" ? "danger" : props.action?.action === "Expire" ? "warn" : "success")
 </script>

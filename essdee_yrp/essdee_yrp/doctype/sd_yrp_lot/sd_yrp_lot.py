@@ -526,7 +526,6 @@ def fetch_item_details(items, production_detail):
 def fetch_order_item_details(items, production_detail, process=None, includes_packing: bool = False):
 	ipd_doc = frappe.get_doc("YRP Item Production Detail", production_detail)
 	items = update_if_string_instance(items)
-	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 	field = "quantity"
 	if process:
@@ -565,11 +564,17 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 		if not field:
 			frappe.msgprint(f"Please Mention Process {process} in IPD")
 			return
+	return build_order_item_details(items, ipd_doc, field)
+
+
+def build_order_item_details(items, ipd_doc, field="quantity"):
+	"""Group order rows into the CutPlanItems matrix using `field` as the quantity."""
+	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 	items = [item.as_dict() for item in items]
 	item_details = []
 	items = sorted(items, key=lambda i: i["row_index"])
-	primary_values = get_ipd_primary_values(production_detail)
+	primary_values = get_ipd_primary_values(ipd_doc.name)
 	for _key, variants in groupby(items, lambda i: i["row_index"]):
 		variants = list(variants)
 		current_variant = frappe.get_cached_doc("Item", variants[0]["item_variant"])

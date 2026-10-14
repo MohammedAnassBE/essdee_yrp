@@ -53,6 +53,9 @@ const BillTrackings = () => import("../departments/hr/BillTrackings.vue")
 const BillTracking = () => import("../departments/hr/BillTracking.vue")
 const BillTrackingEditorPage = () => import("../departments/hr/BillTrackingEditorPage.vue")
 const HrReports = () => import("../departments/hr/HrReports.vue")
+const LotsList = () => import("../departments/purchase/lot/LotsList.vue")
+const LotPage = () => import("../departments/purchase/lot/LotPage.vue")
+const LotEditorPage = () => import("../departments/purchase/lot/LotEditorPage.vue")
 const ItemsList = () => import("../departments/purchase/ItemsList.vue")
 const ItemPage = () => import("../departments/purchase/ItemPage.vue")
 const ItemEditorPage = () => import("../departments/purchase/ItemEditorPage.vue")
@@ -544,6 +547,10 @@ const routes = [
 			purchaseOrderNewRouteName: "purchase-purchase-order-new",
 		},
 	},
+	{ path: "/purchase/lots", name: PURCHASE_ROUTES.lots, component: LotsList },
+	{ path: "/purchase/lots/new", name: PURCHASE_ROUTES.lotNew, component: LotEditorPage },
+	{ path: "/purchase/lots/:lotId", name: PURCHASE_ROUTES.lot, component: LotPage, props: true },
+	{ path: "/purchase/lots/:lotId/edit", name: PURCHASE_ROUTES.lotEdit, component: LotEditorPage, props: true },
 	{
 		path: "/purchase/items",
 		name: PURCHASE_ROUTES.items,

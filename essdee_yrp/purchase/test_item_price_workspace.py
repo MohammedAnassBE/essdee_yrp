@@ -328,15 +328,8 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		self._transition(approved, "Approve", "purchase_manager")
 		doc = frappe.get_doc("YRP Item Price", approved)
 		frappe.set_user(self.fixture_users["purchase_manager"])
-		with self.assertRaisesRegex(frappe.ValidationError, "Draft"):
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be edited in state Approved"):
 			save_item_price(self._values(price=20), approved, doc.modified)
-
-		rejected = self._save(supplier=self.suppliers[1])["record"]["name"]
-		self._transition(rejected, "Submit", "purchase_user")
-		self._transition(rejected, "Reject", "purchase_manager")
-		doc = frappe.get_doc("YRP Item Price", rejected)
-		with self.assertRaisesRegex(frappe.ValidationError, "Draft"):
-			save_item_price(self._values(supplier=self.suppliers[1]), rejected, doc.modified)
 
 	def test_web_save_requires_supplier_allows_past_dates_and_checks_staleness(self):
 		from essdee_yrp.purchase.item_price_workspace import save_item_price
@@ -385,8 +378,8 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		approve = next(row for row in payload["actions"] if row["action"] == "Approve")
 		self.assertIn(predecessor, approve["preview"])
 		self.assertIn(format_date(add_days(doc.from_date, -1)), approve["preview"])
-		self.assertFalse(payload["can_edit"])
-		self.assertFalse(payload["can_delete"])
+		self.assertTrue(payload["can_edit"])
+		self.assertTrue(payload["can_delete"])
 		self.assertIn(predecessor, [row["name"] for row in payload["history"]])
 
 	def test_workspace_timeline_includes_comments_automatic_expiry_and_approver(self):
@@ -488,19 +481,245 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		)
 		self.assertEqual(rejected_payload["record"]["workflow_state"], "Rejected")
 		self.assertEqual(rejected_payload["actions"], [])
-		self.assertFalse(rejected_payload["can_edit"])
-		self.assertFalse(rejected_payload["can_delete"])
-		with self.assertRaisesRegex(frappe.ValidationError, "Draft"):
-			get_item_price_editor(rejected)
-		with self.assertRaisesRegex(frappe.ValidationError, "Draft"):
-			delete_item_price(rejected, rejected_payload["record"]["modified"])
+		self.assertTrue(rejected_payload["can_edit"])
+		self.assertTrue(rejected_payload["can_delete"])
+		self.assertEqual(get_item_price_editor(rejected)["workflow"]["save_actions"], [])
 
 		frappe.set_user(self.fixture_users["purchase_manager"])
 		expired_payload = get_item_price_workspace(approved)
-		with self.assertRaisesRegex(frappe.ValidationError, "Draft"):
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be edited in state Expired"):
 			get_item_price_editor(approved)
-		with self.assertRaisesRegex(frappe.ValidationError, "Draft"):
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be deleted in state Expired"):
 			delete_item_price(approved, expired_payload["record"]["modified"])
+
+	def _price_in_state(self, state, supplier_index=0):
+		name = self._save(supplier=self.suppliers[supplier_index])["record"]["name"]
+		path = {
+			"Draft": [],
+			"Approval Pending": ["Submit"],
+			"Rejected": ["Submit", "Reject"],
+			"Approved": ["Submit", "Approve"],
+			"Expired": ["Submit", "Approve", "Expired"],
+		}[state]
+		for action in path:
+			self._transition(name, action, "purchase_manager")
+		frappe.set_user("Administrator")
+		self.assertEqual(frappe.db.get_value("YRP Item Price", name, "workflow_state"), state)
+		return name
+
+	def test_workspace_buttons_per_state_and_role_match_the_workflow(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
+
+		expected = {
+			"Draft": {
+				"purchase_user": (["Submit"], True, False),
+				"purchase_manager": (["Submit"], True, True),
+				"manager_only": ([], False, False),
+				"system_manager": ([], False, False),
+			},
+			"Approval Pending": {
+				"purchase_user": ([], False, False),
+				"purchase_manager": (["Approve", "Reject"], True, True),
+				"manager_only": (["Approve", "Reject"], True, True),
+				"system_manager": ([], False, False),
+			},
+			"Approved": {
+				"purchase_user": ([], False, False),
+				"purchase_manager": (["Expired"], False, False),
+				"manager_only": (["Expired"], False, False),
+				"system_manager": ([], False, False),
+			},
+			"Rejected": {
+				"purchase_user": ([], True, False),
+				"purchase_manager": ([], True, True),
+				"manager_only": ([], False, False),
+				"system_manager": ([], False, False),
+			},
+			"Expired": {
+				"purchase_user": ([], False, False),
+				"purchase_manager": ([], False, False),
+				"manager_only": ([], False, False),
+				"system_manager": ([], False, False),
+			},
+		}
+		approving_suppliers = {"Approved": 0, "Expired": 1}
+		for state, roles in expected.items():
+			name = self._price_in_state(state, supplier_index=approving_suppliers.get(state, 0))
+			for user_key, (actions, can_edit, can_delete) in roles.items():
+				with self.subTest(state=state, role=user_key):
+					frappe.set_user(self.fixture_users[user_key])
+					payload = get_item_price_workspace(name)
+					self.assertEqual([row["action"] for row in payload["actions"]], actions)
+					self.assertEqual(payload["can_edit"], can_edit)
+					self.assertEqual(payload["can_delete"], can_delete)
+
+	def test_action_payload_carries_next_state_and_its_doc_status(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
+
+		name = self._price_in_state("Approved")
+		frappe.set_user(self.fixture_users["purchase_manager"])
+		(expired,) = get_item_price_workspace(name)["actions"]
+		self.assertEqual(
+			(expired["action"], expired["state"], expired["next_state"], expired["next_state_doc_status"]),
+			("Expired", "Approved", "Expired", 2),
+		)
+
+	def test_each_web_transition_moves_the_state_and_disallowed_ones_are_rejected(self):
+		from essdee_yrp.purchase.item_price_workspace import execute_item_price_action
+
+		def run(name, action, user_key):
+			frappe.set_user(self.fixture_users[user_key])
+			modified = frappe.db.get_value("YRP Item Price", name, "modified")
+			return execute_item_price_action(name, action, modified)["record"]
+
+		name = self._save()["record"]["name"]
+		with self.assertRaises(frappe.PermissionError):
+			run(name, "Approve", "purchase_manager")
+		self.assertEqual(run(name, "Submit", "purchase_user")["workflow_state"], "Approval Pending")
+		with self.assertRaises(frappe.PermissionError):
+			run(name, "Approve", "purchase_user")
+		with self.assertRaises(frappe.PermissionError):
+			run(name, "Submit", "purchase_manager")
+		approved = run(name, "Approve", "purchase_manager")
+		self.assertEqual((approved["workflow_state"], approved["docstatus"]), ("Approved", 1))
+		with self.assertRaises(frappe.PermissionError):
+			run(name, "Expired", "purchase_user")
+		expired = run(name, "Expired", "purchase_manager")
+		self.assertEqual((expired["workflow_state"], expired["docstatus"]), ("Expired", 2))
+		with self.assertRaises(frappe.PermissionError):
+			run(name, "Expired", "purchase_manager")
+		comments = frappe.get_all(
+			"Comment",
+			filters={
+				"reference_doctype": "YRP Item Price",
+				"reference_name": name,
+				"comment_type": "Workflow",
+				"creation": [">=", frappe.db.get_value("YRP Item Price", name, "creation")],
+			},
+			pluck="content",
+		)
+		self.assertEqual(sorted(comments), sorted(["Approval Pending", "Approved", "Expired"]))
+
+		rejected = self._save(supplier=self.suppliers[1])["record"]["name"]
+		run(rejected, "Submit", "purchase_user")
+		self.assertEqual(run(rejected, "Reject", "purchase_manager")["workflow_state"], "Rejected")
+		for action in ("Submit", "Approve", "Reject"):
+			with self.subTest(action=action), self.assertRaises(frappe.PermissionError):
+				run(rejected, action, "purchase_manager")
+
+	def test_rejected_price_is_editable_by_a_purchase_user_and_keeps_its_state(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor, save_item_price
+
+		name = self._price_in_state("Rejected")
+		frappe.set_user(self.fixture_users["purchase_user"])
+		editor = get_item_price_editor(name)
+		self.assertEqual(editor["workflow"], {"state": "Rejected", "save_actions": []})
+		payload = save_item_price(
+			self._values(item_price_values=[{"moq": 0, "price": 12, "lead_time": 2}]),
+			name,
+			editor["modified"],
+		)
+		self.assertEqual(payload["record"]["workflow_state"], "Rejected")
+		self.assertEqual(payload["actions"], [])
+		self.assertEqual(payload["tiers"][0]["price"], 12)
+
+	def test_pending_price_is_editable_by_a_purchase_manager_only(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor, save_item_price
+
+		name = self._price_in_state("Approval Pending")
+		modified = frappe.db.get_value("YRP Item Price", name, "modified")
+		frappe.set_user(self.fixture_users["purchase_user"])
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be edited in state Approval Pending"):
+			get_item_price_editor(name)
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be edited in state Approval Pending"):
+			save_item_price(self._values(), name, modified)
+
+		frappe.set_user(self.fixture_users["purchase_manager"])
+		editor = get_item_price_editor(name)
+		self.assertEqual(editor["workflow"]["state"], "Approval Pending")
+		self.assertEqual(
+			[row["action"] for row in editor["workflow"]["save_actions"]], ["Approve", "Reject"]
+		)
+		payload = save_item_price(
+			self._values(item_price_values=[{"moq": 0, "price": 14, "lead_time": 2}]),
+			name,
+			editor["modified"],
+		)
+		self.assertEqual(payload["record"]["workflow_state"], "Approval Pending")
+		self.assertEqual(payload["record"]["docstatus"], 0)
+
+	def test_editor_save_actions_follow_the_initial_state_transitions(self):
+		from frappe.model.workflow import get_workflow
+
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor
+
+		initial_state = get_workflow("YRP Item Price").states[0].state
+		frappe.set_user(self.fixture_users["purchase_user"])
+		editor = get_item_price_editor(item=self.item)
+		self.assertEqual(editor["workflow"]["state"], initial_state)
+		self.assertEqual([row["action"] for row in editor["workflow"]["save_actions"]], ["Submit"])
+		self.assertEqual(editor["workflow"]["save_actions"][0]["next_state"], "Approval Pending")
+
+		draft = self._save()["record"]["name"]
+		self.assertEqual(
+			[row["action"] for row in get_item_price_editor(draft)["workflow"]["save_actions"]],
+			["Submit"],
+		)
+
+		frappe.set_user(self.fixture_users["system_manager"])
+		self.assertEqual(get_item_price_editor(item=self.item)["workflow"]["save_actions"], [])
+
+	def test_new_price_save_actions_respect_transition_conditions(self):
+		import copy
+
+		from frappe.model.workflow import get_workflow
+
+		from essdee_yrp.purchase import item_price_workspace
+
+		workflow = copy.deepcopy(get_workflow("YRP Item Price"))
+		initial_state = workflow.states[0].state
+		submit = next(row for row in workflow.transitions if row.action == "Submit")
+		frappe.set_user(self.fixture_users["purchase_user"])
+
+		def save_actions(condition):
+			submit.condition = condition
+			with patch.object(item_price_workspace, "get_workflow", return_value=workflow):
+				editor = item_price_workspace.get_item_price_editor(item=self.item)
+			return [row["action"] for row in editor["workflow"]["save_actions"]]
+
+		self.assertEqual(
+			save_actions(f"doc.workflow_state == {initial_state!r} and doc.item_name == {self.item!r}"),
+			["Submit"],
+		)
+		self.assertEqual(save_actions("doc.item_name == 'not this item'"), [])
+
+	def test_delete_follows_the_state_edit_role_and_delete_permission(self):
+		from essdee_yrp.purchase.item_price_workspace import delete_item_price
+
+		for state in ("Approval Pending", "Rejected"):
+			with self.subTest(state=state):
+				name = self._price_in_state(state)
+				modified = frappe.db.get_value("YRP Item Price", name, "modified")
+				frappe.set_user(self.fixture_users["purchase_user"])
+				with self.assertRaises(frappe.PermissionError):
+					delete_item_price(name, modified)
+				frappe.set_user(self.fixture_users["purchase_manager"])
+				self.assertEqual(delete_item_price(name, modified), {"deleted": True, "name": name})
+				self.assertFalse(frappe.db.exists("YRP Item Price", name))
+
+		approved = self._price_in_state("Approved")
+		frappe.set_user(self.fixture_users["purchase_manager"])
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be deleted in state Approved"):
+			delete_item_price(approved, frappe.db.get_value("YRP Item Price", approved, "modified"))
+
+	def test_unapproved_price_hides_a_migrated_approver_from_the_timeline(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
+
+		name = self._save()["record"]["name"]
+		frappe.db.set_value("YRP Item Price", name, "approved_by", "Administrator", update_modified=False)
+		frappe.set_user(self.fixture_users["purchase_user"])
+		payload = get_item_price_workspace(name)
+		self.assertNotIn("approval", [entry["kind"] for entry in payload["timeline"]])
 
 	def test_standalone_system_manager_has_no_workflow_action(self):
 		from essdee_yrp.purchase.item_price_workspace import (

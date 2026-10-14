@@ -1,6 +1,7 @@
 import { callMethod } from "./frappe.js"
 
 const CAPABILITIES_METHOD = "essdee_yrp.purchase.web_capabilities"
+const LOT_METHOD = "essdee_yrp.purchase.lot_workspace"
 const ITEM_METHOD = "essdee_yrp.purchase.item_editor"
 const ITEM_PRICE_METHOD = "essdee_yrp.purchase.item_price_workspace"
 
@@ -61,4 +62,38 @@ export function deleteItemPrice(name, expectedModified) {
 		name,
 		expected_modified: expectedModified,
 	})
+}
+
+export function getLotWorkspace(name) {
+	return callMethod(`${LOT_METHOD}.get_lot_workspace`, { name })
+}
+
+export function getLotForm(name = null) {
+	return callMethod("essdee_yrp.purchase.lot_editor.get_lot_form", { name })
+}
+
+export function getLotProductionDetailContext(productionDetail, item, productionOrder = null) {
+	return callMethod("essdee_yrp.purchase.lot_editor.get_lot_production_detail_context", {
+		production_detail: productionDetail, item, production_order: productionOrder,
+	})
+}
+
+export function getLotProductionOrderItem(productionOrder) {
+	return callMethod("essdee_yrp.purchase.lot_editor.get_lot_production_order_item", {
+		production_order: productionOrder,
+	})
+}
+
+export function saveLot(values, { name, expectedModified }) {
+	return callMethod("essdee_yrp.purchase.lot_editor.save_lot", {
+		values, name: name || null, expected_modified: expectedModified || null,
+	})
+}
+
+export function getLotDocuments(lot) {
+	return callMethod("essdee_yrp.purchase.lot_documents.get_lot_documents", { lot })
+}
+
+export function getLotDocument(lot, doctype, name) {
+	return callMethod("essdee_yrp.purchase.lot_documents.get_lot_document", { lot, doctype, name })
 }

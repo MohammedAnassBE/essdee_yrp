@@ -53,6 +53,7 @@ class TestPurchaseWebCapabilities(TestCase):
 				frappe.set_user(user)
 				payload = get_capabilities()
 				for key, doctype, permission_types in (
+					("lots", "SD YRP Lot", ("read", "create", "write")),
 					("items", "Item", ("read", "create", "write")),
 					(
 						"item_prices",
@@ -93,3 +94,36 @@ class TestPurchaseWebCapabilities(TestCase):
 		frappe.set_user(self.fixture_users["item_manager"])
 		item_manager = get_capabilities()
 		self.assertTrue(item_manager["sections"]["items"]["can_create"])
+
+	def test_lot_all_role_can_write_without_create(self):
+		from essdee_yrp.purchase.web_capabilities import get_capabilities
+
+		frappe.set_user(self.fixture_users["roleless"])
+		lots = get_capabilities()["sections"]["lots"]
+		self.assertTrue(lots["can_write"])
+		self.assertFalse(lots["can_create"])
+
+	def test_lot_merchandiser_can_create_and_write(self):
+		from essdee_yrp.purchase.web_capabilities import get_capabilities
+
+		if not frappe.db.exists("Role", "Merchandiser"):
+			self.skipTest("Merchandiser role fixture is missing")
+		user = self._make_user("lot-merchandiser", ["Merchandiser"])
+		self.fixture_users["lot_merchandiser"] = user
+		frappe.set_user(user)
+		lots = get_capabilities()["sections"]["lots"]
+		self.assertTrue(lots["can_write"])
+		self.assertTrue(lots["can_create"])
+
+	def test_item_prices_return_the_ordered_workflow_states(self):
+		from frappe.model.workflow import get_workflow
+
+		from essdee_yrp.purchase.web_capabilities import get_capabilities
+
+		frappe.set_user(self.fixture_users["purchase_user"])
+		sections = get_capabilities()["sections"]
+		self.assertEqual(
+			sections["item_prices"]["workflow_states"],
+			[row.state for row in get_workflow("YRP Item Price").states],
+		)
+		self.assertEqual(sections["items"]["workflow_states"], [])

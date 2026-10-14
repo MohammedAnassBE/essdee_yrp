@@ -1,9 +1,10 @@
 <template>
 	<DepartmentPage title="Item Price" back-to="/purchase/item-prices" back-label="Item Prices" :show-title="false" flat full-width inline-navigation>
+		<div class="price-record-page erp-workspace">
 		<section class="price-page erp-card" aria-label="Item Price page" :aria-busy="loading">
 			<header class="price-page__header">
 				<InlinePageNavigation title-target="item-price-title" show-document-navigation :current-name="priceId" document-label="Item Price" :navigation-disabled="loading || Boolean(acting)" />
-				<div class="price-page__identity"><span>Purchase · Item Price</span><div><h1 id="item-price-title">{{ priceId }}</h1><DocumentStatusBadge :label="record.workflow_state || 'Draft'" /></div></div>
+				<div class="price-page__identity"><span>Purchase · Item Price</span><div><h1 id="item-price-title">{{ priceId }}</h1><DocumentStatusBadge v-if="!loading && !loadError" :label="record.workflow_state" /></div></div>
 				<dl v-if="!loading && !loadError" class="price-page__facts">
 					<div><dt>Item</dt><dd>{{ record.item_name || "—" }}</dd></div>
 					<div><dt>Supplier</dt><dd>{{ record.supplier_name || record.supplier || "—" }}</dd></div>
@@ -18,7 +19,7 @@
 				<main class="price-page__main">
 					<section class="price-summary-card">
 						<header><div><span>Commercial terms</span><h2>Price slabs</h2></div><strong>{{ record.uom || "—" }}</strong></header>
-						<div class="price-summary-facts"><div><span>Tax slab</span><strong>{{ record.tax || "—" }}</strong></div><div><span>Attribute</span><strong>{{ record.depends_on_attribute ? record.attribute : "Not used" }}</strong></div><div><span>Approved by</span><strong>{{ record.approved_by || "—" }}</strong></div></div>
+						<div class="price-summary-facts"><div><span>Tax slab</span><strong>{{ record.tax || "—" }}</strong></div><div><span>Attribute</span><strong>{{ record.depends_on_attribute ? record.attribute : "Not used" }}</strong></div><div class="price-summary-facts__approver"><span>Approved by</span><strong :title="itemPriceApprovedBy(record)">{{ itemPriceApprovedBy(record) || "—" }}</strong></div></div>
 						<div v-if="tierGroups.length" class="price-groups">
 							<section v-for="group in tierGroups" :key="group.key" class="price-group">
 								<h3 v-if="record.depends_on_attribute">{{ group.label }}</h3>
@@ -49,9 +50,9 @@
 						<header><span>Versions</span><strong>{{ workspace.history?.length || 0 }}</strong></header>
 						<div v-if="workspace.history?.length" class="price-history__list">
 							<RouterLink v-for="entry in workspace.history" :key="entry.name" :to="historyPath(entry.name)">
-								<div><strong>{{ entry.name }}</strong><DocumentStatusBadge :label="entry.workflow_state || 'Draft'" /></div>
+								<div><strong>{{ entry.name }}</strong><DocumentStatusBadge :label="entry.workflow_state" /></div>
 								<span>{{ dateRange(entry.from_date, entry.to_date) }}</span>
-								<small v-if="entry.approved_by">Approved by {{ entry.approved_by }}</small>
+								<small v-if="itemPriceApprovedBy(entry)">Approved by {{ itemPriceApprovedBy(entry) }}</small>
 							</RouterLink>
 						</div>
 						<div v-else class="price-history__empty">No earlier versions.</div>
@@ -61,7 +62,8 @@
 		</section>
 
 		<ItemPriceActionDialog v-model:visible="actionVisible" :action="selectedAction" :busy="Boolean(acting)" @confirm="runWorkflowAction" />
-		<DocumentConfirmationDialog v-model:visible="deleteVisible" title="Delete draft Item Price?" :message="`Delete ${pendingDelete?.name || priceId}? This cannot be undone.`" confirm-label="Delete Price" confirm-icon="pi pi-trash" severity="danger" :busy="Boolean(acting)" @confirm="deletePrice" />
+		</div>
+		<DocumentConfirmationDialog v-model:visible="deleteVisible" title="Delete Item Price?" :message="`Delete ${pendingDelete?.name || priceId}? This cannot be undone.`" confirm-label="Delete Price" confirm-icon="pi pi-trash" severity="danger" :busy="Boolean(acting)" @confirm="deletePrice" />
 		<DocumentErrorDialog :message="actionError" title="Item Price action failed" @dismiss="actionError = ''" />
 	</DepartmentPage>
 </template>
@@ -81,7 +83,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
-import { PURCHASE_ROUTES, captureRecordTarget, isCurrentRecordRequest, itemPriceActionItems, itemPriceGroups } from "./purchaseViews.js"
+import { PURCHASE_ROUTES, captureRecordTarget, isCurrentRecordRequest, itemPriceActionItems, itemPriceApprovedBy, itemPriceGroups } from "./purchaseViews.js"
 import ItemPriceActionDialog from "./ItemPriceActionDialog.vue"
 
 const props = defineProps({ priceId: { type: String, required: true } })
@@ -202,7 +204,8 @@ watch(() => props.priceId, load, { immediate: true })
 </script>
 
 <style scoped>
-.price-page { display: flex; width: min(1380px, 100%); min-width: 0; min-height: 580px; margin: 0 auto; overflow: hidden; flex-direction: column; border-top: 3px solid var(--erp-accent); }
+.price-record-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
+.price-page { display: flex; width: 100%; min-width: 0; overflow: hidden; flex-direction: column; border-top: 3px solid var(--erp-accent); }
 .price-page__header { display: flex; min-width: 0; align-items: center; gap: 18px; padding: 13px clamp(16px, 2vw, 24px); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); }
 .price-page__identity { display: grid; min-width: 0; gap: 4px; }
 .price-page__identity > span, .price-summary-card header span, .price-history > header span, .price-timeline > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .045em; text-transform: uppercase; }
@@ -212,7 +215,7 @@ watch(() => props.priceId, load, { immediate: true })
 .price-page__facts div { display: grid; min-width: 110px; max-width: 210px; gap: 2px; padding: 0 12px; border-left: 1px solid var(--erp-border); }
 .price-page__facts dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; text-transform: uppercase; }
 .price-page__facts dd { margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
-.price-page__loading, .price-page__content { min-width: 0; padding: clamp(14px, 2vw, 22px); }
+.price-page__loading, .price-page__content { min-width: 0; padding: clamp(14px, 2vw, 22px) clamp(14px, 2vw, 22px) 14px; }
 .price-page__loading { display: grid; gap: 16px; }
 .price-page__content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 290px); align-items: start; gap: 16px; }
 .price-summary-card, .price-history, .price-timeline { display: grid; min-width: 0; gap: 14px; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-xs); }
@@ -230,6 +233,7 @@ watch(() => props.priceId, load, { immediate: true })
 .price-rail { display: grid; min-width: 0; gap: 16px; }
 .price-history, .price-timeline { gap: 0; overflow: hidden; }
 .price-history > header, .price-timeline > header { padding: 13px; border-bottom: 1px solid var(--erp-border); }
+.price-timeline__list, .price-history__list { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
 .price-timeline__list { display: grid; }
 .price-timeline__list article { display: grid; gap: 5px; padding: 11px 13px; border-bottom: 1px solid var(--erp-border); }
 .price-timeline__list article:last-child { border-bottom: 0; }
@@ -237,7 +241,7 @@ watch(() => props.priceId, load, { immediate: true })
 .price-timeline__list strong, .price-timeline__list p { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .price-timeline__list p { margin: 0; line-height: 1.35; }
 .price-timeline__list small, .price-timeline__list span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.price-history__list { display: grid; }
+.price-history__list { display: grid; align-content: start; }
 .price-history__list a { display: grid; gap: 6px; padding: 12px 13px; color: inherit; text-decoration: none; border-bottom: 1px solid var(--erp-border); }
 .price-history__list a:last-child { border-bottom: 0; }
 .price-history__list a:hover { background: var(--erp-surface-muted); }
@@ -246,5 +250,21 @@ watch(() => props.priceId, load, { immediate: true })
 .price-history__list span, .price-history__list small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .price-history__empty, .price-page-empty { display: grid; min-height: 90px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); place-items: center; }
 @media (max-width: 1050px) { .price-page__header { align-items: flex-start; flex-wrap: wrap; } .price-page__facts { width: 100%; margin: 0; order: 3; } .price-page__facts div:first-child { padding-left: 0; border-left: 0; } .price-page__content { grid-template-columns: 1fr; } .price-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); } .price-history__list a:nth-child(odd) { border-right: 1px solid var(--erp-border); } }
-@media (max-width: 650px) { .price-page__identity > div { align-items: flex-start; flex-wrap: wrap; } .price-page__header > :deep(.document-action-strip) { width: auto; margin-left: auto; } .price-page__facts, .price-summary-facts, .price-history__list, .price-rail { grid-template-columns: 1fr; } .price-page__facts div { min-width: 0; padding: 7px 0; border-top: 1px solid var(--erp-border); border-left: 0; } .price-page__facts dd { white-space: normal; } .price-history__list a:nth-child(odd) { border-right: 0; } }
+@media (max-width: 650px) {
+	.price-page__header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 10px; padding: 8px 14px; }
+	.price-page__header:has(> .document-action-strip) > .price-page__identity { grid-column: 1 / -1; grid-row: 2; }
+	.price-page__header > :deep(.document-action-strip) { grid-column: 2; grid-row: 1; width: auto; justify-self: end; }
+	.price-page__identity > span { display: none; }
+	.price-page__identity :deep(.document-status-badge) { flex-shrink: 0; }
+	.price-page__facts { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.price-page__facts div { min-width: 0; padding-inline: 8px; }
+	.price-page__facts dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+	.price-summary-facts > div { min-height: 0; padding: 8px 9px; }
+	.price-summary-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.price-summary-facts__approver { grid-column: 1 / -1; }
+	.price-summary-facts strong { overflow-wrap: anywhere; }
+	.price-summary-facts__approver strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.price-history__list, .price-rail { grid-template-columns: 1fr; }
+	.price-history__list a:nth-child(odd) { border-right: 0; }
+}
 </style>

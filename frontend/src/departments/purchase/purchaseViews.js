@@ -1,4 +1,8 @@
 export const PURCHASE_ROUTES = {
+	lots: "purchase-lots",
+	lot: "purchase-lot",
+	lotNew: "purchase-lot-new",
+	lotEdit: "purchase-lot-edit",
 	items: "purchase-items",
 	itemNew: "purchase-item-new",
 	item: "purchase-item",
@@ -9,16 +13,15 @@ export const PURCHASE_ROUTES = {
 	itemPriceEdit: "purchase-item-price-edit",
 }
 
-export const PURCHASE_ITEM_PRICE_STATUS_OPTIONS = [
-	"Approval Pending",
-	"Draft",
-	"Approved",
-	"Rejected",
-	"Expired",
-]
-
 export function purchaseLauncherItems() {
 	return [
+		{
+			key: "lots",
+			label: "Lot",
+			description: "Order quantities, BOM, OCR and cloth program for each lot.",
+			icon: "pi pi-th-large",
+			to: "/purchase/lots",
+		},
 		{
 			key: "items",
 			label: "Items",
@@ -53,7 +56,10 @@ export function itemEditorValues(values = {}) {
 		description: values.description || "",
 		disabled: Number(values.disabled || 0),
 		primary_attribute: values.primary_attribute || "",
-		attributes: clone(values.attributes || []) || [],
+		attributes: (clone(values.attributes || []) || []).map((row) => ({
+			...row,
+			values: attributeValueLabels(row.values),
+		})),
 	}
 }
 
@@ -61,7 +67,7 @@ export function itemSaveValues(values = {}, options = {}) {
 	const attributes = (values.attributes || []).map((row) => ({
 		attribute: row.attribute,
 		mapping_modified: row.mapping_modified || null,
-		values: clone(row.values || []) || [],
+		values: attributeValueLabels(row.values),
 	}))
 	const selectedAttributes = new Set(attributes.map((row) => row.attribute).filter(Boolean))
 	const primaryAttribute = attributes.length === 1
@@ -82,30 +88,55 @@ export function itemSaveValues(values = {}, options = {}) {
 	}
 }
 
-export function itemAttributeSearchScope(attributesLocked, currentName) {
-	return attributesLocked ? String(currentName || "") || null : null
+export function itemCanSave(values = {}) {
+	return Boolean(
+		String(values.name || "").trim()
+		&& values.item_group
+		&& values.stock_uom
+		&& (values.attributes || []).every((row) => row.attribute),
+	)
 }
 
-export function withSelectedAttributeValues(selected = [], options = []) {
-	const merged = new Map()
-	for (const option of [...options, ...selected]) {
-		const key = option?.name || option?.label
-		if (key && !merged.has(key)) merged.set(key, option)
-	}
-	return [...merged.values()]
+export function storedAttributeMappings(attributes = []) {
+	return Object.fromEntries((attributes || []).filter((row) => row?.attribute).map((row) => [row.attribute, {
+		mapping: row.mapping || null,
+		mapping_modified: row.mapping_modified || null,
+		value_count: row.value_count ?? null,
+	}]))
 }
 
-export function stageItemAttributeValue(selected = [], options = [], value = "") {
+export function resetAttributeRow(storedMappings = {}, attribute = "") {
+	return { mapping: null, mapping_modified: null, value_count: null, ...storedMappings[attribute], attribute, values: [], new_values: [], all_values_allowed: true }
+}
+
+export function attributeValueLabels(values = []) {
+	return (values || [])
+		.map((value) => String(typeof value === "string" ? value : value?.label || value?.value || value?.name || "").trim())
+		.filter(Boolean)
+}
+
+export function isSameAttributeValue(left, right) {
+	return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase()
+}
+
+export function matchingAttributeValue(options = [], text = "") {
+	return attributeValueLabels(options).find((label) => isSameAttributeValue(label, text)) || null
+}
+
+export function addAttributeValueDraft(draft = [], value = "") {
 	const label = String(value || "").trim()
-	const values = [...new Set((selected || []).map((entry) => String(entry || "").trim()).filter(Boolean))]
-	if (label && !values.includes(label)) values.push(label)
-	return {
-		values,
-		availableValues: withSelectedAttributeValues(
-			values.map((entry) => ({ name: entry, label: entry })),
-			options || [],
-		),
-	}
+	if (!label || draft.some((entry) => isSameAttributeValue(entry, label))) return draft
+	return [...draft, label]
+}
+
+export function removeAttributeValueDraft(draft = [], value = "") {
+	return draft.filter((entry) => entry !== value)
+}
+
+export function attributeValuesSummary(values = []) {
+	const count = (values || []).length
+	if (!count) return "All"
+	return count === 1 ? "1 value" : `${count} values`
 }
 
 export function itemAttributeCountLabel(value) {
@@ -138,8 +169,13 @@ export function itemPriceListInitialStatus(capability = {}) {
 	return capability.can_submit ? "Approval Pending" : ""
 }
 
-export function canSendItemPriceForApproval(editor = {}) {
-	return Boolean(editor.workflow?.can_send_for_approval)
+export function itemPriceSaveAction(editor = {}) {
+	const actions = editor.workflow?.save_actions || []
+	return actions.length === 1 ? actions[0] : null
+}
+
+export function itemPriceApprovedBy(record = {}) {
+	return [1, 2].includes(Number(record.docstatus)) ? record.approved_by || "" : ""
 }
 
 export function savedItemPriceIdentity(workspace = {}) {
@@ -259,16 +295,30 @@ const WORKFLOW_ICONS = {
 	Submit: "pi pi-send",
 	Approve: "pi pi-check-circle",
 	Reject: "pi pi-times-circle",
-	Expire: "pi pi-clock",
+	Expired: "pi pi-clock",
+}
+
+export function itemPriceActionIcon(action = {}) {
+	return WORKFLOW_ICONS[action.action] || "pi pi-arrow-right"
+}
+
+export function itemPriceActionSeverity(action = {}) {
+	if (action.action === "Reject") return "danger"
+	return Number(action.next_state_doc_status) === 2 ? "warn" : "success"
+}
+
+export function itemPriceActionMessage(action = {}) {
+	if (action.preview) return action.preview
+	return `Move ${action.documentName || "this Item Price"} from ${action.state} to ${action.next_state}?`
 }
 
 export function itemPriceActionItems(workspace = {}, handlers = {}) {
 	const workflowActions = (workspace.actions || []).map((action, index) => ({
 		key: `workflow-${String(action.action || "action").toLowerCase().replaceAll(" ", "-")}`,
 		label: action.label || action.action,
-		icon: WORKFLOW_ICONS[action.action] || "pi pi-arrow-right",
+		icon: itemPriceActionIcon(action),
 		primary: index === 0,
-		menuOnly: index > 0,
+		severity: itemPriceActionSeverity(action) === "success" ? undefined : itemPriceActionSeverity(action),
 		command: () => handlers.workflow?.(action),
 	}))
 	const documentActions = []
@@ -276,7 +326,7 @@ export function itemPriceActionItems(workspace = {}, handlers = {}) {
 		key: "edit",
 		label: "Edit",
 		icon: "pi pi-pencil",
-		menuOnly: true,
+		primary: !workflowActions.length,
 		command: handlers.edit,
 	})
 	if (workspace.can_delete) documentActions.push({
@@ -284,6 +334,7 @@ export function itemPriceActionItems(workspace = {}, handlers = {}) {
 		label: "Delete",
 		icon: "pi pi-trash",
 		menuOnly: true,
+		severity: "danger",
 		command: handlers.delete,
 	})
 	return [...workflowActions, ...documentActions]

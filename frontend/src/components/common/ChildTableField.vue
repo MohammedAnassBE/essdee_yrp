@@ -34,7 +34,7 @@
 			>
 				<template #body="{ data, index }">
 					<FormField
-						:field="column"
+						:field="columnFilters ? { ...column, link_filters: columnFilters(column, data) ?? column.link_filters } : column"
 						:model-value="data[column.fieldname]"
 						:form="data"
 						:disabled="isDisabled"
@@ -84,6 +84,7 @@ const props = defineProps({
 	field: { type: Object, required: true },
 	modelValue: { type: Array, default: () => [] },
 	childMeta: { type: Object, default: null },
+	columnFilters: { type: Function, default: null },
 	disabled: { type: Boolean, default: false },
 	errors: { type: Object, default: () => ({}) },
 })

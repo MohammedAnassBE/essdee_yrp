@@ -13,6 +13,7 @@ import {
 	colourOptionsFromForm,
 	copiedImageGroups,
 	copiedProductDraft,
+	createDebouncedSearch,
 	editableValues,
 	hasMinimumQuery,
 	imagePayload,
@@ -21,6 +22,7 @@ import {
 	mergeComputedValues,
 	mergeFilteredSelection,
 	moveItem,
+	newColourName,
 	pdRecordPath,
 	productActionItems,
 	readableTextColour,
@@ -81,6 +83,33 @@ assert.equal(
 )
 assert.ok(
 	readFileSync("frontend/src/departments/pd/components/ProductGraphics.vue", "utf8").includes("Upload images"),
+)
+assert.equal(
+	readFileSync("frontend/src/departments/pd/components/ProductWorkspaceContent.vue", "utf8")
+		.includes("Save or cancel your edits to upload images."),
+	false,
+)
+assert.match(
+	readFileSync("frontend/src/departments/pd/ProductPage.vue", "utf8"),
+	/const canUploadImages = computed\(\(\) => !isNew\.value\s*&& permissions\.value\.can_write/,
+)
+assert.ok(
+	readFileSync("frontend/src/departments/pd/ProductPage.vue", "utf8")
+		.includes('@edit-requested="startMediaEditing"'),
+)
+assert.match(
+	readFileSync("frontend/src/departments/pd/ProductPage.vue", "utf8"),
+	/allowNavigation = target !== route\.path/,
+)
+for (const component of ["ProductSilhouette.vue", "ProductGraphics.vue"]) {
+	assert.ok(
+		readFileSync(`frontend/src/departments/pd/components/${component}`, "utf8")
+			.includes('emit("edit-requested")'),
+	)
+}
+assert.ok(
+	readFileSync("frontend/src/departments/pd/components/ProductGraphicsUploadDialog.vue", "utf8")
+		.includes("stageProductGraphic"),
 )
 const releaseSource = readFileSync("frontend/src/departments/pd/ProductReleasePage.vue", "utf8")
 for (const component of ["ProductImagePicker", "ProductTrimCombination", "ProductGraphics"]) {
@@ -277,6 +306,18 @@ assert.deepEqual(
 	[{ name: "row-1", attribute_value: "IAV-1" }],
 )
 assert.deepEqual(
+	editableValues({
+		product_image: "/private/files/silhouette.png",
+		product_designs: [{ upload_name: "Option 5", graphic_image: "/private/files/graphic.png" }],
+		product_box_details: [{ upload_name: "Box 2", graphic_image: "/private/files/box.png" }],
+	}),
+	{
+		product_image: "/private/files/silhouette.png",
+		product_designs: [{ upload_name: "Option 5", graphic_image: "/private/files/graphic.png" }],
+		product_box_details: [{ upload_name: "Box 2", graphic_image: "/private/files/box.png" }],
+	},
+)
+assert.deepEqual(
 	appendProductColours(
 		[{ product_colour: "Black", colour_code: "#000000" }],
 		[{ name: "Black", colour: "Black", colour_code: "#000000", image: "/black.png" }],
@@ -315,6 +356,77 @@ assert.deepEqual(
 	mergeFilteredSelection([redOption, blueOption], [redOption], [blueOption]),
 	[redOption],
 )
+assert.equal(newColourName("  orange ", { searchSucceeded: true }), "orange")
+assert.equal(newColourName("orange", { searchSucceeded: false }), "")
+assert.equal(newColourName("orange", { searchSucceeded: true, exactNameExists: true }), "")
+assert.equal(newColourName("   ", { searchSucceeded: true }), "")
+
+const oldSearch = deferred()
+const currentSearch = deferred()
+const cancelledSearch = deferred()
+const failedSearch = deferred()
+const searchResponses = new Map([
+	["old", oldSearch],
+	["current", currentSearch],
+	["cancelled", cancelledSearch],
+	["failed", failedSearch],
+])
+const requestedSearches = []
+const appliedSearches = []
+const searchErrors = []
+const scheduledSearches = []
+let settledSearches = 0
+const colourSearch = createDebouncedSearch(
+	(query) => {
+		requestedSearches.push(query)
+		return searchResponses.get(query).promise
+	},
+	{
+		onResult: (result) => appliedSearches.push(result),
+		onError: (reason) => searchErrors.push(reason.message),
+		onSettled: () => { settledSearches += 1 },
+	},
+	{
+		schedule(callback, delay) {
+			const timer = { callback, cancelled: false, delay }
+			scheduledSearches.push(timer)
+			return timer
+		},
+		cancel(timer) { timer.cancelled = true },
+	},
+)
+
+const oldLoad = colourSearch.load("old")
+colourSearch.queue("current")
+oldSearch.resolve("stale result")
+await oldLoad
+assert.deepEqual(appliedSearches, [])
+assert.equal(settledSearches, 0)
+assert.equal(scheduledSearches[0].delay, 250)
+scheduledSearches[0].callback()
+currentSearch.resolve("current result")
+await nextTask()
+assert.deepEqual(requestedSearches, ["old", "current"])
+assert.deepEqual(appliedSearches, ["current result"])
+assert.equal(settledSearches, 1)
+
+colourSearch.queue("queued then cancelled")
+const queuedTimer = scheduledSearches.at(-1)
+colourSearch.invalidate()
+assert.equal(queuedTimer.cancelled, true)
+
+const cancelledLoad = colourSearch.load("cancelled")
+colourSearch.invalidate()
+cancelledSearch.resolve("must not overwrite a created colour")
+await cancelledLoad
+assert.deepEqual(appliedSearches, ["current result"])
+assert.equal(settledSearches, 1)
+
+const failedLoad = colourSearch.load("failed")
+failedSearch.reject(new Error("search failed"))
+await failedLoad
+assert.deepEqual(searchErrors, ["search failed"])
+assert.equal(settledSearches, 2)
 
 assert.deepEqual(PRODUCT_FIELD_GROUPS.basic.map((group) => group.label), [
 	"Style", "Fabric", "Sizes", "Production setup",
@@ -339,4 +451,19 @@ assert.deepEqual(
 	copiedImageGroups({ placement: [item], trims: [], combination: [item], accessories: [] }),
 	{ placement: [item], trims: [], combination: [item], accessories: [] },
 )
+
+function deferred() {
+	let resolve
+	let reject
+	const promise = new Promise((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise
+		reject = rejectPromise
+	})
+	return { promise, resolve, reject }
+}
+
+function nextTask() {
+	return new Promise((resolve) => setImmediate(resolve))
+}
+
 console.log("pd views ok")

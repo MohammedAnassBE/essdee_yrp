@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import frappe
 from frappe import _
 from frappe.utils import cstr
@@ -11,6 +13,8 @@ from essdee_yrp.web_common import assert_expected_modified, parse_mapping, permi
 PRODUCT = "SD YRP Product"
 RELEASE = "SD YRP Product Release"
 LOTWISE = "SD YRP Lotwise Item Profit"
+COLOUR_CODE = "SD YRP Product Colour Code"
+HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 PERMISSION_TYPES = ("read", "create", "write", "delete", "print")
 SECTIONS = {
 	"products": (PRODUCT, "Products"),
@@ -38,12 +42,17 @@ PRODUCT_FIELDS = (
 	"measurement",
 	"top_measurement",
 	"bottom_measurement",
+	"product_image",
+	"top_image",
+	"bottom_image",
 )
 PRODUCT_TABLES = (
 	"sizes",
 	"product_fabric_composition_details",
 	"product_colours",
 	"product_set_colours",
+	"product_designs",
+	"product_box_details",
 	"product_info_extras",
 )
 IMAGE_PAYLOAD_KEYS = ("placement_images", "product_trims_images", "trim_comb", "accessory_images")
@@ -168,19 +177,47 @@ def strip_row_identity(row) -> dict:
 
 
 def child_rows_for_save(doc, table: str, rows) -> list[dict]:
-	existing_names = {row.name for row in doc.get(table) or [] if row.name}
+	existing_rows = {row.name: row for row in doc.get(table) or [] if row.name}
 	clean_rows = []
-	for source_row in rows or []:
+	for index, source_row in enumerate(rows or [], start=1):
 		row = strip_row_identity(source_row)
-		if row.get("name") and row["name"] not in existing_names:
+		if row.get("name") and row["name"] not in existing_rows:
 			frappe.throw(
 				_("Row {0} does not belong to table {1}.").format(
 					frappe.bold(row["name"]), frappe.bold(table)
 				),
 				frappe.ValidationError,
 			)
+		if table in {"product_designs", "product_box_details"}:
+			_validate_graphic_reference(doc, table, row, existing_rows.get(row.get("name")))
+			row["idx"] = index
 		clean_rows.append(row)
 	return clean_rows
+
+
+def _validate_graphic_reference(doc, table: str, row: dict, existing_row=None) -> None:
+	if existing_row and all(
+		row.get(fieldname) == existing_row.get(fieldname)
+		for fieldname in ("file", "graphic_image")
+	):
+		row["filename"] = existing_row.filename
+		return
+	file_name = cstr(row.get("file")).strip()
+	if not file_name or not frappe.db.exists("File", file_name):
+		frappe.throw(_("The selected graphic file was not found."), frappe.ValidationError)
+	file_doc = frappe.get_doc("File", file_name)
+	if (
+		file_doc.attached_to_doctype != PRODUCT
+		or file_doc.attached_to_name != doc.name
+		or file_doc.attached_to_field != table
+	):
+		frappe.throw(
+			_("The selected graphic file does not belong to this Product table."),
+			frappe.ValidationError,
+		)
+	if not file_doc.file_url or file_doc.file_url != row.get("graphic_image"):
+		frappe.throw(_("The selected graphic URL does not match its File."), frappe.ValidationError)
+	row["filename"] = file_doc.file_name
 
 
 def product_for_save(name, expected_modified):
@@ -221,7 +258,7 @@ def get_capabilities() -> dict:
 
 
 @frappe.whitelist()
-def search_submitted_colour_codes(query: str = "") -> list[dict]:
+def search_submitted_colour_codes(query: str = "") -> dict:
 	"""Search submitted Product Colour Codes through normal read permissions."""
 	query = cstr(query).strip()
 	or_filters = None
@@ -232,14 +269,51 @@ def search_submitted_colour_codes(query: str = "") -> list[dict]:
 			["colour", "like", like],
 			["colour_code", "like", like],
 		]
-	return frappe.get_list(
-		"SD YRP Product Colour Code",
+	options = frappe.get_list(
+		COLOUR_CODE,
 		filters={"docstatus": 1},
 		or_filters=or_filters,
 		fields=["name", "colour", "colour_code", "image"],
 		order_by="colour asc",
 		limit_page_length=50,
 	)
+	exact_name_exists = bool(
+		query
+		and frappe.get_list(
+			COLOUR_CODE,
+			filters={"name": query},
+			pluck="name",
+			limit_page_length=1,
+		)
+	)
+	return {"options": options, "exact_name_exists": exact_name_exists}
+
+
+@frappe.whitelist(methods=["POST"])
+def create_colour_code(colour: str, colour_code: str) -> dict:
+	"""Create a Product Colour Code, submitting it only when the user may submit."""
+	colour = cstr(colour).strip()
+	colour_code = cstr(colour_code).strip()
+	frappe.has_permission(COLOUR_CODE, "create", throw=True)
+	if not HEX_COLOUR.fullmatch(colour_code):
+		frappe.throw(_("Colour code must be a hex value like #FF8800."), frappe.ValidationError)
+	existing = frappe.db.get_value(COLOUR_CODE, colour, ["name", "docstatus"], as_dict=True)
+	if existing:
+		state = _("submitted") if existing.docstatus == 1 else _("not submitted")
+		frappe.throw(
+			_('Colour "{0}" already exists ({1}).').format(existing.name, state),
+			frappe.DuplicateEntryError,
+		)
+	doc = frappe.get_doc({"doctype": COLOUR_CODE, "colour": colour, "colour_code": colour_code}).insert()
+	if frappe.has_permission(COLOUR_CODE, "submit", doc=doc):
+		doc.submit()
+	return {
+		"name": doc.name,
+		"colour": doc.colour,
+		"colour_code": doc.colour_code,
+		"image": doc.image,
+		"docstatus": doc.docstatus,
+	}
 
 
 @frappe.whitelist()

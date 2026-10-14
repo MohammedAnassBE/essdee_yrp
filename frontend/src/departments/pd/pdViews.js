@@ -97,6 +97,9 @@ export const PRODUCT_EDITABLE_FIELDS = [
 	"measurement",
 	"top_measurement",
 	"bottom_measurement",
+	"product_image",
+	"top_image",
+	"bottom_image",
 ]
 
 export const PRODUCT_EDITABLE_TABLES = [
@@ -104,8 +107,17 @@ export const PRODUCT_EDITABLE_TABLES = [
 	"product_fabric_composition_details",
 	"product_colours",
 	"product_set_colours",
+	"product_designs",
+	"product_box_details",
 	"product_info_extras",
 ]
+
+const PRODUCT_COPY_FIELDS = PRODUCT_EDITABLE_FIELDS.filter(
+	(fieldname) => !["product_image", "top_image", "bottom_image"].includes(fieldname),
+)
+const PRODUCT_COPY_TABLES = PRODUCT_EDITABLE_TABLES.filter(
+	(table) => !["product_designs", "product_box_details"].includes(table),
+)
 
 const SET_ITEM_VISIBILITY = {
 	product_colours: false,
@@ -306,10 +318,10 @@ function copyChildRows(rows) {
 
 export function copiedProductDraft(defaultRecord, sourceRecord) {
 	const draft = { ...(defaultRecord || {}) }
-	for (const fieldname of PRODUCT_EDITABLE_FIELDS) {
+	for (const fieldname of PRODUCT_COPY_FIELDS) {
 		if (Object.hasOwn(sourceRecord || {}, fieldname)) draft[fieldname] = sourceRecord[fieldname]
 	}
-	for (const table of PRODUCT_EDITABLE_TABLES) draft[table] = copyChildRows(sourceRecord?.[table])
+	for (const table of PRODUCT_COPY_TABLES) draft[table] = copyChildRows(sourceRecord?.[table])
 	draft.style_no = ""
 	return draft
 }
@@ -377,6 +389,51 @@ export function appendProductColours(rows, options) {
 			image: option.image || "",
 		})),
 	])
+}
+
+export function newColourName(query, { searchSucceeded = false, exactNameExists = false } = {}) {
+	const name = String(query || "").trim()
+	return searchSucceeded && !exactNameExists ? name : ""
+}
+
+export function createDebouncedSearch(search, handlers, timers = {}) {
+	const schedule = timers.schedule || setTimeout
+	const cancelSchedule = timers.cancel || clearTimeout
+	const delay = timers.delay ?? 250
+	let sequence = 0
+	let timer = null
+
+	function invalidate() {
+		sequence += 1
+		if (timer !== null) cancelSchedule(timer)
+		timer = null
+		return sequence
+	}
+
+	async function run(query, requestSequence) {
+		try {
+			const result = await search(query)
+			if (requestSequence === sequence) handlers.onResult(result)
+		} catch (reason) {
+			if (requestSequence === sequence) handlers.onError(reason)
+		} finally {
+			if (requestSequence === sequence) handlers.onSettled()
+		}
+	}
+
+	function queue(query) {
+		const requestSequence = invalidate()
+		timer = schedule(() => {
+			timer = null
+			void run(query, requestSequence)
+		}, delay)
+	}
+
+	function load(query) {
+		return run(query, invalidate())
+	}
+
+	return { invalidate, load, queue }
 }
 
 export function mergeFilteredSelection(previous, next, visibleOptions) {

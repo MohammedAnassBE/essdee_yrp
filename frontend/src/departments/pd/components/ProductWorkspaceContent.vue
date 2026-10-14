@@ -30,10 +30,6 @@
 				Copied from {{ copySource }}. Silhouette and graphic designs are not copied.
 			</Message>
 
-			<p v-if="mode === 'edit' && !isNew" class="pd-product-workspace__upload-hint">
-				Save or cancel your edits to upload images.
-			</p>
-
 			<ProductWorkspaceTabs
 				:active-tab="activeTab"
 				:visible-tabs="visibleTabs"
@@ -54,6 +50,7 @@
 				@update:active-tab="emit('update:active-tab', $event)"
 				@update-field="forwardFieldUpdate"
 				@update-image-group="forwardImageUpdate"
+				@edit-requested="emit('edit-requested')"
 				@operation-started="emit('operation-started')"
 				@operation-finished="emit('operation-finished', $event)"
 			/>
@@ -87,7 +84,7 @@ defineProps({
 })
 const emit = defineEmits([
 	"retry", "cancel", "save", "update:active-tab", "update-field", "update-image-group",
-	"operation-started", "operation-finished", "dismiss-copy",
+	"edit-requested", "operation-started", "operation-finished", "dismiss-copy",
 ])
 
 function forwardFieldUpdate(fieldname, value) {

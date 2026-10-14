@@ -62,7 +62,7 @@ import Button from "primevue/button"
 import Message from "primevue/message"
 import { computed, ref } from "vue"
 
-import { replaceAttachment, uploadSinglePagePdf } from "../../../api/pd.js"
+import { stageProductAttachment, stageProductAttachmentPdf } from "../../../api/pd.js"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({
@@ -72,9 +72,10 @@ const props = defineProps({
 	canUpload: { type: Boolean, default: false },
 	busy: { type: Boolean, default: false },
 	isNew: { type: Boolean, default: false },
+	editing: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(["operation-started", "operation-finished"])
+const emit = defineEmits(["operation-started", "operation-finished", "update-field", "edit-requested"])
 const fileInputs = new Map()
 const busyField = ref("")
 const actionError = ref("")
@@ -100,22 +101,20 @@ function registerInput(fieldname, type, element) {
 
 function openFilePicker(fieldname, type) {
 	if (!canChange.value || controlsDisabled.value) return
+	if (!props.editing) emit("edit-requested")
 	fileInputs.get(inputKey(fieldname, type))?.click()
 }
 
 async function uploadImage(fieldname, event) {
-	await runUpload(fieldname, "image", event, (file) => replaceAttachment({
-		doctype: props.doctype,
+	await runUpload(fieldname, "image", event, (file) => stageProductAttachment({
 		docname: props.record.name,
 		fieldname,
-		oldUrl: props.record[fieldname] || null,
 		file,
 	}))
 }
 
 async function uploadPdf(fieldname, event) {
-	await runUpload(fieldname, "pdf", event, (file) => uploadSinglePagePdf({
-		doctype: props.doctype,
+	await runUpload(fieldname, "pdf", event, (file) => stageProductAttachmentPdf({
 		docname: props.record.name,
 		fieldname,
 		file,
@@ -134,7 +133,7 @@ async function runUpload(fieldname, type, event, upload) {
 	emit("operation-started")
 	let changed = false
 	try {
-		await upload(file)
+		emit("update-field", fieldname, await upload(file))
 		changed = true
 	} catch (reason) {
 		actionError.value = reason?.message || "Unable to upload the silhouette."

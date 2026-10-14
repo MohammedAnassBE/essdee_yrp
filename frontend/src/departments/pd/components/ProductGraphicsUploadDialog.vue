@@ -38,19 +38,19 @@ import InputText from "primevue/inputtext"
 import Tag from "primevue/tag"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 
-import { uploadGraphic } from "../../../api/pd.js"
+import { stageProductGraphic } from "../../../api/pd.js"
 import { cleanFileStem } from "../pdViews.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
+	modelValue: { type: Array, default: () => [] },
 	files: { type: Array, default: () => [] },
 	docname: { type: String, default: "" },
 	isBox: { type: Boolean, default: false },
 })
-const emit = defineEmits(["update:visible", "operation-started", "operation-finished"])
+const emit = defineEmits(["update:visible", "update:modelValue", "operation-started", "operation-finished"])
 const rows = ref([])
 const processing = ref(false)
-const changedSinceOpen = ref(false)
 const uploadableRows = computed(() => rows.value.filter((row) => row.status !== "done"))
 const hasFinished = computed(() => rows.value.some((row) => ["done", "error"].includes(row.status)))
 
@@ -60,12 +60,11 @@ watch(() => props.visible, (visible) => {
 
 function initialise() {
 	releasePreviews()
-	changedSinceOpen.value = false
 	rows.value = props.files.map((file, index) => ({
 		id: `${index}-${file.name}-${file.lastModified}`,
 		file,
 		previewUrl: URL.createObjectURL(file),
-		uploadType: cleanFileStem(file.name, `Option ${index + 1}`),
+		uploadType: cleanFileStem(file.name, `Option ${props.modelValue.length + index + 1}`),
 		status: "pending",
 		message: "",
 	}))
@@ -74,11 +73,8 @@ function initialise() {
 function setVisible(value) {
 	if (!value && processing.value) return
 	if (!value) {
-		const changed = changedSinceOpen.value
 		releasePreviews()
-		changedSinceOpen.value = false
 		emit("update:visible", false)
-		if (changed) emit("operation-finished", true)
 		return
 	}
 	emit("update:visible", value)
@@ -88,6 +84,7 @@ async function uploadAll() {
 	if (processing.value || !props.docname) return
 	processing.value = true
 	emit("operation-started")
+	const nextRows = [...props.modelValue]
 	for (const row of uploadableRows.value) {
 		if (!row.uploadType.trim()) {
 			row.status = "error"
@@ -97,15 +94,15 @@ async function uploadAll() {
 		row.status = "uploading"
 		row.message = "Uploading…"
 		try {
-			await uploadGraphic({
+			nextRows.push(await stageProductGraphic({
 				docname: props.docname,
 				uploadType: row.uploadType.trim(),
 				file: row.file,
 				isBox: props.isBox,
-			})
+			}))
+			emit("update:modelValue", [...nextRows])
 			row.status = "done"
 			row.message = "Uploaded."
-			changedSinceOpen.value = true
 		} catch (reason) {
 			row.status = "error"
 			row.message = reason?.message || "Upload failed."

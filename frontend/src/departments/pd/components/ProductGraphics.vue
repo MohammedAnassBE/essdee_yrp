@@ -35,7 +35,7 @@
 			<div class="product-graphics__drop" @dragover.prevent @drop.prevent="queueDroppedFiles">
 				<i class="pi pi-cloud-upload" />
 				<span>Drop several images here</span>
-				<Button label="Upload images" icon="pi pi-upload" :disabled="controlsDisabled" @click="imageInput?.click()" />
+				<Button label="Upload images" icon="pi pi-upload" :disabled="controlsDisabled" @click="openFilePicker(imageInput)" />
 				<input ref="imageInput" class="pd-visually-hidden" type="file" accept="image/*" multiple :disabled="controlsDisabled" @change="queueChosenFiles" />
 			</div>
 			<div class="product-graphics__pdf">
@@ -45,7 +45,7 @@
 					severity="secondary"
 					:loading="busyAction === 'pdf'"
 					:disabled="controlsDisabled"
-					@click="pdfInput?.click()"
+					@click="openFilePicker(pdfInput)"
 				/>
 				<input ref="pdfInput" class="pd-visually-hidden" type="file" accept=".pdf,application/pdf" :disabled="controlsDisabled" @change="uploadPdf" />
 			</div>
@@ -63,9 +63,11 @@
 		/>
 		<ProductGraphicsUploadDialog
 			v-model:visible="bulkVisible"
+			:model-value="rows"
 			:files="bulkFiles"
 			:docname="docname"
 			:is-box="isBox"
+			@update:model-value="emit('update:rows', $event)"
 			@operation-started="emit('operation-started')"
 			@operation-finished="emit('operation-finished', $event)"
 		/>
@@ -78,7 +80,7 @@ import Button from "primevue/button"
 import Message from "primevue/message"
 import { computed, ref } from "vue"
 
-import { removeGraphic, uploadGraphicsPdf } from "../../../api/pd.js"
+import { stageProductGraphicsPdf } from "../../../api/pd.js"
 import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import ProductGraphicsUploadDialog from "./ProductGraphicsUploadDialog.vue"
@@ -91,8 +93,9 @@ const props = defineProps({
 	readonly: { type: Boolean, default: false },
 	canUpload: { type: Boolean, default: false },
 	busy: { type: Boolean, default: false },
+	editing: { type: Boolean, default: false },
 })
-const emit = defineEmits(["operation-started", "operation-finished"])
+const emit = defineEmits(["operation-started", "operation-finished", "update:rows", "edit-requested"])
 const busyAction = ref("")
 const actionError = ref("")
 const removeVisible = ref(false)
@@ -107,7 +110,6 @@ const controlsDisabled = computed(() => props.busy || Boolean(busyAction.value))
 const headingId = `product-graphics-${props.isBox ? "box" : "design"}`
 const busyMessage = computed(() => ({
 	pdf: "Processing PDF and extracting images…",
-	remove: "Removing graphic…",
 })[busyAction.value] || "")
 
 function queueChosenFiles(event) {
@@ -123,8 +125,19 @@ function queueFiles(fileList) {
 	if (!canChange.value || controlsDisabled.value) return
 	const files = [...(fileList || [])].filter((file) => file.type.startsWith("image/"))
 	if (!files.length) return
+	requestEditing()
 	bulkFiles.value = files
 	bulkVisible.value = true
+}
+
+function requestEditing() {
+	if (!props.editing) emit("edit-requested")
+}
+
+function openFilePicker(input) {
+	if (!canChange.value || controlsDisabled.value) return
+	requestEditing()
+	input?.click()
 }
 
 async function uploadPdf(event) {
@@ -139,11 +152,12 @@ async function uploadPdf(event) {
 	emit("operation-started")
 	let changed = false
 	try {
-		await uploadGraphicsPdf({
+		const rows = await stageProductGraphicsPdf({
 			docname: props.docname,
 			tableName: props.isBox ? "product_box_details" : "product_designs",
 			file,
 		})
+		emit("update:rows", [...props.rows, ...(rows || [])])
 		changed = true
 	} catch (reason) {
 		actionError.value = reason?.message || "Unable to process the graphics PDF."
@@ -156,27 +170,16 @@ async function uploadPdf(event) {
 
 function askToRemove(row) {
 	if (controlsDisabled.value) return
+	requestEditing()
 	removeTarget.value = row
 	removeVisible.value = true
 }
 
-async function confirmRemove() {
-	if (!removeTarget.value?.name || !canChange.value || controlsDisabled.value) return
-	busyAction.value = "remove"
-	actionError.value = ""
-	emit("operation-started")
-	let changed = false
-	try {
-		await removeGraphic(props.docname, removeTarget.value.name)
-		removeVisible.value = false
-		removeTarget.value = null
-		changed = true
-	} catch (reason) {
-		actionError.value = reason?.message || "Unable to remove the graphic."
-	} finally {
-		busyAction.value = ""
-		emit("operation-finished", changed)
-	}
+function confirmRemove() {
+	if (!removeTarget.value || !canChange.value || controlsDisabled.value) return
+	emit("update:rows", props.rows.filter((row) => row !== removeTarget.value))
+	removeVisible.value = false
+	removeTarget.value = null
 }
 </script>
 

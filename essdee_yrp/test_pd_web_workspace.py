@@ -81,6 +81,31 @@ class TestPdProductWorkspace(IntegrationTestCase):
 		super().setUp()
 		frappe.set_user("Administrator")
 		self.product = make_product()
+		self.attachments = []
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for file_name in self.attachments:
+			if frappe.db.exists("File", file_name):
+				frappe.delete_doc("File", file_name, ignore_permissions=True)
+		super().tearDown()
+
+	def make_attachment(self, *, product=None, table="product_designs", filename=None):
+		product = product or self.product
+		filename = filename or f"{frappe.generate_hash(length=10)}.png"
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": filename,
+				"content": b"image",
+				"is_private": 1,
+				"attached_to_doctype": web_workspace.PRODUCT,
+				"attached_to_name": product.name,
+				"attached_to_field": table,
+			}
+		).insert(ignore_permissions=True)
+		self.attachments.append(file_doc.name)
+		return file_doc
 
 	def test_workspace_contains_record_images_and_permissions(self):
 		payload = web_workspace.get_product_workspace(self.product.name)
@@ -104,6 +129,110 @@ class TestPdProductWorkspace(IntegrationTestCase):
 		)
 		self.assertEqual(payload["record"]["item_name"], "Renamed")
 		self.assertNotEqual(payload["record"]["tech_pack_no"], 99)
+
+	def test_save_persists_staged_silhouette_and_graphic_rows(self):
+		silhouette = self.make_attachment(table="product_image", filename="staged-silhouette.png")
+		graphic = self.make_attachment(filename="staged-graphic.png")
+		payload = web_workspace.save_product(
+			{
+				"product_image": silhouette.file_url,
+				"product_designs": [
+					{
+						"graphic_image": graphic.file_url,
+						"upload_name": "Option 5",
+						"filename": "untrusted-name.png",
+						"file": graphic.name,
+					}
+				],
+			},
+			name=self.product.name,
+			expected_modified=str(self.product.modified),
+		)
+
+		self.assertEqual(
+			payload["record"]["product_image"], silhouette.file_url
+		)
+		self.assertEqual(payload["record"]["product_designs"][0]["upload_name"], "Option 5")
+		self.assertEqual(payload["record"]["product_designs"][0]["filename"], graphic.file_name)
+
+	def test_save_rejects_nonexistent_graphic_file(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "not found"):
+			web_workspace.save_product(
+				{
+					"product_designs": [{
+						"file": "missing-file",
+						"graphic_image": "/private/files/missing.png",
+					}]
+				},
+				name=self.product.name,
+				expected_modified=str(self.product.modified),
+			)
+
+	def test_save_rejects_graphic_file_attached_to_another_product(self):
+		foreign_file = self.make_attachment(product=make_product())
+		with self.assertRaisesRegex(frappe.ValidationError, "does not belong"):
+			web_workspace.save_product(
+				{"product_designs": [{"file": foreign_file.name, "graphic_image": foreign_file.file_url}]},
+				name=self.product.name,
+				expected_modified=str(self.product.modified),
+			)
+
+	def test_save_rejects_mismatched_graphic_file_url_and_table(self):
+		graphic = self.make_attachment(table="product_box_details")
+		with self.assertRaisesRegex(frappe.ValidationError, "Product table"):
+			web_workspace.save_product(
+				{"product_designs": [{"file": graphic.name, "graphic_image": graphic.file_url}]},
+				name=self.product.name,
+				expected_modified=str(self.product.modified),
+			)
+
+		graphic = self.make_attachment()
+		with self.assertRaisesRegex(frappe.ValidationError, "URL does not match"):
+			web_workspace.save_product(
+				{"product_designs": [{"file": graphic.name, "graphic_image": "/files/other.png"}]},
+				name=self.product.name,
+				expected_modified=str(self.product.modified),
+			)
+
+	def test_graphic_tables_follow_submitted_order_after_removal_and_upload(self):
+		initial_rows = {}
+		for table in ("product_designs", "product_box_details"):
+			initial_rows[table] = []
+			for number in range(1, 4):
+				file_doc = self.make_attachment(table=table, filename=f"{table}-{number}.png")
+				initial_rows[table].append({
+					"upload_name": f"Option {number}",
+					"graphic_image": file_doc.file_url,
+					"file": file_doc.name,
+				})
+		web_workspace.save_product(
+			initial_rows,
+			name=self.product.name,
+			expected_modified=str(self.product.modified),
+		)
+		self.product.reload()
+
+		next_rows = {}
+		for table in ("product_designs", "product_box_details"):
+			survivor = self.product.get(table)[2].as_dict()
+			uploaded = self.make_attachment(table=table, filename=f"{table}-new.png")
+			next_rows[table] = [survivor, {
+				"upload_name": "New upload",
+				"graphic_image": uploaded.file_url,
+				"file": uploaded.name,
+			}]
+		web_workspace.save_product(
+			next_rows,
+			name=self.product.name,
+			expected_modified=str(self.product.modified),
+		)
+		self.product.reload()
+
+		for table in ("product_designs", "product_box_details"):
+			self.assertEqual(
+				[(row.idx, row.upload_name) for row in self.product.get(table)],
+				[(1, "Option 3"), (2, "New upload")],
+			)
 
 	def test_save_rejects_stale_modified(self):
 		with self.assertRaises(frappe.TimestampMismatchError):
@@ -214,9 +343,143 @@ class TestPdProductWorkspace(IntegrationTestCase):
 
 		result = web_workspace.search_submitted_colour_codes("c0ffee")
 
-		self.assertIn(colour, {row["name"] for row in result})
-		matched = next(row for row in result if row["name"] == colour)
+		self.assertIn(colour, {row["name"] for row in result["options"]})
+		matched = next(row for row in result["options"] if row["name"] == colour)
 		self.assertEqual(matched["colour_code"], colour_code)
+		self.assertFalse(result["exact_name_exists"])
+
+	def test_colour_search_detects_draft_exact_name_case_insensitively(self):
+		colour = f"PD Web Draft {frappe.generate_hash(length=10)}"
+		frappe.get_doc(
+			{
+				"doctype": web_workspace.COLOUR_CODE,
+				"colour": colour,
+				"colour_code": "#123456",
+			}
+		).insert()
+
+		result = web_workspace.search_submitted_colour_codes(colour.swapcase())
+
+		self.assertTrue(result["exact_name_exists"])
+		self.assertNotIn(colour, {row["name"] for row in result["options"]})
+
+	def test_colour_search_detects_exact_name_beyond_option_limit(self):
+		colour = f"PD Web Limited {frappe.generate_hash(length=10)}"
+		limited_options = [{"name": f"Earlier {index} {colour}"} for index in range(50)]
+		with patch.object(
+			frappe, "get_list", side_effect=[limited_options, [colour]]
+		) as get_list:
+			result = web_workspace.search_submitted_colour_codes(colour)
+
+		self.assertEqual(result["options"], limited_options)
+		self.assertNotIn(colour, {row["name"] for row in result["options"]})
+		self.assertTrue(result["exact_name_exists"])
+		self.assertEqual(get_list.call_args_list[1].kwargs["filters"], {"name": colour})
+		self.assertEqual(get_list.call_args_list[1].kwargs["limit_page_length"], 1)
+
+	def colour_user(self, *, can_create, can_write, can_submit, can_read=True):
+		token = frappe.generate_hash(length=8)
+		role = f"Test PD Colour {token}"
+		email = f"pd-colour-{frappe.generate_hash(length=8)}@example.com"
+		frappe.get_doc(
+			{
+				"doctype": "Role",
+				"role_name": role,
+				"desk_access": 1,
+			}
+		).insert(ignore_permissions=True)
+		permission_doctype = (
+			"Custom DocPerm"
+			if frappe.db.exists("Custom DocPerm", {"parent": web_workspace.COLOUR_CODE})
+			else "DocPerm"
+		)
+		permission = frappe.get_doc(
+			{
+				"doctype": permission_doctype,
+				"parent": web_workspace.COLOUR_CODE,
+				"parenttype": "DocType",
+				"parentfield": "permissions",
+				"role": role,
+				"read": int(can_read),
+				"create": int(can_create),
+				"write": int(can_write),
+				"submit": int(can_submit),
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": "PD Colour",
+				"send_welcome_email": 0,
+				"user_type": "System User",
+				"roles": [{"role": role}],
+			}
+		).insert(ignore_permissions=True)
+		self.addCleanup(self.cleanup_colour_user, email, role, permission_doctype, permission.name)
+		frappe.clear_cache(doctype=web_workspace.COLOUR_CODE)
+		frappe.clear_cache(user=email)
+		frappe.set_user(email)
+
+	def cleanup_colour_user(self, email, role, permission_doctype, permission):
+		frappe.set_user("Administrator")
+		if frappe.db.exists("User", email):
+			frappe.delete_doc("User", email, force=True, ignore_permissions=True)
+		if frappe.db.exists(permission_doctype, permission):
+			frappe.db.delete(permission_doctype, {"name": permission})
+		if frappe.db.exists("Role", role):
+			frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
+		frappe.clear_cache(doctype=web_workspace.COLOUR_CODE)
+		frappe.clear_cache(user=email)
+
+	def test_create_colour_code_submits_when_user_can_submit(self):
+		self.colour_user(can_create=True, can_write=True, can_submit=True)
+		colour = f"pd web orange {frappe.generate_hash(length=8)}"
+
+		created = web_workspace.create_colour_code(f"  {colour} ", "#FF8800")
+
+		self.assertEqual(created["name"], colour)
+		self.assertEqual(created["colour_code"], "#FF8800")
+		self.assertEqual(created["docstatus"], 1)
+		result = web_workspace.search_submitted_colour_codes(colour)
+		self.assertIn(colour, {row["name"] for row in result["options"]})
+
+	def test_create_colour_code_stays_draft_without_submit_permission(self):
+		self.colour_user(can_create=True, can_write=True, can_submit=False)
+		colour = f"pd web draft {frappe.generate_hash(length=8)}"
+
+		created = web_workspace.create_colour_code(colour, "#123456")
+
+		self.assertEqual(created["docstatus"], 0)
+		self.assertEqual(frappe.db.get_value("SD YRP Product Colour Code", colour, "docstatus"), 0)
+
+	def test_create_colour_code_checks_permission_before_existing_lookup(self):
+		colour = f"pd web denied {frappe.generate_hash(length=8)}"
+		web_workspace.create_colour_code(colour, "#123456")
+		self.colour_user(
+			can_create=False,
+			can_write=False,
+			can_submit=False,
+			can_read=False,
+		)
+		with self.assertRaises(frappe.PermissionError):
+			web_workspace.create_colour_code(colour, "#654321")
+
+	def test_create_colour_code_rejects_invalid_hex(self):
+		with self.assertRaises(frappe.ValidationError):
+			web_workspace.create_colour_code(f"pd web bad {frappe.generate_hash(length=8)}", "orange")
+
+	def test_create_colour_code_rejects_existing_colour(self):
+		colour = f"pd web existing {frappe.generate_hash(length=8)}"
+		web_workspace.create_colour_code(colour, "#123456")
+		with self.assertRaisesRegex(frappe.DuplicateEntryError, "already exists"):
+			web_workspace.create_colour_code(colour.upper(), "#654321")
+
+	def test_create_colour_code_is_post_only_and_not_guest(self):
+		function = web_workspace.create_colour_code
+		self.assertIn(function, frappe.whitelisted)
+		self.assertNotIn(function, frappe.guest_methods)
+		self.assertEqual(frappe.allowed_http_methods_for_whitelisted_func[function], ["POST"])
 
 	def test_create_product_image_rejects_duplicate_titles(self):
 		from essdee_yrp.essdee_yrp.doctype.sd_yrp_product_image.sd_yrp_product_image import (

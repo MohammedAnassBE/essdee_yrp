@@ -36,6 +36,9 @@
 						:can-upload="canUploadImages"
 						:busy="mediaBusy"
 						:is-new="isNew"
+						:editing="!fieldsDisabled"
+						@update-field="forwardFieldUpdate"
+						@edit-requested="emit('edit-requested')"
 						@operation-started="emit('operation-started')"
 						@operation-finished="emit('operation-finished', $event)"
 					/>
@@ -90,6 +93,9 @@
 					:can-upload="canUploadImages"
 					:busy="mediaBusy"
 					:is-new="isNew"
+					:editing="!fieldsDisabled"
+					@update:rows="forwardFieldUpdate('product_designs', $event)"
+					@edit-requested="emit('edit-requested')"
 					@operation-started="emit('operation-started')"
 					@operation-finished="emit('operation-finished', $event)"
 				/>
@@ -103,6 +109,10 @@
 						:readonly="!canUploadImages"
 						:can-upload="canUploadImages"
 						:busy="mediaBusy"
+						:is-new="isNew"
+						:editing="!fieldsDisabled"
+						@update:rows="forwardFieldUpdate('product_box_details', $event)"
+						@edit-requested="emit('edit-requested')"
 						@operation-started="emit('operation-started')"
 						@operation-finished="emit('operation-finished', $event)"
 					/>
@@ -191,6 +201,7 @@ const emit = defineEmits([
 	"update:active-tab",
 	"update-field",
 	"update-image-group",
+	"edit-requested",
 	"operation-started",
 	"operation-finished",
 ])

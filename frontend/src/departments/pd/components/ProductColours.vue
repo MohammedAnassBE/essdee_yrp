@@ -11,6 +11,7 @@
 			<label for="product-colour-quick-add">Quick add colours</label>
 			<div>
 				<MultiSelect
+					ref="picker"
 					input-id="product-colour-quick-add"
 					:model-value="pending"
 					:options="options"
@@ -35,10 +36,16 @@
 					<template #chip="{ value }">
 						<span class="product-colours__chip"><i :style="swatchStyle(value.colour_code)" />{{ value.colour || value.name }}</span>
 					</template>
+					<template #footer>
+						<div v-if="newColour && !loading" class="product-colours__create">
+							<Button :label="`Create colour '${newColour}'`" icon="pi pi-plus" text size="small" @click="openCreate" />
+						</div>
+					</template>
 				</MultiSelect>
 				<Button label="Add selected" icon="pi pi-plus" :disabled="!pending.length" @click="addSelected" />
 			</div>
 			<small>Submitted colours only. Add the same colour again when the tech pack needs a duplicate row.</small>
+			<ProductColourCreateDialog v-model:visible="creating" :name="creationName" @created="addCreated" />
 		</div>
 
 		<div v-if="rows.length" class="product-colours__list">
@@ -63,11 +70,13 @@ import { FilterService } from "@primevue/core/api"
 import Button from "primevue/button"
 import MultiSelect from "primevue/multiselect"
 import Tag from "primevue/tag"
+import { useToast } from "primevue/usetoast"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 
 import { getSubmittedColourCodes } from "../../../api/pd.js"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
-import { appendProductColours, mergeFilteredSelection, renumberRows } from "../pdViews.js"
+import { appendProductColours, createDebouncedSearch, mergeFilteredSelection, newColourName, renumberRows } from "../pdViews.js"
+import ProductColourCreateDialog from "./ProductColourCreateDialog.vue"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -78,9 +87,18 @@ const options = ref([])
 const pending = ref([])
 const loading = ref(false)
 const actionError = ref("")
+const picker = ref(null)
+const creating = ref(false)
+const creationName = ref("")
+const exactNameExists = ref(false)
+const searchSucceeded = ref(false)
+const toast = useToast()
 const filterFields = ["colour", "name", "colour_code"]
-let loadSequence = 0
-let searchTimer = null
+const colourSearch = createDebouncedSearch(getSubmittedColourCodes, {
+	onResult: applySearchResult,
+	onError: applySearchError,
+	onSettled: () => { loading.value = false },
+})
 
 const rows = computed(() => props.modelValue || [])
 const optionByName = computed(() => new Map(options.value.map((option) => [option.name, option])))
@@ -89,6 +107,10 @@ const visibleOptions = computed(() => {
 	if (!filterValue.value) return options.value
 	return FilterService.filter(options.value, filterFields, filterValue.value, "contains")
 })
+const newColour = computed(() => newColourName(filterValue.value, {
+	searchSucceeded: searchSucceeded.value,
+	exactNameExists: exactNameExists.value,
+}))
 const counts = computed(() => {
 	const values = new Map()
 	for (const row of rows.value) values.set(row.product_colour, (values.get(row.product_colour) || 0) + 1)
@@ -98,42 +120,74 @@ const counts = computed(() => {
 watch(() => props.disabled, (disabled) => {
 	if (disabled) {
 		filterValue.value = ""
-		window.clearTimeout(searchTimer)
+		cancelSearch()
 	} else if (!options.value.length) loadOptions()
 }, { immediate: true })
 
 function queueSearch(event) {
 	filterValue.value = event.value || ""
-	window.clearTimeout(searchTimer)
-	searchTimer = window.setTimeout(() => loadOptions(event.value || ""), 250)
+	prepareSearch()
+	colourSearch.queue(filterValue.value)
 }
 
 function updatePending(value) {
 	pending.value = mergeFilteredSelection(pending.value, value, visibleOptions.value)
 }
 
-async function loadOptions(query = "") {
-	const sequence = ++loadSequence
+function prepareSearch() {
 	loading.value = true
+	searchSucceeded.value = false
+	exactNameExists.value = false
 	actionError.value = ""
-	try {
-		const result = await getSubmittedColourCodes(query)
-		if (sequence === loadSequence) {
-			const selected = new Map(pending.value.map((option) => [option.name, option]))
-			for (const option of result || []) selected.set(option.name, option)
-			options.value = [...selected.values()]
-		}
-	} catch (reason) {
-		if (sequence === loadSequence) actionError.value = reason?.message || "Unable to load submitted colours."
-	} finally {
-		if (sequence === loadSequence) loading.value = false
-	}
+}
+
+function loadOptions(query = "") {
+	prepareSearch()
+	return colourSearch.load(query)
+}
+
+function applySearchResult(result) {
+	const selected = new Map(pending.value.map((option) => [option.name, option]))
+	for (const option of result?.options || []) selected.set(option.name, option)
+	options.value = [...selected.values()]
+	exactNameExists.value = Boolean(result?.exact_name_exists)
+	searchSucceeded.value = true
+}
+
+function applySearchError(reason) {
+	actionError.value = reason?.message || "Unable to load submitted colours."
+}
+
+function cancelSearch() {
+	colourSearch.invalidate()
+	loading.value = false
+	searchSucceeded.value = false
+	exactNameExists.value = false
 }
 
 function addSelected() {
 	if (!pending.value.length || props.disabled) return
 	emit("update:modelValue", appendProductColours(rows.value, pending.value))
 	pending.value = []
+}
+
+function openCreate() {
+	if (!newColour.value) return
+	creationName.value = newColour.value
+	picker.value?.hide()
+	cancelSearch()
+	creating.value = true
+}
+
+function addCreated(colour) {
+	exactNameExists.value = true
+	if (colour.docstatus !== 1) {
+		toast.add({ severity: "warn", summary: `Colour '${colour.name}' saved as draft`, detail: "Submit it in Desk before adding it to products.", life: 6000 })
+		return
+	}
+	options.value = [...options.value, colour]
+	emit("update:modelValue", appendProductColours(rows.value, [colour]))
+	toast.add({ severity: "success", summary: `Colour '${colour.name}' created and added`, life: 3500 })
 }
 
 function remove(index) {
@@ -153,10 +207,7 @@ function swatchStyle(code) {
 	return { backgroundColor: code || "#f4f5f7" }
 }
 
-onBeforeUnmount(() => {
-	++loadSequence
-	window.clearTimeout(searchTimer)
-})
+onBeforeUnmount(cancelSearch)
 </script>
 
 <style scoped>
@@ -171,6 +222,7 @@ onBeforeUnmount(() => {
 .product-colours__option i, .product-colours__chip i { width: 18px; height: 18px; flex: 0 0 auto; border: 1px solid var(--erp-border-strong); border-radius: 50%; }
 .product-colours__option strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .product-colours__option small { margin-left: auto; color: var(--erp-text-muted); }
+.product-colours__create { padding: 6px 8px; border-top: 1px solid var(--erp-border); }
 .product-colours__list { display: grid; gap: 8px; }
 .product-colours__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-bg); }
 .product-colours__swatch { width: 30px; height: 30px; border: 1px solid var(--erp-border-strong); border-radius: 7px; }

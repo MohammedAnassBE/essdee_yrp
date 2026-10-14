@@ -19,6 +19,7 @@
 			:can-create-costing="Boolean(permissions.can_write)" :media-busy="mediaBusy"
 			@retry="load" @cancel="cancelEditing" @save="save" @update:active-tab="activeTab = $event"
 			@update-field="updateField" @update-image-group="updateImageGroup"
+			@edit-requested="startMediaEditing"
 			@operation-started="startMediaOperation" @operation-finished="finishMediaOperation"
 			@dismiss-copy="copySource = ''"
 		/>
@@ -116,7 +117,6 @@ const canEditImages = computed(() => mode.value === "edit"
 	&& (isNew.value ? permissions.value.can_create : permissions.value.can_write)
 	&& !busy.value)
 const canUploadImages = computed(() => !isNew.value
-	&& mode.value === "view"
 	&& permissions.value.can_write
 	&& !documentBusy.value)
 const trimColours = computed(() => colourOptionsFromForm(form.value, workspace.value.colours))
@@ -295,8 +295,9 @@ async function save() {
 		})
 		if (!isCurrentMutation(context)) return
 		applyWorkspace(payload)
-		allowNavigation = true
-		await router.push(routePath("product", payload.record.name))
+		const target = routePath("product", payload.record.name)
+		allowNavigation = target !== route.path
+		await router.push(target)
 	} catch (reason) {
 		if (isCurrentMutation(context)) actionError.value = reason?.message || "Unable to save the Product."
 	} finally {
@@ -314,7 +315,15 @@ function duplicateProduct() {
 
 function cancelEditing() {
 	const target = isNew.value ? "/pd/products" : routePath("product", record.value.name)
+	if (!isNew.value && route.name !== "pd-product-edit") {
+		applyWorkspace(workspace.value)
+		return
+	}
 	router.push(target)
+}
+
+function startMediaEditing() {
+	if (!isNew.value && permissions.value.can_write) mode.value = "edit"
 }
 
 function openReleaseConfirmation() {
@@ -371,9 +380,8 @@ function startMediaOperation() {
 	mediaBusy.value = true
 }
 
-async function finishMediaOperation(changed) {
+function finishMediaOperation() {
 	mediaBusy.value = false
-	if (changed) await load()
 }
 
 async function reloadAfterConflict() {

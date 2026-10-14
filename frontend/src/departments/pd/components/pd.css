@@ -83,16 +83,6 @@
 	flex-wrap: wrap;
 }
 
-.pd-product-workspace__upload-hint {
-	margin: 0;
-	padding: 9px 12px;
-	color: var(--erp-text-secondary);
-	font-size: var(--erp-font-size-caption);
-	border: 1px solid color-mix(in srgb, var(--erp-warning) 30%, var(--erp-border));
-	border-radius: var(--erp-control-radius);
-	background: color-mix(in srgb, var(--erp-warning) 8%, white);
-}
-
 .pd-product-workspace__loading {
 	display: grid;
 	gap: var(--erp-space-3);

@@ -18,10 +18,62 @@ from essdee_yrp.finishing.work_order import (
 from essdee_yrp.finishing.work_order import (
 	on_submit as on_packing_work_order_submit,
 )
-from essdee_yrp.finishing.work_order_packing import build_packing_work_order_rows
+from essdee_yrp.finishing.work_order_packing import _packing_receivables, build_packing_work_order_rows
+from essdee_yrp.garment_work_order import _packing_rows
 
 
 class TestFinishingWorkOrderPacking(FrappeTestCase):
+	def test_mapped_size_wise_planning_keeps_piece_quantities_in_both_builders(self):
+		ipd = frappe._dict(
+			name="TEST-IPD",
+			item="TEST-ITEM",
+			based_on_other_attribute_mapping=1,
+			packing_mode="Size Wise Packing",
+			primary_item_attribute="Size",
+			pack_out_stage="Packed",
+			dependent_attribute_mapping="TEST-MAPPING",
+			is_set_item=0,
+			stiching_item_details=[],
+		)
+		lot = frappe._dict(name="TEST-LOT", packing_uom="Pieces", uom="Box")
+		demand = {
+			"attrs": {"Size": "S"},
+			"qty": 120,
+			"item_variant": "INPUT-S",
+			"set_combination": "{}",
+			"table_index": 0,
+			"row_index": "0",
+		}
+		principal = [{"item_variant": "INPUT-S", "quantity": 120}]
+
+		def to_float(value, precision=None):
+			return round(float(value or 0), precision) if precision else float(value or 0)
+
+		with (
+			patch("essdee_yrp.garment_work_order.flt", side_effect=to_float),
+			patch(
+				"essdee_yrp.garment_work_order.build_variant_attributes",
+				return_value={"Size": "S", "Stage": "Packed"},
+			),
+			patch("essdee_yrp.garment_work_order.get_or_create_variant", return_value="PACKED-S"),
+			patch(
+				"essdee_yrp.finishing.work_order_packing.build_variant_attributes",
+				return_value={"Size": "S", "Stage": "Packed"},
+			),
+			patch("essdee_yrp.finishing.work_order_packing.get_or_create_variant", return_value="PACKED-S"),
+			patch("essdee_yrp.finishing.work_order_packing.flt", side_effect=to_float),
+			patch(
+				"essdee_yrp.finishing.work_order_packing.get_variant_attr_details",
+				return_value={"Size": "S"},
+			),
+		):
+			calculated = _packing_rows(ipd, lot, [demand])
+			receivables = _packing_receivables(ipd, lot, principal, "Accepted")
+
+		self.assertEqual(calculated[0]["qty"], 120)
+		self.assertEqual(receivables[0]["qty"], 120)
+		self.assertEqual(receivables[0]["uom"], "Pieces")
+
 	@patch("essdee_yrp.finishing.work_order.create_or_refresh_finishing_plan")
 	@patch("essdee_yrp.finishing.work_order._transfer_alternative_stock")
 	def test_external_packing_work_order_does_not_create_finishing_plan(

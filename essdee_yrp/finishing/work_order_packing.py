@@ -166,6 +166,7 @@ def _accessory_rows(ipd, lot, demands, process_name):
 
 def _packing_receivables(ipd, lot, principal, default_received_type):
 	dynamic_ratio = bool(ipd.based_on_other_attribute_mapping and ipd.packing_mode == "Size Ratio Packing")
+	mapped_size_wise = bool(ipd.based_on_other_attribute_mapping and ipd.packing_mode == "Size Wise Packing")
 	parts_count = _set_parts_count(ipd)
 	aggregated = {}
 	for row in principal:
@@ -174,7 +175,7 @@ def _packing_receivables(ipd, lot, principal, default_received_type):
 		if not size:
 			continue
 		quantity = flt(row["quantity"])
-		if not dynamic_ratio:
+		if not (dynamic_ratio or mapped_size_wise):
 			quantity /= parts_count
 			quantity = math.ceil(quantity * _uom_factor(ipd.item, lot.packing_uom, lot.uom))
 		variant = get_or_create_variant(
@@ -190,7 +191,7 @@ def _packing_receivables(ipd, lot, principal, default_received_type):
 				"lot": lot.name,
 				"qty": 0,
 				"pending_quantity": 0,
-				"uom": lot.packing_uom if dynamic_ratio else lot.uom,
+				"uom": lot.packing_uom if dynamic_ratio or mapped_size_wise else lot.uom,
 				"received_type": default_received_type,
 				"table_index": 0,
 				"row_index": str(len(aggregated)),

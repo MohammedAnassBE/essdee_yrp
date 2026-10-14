@@ -74,7 +74,9 @@ def get_finishing_dispatch_totals(finishing_doc):
 	total_cutting = get_finishing_plan_total_cutting(finishing_doc)
 	packing_summary = get_finishing_packing_summary(finishing_doc)
 	if packing_summary.dynamic_ratio_packing:
-		total_dispatched_pieces = flt(packing_summary.total_dispatched)
+		total_dispatched_pieces = flt(packing_summary.total_dispatched) * get_set_item_parts_count(
+			finishing_doc
+		)
 	else:
 		pieces_per_box = flt(finishing_doc.pieces_per_box)
 		set_item_parts_count = get_set_item_parts_count(finishing_doc)
@@ -169,7 +171,7 @@ def compute_received_status(finishing_doc):
 
 	if total_dispatched > 0:
 		dispatch_percentage = (total_dispatched / total_cutting) * 100
-		dispatch_threshold = flt(getattr(settings, "partially_dispatched_percentage", None)) or 90
+		dispatch_threshold = flt(getattr(settings, "partially_dispatched_percentage", None)) or 0
 		if dispatch_percentage < dispatch_threshold:
 			return "Partially Dispatched"
 		if dispatch_percentage > FULLY_DISPATCHED_PCT:
@@ -182,7 +184,7 @@ def compute_received_status(finishing_doc):
 	if not total_received:
 		return None
 	received_percentage = (total_received / total_cutting) * 100
-	received_threshold = flt(getattr(settings, "partial_received_percentage", None)) or 50
+	received_threshold = flt(getattr(settings, "partial_received_percentage", None)) or 0
 	return "Ready to Pack" if received_percentage >= received_threshold else "Partially Received"
 
 

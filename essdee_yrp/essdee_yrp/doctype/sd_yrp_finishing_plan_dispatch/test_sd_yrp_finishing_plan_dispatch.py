@@ -93,6 +93,8 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 					quantity=4,
 					lot="LOT-1",
 					uom="Pieces",
+					against_id="FP-TEST",
+					packing_source="",
 				)
 			],
 			check_permission=MagicMock(),

@@ -938,9 +938,9 @@ def validate_packing_fields(doc):
 
 	if doc.based_on_other_attribute_mapping:
 		if doc.packing_mode == "Size Ratio Packing":
-			validate_packing_size_details(doc, ratio_mode=True)
+			if any(row.quantity for row in doc.get("packing_size_details") or []):
+				validate_packing_size_details(doc, ratio_mode=True)
 		elif doc.packing_mode == "Size Wise Packing":
-			validate_packing_size_details(doc, ratio_mode=False)
 			doc.packing_combo = 1
 		else:
 			validate_packing_assortment(doc)

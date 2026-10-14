@@ -137,7 +137,14 @@ def _plan_dispatch(locations):
 		packing_batch_dispatch_json=None,
 		dispatch_colour_details=None,
 		finishing_plan_dispatch_items=[
-			SimpleNamespace(item_variant="ITEM-S", quantity=4, lot="LOT-1", uom="Nos")
+			SimpleNamespace(
+				item_variant="ITEM-S",
+				quantity=4,
+				lot="LOT-1",
+				uom="Nos",
+				against_id="FP-TEST",
+				packing_source="",
+			)
 		],
 		check_permission=MagicMock(),
 	)

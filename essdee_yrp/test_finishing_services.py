@@ -493,6 +493,20 @@ class TestFinishingServices(IntegrationTestCase):
 		self.assertEqual(totals.total_dispatched_pieces, 100)
 		self.assertEqual(totals.dispatch_percentage, 50)
 
+	@patch("essdee_yrp.finishing.status.get_set_item_parts_count", return_value=2)
+	@patch("essdee_yrp.finishing.status.get_finishing_packing_summary")
+	def test_dynamic_set_dispatch_converts_sets_to_component_pieces(self, packing_summary, _parts_count):
+		packing_summary.return_value = frappe._dict(
+			dynamic_ratio_packing=True,
+			total_dispatched=100,
+		)
+		doc = _doc(finishing_plan_details=[_row(cutting_qty=200)])
+
+		totals = get_finishing_dispatch_totals(doc)
+
+		self.assertEqual(totals.total_dispatched_pieces, 200)
+		self.assertEqual(totals.dispatch_percentage, 100)
+
 	def test_ocr_balance_accounts_for_rework_and_old_lot_transfers(self):
 		doc = _doc(
 			finishing_plan_details=[
@@ -529,6 +543,23 @@ class TestFinishingServices(IntegrationTestCase):
 		doc = _doc(finishing_plan_details=[])
 
 		self.assertEqual(compute_received_status(doc), "Fully Dispatched")
+
+	@patch("essdee_yrp.finishing.status.get_finishing_dispatch_totals")
+	@patch("essdee_yrp.finishing.status.get_finishing_plan_total_cutting", return_value=100)
+	@patch("essdee_yrp.finishing.status.frappe.get_cached_doc")
+	def test_zero_status_thresholds_are_preserved(self, get_settings, _total_cutting, dispatch_totals):
+		get_settings.return_value = _row(
+			partial_received_percentage=0,
+			partially_dispatched_percentage=0,
+		)
+		dispatch_totals.return_value = _row(total_dispatched_pieces=10)
+		doc = _doc(finishing_plan_details=[])
+
+		self.assertEqual(compute_received_status(doc), "Dispatched")
+
+		dispatch_totals.return_value = _row(total_dispatched_pieces=0)
+		doc = _doc(finishing_plan_details=[_row(delivered_quantity=1)])
+		self.assertEqual(compute_received_status(doc), "Ready to Pack")
 
 
 def _row(**values):

@@ -628,6 +628,9 @@ def _packing_rows(ipd, lot, demands):
 	dynamic_ratio = bool(
 		ipd.get("based_on_other_attribute_mapping") and ipd.get("packing_mode") == "Size Ratio Packing"
 	)
+	mapped_size_wise = bool(
+		ipd.get("based_on_other_attribute_mapping") and ipd.get("packing_mode") == "Size Wise Packing"
+	)
 	parts_count = (
 		len(
 			{
@@ -645,7 +648,7 @@ def _packing_rows(ipd, lot, demands):
 		if not size:
 			continue
 		quantity = flt(demand["qty"])
-		if not dynamic_ratio:
+		if not (dynamic_ratio or mapped_size_wise):
 			quantity /= parts_count
 			input_uom = resolve_item_uom(demand["item_variant"]).uom
 			output_variant = get_or_create_variant(

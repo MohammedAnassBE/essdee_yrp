@@ -419,10 +419,10 @@ doc_events = {
 	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
+	"Warehouse": {"autoname": "essdee_yrp.overrides.warehouse.autoname"},
 	"YRP Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [
-	"Warehouse": {"autoname": "essdee_yrp.overrides.warehouse.autoname"},
 			"essdee_yrp.ipd_validations.before_validate",
 			"essdee_yrp.fabric_ipd.ensure_cloth_item_attributes",
 		],

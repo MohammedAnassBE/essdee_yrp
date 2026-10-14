@@ -204,8 +204,10 @@ class TestFinishingWebEntries(TestCase):
 		result, mocks = self._run(
 			"dispatch_box",
 			{
-				"from_location": "S-UNIT",
-				"to_location": "S-TO",
+				"from_supplier": "S-UNIT",
+				"from_warehouse": "WH-UNIT",
+				"to_supplier": "S-TO",
+				"to_warehouse": "WH-TO",
 				"goods_value": 100,
 				"vehicle_no": "TN01",
 				"quantities": {"M": 2},
@@ -220,7 +222,11 @@ class TestFinishingWebEntries(TestCase):
 		kwargs = mocks["create_stock_entry"].call_args.kwargs
 		self.assertEqual(kwargs["data"], {"S": {"cur_dispatch": 0}, "M": {"cur_dispatch": 2}})
 		self.assertEqual(
-			(kwargs["doc_name"], kwargs["to_location"], kwargs["vehicle_no"]), ("FP-0001", "S-TO", "TN01")
+			[
+				kwargs[field]
+				for field in ("doc_name", "from_supplier", "from_warehouse", "to_supplier", "to_warehouse")
+			],
+			["FP-0001", "S-UNIT", "WH-UNIT", "S-TO", "WH-TO"],
 		)
 		self.assertEqual(result["result"], {"doctype": "YRP Stock Entry", "name": "STE-1"})
 
@@ -229,8 +235,10 @@ class TestFinishingWebEntries(TestCase):
 			self._run(
 				"dispatch_box",
 				{
-					"from_location": "S-UNIT",
-					"to_location": "",
+					"from_supplier": "S-UNIT",
+					"from_warehouse": "WH-UNIT",
+					"to_supplier": "S-TO",
+					"to_warehouse": "",
 					"goods_value": 100,
 					"vehicle_no": "TN01",
 					"quantities": {},

@@ -23,6 +23,7 @@ from essdee_yrp.dynamic_packing import (
 	aggregate_batch_pieces,
 	normalize_packing_batches,
 )
+from essdee_yrp.finishing.dispatch_locations import get_dispatch_locations
 from essdee_yrp.finishing.packing import (
 	get_ipd_packing_config,
 	prepare_dynamic_batch_dispatch,
@@ -581,8 +582,10 @@ def create_stock_entry(
 	item_name,
 	doc_name,
 	lot,
-	from_location,
-	to_location,
+	from_supplier,
+	from_warehouse,
+	to_supplier,
+	to_warehouse,
 	goods_value,
 	vehicle_no,
 	colour_details=None,
@@ -592,6 +595,7 @@ def create_stock_entry(
 	finishing_doc.check_permission("read")
 	if finishing_doc.lot != lot or finishing_doc.item != item_name:
 		frappe.throw("Finishing Plan, Lot, and Item do not match")
+	locations = get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse)
 	from essdee_yrp.finishing.packing import get_finishing_packing_summary
 
 	packing_summary = get_finishing_packing_summary(finishing_doc)
@@ -656,8 +660,7 @@ def create_stock_entry(
 			"purpose": "Material Issue",
 			"against": "SD YRP Finishing Plan",
 			"against_id": doc_name,
-			"from_warehouse": from_location,
-			"transfer_supplier": to_location,
+			**locations,
 			"vehicle_no": vehicle_no,
 			"additional_amount": goods_value,
 			"packing_batch_dispatch_json": (
@@ -681,7 +684,7 @@ def create_stock_entry(
 	for row in items:
 		row["received_type"] = default_received_type
 		stock_entry.append("items", row)
-	populate_stock_rates(stock_entry, from_location)
+	populate_stock_rates(stock_entry, from_warehouse)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name

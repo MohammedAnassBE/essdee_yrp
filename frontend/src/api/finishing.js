@@ -55,10 +55,6 @@ export const getReworkGroups = (filters) => callMethod(`${REPORTS_METHOD}.get_re
 export const updateReworkRejection = (rows, completed, lot) => callMethod(`${REWORK_METHOD}.update_rejected_quantity`, { rejection_data: rows, completed, lot })
 export const updateReworkPartial = (rows, lot) => callMethod(`${REWORK_METHOD}.update_partial_quantity`, { data: rows, lot })
 
-export function runFinishingPlanReport(filters) {
-	return callMethod("frappe.desk.query_report.run", { report_name: "SD YRP Finishing Plan Report", filters, ignore_prepared_report: 1 })
-}
-
 export const getDispatchWorkspace = (name = "") => callMethod(`${DISPATCH_METHOD}.get_dispatch_workspace`, { name: name || null })
 export const fetchDispatchItems = () => callMethod(`${DISPATCH_METHOD}.fetch_dispatch_items`)
 export function saveDispatch(items, name = "", submit = false, expectedModified = "") {
@@ -67,3 +63,4 @@ export function saveDispatch(items, name = "", submit = false, expectedModified 
 export function executeDispatchCommand(name, command, payload = {}, expectedModified = "") {
 	return callMethod(`${DISPATCH_METHOD}.execute_dispatch_command`, { name, command, payload, expected_modified: expectedModified })
 }
+export const getSupplierWarehouses = (supplier) => callMethod("essdee_yrp.finishing.dispatch_locations.get_supplier_warehouses", { supplier })

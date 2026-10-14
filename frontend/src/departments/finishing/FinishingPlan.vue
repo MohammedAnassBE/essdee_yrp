@@ -123,7 +123,7 @@ const successMessages = {
 	return_items: "Items returned.",
 	convert_to_loose_piece: "Items converted to loose pieces.",
 	create_grn: "Goods Received Note created.",
-	dispatch_box: "Boxes dispatched.",
+	dispatch_box: "Stock dispatched",
 	add_ironing_excess: "Ironing excess added.",
 	return_pack: "Packed pieces returned.",
 	lot_transfer: "Items transferred.",
@@ -176,6 +176,7 @@ async function submitEntry(action, payload) {
 	const outcome = await runCommand(action, payload)
 	if (!outcome) return
 	entryOpen.value = false
+	if (action === "dispatch_box") return
 	openResult(outcome.result)
 }
 

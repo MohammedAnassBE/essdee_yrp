@@ -8,6 +8,8 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch import (
 	sd_yrp_finishing_plan_dispatch as finishing_plan_dispatch,
 )
 
+DISPATCH_ARGS = ("FPD-TEST", "SUP-FROM", "WH-FROM", "SUP-TO", "WH-TO", "TEST-1", 1)
+
 
 class TestFinishingPlanDispatch(IntegrationTestCase):
 	def test_new_dispatch_uses_configured_current_fiscal_series(self):
@@ -54,14 +56,14 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		dispatch.check_permission.side_effect = frappe.PermissionError
 		with patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=dispatch):
 			with self.assertRaises(frappe.PermissionError):
-				finishing_plan_dispatch.create_stock_dispatch("FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1)
+				finishing_plan_dispatch.create_stock_dispatch(*DISPATCH_ARGS)
 		dispatch.check_permission.assert_called_once_with("write")
 
 	def test_stock_dispatch_rejects_draft_document(self):
 		dispatch = MagicMock(docstatus=0, stock_entry=None)
 		with patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=dispatch):
 			with self.assertRaisesRegex(frappe.ValidationError, "Submit the Finishing Plan Dispatch"):
-				finishing_plan_dispatch.create_stock_dispatch("FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1)
+				finishing_plan_dispatch.create_stock_dispatch(*DISPATCH_ARGS)
 
 	def test_stock_dispatch_rejects_existing_active_stock_entry(self):
 		dispatch = MagicMock(docstatus=1, stock_entry="STE-TEST")
@@ -70,7 +72,7 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 			patch.object(finishing_plan_dispatch.frappe.db, "get_value", return_value=1),
 		):
 			with self.assertRaisesRegex(frappe.ValidationError, "already exists"):
-				finishing_plan_dispatch.create_stock_dispatch("FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 1)
+				finishing_plan_dispatch.create_stock_dispatch(*DISPATCH_ARGS)
 
 	def test_cancel_cascades_to_submitted_dispatch_stock_entry(self):
 		stock_entry = MagicMock(docstatus=1)
@@ -105,11 +107,10 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 				"get_single_value",
 				return_value="Accepted",
 			),
+			patch.object(finishing_plan_dispatch, "get_dispatch_locations", return_value={}),
 			patch.object(finishing_plan_dispatch, "populate_stock_rates") as populate_rates,
 		):
-			result = finishing_plan_dispatch.create_stock_dispatch(
-				"FPD-TEST", "WH-FROM", "SUP-TO", "TEST-1", 100
-			)
+			result = finishing_plan_dispatch.create_stock_dispatch(*DISPATCH_ARGS)
 
 		self.assertEqual(result, "STE-TEST")
 		populate_rates.assert_called_once_with(stock_entry, "WH-FROM")

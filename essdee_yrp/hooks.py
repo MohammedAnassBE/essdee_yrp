@@ -227,6 +227,7 @@ doctype_js = {
 	"YRP Delivery Challan": "public/js/delivery_challan.js",
 	"YRP Goods Received Note": "public/js/goods_received_note.js",
 	"YRP Purchase Invoice": "public/js/purchase_invoice.js",
+	"Supplier": "public/js/supplier.js",
 	"YRP Bill Tracking": "public/js/bill_tracking.js",
 	"YRP Item BOM Attribute Mapping": "public/js/item_bom_attribute_mapping.js",
 	"YRP Process Cost": "public/js/process_cost.js",
@@ -421,6 +422,7 @@ doc_events = {
 	"YRP Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [
+	"Warehouse": {"autoname": "essdee_yrp.overrides.warehouse.autoname"},
 			"essdee_yrp.ipd_validations.before_validate",
 			"essdee_yrp.fabric_ipd.ensure_cloth_item_attributes",
 		],

@@ -16,6 +16,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import (
 )
 
 from essdee_yrp.dynamic_packing import aggregate_batch_pieces
+from essdee_yrp.finishing.dispatch_locations import get_dispatch_locations
 from essdee_yrp.finishing.packing import (
 	get_finishing_packing_summary,
 	get_ipd_packing_config,
@@ -441,8 +442,10 @@ def merge_saved_finishing_items(fresh_items, saved_items):
 @frappe.whitelist()
 def create_stock_dispatch(
 	doc_name,
-	from_location,
-	to_location,
+	from_supplier,
+	from_warehouse,
+	to_supplier,
+	to_warehouse,
 	vehicle_no,
 	goods_value,
 ):
@@ -456,6 +459,7 @@ def create_stock_dispatch(
 		existing_status = frappe.db.get_value("YRP Stock Entry", dispatch_doc.stock_entry, "docstatus")
 		if existing_status != 2:
 			frappe.throw(f"Stock Entry {dispatch_doc.stock_entry} already exists")
+	locations = get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse)
 
 	batch_requests = {}
 	for batch in update_if_string_instance(dispatch_doc.packing_batch_dispatch_json) or []:
@@ -481,8 +485,7 @@ def create_stock_dispatch(
 			"purpose": "Material Issue",
 			"against": "SD YRP Finishing Plan Dispatch",
 			"against_id": doc_name,
-			"from_warehouse": from_location,
-			"transfer_supplier": to_location,
+			**locations,
 			"vehicle_no": vehicle_no,
 			"additional_amount": goods_value,
 			"packing_batch_dispatch_json": (
@@ -503,7 +506,7 @@ def create_stock_dispatch(
 				"set_combination": "{}",
 			},
 		)
-	populate_stock_rates(stock_entry, from_location)
+	populate_stock_rates(stock_entry, from_warehouse)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name

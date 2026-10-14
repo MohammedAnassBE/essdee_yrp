@@ -161,7 +161,14 @@ class TestFinishingWebDispatch(TestCase):
 
 	def test_dispatch_stock_requires_submitted_dispatch_without_stock_entry(self):
 		module = self._dispatch()
-		values = {"from_location": "WH-1", "to_location": "S-1", "goods_value": 100, "vehicle_no": "TN01"}
+		values = {
+			"from_supplier": "S-FROM",
+			"from_warehouse": "WH-FROM",
+			"to_supplier": "S-TO",
+			"to_warehouse": "WH-TO",
+			"goods_value": 100,
+			"vehicle_no": "TN01",
+		}
 		for doc in (dispatch(docstatus=0), dispatch(docstatus=1, stock_entry="STE-1")):
 			with (
 				self.subTest(docstatus=doc.docstatus),
@@ -190,7 +197,10 @@ class TestFinishingWebDispatch(TestCase):
 			self.assertRaises(frappe.ValidationError),
 		):
 			module.execute_dispatch_command(
-				"FPD-2627-00001", "dispatch_stock", {"from_location": "WH-1"}, "2026-10-09 10:00:00"
+				"FPD-2627-00001",
+				"dispatch_stock",
+				{"from_supplier": "S-FROM", "from_warehouse": "WH-FROM"},
+				"2026-10-09 10:00:00",
 			)
 
 	def test_cancel_requires_a_submitted_dispatch_and_cancel_permission(self):

@@ -12,6 +12,7 @@ from essdee_yrp.cut_panel_store.common import assert_expected_modified, parse_js
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_finishing_plan_dispatch import (
 	sd_yrp_finishing_plan_dispatch as dispatch_service,
 )
+from essdee_yrp.finishing.dispatch_locations import DISPATCH_LOCATION_FIELDS
 from essdee_yrp.print_registry import get_document_print_formats
 
 DOCTYPE = "SD YRP Finishing Plan Dispatch"
@@ -25,7 +26,7 @@ RECORD_FIELDS = (
 	"owner",
 	"creation",
 )
-STOCK_FIELDS = ("from_location", "to_location", "goods_value", "vehicle_no")
+STOCK_FIELDS = (*DISPATCH_LOCATION_FIELDS, "goods_value", "vehicle_no")
 
 
 def quantity(value, label):

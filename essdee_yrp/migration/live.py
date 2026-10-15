@@ -29,6 +29,14 @@ from frappe.model import no_value_fields
 from frappe.utils import cint, now_datetime
 from frappe.utils.password import get_decrypted_password, set_encrypted_password
 
+from essdee_yrp.item_roles import (
+	VARIANT_INHERITED_FIELDS,
+	get_canonical_item_names,
+	get_item_structural_role,
+	get_variant_inherited_values,
+	resolve_variant_target_role,
+	strip_item_migration_context,
+)
 from essdee_yrp.migration.config import (
 	MigrationSettings,
 	get_migration_settings,
@@ -1411,6 +1419,7 @@ def _migration_contract_fingerprint(settings: MigrationSettings, plan: Migration
 	code_paths.append(SOURCE_BRIDGE)
 	code_paths.append(SOURCE_BRIDGE.with_name("f15_framework_archive.py"))
 	code_paths.append(migration_root.parent / "purchase_invoice.py")
+	code_paths.append(migration_root.parent / "item_roles.py")
 	code_paths.append(migration_root.parent / "patches" / "backfill_deterministic_valuation_lineage.py")
 	code_digest = hashlib.sha256()
 	for path in code_paths:
@@ -2395,6 +2404,7 @@ def _run_documents(
 	)
 	processed_total += int(approved_frappe_data["processed"])
 
+	dry_run_item_parents = {}
 	supplier_siblings = _supplier_alias_siblings(reference_data)
 	for doctype in plan.parent_doctypes:
 		spec = plan.specs[doctype]
@@ -2420,6 +2430,8 @@ def _run_documents(
 				)
 			except Exception as exc:
 				failed.append(f"{doctype}:{source_document.get('name')}: {exc}")
+				if not dry_run:
+					raise MigrationError("Migration transformation failures:\n" + "\n".join(failed)) from exc
 				if len(failed) >= 100:
 					raise MigrationError("Dry-run failure limit reached:\n" + "\n".join(failed))
 				continue
@@ -2433,6 +2445,7 @@ def _run_documents(
 					target,
 					checkpoint,
 					dry_run,
+					dry_run_item_parents=dry_run_item_parents,
 				)
 				doctype_count += processed
 				processed_total += processed
@@ -2453,6 +2466,7 @@ def _run_documents(
 				target,
 				checkpoint,
 				dry_run,
+				dry_run_item_parents=dry_run_item_parents,
 			)
 			doctype_count += processed
 			processed_total += processed
@@ -2473,6 +2487,8 @@ def _run_documents(
 		"failed": 0,
 		"preserved_required_values": preserved_required_values,
 		"historical_required_blanks": historical_required_blanks,
+		"standalone_orphan_variants": checkpoint.get("standalone_orphan_variants", []),
+		"standalone_orphan_variant_count": len(checkpoint.get("standalone_orphan_variants", [])),
 		"source_reference_counts": {key: len(value) for key, value in reference_data.items()},
 		"validated_external_reference_values": external_reference_count,
 		"supporting_external_masters": _supporting_external_counts,
@@ -3957,7 +3973,10 @@ def _transform_source_document(
 
 	siblings = supplier_siblings.get(str(source_document.get("name"))) if doctype == "Supplier" else None
 	if not siblings:
-		return transform_document(source_document, plan)
+		document = transform_document(source_document, plan)
+		if doctype == "Item Variant":
+			document["_source_item_parent"] = source_document.get("item")
+		return document
 	group = sorted(
 		[source_document, *source.iter_documents("Supplier", names=siblings)],
 		key=lambda document: (str(document.get("modified") or ""), str(document.get("name"))),
@@ -3986,15 +4005,37 @@ def _flush_batch(
 	target: FrappeBulkTarget,
 	checkpoint: dict[str, Any],
 	dry_run: bool,
+	*,
+	dry_run_item_parents: dict[str, dict[str, Any]] | None = None,
 ) -> int:
 	target_documents = [target_doc for _source, target_doc in batch]
 	if source_doctype in {"Item", "Item Variant"}:
-		target_documents = _prepare_item_migration_documents(source_doctype, target_documents)
+		target_documents = _prepare_item_migration_documents(
+			source_doctype,
+			target_documents,
+			checkpoint.setdefault("standalone_orphan_variants", []),
+			dry_run_item_parents if dry_run else None,
+		)
+		checkpoint["standalone_orphan_variants"] = list(
+			dict.fromkeys(checkpoint["standalone_orphan_variants"])
+		)
+		if dry_run and source_doctype == "Item" and dry_run_item_parents is not None:
+			fields = ("name", "has_variants", "variant_of", "variant_based_on", *VARIANT_INHERITED_FIELDS)
+			dry_run_item_parents.update(
+				{
+					document["name"].casefold(): {
+						field: document[field] for field in fields if field in document
+					}
+					for document in target_documents
+				}
+			)
 	if dry_run:
 		return len(batch)
 	if source_doctype == "Purchase Invoice":
 		target_documents = _prepare_purchase_invoice_migration_documents(target_documents)
-	target.upsert_batch(target_doctype, target_documents)
+	target.upsert_batch(
+		target_doctype, [strip_item_migration_context(document) for document in target_documents]
+	)
 	state = checkpoint["doctypes"].setdefault(source_doctype, {})
 	state["last_name"] = batch[-1][0]["name"]
 	state["processed"] = int(state.get("processed") or 0) + len(batch)
@@ -4010,95 +4051,155 @@ def _flush_batch(
 	return len(batch)
 
 
-def _prepare_item_migration_documents(
-	source_doctype: str,
-	documents: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-	"""Merge source catalog structure without overwriting unrelated ERP fields."""
+def _canonicalize_item_document(document, canonical):
+	name = str(document.get("name") or "")
+	document["name"] = canonical.get(name.casefold(), name)
+	document["item_code"] = document["name"]
+	parent = str(document.get("variant_of") or "")
+	if parent:
+		document["variant_of"] = canonical.get(parent.casefold(), parent)
+	for value in document.values():
+		if isinstance(value, list):
+			for row in value:
+				if isinstance(row, dict):
+					row["parent"] = document["name"]
+					if "variant_of" in row:
+						row["variant_of"] = document.get("variant_of")
 
-	names = [str(document.get("name") or "") for document in documents]
-	existing_rows = frappe.get_all(
-		"Item",
-		filters={"name": ["in", names]},
-		fields=["name", "has_variants", "variant_of", "variant_based_on"],
-		limit_page_length=0,
+
+def _prepare_variant_role(document, parents, canonical, diagnostics):
+	"""Drop Item Variant Attribute children for standalone variants; retain tuple data."""
+	parent_name = document.pop("_source_item_parent", None) or document.get("variant_of") or document["name"]
+	parent_name = canonical.get(parent_name.casefold(), parent_name)
+	parent = parents.get(parent_name)
+	if parent is None:
+		raise MigrationError(f"Missing parent Item {parent_name} for Item Variant {document['name']}")
+	try:
+		role = resolve_variant_target_role(
+			document["name"], parent_name, document.get("attributes") or [], get_item_structural_role(parent)
+		)
+	except ValueError as exc:
+		raise MigrationError(str(exc)) from exc
+	if role == "variant":
+		document["variant_of"] = parent_name
+		document["stock_uom"] = parent.get("stock_uom")
+	if role in {"variant", "standalone"}:
+		_fill_variant_inherited_values(document, parent)
+	if role != "variant":
+		if role == "standalone" and document["name"] not in diagnostics:
+			diagnostics.append(document["name"])
+		document.update(variant_of=None, has_variants=0, attributes=[])
+	return role
+
+
+def _fill_variant_inherited_values(document, parent):
+	for field, value in get_variant_inherited_values(parent).items():
+		if document.get(field) in (None, ""):
+			document[field] = deepcopy(value)
+
+
+def _merge_existing_item_structure(source_doctype, document, existing, role):
+	name = document["name"]
+	desired_role = get_item_structural_role(document)
+	existing_role = get_item_structural_role(existing)
+	if role == "merge_into_parent" and existing_role == "template":
+		# 63 historical catalogs have self-named empty variants beside templates.
+		return {
+			"doctype": "Item",
+			"name": name,
+			**{
+				key: deepcopy(document[key])
+				for key in ("item_tuple_attribute", "sync_with_erp")
+				if key in document
+			},
+		}
+	changed = desired_role != existing_role or (
+		desired_role == "variant"
+		and str(document.get("variant_of") or "").casefold()
+		!= str(existing.get("variant_of") or "").casefold()
 	)
-	existing_by_name = {str(row.name): row for row in existing_rows}
-	prepared = []
-	for document in documents:
-		name = str(document.get("name") or "")
-		existing = existing_by_name.get(name)
-		if not existing:
-			prepared.append(document)
-			continue
-		desired_role = _item_structural_role(document)
-		existing_role = _item_structural_role(existing)
-		if source_doctype == "Item Variant" and desired_role == "standalone" and existing_role == "template":
-			# Five historical catalogs contain a self-named, attribute-less Item
-			# Variant beside a real attributed parent Item.  The parent/template is
-			# structurally authoritative: loading the legacy self-variant later must
-			# not turn it back into a standalone Item or delete its attribute rows.
-			# Preserve only the optional physical-variant compatibility values that
-			# do not change the native Item role.
-			prepared.append(
-				{
-					"doctype": "Item",
-					"name": name,
-					**{
-						key: deepcopy(document[key])
-						for key in ("item_tuple_attribute", "sync_with_erp")
-						if key in document
-					},
-				}
-			)
-			continue
-		role_changed = desired_role != existing_role or (
-			desired_role == "variant"
-			and str(document.get("variant_of") or "") != str(existing.variant_of or "")
+	if changed and frappe.db.exists("Stock Ledger Entry", {"item_code": name, "is_cancelled": 0}):
+		raise MigrationError(
+			f"Cannot convert existing ERP Item {name} from {existing_role} "
+			f"to {desired_role}: it has ERPNext stock history"
 		)
-		if role_changed and frappe.db.exists("Stock Ledger Entry", {"item_code": name, "is_cancelled": 0}):
-			raise MigrationError(
-				f"Cannot convert existing ERP Item {name} from {existing_role} "
-				f"to {desired_role}: it has ERPNext stock history"
-			)
+	fields = _item_structure_fields(source_doctype)
+	return {
+		"doctype": "Item",
+		"name": name,
+		"item_code": name,
+		**{key: deepcopy(document[key]) for key in fields if key in document},
+	}
 
-		if source_doctype == "Item":
-			fields = {
-				"has_variants",
-				"variant_of",
-				"variant_based_on",
-				"attributes",
-				"primary_attribute",
-				"dependent_attribute",
-				"dependent_attribute_mapping",
-				"item_hash_value",
-			}
-		else:
-			fields = {
-				"has_variants",
-				"variant_of",
-				"variant_based_on",
-				"attributes",
-				"item_tuple_attribute",
-				"dependent_attribute_value",
-				"sync_with_erp",
-			}
-		prepared.append(
-			{
-				"doctype": "Item",
-				"name": name,
-				**{key: deepcopy(document[key]) for key in fields if key in document},
-			}
+
+def _item_structure_fields(source_doctype):
+	fields = {"has_variants", "variant_of", "variant_based_on", "attributes"}
+	if source_doctype == "Item":
+		return fields | {
+			"primary_attribute",
+			"dependent_attribute",
+			"dependent_attribute_mapping",
+			"item_hash_value",
+		}
+	return fields | {"item_tuple_attribute", "dependent_attribute_value", "sync_with_erp"}
+
+
+def _prepare_item_migration_documents(source_doctype, documents, diagnostics=None, projected_parents=None):
+	"""Resolve roles and merge structure without overwriting ERP-owned fields."""
+	diagnostics = diagnostics if diagnostics is not None else []
+	documents = deepcopy(documents)
+	names = [str(document.get("name") or "") for document in documents]
+	if source_doctype == "Item Variant":
+		names += [
+			document.get("_source_item_parent") or document.get("variant_of") or document["name"]
+			for document in documents
+		]
+	canonical = get_canonical_item_names(names)
+	projected_parents = _projected_item_rows(names, projected_parents or {})
+	canonical.update({name.casefold(): name for name in projected_parents})
+	existing_by_name = _get_item_migration_rows(canonical, projected_parents)
+	return [
+		_prepare_item_document(source_doctype, document, canonical, existing_by_name, diagnostics)
+		for document in documents
+	]
+
+
+def _projected_item_rows(names, projected_parents):
+	"""Use the in-memory Item phase when a dry run cannot write parents."""
+	return {
+		parent["name"]: parent
+		for name in names
+		if (parent := projected_parents.get(name.casefold())) is not None
+	}
+
+
+def _get_item_migration_rows(canonical, projected_parents):
+	rows = (
+		frappe.get_all(
+			"Item",
+			filters={"name": ["in", list(canonical.values())]},
+			fields=["*"],
+			limit_page_length=0,
 		)
-	return prepared
+		if canonical
+		else []
+	)
+	existing_by_name = {str(row["name"]): row for row in rows}
+	for name, document in projected_parents.items():
+		existing_by_name[name] = {**existing_by_name.get(name, {}), **document}
+	return existing_by_name
 
 
-def _item_structural_role(document: Mapping[str, Any]) -> str:
-	if int(document.get("has_variants") or 0):
-		return "template"
-	if document.get("variant_of"):
-		return "variant"
-	return "standalone"
+def _prepare_item_document(source_doctype, document, canonical, existing_by_name, diagnostics):
+	_canonicalize_item_document(document, canonical)
+	role = None
+	if source_doctype == "Item Variant":
+		role = _prepare_variant_role(document, existing_by_name, canonical, diagnostics)
+		_canonicalize_item_document(document, canonical)
+	existing = existing_by_name.get(document["name"])
+	if existing is None:
+		return document
+	return _merge_existing_item_structure(source_doctype, document, existing, role)
 
 
 def _prepare_purchase_invoice_migration_documents(
@@ -4913,7 +5014,9 @@ def _verify_transformed_value_batch(
 	grouped: dict[str, list[dict[str, Any]]] = {}
 	skipped_password_values = 0
 	for document in documents:
-		skipped_password_values += _collect_expected_value_rows(document, plan, grouped)
+		skipped_password_values += _collect_expected_value_rows(
+			strip_item_migration_context(document), plan, grouped
+		)
 
 	verified_documents = 0
 	verified_values = 0
@@ -5294,6 +5397,95 @@ def _verify_series(source: F15SourceBridge) -> dict[str, Any]:
 	}
 
 
+def _verify_item_role(document, expected_role, actual, parents, failures):
+	name = document["name"]
+	if actual is None:
+		return
+	actual_role = get_item_structural_role(actual)
+	if actual_role != expected_role:
+		failures.append(f"Item {name} role mismatch: expected {expected_role}, found {actual_role}")
+	parent_name = actual.get("variant_of")
+	if parent_name and get_item_structural_role(parents.get(parent_name.casefold(), {})) != "template":
+		failures.append(f"Item {name} variant_of {parent_name} is not a template")
+	if expected_role == "variant" and document.get("variant_of") != parent_name:
+		failures.append(
+			f"Item {name} parent mismatch: expected {document.get('variant_of')}, found {parent_name}"
+		)
+
+
+def _resolve_verified_variant(document, source_roles, failures):
+	parent_name = document.pop("_source_item_parent", None) or document.get("variant_of") or document["name"]
+	parent_role = source_roles.get(parent_name.casefold())
+	try:
+		role = resolve_variant_target_role(
+			document["name"], parent_name, document.get("attributes") or [], parent_role
+		)
+	except ValueError as exc:
+		failures.append(str(exc))
+		return "standalone"
+	if role != "variant":
+		document.update(variant_of=None, has_variants=0, attributes=[])
+	return role
+
+
+def _expected_item_role(source_doctype, document, source_roles, failures):
+	if source_doctype == "Item":
+		role = get_item_structural_role(document)
+		source_roles[document["name"].casefold()] = role
+		return role
+	return _resolve_verified_variant(document, source_roles, failures)
+
+
+def _narrow_item_identity_fields(source_doctype, document):
+	fields = _item_structure_fields(source_doctype) | {"doctype", "name", "item_code"}
+	for field in list(document):
+		if field not in fields:
+			del document[field]
+
+
+def _verify_item_identity_batch(source_doctype, documents, source_roles, failures):
+	names = [document["name"] for document in documents]
+	lookup_names = names + [
+		document.get("_source_item_parent") or document.get("variant_of") for document in documents
+	]
+	canonical = get_canonical_item_names(lookup_names)
+	rows = frappe.get_all(
+		"Item", filters={"name": ["in", names]}, fields=["name", "has_variants", "variant_of"]
+	)
+	actual = {row["name"].casefold(): row for row in rows}
+	parent_names = [row["variant_of"] for row in rows if row.get("variant_of")]
+	parents = (
+		frappe.get_all("Item", filters={"name": ["in", parent_names]}, fields=["name", "has_variants"])
+		if parent_names
+		else []
+	)
+	parents = {row["name"].casefold(): row for row in parents}
+	merged = 0
+	for document in documents:
+		role = _expected_item_role(source_doctype, document, source_roles, failures)
+		if role == "merge_into_parent":
+			merged += 1
+			role = source_roles[document["name"].casefold()]
+		_canonicalize_item_document(document, canonical)
+		_verify_item_role(document, role, actual.get(document["name"].casefold()), parents, failures)
+		if document["name"].casefold() in actual:
+			_narrow_item_identity_fields(source_doctype, document)
+	return merged
+
+
+def _verify_target_variant_parents():
+	rows = frappe.db.sql(
+		"""
+		SELECT variant.name, variant.variant_of
+		FROM `tabItem` variant
+		LEFT JOIN `tabItem` template ON template.name = variant.variant_of
+		WHERE COALESCE(variant.variant_of, '') != ''
+		AND COALESCE(template.has_variants, 0) != 1
+		"""
+	)
+	return [f"Item {name} variant_of {parent} is not a template" for name, parent in rows]
+
+
 def _verify_source_identities(
 	plan: MigrationPlan,
 	source: F15SourceBridge,
@@ -5304,8 +5496,12 @@ def _verify_source_identities(
 	expected_counts: dict[str, int] = {}
 	missing_counts: dict[str, int] = {}
 	failures: list[str] = []
+	item_role_failures: list[str] = []
 	verified_parents = 0
 	pending: dict[str, list[str]] = {}
+	item_identities: set[str] = set()
+	source_item_roles: dict[str, str] = {}
+	merged = 0
 
 	def flush() -> None:
 		for target_doctype, names in list(pending.items()):
@@ -5329,15 +5525,25 @@ def _verify_source_identities(
 		pending.clear()
 
 	def collect_batch(source_doctype: str, documents: list[dict[str, Any]]) -> None:
+		nonlocal merged
 		if source_doctype in {"Item", "Item Variant"}:
-			documents = _prepare_item_migration_documents(source_doctype, documents)
+			merged += _verify_item_identity_batch(
+				source_doctype, documents, source_item_roles, item_role_failures
+			)
 		for document in documents:
+			if document["doctype"] == "Item":
+				identity = document["name"].casefold()
+				if identity in item_identities:
+					continue
+				item_identities.add(identity)
 			_collect_document_identities(document, plan, pending, expected_counts)
 
 	for source_doctype in plan.parent_doctypes:
 		document_batch: list[dict[str, Any]] = []
 		for source_document in source.iter_documents(source_doctype, batch_size=batch_size):
 			target_document = transform_document(source_document, plan)
+			if source_doctype == "Item Variant":
+				target_document["_source_item_parent"] = source_document.get("item")
 			_apply_target_owned_configuration_boundary(source_doctype, target_document)
 			_resolve_and_validate_required_target_values(target_document, plan, reference_data=reference_data)
 			document_batch.append(target_document)
@@ -5358,6 +5564,9 @@ def _verify_source_identities(
 		target_document = transform_orphan(source_document, plan)
 		_collect_document_identities(target_document, plan, pending, expected_counts)
 	flush()
+	if item_identities:
+		item_role_failures.extend(_verify_target_variant_parents())
+	failures.extend(item_role_failures)
 	generated_allowances = _migration_generated_identity_allowances()
 	rows = []
 	for target_doctype, expected_count in sorted(expected_counts.items()):
@@ -5365,7 +5574,9 @@ def _verify_source_identities(
 		target_count = _identity_scope_count(target_doctype, target_meta, plan)
 		missing = missing_counts.get(target_doctype, 0)
 		generated = generated_allowances.get(target_doctype, 0)
-		target_only = max(0, target_count - expected_count - generated + missing)
+		target_only = target_count - expected_count - generated + missing
+		if target_only < 0:
+			failures.append(f"Identity count deficit in {target_doctype}: {-target_only}")
 		preserved_target_owned, unexpected_target_only = _classify_target_only_identities(
 			target_doctype, target_only
 		)
@@ -5375,16 +5586,24 @@ def _verify_source_identities(
 			{
 				"target_doctype": target_doctype,
 				"source_identity_count": expected_count,
+				"merged": merged if target_doctype == "Item" else 0,
 				"target_count": target_count,
 				"target_only_count": target_only,
 				"preserved_target_owned_count": preserved_target_owned,
 				"unexpected_target_only_count": unexpected_target_only,
 				"migration_generated_count": generated,
 				"missing_source_identities": missing,
-				"status": ("Pass" if not missing and not unexpected_target_only else "Failed"),
+				"status": (
+					"Failed"
+					if missing
+					or unexpected_target_only
+					or (target_doctype == "Item" and bool(item_role_failures))
+					else "Pass"
+				),
 			}
 		)
 	return {
+		"merged": merged,
 		"verified_parent_records": verified_parents,
 		"verified_parent_and_child_identities": sum(expected_counts.values()),
 		"doctypes": rows,
@@ -5404,8 +5623,12 @@ def _identity_scope_count(doctype, meta, plan):
 def _classify_target_only_identities(target_doctype: str, target_only: int) -> tuple[int, int]:
 	"""Split preserved ERP-owned rows from genuinely unexpected identities."""
 
-	target_only = max(0, int(target_only or 0))
-	if target_doctype in (PRESERVED_TARGET_IDENTITY_DOCTYPES | PRESERVED_TARGET_CHILD_DOCTYPES):
+	target_only = int(target_only or 0)
+	if target_only < 0:
+		return 0, target_only
+	if target_doctype == "Item" or target_doctype in (
+		PRESERVED_TARGET_IDENTITY_DOCTYPES | PRESERVED_TARGET_CHILD_DOCTYPES
+	):
 		return target_only, 0
 	return 0, target_only
 

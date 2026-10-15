@@ -352,8 +352,11 @@ def upsert_item(data, source_doctype=None):
 	# Some legacy source items have a NULL item_group (mandatory on F16). Default
 	# them to the root group so the sync doesn't fail; review later by querying
 	# Items whose item_group == DEFAULT_ITEM_GROUP and reassign on the source.
-	if not data.get("item_group") and frappe.db.exists("Item Group", DEFAULT_ITEM_GROUP):
-		data["item_group"] = DEFAULT_ITEM_GROUP
+	if not data.get("item_group"):
+		if frappe.db.exists("Item", data.get("name")):
+			data.pop("item_group", None)
+		elif frappe.db.exists("Item Group", DEFAULT_ITEM_GROUP):
+			data["item_group"] = DEFAULT_ITEM_GROUP
 	from essdee_yrp.item_validations import validate_sync_payload
 
 	validate_sync_payload(data)
@@ -396,79 +399,72 @@ def map_source_item(data):
 
 
 def map_source_item_variant(data):
-	"""Map production_api Item Variant rows onto ERPNext variant Items.
+	"""Resolve replicated physical Items against their canonical parent."""
+	from essdee_yrp.item_roles import (
+		get_canonical_item_names,
+		get_item_structural_role,
+		resolve_variant_target_role,
+	)
 
-	An attribute-less source parent/variant pair represents one physical item in
-	the agreed model, so the source variant converges onto its parent Item instead
-	of creating a second ERPNext record.
-	"""
-	mapped = copy.deepcopy(data)
-	parent = mapped.get("item")
-	attributes = mapped.get("attributes") or []
-	if not attributes:
-		if not parent:
-			frappe.throw(f"Item Variant {mapped.get('name')} has no parent Item")
-		if not frappe.db.exists("Item", parent):
-			frappe.throw(
-				f"Item Variant {mapped.get('name')} cannot collapse because parent Item {parent} is missing"
-			)
-		return (
-			None
-			if mapped.get("name") != parent
-			else {
-				"doctype": "Item",
-				"name": parent,
-				"item_code": parent,
-				"has_variants": 0,
-				"variant_of": None,
-				"item_tuple_attribute": mapped.get("item_tuple_attribute"),
-			}
-		)
-
-	if not parent or not frappe.db.exists("Item", parent):
-		frappe.throw(f"Missing parent Item {parent} for Item Variant {mapped.get('name')}")
+	parent = data.get("item")
+	canonical = get_canonical_item_names([data.get("name"), parent])
+	name = canonical.get(str(data.get("name")).casefold(), data.get("name"))
+	parent = canonical.get(str(parent).casefold())
+	if not parent:
+		frappe.throw(f"Missing parent Item {data.get('item')} for Item Variant {name}")
 	parent_doc = frappe.get_cached_doc("Item", parent)
-	mapped = {
+	try:
+		role = resolve_variant_target_role(
+			name, parent, data.get("attributes") or [], get_item_structural_role(parent_doc)
+		)
+	except ValueError as exc:
+		frappe.throw(str(exc))
+	if role == "merge_into_parent" and get_item_structural_role(parent_doc) == "template":
+		return {"doctype": "Item", "name": name, "item_tuple_attribute": data.get("item_tuple_attribute")}
+	return _map_resolved_item_variant(data, name, parent_doc, role)
+
+
+def _map_resolved_item_variant(data, name, parent, role):
+	from essdee_yrp.item_roles import VARIANT_INHERITED_FIELDS, get_variant_inherited_values
+
+	variant_of = parent.name if role == "variant" else None
+	return {
 		"doctype": "Item",
-		"name": data.get("name"),
-		"item_code": data.get("name"),
-		"item_name": data.get("name"),
-		"variant_of": parent,
+		"name": name,
+		"item_code": name,
+		"item_name": name,
+		"variant_of": variant_of,
 		"has_variants": 0,
 		"variant_based_on": "Item Attribute",
-		"item_group": parent_doc.item_group,
-		"stock_uom": parent_doc.stock_uom,
-		"is_stock_item": parent_doc.is_stock_item,
-		"is_purchase_item": parent_doc.is_purchase_item,
-		"is_sales_item": parent_doc.is_sales_item,
-		"disabled": parent_doc.disabled,
+		**get_variant_inherited_values(parent.as_dict()),
+		**{field: data[field] for field in VARIANT_INHERITED_FIELDS if data.get(field) not in (None, "")},
+		**({"stock_uom": parent.get("stock_uom")} if role == "variant" else {}),
 		"item_tuple_attribute": data.get("item_tuple_attribute"),
-		"attributes": [
-			{
-				"doctype": "Item Variant Attribute",
-				"attribute": row.get("attribute"),
-				"attribute_value": row.get("attribute_value"),
-				"display_name": row.get("display_name"),
-				"display_name_is_empty": row.get("display_name_is_empty"),
-			}
-			for row in attributes
-			if row.get("attribute")
-		],
+		"attributes": _map_variant_attributes(data.get("attributes") or [], name, variant_of),
 	}
-	for fieldname in (
-		"brand",
-		"description",
-		"secondary_unit_of_measure",
-		"purchase_uom",
-		"sales_uom",
-		"weight_per_unit",
-		"weight_uom",
-		"hsn_code",
-		"po_excess_allowed_percentage",
-	):
-		if parent_doc.meta.has_field(fieldname):
-			mapped[fieldname] = parent_doc.get(fieldname)
-	return mapped
+
+
+def _map_variant_attributes(rows, name, variant_of):
+	if not variant_of:
+		return []
+	return [
+		{
+			"doctype": "Item Variant Attribute",
+			"parent": name,
+			"variant_of": variant_of,
+			**{
+				field: row.get(field)
+				for field in (
+					"attribute",
+					"attribute_value",
+					"display_name",
+					"display_name_is_empty",
+				)
+			},
+		}
+		for row in rows
+		if row.get("attribute")
+	]
 
 
 def upsert_item_attribute_value(data):

@@ -130,6 +130,7 @@ RULES = {
 	),
 	"Item Variant": DocTypeRule(
 		target="Item",
+		extra_dependencies=frozenset({"Item"}),
 		custom_transformer="item_variant_to_standard_item",
 	),
 	"Item Variant Attribute": DocTypeRule(

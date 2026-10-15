@@ -1,8 +1,8 @@
 <template>
 	<DepartmentPage
 		title="Cutting Plan"
-		back-to="/cutting/plans"
-		back-label="Cutting Plans"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -123,6 +123,11 @@ import DocumentPrintButton from "./cutting/DocumentPrintButton.vue"
 import CuttingPlanSidebar from "./cutting/CuttingPlanSidebar.vue"
 import CuttingPlanTabs from "./cutting/CuttingPlanTabs.vue"
 import CuttingPlanEditor from "./cutting/plan/CuttingPlanEditor.vue"
+
+const props = defineProps({
+	backTo: { type: String, default: "/cutting/plans" },
+	backLabel: { type: String, default: "Cutting Plans" },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -247,7 +252,7 @@ function cancelEditor() {
 		editingSubmitted.value = false
 		return
 	}
-	router.push("/cutting/plans")
+	router.push(props.backTo)
 }
 
 watch(cuttingPlanId, probeEditor, { immediate: true })

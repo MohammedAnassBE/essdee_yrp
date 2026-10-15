@@ -1,6 +1,7 @@
 <template>
 	<DepartmentPage
 		title="Cutting Reports"
+		:embedded="embedded"
 		back-to="/cutting"
 		back-label="Cutting"
 		:show-title="false"
@@ -8,7 +9,7 @@
 		full-width
 		inline-navigation
 	>
-		<section class="cutting-reports erp-workspace" aria-label="Cutting Reports">
+		<section class="cutting-reports erp-workspace" :class="{ 'cutting-reports--embedded': embedded }" aria-label="Cutting Reports">
 			<div v-if="loadingPermissions" class="report-permission-loading"><Skeleton height="3rem" /><Skeleton height="14rem" /></div>
 			<WorkspaceLoadError v-else-if="permissionError" title="Reports could not be loaded" :message="permissionError" :loading="loadingPermissions" @retry="load" />
 			<Tabs v-else-if="visibleTabs.length" v-model:value="activeTab" class="erp-tabs report-tabs">
@@ -59,6 +60,8 @@ import CuttingDetailReport from "./cutting/reports/CuttingDetailReport.vue"
 import DailyCutSheetReport from "./cutting/reports/DailyCutSheetReport.vue"
 import DailyProductionReport from "./cutting/reports/DailyProductionReport.vue"
 import MultiCCRReport from "./cutting/reports/MultiCCRReport.vue"
+
+defineProps({ embedded: { type: Boolean, default: false } })
 
 const activeTab = ref("")
 const loadingPermissions = ref(true)
@@ -117,6 +120,11 @@ onMounted(load)
 	z-index: var(--erp-layer-sticky);
 	top: var(--erp-shell-header-height);
 	background: var(--erp-bg);
+}
+
+.cutting-reports--embedded .report-tabs__list,
+.cutting-reports--embedded .report-tabs__mobile {
+	top: calc(var(--erp-shell-header-height) + var(--planning-reports-sticky-offset, 0px));
 }
 
 .report-tabs :deep(.p-tab) {

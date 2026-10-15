@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Production Order" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Production Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="ppo-page-frame">
 			<FabricDocumentWorkspace doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
 				<template #header="{ record, headingId }">
@@ -64,6 +64,14 @@ import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
 import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
 
+const props = defineProps({
+	backTo: { type: String, default: "/sales/production-orders" },
+	backLabel: { type: String, default: "Production Orders" },
+	viewRouteName: { type: String, default: "sales-production-order" },
+	editRouteName: { type: String, default: "sales-production-order-edit" },
+	listRouteName: { type: String, default: "sales-production-orders" },
+})
+
 const route = useRoute()
 const router = useRouter()
 const workspace = ref({})
@@ -110,7 +118,7 @@ async function load(refresh = false) {
 }
 function openLotOcr(lot) { selectedLot.value = lot; lotOcrVisible.value = true }
 function beginAction(command) {
-	if (command === "save") return router.push({ name: "sales-production-order-edit", params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
+	if (command === "save") return router.push({ name: props.editRouteName, params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
 	if (dialogModes.has(command)) { actionMode.value = command; actionVisible.value = true; return }
 	pendingConfirm.value = command; confirmVisible.value = true
 }
@@ -121,10 +129,10 @@ async function runCommand(command, payload = {}) {
 	acting.value = command; error.value = ""
 	try {
 		const result = await executeProductionOrderCommand(source.name, command, payload, source.modified) || {}
-		if (result.deleted) { await router.replace({ name: "sales-production-orders" }); return }
+		if (result.deleted) { await router.replace({ name: props.listRouteName }); return }
 		workspace.value = result
 		const name = result.record?.name || source.name
-		if (name !== route.params.productionOrderId) await router.replace({ name: "sales-production-order", params: { productionOrderId: name }, state: preserveListNavigationState(name) })
+		if (name !== route.params.productionOrderId) await router.replace({ name: props.viewRouteName, params: { productionOrderId: name }, state: preserveListNavigationState(name) })
 	} catch (reason) { error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Production Order.` }
 	finally { acting.value = "" }
 }

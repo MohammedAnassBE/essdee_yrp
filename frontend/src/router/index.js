@@ -4,6 +4,7 @@ import { departments } from "../departments/registry.js"
 import { getLockedRedirect } from "./departmentLock.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
+import { PLANNING_ROUTES } from "../departments/planning/planningViews.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")
@@ -57,12 +58,18 @@ const HrReports = () => import("../departments/hr/HrReports.vue")
 const LotsList = () => import("../departments/purchase/lot/LotsList.vue")
 const LotPage = () => import("../departments/purchase/lot/LotPage.vue")
 const LotEditorPage = () => import("../departments/purchase/lot/LotEditorPage.vue")
+const PlanningLotsList = () => import("../departments/planning/lot/LotsList.vue")
+const PlanningLotPage = () => import("../departments/planning/lot/LotPage.vue")
+const PlanningLotEditorPage = () => import("../departments/planning/lot/LotEditorPage.vue")
+const PlanningReports = () => import("../departments/planning/PlanningReports.vue")
 const ItemsList = () => import("../departments/purchase/ItemsList.vue")
 const ItemPage = () => import("../departments/purchase/ItemPage.vue")
 const ItemEditorPage = () => import("../departments/purchase/ItemEditorPage.vue")
 const ItemPricesList = () => import("../departments/purchase/ItemPricesList.vue")
 const ItemPricePage = () => import("../departments/purchase/ItemPricePage.vue")
 const ItemPriceEditor = () => import("../departments/purchase/ItemPriceEditor.vue")
+
+const idProps = (param, extra) => (route) => ({ [param]: String(route.params[param] || ""), ...extra })
 
 const routes = [
 	{
@@ -552,6 +559,66 @@ const routes = [
 	{ path: "/purchase/lots/new", name: PURCHASE_ROUTES.lotNew, component: LotEditorPage },
 	{ path: "/purchase/lots/:lotId", name: PURCHASE_ROUTES.lot, component: LotPage, props: true },
 	{ path: "/purchase/lots/:lotId/edit", name: PURCHASE_ROUTES.lotEdit, component: LotEditorPage, props: true },
+	{
+		path: "/planning/cutting-plans", name: PLANNING_ROUTES.cuttingPlans, component: CuttingPlans,
+		props: { backTo: "/planning", backLabel: "Planning", viewRouteName: PLANNING_ROUTES.cuttingPlan, newRouteName: PLANNING_ROUTES.cuttingPlanNew },
+	},
+	{
+		path: "/planning/cutting-plans/new", name: PLANNING_ROUTES.cuttingPlanNew, component: CuttingPlanEditorPage,
+		props: { backTo: "/planning/cutting-plans", backLabel: "Cutting Plans", viewRouteName: PLANNING_ROUTES.cuttingPlan },
+	},
+	{
+		path: "/planning/cutting-plans/:cuttingPlanId", name: PLANNING_ROUTES.cuttingPlan, component: CuttingPlan,
+		props: { backTo: "/planning/cutting-plans", backLabel: "Cutting Plans" },
+	},
+	{
+		path: "/planning/sewing-plans", name: PLANNING_ROUTES.sewingPlans, component: SewingPlans,
+		props: { backTo: "/planning", backLabel: "Planning" },
+	},
+	{
+		path: "/planning/finishing-plans", name: PLANNING_ROUTES.finishingPlans, component: FinishingPlans,
+		props: { backTo: "/planning", backLabel: "Planning", viewRouteName: PLANNING_ROUTES.finishingPlan },
+	},
+	{
+		path: "/planning/finishing-plans/:finishingPlanId", name: PLANNING_ROUTES.finishingPlan, component: FinishingPlan,
+		props: { backTo: "/planning/finishing-plans", backLabel: "Finishing Plans" },
+	},
+	{ path: "/planning/lots", name: PLANNING_ROUTES.lots, component: PlanningLotsList },
+	{ path: "/planning/lots/:lotId", name: PLANNING_ROUTES.lot, component: PlanningLotPage, props: true },
+	{ path: "/planning/lots/:lotId/edit", name: PLANNING_ROUTES.lotEdit, component: PlanningLotEditorPage, props: true },
+	{
+		path: "/planning/production-orders", name: PLANNING_ROUTES.productionOrders, component: SalesSection,
+		props: { backTo: "/planning", backLabel: "Planning", viewRouteName: PLANNING_ROUTES.productionOrder, newRouteName: PLANNING_ROUTES.productionOrderNew },
+	},
+	{
+		path: "/planning/production-orders/new", name: PLANNING_ROUTES.productionOrderNew, component: ProductionOrderEditorPage,
+		props: { backTo: "/planning/production-orders", backLabel: "Production Orders", viewRouteName: PLANNING_ROUTES.productionOrder },
+	},
+	{
+		path: "/planning/production-orders/:productionOrderId/edit", name: PLANNING_ROUTES.productionOrderEdit, component: ProductionOrderEditorPage,
+		props: idProps("productionOrderId", { backTo: "/planning/production-orders", backLabel: "Production Orders", viewRouteName: PLANNING_ROUTES.productionOrder }),
+	},
+	{
+		path: "/planning/production-orders/:productionOrderId", name: PLANNING_ROUTES.productionOrder, component: ProductionOrder,
+		props: { backTo: "/planning/production-orders", backLabel: "Production Orders", viewRouteName: PLANNING_ROUTES.productionOrder, editRouteName: PLANNING_ROUTES.productionOrderEdit, listRouteName: PLANNING_ROUTES.productionOrders },
+	},
+	{
+		path: "/planning/work-orders", name: PLANNING_ROUTES.workOrders, component: FabricStoreSection,
+		props: { section: "work_orders", storeName: "Planning", basePath: "/planning", workOrderViewRouteName: PLANNING_ROUTES.workOrder, workOrderNewRouteName: PLANNING_ROUTES.workOrderNew },
+	},
+	{
+		path: "/planning/work-orders/new", name: PLANNING_ROUTES.workOrderNew, component: FabricWorkOrderEditorPage,
+		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", listRouteName: PLANNING_ROUTES.workOrders, viewRouteName: PLANNING_ROUTES.workOrder },
+	},
+	{
+		path: "/planning/work-orders/:workOrderId/edit", name: PLANNING_ROUTES.workOrderEdit, component: FabricWorkOrderEditorPage,
+		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", listRouteName: PLANNING_ROUTES.workOrders, viewRouteName: PLANNING_ROUTES.workOrder },
+	},
+	{
+		path: "/planning/work-orders/:workOrderId", name: PLANNING_ROUTES.workOrder, component: FabricWorkOrder,
+		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", viewRouteName: PLANNING_ROUTES.workOrder, newRouteName: PLANNING_ROUTES.workOrderNew, editRouteName: PLANNING_ROUTES.workOrderEdit },
+	},
+	{ path: "/planning/reports", name: PLANNING_ROUTES.reports, component: PlanningReports },
 	{
 		path: "/purchase/items",
 		name: PURCHASE_ROUTES.items,

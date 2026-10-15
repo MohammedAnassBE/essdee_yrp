@@ -34,17 +34,21 @@ import ListView from "../../components/common/ListView.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
 
-defineProps({ capability: { type: Object, required: true } })
+const props = defineProps({
+	capability: { type: Object, required: true },
+	viewRouteName: { type: String, default: "sales-production-order" },
+	newRouteName: { type: String, default: "sales-production-order-new" },
+})
 
 const router = useRouter()
 const defaultColumns = ["item", "production_term", "delivery_date", "status"]
 const statusOptions = ["Draft", "PPO Request", "Open", "Pending Request", "Item Changed", "Not Processed", "Closed", "Cancelled"]
 
 function openProductionOrder(row, snapshot) {
-	return openListDocument(router, row, snapshot, { routeName: "sales-production-order", paramName: "productionOrderId" })
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "productionOrderId" })
 }
 
 function createProductionOrder() {
-	router.push({ name: "sales-production-order-new" })
+	router.push({ name: props.newRouteName })
 }
 </script>

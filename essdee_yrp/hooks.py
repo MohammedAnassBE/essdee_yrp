@@ -194,6 +194,7 @@ yrp_registered_experiences = {
 	"finishing": ["workspaces"],
 	"purchase": ["workspaces"],
 	"sales": ["workspaces"],
+	"planning": ["workspaces"],
 	"pd": ["workspaces"],
 	"accounts": ["workspaces"],
 	"hr": ["workspaces"],

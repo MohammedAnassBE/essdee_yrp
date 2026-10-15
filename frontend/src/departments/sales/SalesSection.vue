@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Production Orders" back-to="/sales" back-label="Sales" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Production Orders" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="sales-section erp-workspace" aria-label="Production Orders">
 			<div v-if="loading" class="sales-section__loading">
 				<Skeleton height="76px" />
@@ -7,7 +7,7 @@
 			</div>
 			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view Production Orders.</Message>
-			<ProductionOrders v-else :capability="capability" />
+			<ProductionOrders v-else :capability="capability" :view-route-name="viewRouteName" :new-route-name="newRouteName" />
 		</section>
 	</DepartmentPage>
 </template>
@@ -21,6 +21,13 @@ import { getSalesCapabilities } from "../../api/sales.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ProductionOrders from "./ProductionOrders.vue"
+
+const props = defineProps({
+	backTo: { type: String, default: "/sales" },
+	backLabel: { type: String, default: "Sales" },
+	viewRouteName: { type: String, default: "sales-production-order" },
+	newRouteName: { type: String, default: "sales-production-order-new" },
+})
 
 const loading = ref(true)
 const error = ref("")

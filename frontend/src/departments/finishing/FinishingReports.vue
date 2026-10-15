@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Reports" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Reports" back-to="/finishing" back-label="Finishing" :show-title="false" :embedded="embedded" flat full-width inline-navigation>
 		<div class="finishing-reports erp-workspace">
 			<div v-if="loading" class="finishing-reports__loading" aria-label="Loading Finishing reports"><Skeleton height="56px" /><Skeleton height="320px" /></div>
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
@@ -39,6 +39,8 @@ import { getFinishingCapabilities } from "../../api/finishing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import "./finishing.css"
+
+defineProps({ embedded: { type: Boolean, default: false } })
 
 const REPORTS = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue")) },

@@ -1,0 +1,810 @@
+.planning-lot-frame {
+	width: 100%;
+	min-width: 0;
+}
+
+.lot-page__identity {
+	display: grid;
+	width: 100%;
+	min-width: 0;
+	padding-block: 5px;
+}
+
+.lot-page__title-row {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 12px;
+}
+
+.lot-page__title {
+	display: grid;
+	min-width: 0;
+	gap: 3px;
+}
+.lot-page__meta {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 12px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+
+.lot-page__date {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding-left: 12px;
+	border-left: 1px solid var(--erp-border);
+}
+.lot-page__date strong {
+	color: var(--erp-text);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.lot-page__identity h1 {
+	display: flex;
+	max-width: min(1080px, 73vw);
+	min-width: 0;
+	align-items: baseline;
+	gap: 7px;
+	margin: 0;
+	overflow: hidden;
+	color: var(--erp-text);
+	white-space: nowrap;
+}
+
+.lot-page__identity h1 > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.lot-page__lot {
+	flex: 0 0 auto;
+	max-width: 100%;
+	overflow: hidden;
+	color: var(--erp-accent-ink);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.lot-page__title-separator {
+	flex: 0 0 auto;
+	color: var(--erp-text-muted);
+	font-weight: 500;
+}
+.lot-tabs {
+	min-width: 0;
+	overflow: hidden;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	background: var(--erp-surface);
+	box-shadow: var(--erp-shadow-card);
+}
+
+.lot-tabs .lot-panels {
+	padding: var(--erp-space-3);
+	background: color-mix(in srgb, var(--erp-bg) 72%, white);
+}
+
+.lot-panels .p-tabpanel {
+	padding: 0;
+}
+
+.lot-tabs .p-tab span {
+	margin-left: 5px;
+	padding: 2px 6px;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface-muted);
+	border-radius: var(--erp-pill-radius);
+	font-size: var(--erp-font-size-min);
+}
+
+.lot-tab-stack {
+	display: grid;
+	min-width: 0;
+	gap: var(--erp-space-3);
+}
+.lot-section {
+	overflow: hidden;
+	min-width: 0;
+	background: var(--erp-surface);
+}
+.lot-section > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 13px;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.lot-section > header div {
+	display: grid;
+	min-width: 0;
+	gap: 2px;
+}
+.lot-section > header div > span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	text-transform: uppercase;
+}
+.lot-section h2 {
+	margin: 0;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-table);
+	font-weight: 600;
+}
+.lot-count {
+	padding: 1px 7px;
+	color: var(--erp-accent-ink);
+	background: var(--erp-accent-soft);
+	border-radius: var(--erp-pill-radius);
+	white-space: nowrap;
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+}
+
+.lot-section__body {
+	display: grid;
+	min-width: 0;
+	gap: var(--erp-space-3);
+	padding: var(--erp-space-3);
+}
+.lot-group {
+	overflow: hidden;
+	min-width: 0;
+	background: var(--erp-surface);
+}
+.lot-group__header {
+	display: flex;
+	min-height: 42px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 7px 10px;
+	background: transparent;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.lot-group__header strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+}
+
+.lot-group__header span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+}
+.lot-group__header > span {
+	flex: 0 0 auto;
+	padding: 1px 7px;
+	color: var(--erp-accent-ink);
+	background: var(--erp-accent-soft);
+	border-radius: var(--erp-pill-radius);
+	font-weight: 600;
+}
+
+.lot-group .lot-table-wrap,
+.lot-section > .lot-table-wrap {
+	border: 0;
+	border-radius: 0;
+}
+
+.lot-table-wrap {
+	max-height: none;
+	overflow-x: auto;
+	overflow-y: visible;
+}
+
+.lot-table-wrap:focus-visible {
+	outline: 2px solid var(--erp-accent);
+	outline-offset: -2px;
+}
+
+.lot-table {
+	min-width: 620px;
+}
+
+.lot-table--compact {
+	min-width: 0;
+}
+
+.lot-table :is(th, td) {
+	padding-top: 7px;
+	padding-bottom: 7px;
+	white-space: nowrap;
+}
+.lot-stage-label span {
+	display: inline-flex;
+	min-width: 68px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+}
+
+.lot-table tbody + tbody tr:first-child > * {
+	border-top: 1px solid var(--erp-border-strong);
+}
+.lot-table td.lot-total {
+	color: var(--erp-text);
+	font-weight: 700;
+}
+.lot-table tfoot :is(th, td) {
+	background: var(--erp-surface-muted);
+	border-top: 1px solid var(--erp-border-strong);
+	border-bottom: 0;
+	font-weight: 700;
+}
+.lot-table tfoot th {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+}
+
+.lot-table tbody small {
+	display: block;
+	margin-top: 2px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 500;
+}
+.lot-group-row th {
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-muted);
+	font-weight: 600;
+	font-size: var(--erp-font-size-caption);
+}
+
+.lot-empty {
+	min-height: 130px;
+}
+
+.lot-empty div {
+	display: grid;
+	justify-items: center;
+	gap: 6px;
+}
+.lot-muted {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.lot-conversion-toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--erp-space-2);
+	color: var(--erp-text-secondary);
+	font-size: var(--erp-font-size-caption);
+}
+.lot-table td.lot-negative {
+	color: var(--erp-danger);
+	font-weight: 400;
+}
+.lot-table td.lot-positive {
+	color: var(--erp-success-text);
+	font-weight: 400;
+}
+
+.lot-documents-rail {
+	display: grid;
+	grid-auto-rows: max-content;
+	align-content: start;
+	gap: var(--erp-space-3);
+	height: 100%;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	padding: var(--erp-space-2);
+}
+.lot-documents-section {
+	display: flex;
+	overflow: hidden;
+	flex-direction: column;
+	background: var(--erp-surface);
+}
+.lot-documents-section > header {
+	display: flex;
+	min-height: 49px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 7px 9px 7px 12px;
+	background: transparent;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.lot-documents-section > header > div:first-child {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 7px;
+}
+
+.lot-documents-section h2 {
+	overflow: hidden;
+	margin: 0;
+	font-size: var(--erp-font-size-caption);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lot-documents-section header span {
+	display: inline-grid;
+	min-width: 21px;
+	height: 21px;
+	padding: 1px 7px;
+	place-items: center;
+	color: var(--erp-accent-ink);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	background: var(--erp-accent-soft);
+	border-radius: var(--erp-pill-radius);
+}
+.lot-documents-card {
+	position: relative;
+	display: grid;
+	width: 100%;
+	gap: 5px;
+	margin: 0;
+	padding: 11px 34px 11px 12px;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: var(--erp-surface);
+	border: 0;
+	border-bottom: 1px solid var(--erp-border);
+	border-radius: 0;
+	cursor: pointer;
+	transition: background-color var(--erp-transition-fast),
+		padding-left var(--erp-transition-fast);
+}
+
+.lot-documents-card:last-of-type {
+	border-bottom: 0;
+}
+
+.lot-documents-card:hover {
+	padding-left: 15px;
+	background: color-mix(in srgb, var(--erp-accent-soft) 42%, white);
+}
+
+.lot-documents-card:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, white);
+	outline-offset: -2px;
+}
+
+.lot-documents-card__top {
+	display: flex;
+	flex-wrap: wrap;
+	min-width: 0;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.lot-documents-card__top strong {
+	flex: 1 1 auto;
+	min-width: min-content;
+	overflow-wrap: anywhere;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+}
+
+.lot-documents-card__top .document-status-badge {
+	flex: 0 0 auto;
+}
+
+.lot-documents-card__context {
+	overflow: hidden;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lot-documents-card__meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.lot-documents-card__meta span {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.lot-documents-card__meta i {
+	font-size: var(--erp-font-size-min);
+}
+.lot-documents-card__chevron {
+	position: absolute;
+	top: 50%;
+	right: 10px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	transform: translateY(-50%);
+}
+
+.lot-documents-empty {
+	display: grid;
+	min-height: 76px;
+	place-items: center;
+	align-content: center;
+	gap: 6px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.lot-documents-rail .lot-documents-toggle {
+	display: flex;
+	width: 100%;
+	min-height: 44px;
+	justify-content: center;
+	border-top: 1px solid var(--erp-border);
+	border-radius: 0;
+}
+
+.lot-documents-limit {
+	padding: var(--erp-space-2);
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+
+.lot-documents-rail > .workspace-load-error {
+	grid-column: 1 / -1;
+	width: 100%;
+	margin: 0;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.lot-document-dialog__content {
+	display: grid;
+	min-height: 180px;
+	overflow-y: visible;
+	gap: 10px;
+	padding: 2px;
+}
+
+.lot-document-dialog__loading {
+	display: grid;
+	gap: var(--erp-space-2);
+}
+
+.lot-document-dialog__status-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.lot-document-dialog__status-row small {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+}
+.lot-document-summary-strip {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 1px;
+	overflow: hidden;
+	background: var(--erp-border);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+}
+.lot-document-summary-metric {
+	display: grid;
+	min-width: 0;
+	min-height: 58px;
+	align-content: center;
+	gap: 2px;
+	padding: 8px 12px;
+	background: var(--erp-surface);
+}
+.lot-document-summary-metric span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+}
+.lot-document-summary-metric strong {
+	min-width: 0;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-section);
+	font-weight: 700;
+	letter-spacing: -.01em;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+.lot-document-detail-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 4px 28px;
+}
+.lot-document-detail-grid > div {
+	display: grid;
+	min-width: 0;
+	min-height: 48px;
+	align-content: center;
+	gap: 2px;
+	padding: 7px 10px;
+	border-bottom: 1px solid var(--erp-border-subtle);
+}
+.lot-document-detail-grid > div > span:not(.document-status-badge) {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .03em;
+	text-transform: uppercase;
+}
+
+.lot-document-detail-grid .document-status-badge {
+	justify-self: start;
+}
+.lot-document-detail-grid strong {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-md);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lot-document-detail-grid .lot-document-detail-link {
+	color: var(--erp-accent-ink);
+	text-decoration: underline dotted;
+	text-underline-offset: 2px;
+}
+
+.lot-document-dialog__footer {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-3);
+}
+
+.lot-document-dialog__footer .p-button {
+	white-space: nowrap;
+}
+
+.lot-document-dialog__status-row > div {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.lot-document-dialog__status-row > div > strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+}
+
+.lot-document-detail-wide {
+	grid-column: 1 / -1;
+}
+
+.lot-document-detail-wide strong {
+	white-space: pre-line;
+}
+
+.lot-document-dialog__state {
+	display: grid;
+	min-height: 260px;
+	gap: 10px;
+	padding: var(--erp-space-3);
+	color: var(--erp-text-muted);
+	text-align: center;
+	place-content: center;
+	justify-items: center;
+}
+.lot-document-dialog__state i {
+	color: var(--erp-accent);
+	font-size: var(--erp-font-size-title);
+}
+.lot-document-dialog__state strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+}
+
+.lot-document-dialog__state--error i {
+	color: var(--erp-danger);
+}
+
+@media (min-width: 901px) {
+	.planning-lot-frame .fabric-document-workspace__main {
+		grid-template-rows: minmax(0, 1fr);
+		align-content: stretch;
+		overflow: hidden;
+	}
+
+	.planning-lot-frame .fabric-document-workspace__matrix {
+		min-height: 0;
+		grid-template-rows: minmax(0, 1fr);
+	}
+
+	.lot-tabs {
+		display: flex;
+		height: 100%;
+		min-height: 0;
+		flex-direction: column;
+	}
+
+	.lot-tabs .lot-tablist {
+		flex: 0 0 auto;
+	}
+
+	.lot-tabs .lot-panels {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-gutter: stable;
+	}
+}
+
+@media (max-width: 1024px), (pointer: coarse) {
+	.lot-documents-card,
+	.lot-documents-rail .lot-documents-toggle {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 900px) {
+	.lot-tabs {
+		overflow: visible;
+	}
+
+	.lot-tabs .lot-tablist {
+		position: sticky;
+		z-index: var(--erp-layer-sticky);
+		top: var(--erp-shell-header-height);
+		background: var(--erp-surface);
+		border-radius: var(--erp-panel-radius) var(--erp-panel-radius) 0 0;
+	}
+
+	.fabric-document-workspace--embedded .lot-tabs .lot-tablist {
+		top: 0;
+	}
+
+	.lot-documents-rail {
+		grid-column: 1 / -1;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		height: auto;
+		overflow: visible;
+	}
+
+	.lot-document-detail-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 760px) {
+	.lot-document-dialog__footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.lot-document-dialog__footer .p-button {
+		width: 100%;
+	}
+}
+
+@media (max-width: 650px) {
+	.planning-lot-frame {
+		margin-bottom: 0;
+		padding: 0;
+	}
+
+	.lot-page__identity {
+		width: 100%;
+	}
+
+	.lot-page__meta {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.lot-page__date {
+		padding-left: 0;
+		border-left: 0;
+	}
+
+	.lot-page__identity h1 {
+		max-width: calc(100vw - 132px);
+	}
+
+	.lot-tabs .lot-panels {
+		padding: var(--erp-space-2);
+	}
+
+	.lot-group__header {
+		flex-wrap: wrap;
+	}
+}
+
+@media (max-width: 620px) {
+	.lot-documents-rail {
+		grid-template-columns: 1fr;
+	}
+
+	.lot-document-dialog__status-row {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 6px;
+	}
+
+	.lot-document-dialog__status-row > div {
+		flex-wrap: wrap;
+	}
+}
+
+@media (max-width: 480px) {
+	.lot-document-summary-strip,
+	.lot-document-detail-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.lot-document-summary-metric {
+		min-height: 52px;
+		padding: 7px 9px;
+	}
+
+	.lot-document-detail-grid > div {
+		min-height: 46px;
+		padding: 6px 8px;
+	}
+}
+
+.lot-page__editing { color: var(--erp-text-muted); font-weight: 500; }
+.lot-edit-fact { display: grid; min-width: 0; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, white); }
+.lot-edit-fact span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .03em;
+	text-transform: uppercase;
+}
+.lot-edit-fact strong {
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-md);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lot-edit-hint { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.lot-composer-attributes, .lot-composer-values { display: grid; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3); }
+.lot-composer-attributes > div, .lot-composer-values > div { display: grid; min-width: 0; gap: var(--erp-space-2); }
+.lot-order-composer .p-inputnumber { min-width: 0; }
+.lot-order-composer .p-inputnumber-input { width: 100%; min-width: 0; }
+.lot-order-composer .p-button { justify-self: start; }
+.lot-table .p-inputnumber { width: 100%; min-width: 90px; }
+.lot-table .p-inputnumber-input { width: 100%; min-width: 0; text-align: right; }
+@media (max-width: 620px) { .lot-composer-attributes, .lot-composer-values { grid-template-columns: 1fr; } }
+
+@media (max-width: 899px) {
+ .planning-lot-frame .lot-editor-actions .document-action-strip__secondary--1 { display: inline-flex; }
+ .planning-lot-frame .lot-editor-actions .document-action-strip__more--mobile { display: none; }
+}
+.lot-page__meta > span:first-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lot-document-detail-link::after {
+	content: " ↗";
+	color: var(--erp-accent);
+}

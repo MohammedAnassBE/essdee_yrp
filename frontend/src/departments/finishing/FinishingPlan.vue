@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan" back-to="/finishing/plans" back-label="Finishing Plans" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan"><Skeleton height="64px" /><Skeleton height="420px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -85,6 +85,11 @@ import FinishingEntryDialog from "./FinishingEntryDialog.vue"
 import FinishingPlanActions from "./FinishingPlanActions.vue"
 import FinishingPlanTabs from "./FinishingPlanTabs.vue"
 import "./finishing.css"
+
+const props = defineProps({
+	backTo: { type: String, default: "/finishing/plans" },
+	backLabel: { type: String, default: "Finishing Plans" },
+})
 
 const route = useRoute()
 const router = useRouter()

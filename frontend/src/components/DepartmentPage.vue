@@ -1,5 +1,7 @@
 <template>
+	<div v-if="embedded" class="department-page-embedded"><slot /></div>
 	<main
+		v-else
 		class="department-page erp-page-shell"
 		:class="{
 			'department-page--flat': flat,
@@ -76,16 +78,19 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	embedded: { type: Boolean, default: false },
 })
 
 provide(pageNavigationKey, {
 	backTo: computed(() => props.backTo),
 	backLabel: computed(() => props.backLabel),
-	inline: computed(() => props.inlineNavigation),
+	inline: computed(() => props.inlineNavigation && !props.embedded),
 })
 </script>
 
 <style scoped>
+.department-page-embedded { min-width: 0; }
+
 .department-page__content--inline-navigation {
 	min-height: calc(100vh - var(--erp-shell-header-height) - 112px);
 	min-height: calc(100dvh - var(--erp-shell-header-height) - 112px);

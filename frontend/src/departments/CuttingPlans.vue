@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting Plans" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Cutting Plans" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<div class="cutting-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Cutting Plans unavailable" message="You do not have permission to view Cutting Plans." :retryable="false" />
@@ -43,6 +43,13 @@ import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../router/listDocumentNavigation.js"
 
+const props = defineProps({
+	backTo: { type: String, default: "/cutting" },
+	backLabel: { type: String, default: "Cutting" },
+	viewRouteName: { type: String, default: "cutting-plan" },
+	newRouteName: { type: String, default: "cutting-plan-new" },
+})
+
 const router = useRouter()
 const capability = ref(null)
 const loadError = ref("")
@@ -53,11 +60,11 @@ const linkFilters = { item: { has_variants: 1 } }
 const statusOptions = ["Draft", "Planned", "Fabric Partially Received", "Ready to Cut", "Cutting In Progress", "Partially Completed", "Completed", "Cut Panel Dispatch Pending"]
 
 function openCuttingPlan(row, snapshot) {
-	return openListDocument(router, row, snapshot, { routeName: "cutting-plan", paramName: "cuttingPlanId" })
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "cuttingPlanId" })
 }
 
 function createCuttingPlan() {
-	router.push("/cutting/plans/new")
+	router.push({ name: props.newRouteName })
 }
 
 async function load() {

@@ -37,6 +37,7 @@
 		</section>
 
 		<ProductionOrderActionDialog v-model:visible="actionVisible" :mode="actionMode" :matrix="workspace.matrix || []" :busy="Boolean(acting)" @submit="submitAction" />
+		<ProductionOrderUpdatePriceDialog v-model:visible="priceVisible" :production-order="workspace.record?.name || ''" :busy="Boolean(acting)" :error="error" @submit="submitPrice" />
 		<ProductionOrderLotOcrDialog v-model:visible="lotOcrVisible" :production-order="workspace.record?.name || ''" :lot="selectedLot" :item="workspace.record?.item || ''" />
 		<DocumentConfirmationDialog v-model:visible="confirmVisible" :title="confirmTitle" :message="confirmMessage" :confirm-label="confirmLabel" :busy="Boolean(acting)" @confirm="confirmAction" />
 	</DepartmentPage>
@@ -63,6 +64,7 @@ import ProductionOrderLotOcrDialog from "./ProductionOrderLotOcrDialog.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
 import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
+import ProductionOrderUpdatePriceDialog from "./ProductionOrderUpdatePriceDialog.vue"
 
 const props = defineProps({
 	backTo: { type: String, default: "/sales/production-orders" },
@@ -81,13 +83,14 @@ const acting = ref("")
 const activeTab = ref("details")
 const actionVisible = ref(false)
 const actionMode = ref("")
+const priceVisible = ref(false)
 const lotOcrVisible = ref(false)
 const selectedLot = ref("")
 const confirmVisible = ref(false)
 const pendingConfirm = ref("")
 let loadSequence = 0
 
-const dialogModes = new Set(["request_changes", "update_price", "change_dates", "change_status", "update_quantity_ratio", "transfer_quantity", "create_lot", "link_lot"])
+const dialogModes = new Set(["request_changes", "change_dates", "change_status", "update_quantity_ratio", "transfer_quantity", "create_lot", "link_lot"])
 const iconMap = { save: "pi pi-pencil", request_ppo_approval: "pi pi-send", approve_ppo: "pi pi-check-circle", request_changes: "pi pi-undo", update_price: "pi pi-indian-rupee", change_dates: "pi pi-calendar", change_status: "pi pi-sync", update_quantity_ratio: "pi pi-sliders-h", approve_quantity_ratio: "pi pi-check", approve_status: "pi pi-check", transfer_quantity: "pi pi-arrow-right-arrow-left", approve_transfer: "pi pi-check", create_lot: "pi pi-plus", link_lot: "pi pi-link", reopen: "pi pi-lock-open", cancel: "pi pi-ban", delete: "pi pi-trash", amend: "pi pi-copy" }
 const priority = ["approve_ppo", "request_ppo_approval", "approve_quantity_ratio", "approve_status", "approve_transfer", "save", "update_quantity_ratio", "update_price", "change_dates", "change_status", "transfer_quantity", "create_lot", "link_lot", "reopen", "request_changes", "cancel", "amend", "delete"]
 const actions = computed(() => priority.flatMap((key) => {
@@ -119,10 +122,12 @@ async function load(refresh = false) {
 function openLotOcr(lot) { selectedLot.value = lot; lotOcrVisible.value = true }
 function beginAction(command) {
 	if (command === "save") return router.push({ name: props.editRouteName, params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
+	if (command === "update_price") { error.value = ""; priceVisible.value = true; return }
 	if (dialogModes.has(command)) { actionMode.value = command; actionVisible.value = true; return }
 	pendingConfirm.value = command; confirmVisible.value = true
 }
 async function submitAction(payload) { actionVisible.value = false; await runCommand(actionMode.value, payload) }
+async function submitPrice(payload) { if (await runCommand("update_price", payload)) priceVisible.value = false }
 async function confirmAction() { const command = pendingConfirm.value; confirmVisible.value = false; pendingConfirm.value = ""; if (command) await runCommand(command) }
 async function runCommand(command, payload = {}) {
 	const source = workspace.value.record
@@ -133,13 +138,14 @@ async function runCommand(command, payload = {}) {
 		workspace.value = result
 		const name = result.record?.name || source.name
 		if (name !== route.params.productionOrderId) await router.replace({ name: props.viewRouteName, params: { productionOrderId: name }, state: preserveListNavigationState(name) })
-	} catch (reason) { error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Production Order.` }
+		return true
+	} catch (reason) { error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Production Order.`; return false }
 	finally { acting.value = "" }
 }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
-watch(() => route.params.productionOrderId, () => { lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
+watch(() => route.params.productionOrderId, () => { priceVisible.value = false; lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
 </script>
 
 <style scoped>

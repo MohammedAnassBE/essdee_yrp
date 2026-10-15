@@ -158,7 +158,11 @@ class TestSalesProductionOrderCommands(TestCase):
 				{"production_order": "PPO-0001", "size_quantities": {"S": 10}, "size_ratios": {"S": 1}, "requested_by": "Buyer", "reason": "Revised order"},
 			),
 			"approve_quantity_ratio": ("approve_quantity_and_ratio", {}, {"production_order": "PPO-0001"}),
-			"update_price": ("update_price", {"item_details": [{"size": "S", "mrp": 799}]}, {"production_order": "PPO-0001", "item_details": [{"size": "S", "mrp": 799}]}),
+			"update_price": (
+				"update_price",
+				{"item_details": {"items": {"S": {"selected_source": "sales_mrp"}}, "lot_price_overrides": {"LOT-1": {"S": 799}}}},
+				{"production_order": "PPO-0001", "item_details": {"items": {"S": {"selected_source": "sales_mrp"}}, "lot_price_overrides": {"LOT-1": {"S": 799}}}},
+			),
 			"change_dates": (
 				"update_production_order_date",
 				{"date_field": "Delivery Date", "new_date": "2026-10-22", "reason": "Buyer request"},

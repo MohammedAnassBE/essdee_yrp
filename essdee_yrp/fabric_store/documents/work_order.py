@@ -10,7 +10,11 @@ from frappe.utils import cint, flt
 from yrp import attribute_links as attribute_db
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import group_items_for_ui
-from yrp.yrp.doctype.yrp_debit.yrp_debit import approve_debit, create_debit
+from yrp.yrp.doctype.yrp_debit.yrp_debit import (
+	approve_debit,
+	create_debit,
+	has_debit_request_permission,
+)
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	create_rework_work_order,
 	get_close_permission,
@@ -328,11 +332,7 @@ def _capability_candidates(
 		and not doc.get("is_rework")
 		and _target_create_permission("YRP Work Order", adapter)
 	)
-	can_create_debit = bool(
-		is_open
-		and _target_create_permission("YRP Debit", adapter)
-		and _settings_role_allowed("debit_request_role")
-	)
+	can_create_debit = bool(is_open and has_debit_request_permission())
 	return {
 		"save": {"label": _("Edit"), "permission": "write", "eligible": docstatus == 0},
 		"submit": {"label": _("Submit"), "permission": "submit", "eligible": docstatus == 0},
@@ -858,12 +858,14 @@ def execute_work_order_command(
 		)
 	elif command == "create_debit":
 		_assert_open_submitted(doc)
-		frappe.has_permission("YRP Debit", ptype="create", throw=True)
+		if not has_debit_request_permission():
+			frappe.throw(_("You do not have permission to request a Debit."), frappe.PermissionError)
 		create_debit(
 			name,
 			debit_no=payload.get("debit_no"),
 			debit_value=payload.get("debit_value"),
 			reason=payload.get("reason"),
+			debit_document=payload.get("debit_document") or None,
 			on_close=0,
 		)
 	elif command == "approve_debit":

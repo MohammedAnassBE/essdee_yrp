@@ -51,7 +51,20 @@
 			</template>
 
 			<template v-else-if="mode === 'create_debit'">
-				<div class="work-order-action-panel__fields"><label><span>Debit number</span><InputText v-model="draft.debit_no" fluid /></label><label><span>Debit value *</span><InputNumber v-model="draft.debit_value" :min="0" fluid /></label><label class="work-order-action-panel__wide"><span>Reason *</span><Textarea v-model="draft.reason" rows="3" auto-resize fluid /></label></div>
+				<div class="work-order-action-panel__fields">
+					<label><span>Debit No *</span><InputText v-model="draft.debit_no" fluid /></label>
+					<label><span>Debit Value *</span><InputNumber v-model="draft.debit_value" :min="0" :min-fraction-digits="0" :max-fraction-digits="2" fluid /></label>
+					<label class="work-order-action-panel__wide"><span>Reason *</span><Textarea v-model="draft.reason" rows="3" auto-resize fluid /></label>
+					<label class="work-order-action-panel__wide">
+						<span>Debit Document</span>
+						<input ref="debitDocumentInput" type="file" hidden :disabled="busy" @change="attachDebitDocument" />
+						<div class="work-order-action-panel__check">
+							<Button :label="draft.debit_document ? 'Replace' : 'Attach'" size="small" severity="secondary" outlined :loading="uploading" :disabled="busy" @click.prevent="debitDocumentInput?.click()" />
+							<span v-if="draft.debit_document">{{ debitDocumentName }}</span>
+							<Button v-if="draft.debit_document" label="Clear" size="small" severity="secondary" text :disabled="busy" @click.prevent="draft.debit_document = ''" />
+						</div>
+					</label>
+				</div>
 			</template>
 
 			<template v-else-if="mode === 'create_rework'">
@@ -117,6 +130,7 @@ import Textarea from "primevue/textarea"
 import { computed, reactive, ref, watch } from "vue"
 
 import { executeWorkOrderCommand, getWorkOrderFabricCalculationContext } from "../../api/fabricStore.js"
+import { uploadFile } from "../../api/frappe.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -131,7 +145,10 @@ const emit = defineEmits(["update:visible", "changed"])
 const error = ref("")
 const loading = ref(false)
 const acting = ref("")
+const uploading = ref(false)
+const debitDocumentInput = ref(null)
 const draft = reactive({})
+const debitDocumentName = computed(() => String(draft.debit_document || "").split("/").pop())
 const garmentRows = ref([])
 const garmentMatrixRows = ref([])
 const garmentPrimaryValues = ref([])
@@ -159,7 +176,7 @@ const titles = {
 }
 const title = computed(() => titles[props.mode] || "Work Order Action")
 const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item"].includes(props.mode))
-const busy = computed(() => loading.value || Boolean(acting.value))
+const busy = computed(() => loading.value || uploading.value || Boolean(acting.value))
 const isCloseMode = computed(() => ["close", "request_close", "approve_close"].includes(props.mode))
 const actionLabels = {
 	close: "Close Work Order", request_close: "Request Close", approve_close: "Approve Close",
@@ -172,7 +189,7 @@ const canSubmit = computed(() => {
 	if (props.mode === "calculate_garment") return garmentMatrixRows.value.some((row) => row.selected && garmentRowTotal(row) > 0)
 	if (props.mode === "calculate_fabric") return fabricRows.value.some((row) => row.entries.some((entry) => Number(entry.qty || 0) > 0))
 	if (isCloseMode.value) return Boolean(String(draft.close_reason || "").trim()) && (draft.close_reason !== "Others" || Boolean(String(draft.close_other_reason || "").trim())) && (!draft.with_debit || Boolean(String(draft.debit_no || "").trim()) && Number(draft.debit_value || 0) > 0 && Boolean(String(draft.debit_reason || "").trim()))
-	if (props.mode === "create_debit") return Boolean(String(draft.debit_no || "").trim()) && Number(draft.debit_value || 0) > 0 && Boolean(String(draft.reason || "").trim())
+	if (props.mode === "create_debit") return !uploading.value && Boolean(String(draft.debit_no || "").trim()) && Number(draft.debit_value || 0) > 0 && Boolean(String(draft.reason || "").trim())
 	if (props.mode === "create_rework") return reworkRows.value.some((row) => Number(row.qty || 0) > 0) && (draft.supplier_type !== "Different Supplier" || Boolean(draft.supplier))
 	if (props.mode === "create_recut") return recutQuantity.value > 0
 	if (props.mode === "change_delivery_date") return Boolean(draft.expected_date && String(draft.reason || "").trim())
@@ -183,7 +200,7 @@ const canSubmit = computed(() => {
 function clone(value) { return JSON.parse(JSON.stringify(value ?? {})) }
 function resetDraft() {
 	for (const key of Object.keys(draft)) delete draft[key]
-	Object.assign(draft, { supplier_type: "Same Supplier", supplier: "", selected: [], expected_date: props.workOrder.expected_delivery_date || "", close_reason: "", close_other_reason: "", close_remarks: "", with_debit: false, debit_no: "", debit_value: null, debit_reason: "", reason: "", source_process: "", submit_recut: false })
+	Object.assign(draft, { supplier_type: "Same Supplier", supplier: "", selected: [], expected_date: props.workOrder.expected_delivery_date || "", close_reason: "", close_other_reason: "", close_remarks: "", with_debit: false, debit_no: "", debit_value: null, debit_document: "", debit_reason: "", reason: "", source_process: "", submit_recut: false })
 	const garment = props.editor.calculation_contexts?.garment || {}
 	garmentRows.value = clone(garment.rows || [])
 	garmentPrimaryValues.value = clone(garment.primary_values?.length ? garment.primary_values : ["default"])
@@ -209,6 +226,16 @@ function hydrateFabricRows(context) {
 			: (row.qty_rows || []).map((entry, index) => ({ ...entry, input_key: `${entry.key}:${entry.knit_colour || index}`, qty: Number(entry.prefill ?? entry.qty ?? 0) }))
 		return { ...row, colour: row.greige_colour || "", yarn_qty: null, entries }
 	})
+}
+async function attachDebitDocument(event) {
+	const file = event.target.files?.[0]
+	if (!file) return
+	uploading.value = true; error.value = ""
+	try {
+		const uploaded = await uploadFile(file, { isPrivate: 1 })
+		draft.debit_document = uploaded.file_url
+	} catch (reason) { error.value = reason?.message || "Unable to upload the Debit Document." }
+	finally { uploading.value = false; event.target.value = "" }
 }
 async function refreshFabricSource() {
 	loading.value = true; error.value = ""
@@ -294,7 +321,7 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-action-panel__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
 .work-order-action-panel__fields > label, .work-order-action-panel__field, .work-order-fabric-row__quantities label { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .work-order-action-panel__wide { grid-column: 1 / -1; }
-.work-order-action-panel__check { display: flex !important; align-items: center; grid-column: 1 / -1; }
+.work-order-action-panel__check { display: flex !important; align-items: center; gap: var(--erp-space-2); grid-column: 1 / -1; }
 .work-order-action-panel__table-wrap { overflow-x: auto; overflow-y: visible; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 5px 16px rgb(28 61 45 / 4%); }
 .work-order-action-panel__table-wrap:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: 2px; }
 .work-order-action-panel__table-wrap table { min-width: 720px; }
@@ -330,7 +357,7 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-action-panel__copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
 @media (max-width: 700px) { .work-order-action-panel__fields, .work-order-fabric-row__quantities { grid-template-columns: 1fr; } .work-order-action-panel__wide { grid-column: auto; } }
 @media (max-width: 1024px), (pointer: coarse) {
-	.work-order-garment-calculation__toolbar :deep(.p-button), .work-order-action-panel__existing :deep(.p-button) { min-height: 44px; }
+	.work-order-garment-calculation__toolbar :deep(.p-button), .work-order-action-panel__existing :deep(.p-button), .work-order-action-panel__check :deep(.p-button) { min-height: 44px; }
 	.work-order-action-panel__body :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; }
 }
 </style>

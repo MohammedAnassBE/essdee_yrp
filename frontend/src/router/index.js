@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
+import { getLockedRedirect } from "./departmentLock.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
 
@@ -717,7 +718,11 @@ const routes = [
 	},
 ]
 
-export default createRouter({
+const router = createRouter({
 	history: createWebHistory("/web/"),
 	routes,
 })
+
+router.beforeEach((to) => getLockedRedirect(to.path))
+
+export default router

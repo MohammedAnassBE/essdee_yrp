@@ -183,6 +183,22 @@ yrp_web_doctype_catalog = [
 	"YRP Bill Tracking",
 ]
 
+# /web department workspaces a YRP UI Layout may select (Registered Experience).
+# Keys match frontend departments/registry.js; `workspaces` lists launcher card keys.
+yrp_registered_experiences = {
+	"cutting": ["workspaces"],
+	"fabric-store": ["workspaces"],
+	"cut-panel-store": ["workspaces"],
+	"accessory-store": ["workspaces"],
+	"sewing": ["workspaces"],
+	"finishing": ["workspaces"],
+	"purchase": ["workspaces"],
+	"sales": ["workspaces"],
+	"pd": ["workspaces"],
+	"accounts": ["workspaces"],
+	"hr": ["workspaces"],
+}
+
 # Post-login landing: ordinary users land on the custom /web work hub;
 # System Manager / Administrator keep the Desk default (function returns None
 # for them, so Frappe falls through). See essdee_yrp/www_home.py.

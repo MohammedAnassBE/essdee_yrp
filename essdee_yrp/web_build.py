@@ -19,7 +19,7 @@ Design guarantees:
 - **Source-hash gated.** Rebuilds only when the SPA sources or its compiled-in
   Default UI Layout fixture change (``frontend/src`` — including the
   Essdee-owned UI engine — ``package.json``, ``yarn.lock``, ``vite.config.js``,
-  ``index.html``, and ``fixtures/ui_layout.json``), so ordinary migrations
+  ``index.html``, and ``fixtures/yrp_ui_layout.json``), so ordinary migrations
   don't pay for a full rebuild. The signature is stored in
   ``public/frontend/.build-hash``.
 - **Installs deps only when missing** (``frontend/node_modules`` absent) using
@@ -43,7 +43,7 @@ _NODE_MODULES = os.path.join(_FRONTEND, "node_modules")
 _OUTPUT = os.path.join(_MODULE_DIR, "public", "frontend")
 _ENTRY_HTML = os.path.join(_OUTPUT, "index.html")
 _HASH_FILE = os.path.join(_OUTPUT, ".build-hash")
-_DEFAULT_LAYOUT_FIXTURE = os.path.join(_MODULE_DIR, "fixtures", "ui_layout.json")
+_DEFAULT_LAYOUT_FIXTURE = os.path.join(_MODULE_DIR, "fixtures", "yrp_ui_layout.json")
 
 
 def _log(msg, warning=False):

@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Page unavailable" back-to="/" back-label="Workspaces" :show-title="false" flat full-width>
+	<DepartmentPage title="Page unavailable" :back-to="getHomePath()" :back-label="lockedDepartment?.label || 'Workspaces'" :show-title="false" flat full-width>
 		<section class="document-unavailable erp-card" role="status">
 			<span class="document-unavailable__mark"><i class="pi pi-file-excel" /></span>
 			<div>
@@ -19,6 +19,7 @@ import { computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../DepartmentPage.vue"
+import { getHomePath, lockedDepartment } from "../../router/departmentLock.js"
 
 const route = useRoute()
 const router = useRouter()
@@ -27,7 +28,7 @@ const name = computed(() => String(route.query.name || ""))
 
 function goBack() {
 	if (window.history.length > 1) router.back()
-	else router.push("/")
+	else router.push(getHomePath())
 }
 </script>
 

@@ -1,6 +1,7 @@
 <template>
 	<nav v-if="inline" class="inline-page-navigation" :aria-label="hasContext ? `${documentLabel} navigation` : `Back to ${backLabel}`">
 		<RouterLink
+			v-if="!isLockedExit(resolvedBackTo)"
 			class="inline-page-navigation__back"
 			:to="resolvedBackTo"
 			:aria-label="`Back to ${backLabel}`"
@@ -42,6 +43,7 @@ import { RouterLink } from "vue-router"
 
 import { useDocumentListNavigation } from "../../composables/useDocumentListNavigation.js"
 import { usePageNavigation } from "./pageNavigationContext.js"
+import { isLockedExit } from "../../router/departmentLock.js"
 
 const props = defineProps({
 	showDocumentNavigation: { type: Boolean, default: false },

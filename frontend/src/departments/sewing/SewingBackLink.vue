@@ -1,11 +1,13 @@
 <template>
-	<RouterLink class="sewing-back-link" :to="to" :aria-label="`Back to ${label}`" :title="`Back to ${label}`">
+	<RouterLink v-if="!isLockedExit(to)" class="sewing-back-link" :to="to" :aria-label="`Back to ${label}`" :title="`Back to ${label}`">
 		<i class="pi pi-arrow-left" aria-hidden="true" />
 	</RouterLink>
 </template>
 
 <script setup>
 import { RouterLink } from "vue-router"
+
+import { isLockedExit } from "../../router/departmentLock.js"
 
 defineProps({
 	to: { type: [String, Object], required: true },

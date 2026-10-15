@@ -233,7 +233,7 @@ class TestNamespaceContract(unittest.TestCase):
 			{row["name"] for row in property_setters},
 		)
 
-		layouts = _load_json(PACKAGE_ROOT / "fixtures" / "ui_layout.json")
+		layouts = _load_json(PACKAGE_ROOT / "fixtures" / "yrp_ui_layout.json")
 		layout_doctypes = {row["doctype"] for row in layouts}
 		self.assertEqual(layout_doctypes, {"YRP UI Layout"})
 		self.assertEqual(_fixture_definition("YRP UI Layout")["dt"], "YRP UI Layout")
@@ -246,12 +246,33 @@ class TestNamespaceContract(unittest.TestCase):
 			for name in final_names
 		}
 
-		layouts = _load_json(PACKAGE_ROOT / "fixtures" / "ui_layout.json")
+		layouts = _load_json(PACKAGE_ROOT / "fixtures" / "yrp_ui_layout.json")
 		for row in layouts:
 			config = json.loads(row["config"])
 			for identity in _layout_identity_values(config):
 				with self.subTest(layout=row["name"], identity=identity):
 					self.assertNotIn(identity, old_names)
+
+	def test_department_layouts_select_a_registered_web_department(self):
+		departments = PACKAGE_ROOT.parent / "frontend" / "src" / "departments"
+		registry = (departments / "registry.js").read_text()
+		department_keys = set(re.findall(r'^\t\tkey: "([a-z-]+)"', registry, re.MULTILINE))
+		self.assertLessEqual(set(hooks.yrp_registered_experiences), department_keys)
+		sources = [*departments.rglob("*.js"), *departments.rglob("*.vue")]
+		launcher_sources = "".join(path.read_text() for path in sources)
+		launcher_keys = set(re.findall(r'key: "([a-z_-]+)"', launcher_sources))
+
+		layouts = _load_json(PACKAGE_ROOT / "fixtures" / "yrp_ui_layout.json")
+		experiences = [row for row in layouts if row["render_mode"] == "Registered Experience"]
+		experience_keys = [row["experience_key"] for row in experiences]
+		self.assertCountEqual(experience_keys, set(hooks.yrp_registered_experiences))
+		for row in experiences:
+			props = json.loads(row["config"])["experience_props"]
+			with self.subTest(layout=row["name"]):
+				self.assertLessEqual(set(props), set(hooks.yrp_registered_experiences[row["experience_key"]]))
+				self.assertTrue(props["workspaces"])
+				self.assertEqual(len(props["workspaces"]), len(set(props["workspaces"])))
+				self.assertLessEqual(set(props["workspaces"]), launcher_keys)
 
 	def test_layout_fixture_changes_invalidate_the_web_build_signature(self):
 		with tempfile.TemporaryDirectory() as directory:

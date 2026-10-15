@@ -7,7 +7,7 @@
 			'department-page--inline-navigation': inlineNavigation,
 		}"
 	>
-		<nav v-if="!inlineNavigation && !hideNavigation" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
+		<nav v-if="!inlineNavigation && !hideNavigation && !isLockedExit(backTo)" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
 			<RouterLink v-slot="{ navigate }" custom :to="backTo">
 				<Button
 					class="back-link"
@@ -41,6 +41,7 @@ import { RouterLink } from "vue-router"
 import { computed, provide } from "vue"
 
 import { pageNavigationKey } from "./navigation/pageNavigationContext.js"
+import { isLockedExit } from "../router/departmentLock.js"
 
 const props = defineProps({
 	title: {

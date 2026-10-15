@@ -210,9 +210,9 @@
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "planning",
-  "layout_name": "Planning",
-  "modified": "2026-10-15 10:10:21.285000",
-  "name": "Planning",
+  "layout_name": "Production Planner",
+  "modified": "2026-10-15 18:00:00.000000",
+  "name": "Production Planner",
   "render_mode": "Registered Experience"
  },
  {

@@ -266,6 +266,10 @@ class TestNamespaceContract(unittest.TestCase):
 		experiences = [row for row in layouts if row["render_mode"] == "Registered Experience"]
 		experience_keys = [row["experience_key"] for row in experiences]
 		self.assertCountEqual(experience_keys, set(hooks.yrp_registered_experiences))
+		self.assertEqual(
+			next(row["name"] for row in experiences if row["experience_key"] == "planning"),
+			"Production Planner",
+		)
 		for row in experiences:
 			props = json.loads(row["config"])["experience_props"]
 			with self.subTest(layout=row["name"]):

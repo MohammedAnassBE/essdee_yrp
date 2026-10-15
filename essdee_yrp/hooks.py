@@ -186,11 +186,13 @@ yrp_web_doctype_catalog = [
 # Post-login landing: ordinary users land on the custom /web work hub;
 # System Manager / Administrator keep the Desk default (function returns None
 # for them, so Frappe falls through). See essdee_yrp/www_home.py.
-get_website_user_home_page = "essdee_yrp.www_home.get_website_user_home_page"
+# Disabled: use Frappe's normal landing-page resolution.
+# get_website_user_home_page = "essdee_yrp.www_home.get_website_user_home_page"
 
 # Desk gate: non-(System Manager/Administrator) users are 302'd from
 # /app|/apps|/desk|/ to /web. See essdee_yrp/auth.py.
-before_request = ["essdee_yrp.auth.block_desk_for_non_managers"]
+# Disabled: let native Desk permissions handle access without forcing /web.
+# before_request = ["essdee_yrp.auth.block_desk_for_non_managers"]
 
 # Includes in <head>
 # ------------------
@@ -399,9 +401,9 @@ doc_events = {
 		"on_update": "essdee_yrp.telegram_approval.service.handle_document_event",
 		"on_update_after_submit": "essdee_yrp.telegram_approval.service.handle_document_event",
 	},
+	"SD YRP FG Item Size Range": {"on_update": "essdee_yrp.product_sales.refresh_range_templates"},
 	"YRP Process Cost": {"before_validate": "essdee_yrp.process_cost.before_validate"},
 	"YRP Process": {"validate": "essdee_yrp.process_validations.validate"},
-	"SD YRP FG Item Size Range": {"on_update": "essdee_yrp.product_sales.refresh_range_templates"},
 	"YRP Production Order": {
 		"onload": "essdee_yrp.production_order_workflow.onload",
 		"before_validate": "essdee_yrp.production_order_workflow.before_validate",
@@ -421,11 +423,11 @@ doc_events = {
 		"on_submit": "essdee_yrp.purchase_order_approval.finalize_purchase_order_submission",
 	},
 	"Item": {
-		"validate": "essdee_yrp.item_validations.validate",
-	},
 		"before_validate": "essdee_yrp.product_sales.validate_sales_template",
-	"Warehouse": {"autoname": "essdee_yrp.overrides.warehouse.autoname"},
+		"validate": "essdee_yrp.item_validations.validate",
 		"on_update": "essdee_yrp.product_sales.ensure_size_variants",
+	},
+	"Warehouse": {"autoname": "essdee_yrp.overrides.warehouse.autoname"},
 	"YRP Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [

@@ -4284,7 +4284,7 @@ def _apply_contextual_defaults(
 
 	for fieldname in attribute_link_fields().get(document.get("doctype"), []):
 		value = document.get(fieldname)
-		if not value or str(value).startswith("IAV-"):
+		if not value:
 			continue
 		attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
 		if not attribute:
@@ -4300,7 +4300,7 @@ def _apply_contextual_defaults(
 		from yrp.attribute_value_identity import attribute_value_name
 
 		value = document.get("stiching_major_attribute_value")
-		if value and not str(value).startswith("IAV-"):
+		if value:
 			pairs = reference_data.get("attribute_value_pairs", {})
 			attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
 			if not attribute:
@@ -4537,13 +4537,18 @@ def _ensure_supporting_masters(
 	reference_data: Mapping[str, Mapping[str, Any]],
 ) -> None:
 	now = now_datetime()
-	from yrp.attribute_value_identity import attribute_value_name
+	from yrp.attribute_value_identity import clear_name_cache, get_attribute_value_names
 
+	names = get_attribute_value_names(
+		(attribute, value)
+		for value, attributes in reference_data.get("attribute_value_pairs", {}).items()
+		for attribute in attributes
+	)
 	target._bulk_upsert(
 		"YRP Item Attribute Value",
 		[
 			{
-				"name": attribute_value_name(attribute, value),
+				"name": names[(str(attribute), str(value))],
 				"attribute_name": attribute,
 				"attribute_value": value,
 				"owner": "Administrator",
@@ -4556,6 +4561,7 @@ def _ensure_supporting_masters(
 			for attribute in set(attributes)
 		],
 	)
+	clear_name_cache()
 	defaults = reference_data.get("migration_defaults", {})
 	received_via_values = sorted({str(value) for value in defaults.get("bill_received_via") or [] if value})
 	target._bulk_upsert(

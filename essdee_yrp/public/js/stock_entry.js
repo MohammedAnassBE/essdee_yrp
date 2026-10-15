@@ -2,9 +2,6 @@ frappe.ui.form.on("YRP Stock Entry", {
 	refresh(frm) {
 		exclude_stock_entry_cut_panel_movement_from_cancel_all(frm);
 		allow_positive_material_receipt_rates(frm);
-		setTimeout(() => {
-			essdee_yrp.contain_item_editor_matrix(frm, ["item_html"]);
-		}, 0);
 		// Base YRP mounts the generic stock editor. A new Stock Entry prepared
 		// from Cut Panel Movement carries grouped rows in item_details rather
 		// than __onload, so load that payload after the base refresh handler.

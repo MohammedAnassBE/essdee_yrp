@@ -108,20 +108,7 @@ function show_dispatch_dialog(frm) {
 	const dialog = new frappe.ui.Dialog({
 		title: __("Dispatch Stock"),
 		fields: [
-			{
-				fieldname: "from_location",
-				fieldtype: "Link",
-				label: __("From Warehouse"),
-				options: "Warehouse",
-				reqd: 1,
-			},
-			{
-				fieldname: "to_location",
-				fieldtype: "Link",
-				label: __("To Supplier"),
-				options: "Supplier",
-				reqd: 1,
-			},
+			...essdee_yrp.dispatch_location_fields(() => dialog),
 			{
 				fieldname: "goods_value",
 				fieldtype: "Currency",
@@ -148,7 +135,7 @@ function show_dispatch_dialog(frm) {
 				dialog.hide();
 				await frm.reload_doc();
 				frappe.show_alert({
-					message: __("Stock Entry {0} created", [response.message]),
+					message: __("Stock Entry {0} submitted", [response.message]),
 					indicator: "green",
 				});
 			} finally {

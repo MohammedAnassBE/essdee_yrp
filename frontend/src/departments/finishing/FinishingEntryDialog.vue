@@ -6,7 +6,10 @@
 			<div v-if="definition.fields.length" class="finishing-entry-dialog__fields">
 				<template v-for="field in visibleFields" :key="field">
 					<LinkField v-if="field === 'from_location'" v-model="form.from_location" doctype="Supplier" label="From Location" required :show-open-button="false" :disabled="busy" />
-					<LinkField v-else-if="field === 'to_location'" v-model="form.to_location" doctype="Supplier" label="To Location" required :show-open-button="false" :disabled="busy" />
+					<LinkField v-else-if="field === 'from_supplier'" :model-value="form.from_supplier" doctype="Supplier" label="From Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('from', value)" />
+					<LinkField v-else-if="field === 'from_warehouse'" v-model="form.from_warehouse" doctype="Warehouse" label="From Warehouse" required :filters="warehouseFilters(form.from_supplier)" :show-open-button="false" :disabled="busy" />
+					<LinkField v-else-if="field === 'to_supplier'" :model-value="form.to_supplier" doctype="Supplier" label="To Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('to', value)" />
+					<LinkField v-else-if="field === 'to_warehouse'" v-model="form.to_warehouse" doctype="Warehouse" label="To Warehouse" required :filters="warehouseFilters(form.to_supplier)" :show-open-button="false" :disabled="busy" />
 					<LinkField v-else-if="field === 'delivery_location'" v-model="form.delivery_location" doctype="Supplier" label="Delivery Location" required :show-open-button="false" :disabled="busy" />
 					<DateField v-else-if="field === 'actual_date'" v-model="form.actual_date" label="Actual Date" required :disabled="busy" />
 					<LinkField v-else-if="field === 'received_type'" v-model="form.received_type" doctype="YRP Received Type" label="Received Type" required :show-open-button="false" :disabled="busy" />
@@ -56,6 +59,7 @@ import FinishingEntryMatrix from "./components/FinishingEntryMatrix.vue"
 import FinishingPackingEntry from "./components/FinishingPackingEntry.vue"
 import { ENTRY_DEFINITIONS, entryPayload, missingFields } from "./finishingEntryDefinitions.js"
 import { fillEntry, initialEntry } from "./finishingEntries.js"
+import { setDispatchSupplier, warehouseFilters } from "./supplierWarehouse.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -101,7 +105,10 @@ function resetForm() {
 		lot_source: "New Lot",
 		lot_name: record.lot || "",
 		received_type: "",
-		to_location: "",
+		from_supplier: "",
+		from_warehouse: "",
+		to_supplier: "",
+		to_warehouse: "",
 		goods_value: null,
 		vehicle_no: "",
 	})
@@ -123,6 +130,11 @@ async function load() {
 	} finally {
 		if (token === loadToken) loading.value = false
 	}
+}
+
+async function setSupplier(side, supplier) {
+	const message = await setDispatchSupplier(form, side, supplier)
+	if (message) validationError.value = message
 }
 
 function fill() {
@@ -147,6 +159,7 @@ function submit() {
 watch(() => [props.visible, props.action], ([visible]) => {
 	if (!visible || !definition.value) return
 	resetForm()
+	if (definition.value.fields.includes("from_supplier")) setSupplier("from", options.value.delivery_location)
 	load()
 }, { immediate: true })
 </script>

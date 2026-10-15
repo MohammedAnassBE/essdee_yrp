@@ -474,7 +474,6 @@ def _copy_release_attachment(file_name: str | None, release_name: str):
 @frappe.whitelist()
 def release_tech_pack(doc_name: str):
 	product = _get_writable_doc("SD YRP Product", doc_name)
-	frappe.has_permission("SD YRP Product Release", "create", throw=True)
 	if product.is_set_item:
 		for row in product.product_trim_combination:
 			if not row.selected_colours:
@@ -506,6 +505,8 @@ def release_tech_pack(doc_name: str):
 		"category",
 		"sub_brand",
 		"dia",
+		"front_image",
+		"back_image",
 		"product_image",
 		"top_image",
 		"bottom_image",
@@ -531,7 +532,7 @@ def release_tech_pack(doc_name: str):
 		"product_box_details",
 	):
 		release.set(table_name, _child_rows(product, table_name))
-	release.insert()
+	release.insert(ignore_permissions=True)
 
 	for table_name in PRODUCT_GRAPHIC_TABLES:
 		for row in release.get(table_name):
@@ -549,7 +550,9 @@ def _validated_pdf(file_url: str, doctype: str, docname: str, fieldname: str):
 	if (guess_type(file_doc.file_name or file_doc.file_url)[0] or "") != "application/pdf":
 		frappe.throw(_("Please upload a PDF file."))
 	try:
-		pdf = fitz.open(stream=file_doc.get_content(), filetype="pdf")
+		with open(file_doc.get_full_path(), "rb") as source:
+			content = source.read()
+		pdf = fitz.open(stream=content, filetype="pdf")
 	except Exception as exc:
 		frappe.throw(_("Unable to read the PDF: {0}").format(cstr(exc)))
 	if len(pdf) > 100:
@@ -558,13 +561,16 @@ def _validated_pdf(file_url: str, doctype: str, docname: str, fieldname: str):
 
 
 @frappe.whitelist()
-def process_pdf_to_images(file_url: str, docname: str, table_name: str):
+def process_pdf_to_images(
+	file_url: str, docname: str, table_name: str, defer_save: int = 0
+):
 	product = _get_writable_doc("SD YRP Product", docname)
 	if table_name not in PRODUCT_GRAPHIC_TABLES:
 		frappe.throw(_("Unsupported Product graphics table."))
 	file_doc, pdf = _validated_pdf(file_url, "SD YRP Product", docname, table_name)
 	folder = get_or_create_product_folder(docname)
 	matrix = fitz.Matrix(2, 2)
+	rows = []
 	for page_number, page in enumerate(pdf):
 		image = page.get_pixmap(matrix=matrix).tobytes("png")
 		filename = f"{_safe_fragment(docname)}_page_{page_number + 1}.png"
@@ -580,21 +586,29 @@ def process_pdf_to_images(file_url: str, docname: str, table_name: str):
 				"attached_to_field": table_name,
 			}
 		).insert(ignore_permissions=True)
-		product.append(
-			table_name,
+		rows.append(
 			{
 				"upload_name": _("Page {0}").format(page_number + 1),
 				"graphic_image": new_file.file_url,
 				"filename": filename,
 				"file": new_file.name,
-			},
+			}
 		)
+	if cint(defer_save):
+		return rows
+	product.extend(table_name, rows)
 	product.save()
 	return True
 
 
 @frappe.whitelist()
-def process_single_page_pdf(file_url: str, doctype: str, docname: str, fieldname: str):
+def process_single_page_pdf(
+	file_url: str,
+	doctype: str,
+	docname: str,
+	fieldname: str,
+	defer_save: int = 0,
+):
 	doc = _get_writable_doc(doctype, docname)
 	_validate_attachment_field(doctype, fieldname)
 	file_doc, pdf = _validated_pdf(file_url, doctype, docname, fieldname)
@@ -614,9 +628,15 @@ def process_single_page_pdf(file_url: str, doctype: str, docname: str, fieldname
 			"attached_to_field": fieldname,
 		}
 	).insert(ignore_permissions=True)
-	doc.db_set(fieldname, new_file.file_url, update_modified=True)
+	result = {
+		"file_url": new_file.file_url,
+		"file_name": new_file.file_name,
+		"name": new_file.name,
+	}
+	if not cint(defer_save):
+		doc.db_set(fieldname, new_file.file_url, update_modified=True)
 	frappe.delete_doc("File", file_doc.name, ignore_permissions=True)
-	return True
+	return result if cint(defer_save) else True
 
 
 Product = SDYRPProduct

@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Production Order" accent="#b7493f" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Production Order" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
 		<div class="ppo-editor-page erp-workspace"><ProductionOrderEditor :name="productionOrderId" @saved="saved" @cancel="router.push('/sales/production-orders')" /></div>
 	</DepartmentPage>
 </template>

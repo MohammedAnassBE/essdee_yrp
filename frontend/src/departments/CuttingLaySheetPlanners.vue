@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" accent="#059669" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width>
 		<div class="cutting-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="LaySheet Planner unavailable" message="You do not have permission to view LaySheet Planner documents." :retryable="false" />

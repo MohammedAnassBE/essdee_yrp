@@ -3,6 +3,7 @@
 import assert from "node:assert/strict"
 
 import { extractServerMessage } from "../frontend/src/api/errorMessages.js"
+import { webDocumentPath } from "../frontend/src/router/webDocumentRoutes.js"
 import { normaliseFrappeTime, plainTextFromHtml } from "../frontend/src/utils/documentValues.js"
 
 assert.equal(
@@ -44,4 +45,13 @@ assert.equal(normaliseFrappeTime("09:05:07"), "09:05:07")
 assert.equal(normaliseFrappeTime("9:05"), "09:05:00")
 assert.equal(normaliseFrappeTime("Now"), "")
 
-console.log(JSON.stringify({ passed: true, tests: 14 }))
+assert.equal(
+	webDocumentPath("YRP Purchase Invoice", "MPI-2526-00001"),
+	"/web/accounts/purchase-invoices/MPI-2526-00001",
+)
+assert.equal(
+	webDocumentPath("YRP Bill Tracking", "BT-00001"),
+	"/web/hr/bill-tracking/BT-00001",
+)
+
+console.log(JSON.stringify({ passed: true, tests: 16 }))

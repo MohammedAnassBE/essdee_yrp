@@ -105,6 +105,34 @@ def get_document_permissions(doctype: str, doc=None) -> dict[str, bool]:
 	return permissions
 
 
+COMPLETION_STOCK_ENTRY_PURPOSES = {
+	"YRP Delivery Challan": "DC Completion",
+	"YRP Goods Received Note": "GRN Completion",
+}
+
+
+def get_draft_completion_stock_entry(doctype: str, name: str) -> str | None:
+	"""Return the newest draft completion Stock Entry for a DC or GRN, if any.
+
+	Native submit validation caps each draft at the pending quantity, so older
+	duplicate drafts stay safe and surface one at a time after a discard.
+	"""
+
+	drafts = frappe.get_all(
+		"YRP Stock Entry",
+		filters={
+			"against": doctype,
+			"against_id": name,
+			"purpose": COMPLETION_STOCK_ENTRY_PURPOSES[doctype],
+			"docstatus": 0,
+		},
+		pluck="name",
+		order_by="creation desc",
+		limit=1,
+	)
+	return drafts[0] if drafts else None
+
+
 def get_effective_fields(doc, fieldnames: Iterable[str]) -> list[dict]:
 	"""Serialize readable allowlisted fields with their effective UI rules."""
 

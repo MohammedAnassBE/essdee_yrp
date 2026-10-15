@@ -1,7 +1,6 @@
 <template>
 	<DepartmentPage
 		:title="title"
-		accent="#0a7f5a"
 		:back-to="backTo"
 		:back-label="section ? 'Sewing' : 'Workspaces'"
 		:show-title="false"

@@ -13,6 +13,7 @@
 					icon="pi pi-play"
 					class="erp-action-button erp-action-button--primary"
 					:loading="loading"
+					:disabled="generateDisabled"
 				/>
 				<Button
 					type="button"
@@ -24,6 +25,7 @@
 					:disabled="loading"
 					@click="$emit('reset')"
 				/>
+				<slot name="actions" />
 				<Button
 					v-if="copyable"
 					type="button"
@@ -52,30 +54,33 @@
 		<Message v-if="error" severity="error" :closable="false" class="report-shell__message">
 			{{ error }}
 		</Message>
+		<div v-if="$slots.status" class="report-shell__status"><slot name="status" /></div>
 
-		<p v-if="loading && keepResultsWhileLoading && generated" class="report-shell__refreshing" role="status">Refreshing report. Previously generated values remain visible.</p>
-		<div v-if="loading && !(keepResultsWhileLoading && generated)" class="report-shell__loading" aria-live="polite">
-			<Skeleton width="100%" height="62px" border-radius="10px" />
-			<Skeleton width="100%" height="210px" border-radius="10px" />
-		</div>
-		<div v-else-if="!generated" class="erp-empty-state report-shell__empty">
-			<div>
-				<i class="pi pi-sliders-h" aria-hidden="true" />
-				<strong>Set the report filters</strong>
-				<span>No report data is requested until you choose Generate.</span>
+		<template v-if="!statusOnly">
+			<p v-if="loading && keepResultsWhileLoading && generated" class="report-shell__refreshing" role="status">Refreshing report. Previously generated values remain visible.</p>
+			<div v-if="loading && !(keepResultsWhileLoading && generated)" class="report-shell__loading" aria-live="polite">
+				<Skeleton width="100%" height="62px" border-radius="10px" />
+				<Skeleton width="100%" height="210px" border-radius="10px" />
 			</div>
-		</div>
-		<div v-else-if="!hasResults" class="erp-empty-state report-shell__empty">
-			<div>
-				<i class="pi pi-inbox" aria-hidden="true" />
-				<strong>No matching records</strong>
-				<span>Try a different date, location, item, lot, or status.</span>
+			<div v-else-if="!generated" class="erp-empty-state report-shell__empty">
+				<div>
+					<i class="pi pi-sliders-h" aria-hidden="true" />
+					<strong>Set the report filters</strong>
+					<span>No report data is requested until you choose Generate.</span>
+				</div>
 			</div>
-		</div>
-		<div v-else class="report-shell__results">
-			<div v-if="$slots.metrics" class="report-metrics"><slot name="metrics" /></div>
-			<slot />
-		</div>
+			<div v-else-if="!hasResults" class="erp-empty-state report-shell__empty">
+				<div>
+					<i class="pi pi-inbox" aria-hidden="true" />
+					<strong>No matching records</strong>
+					<span>Try a different date, location, item, lot, or status.</span>
+				</div>
+			</div>
+			<div v-else class="report-shell__results">
+				<div v-if="$slots.metrics" class="report-metrics"><slot name="metrics" /></div>
+				<slot />
+			</div>
+		</template>
 	</section>
 </template>
 
@@ -97,6 +102,8 @@ const props = defineProps({
 	hasResults: { type: Boolean, default: false },
 	copyable: { type: Boolean, default: false },
 	keepResultsWhileLoading: { type: Boolean, default: false },
+	generateDisabled: { type: Boolean, default: false },
+	statusOnly: { type: Boolean, default: false },
 })
 
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-report-title`)
@@ -222,6 +229,14 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 
 .report-shell__message {
 	margin: var(--erp-space-3) var(--erp-space-4) 0;
+}
+
+.report-shell__status {
+	padding: var(--erp-space-4);
+}
+
+.report-shell__status:empty {
+	display: none;
 }
 
 .report-shell__loading {

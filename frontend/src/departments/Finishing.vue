@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing" accent="#087c91" :show-title="false" flat inline-navigation>
+	<DepartmentPage title="Finishing" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 		<WorkspaceLauncher v-else title="Finishing" :items="visibleWorkspaces" :loading="loading" empty-text="No permitted Finishing workspaces" :skeleton-count="5" />
 	</DepartmentPage>

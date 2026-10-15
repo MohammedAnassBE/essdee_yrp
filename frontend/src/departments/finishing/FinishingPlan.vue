@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan" accent="#087c91" back-to="/finishing/plans" back-label="Finishing Plans" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan" back-to="/finishing/plans" back-label="Finishing Plans" :show-title="false" flat full-width inline-navigation>
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan"><Skeleton height="64px" /><Skeleton height="420px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -123,7 +123,7 @@ const successMessages = {
 	return_items: "Items returned.",
 	convert_to_loose_piece: "Items converted to loose pieces.",
 	create_grn: "Goods Received Note created.",
-	dispatch_box: "Boxes dispatched.",
+	dispatch_box: "Stock dispatched",
 	add_ironing_excess: "Ironing excess added.",
 	return_pack: "Packed pieces returned.",
 	lot_transfer: "Items transferred.",
@@ -176,6 +176,7 @@ async function submitEntry(action, payload) {
 	const outcome = await runCommand(action, payload)
 	if (!outcome) return
 	entryOpen.value = false
+	if (action === "dispatch_box") return
 	openResult(outcome.result)
 }
 

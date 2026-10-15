@@ -122,7 +122,7 @@ function formatValue(column, row) {
 .material-requirement-table td:last-child { border-right: 0; }
 .material-requirement-table__number { text-align: right !important; }
 .material-requirement-table .requirement-balance { font-weight: 780; }
-.material-requirement-table .requirement-balance--positive { color: var(--erp-accent-dark); background: var(--erp-success-soft); }
+.material-requirement-table .requirement-balance--positive { color: var(--erp-success-text); background: var(--erp-success-soft); }
 .material-requirement-table .requirement-balance--negative { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .material-requirement-table .requirement-balance--zero { color: var(--erp-text-muted); background: var(--erp-surface-soft); }
 .material-requirement-table__actions { width: 78px; text-align: right !important; white-space: nowrap; }

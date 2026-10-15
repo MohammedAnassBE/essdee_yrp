@@ -174,7 +174,7 @@ defineExpose({ markDirty, reload: load })
 .document-transaction-dialog__status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .document-transaction-dialog__status-row small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .document-status { padding: 4px 9px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 800; text-transform: uppercase; background: var(--erp-surface-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); }
-.document-status--submitted { color: var(--erp-accent-hover); background: var(--erp-accent-soft); border-color: color-mix(in srgb, var(--erp-accent) 22%, white); }
+.document-status--submitted { color: var(--erp-success-text); background: var(--erp-success-soft); border-color: color-mix(in srgb, var(--erp-success) 22%, white); }
 .document-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); border-color: color-mix(in srgb, var(--erp-danger) 28%, var(--erp-border)); }
 .document-summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow: hidden; background: var(--erp-surface); border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); box-shadow: inset 3px 0 0 var(--erp-accent), var(--erp-shadow-xs); }
 .document-summary-metric { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 8px 12px; border-right: 1px solid var(--erp-border); }

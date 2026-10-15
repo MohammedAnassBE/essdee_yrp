@@ -1,6 +1,6 @@
 <template>
 	<article class="completed-report">
-		<header class="completed-report__meta">
+		<header v-if="showMeta" class="completed-report__meta">
 			<div class="completed-report__meta-item">
 				<span>{{ referenceLabel }}</span>
 				<strong>{{ referenceValue || doc.lot || "—" }}</strong>
@@ -17,7 +17,7 @@
 
 		<div v-if="sections.length" class="completed-report__sections">
 			<section v-for="(section, sectionIndex) in sections" :key="section.key" class="completed-report__group">
-				<h3 :id="`completed-report-section-${sectionIndex}`" class="completed-report__sr-only">
+				<h3 :id="sectionHeadingId(sectionIndex)" class="completed-report__sr-only">
 					{{ section.part ? `Completed cut quantity for ${section.part}` : "Completed cut quantity" }}
 				</h3>
 				<header v-if="section.part || section.panels.length" class="completed-report__group-header">
@@ -33,14 +33,15 @@
 					</div>
 				</header>
 
-				<div class="completed-report__table-wrap" role="region" tabindex="0" :aria-labelledby="`completed-report-section-${sectionIndex}`">
-					<table class="completed-report__table" :aria-labelledby="`completed-report-section-${sectionIndex}`">
+				<div class="completed-report__table-wrap" role="region" tabindex="0" :aria-labelledby="sectionHeadingId(sectionIndex)">
+					<table class="completed-report__table" :aria-labelledby="sectionHeadingId(sectionIndex)">
 						<thead>
 							<tr>
 								<th scope="col">S.No.</th>
 								<th v-for="attribute in section.attributes" :key="attribute" scope="col">{{ attribute }}</th>
 								<th v-for="value in section.primaryValues" :key="value" scope="col" class="number-cell">{{ value }}</th>
 								<th scope="col" class="number-cell">Total</th>
+								<th v-if="showCompletion" scope="col" class="completed-report__completion-cell">Completed</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -49,12 +50,21 @@
 								<td v-for="attribute in section.attributes" :key="attribute">{{ displayAttribute(item, attribute, section.group) }}</td>
 								<td v-for="value in section.primaryValues" :key="value" class="number-cell">{{ displayQuantity(item.values?.[value]) }}</td>
 								<td class="number-cell completed-report__row-total">{{ rowTotal(item, section.primaryValues) }}</td>
+								<td v-if="showCompletion" class="completed-report__completion-cell">
+									<input
+										type="checkbox"
+										:checked="Boolean(item.completed)"
+										disabled
+										:aria-label="`Row ${itemIndex + 1}: ${completionLabel(item)}`"
+									/>
+								</td>
 							</tr>
 							<tr class="completed-report__total-row">
 								<th scope="row">Total</th>
 								<td v-for="attribute in section.attributes" :key="attribute"></td>
 								<td v-for="value in section.primaryValues" :key="value" class="number-cell">{{ columnTotal(section.items, value) }}</td>
 								<td class="number-cell">{{ sectionTotal(section) }}</td>
+								<td v-if="showCompletion"></td>
 							</tr>
 						</tbody>
 					</table>
@@ -64,14 +74,16 @@
 
 		<div v-else class="completed-report__empty">
 			<i class="pi pi-inbox" aria-hidden="true" />
-			<strong>No completed cut quantities</strong>
-			<span>Completed rows will appear here after they are updated.</span>
+			<strong>{{ showCompletion ? "No completed cut quantity rows" : "No completed cut quantities" }}</strong>
+			<span>{{ showCompletion ? "This Cutting Plan has no completed quantity rows yet." : "Completed rows will appear here after they are updated." }}</span>
 		</div>
 	</article>
 </template>
 
 <script setup>
-import { computed } from "vue"
+import { computed, useId } from "vue"
+
+import { completedReportSections, completionLabel } from "./cuttingCompletedReport.js"
 
 const props = defineProps({
 	doc: { type: Object, required: true },
@@ -79,59 +91,15 @@ const props = defineProps({
 	generatedAt: { type: String, required: true },
 	referenceLabel: { type: String, default: "Lot" },
 	referenceValue: { type: String, default: "" },
+	showCompletion: { type: Boolean, default: false },
+	showMeta: { type: Boolean, default: true },
 })
 
-const sections = computed(() => normaliseGroups(props.groups).flatMap((group, groupIndex) => {
-	const completedItems = (group.items || []).filter((item) => Boolean(item.completed))
-	if (!completedItems.length) return []
+const reportId = useId()
+const sections = computed(() => completedReportSections(props.groups, props.showCompletion))
 
-	const attributes = Array.from(group.attributes || [])
-	const primaryValues = Array.from(group.primary_attribute_values || [])
-	if (!group.is_set_item) {
-		return [{
-			key: `group-${groupIndex}`,
-			group,
-			attributes,
-			primaryValues,
-			items: completedItems,
-			part: "",
-			panels: normalisePanels(group?.[group?.stiching_attr]),
-		}]
-	}
-
-	const partAttribute = group.set_item_attr || completedItems[0]?.set_attr
-	const panelMap = group?.[group?.stiching_attr] || {}
-	const parts = Array.from(new Set([
-		...Object.keys(panelMap && !Array.isArray(panelMap) ? panelMap : {}),
-		...completedItems.map((item) => item.attributes?.[partAttribute]).filter(Boolean),
-	]))
-
-	return parts.flatMap((part) => {
-		const items = completedItems.filter((item) => item.attributes?.[partAttribute] === part)
-		if (!items.length) return []
-		return [{
-			key: `group-${groupIndex}-part-${part}`,
-			group,
-			attributes,
-			primaryValues,
-			items,
-			part,
-			panels: [],
-		}]
-	})
-}))
-
-function normaliseGroups(value) {
-	if (Array.isArray(value)) return value.filter((group) => group?.items)
-	if (value?.items) return [value]
-	if (value && typeof value === "object") return Object.values(value).filter((group) => group?.items)
-	return []
-}
-
-function normalisePanels(value) {
-	if (Array.isArray(value)) return value.filter(Boolean)
-	if (typeof value === "string") return value.split(",").map((panel) => panel.trim()).filter(Boolean)
-	return []
+function sectionHeadingId(sectionIndex) {
+	return `${reportId}-completed-report-section-${sectionIndex}`
 }
 
 function numeric(value) {
@@ -312,6 +280,15 @@ function sectionTotal(section) {
 }
 
 .completed-report__row-total { color: var(--erp-accent-hover); font-weight: 760; }
+
+.completed-report__completion-cell { text-align: center !important; }
+
+.completed-report__completion-cell input {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	accent-color: var(--erp-accent);
+}
 
 .completed-report__total-row th,
 .completed-report__total-row td {

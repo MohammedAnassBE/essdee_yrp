@@ -3,8 +3,10 @@
 		title="Cut Bundle Balance"
 		:generated="generated"
 		:loading="loading"
-		:error="error"
+		:error="layoutError"
 		:has-results="rows.length > 0"
+		:generate-disabled="isBusy"
+		:status-only="statusOnly"
 		@generate="generate"
 		@reset="reset"
 	>
@@ -12,9 +14,16 @@
 			<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="All lots" :show-open-button="false" show-clear />
 			<LinkField v-model="filters.supplier" doctype="Supplier" label="Supplier" placeholder="All suppliers" :show-open-button="false" show-clear />
 		</template>
+		<template #actions>
+			<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
+			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+		</template>
+		<template #status>
+			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" determinate @rebuild="rebuild" />
+		</template>
 
 		<template #metrics>
-			<div class="report-metric"><i class="pi pi-list" /><div><span>Balance rows</span><strong>{{ number(rows.length) }}</strong></div></div>
+			<div class="report-metric"><i class="pi pi-list" /><div><span>Balance rows</span><strong>{{ number(dataRows.length) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-box" /><div><span>Bundle quantity</span><strong>{{ number(totalQuantity) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-tags" /><div><span>Lots</span><strong>{{ number(uniqueLots) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-building" /><div><span>Suppliers</span><strong>{{ number(uniqueSuppliers) }}</strong></div></div>
@@ -22,71 +31,77 @@
 
 		<div class="erp-table-wrap cut-bundle-balance__table-wrap" role="region" aria-label="Cut Bundle Balance results" tabindex="0">
 			<table class="erp-data-table cut-bundle-balance__table">
+				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead>
-					<tr><th v-for="column in columns" :key="column.fieldname" :class="{ 'erp-number': numericColumn(column) }">{{ column.label }}</th></tr>
+					<tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label }}</th></tr>
 				</thead>
 				<tbody>
-					<tr v-for="row in rows" :key="row.name">
-						<td v-for="column in columns" :key="column.fieldname" :class="{ 'erp-number': numericColumn(column) }">
-							<strong v-if="column.fieldname === 'qty'">{{ number(row[column.fieldname]) }}</strong>
-							<span v-else>{{ row[column.fieldname] || "—" }}</span>
+					<tr v-for="(row, index) in rows" :key="`${row.name || 'row'}-${index}`" :class="{ 'report-total-row': row.is_total_row }">
+						<td v-for="column in columns" :key="column.key" :class="cellAlign(column)">
+							<strong v-if="column.kind === 'base' && column.fieldname === 'qty'">{{ number(cellValue(row, column)) }}</strong>
+							<span v-else>{{ cellValue(row, column) || "—" }}</span>
 						</td>
 					</tr>
 				</tbody>
 			</table>
 		</div>
 	</ReportShell>
+	<ReportColumnPicker v-model:visible="pickerVisible" :columns="allColumns" :link-sources="linkSources" :fields-by-source="fieldsBySource" :load-field-options="loadFieldOptions" :apply-layout="applyLayout" :save-layout="saveLayout" :reset-layout="resetLayout" :error="layoutError" />
 </template>
 
 <script setup>
-import { computed, reactive, ref } from "vue"
+import Button from "primevue/button"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 
-import { getCutBundleBalance } from "../../api/cutPanelStore.js"
+import { useReportColumns } from "../../composables/useReportColumns.js"
+import { useWebReport } from "../../composables/useWebReport.js"
 import LinkField from "../../components/common/LinkField.vue"
+import ReportColumnPicker from "../../components/reports/ReportColumnPicker.vue"
+import { cutBundleFormFilters } from "../../components/reports/reportFilterState.js"
+import ReportRunStatus from "../../components/reports/ReportRunStatus.vue"
 import ReportShell from "../../components/reports/ReportShell.vue"
-import { errorMessage, number } from "../../components/reports/reportUtils.js"
+import { number } from "../../components/reports/reportUtils.js"
 
 const filters = reactive(defaultFilters())
-const rows = ref([])
-const columns = ref([])
-const loading = ref(false)
-const generated = ref(false)
-const error = ref("")
+const pickerVisible = ref(false)
+const {
+	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError, activeFilters,
+	trackingStartedAt, loading, isBusy, generated, isBackgroundResult, statusOnly,
+	generate: generateReport, filtersChanged, clear, download,
+} = useWebReport({ reportKey: "cut-bundle-balance" })
+const {
+	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
+	saveLayout, resetLayout, cellAlign, cellValue,
+} = useReportColumns({ reportKey: "cut-bundle-balance", sourceColumns, sourceRows })
 
-const totalQuantity = computed(() => rows.value.reduce((total, row) => total + Number(row.qty || 0), 0))
-const uniqueLots = computed(() => new Set(rows.value.map((row) => row.lot).filter(Boolean)).size)
-const uniqueSuppliers = computed(() => new Set(rows.value.map((row) => row.supplier).filter(Boolean)).size)
+const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+const totalQuantity = computed(() => dataRows.value.reduce((total, row) => total + Number(row.qty || 0), 0))
+const uniqueLots = computed(() => new Set(dataRows.value.map((row) => row.lot).filter(Boolean)).size)
+const uniqueSuppliers = computed(() => new Set(dataRows.value.map((row) => row.supplier).filter(Boolean)).size)
 
 function defaultFilters() {
 	return { lot: "", supplier: "" }
 }
 
-function numericColumn(column) {
-	return ["Int", "Float", "Currency"].includes(column?.fieldtype)
+async function generate() {
+	await generateReport(requestFilters())
 }
 
-async function generate() {
-	loading.value = true
-	error.value = ""
-	try {
-		const payload = await getCutBundleBalance({ lot: filters.lot, supplier: filters.supplier }) || {}
-		columns.value = payload.columns || []
-		rows.value = payload.result || []
-		generated.value = true
-	} catch (reason) {
-		error.value = errorMessage(reason, "Unable to generate the Cut Bundle Balance report.")
-	} finally {
-		loading.value = false
-	}
-}
+function requestFilters() { return { lot: filters.lot, supplier: filters.supplier } }
+function rebuild() { return generateReport(requestFilters(), { refresh: true }) }
 
 function reset() {
 	Object.assign(filters, defaultFilters())
-	rows.value = []
-	columns.value = []
-	generated.value = false
-	error.value = ""
+	clear()
 }
+function restoreFilters(request) {
+	if (request) Object.assign(filters, cutBundleFormFilters(request))
+}
+
+watch(filters, () => filtersChanged(requestFilters()), { deep: true })
+watch(activeFilters, restoreFilters, { flush: "sync" })
+onMounted(loadLayout)
 </script>
 
 <style scoped>

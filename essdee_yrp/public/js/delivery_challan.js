@@ -14,7 +14,6 @@ frappe.ui.form.on("YRP Delivery Challan", {
 	refresh(frm) {
 		exclude_cut_panel_movement_from_cancel_all(frm);
 		setTimeout(() => {
-			essdee_yrp.contain_item_editor_matrix(frm, ["item_html", "correction_item_html"]);
 			replace_return_button(frm);
 		}, 0);
 		if (frm.doc.docstatus === 2) return;

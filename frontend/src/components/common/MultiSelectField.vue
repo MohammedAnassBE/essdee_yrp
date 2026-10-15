@@ -16,6 +16,7 @@
 			fluid
 			@update:model-value="$emit('update:modelValue', $event)"
 			@change="$emit('change', $event)"
+			@filter="$emit('filter', $event)"
 		/>
 		<small v-if="helpText" class="common-field__help">{{ helpText }}</small>
 	</label>
@@ -41,7 +42,7 @@ defineProps({
 	maxSelectedLabels: { type: Number, default: 4 },
 })
 
-defineEmits(["update:modelValue", "change"])
+defineEmits(["update:modelValue", "change", "filter"])
 </script>
 
 <style scoped>

@@ -6,7 +6,6 @@
 			'department-page--full-width': fullWidth,
 			'department-page--inline-navigation': inlineNavigation,
 		}"
-		:style="{ '--accent': accent }"
 	>
 		<nav v-if="!inlineNavigation && !hideNavigation" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
 			<RouterLink v-slot="{ navigate }" custom :to="backTo">
@@ -44,10 +43,6 @@ import { computed, provide } from "vue"
 import { pageNavigationKey } from "./navigation/pageNavigationContext.js"
 
 const props = defineProps({
-	accent: {
-		type: String,
-		required: true,
-	},
 	title: {
 		type: String,
 		required: true,

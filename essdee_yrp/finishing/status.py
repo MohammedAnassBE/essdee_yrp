@@ -5,10 +5,7 @@ from frappe.utils import flt
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details
 
-from essdee_yrp.finishing.old_lot_history import (
-	active_old_lot_transfer_rows,
-	get_old_lot_received_rows,
-)
+from essdee_yrp.finishing.ocr import get_ocr_details, get_unaccountable_balance
 from essdee_yrp.finishing.packing import get_finishing_packing_summary
 
 AUTO_FP_STATUSES = (
@@ -74,7 +71,9 @@ def get_finishing_dispatch_totals(finishing_doc):
 	total_cutting = get_finishing_plan_total_cutting(finishing_doc)
 	packing_summary = get_finishing_packing_summary(finishing_doc)
 	if packing_summary.dynamic_ratio_packing:
-		total_dispatched_pieces = flt(packing_summary.total_dispatched)
+		total_dispatched_pieces = flt(packing_summary.total_dispatched) * get_set_item_parts_count(
+			finishing_doc
+		)
 	else:
 		pieces_per_box = flt(finishing_doc.pieces_per_box)
 		set_item_parts_count = get_set_item_parts_count(finishing_doc)
@@ -169,12 +168,12 @@ def compute_received_status(finishing_doc):
 
 	if total_dispatched > 0:
 		dispatch_percentage = (total_dispatched / total_cutting) * 100
-		dispatch_threshold = flt(getattr(settings, "partially_dispatched_percentage", None)) or 90
+		dispatch_threshold = flt(getattr(settings, "partially_dispatched_percentage", None)) or 0
 		if dispatch_percentage < dispatch_threshold:
 			return "Partially Dispatched"
 		if dispatch_percentage > FULLY_DISPATCHED_PCT:
-			unaccountable = get_unaccountable_quantity(finishing_doc, total_dispatched)
-			if abs(unaccountable) < 1e-6:
+			unaccountable = get_unaccountable_quantity(finishing_doc)
+			if unaccountable == 0:
 				return "Fully Dispatched"
 		return "Dispatched"
 
@@ -182,7 +181,7 @@ def compute_received_status(finishing_doc):
 	if not total_received:
 		return None
 	received_percentage = (total_received / total_cutting) * 100
-	received_threshold = flt(getattr(settings, "partial_received_percentage", None)) or 50
+	received_threshold = flt(getattr(settings, "partial_received_percentage", None)) or 0
 	return "Ready to Pack" if received_percentage >= received_threshold else "Partially Received"
 
 
@@ -192,46 +191,11 @@ def apply_auto_fp_status(finishing_doc):
 		finishing_doc.fp_status = new_status
 
 
-def get_unaccountable_quantity(finishing_doc, dispatched_pieces=None):
-	"""Compute the aggregate OCR balance without coupling Stock Entry to its UI.
-
-	This is the sum-equivalent of the F15 part/colour/size OCR matrix.  The UI can
-	build the detailed matrix separately; automatic status needs only this total.
-	"""
-	rows = finishing_doc.get("finishing_plan_details") or []
-	inward = sum(
-		flt(row.delivered_quantity) + flt(row.lot_transferred) + flt(row.ironing_excess) for row in rows
-	)
-	transferred = sum(flt(row.transferred_qty) for row in rows)
-	rejected = sum(flt(row.rejected_qty) for row in rows)
-	loose_piece = sum(flt(row.return_qty) for row in rows)
-	loose_piece_set = sum(flt(row.pack_return_qty) for row in rows)
-	transferred_as_loose_piece = 0
-
-	for row in finishing_doc.get("finishing_plan_reworked_details") or []:
-		rejected += flt(row.rejected_qty)
-		# Rework still outstanding is part of the OCR pending quantity.
-		transferred += max(
-			flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty),
-			0,
-		)
-
-	for row in active_old_lot_transfer_rows(finishing_doc.get("finishing_old_lot_given_items")):
-		loose_piece -= flt(row.loose_piece_given)
-		loose_piece_set -= flt(row.loose_piece_set_given)
-		transferred_as_loose_piece += flt(row.loose_piece_given) + flt(row.loose_piece_set_given)
-	for row in get_old_lot_received_rows(finishing_doc):
-		loose_piece += flt(row.loose_piece_taken)
-		loose_piece_set += flt(row.loose_piece_set_taken)
-
-	if dispatched_pieces is None:
-		dispatched_pieces = get_finishing_dispatch_totals(finishing_doc).total_dispatched_pieces
-	return (
-		inward
-		- flt(dispatched_pieces)
-		- rejected
-		- loose_piece
-		- loose_piece_set
-		- transferred
-		- transferred_as_loose_piece
+def get_unaccountable_quantity(finishing_doc):
+	"""Return the sum of absolute per part/size OCR balances."""
+	ocr_data = get_ocr_details(finishing_doc)
+	return sum(
+		abs(get_unaccountable_balance(size_values))
+		for part in ocr_data.values()
+		for size_values in part["total"].values()
 	)

@@ -5,6 +5,7 @@
 			class="document-action-strip__primary"
 			:label="primaryAction.label"
 			:icon="primaryAction.icon"
+			:severity="primaryAction.severity"
 			:loading="Boolean(primaryAction.loading)"
 			:disabled="nativeDisabled(primaryAction)"
 			:aria-disabled="Boolean(primaryAction.disabled)"
@@ -22,7 +23,7 @@
 			:class="[`document-action-strip__secondary--${index + 1}`, { 'document-action-strip__reason-disabled': action.disabled && action.disabledReason }]"
 			:label="action.label"
 			:icon="action.icon"
-			severity="secondary"
+			:severity="action.severity || 'secondary'"
 			text
 			:loading="Boolean(action.loading)"
 			:disabled="nativeDisabled(action)"
@@ -91,6 +92,7 @@ const desktopOverflowActions = computed(() => secondaryActions.value.filter((act
 const menuItems = computed(() => activeOverflowActions.value.map((action) => ({
 	label: action.disabled && action.disabledReason ? `${action.label} — ${action.disabledReason}` : action.label,
 	icon: action.icon,
+	class: action.severity === "danger" ? "document-action-menu__item--danger" : undefined,
 	disabled: Boolean(action.disabled),
 	command: () => run(action),
 })))
@@ -127,4 +129,9 @@ function toggleMenu(event, actions) {
 .document-action-strip__reason { position: absolute; z-index: var(--erp-layer-dropdown); top: calc(100% + 7px); left: 0; width: max-content; max-width: min(360px, 82vw); padding: 7px 10px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-min); font-weight: 650; line-height: 1.35; border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-md); }
 @media (max-width: 899px) { .document-action-strip__secondary, .document-action-strip__more--desktop { display: none; } .document-action-strip__more--mobile { display: inline-flex; } }
 @media (max-width: 620px) { .document-action-strip { width: 100%; } .document-action-strip--with-reason { flex-wrap: wrap; } .document-action-strip__primary { min-width: 0; flex: 1 1 auto !important; } .document-action-strip__more { flex: 0 0 auto; } .document-action-strip__reason { position: static; width: 100%; max-width: none; flex: 1 0 100%; box-shadow: none; } }
+</style>
+
+<style>
+.document-action-menu .document-action-menu__item--danger .p-menu-item-icon,
+.document-action-menu .document-action-menu__item--danger .p-menu-item-label { color: var(--erp-danger); }
 </style>

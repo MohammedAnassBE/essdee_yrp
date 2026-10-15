@@ -199,6 +199,14 @@ export function getPurchaseOrderItemPrice(itemDetail, supplier, purchaseOrder = 
 	})
 }
 
+export function previewPurchaseOrderPrices(items, supplier, purchaseOrder = "") {
+	return callMethod(`${WORKSPACE_METHOD}.preview_purchase_order_prices`, {
+		items,
+		supplier,
+		purchase_order: purchaseOrder || undefined,
+	})
+}
+
 export function savePurchaseOrder(values, options = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.save_purchase_order`, {
 		values,
@@ -233,4 +241,8 @@ export function saveFabricStockOperation(operation, values, options = {}) {
 		submit: Boolean(options.submit),
 		expected_modified: options.expectedModified || undefined,
 	})
+}
+
+export function discardCompletionDraft(name, expectedModified = "") {
+	return callMethod(`${WORKSPACE_METHOD}.discard_completion_draft`, { name, expected_modified: expectedModified || undefined })
 }

@@ -292,21 +292,7 @@ function make_dispatch(){
     let d = new frappe.ui.Dialog({
         title: "Dispatch Box",
         fields: [
-            {
-                "fieldname": "from_location",
-                "fieldtype": "Link",
-                "label": "From Location",
-                "options": "Supplier",
-                "reqd": 1,
-                "default": location,
-            },
-            {
-                "fieldname": "to_location",
-                "fieldtype": "Link",
-                "label": "To Location",
-                "options": "Supplier",
-                "reqd": 1,
-            },
+            ...essdee_yrp.dispatch_location_fields(() => d, { from_supplier: location }),
             {
                 "fieldname": "goods_value",
                 "fieldtype": "Currency",
@@ -335,8 +321,10 @@ function make_dispatch(){
                     lot: cur_frm.doc.lot,
                     item_name: cur_frm.doc.item,
 					data: dispatchComponent.packed_qty,
-                    from_location: values.from_location,
-                    to_location: values.to_location,
+                    from_supplier: values.from_supplier,
+                    from_warehouse: values.from_warehouse,
+                    to_supplier: values.to_supplier,
+                    to_warehouse: values.to_warehouse,
                     goods_value: values.goods_value,
                     vehicle_no: values.vehicle_no,
 					colour_details: dispatchComponent.colour_details,
@@ -365,6 +353,7 @@ function make_dispatch(){
     const vueApp = createApp(FPDispatch, props);
 	dispatchComponent = vueApp.mount(el);
     d.show()
+    essdee_yrp.set_dispatch_supplier(d, "from")
 }
 
 defineExpose({

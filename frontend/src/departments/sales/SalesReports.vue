@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Sales Reports" accent="#b7493f" back-to="/sales" back-label="Sales" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Sales Reports" back-to="/sales" back-label="Sales" :show-title="false" flat full-width inline-navigation>
 		<section class="sales-reports erp-workspace" aria-label="Sales Reports">
 			<div v-if="loading" class="sales-reports__loading"><Skeleton height="76px" /><Skeleton height="420px" /></div>
 			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />

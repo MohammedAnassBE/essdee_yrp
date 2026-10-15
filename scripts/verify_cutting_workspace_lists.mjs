@@ -2,6 +2,7 @@
 
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
 
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
@@ -97,20 +98,21 @@ await page.route("**/api/method/essdee_yrp.cutting.reports.get_report_permission
 	contentType: "application/json",
 	body: JSON.stringify({ message: { "cutting-plans": true, "daily-production": true } }),
 }))
+const metaFieldsFor = (doctype) => (doctypes[doctype]?.fields || []).map(([fieldname, label, fieldtype]) => ({
+	fieldname, label, fieldtype, in_list_view: 1, in_standard_filter: 0,
+}))
 await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => {
 	const doctype = new URL(route.request().url()).searchParams.get("doctype")
-	const fields = (doctypes[doctype]?.fields || []).map(([fieldname, label, fieldtype]) => ({
-		fieldname, label, fieldtype, in_list_view: 1, in_standard_filter: 0,
-	}))
 	return route.fulfill({
 		status: 200,
 		contentType: "application/json",
-		body: JSON.stringify({ docs: [{ name: doctype, is_submittable: 1, fields }] }),
+		body: JSON.stringify({ docs: [{ name: doctype, is_submittable: 1, fields: metaFieldsFor(doctype) }] }),
 	})
 })
-await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-	status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-}))
+await page.route(USER_LISTVIEW_ROUTE, (route) => {
+	const { doctype_name: doctype } = route.request().postDataJSON()
+	return fulfillUserListview(route, metaFieldsFor(doctype), { isSubmittable: true })
+})
 await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
 	status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
 }))
@@ -177,7 +179,7 @@ for (const list of lists) {
 	assert(desktopStatusFilters.select === "none", `${list.title} shows the mobile status selector on desktop: ${JSON.stringify(desktopStatusFilters)}`)
 	assert(await page.locator(".list-row-chevron").count() === 1, `${list.title} rows are not clickable`)
 	const request = listRequests.find((entry) => entry.doctype === list.doctype)
-	assert(request?.orderBy === "modified desc", `${list.title} is not newest-first: ${JSON.stringify(request)}`)
+	assert(request?.orderBy === "modified desc, name desc", `${list.title} is not newest-first: ${JSON.stringify(request)}`)
 	assert(!page.url().includes("/app/"), `${list.title} redirected to Desk`)
 }
 

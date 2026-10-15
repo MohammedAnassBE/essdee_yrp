@@ -405,6 +405,7 @@ const submitUpdate = () => {
         () => {
             // User confirmed
             const payload = {
+                supplier: props.selected_supplier,
                 lot: active_lot.value,
                 plan: active_plan.value,
                 inspection_type: selected_inspection_type.value,
@@ -598,6 +599,7 @@ const submitLog = () => {
     }
 
     const payload = {
+        supplier: props.selected_supplier,
         lot: active_lot.value,
         plan: active_plan.value,
         date: date_control?.get_value() || entry_form.value.date,

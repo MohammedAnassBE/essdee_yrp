@@ -41,6 +41,11 @@ class TestProductionOrderCustomization(FrappeTestCase):
 				"hidden": 1,
 				"allow_on_submit": 1,
 			},
+			"ppo_price_request_html": {
+				"fieldtype": "HTML",
+				"label": "Price Changes",
+				"depends_on": "eval:doc.docstatus==1",
+			},
 			"ppo_requested_by": {
 				"fieldtype": "Link",
 				"options": "User",

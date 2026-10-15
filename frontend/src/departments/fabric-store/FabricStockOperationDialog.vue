@@ -40,7 +40,7 @@
 		<template #footer>
 			<div class="fabric-stock-footer">
 				<Button label="Close" severity="secondary" text :disabled="saving" @click="requestVisibility(false)" />
-				<div><DocumentSaveButton :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Save & Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
+				<div><Button v-if="canDiscard" label="Discard Draft" icon="pi pi-trash" severity="danger" outlined :disabled="saving" @click="requestDiscard" /><DocumentSaveButton :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Save & Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
 			</div>
 		</template>
 	</Dialog>
@@ -54,7 +54,7 @@ import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
-import { getFabricStockItemSchema, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
+import { discardCompletionDraft, getFabricStockItemSchema, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -95,6 +95,8 @@ const canSave = computed(() => {
 	return true
 })
 
+const canDiscard = computed(() => Boolean(props.name && editor.value.protected_completion && editor.value.permissions?.can_delete))
+
 watch(() => [props.visible, props.operation, props.name, JSON.stringify(props.sourceContext || {})], ([visible]) => { if (visible) load() }, { immediate: true })
 
 async function load() {
@@ -126,6 +128,27 @@ async function save(submit) {
 		emit("update:visible", false)
 	} catch (reason) { error.value = reason?.message || "Unable to save this stock document." }
 	finally { saving.value = false; saveMode.value = "" }
+}
+function requestDiscard() {
+	confirmAction({
+		header: "Discard completion draft?",
+		message: `Delete draft ${props.name}? Complete Transfer will prepare a fresh entry from the pending quantities.`,
+		acceptLabel: "Discard Draft",
+		rejectLabel: "Keep Draft",
+		acceptIcon: "pi pi-trash",
+		accept: discard,
+	})
+}
+async function discard() {
+	saving.value = true
+	error.value = ""
+	try {
+		const discarded = await discardCompletionDraft(props.name, props.expectedModified || editor.value.modified)
+		dirty.value = false
+		emit("changed", discarded)
+		emit("update:visible", false)
+	} catch (reason) { error.value = reason?.message || "Unable to discard this draft." }
+	finally { saving.value = false }
 }
 function requestVisibility(value) {
 	if (value) return

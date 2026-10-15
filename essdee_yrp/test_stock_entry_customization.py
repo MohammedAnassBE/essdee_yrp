@@ -288,6 +288,66 @@ class TestStockEntryCustomization(FrappeTestCase):
 		self.assertEqual(row.conversion_factor, 12)
 		self.assertEqual(row.stock_qty, 24)
 
+	def test_mapped_size_wise_completion_preserves_piece_uom(self):
+		doc = frappe.new_doc("YRP Stock Entry")
+		doc.update(
+			{
+				"purpose": "GRN Completion",
+				"against": "YRP Goods Received Note",
+				"against_id": "TEST-SIZE-WISE-GRN",
+			}
+		)
+		row = doc.append(
+			"items",
+			{
+				"item": "TEST-PACKED-S",
+				"qty": 120,
+				"uom": "Box",
+				"stock_uom": "Pieces",
+				"conversion_factor": 10,
+				"stock_qty": 1200,
+				"rate": 1,
+				"against_id_detail": "TEST-GRN-ITEM",
+			},
+		)
+		grn = frappe._dict(
+			name="TEST-SIZE-WISE-GRN",
+			packing_calculation_version=0,
+			against="YRP Work Order",
+			against_id="TEST-WO",
+			includes_packing=1,
+			from_finishing=1,
+			lot="TEST-LOT",
+			items=[
+				frappe._dict(
+					name="TEST-GRN-ITEM",
+					item_variant="TEST-PACKED-S",
+					stock_uom="Pieces",
+				)
+			],
+		)
+		values = {
+			("YRP Work Order", "TEST-WO", "production_detail"): "TEST-IPD",
+			(
+				"YRP Item Production Detail",
+				"TEST-IPD",
+				("based_on_other_attribute_mapping", "packing_mode"),
+			): (1, "Size Wise Packing"),
+			("SD YRP Lot", "TEST-LOT", "packing_uom"): "Pieces",
+		}
+
+		def get_value(doctype, name, fieldname):
+			key = (doctype, name, tuple(fieldname) if isinstance(fieldname, list) else fieldname)
+			return values[key]
+
+		with (
+			patch("essdee_yrp.stock_entry_hooks.frappe.get_doc", return_value=grn),
+			patch("essdee_yrp.stock_entry_hooks.attribute_db.get_value", side_effect=get_value),
+		):
+			self.assertTrue(preserve_dynamic_packing_completion_piece_uom(doc))
+
+		self.assertEqual((row.uom, row.conversion_factor, row.stock_qty), ("Pieces", 1, 120))
+
 	def test_dynamic_packing_dispatch_routes_preserve_physical_piece_uom(self):
 		for against, against_id, finishing_plan in (
 			("SD YRP Finishing Plan", "TEST-FP", None),
@@ -376,7 +436,111 @@ class TestStockEntryCustomization(FrappeTestCase):
 			},
 		)
 
-		self.assertFalse(preserve_dynamic_packing_dispatch_piece_uom(doc))
+		with patch(
+			"essdee_yrp.stock_entry_hooks.frappe.db.get_value",
+			side_effect=lambda doctype, name, field: {
+				("SD YRP Finishing Plan", "TEST-FP", "lot"): "TEST-LOT",
+				("SD YRP Lot", "TEST-LOT", "packing_uom"): "Pieces",
+			}[(doctype, name, field)],
+		):
+			self.assertFalse(preserve_dynamic_packing_dispatch_piece_uom(doc))
 		self.assertEqual(row.uom, "Box")
 		self.assertEqual(row.conversion_factor, 12)
 		self.assertEqual(row.stock_qty, 24)
+
+	def test_mixed_dynamic_and_legacy_dispatch_restores_only_dynamic_rows(self):
+		doc = frappe.new_doc("YRP Stock Entry")
+		doc.update(
+			{
+				"purpose": "Material Issue",
+				"against": "SD YRP Finishing Plan Dispatch",
+				"against_id": "TEST-FPD",
+				"packing_batch_dispatch_json": frappe.as_json(
+					[
+						{
+							"finishing_plan": "TEST-DYNAMIC-FP",
+							"packing_calculation_version": 2,
+							"stock_uom": "Pieces",
+							"stock_quantities": {"S": 10},
+						}
+					]
+				),
+			}
+		)
+		dynamic = doc.append(
+			"items",
+			{"item": "DYNAMIC-S", "lot": "LOT-A", "qty": 10, "uom": "Box", "rate": 1},
+		)
+		dynamic._packing_finishing_plan = "TEST-DYNAMIC-FP"
+		dynamic._packing_calculation_version = 2
+		legacy = doc.append(
+			"items",
+			{
+				"item": "LEGACY-S",
+				"lot": "LOT-B",
+				"qty": 1,
+				"uom": "Box",
+				"stock_uom": "Pieces",
+				"conversion_factor": 10,
+				"stock_qty": 10,
+			},
+		)
+		legacy._packing_finishing_plan = "TEST-LEGACY-FP"
+
+		with patch(
+			"essdee_yrp.stock_entry_hooks.frappe.db.get_value",
+			side_effect=lambda doctype, name, field: {
+				("SD YRP Finishing Plan", "TEST-DYNAMIC-FP", "lot"): "LOT-A",
+				("SD YRP Lot", "LOT-A", "packing_uom"): "Pieces",
+			}[(doctype, name, field)],
+		):
+			self.assertTrue(preserve_dynamic_packing_dispatch_piece_uom(doc))
+
+		self.assertEqual((dynamic.uom, dynamic.conversion_factor, dynamic.stock_qty), ("Pieces", 1, 10))
+		self.assertEqual((legacy.uom, legacy.conversion_factor, legacy.stock_qty), ("Box", 10, 10))
+
+	def test_mixed_batch_versions_restore_only_version_two_rows(self):
+		doc = frappe.new_doc("YRP Stock Entry")
+		doc.update(
+			{
+				"purpose": "Material Issue",
+				"against": "SD YRP Finishing Plan",
+				"against_id": "TEST-FP",
+				"packing_batch_dispatch_json": frappe.as_json(
+					[
+						{
+							"packing_calculation_version": 1,
+							"stock_uom": "Box",
+							"stock_quantities": {"S": 2},
+						},
+						{
+							"packing_calculation_version": 2,
+							"stock_uom": "Pieces",
+							"stock_quantities": {"S": 20},
+						},
+					]
+				),
+			}
+		)
+		legacy = doc.append(
+			"items", {"item": "PACKED-S", "lot": "LOT-A", "qty": 2, "uom": "Box", "stock_qty": 20}
+		)
+		legacy._packing_finishing_plan = "TEST-FP"
+		legacy._packing_calculation_version = 1
+		dynamic = doc.append(
+			"items", {"item": "PACKED-S", "lot": "LOT-A", "qty": 20, "uom": "Box", "stock_qty": 200}
+		)
+		dynamic._packing_finishing_plan = "TEST-FP"
+		dynamic._packing_calculation_version = 2
+
+		with patch(
+			"essdee_yrp.stock_entry_hooks.frappe.db.get_value",
+			side_effect=lambda doctype, name, field: {
+				("SD YRP Finishing Plan", "TEST-FP", "lot"): "LOT-A",
+				("SD YRP Lot", "LOT-A", "packing_uom"): "Pieces",
+			}[(doctype, name, field)],
+		):
+			self.assertTrue(preserve_dynamic_packing_dispatch_piece_uom(doc))
+
+		self.assertEqual((legacy.uom, legacy.qty, legacy.stock_qty), ("Box", 2, 20))
+		self.assertEqual((dynamic.uom, dynamic.qty, dynamic.stock_qty), ("Pieces", 20, 20))

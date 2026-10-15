@@ -632,7 +632,7 @@ const RecutTable = defineComponent({
 }
 
 .cutting-tabs :deep(.requirement-table .requirement-balance--positive) {
-	color: var(--erp-accent-dark);
+	color: var(--erp-success-text);
 	background: var(--erp-success-soft);
 }
 

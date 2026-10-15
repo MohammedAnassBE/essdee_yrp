@@ -3,8 +3,10 @@
 		title="Stock Balance"
 		:generated="generated"
 		:loading="loading"
-		:error="error"
+		:error="filterError || layoutError"
 		:has-results="rows.length > 0"
+		:generate-disabled="isBusy"
+		:status-only="statusOnly"
 		@generate="generate"
 		@reset="reset"
 	>
@@ -28,9 +30,16 @@
 				</div>
 			</details>
 		</template>
+		<template #actions>
+			<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
+			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+		</template>
+		<template #status>
+			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" />
+		</template>
 
 		<template #metrics>
-			<div class="report-metric"><i class="pi pi-list" /><div><span>Stock rows</span><strong>{{ number(rows.length) }}</strong></div></div>
+			<div class="report-metric"><i class="pi pi-list" /><div><span>Stock rows</span><strong>{{ number(dataRows.length) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-box" /><div><span>Balance quantity</span><strong>{{ number(totals.balanceQty, 3) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-arrow-down-left" /><div><span>In quantity</span><strong>{{ number(totals.inQty, 3) }}</strong></div></div>
 			<div class="report-metric"><i class="pi pi-arrow-up-right" /><div><span>Out quantity</span><strong>{{ number(totals.outQty, 3) }}</strong></div></div>
@@ -38,35 +47,50 @@
 
 		<div class="erp-table-wrap stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
 			<table class="erp-data-table stock-table">
-				<thead><tr><th v-for="column in columns" :key="column.fieldname" :class="numericColumn(column) ? 'erp-number' : ''">{{ column.label || column.fieldname }}</th></tr></thead>
+				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
+				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr></thead>
 				<tbody>
-					<tr v-for="(row, rowIndex) in rows" :key="rowIndex">
-						<td v-for="column in columns" :key="column.fieldname" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ stockCellValue(row[column.fieldname], column) }}</span></td>
+					<tr v-for="(row, rowIndex) in rows" :key="rowIndex" :class="{ 'report-total-row': row.is_total_row }">
+						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ stockCellValue(cellValue(row, column), column) }}</span></td>
 					</tr>
 				</tbody>
 			</table>
 		</div>
 	</ReportShell>
+	<ReportColumnPicker v-model:visible="pickerVisible" :columns="allColumns" :link-sources="linkSources" :fields-by-source="fieldsBySource" :load-field-options="loadFieldOptions" :apply-layout="applyLayout" :save-layout="saveLayout" :reset-layout="resetLayout" :error="layoutError" />
 </template>
 
 <script setup>
-import { computed, reactive, ref } from "vue"
+import Button from "primevue/button"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 
-import { getStockBalanceReport } from "../../api/stockReports.js"
+import { useReportColumns } from "../../composables/useReportColumns.js"
+import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
 import LinkField from "../common/LinkField.vue"
+import ReportColumnPicker from "./ReportColumnPicker.vue"
+import { stockBalanceFormFilters } from "./reportFilterState.js"
+import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
-import { errorMessage, number, oneMonthAgoIso, stockCellValue, todayIso } from "./reportUtils.js"
+import { number, oneMonthAgoIso, stockCellValue, todayIso } from "./reportUtils.js"
 
 const filters = reactive(defaultFilters())
-const rows = ref([])
-const columns = ref([])
-const loading = ref(false)
-const generated = ref(false)
-const error = ref("")
+const filterError = ref("")
+const pickerVisible = ref(false)
 const advancedOpen = ref(typeof window === "undefined" || !window.matchMedia("(max-width: 430px)").matches)
-const totals = computed(() => rows.value.reduce((out, row) => {
-	out.balanceQty += Number(row.bal_qty || 0); out.inQty += Number(row.in_qty || 0); out.outQty += Number(row.out_qty || 0); return out
+const {
+	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError, activeFilters,
+	trackingStartedAt, loading, isBusy, generated, isBackgroundResult, statusOnly,
+	generate: generateReport, filtersChanged, clear, download,
+} = useWebReport({ reportKey: "stock-balance" })
+const {
+	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
+	saveLayout, resetLayout, cellAlign, cellValue,
+} = useReportColumns({ reportKey: "stock-balance", sourceColumns, sourceRows })
+const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+const totals = computed(() => dataRows.value.reduce((result, row) => {
+	result.balanceQty += Number(row.bal_qty || 0); result.inQty += Number(row.in_qty || 0); result.outQty += Number(row.out_qty || 0); return result
 }, { balanceQty: 0, inQty: 0, outQty: 0 }))
 const optionalFilterCount = computed(() => [filters.item, filters.parentItem, filters.warehouse, filters.lot, filters.receivedType].filter(Boolean).length
 	+ Number(filters.showAttributes) + Number(filters.showAgeing) + Number(filters.showInwardSplit))
@@ -74,29 +98,32 @@ const optionalFilterCount = computed(() => [filters.item, filters.parentItem, fi
 function defaultFilters() {
 	return { fromDate: oneMonthAgoIso(), toDate: todayIso(), item: "", parentItem: "", warehouse: "", lot: "", receivedType: "", removeZero: true, showAttributes: false, showAgeing: false, showInwardSplit: false }
 }
-function numericColumn(column) { return ["Float", "Currency", "Int"].includes(column?.fieldtype) }
 function cellClass(column, row) {
-	return [numericColumn(column) ? "erp-number" : "", column.fieldname === "in_qty" && Number(row.in_qty) > 0 ? "stock-in" : "", column.fieldname === "out_qty" && Number(row.out_qty) > 0 ? "stock-out" : ""]
+	return [cellAlign(column), column.fieldname === "in_qty" && Number(row.in_qty) > 0 ? "stock-in" : "", column.fieldname === "out_qty" && Number(row.out_qty) > 0 ? "stock-out" : ""]
+}
+function requestFilters() {
+	return {
+		from_date: filters.fromDate, to_date: filters.toDate, item: filters.item, parent_item: filters.parentItem,
+		warehouse: filters.warehouse, lot: filters.lot, received_type: filters.receivedType,
+		remove_zero_balance_item: filters.removeZero ? 1 : 0, show_variant_attributes: filters.showAttributes ? 1 : 0,
+		show_stock_ageing_data: filters.showAgeing ? 1 : 0, show_inward_date_split: filters.showInwardSplit ? 1 : 0,
+	}
 }
 async function generate() {
-	if (!filters.fromDate || !filters.toDate) { error.value = "From date and To date are required."; return }
-	if (filters.fromDate > filters.toDate) { error.value = "From date cannot be after To date."; return }
-	error.value = ""
-	loading.value = true
-	try {
-		const response = await getStockBalanceReport({
-			from_date: filters.fromDate, to_date: filters.toDate, item: filters.item, parent_item: filters.parentItem,
-			warehouse: filters.warehouse, lot: filters.lot, received_type: filters.receivedType,
-			remove_zero_balance_item: filters.removeZero ? 1 : 0, show_variant_attributes: filters.showAttributes ? 1 : 0,
-			show_stock_ageing_data: filters.showAgeing ? 1 : 0, show_inward_date_split: filters.showInwardSplit ? 1 : 0,
-		}) || {}
-		rows.value = response.result || []
-		columns.value = (response.columns || []).map((column, index) => typeof column === "string" ? { fieldname: `column_${index}`, label: column } : column)
-		generated.value = true
-	} catch (exception) { error.value = errorMessage(exception, "Unable to generate the Stock Balance report.") }
-	finally { loading.value = false }
+	if (!filters.fromDate || !filters.toDate) { filterError.value = "From date and To date are required."; return }
+	if (filters.fromDate > filters.toDate) { filterError.value = "From date cannot be after To date."; return }
+	filterError.value = ""
+	await generateReport(requestFilters())
 }
-function reset() { Object.assign(filters, defaultFilters()); rows.value = []; columns.value = []; generated.value = false; error.value = "" }
+function rebuild() { return generateReport(requestFilters(), { refresh: true }) }
+function reset() { Object.assign(filters, defaultFilters()); filterError.value = ""; clear() }
+function restoreFilters(request) {
+	if (request) Object.assign(filters, stockBalanceFormFilters(request))
+}
+
+watch(filters, () => filtersChanged(requestFilters()), { deep: true })
+watch(activeFilters, restoreFilters, { flush: "sync" })
+onMounted(loadLayout)
 </script>
 
 <style scoped>

@@ -19,6 +19,10 @@ const temporalComponentContract = Object.entries(temporalComponentModes).every((
 	return existsSync(componentPath)
 		&& readFileSync(componentPath, "utf8").includes(`<TemporalFieldBase v-bind="$attrs" mode="${mode}" />`)
 })
+const listViewSource = readFileSync(join(commonComponents, "ListView.vue"), "utf8")
+const selectableListContract = listViewSource.includes('selectable: { type: Boolean, default: false }')
+	&& listViewSource.includes('"selection-change"')
+	&& listViewSource.includes('emit("selection-change", [...selection])')
 
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1500, height: 950 } })
@@ -163,6 +167,7 @@ const fieldAfterConditionRestore = await row.locator(".p-select-label").first().
 
 const partialResults = {
 	temporalComponentContract,
+	selectableListContract,
 	defaultControl,
 	lotControlIsLink,
 	lotSearchOnlyMatchesVisibleText,
@@ -189,6 +194,7 @@ const partialResults = {
 }
 const partialPassed = defaultControl.field === "ID"
 	&& temporalComponentContract
+	&& selectableListContract
 	&& defaultControl.condition === "Equals"
 	&& defaultControl.isLink
 	&& lotControlIsLink
@@ -352,6 +358,7 @@ const shownStatuses = await page.locator(".laysheet-card .lay-status").allTextCo
 
 const results = {
 	temporalComponentContract,
+	selectableListContract,
 	defaultControl,
 	lotControlIsLink,
 	lotSearchOnlyMatchesVisibleText,
@@ -389,6 +396,7 @@ const results = {
 
 const passed = defaultControl.field === "ID"
 	&& temporalComponentContract
+	&& selectableListContract
 	&& defaultControl.condition === "Equals"
 	&& defaultControl.isLink
 	&& lotControlIsLink

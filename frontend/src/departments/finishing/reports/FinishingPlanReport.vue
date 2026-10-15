@@ -1,14 +1,21 @@
 <template>
 	<section data-finishing-report="finishing-plan-report" aria-label="Finishing Plan Report">
-		<ReportShell title="Finishing Plan Report" :generated="generated" :loading="loading" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.item" doctype="Item" label="Item" placeholder="Search item…" :filters="{ has_variants: 1 }" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.season" doctype="SD YRP Product Season" label="Season" placeholder="Search season…" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.productCategory" doctype="SD YRP Product Category" label="Product Category" placeholder="Search category…" :show-open-button="false" show-clear />
 			</template>
+			<template #actions>
+				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
+				<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+			</template>
+			<template #status>
+				<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" />
+			</template>
 			<template #metrics>
-				<div class="report-metric"><i class="pi pi-box" /><div><span>Finishing Plans</span><strong>{{ formatQuantity(rows.length) }}</strong></div></div>
+				<div class="report-metric"><i class="pi pi-box" /><div><span>Finishing Plans</span><strong>{{ formatQuantity(dataRows.length) }}</strong></div></div>
 			</template>
 			<div class="finishing-stack">
 				<FinishingReportHeading title="Finishing Plan Report" :period="period">
@@ -16,95 +23,110 @@
 				</FinishingReportHeading>
 				<div class="finishing-scroll fp-report__scroll" role="region" tabindex="0" aria-label="Finishing Plan Report results">
 					<table ref="table" class="finishing-table fp-report__table">
+						<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 						<thead>
 							<tr>
-								<th v-for="column in columns" :key="column.fieldname" :class="headerClass(column)" :style="frozenStyle(column, true)">{{ column.label }}</th>
+								<th v-for="column in columns" :key="column.key" :class="headerClass(column)" :style="frozenStyle(column, true)">{{ column.label }}</th>
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="(row, index) in rows" :key="index">
-								<td v-for="column in columns" :key="column.fieldname" :class="cellClass(column, row)" :style="frozenStyle(column, false)">{{ formatReportCell(column, row) }}</td>
+							<tr v-for="(row, index) in rows" :key="index" :class="{ 'report-total-row': row.is_total_row }">
+								<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)" :style="frozenStyle(column, false)">{{ formattedCell(column, row) }}</td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
 			</div>
 		</ReportShell>
-		<DocumentErrorDialog :message="error" title="Finishing Plan Report could not be generated" @dismiss="error = ''" />
+		<ReportColumnPicker v-model:visible="pickerVisible" :columns="allColumns" :link-sources="linkSources" :fields-by-source="fieldsBySource" :load-field-options="loadFieldOptions" :apply-layout="applyLayout" :save-layout="saveLayout" :reset-layout="resetLayout" :error="layoutError" />
 	</section>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
-import { runFinishingPlanReport } from "../../../api/finishing.js"
+import { useReportColumns } from "../../../composables/useReportColumns.js"
+import { useWebReport } from "../../../composables/useWebReport.js"
 import LinkField from "../../../components/common/LinkField.vue"
-import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import ReportColumnPicker from "../../../components/reports/ReportColumnPicker.vue"
+import { finishingPlanFormFilters } from "../../../components/reports/reportFilterState.js"
+import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import { formatQuantity } from "../finishingViews.js"
 import FinishingReportHeading from "./FinishingReportHeading.vue"
-import { FROZEN_COLUMNS, formatReportCell, normalizeReportColumn, reportCellTone } from "./finishingReports.js"
-import { useReportRequest } from "./useReportRequest.js"
+import { FROZEN_COLUMNS, formatReportCell, frozenColumnOffsets, reportCellTone } from "./finishingReports.js"
 
-const NUMERIC = new Set(["Int", "Float", "Currency", "Percent"])
 const filters = reactive(defaultFilters())
-const columns = ref([])
-const rows = ref([])
 const period = ref("")
 const table = ref(null)
 const frozenLefts = ref({})
-const { loading, generated, error, run, clear } = useReportRequest()
+const pickerVisible = ref(false)
+const {
+	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError, activeFilters,
+	trackingStartedAt, loading, isBusy, generated, isBackgroundResult, statusOnly,
+	generate: generateReport, filtersChanged, clear, download,
+} = useWebReport({ reportKey: "finishing-plan" })
+const {
+	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
+	saveLayout, resetLayout, cellAlign, cellValue,
+} = useReportColumns({ reportKey: "finishing-plan", sourceColumns, sourceRows })
+const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
 
 function defaultFilters() {
 	return { lot: "", item: "", season: "", productCategory: "" }
 }
 
 function headerClass(column) {
-	return { "erp-number": NUMERIC.has(column.fieldtype), "fp-report__frozen": FROZEN_COLUMNS.includes(column.fieldname), "fp-report__frozen-edge": column.fieldname === FROZEN_COLUMNS.at(-1) }
+	return { [cellAlign(column)]: true, "fp-report__frozen": isFrozen(column), "fp-report__frozen-edge": column.kind === "base" && column.fieldname === FROZEN_COLUMNS.at(-1) }
 }
 
 function cellClass(column, row) {
-	const tone = reportCellTone(column, row)
-	return { ...headerClass(column), [`finishing-value--${tone}`]: Boolean(tone), "finishing-table__colour": column.fieldname === "item" }
+	const tone = column.kind === "base" ? reportCellTone(column, row) : ""
+	return { ...headerClass(column), [`finishing-value--${tone}`]: Boolean(tone), "finishing-table__colour": column.kind === "base" && column.fieldname === "item" }
 }
 
+function isFrozen(column) { return column.kind === "base" && FROZEN_COLUMNS.includes(column.fieldname) }
+function formattedCell(column, row) { return formatReportCell(column, { [column.fieldname]: cellValue(row, column) }) }
+
 function frozenStyle(column, header) {
-	const left = frozenLefts.value[column.fieldname]
+	if (!isFrozen(column)) return {}
+	const left = frozenLefts.value[column.key]
 	if (left === undefined) return {}
 	return { position: "sticky", left: `${left}px`, zIndex: header ? 3 : 2 }
 }
 
 function measureFrozen() {
 	const cells = table.value?.querySelectorAll("thead th") || []
-	const lefts = {}
-	let offset = 0
-	columns.value.forEach((column, index) => {
-		if (!FROZEN_COLUMNS.includes(column.fieldname)) return
-		lefts[column.fieldname] = offset
-		offset += cells[index]?.offsetWidth || 0
-	})
+	const widths = columns.value.map((_column, index) => cells[index]?.offsetWidth || 0)
+	const lefts = frozenColumnOffsets(columns.value, widths)
 	frozenLefts.value = window.innerWidth > 700 ? lefts : {}
 }
 
-function generate() {
+async function generate() {
 	const values = { lot: filters.lot, item: filters.item, season: filters.season, product_category: filters.productCategory }
 	const applied = Object.fromEntries(Object.entries(values).filter(([, value]) => value))
-	run("", () => runFinishingPlanReport(applied), async (data) => {
-		columns.value = (data?.columns || []).map(normalizeReportColumn)
-		rows.value = data?.result || []
-		period.value = Object.values(applied).join(" · ")
-		frozenLefts.value = {}
-		await nextTick()
-		measureFrozen()
-	})
+	period.value = Object.values(applied).join(" · ")
+	await generateReport(applied)
 }
+
+function requestFilters() {
+	return Object.fromEntries(Object.entries({ lot: filters.lot, item: filters.item, season: filters.season, product_category: filters.productCategory }).filter(([, value]) => value))
+}
+
+function rebuild() { return generateReport(requestFilters(), { refresh: true }) }
 
 function reset() {
 	Object.assign(filters, defaultFilters())
-	columns.value = []
-	rows.value = []
+	period.value = ""
 	clear()
+}
+
+function restoreFilters(request) {
+	if (!request) return
+	Object.assign(filters, finishingPlanFormFilters(request))
+	period.value = Object.values(request).filter(Boolean).join(" · ")
 }
 
 function csvCell(value) {
@@ -113,7 +135,7 @@ function csvCell(value) {
 }
 
 function downloadCsv() {
-	const lines = [columns.value.map((column) => column.label), ...rows.value.map((row) => columns.value.map((column) => row[column.fieldname] ?? ""))]
+	const lines = [columns.value.map((column) => column.label), ...rows.value.map((row) => columns.value.map((column) => cellValue(row, column) ?? ""))]
 	const url = URL.createObjectURL(new Blob(["﻿", lines.map((line) => line.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }))
 	const link = document.createElement("a")
 	link.href = url
@@ -122,7 +144,17 @@ function downloadCsv() {
 	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-onMounted(() => window.addEventListener("resize", measureFrozen))
+watch(filters, () => filtersChanged(requestFilters()), { deep: true })
+watch(activeFilters, restoreFilters, { flush: "sync" })
+watch(columns, async () => {
+	frozenLefts.value = {}
+	await nextTick()
+	measureFrozen()
+})
+onMounted(() => {
+	window.addEventListener("resize", measureFrozen)
+	loadLayout()
+})
 onBeforeUnmount(() => window.removeEventListener("resize", measureFrozen))
 </script>
 

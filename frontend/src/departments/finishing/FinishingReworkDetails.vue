@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Rework Details" accent="#087c91" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Rework Details" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-rework erp-workspace" data-finishing-page="rework-details">
 			<ReportShell title="Rework Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 				<template #filters>

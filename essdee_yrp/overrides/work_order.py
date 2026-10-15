@@ -55,6 +55,9 @@ class EssdeeWorkOrder(WorkOrder):
 		if not self.get("includes_packing"):
 			return issues
 
+		if self.has_submitted_packing_work_order:
+			issues.append(_("Already Work Order was Created for Packing"))
+
 		from essdee_yrp.finishing.box_sticker import get_missing_box_sticker_prices
 
 		missing_prices = get_missing_box_sticker_prices(self, for_update=True)
@@ -66,6 +69,29 @@ class EssdeeWorkOrder(WorkOrder):
 				).format(self.lot, ", ".join(missing_prices))
 			)
 		return issues
+
+	@property
+	def has_submitted_packing_work_order(self):
+		"""Check for another submitted packing Work Order under the Lot lock."""
+		if not self.get("lot"):
+			return False
+		frappe.db.sql(
+			"SELECT name FROM `tabSD YRP Lot` WHERE name = %s FOR UPDATE",
+			(self.lot,),
+		)
+		return bool(
+			frappe.db.get_value(
+				"YRP Work Order",
+				{
+					"lot": self.lot,
+					"includes_packing": 1,
+					"docstatus": 1,
+					"name": ["!=", self.name or ""],
+				},
+				"name",
+				for_update=True,
+			)
+		)
 
 	def apply_receivable_process_costs(self, process_cost):
 		if apply_garment_panel_process_costs(self, process_cost):

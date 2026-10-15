@@ -137,7 +137,9 @@ class TestServerSidePermissions(UnitTestCase):
 			patch.object(finishing_plan_dispatch.frappe, "new_doc") as new_doc,
 		):
 			with self.assertRaises(frappe.PermissionError):
-				finishing_plan_dispatch.create_stock_dispatch("FPD-U43", "FROM-U43", "TO-U43", "TN-U43", 1)
+				finishing_plan_dispatch.create_stock_dispatch(
+					"FPD-U43", "FROM-U43", "WH-FROM-U43", "TO-U43", "WH-TO-U43", "TN-U43", 1
+				)
 
 		dispatch.check_permission.assert_called_once_with("write")
 		new_doc.assert_not_called()
@@ -176,7 +178,7 @@ class TestActualRolelessSession(IntegrationTestCase):
 				"migration configuration": mrp_data_migration.get_connection_defaults,
 				"rework sync": lambda: grn_rework_item.sync_grn_rework_for_name(grn),
 				"stock dispatch": lambda: finishing_plan_dispatch.create_stock_dispatch(
-					dispatch, "FROM-U43", "TO-U43", "TN-U43", 1
+					dispatch, "FROM-U43", "WH-FROM-U43", "TO-U43", "WH-TO-U43", "TN-U43", 1
 				),
 			}
 			for label, action in checks.items():

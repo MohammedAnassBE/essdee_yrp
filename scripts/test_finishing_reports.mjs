@@ -8,6 +8,7 @@ import {
 	dispatchTotals,
 	firstColourLabel,
 	formatReportCell,
+	frozenColumnOffsets,
 	groupByDate,
 	ironingShowsPart,
 	normalizeReportColumn,
@@ -31,8 +32,8 @@ assert.equal(ironingShowsPart({ attributes: ["Colour", "Part"], rows: [{ part: "
 assert.equal(ironingShowsPart({ attributes: ["Colour", "Part"], rows: [{ part: "" }] }), false)
 assert.equal(ironingShowsPart({ attributes: ["Colour"], rows: [{ part: "Top" }] }), false)
 
-assert.deepEqual(normalizeReportColumn("Lot Name:Link/SD YRP Lot:120"), { label: "Lot Name", fieldname: "lot_name", fieldtype: "Link", options: "SD YRP Lot" })
-assert.deepEqual(normalizeReportColumn({ label: "Cut Qty", fieldname: "cutting", fieldtype: "Int" }), { label: "Cut Qty", fieldname: "cutting", fieldtype: "Int", options: "" })
+assert.deepEqual(normalizeReportColumn("Lot Name:Link/SD YRP Lot:120"), { label: "Lot Name", fieldname: "lot_name", fieldtype: "Link", options: "SD YRP Lot", width: 120, align: "auto" })
+assert.deepEqual(normalizeReportColumn({ label: "Cut Qty", fieldname: "cutting", fieldtype: "Int", width: 96, align: "center" }), { label: "Cut Qty", fieldname: "cutting", fieldtype: "Int", options: "", width: 96, align: "center" })
 assert.equal(formatReportCell({ fieldname: "p", fieldtype: "Percent" }, { p: 12.345 }), "12.35%")
 assert.equal(formatReportCell({ fieldname: "q", fieldtype: "Int" }, { q: 12820 }), "12,820")
 assert.equal(formatReportCell({ fieldname: "q", fieldtype: "Int" }, { q: 0 }), "0")
@@ -43,6 +44,14 @@ assert.equal(reportCellTone({ fieldname: "unaccountable" }, { unaccountable: 2 }
 assert.equal(reportCellTone({ fieldname: "unaccountable" }, { unaccountable: 0 }), "")
 assert.equal(reportCellTone({ fieldname: "cutting" }, { cutting: -3 }), "")
 assert.deepEqual(FROZEN_COLUMNS, ["item", "description", "lot", "pieces_per_box"])
+assert.deepEqual(frozenColumnOffsets([
+	{ key: "base:item", kind: "base", fieldname: "item" },
+	{ key: "linked:lot:item", kind: "linked", fieldname: "item" },
+	{ key: "base:description", kind: "base", fieldname: "description" },
+], [120, 200, 160]), {
+	"base:item": 0,
+	"base:description": 120,
+})
 
 assert.equal(firstColourLabel({ "Oil Mark-Red-Top": {} }), "Red-Top")
 assert.equal(firstColourLabel({}), "")

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, call, patch
 import frappe
 
 import essdee_yrp.fabric_store.web_workspace as workspace
+from essdee_yrp.fabric_store.documents.common import get_draft_completion_stock_entry
 from essdee_yrp.fabric_store.web_workspace import (
 	DOCUMENT_KEYS,
 	STOCK_OPERATION_DOCTYPES,
@@ -171,6 +172,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 				side_effect=has_permission,
 			),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_doc", side_effect=get_report),
+			patch("essdee_yrp.fabric_store.web_workspace.can_view_lot_cut_quantity", return_value=True),
 		):
 			payload = get_capabilities()
 
@@ -180,7 +182,12 @@ class TestFabricStoreWebWorkspace(TestCase):
 				"purchase_order_itemwise": {
 					"label": "Purchase Order Itemwise",
 					"can_read": True,
-				}
+				},
+				"lot_cut_quantity": {
+					"label": "Lot Cut Quantity",
+					"can_read": True,
+					"can_read_cutting_plan": True,
+				},
 			},
 		)
 
@@ -198,6 +205,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.get_doc", side_effect=get_report),
+			patch("essdee_yrp.fabric_store.web_workspace.can_view_lot_cut_quantity", return_value=False),
 		):
 			payload = get_capabilities()
 
@@ -550,6 +558,59 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(payload, expected)
 		complete.assert_called_once_with("DC-1")
 
+	def test_complete_transfer_endpoint_reopens_existing_draft_completion(self):
+		for doctype, maker in (
+			("YRP Delivery Challan", "make_dc_completion"),
+			("YRP Goods Received Note", "make_grn_completion"),
+		):
+			with self.subTest(doctype=doctype):
+				source = frappe._dict(doctype=doctype, name="SRC-1", docstatus=1)
+				expected = {"record": {"doctype": "YRP Stock Entry", "name": "STE-DRAFT", "docstatus": 0}}
+				with (
+					patch("essdee_yrp.fabric_store.web_workspace._get_supported_document", return_value=source),
+					patch("essdee_yrp.fabric_store.web_workspace.get_draft_completion_stock_entry", return_value="STE-DRAFT") as find_draft,
+					patch(f"essdee_yrp.fabric_store.web_workspace.{maker}") as complete,
+					patch("essdee_yrp.fabric_store.web_workspace.get_document", return_value=expected) as get_payload,
+				):
+					payload = workspace.complete_work_order_document_transfer(doctype, source.name)
+
+				self.assertEqual(payload, expected)
+				find_draft.assert_called_once_with(doctype, "SRC-1")
+				complete.assert_not_called()
+				get_payload.assert_called_once_with("YRP Stock Entry", "STE-DRAFT")
+
+	def test_draft_completion_lookup_returns_the_newest_open_draft(self):
+		with patch("essdee_yrp.fabric_store.documents.common.frappe.get_all", return_value=["STE-NEWEST"]) as get_all:
+			self.assertEqual(get_draft_completion_stock_entry("YRP Goods Received Note", "GRN-1"), "STE-NEWEST")
+		self.assertEqual(
+			get_all.call_args.kwargs["filters"],
+			{"against": "YRP Goods Received Note", "against_id": "GRN-1", "purpose": "GRN Completion", "docstatus": 0},
+		)
+		self.assertEqual(get_all.call_args.kwargs["order_by"], "creation desc")
+		with patch("essdee_yrp.fabric_store.documents.common.frappe.get_all", return_value=[]):
+			self.assertIsNone(get_draft_completion_stock_entry("YRP Delivery Challan", "DC-1"))
+
+	@patch("essdee_yrp.fabric_store.web_workspace._get_supported_document")
+	def test_discard_completion_draft_deletes_only_draft_completion_entries(self, get_supported):
+		draft = frappe._dict(doctype="YRP Stock Entry", name="STE-DRAFT", docstatus=0, purpose="DC Completion", modified="2026-10-06 12:00:00")
+		get_supported.return_value = draft
+		with patch("essdee_yrp.fabric_store.web_workspace.frappe.delete_doc") as delete_doc:
+			self.assertEqual(workspace.discard_completion_draft("STE-DRAFT", draft.modified), {"deleted": "STE-DRAFT"})
+		get_supported.assert_called_with("YRP Stock Entry", "STE-DRAFT", "delete")
+		delete_doc.assert_called_once_with("YRP Stock Entry", "STE-DRAFT")
+
+		for invalid in (
+			frappe._dict(draft, docstatus=1),
+			frappe._dict(draft, purpose="Send to Warehouse"),
+		):
+			get_supported.return_value = invalid
+			with (
+				patch("essdee_yrp.fabric_store.web_workspace.frappe.delete_doc") as delete_doc,
+				self.assertRaises(frappe.ValidationError),
+			):
+				workspace.discard_completion_draft("STE-DRAFT")
+			delete_doc.assert_not_called()
+
 	@patch("essdee_yrp.fabric_store.web_workspace.get_purchase_order_defaults")
 	@patch("essdee_yrp.fabric_store.web_workspace._get_supported_document")
 	def test_purchase_order_workspace_opens_readable_non_yrp_orders_without_grn(self, get_supported, defaults):
@@ -632,8 +693,14 @@ class TestFabricStoreWebWorkspace(TestCase):
 			comments=None,
 			items=[],
 		)
+		def permissions(doctype, **_kwargs):
+			return doctype != "YRP Item Price"
+
 		with (
-			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+			patch(
+				"essdee_yrp.fabric_store.web_workspace.frappe.has_permission",
+				side_effect=permissions,
+			),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.new_doc", return_value=doc),
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.db.get_single_value", return_value=1),
 			patch("essdee_yrp.fabric_store.web_workspace.get_stock_dimensions_for_ui", return_value=[
@@ -650,6 +717,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertTrue(payload["price_validation_enabled"])
 		self.assertTrue(payload["permissions"]["can_create"])
 		self.assertTrue(payload["permissions"]["can_submit"])
+		self.assertFalse(payload["permissions"]["can_create_item_price"])
 
 	@patch("essdee_yrp.fabric_store.web_workspace.get_purchase_order_workspace", return_value={"record": {"name": "YRP-PO-2026-00001"}})
 	@patch("essdee_yrp.fabric_store.web_workspace.ungroup_items_from_ui")
@@ -720,28 +788,87 @@ class TestFabricStoreWebWorkspace(TestCase):
 
 	def test_purchase_order_item_price_uses_same_authoritative_resolver_as_desk(self):
 		item_detail = {"name": "ITEM", "values": {"S": {"qty": 4}}}
-		expected_price = {"rates": {"S": 125}, "tax": "GST 5", "tax_rate": 5}
+		application = {
+			"warnings": [],
+			"rows": [{
+				"status": "ok",
+				"rate": 125,
+				"tax": "5",
+				"tax_rate": 5,
+				"lead_time_days": 7,
+				"tier": {"moq": 0, "rate": 125, "lead_time_days": 7},
+			}],
+		}
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True) as permission,
-			patch("essdee_yrp.fabric_store.web_workspace.get_item_price_for_ui", return_value=expected_price) as get_price,
-			patch("essdee_yrp.fabric_store.web_workspace._get_purchase_order_item_lead_time", return_value=7) as get_lead_time,
+			patch("essdee_yrp.fabric_store.web_workspace.apply_price_details", return_value=application) as apply_prices,
 		):
 			payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
 
 		permission.assert_any_call("Purchase Order", ptype="create", throw=True)
-		get_price.assert_called_once_with(item_detail, "SUPPLIER-1")
-		get_lead_time.assert_called_once_with(item_detail, "SUPPLIER-1")
-		self.assertEqual(payload, {**expected_price, "lead_time_days": 7})
+		apply_prices.assert_called_once()
+		self.assertEqual(payload["status"], "ok")
+		self.assertEqual(payload["rates"], {"S": 125})
+		self.assertEqual(payload["tiers"]["S"]["moq"], 0)
+		self.assertEqual(payload["lead_time_days"], 7)
 
-	def test_purchase_order_item_price_allows_missing_price_for_disabled_policy(self):
+	def test_purchase_order_item_price_returns_explicit_unavailable_statuses(self):
 		item_detail = {"name": "ITEM", "values": {"S": {"qty": 4}}}
+		for status in ("missing", "ambiguous", "no_slab"):
+			application = {
+				"warnings": [status],
+				"rows": [{
+					"status": status,
+					"rate": None,
+					"tax": "5" if status == "no_slab" else None,
+					"tax_rate": 5 if status == "no_slab" else 0,
+					"lead_time_days": None,
+					"tier": None,
+				}],
+			}
+			with (
+				self.subTest(status=status),
+				patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.web_workspace.apply_price_details", return_value=application),
+			):
+				payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
+
+			self.assertEqual(payload["status"], status)
+			self.assertEqual(payload["rates"], {"S": None})
+
+	def test_purchase_order_price_preview_returns_every_logical_row(self):
+		items = [{
+			"primary_attribute": "Size",
+			"items": [
+				{"name": "ITEM", "primary_attribute": "Size", "values": {"S": {"qty": 6}}},
+				{"name": "ITEM", "primary_attribute": "Size", "values": {"M": {"qty": 6}}},
+			],
+		}]
+		application = {
+			"warnings": [],
+			"rows": [
+				{"status": "ok", "rate": 80, "tax": "5", "tax_rate": 5, "lead_time_days": 7, "tier": {"moq": 10}},
+				{"status": "ok", "rate": 80, "tax": "5", "tax_rate": 5, "lead_time_days": 7, "tier": {"moq": 10}},
+			],
+		}
 		with (
 			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
-			patch("essdee_yrp.fabric_store.web_workspace.get_item_price_for_ui", return_value=None),
+			patch("essdee_yrp.fabric_store.web_workspace.apply_price_details", return_value=application) as apply_prices,
 		):
-			payload = workspace.get_purchase_order_item_price(item_detail, "SUPPLIER-1")
+			payload = workspace.preview_purchase_order_prices(items, "SUPPLIER-1")
 
-		self.assertEqual(payload, {})
+		rows = apply_prices.call_args.args[0]
+		self.assertEqual([row.qty for row in rows], [6, 6])
+		self.assertEqual([row.item_code for row in rows], ["ITEM", "ITEM"])
+		self.assertEqual(
+			apply_prices.call_args.kwargs["preview_context"],
+			[
+				{"parent_item": "ITEM", "attributes": {"Size": "S"}},
+				{"parent_item": "ITEM", "attributes": {"Size": "M"}},
+			],
+		)
+		self.assertEqual(payload["rows"][0]["values"]["S"]["rate"], 80)
+		self.assertEqual(payload["rows"][1]["values"]["M"]["tier"]["moq"], 10)
 
 	def test_purchase_order_item_schema_uses_write_permission_for_existing_draft(self):
 		doc = frappe._dict(doctype="Purchase Order", name="PO-DRAFT-1", docstatus=0)
@@ -756,6 +883,40 @@ class TestFabricStoreWebWorkspace(TestCase):
 		permission.assert_any_call("Purchase Order", ptype="write", doc=doc, throw=True)
 		schema.assert_called_once_with("ITEM")
 		self.assertEqual(payload["item"], "ITEM")
+
+	def test_shared_stock_schema_accepts_a_plain_purchase_item(self):
+		from essdee_yrp.cutting.web_workspace import _get_stock_item_schema_data
+
+		plain = MagicMock()
+		plain.name = "PLAIN-ITEM"
+		plain.is_stock_item = 1
+		plain.is_purchase_item = 1
+		plain.docstatus = 0
+		plain.disabled = 0
+		plain.attributes = []
+		plain.get.side_effect = lambda key, default=None: getattr(plain, key, default)
+		with (
+			patch("essdee_yrp.cutting.web_workspace.frappe.get_doc", return_value=plain),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_is_stock_item") as validate_stock,
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_cancelled_item"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_disabled"),
+			patch(
+				"yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details",
+				return_value={
+					"item": "PLAIN-ITEM",
+					"attributes": [],
+					"primary_attribute": "",
+					"primary_attribute_values": [],
+				},
+			),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values", return_value={}),
+		):
+			payload = _get_stock_item_schema_data("PLAIN-ITEM")
+
+		self.assertEqual(payload["item"], "PLAIN-ITEM")
+		self.assertEqual(payload["attribute_values"], {})
+		self.assertEqual(validate_stock.call_count, 2)
+		plain.check_permission.assert_has_calls([call("read"), call("read")])
 
 	def test_purchase_order_parameter_search_uses_po_permission_for_non_system_manager(self):
 		def permissions(doctype, ptype="read", **kwargs):
@@ -910,6 +1071,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(payload["purpose_options"][0], "DC Completion")
 		self.assertTrue(payload["purpose_locked"])
 		self.assertTrue(payload["protected_completion"])
+		self.assertTrue(payload["permissions"]["can_delete"])
 
 	@patch("essdee_yrp.fabric_store.web_workspace.get_document", return_value={"record": {"name": "STE-COMPLETE-1"}})
 	@patch("essdee_yrp.fabric_store.web_workspace._get_supported_document")

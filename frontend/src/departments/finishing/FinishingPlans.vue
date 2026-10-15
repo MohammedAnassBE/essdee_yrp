@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plans" accent="#087c91" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plans" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Finishing Plans unavailable" message="You do not have permission to view Finishing Plans." :retryable="false" />

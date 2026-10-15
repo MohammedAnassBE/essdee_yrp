@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan Dispatch" accent="#087c91" back-to="/finishing/dispatches" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan Dispatch" back-to="/finishing/dispatches" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan Dispatch"><Skeleton height="64px" /><Skeleton height="360px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan Dispatch unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -47,8 +47,10 @@
 		</section>
 		<Dialog v-model:visible="dispatchOpen" modal header="Dispatch Stock" class="erp-dialog--sm" :closable="!busy">
 			<form class="finishing-dispatch__form" @submit.prevent="dispatchStock">
-				<LinkField v-model="stock.from_location" doctype="Warehouse" label="From Warehouse" required :show-open-button="false" :disabled="busy" />
-				<LinkField v-model="stock.to_location" doctype="Supplier" label="To Supplier" required :show-open-button="false" :disabled="busy" />
+				<LinkField :model-value="stock.from_supplier" doctype="Supplier" label="From Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('from', value)" />
+				<LinkField v-model="stock.from_warehouse" doctype="Warehouse" label="From Warehouse" required :filters="warehouseFilters(stock.from_supplier)" :show-open-button="false" :disabled="busy" />
+				<LinkField :model-value="stock.to_supplier" doctype="Supplier" label="To Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('to', value)" />
+				<LinkField v-model="stock.to_warehouse" doctype="Warehouse" label="To Warehouse" required :filters="warehouseFilters(stock.to_supplier)" :show-open-button="false" :disabled="busy" />
 				<label class="common-field"><span class="finishing-field-label">Goods Value</span><InputNumber v-model="stock.goods_value" :max-fraction-digits="2" fluid :disabled="busy" /></label>
 				<label class="common-field"><span class="finishing-field-label">Vehicle No</span><InputText v-model="stock.vehicle_no" fluid :disabled="busy" /></label>
 			</form>
@@ -86,6 +88,7 @@ import { preserveListNavigationState } from "../../router/listDocumentNavigation
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import FinishingDispatchEntry from "./components/FinishingDispatchEntry.vue"
 import { dispatchEntrySource, dispatchInitialState } from "./finishingEntries.js"
+import { setDispatchSupplier, warehouseFilters } from "./supplierWarehouse.js"
 import "./finishing.css"
 
 const route = useRoute()
@@ -103,7 +106,7 @@ const actionError = ref("")
 const dispatchOpen = ref(false)
 const stockEntryOpen = ref(false)
 const stockEntryName = ref("")
-const stock = reactive({ from_location: "", to_location: "", goods_value: null, vehicle_no: "" })
+const stock = reactive({ from_supplier: "", from_warehouse: "", to_supplier: "", to_warehouse: "", goods_value: null, vehicle_no: "" })
 const entries = new Map()
 const rowsVersion = ref(0)
 const record = computed(() => workspace.value.record || {})
@@ -182,8 +185,13 @@ function confirmFetch() {
 	confirmAction({ header: "Fetch Items?", message: "Fetch the latest packed balances? Quantities entered on this page are replaced.", acceptLabel: "Fetch Items", acceptIcon: "pi pi-refresh", acceptSeverity: "primary", rejectLabel: "Keep Entries", accept: () => run(fetchDispatchItems, "Finishing Plans fetched", (items) => { rows.value = items || []; rowsVersion.value += 1 }) })
 }
 
+async function setSupplier(side, supplier) {
+	const message = await setDispatchSupplier(stock, side, supplier)
+	if (message) actionError.value = message
+}
+
 function dispatchStock() {
-	const missing = [["from_location", "From Warehouse"], ["to_location", "To Supplier"], ["goods_value", "Goods Value"], ["vehicle_no", "Vehicle No"]].filter(([field]) => stock[field] === null || stock[field] === "").map(([, label]) => label)
+	const missing = [["from_supplier", "From Supplier"], ["from_warehouse", "From Warehouse"], ["to_supplier", "To Supplier"], ["to_warehouse", "To Warehouse"], ["goods_value", "Goods Value"], ["vehicle_no", "Vehicle No"]].filter(([field]) => stock[field] === null || stock[field] === "").map(([, label]) => label)
 	if (missing.length) {
 		actionError.value = `Enter ${missing.join(", ")}.`
 		return
@@ -191,7 +199,6 @@ function dispatchStock() {
 	run(() => executeDispatchCommand(record.value.name, "dispatch_stock", { ...stock }, record.value.modified), "Stock dispatched", (data) => {
 		applyWorkspace(data)
 		dispatchOpen.value = false
-		if (data?.result?.name) openStockEntry(data.result.name)
 	})
 }
 

@@ -1,12 +1,12 @@
 <template>
 	<section class="fabric-reports" aria-label="Reports">
-		<component :is="visibleTabs[0].component" v-if="visibleTabs.length === 1" />
+		<component :is="visibleTabs[0].component" v-if="visibleTabs.length === 1" v-bind="visibleTabs[0].componentProps" />
 		<Tabs v-else-if="visibleTabs.length > 1" v-model:value="activeTab" class="erp-tabs fabric-reports__tabs">
 			<TabList class="fabric-reports__tab-list">
 				<Tab v-for="tab in visibleTabs" :key="tab.value" :value="tab.value"><i :class="tab.icon" /><span>{{ tab.label }}</span></Tab>
 			</TabList>
 			<TabPanels class="fabric-reports__panels">
-				<TabPanel v-for="tab in visibleTabs" :key="tab.value" :value="tab.value"><component :is="tab.component" /></TabPanel>
+				<TabPanel v-for="tab in visibleTabs" :key="tab.value" :value="tab.value"><component :is="tab.component" v-bind="tab.componentProps" /></TabPanel>
 			</TabPanels>
 		</Tabs>
 		<Message v-else severity="warn" :closable="false">You do not have permission to view these reports.</Message>
@@ -22,6 +22,7 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, ref, watch } from "vue"
 
+import LotCutQuantityReport from "../../components/reports/LotCutQuantityReport.vue"
 import PurchaseOrderItemwiseReport from "../../components/reports/PurchaseOrderItemwiseReport.vue"
 import StockBalanceReport from "../../components/reports/StockBalanceReport.vue"
 
@@ -33,10 +34,16 @@ const activeTab = ref("")
 const tabs = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: StockBalanceReport },
 	{ key: "purchase_order_itemwise", value: "purchase-order-itemwise", label: "Purchase Order Itemwise", icon: "pi pi-shopping-cart", component: PurchaseOrderItemwiseReport },
+	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: LotCutQuantityReport },
 ]
 const visibleTabs = computed(() => tabs.filter((tab) => (
 	props.reportKeys.includes(tab.key) && props.capability?.reports?.[tab.key]?.can_read
-)))
+)).map((tab) => ({
+	...tab,
+	componentProps: tab.key === "lot_cut_quantity" ? {
+		canReadCuttingPlan: Boolean(props.capability?.reports?.[tab.key]?.can_read_cutting_plan),
+	} : {},
+})))
 
 watch(visibleTabs, (available) => {
 	if (!available.some((tab) => tab.value === activeTab.value)) activeTab.value = available[0]?.value || ""

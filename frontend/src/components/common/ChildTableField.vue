@@ -34,7 +34,7 @@
 			>
 				<template #body="{ data, index }">
 					<FormField
-						:field="column"
+						:field="columnFilters ? { ...column, link_filters: columnFilters(column, data) ?? column.link_filters } : column"
 						:model-value="data[column.fieldname]"
 						:form="data"
 						:disabled="isDisabled"
@@ -64,8 +64,8 @@
 			<template #empty>
 				<div class="child-table-field__empty">
 					<i class="pi pi-table" aria-hidden="true"></i>
-					<strong>No rows added</strong>
-					<span>Use Add Row to create the first line.</span>
+					<strong>{{ isDisabled ? "No rows." : "No rows added" }}</strong>
+					<span v-if="!isDisabled">Use Add Row to create the first line.</span>
 				</div>
 			</template>
 		</DataTable>
@@ -84,6 +84,7 @@ const props = defineProps({
 	field: { type: Object, required: true },
 	modelValue: { type: Array, default: () => [] },
 	childMeta: { type: Object, default: null },
+	columnFilters: { type: Function, default: null },
 	disabled: { type: Boolean, default: false },
 	errors: { type: Object, default: () => ({}) },
 })

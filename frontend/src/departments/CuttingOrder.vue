@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting Order" accent="#059669" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width :inline-navigation="!checking && !showDraftEditor">
+	<DepartmentPage title="Cutting Order" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width :inline-navigation="!checking && !showDraftEditor">
 		<div v-if="checking" class="order-probe erp-workspace" aria-label="Loading Cutting Order"><Skeleton height="76px" /><Skeleton height="420px" /></div>
 		<div v-else-if="showDraftEditor" class="order-editor-route erp-workspace">
 			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')" />

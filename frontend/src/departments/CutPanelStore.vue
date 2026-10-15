@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cut Panel Store" accent="#0a7f5a" :show-title="false" flat inline-navigation>
+	<DepartmentPage title="Cut Panel Store" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
 		<WorkspaceLauncher
 			v-else

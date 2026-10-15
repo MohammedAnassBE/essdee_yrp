@@ -18,6 +18,7 @@ import frappe
 from frappe import _
 from yrp.attribute_values import get_mapping_document, get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
+from yrp.yrp_retail.pricing import lock_pricing_policy
 
 
 @frappe.whitelist()
@@ -55,6 +56,9 @@ def update_mapping_values(mapping, attribute_name, values):
 		)
 
 	doc.check_permission("write")
+	owner_names = doc._variant_owner_item_names()
+	lock_pricing_policy()
+	doc._lock_variant_owner_items(owner_names)
 
 	# Deduplicate while preserving order — defensive; the frontend already
 	# blocks duplicates client-side, but we don't trust the client alone.

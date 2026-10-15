@@ -588,7 +588,6 @@ function mount_calculated_work_order_editors(frm) {
 		frm[config.editor_key].load_data(data);
 		frm[config.editor_key].update_status();
 	});
-	essdee_yrp.contain_item_editor_matrix(frm, ["deliverable_items", "receivable_items"]);
 }
 
 function mount_work_order_summary(frm) {

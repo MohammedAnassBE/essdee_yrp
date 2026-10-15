@@ -18,6 +18,25 @@ mkdirSync(SHOT_DIR, { recursive: true })
 
 function assert(condition, message) { if (!condition) throw new Error(message) }
 
+const SUPPLIER_WAREHOUSES = { "S-UNIT": ["WH-UNIT"], "S-TO": ["WH-TO-1", "WH-TO-2"], "S-EMPTY": [] }
+
+function supplierWarehouseReply(method, args) {
+	if (method === "essdee_yrp.finishing.dispatch_locations.get_supplier_warehouses") return SUPPLIER_WAREHOUSES[args.supplier] || []
+	if (method !== "essdee_yrp.api.link_search.link_search") return undefined
+	const names = args.doctype === "Supplier" ? Object.keys(SUPPLIER_WAREHOUSES) : args.filters?.disabled === 0 ? SUPPLIER_WAREHOUSES[args.filters.supplier] || [] : []
+	return names.filter((name) => name.includes(args.txt || "")).map((name) => ({ name, label: name }))
+}
+
+async function chooseLink(root, label, value) {
+	await root.getByRole("combobox", { name: label, exact: true }).fill(value)
+	await root.page().locator(".p-autocomplete-overlay:visible .p-autocomplete-option").filter({ hasText: value }).first().click()
+	await settle(root.page())
+}
+
+async function linkValue(root, label) {
+	return root.getByRole("combobox", { name: label, exact: true }).inputValue()
+}
+
 async function settle(page) {
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 }
@@ -247,6 +266,7 @@ const entryResults = {
 	add_ironing_excess: { doctype: "YRP Stock Entry", name: "STE-NEW" },
 	lot_transfer: { doctype: "SD YRP Lot Transfer", name: "LT-NEW" },
 	update_alternative_quantity: { doctype: "YRP Work Order", name: "WO-ALT" },
+	dispatch_box: { doctype: "YRP Stock Entry", name: "STE-DISPATCH" },
 }
 
 async function entriesSuite(browser) {
@@ -264,6 +284,8 @@ async function entriesSuite(browser) {
 		if (method === `${WORKSPACE}.get_capabilities`) return reply(capabilities)
 		if (method === `${WORKSPACE}.get_plan_workspace`) return reply(entryWorkspace())
 		if (method === `${WORKSPACE}.get_plan_tab`) return reply(entryTabs[args.tab] || tabPayloads[args.tab] || {})
+		const locationReply = supplierWarehouseReply(method, args)
+		if (locationReply) return reply(locationReply)
 		if (method === `${WORKSPACE}.execute_plan_command`) {
 			commands.push(args)
 			if (state.failNext === args.command) {
@@ -333,12 +355,28 @@ async function entriesSuite(browser) {
 
 		await page.getByRole("group", { name: "GRN actions" }).getByRole("button", { name: "Dispatch Box" }).click()
 		await dialog.getByLabel("M dispatch boxes").fill("2")
+		await dialog.getByRole("combobox", { name: "From Warehouse", exact: true }).waitFor()
+		await page.waitForTimeout(300)
+		assert(await linkValue(dialog, "From Supplier") === "S-UNIT" && await linkValue(dialog, "From Warehouse") === "WH-UNIT", "Dispatch Box must prefill the only Warehouse of the default From Supplier")
 		await dialog.getByRole("button", { name: "Dispatch" }).click()
-		await page.locator(".document-error-dialog").getByText("Enter To Location, Goods Value, Vehicle No.").waitFor()
+		await page.locator(".document-error-dialog").getByText("Enter To Supplier, To Warehouse, Goods Value, Vehicle No.").waitFor()
 		await page.locator(".document-error-dialog").getByRole("button", { name: "OK" }).click()
 		assert(await dialog.getByLabel("M dispatch boxes").inputValue() === "2", "Dispatch validation must keep the entered boxes")
-		await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close" }).click()
-		console.log("PASS dispatch box: Frappe 15 mandatory fields enforced, values kept")
+		await chooseLink(dialog, "To Supplier", "S-EMPTY")
+		await page.locator(".document-error-dialog").getByText("Supplier S-EMPTY has no Warehouse. Create one from the Supplier.").waitFor()
+		await page.locator(".document-error-dialog").getByRole("button", { name: "OK" }).click()
+		await chooseLink(dialog, "To Supplier", "S-TO")
+		assert(await linkValue(dialog, "To Warehouse") === "", "A Supplier with several Warehouses must not prefill one")
+		await chooseLink(dialog, "To Warehouse", "WH-TO-2")
+		await dialog.locator("#finishing-goods-value").fill("100")
+		await dialog.getByLabel("Vehicle No").fill("TN01")
+		await dialog.getByRole("button", { name: "Dispatch" }).click()
+		await dialog.waitFor({ state: "hidden" })
+		await page.getByText("Stock dispatched", { exact: true }).waitFor()
+		const dispatched = lastCommand()
+		assert(dispatched.command === "dispatch_box" && dispatched.payload.from_supplier === "S-UNIT" && dispatched.payload.from_warehouse === "WH-UNIT" && dispatched.payload.to_supplier === "S-TO" && dispatched.payload.to_warehouse === "WH-TO-2" && !("from_location" in dispatched.payload) && !("to_location" in dispatched.payload), `Dispatch Box payload: ${JSON.stringify(dispatched.payload)}`)
+		assert(await page.locator(".document-transaction-dialog").count() === 0, "Dispatch Box must stay on the Finishing Plan")
+		console.log("PASS dispatch box: supplier/warehouse pairs, prefill, payload, stays on Finishing Plan")
 
 		await page.getByRole("tab", { name: "Ironing Excess", exact: true }).click()
 		await page.getByRole("button", { name: "Add Ironing Excess Qty" }).click()
@@ -468,6 +506,8 @@ async function workflowsSuite(browser) {
 		requests.push({ method, args })
 		const reply = (message) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ message }) })
 		if (method === `${WORKSPACE}.get_capabilities`) return reply(capabilities)
+		const locationReply = supplierWarehouseReply(method, args)
+		if (locationReply) return reply(locationReply)
 		if (method === `${WEB_REPORTS}.download_rejection_details`) return route.fulfill({ contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers: { "Content-Disposition": "attachment; filename=rejection_details.xlsx" }, body: "xlsx" })
 		if (method === `${WEB_DISPATCH}.get_dispatch_workspace`) return reply(args.name ? dispatchWorkspace({ name: args.name, docstatus: 1, modified: "2026-10-09 10:00:00" }, { can_read: true, can_dispatch_stock: true, can_cancel: true, can_print: false }) : dispatchWorkspace({ name: "", docstatus: 0, naming_series: "FPD-2627-" }, { can_read: true, can_write: true, can_submit: true }))
 		if (method === `${WEB_DISPATCH}.save_dispatch`) return reply(dispatchWorkspace({ name: "FPD-2627-00999", docstatus: args.submit ? 1 : 0, modified: "2026-10-09 11:00:00" }, { can_read: true, can_write: true, can_submit: true }))
@@ -587,10 +627,29 @@ async function workflowsSuite(browser) {
 		await page.goto(`${base}/finishing/dispatches/FPD-2627-00999`)
 		await page.getByRole("button", { name: "Dispatch Stock" }).click()
 		await page.locator(".p-dialog").getByRole("button", { name: "Dispatch", exact: true }).click()
-		await dismiss("Enter From Warehouse, To Supplier, Goods Value, Vehicle No.")
+		await dismiss("Enter From Supplier, From Warehouse, To Supplier, To Warehouse, Goods Value, Vehicle No.")
 		assert(called("execute_dispatch_command").length === 0, "Dispatch Stock must not run without its mandatory fields")
+		const stockDialog = page.locator(".p-dialog").filter({ has: page.getByRole("combobox", { name: "From Supplier", exact: true }) })
+		await chooseLink(stockDialog, "From Supplier", "S-UNIT")
+		await page.waitForTimeout(300)
+		assert(await linkValue(stockDialog, "From Warehouse") === "WH-UNIT", "Dispatch Stock must prefill the only Warehouse of the From Supplier")
+		await chooseLink(stockDialog, "To Supplier", "S-TO")
+		await chooseLink(stockDialog, "To Warehouse", "WH-TO-1")
+		await chooseLink(stockDialog, "To Supplier", "S-EMPTY")
+		await dismiss("Supplier S-EMPTY has no Warehouse. Create one from the Supplier.")
+		assert(await linkValue(stockDialog, "To Warehouse") === "", "Changing the To Supplier must clear the To Warehouse")
+		await chooseLink(stockDialog, "To Supplier", "S-TO")
+		await chooseLink(stockDialog, "To Warehouse", "WH-TO-1")
+		await stockDialog.getByLabel("Goods Value").fill("100")
+		await stockDialog.getByLabel("Vehicle No").fill("TN01")
+		await stockDialog.getByRole("button", { name: "Dispatch", exact: true }).click()
+		await stockDialog.waitFor({ state: "hidden" })
+		await page.getByText("Stock dispatched", { exact: true }).waitFor()
+		const stockPayload = called("execute_dispatch_command").at(-1)?.args.payload || {}
+		assert(stockPayload.from_supplier === "S-UNIT" && stockPayload.from_warehouse === "WH-UNIT" && stockPayload.to_supplier === "S-TO" && stockPayload.to_warehouse === "WH-TO-1" && !("from_location" in stockPayload), `Dispatch Stock payload: ${JSON.stringify(stockPayload)}`)
+		assert(await page.locator(".document-transaction-dialog").count() === 0, "Dispatch Stock must stay on the Finishing Plan Dispatch")
 		await atEveryWidth(page, "dispatch")
-		console.log("PASS finishing plan dispatch: draft save payload and route, Dispatch Stock mandatory fields")
+		console.log("PASS finishing plan dispatch: draft save, Dispatch Stock payload, refresh, toast, stays on dispatch")
 		assert(errors.length === 0, `Page errors: ${errors.join("\n")}`)
 	} finally {
 		await page.close()

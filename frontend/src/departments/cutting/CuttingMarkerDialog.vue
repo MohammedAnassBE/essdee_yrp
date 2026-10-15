@@ -326,7 +326,7 @@ function markerMethod(name) {
 .marker-status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .document-status { padding: 4px 9px; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 800; }
 .document-status--draft { color: var(--erp-warning); background: var(--erp-warning-soft); }
-.document-status--submitted { color: var(--erp-accent-dark); background: var(--erp-success-soft); }
+.document-status--submitted { color: var(--erp-success-text); background: var(--erp-success-soft); }
 .document-status--cancelled { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .modified-text { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .marker-section { display: grid; gap: 12px; padding: 14px; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); }

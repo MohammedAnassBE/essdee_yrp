@@ -9,7 +9,7 @@ export const ENTRY_DEFINITIONS = {
 	return_items: { label: "Return Item", title: "Return Items", submit: "Return", source: "item_details", fields: ["received_type"], references: [{ key: "dc_qty", label: "Delivered" }], inputLabel: "Quantity" },
 	convert_to_loose_piece: { label: "Convert to Loose Piece", title: "Convert Items to Loose Piece", submit: "Convert", source: "item_details", fields: ["from_location"], references: [{ key: "balance", label: "Balance Qty" }], inputLabel: "Quantity" },
 	create_grn: { label: "Make GRN", title: "Create Goods Received Note", submit: "Create GRN", source: "grn", fields: ["delivery_location", "actual_date"], component: "packing" },
-	dispatch_box: { label: "Dispatch Box", title: "Dispatch Box", submit: "Dispatch", source: "grn", fields: ["from_location", "to_location", "goods_value", "vehicle_no"], component: "dispatch" },
+	dispatch_box: { label: "Dispatch Box", title: "Dispatch Box", submit: "Dispatch", source: "grn", fields: ["from_supplier", "from_warehouse", "to_supplier", "to_warehouse", "goods_value", "vehicle_no"], component: "dispatch" },
 	add_ironing_excess: { label: "Add Ironing Excess Qty", title: "Add Ironing Excess Pieces", submit: "Create", source: "ironing_excess", fields: [], references: [], inputLabel: "Ironing Excess" },
 	return_pack: { label: "Return Pack", title: "Add Pack Return Pieces", submit: "Create", source: "pack_return", fields: [], references: [], inputLabel: "Pack Return" },
 	create_alternative_plan: { label: "Create Alternative Plan", title: "Select Alternative Item and IPD", submit: "Next", source: "item_details", fields: ["lot_source", "lot_name", "existing_lot", "alternative_item", "production_detail"], references: qtyReference, inputLabel: "Conversion Qty", checkable: true },
@@ -18,7 +18,10 @@ export const ENTRY_DEFINITIONS = {
 
 const FIELD_LABELS = {
 	from_location: "From Location",
-	to_location: "To Location",
+	from_supplier: "From Supplier",
+	from_warehouse: "From Warehouse",
+	to_supplier: "To Supplier",
+	to_warehouse: "To Warehouse",
 	delivery_location: "Delivery Location",
 	actual_date: "Actual Date",
 	received_type: "Received Type",

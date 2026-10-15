@@ -8,12 +8,29 @@ from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail impor
 	get_ipd_primary_values,
 )
 
+from essdee_yrp.finishing.inward import get_part_value
 from essdee_yrp.finishing.old_lot_history import (
 	active_old_lot_transfer_rows,
 	get_old_lot_received_rows,
 )
 from essdee_yrp.finishing.packing import get_finishing_packing_summary
 from essdee_yrp.finishing.parsing import json_object
+
+
+def get_unaccountable_balance(values):
+	"""Return the unaccountable OCR balance for a part or size."""
+	return (
+		values["sewing_received"]
+		+ values["old_lot"]
+		+ values["ironing_excess"]
+		- values["transferred"]
+		- values["transferred_as_loose_piece"]
+		- values["dispatched_piece"]
+		- values["rejected"]
+		- values["loose_piece_set"]
+		- values["loose_piece"]
+		- values["pending"]
+	)
 
 
 @frappe.whitelist()
@@ -87,12 +104,7 @@ def get_fp_ocr_details(doc_name):
 			},
 			"get_unaccountable": {
 				"val1": cutting_available,
-				"val2": inward_available
-				- values["dispatched_piece"]
-				- values["rejected"]
-				- values["loose_piece_set"]
-				- values["loose_piece"]
-				- values["pending"],
+				"val2": get_unaccountable_balance(values),
 			},
 			"get_order_to_dispatch": {
 				"val1": values.get("order_qty", 0),
@@ -129,7 +141,7 @@ def get_fp_ocr_details(doc_name):
 
 def get_ocr_details(doc):
 	ipd_name = doc.production_detail or attribute_db.get_value("SD YRP Lot", doc.lot, "production_detail")
-	is_set_item, packing_attribute, primary_attribute, set_attribute, major_part = attribute_db.get_value(
+	is_set_item, packing_attribute, primary_attribute, set_attribute = attribute_db.get_value(
 		"YRP Item Production Detail",
 		ipd_name,
 		[
@@ -137,15 +149,12 @@ def get_ocr_details(doc):
 			"packing_attribute",
 			"primary_item_attribute",
 			"set_item_attribute",
-			"major_attribute_value",
 		],
 	)
 	ocr_data = {}
-	parts = set()
 	for row in doc.get("finishing_plan_details") or []:
 		attributes = get_variant_attr_details(row.item_variant)
 		part = attributes.get(set_attribute) if is_set_item else "Item"
-		parts.add(part)
 		size = attributes.get(primary_attribute)
 		part_data = ocr_data.setdefault(part, _empty_part())
 		part_data["total"].setdefault(size, _empty_size())
@@ -187,7 +196,8 @@ def get_ocr_details(doc):
 		part_data["total_inward"] += inward
 		part_data["total"][size]["total_inward"] += inward
 
-	_apply_packing(doc, ocr_data, parts or {"Item"}, primary_attribute)
+	parts = get_part_value(set_attribute, ipd_name) if is_set_item else ["Item"]
+	_apply_packing(doc, ocr_data, parts, primary_attribute)
 	_apply_old_lot_adjustments(
 		doc,
 		ocr_data,
@@ -195,7 +205,6 @@ def get_ocr_details(doc):
 		packing_attribute,
 		primary_attribute,
 		set_attribute,
-		major_part,
 	)
 	_apply_rework(doc, ocr_data, is_set_item, packing_attribute, primary_attribute, set_attribute)
 	_apply_order_quantity(doc, ocr_data, is_set_item, primary_attribute, set_attribute)
@@ -218,23 +227,19 @@ def _apply_packing(doc, ocr_data, parts, primary_attribute):
 			packed_pieces = packed_boxes * flt(doc.pieces_per_box)
 			dispatched_pieces = dispatched_boxes * flt(doc.pieces_per_box)
 		for part in parts:
-			if part not in ocr_data:
-				continue
 			part_data = ocr_data[part]
 			part_data["packed_box_qty"] += packed_pieces
 			part_data["packed_box"] += packed_boxes
 			part_data["dispatched_piece"] += dispatched_pieces
 			part_data["dispatched_box"] += dispatched_boxes
-			part_data["total"].setdefault(size, _empty_size())
 			part_data["total"][size]["packed_box"] += packed_boxes
 			part_data["total"][size]["packed_box_qty"] += packed_pieces
 			part_data["total"][size]["dispatched_box"] += dispatched_boxes
 			part_data["total"][size]["dispatched_piece"] += dispatched_pieces
 	if packing.dynamic_ratio_packing:
 		for part in parts:
-			if part in ocr_data:
-				ocr_data[part]["packed_box"] = packing.total_packed_boxes
-				ocr_data[part]["dispatched_box"] = packing.total_dispatched_boxes
+			ocr_data[part]["packed_box"] = packing.total_packed_boxes
+			ocr_data[part]["dispatched_box"] = packing.total_dispatched_boxes
 
 
 def _apply_old_lot_adjustments(
@@ -244,7 +249,6 @@ def _apply_old_lot_adjustments(
 	packing_attribute,
 	primary_attribute,
 	set_attribute,
-	major_part,
 ):
 	def apply(row, loose_piece, loose_piece_set):
 		if not row.item_variant:
@@ -253,10 +257,9 @@ def _apply_old_lot_adjustments(
 		part = attributes.get(set_attribute) if is_set_item else "Item"
 		size = attributes.get(primary_attribute)
 		colour = attributes.get(packing_attribute)
-		if is_set_item and part != major_part:
-			major_colour = json_object(row.set_combination).get("major_colour")
-			if major_colour:
-				colour = f"{colour} ({major_colour})"
+		if is_set_item:
+			major_colour = json_object(row.set_combination).get("major_colour", "")
+			colour = f"{attributes.get(packing_attribute, '')} ({major_colour}) @ {part or ''}"
 		if part not in ocr_data or colour not in ocr_data[part]["data"]:
 			return
 		if size not in ocr_data[part]["data"][colour]["values"]:
@@ -289,16 +292,12 @@ def _apply_rework(doc, ocr_data, is_set_item, packing_attribute, primary_attribu
 	for row in doc.get("finishing_plan_reworked_details") or []:
 		attributes = get_variant_attr_details(row.item_variant)
 		part = attributes.get(set_attribute) if is_set_item else "Item"
-		if part not in ocr_data:
-			continue
 		size = attributes.get(primary_attribute)
 		major_colour = json_object(row.set_combination).get("major_colour", "")
 		colour = major_colour
 		if is_set_item:
 			colour = f"{attributes.get(packing_attribute, '')} ({major_colour}) @ {part or ''}"
-		if colour not in ocr_data[part]["data"]:
-			continue
-		pending = max(flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty), 0)
+		pending = flt(row.quantity) - flt(row.reworked_quantity) - flt(row.rejected_qty)
 		for fieldname, quantity in (
 			("rejected", flt(row.rejected_qty)),
 			("pending", pending),

@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting Order" accent="#059669" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width>
+	<DepartmentPage title="Cutting Order" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width>
 		<div class="cutting-order-editor-page erp-workspace">
 			<CuttingOrderEditor @saved="saved" @cancel="router.push('/cutting/orders')" />
 		</div>

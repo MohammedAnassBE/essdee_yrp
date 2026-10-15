@@ -27,12 +27,11 @@ no_cache = 1
 
 ASSET_BASE = "/assets/essdee_yrp/frontend/"
 
-# The exact DocTypes the /web SPA exposes (mirror of frontend/src/config/doctypes.js
-# GROUPS). CHECKLIST RULE (spec §8.1): whenever a doctype is added to the frontend
-# catalog (doctypes.js GROUPS), add it HERE too so _apply_accurate_web_perms keeps
-# correcting boot's leaky perm superset — catalog and perms list are code-owned
-# together. Third copy: hooks.py `yrp_web_doctype_catalog` (base yrp's
-# ui_config validation reads it) — all three lists change together. The SPA gates sidebar / command palette / home visibility on
+# The exact DocTypes the /web SPA exposes. CHECKLIST RULE (spec §8.1): whenever
+# a routed doctype is added to the frontend, add it HERE so
+# _apply_accurate_web_perms keeps correcting boot's leaky perm superset. Keep
+# hooks.py `yrp_web_doctype_catalog` (base yrp's ui_config validation input) in
+# the same order. The SPA gates sidebar / command palette / home visibility on
 # frappe.boot.user.can_read, but Frappe's load_user()/build_permissions() emits a
 # can_read list that is a SUPERSET of real access — it stops at "a role grants a read
 # rule" and never runs the full has_permission() check (user permissions, permlevel,
@@ -55,9 +54,15 @@ WEB_DOCTYPES = (
 	"SD YRP Lot Transfer",
 	"YRP Stock Entry",
 	"Item",
+	"YRP Item Price",
 	"YRP Item Production Detail",
 	"YRP Production Order",
 	"YRP Terms and Condition",
+	"SD YRP Product",
+	"SD YRP Product Release",
+	"SD YRP Lotwise Item Profit",
+	"YRP Purchase Invoice",
+	"YRP Bill Tracking",
 )
 
 # boot.user key -> has_permission ptype used by the SPA's usePermissions composable.
@@ -147,11 +152,9 @@ def get_boot():
 	_apply_accurate_web_perms(user)
 	return {
 		"site_name": frappe.local.site,
-		# Realtime: the /web SPA opens its own socket.io connection to Frappe's
-		# realtime server (default port 9000) for live doc/list updates. Exposed
-		# here so the client builds the URL host-only (window.location.hostname +
-		# this port + "/" + site_name), avoiding the :8003:9000 double-port.
+		# The SPA uses the separate socket port only under the development server.
 		"socketio_port": frappe.conf.socketio_port or 9000,
+		"dev_server": bool(frappe._dev_server),
 		"app_logo": _website_asset("app_logo", "essdee-logo.png"),
 		"user": user,
 		# Per-user UI config (spec §8.1): resolved server-side by base yrp and

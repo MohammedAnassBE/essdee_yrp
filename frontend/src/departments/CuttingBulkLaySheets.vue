@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" accent="#059669" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Bulk LaySheets" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width inline-navigation>
 		<div class="cutting-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Bulk LaySheets unavailable" message="You do not have permission to view Bulk LaySheets." :retryable="false" />

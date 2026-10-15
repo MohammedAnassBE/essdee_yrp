@@ -93,11 +93,16 @@ def after_install():
 	ensure_mrp_cancel_permissions()
 	ensure_production_planner_read_permissions()
 	ensure_yrp_production_order_settings()
-	from essdee_yrp.patches import seed_default_dia_attribute, seed_role_settings
+	from essdee_yrp.patches import (
+		grant_accounts_user_report_access,
+		seed_default_dia_attribute,
+		seed_role_settings,
+	)
 
 	# Patches are marked done on install without running, so seed here too.
 	seed_role_settings.execute()
 	seed_default_dia_attribute.execute()
+	grant_accounts_user_report_access.execute(allow_missing_report=True)
 	from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
 
 	ensure_purchase_order_approval_route()

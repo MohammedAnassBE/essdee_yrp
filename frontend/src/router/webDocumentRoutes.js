@@ -1,4 +1,5 @@
 const recordRoutes = {
+	"SD YRP Lot": (name) => `/web/purchase/lots/${encodeURIComponent(name)}`,
 	"YRP Work Order": (name) => `/web/fabric-store/work-orders/${encodeURIComponent(name)}`,
 	"Purchase Order": (name) => `/web/fabric-store/purchase-orders/${encodeURIComponent(name)}`,
 	"YRP Delivery Challan": (name) => `/web/fabric-store/delivery-challans/${encodeURIComponent(name)}`,
@@ -6,6 +7,12 @@ const recordRoutes = {
 	"SD YRP Cutting Plan": (name) => `/web/cutting/plans/${encodeURIComponent(name)}`,
 	"SD YRP Finishing Plan": (name) => `/web/finishing/plans/${encodeURIComponent(name)}`,
 	"SD YRP Finishing Plan Dispatch": (name) => `/web/finishing/dispatches/${encodeURIComponent(name)}`,
+	"SD YRP Product": (name) => `/web/pd/products/${encodeURIComponent(name)}`,
+	"SD YRP Product Release": (name) => `/web/pd/product-releases/${encodeURIComponent(name)}`,
+	"SD YRP Lotwise Item Profit": (name) => `/web/pd/lotwise-item-profits/${encodeURIComponent(name)}`,
+	"YRP Purchase Invoice": (name) => `/web/accounts/purchase-invoices/${encodeURIComponent(name)}`,
+	"YRP Bill Tracking": (name) => `/web/hr/bill-tracking/${encodeURIComponent(name)}`,
+	"YRP Item Price": (name) => `/web/purchase/item-prices/${encodeURIComponent(name)}`,
 }
 
 export function webDocumentPath(doctype, name) {

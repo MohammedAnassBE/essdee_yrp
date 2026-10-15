@@ -8,10 +8,6 @@ from yrp.attribute_values import get_mapping_values
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 from essdee_yrp.finishing.parsing import json_object
-from essdee_yrp.finishing.rebuild import (
-	get_configured_cutting_process,
-	get_process_work_orders,
-)
 
 
 @frappe.whitelist()
@@ -21,6 +17,8 @@ def cache_selected_size(key, size, finishing_id):
 
 
 def check_eqi_status(print_size, finishing_id):
+	from essdee_yrp.finishing.rebuild import get_process_work_orders
+
 	lot = frappe.db.get_value("SD YRP Finishing Plan", finishing_id, "lot")
 	process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	inspection = get_eqi_status(get_process_work_orders(process, lot))
@@ -61,6 +59,11 @@ def get_eqi_status(work_orders):
 
 @frappe.whitelist()
 def get_finishing_plan_inward_details(key, lot):
+	from essdee_yrp.finishing.rebuild import (
+		get_configured_cutting_process,
+		get_process_work_orders,
+	)
+
 	cache_key = f"{key}{frappe.session.user}"
 	selected_size = frappe.cache().get_value(cache_key)
 	if not selected_size:

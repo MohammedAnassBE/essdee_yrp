@@ -3,6 +3,8 @@
 import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 
+import { USER_LISTVIEW_ROUTE, fulfillUserListview } from "./listview_mock.mjs"
+
 const require = createRequire("/home/anas/.claude/playwright/package.json")
 const { chromium } = require("playwright")
 const SITE = process.env.ESSDEE_TEST_SITE || "http://erp-migration-test.site:8001"
@@ -148,25 +150,24 @@ async function mockMovementWorkspace(page, options = {}) {
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
 	}))
+	const movementMetaFields = [
+		{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1, in_standard_filter: 1 },
+		{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+		{ fieldname: "from_warehouse", label: "From Warehouse", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+		{ fieldname: "against", label: "Against", fieldtype: "Select", in_list_view: 1 },
+		{ fieldname: "against_id", label: "Against ID", fieldtype: "Dynamic Link", options: "against", in_list_view: 1 },
+		{ fieldname: "movement_date", label: "Movement Date", fieldtype: "Date", in_list_view: 1 },
+	]
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
 		body: JSON.stringify({ docs: [{
 			name: "SD YRP Cut Panel Movement",
 			is_submittable: 1,
-			fields: [
-				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1, in_standard_filter: 1 },
-				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
-				{ fieldname: "from_warehouse", label: "From Warehouse", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
-				{ fieldname: "against", label: "Against", fieldtype: "Select", in_list_view: 1 },
-				{ fieldname: "against_id", label: "Against ID", fieldtype: "Dynamic Link", options: "against", in_list_view: 1 },
-				{ fieldname: "movement_date", label: "Movement Date", fieldtype: "Date", in_list_view: 1 },
-			],
+			fields: movementMetaFields,
 		}] }),
 	}))
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-	}))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, movementMetaFields, { isSubmittable: true }))
 	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
 	}))
@@ -309,23 +310,22 @@ async function workOrdersSuite(page) {
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
 	}))
+	const workOrderMetaFields = [
+		{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+		{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+		{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+		{ fieldname: "status", label: "Status", fieldtype: "Data", in_list_view: 1 },
+	]
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
 		body: JSON.stringify({ docs: [{
 			name: "YRP Work Order",
 			is_submittable: 1,
-			fields: [
-				{ fieldname: "supplier", label: "Supplier", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
-				{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
-				{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
-				{ fieldname: "status", label: "Status", fieldtype: "Data", in_list_view: 1 },
-			],
+			fields: workOrderMetaFields,
 		}] }),
 	}))
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-	}))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, workOrderMetaFields, { isSubmittable: true }))
 	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
 	}))
@@ -393,20 +393,19 @@ async function mockCutBundleWorkspace(page) {
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }),
 	}))
+	const cutBundleEditMetaFields = [
+		{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+		{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
+		{ fieldname: "warehouse", label: "Warehouse", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
+		{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", in_list_view: 1 },
+		{ fieldname: "printed_time", label: "Printed Time", fieldtype: "Datetime", in_list_view: 1 },
+	]
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
 		status: 200,
 		contentType: "application/json",
-		body: JSON.stringify({ docs: [{ name: "SD YRP Cut Bundle Edit", is_submittable: 1, fields: [
-			{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
-			{ fieldname: "item", label: "Item", fieldtype: "Link", options: "Item", in_list_view: 1 },
-			{ fieldname: "warehouse", label: "Warehouse", fieldtype: "Link", options: "Supplier", in_list_view: 1 },
-			{ fieldname: "posting_date", label: "Posting Date", fieldtype: "Date", in_list_view: 1 },
-			{ fieldname: "printed_time", label: "Printed Time", fieldtype: "Datetime", in_list_view: 1 },
-		] }] }),
+		body: JSON.stringify({ docs: [{ name: "SD YRP Cut Bundle Edit", is_submittable: 1, fields: cutBundleEditMetaFields }] }),
 	}))
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }),
-	}))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, cutBundleEditMetaFields, { isSubmittable: true }))
 	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({
 		status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }),
 	}))
@@ -517,14 +516,15 @@ async function mockBoxStickerWorkspace(page) {
 		}
 	})
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }) }))
+	const boxStickerMetaFields = [
+		{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
+		{ fieldname: "fg_item", label: "Item", fieldtype: "Link", options: "SD YRP FG Item Master", in_list_view: 1 },
+		{ fieldname: "print_format", label: "Print Format", fieldtype: "Link", options: "YRP ZPL Raw Print Format", in_list_view: 1 },
+	]
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "SD YRP Box Sticker Print", is_submittable: 1, fields: [
-			{ fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot", in_list_view: 1 },
-			{ fieldname: "fg_item", label: "Item", fieldtype: "Link", options: "SD YRP FG Item Master", in_list_view: 1 },
-			{ fieldname: "print_format", label: "Print Format", fieldtype: "Link", options: "YRP ZPL Raw Print Format", in_list_view: 1 },
-		] }] }),
+		status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "SD YRP Box Sticker Print", is_submittable: 1, fields: boxStickerMetaFields }] }),
 	}))
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, boxStickerMetaFields, { isSubmittable: true }))
 	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
 	await page.route("**/api/resource/SD%20YRP%20Box%20Sticker%20Print*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "BSP-CP-1", lot: "LOT-CP-1", fg_item: "FG-CP-1", print_format: "BOX-LABEL", docstatus: 1, modified: "2026-10-07 14:00:00" }] }) }))
 	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => {
@@ -878,14 +878,15 @@ async function mockExcelStickerWorkspace(page) {
 		}
 	})
 	await page.route("**/api/method/essdee_yrp.cut_panel_store.web_workspace.get_capabilities*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: capabilities }) }))
+	const excelStickerMetaFields = [
+		{ fieldname: "excel_file", label: "Excel File", fieldtype: "Attach", in_list_view: 1 },
+		{ fieldname: "print_format", label: "Print Format", fieldtype: "Link", options: "YRP ZPL Raw Print Format", in_list_view: 1 },
+		{ fieldname: "modified", label: "Modified", fieldtype: "Datetime", in_list_view: 1 },
+	]
 	await page.route("**/api/method/frappe.desk.form.load.getdoctype*", (route) => route.fulfill({
-		status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Excel Sticker Print", is_submittable: 1, fields: [
-			{ fieldname: "excel_file", label: "Excel File", fieldtype: "Attach", in_list_view: 1 },
-			{ fieldname: "print_format", label: "Print Format", fieldtype: "Link", options: "YRP ZPL Raw Print Format", in_list_view: 1 },
-			{ fieldname: "modified", label: "Modified", fieldtype: "Datetime", in_list_view: 1 },
-		] }] }),
+		status: 200, contentType: "application/json", body: JSON.stringify({ docs: [{ name: "YRP Excel Sticker Print", is_submittable: 1, fields: excelStickerMetaFields }] }),
 	}))
-	await page.route("**/api/method/yrp.yrp.doctype.yrp_user_listview.yrp_user_listview.get_user_listview*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [] }) }))
+	await page.route(USER_LISTVIEW_ROUTE, (route) => fulfillUserListview(route, excelStickerMetaFields, { isSubmittable: true }))
 	await page.route("**/api/method/frappe.desk.reportview.get_count*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: 1 }) }))
 	await page.route("**/api/resource/YRP%20Excel%20Sticker%20Print*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ name: "ESP-CP-1", excel_file: "/private/files/stickers.xlsx", print_format: "EXCEL-LABEL", docstatus: 1, modified: "2026-10-07 15:00:00" }] }) }))
 	await page.route("**/api/method/essdee_yrp.api.link_search.link_search*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: [{ name: "EXCEL-LABEL", label: "EXCEL-LABEL" }] }) }))

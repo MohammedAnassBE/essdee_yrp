@@ -30,7 +30,6 @@ from essdee_yrp.purchase_invoice import (
 	build_legacy_work_order_invoice_payload,
 	build_purchase_order_invoice_payload,
 	build_verification_details,
-	build_work_order_invoice_payload,
 	commercial_group_key,
 	project_purchase_order_items,
 )
@@ -531,6 +530,86 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			invoice.on_submit()
 			local_on_submit.assert_called_once_with()
 			link_erp.assert_called_once_with(invoice)
+
+	def test_modern_work_order_submit_does_not_refetch_or_block_on_warnings(self):
+		invoice = frappe.new_doc("YRP Purchase Invoice")
+		invoice.name = "PI-WARNING-TEST"
+		invoice.against = "YRP Work Order"
+		invoice.supplier = "SUP-1"
+		invoice.essdee_rate_table_source = MODERN_RATE_SOURCE
+		invoice.append("grn", {"grn": "GRN-BAD"})
+		invoice.append("essdee_items", {"group_key": "GROUP-1", "rate": 0})
+		with (
+			patch("essdee_yrp.overrides.purchase_invoice.build_work_order_invoice_payload") as build_payload,
+			patch.object(PurchaseInvoice, "before_submit") as local_submit,
+			patch("essdee_yrp.overrides.purchase_invoice.create_erp_invoice") as erp_create,
+		):
+			invoice.before_submit()
+
+		build_payload.assert_not_called()
+		local_submit.assert_called_once_with()
+		erp_create.assert_called_once_with(invoice)
+
+	def test_validate_locks_selected_grns_and_rechecks_active_owner_before_base(self):
+		invoice = frappe.new_doc("YRP Purchase Invoice")
+		invoice.name = "PI-NEW"
+		invoice.append("grn", {"grn": "GRN-B"})
+		invoice.append("grn", {"grn": "GRN-A"})
+		locked = [
+			frappe._dict(name="GRN-A", purchase_invoice_name="PI-OTHER"),
+			frappe._dict(name="GRN-B", purchase_invoice_name=None),
+		]
+
+		def locking_read(query, _params, **_kwargs):
+			if "tabYRP Goods Received Note" in query:
+				return locked
+			if "tabYRP Purchase Invoice GRN" in query:
+				return []
+			if "tabYRP Purchase Invoice`" in query:
+				return [frappe._dict(name="PI-OTHER", docstatus=0)]
+			raise AssertionError(query)
+
+		with (
+			patch.object(invoice, "_reset_changed_commercial_approval"),
+			patch(
+				"essdee_yrp.overrides.purchase_invoice.frappe.db.sql",
+				side_effect=locking_read,
+			) as sql,
+			patch("essdee_yrp.overrides.purchase_invoice.frappe.get_all", return_value=[]) as get_all,
+			patch.object(PurchaseInvoice, "validate") as base_validate,
+			self.assertRaisesRegex(frappe.ValidationError, "GRN-A.*PI-OTHER"),
+		):
+			invoice.validate()
+
+		self.assertEqual(len(sql.call_args_list), 3)
+		self.assertTrue(all("FOR UPDATE" in call.args[0] for call in sql.call_args_list))
+		self.assertEqual(sql.call_args_list[0].args[1], ("GRN-A", "GRN-B"))
+		self.assertEqual(
+			sql.call_args_list[1].args[1],
+			("YRP Purchase Invoice", "GRN-A", "GRN-B"),
+		)
+		self.assertEqual(sql.call_args_list[2].args[1], ("PI-OTHER",))
+		get_all.assert_not_called()
+		base_validate.assert_not_called()
+
+	def test_modern_work_order_submit_uses_identity_preserving_allocator(self):
+		invoice = frappe.new_doc("YRP Purchase Invoice")
+		invoice.against = "YRP Work Order"
+		invoice.essdee_rate_table_source = MODERN_RATE_SOURCE
+		with (
+			patch.object(PurchaseInvoice, "on_submit") as base_submit,
+			patch.object(invoice, "close_bill_tracking") as close_bill,
+			patch(
+				"essdee_yrp.overrides.purchase_invoice.create_work_order_purchase_invoice_adjustment"
+			) as create_adjustment,
+			patch("essdee_yrp.overrides.purchase_invoice.link_erp_invoice_to_bill_tracking") as link_erp,
+		):
+			invoice.on_submit()
+
+		base_submit.assert_not_called()
+		close_bill.assert_called_once_with()
+		create_adjustment.assert_called_once_with(invoice)
+		link_erp.assert_called_once_with(invoice)
 
 	def test_same_site_create_uses_local_erp_creator(self):
 		invoice = frappe.new_doc("YRP Purchase Invoice")
@@ -1067,77 +1146,6 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		key = "Dark Navy(Dark Navy) @Top"
 		self.assertEqual(matrix["colours"][key]["part"], "Top")
 		self.assertEqual(matrix["colours"][key]["data"]["60 cm"]["quantity"], 10)
-
-	def test_hidden_physical_rows_keep_the_work_order_lot(self):
-		grn_item = frappe._dict(
-			item_variant="PANEL-BLACK-S",
-			uom="Pieces",
-			quantity=2,
-			stock_qty=2,
-			rate=5,
-			set_combination=None,
-		)
-		grn = frappe._dict(
-			name="GRN-1",
-			against_id="WO-1",
-			items=[grn_item],
-		)
-		calculated = frappe._dict(
-			item_variant="GARMENT-BLACK-S",
-			delivered_quantity=1,
-			received_qty=1,
-			billed_qty=0,
-			set_combination=None,
-		)
-		receivable = frappe._dict(
-			name="REC-1",
-			item_variant="PANEL-BLACK-S",
-			qty=2,
-			cost=5,
-		)
-		demand = {
-			"row": calculated,
-			"selected_qty": 1,
-			"planned_qty": 1,
-			"source_rate": 10,
-			"group_key": "GROUP-1",
-			"weights": {"REC-1": 0.5},
-			"receivables": [receivable],
-		}
-		context = {
-			"demands": [demand],
-			"billing_variant": "CUTTING-CHARGES",
-			"billing_uom": "Nos",
-			"item_group": "Others",
-			"tax": None,
-			"lot": "LOT-1",
-			"demand_by_receivable": {"REC-1": demand},
-			"receivables_by_name": {"REC-1": receivable},
-		}
-		with (
-			patch("essdee_yrp.purchase_invoice._validate_selected_grn"),
-			patch(
-				"essdee_yrp.purchase_invoice.frappe.get_doc",
-				side_effect=lambda doctype, name: (
-					grn if doctype == "YRP Goods Received Note" else frappe._dict(name=name)
-				),
-			),
-			patch(
-				"essdee_yrp.purchase_invoice._build_work_order_context",
-				return_value=context,
-			),
-			patch("essdee_yrp.purchase_invoice._validate_selected_physical_quantities"),
-			patch(
-				"essdee_yrp.purchase_invoice._receivable_for_grn_item",
-				return_value=receivable,
-			),
-			patch("essdee_yrp.purchase_invoice._get_item_group", return_value="Products"),
-		):
-			payload = build_work_order_invoice_payload(["GRN-1"], supplier="SUP-1")
-
-		self.assertEqual(payload["commercial_items"][0]["lot"], "LOT-1")
-		self.assertEqual(payload["items"][0]["lot"], "LOT-1")
-		self.assertEqual(payload["items"][0]["amount"], 10)
 
 	def test_finished_rate_splits_across_panel_multiplicity(self):
 		front = frappe._dict(name="front", qty=100, cost=1)

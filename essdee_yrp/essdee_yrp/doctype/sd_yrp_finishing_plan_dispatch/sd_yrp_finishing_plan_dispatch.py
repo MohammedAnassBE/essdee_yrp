@@ -16,6 +16,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import (
 )
 
 from essdee_yrp.dynamic_packing import aggregate_batch_pieces
+from essdee_yrp.finishing.dispatch_locations import get_dispatch_locations
 from essdee_yrp.finishing.packing import (
 	get_finishing_packing_summary,
 	get_ipd_packing_config,
@@ -168,6 +169,7 @@ def _build_saved_item_view(doc):
 		)
 		fp_doc = frappe.get_doc("SD YRP Finishing Plan", fp_name)
 		packing_summary = get_finishing_packing_summary(fp_doc)
+		packing_config = get_ipd_packing_config(lot)
 		row = {
 			"lot": lot,
 			"item": item,
@@ -178,12 +180,15 @@ def _build_saved_item_view(doc):
 			"primary_attribute": primary,
 			"dependent_attribute": dependent,
 			"stage": pack_out_stage,
-			"packing_config": get_ipd_packing_config(lot),
+			"packing_config": packing_config,
 			"dynamic_ratio_packing": packing_summary.dynamic_ratio_packing,
 			"packing_batches": packing_summary.packing_batches,
 			"batch_dispatches": saved_by_plan.get(fp_name, []),
 		}
-		if packing_summary.dynamic_ratio_packing:
+		if packing_summary.dynamic_ratio_packing or (
+			packing_config.get("based_on_other_attribute_mapping")
+			and packing_config.get("packing_mode") == "Size Wise Packing"
+		):
 			row["uom"] = attribute_db.get_value("SD YRP Lot", lot, "packing_uom") or row["uom"]
 		for variant in variants:
 			size = get_variant_attr_details(variant["item_variant"])[primary]
@@ -238,13 +243,17 @@ def _add_dynamic_dispatch_rows(
 				colour_grid[_attribute_value(batch["colour"])].get(size, 0) + quantity
 			)
 		for size, stock_quantity in (batch.get("stock_quantities") or batch["size_pieces"]).items():
-			key = (size, batch.get("stock_uom") or row["uom"])
+			key = (
+				size,
+				batch.get("stock_uom") or row["uom"],
+				batch["packing_calculation_version"],
+			)
 			group = stock_groups.setdefault(key, {"stock_qty": 0, "piece_qty": 0})
 			group["stock_qty"] += flt(stock_quantity)
 			group["piece_qty"] += flt(batch["size_pieces"].get(size))
 	row["colour_grid"] = colour_grid
 
-	for (size, stock_uom), quantities in stock_groups.items():
+	for (size, stock_uom, _version), quantities in stock_groups.items():
 		attributes = build_variant_attributes({row["primary_attribute"]: size}, row["stage"], row["item"])
 		items.append(
 			{
@@ -383,6 +392,7 @@ def fetch_fp_items():
 		fp_doc = frappe.get_doc("SD YRP Finishing Plan", fp_name)
 		packing_summary = get_finishing_packing_summary(fp_doc)
 		box_uom, piece_uom = attribute_db.get_value("SD YRP Lot", fp_doc.lot, ["uom", "packing_uom"])
+		packing_config = get_ipd_packing_config(fp_doc.lot)
 		primary, dependent, pack_out_stage = attribute_db.get_value(
 			"YRP Item Production Detail",
 			fp_doc.production_detail,
@@ -392,13 +402,21 @@ def fetch_fp_items():
 			"lot": fp_doc.lot,
 			"item": fp_doc.item,
 			"doc_name": fp_name,
-			"uom": piece_uom if packing_summary.dynamic_ratio_packing else box_uom,
+			"uom": (
+				piece_uom
+				if packing_summary.dynamic_ratio_packing
+				or (
+					packing_config.get("based_on_other_attribute_mapping")
+					and packing_config.get("packing_mode") == "Size Wise Packing"
+				)
+				else box_uom
+			),
 			"values": {},
 			"total": {"total_qty": 0, "total_dispatch": 0},
 			"primary_attribute": primary,
 			"dependent_attribute": dependent,
 			"stage": pack_out_stage,
-			"packing_config": get_ipd_packing_config(fp_doc.lot),
+			"packing_config": packing_config,
 			"dynamic_ratio_packing": packing_summary.dynamic_ratio_packing,
 			"packing_batches": packing_summary.packing_batches,
 			"batch_dispatches": [],
@@ -441,8 +459,10 @@ def merge_saved_finishing_items(fresh_items, saved_items):
 @frappe.whitelist()
 def create_stock_dispatch(
 	doc_name,
-	from_location,
-	to_location,
+	from_supplier,
+	from_warehouse,
+	to_supplier,
+	to_warehouse,
 	vehicle_no,
 	goods_value,
 ):
@@ -456,6 +476,7 @@ def create_stock_dispatch(
 		existing_status = frappe.db.get_value("YRP Stock Entry", dispatch_doc.stock_entry, "docstatus")
 		if existing_status != 2:
 			frappe.throw(f"Stock Entry {dispatch_doc.stock_entry} already exists")
+	locations = get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse)
 
 	batch_requests = {}
 	for batch in update_if_string_instance(dispatch_doc.packing_batch_dispatch_json) or []:
@@ -473,6 +494,10 @@ def create_stock_dispatch(
 		dynamic_dispatches.extend(
 			{**batch, "finishing_plan": fp_name} for batch in prepare_dynamic_batch_dispatch(fp_doc, requests)
 		)
+	versions_by_source = {}
+	for batch in dynamic_dispatches:
+		key = (batch["finishing_plan"], batch.get("stock_uom"))
+		versions_by_source.setdefault(key, set()).add(batch["packing_calculation_version"])
 
 	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	stock_entry = frappe.new_doc("YRP Stock Entry")
@@ -481,8 +506,7 @@ def create_stock_dispatch(
 			"purpose": "Material Issue",
 			"against": "SD YRP Finishing Plan Dispatch",
 			"against_id": doc_name,
-			"from_warehouse": from_location,
-			"transfer_supplier": to_location,
+			**locations,
 			"vehicle_no": vehicle_no,
 			"additional_amount": goods_value,
 			"packing_batch_dispatch_json": (
@@ -492,7 +516,7 @@ def create_stock_dispatch(
 		}
 	)
 	for row in dispatch_doc.finishing_plan_dispatch_items:
-		stock_entry.append(
+		stock_row = stock_entry.append(
 			"items",
 			{
 				"item": row.item_variant,
@@ -503,7 +527,11 @@ def create_stock_dispatch(
 				"set_combination": "{}",
 			},
 		)
-	populate_stock_rates(stock_entry, from_location)
+		stock_row._packing_finishing_plan = row.against_id
+		versions = versions_by_source.get((row.against_id, row.uom), set())
+		if row.packing_source == "batch" and len(versions) == 1:
+			stock_row._packing_calculation_version = next(iter(versions))
+	populate_stock_rates(stock_entry, from_warehouse)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name

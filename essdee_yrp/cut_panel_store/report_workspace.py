@@ -11,7 +11,6 @@ from essdee_yrp.essdee_yrp.report.sd_yrp_cut_bundle_balance.sd_yrp_cut_bundle_ba
 	execute as _execute_cut_bundle_balance,
 )
 
-
 CUT_BUNDLE_REPORT = "SD YRP Cut Bundle Balance"
 CUT_BUNDLE_LEDGER = "SD YRP Cut Bundle Movement Ledger"
 ALLOWED_FILTERS = {"lot", "supplier"}
@@ -31,7 +30,7 @@ CUT_BUNDLE_COLUMNS = (
 )
 
 
-def _require_cut_bundle_report_access() -> None:
+def require_cut_bundle_report_access() -> None:
 	if not (
 		frappe.has_permission(CUT_BUNDLE_LEDGER, ptype="read")
 		and frappe.has_permission(CUT_BUNDLE_LEDGER, ptype="report")
@@ -75,7 +74,13 @@ def _safe_result(rows) -> list[dict]:
 def get_cut_bundle_balance(filters=None) -> dict:
 	"""Run the allow-listed report and return a stable browser-safe projection."""
 
-	_require_cut_bundle_report_access()
+	require_cut_bundle_report_access()
+	return get_cut_bundle_result(filters)
+
+
+def get_cut_bundle_result(filters=None, progress=None) -> dict:
+	"""Build the browser-safe Cut Bundle Balance payload."""
+
 	filters = _report_filters(filters)
 	_columns, rows = _execute_cut_bundle_balance(filters)
 	result = _safe_result(rows)

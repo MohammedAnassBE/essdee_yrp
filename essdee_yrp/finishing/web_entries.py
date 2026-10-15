@@ -10,6 +10,7 @@ from frappe.utils import cstr, flt
 
 from essdee_yrp.cut_panel_store.common import parse_json_object
 from essdee_yrp.finishing import alternative, old_lot, transactions, views
+from essdee_yrp.finishing.dispatch_locations import DISPATCH_LOCATION_FIELDS
 
 DELIVERY_CHALLAN_TYPES = ("balance", "return_qty", "pack_return")
 ENTRY_VIEWS = {
@@ -155,7 +156,7 @@ def create_grn(doc, values):
 
 
 def dispatch_box(doc, values):
-	require(values, "from_location", "to_location", "goods_value", "vehicle_no")
+	require(values, *DISPATCH_LOCATION_FIELDS, "goods_value", "vehicle_no")
 	dispatch = {
 		size: {"cur_dispatch": value} for size, value in size_quantities(doc, values, _("Dispatch")).items()
 	}
@@ -164,8 +165,7 @@ def dispatch_box(doc, values):
 		item_name=doc.item,
 		doc_name=doc.name,
 		lot=doc.lot,
-		from_location=values["from_location"],
-		to_location=values["to_location"],
+		**{field: values[field] for field in DISPATCH_LOCATION_FIELDS},
 		goods_value=flt(values["goods_value"]),
 		vehicle_no=values["vehicle_no"],
 		colour_details=values.get("colour_details") or None,

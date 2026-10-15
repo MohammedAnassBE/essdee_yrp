@@ -3,8 +3,10 @@
 		title="Daily Production Report"
 		:generated="generated"
 		:loading="loading"
-		:error="error"
+		:error="validationError"
 		:has-results="hasResults"
+		:generate-disabled="isBusy"
+		:status-only="statusOnly"
 		copyable
 		@generate="generate"
 		@reset="reset"
@@ -36,6 +38,12 @@
 					<option value="Manual Cutting">Manual Cutting</option>
 				</select>
 			</label>
+		</template>
+		<template #actions>
+			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+		</template>
+		<template #status>
+			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :error="reportError" determinate @rebuild="rebuild" />
 		</template>
 
 		<template #metrics>
@@ -73,23 +81,29 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from "vue"
+import Button from "primevue/button"
+import { computed, reactive, ref, watch } from "vue"
 
-import { getDailyProductionReport, getDailyProductionSummary } from "../../../api/cuttingReports.js"
+import { useWebReport } from "../../../composables/useWebReport.js"
 import DateField from "../../../components/common/DateField.vue"
+import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
 import AsyncLinkMultiSelect from "./AsyncLinkMultiSelect.vue"
+import { dprFormState } from "./dailyProductionReportState.js"
 import ProductionMatrix from "./ProductionMatrix.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
-import { errorMessage, formatDate, number, reportRowCount, todayIso } from "../../../components/reports/reportUtils.js"
+import { formatDate, number, reportRowCount, todayIso } from "../../../components/reports/reportUtils.js"
 
 const summaryMode = ref(false)
 const filters = reactive(defaultFilters())
-const loading = ref(false)
-const generated = ref(false)
-const error = ref("")
-const report = ref(null)
-const summaryData = ref([])
+const validationError = ref("")
+const {
+	state, payload, job, generatedAt, reused, error: reportError, trackingStartedAt, activeFilters,
+	loading, isBusy, generated, isBackgroundResult, statusOnly,
+	generate: generateReport, filtersChanged, clear, download,
+} = useWebReport({ reportKey: "cutting-dpr" })
 
+const report = computed(() => dailyPayload(payload.value))
+const summaryData = computed(() => summaryPayload(payload.value))
 const reportData = computed(() => report.value?.report_data || [])
 const hasResults = computed(() => summaryMode.value ? summaryData.value.length > 0 : reportData.value.length > 0)
 const metrics = computed(() => {
@@ -104,14 +118,14 @@ const metrics = computed(() => {
 		}
 	}
 	return summaryData.value.reduce(
-		(acc, day) => {
-			acc.bundleGenerated += Number(day.bundle_generated || 0)
-			acc.labelPrinted += Number(day.label_printed || 0)
-			acc.created += Number(day.created || 0)
-			acc.rows += reportRowCount(day.report_data)
-			acc.pieces += groupPieces(day.report_data)
-			acc.groups += day.report_data?.length || 0
-			return acc
+		(result, day) => {
+			result.bundleGenerated += Number(day.bundle_generated || 0)
+			result.labelPrinted += Number(day.label_printed || 0)
+			result.created += Number(day.created || 0)
+			result.rows += reportRowCount(day.report_data)
+			result.pieces += groupPieces(day.report_data)
+			result.groups += day.report_data?.length || 0
+			return result
 		},
 		{ bundleGenerated: 0, labelPrinted: 0, created: 0, rows: 0, pieces: 0, groups: 0 },
 	)
@@ -134,10 +148,8 @@ function defaultFilters() {
 }
 
 function clearResult() {
-	report.value = null
-	summaryData.value = []
-	generated.value = false
-	error.value = ""
+	validationError.value = ""
+	clear()
 }
 
 function setMode(value) {
@@ -163,45 +175,64 @@ function dateParts(value) {
 function validate() {
 	if (!summaryMode.value && !filters.date) return "Date is required."
 	if (!summaryMode.value) return ""
-	if (Boolean(filters.fromDate) !== Boolean(filters.toDate)) return "Select both From date and To date."
 	if (filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) return "From date cannot be after To date."
-	if (!filters.items.length && !filters.lots.length && !(filters.fromDate && filters.toDate)) {
-		return "Select at least one Item or Lot, or a complete date range."
+	if (!filters.items.length && !filters.lots.length && !filters.fromDate && !filters.toDate) {
+		return "Select at least one Item or Lot, or a date boundary."
 	}
 	return ""
 }
 
 async function generate() {
-	error.value = validate()
-	if (error.value) return
-	loading.value = true
-	try {
-		if (summaryMode.value) {
-			summaryData.value = await getDailyProductionSummary({
-				items: filters.items,
-				lots: filters.lots,
-				location: filters.location,
-				from_date: filters.fromDate,
-				to_date: filters.toDate,
-			}) || []
-			report.value = null
-		} else {
-			report.value = await getDailyProductionReport({ date: filters.date, location: filters.location })
-			summaryData.value = []
-		}
-		generated.value = true
-	} catch (exception) {
-		error.value = errorMessage(exception)
-	} finally {
-		loading.value = false
+	validationError.value = validate()
+	if (validationError.value) return
+	await generateReport(requestFilters())
+}
+
+function requestFilters() {
+	if (!summaryMode.value) return { mode: "daily", date: filters.date, location: filters.location }
+	return {
+		mode: "summary",
+		items: filters.items,
+		lots: filters.lots,
+		location: filters.location,
+		from_date: filters.fromDate,
+		to_date: filters.toDate,
 	}
 }
+
+function rebuild() { return generateReport(requestFilters(), { refresh: true }) }
 
 function reset() {
 	Object.assign(filters, defaultFilters())
 	summaryMode.value = false
 	clearResult()
 }
+
+function restoreFilters(request) {
+	if (!request) return
+	const restored = dprFormState(request)
+	summaryMode.value = restored.summaryMode
+	Object.assign(filters, restored.filters)
+}
+
+function dailyPayload(envelope) {
+	if (!envelope || summaryMode.value) return null
+	if (envelope.report_data) return envelope
+	if (envelope.payload?.report_data) return envelope.payload
+	if (envelope.result && !Array.isArray(envelope.result)) return envelope.result
+	return null
+}
+
+function summaryPayload(envelope) {
+	if (!envelope || !summaryMode.value) return []
+	if (Array.isArray(envelope.summary_data)) return envelope.summary_data
+	if (Array.isArray(envelope.payload)) return envelope.payload
+	if (Array.isArray(envelope.payload?.summary_data)) return envelope.payload.summary_data
+	return Array.isArray(envelope.result) ? envelope.result : []
+}
+
+watch(() => requestFilters(), (values) => filtersChanged(values), { deep: true })
+watch(activeFilters, restoreFilters, { flush: "sync" })
 </script>
 
 <style scoped>

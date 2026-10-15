@@ -655,6 +655,23 @@ def _emit_completed_item(state, entry, size, quantity, voucher, received_type):
 		state.add_delivery(variant, combination, quantity, voucher)
 
 
+def get_selected_grn_piece_quantities(work_order, grns):
+	"""Calculate finished pieces from only the selected panel GRNs."""
+	if isinstance(work_order, str):
+		work_order = frappe.get_doc("YRP Work Order", work_order)
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
+	state = PieceState(work_order, ipd)
+	for grn in grns:
+		if isinstance(grn, str):
+			grn = frappe.get_doc("YRP Goods Received Note", grn)
+		process = _process_for_direction(grn.process_name, "receipt")
+		_apply_panel_receipt(state, grn, _panel_list(ipd, process))
+	return {
+		(data["item_variant"], _json_key(data["set_combination"])): flt(data["received"])
+		for data in state.rows
+	}
+
+
 def _apply_return_grns(state, grns):
 	if not grns:
 		return

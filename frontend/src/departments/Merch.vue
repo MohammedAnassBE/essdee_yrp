@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Merch" accent="#059669" :show-title="false" flat full-width>
+	<DepartmentPage title="Merch" :show-title="false" flat full-width>
 		<WorkspacePlaceholder title="Merch" icon="pi pi-tags" />
 	</DepartmentPage>
 </template>

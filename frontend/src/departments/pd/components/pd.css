@@ -1,0 +1,175 @@
+.pd-product-workspace {
+	display: grid;
+	width: 100%;
+	max-width: 1800px;
+	min-width: 0;
+	margin: 0 auto;
+	gap: var(--erp-space-3);
+}
+
+.pd-product-workspace__header {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-3);
+	padding: var(--erp-space-3) var(--erp-space-4);
+	border-top: 3px solid var(--erp-accent);
+	border-bottom: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	background: var(--erp-surface);
+	box-shadow: var(--erp-shadow-sm);
+}
+
+.pd-product-workspace__identity {
+	display: grid;
+	min-width: 0;
+	gap: 4px;
+}
+
+.pd-product-workspace__eyebrow {
+	overflow: hidden;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 720;
+	letter-spacing: 0.04em;
+	text-overflow: ellipsis;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.pd-product-workspace__title-row,
+.pd-product-workspace__actions,
+.pd-product-workspace__edit-actions,
+.pd-product-workspace__chips {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pd-product-workspace__title-row {
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.pd-product-workspace__title-row h1 {
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-title);
+	font-weight: 780;
+	letter-spacing: -0.025em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pd-product-workspace__chip {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 3px 9px;
+	color: var(--erp-accent-hover);
+	font-size: var(--erp-font-size-min);
+	font-weight: 720;
+	border: 1px solid color-mix(in srgb, var(--erp-accent) 24%, var(--erp-border));
+	border-radius: 999px;
+	background: var(--erp-accent-soft);
+	white-space: nowrap;
+}
+
+.pd-product-workspace__actions {
+	justify-content: flex-end;
+	flex-wrap: wrap;
+}
+
+.pd-product-workspace__loading {
+	display: grid;
+	gap: var(--erp-space-3);
+}
+
+.pd-product-tabs {
+	min-width: 0;
+}
+
+.pd-product-tabs .p-tablist-tab-list {
+	position: sticky;
+	z-index: var(--erp-layer-sticky);
+	top: var(--erp-shell-header-height);
+	background: var(--erp-bg);
+}
+
+.pd-product-tabs .p-tabpanels {
+	padding: var(--erp-space-3) 0 0;
+	background: transparent;
+}
+
+.pd-product-tabs__panel,
+.pd-product-fields-group {
+	display: grid;
+	min-width: 0;
+	gap: var(--erp-space-3);
+}
+
+.pd-product-fields-group > h2 {
+	margin: 0;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-section);
+	font-weight: 760;
+}
+
+.pd-fields {
+	display: grid;
+	min-width: 0;
+	gap: var(--erp-space-4);
+	padding: var(--erp-space-4);
+	border: 1px solid var(--erp-border);
+	background: var(--erp-surface);
+	box-shadow: var(--erp-shadow-xs);
+}
+
+.pd-fields__grid {
+	display: grid;
+	min-width: 0;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	align-items: start;
+	gap: var(--erp-space-3) var(--erp-space-4);
+}
+
+.pd-product-placeholder {
+	min-height: 280px;
+}
+
+@media (max-width: 980px) {
+	.pd-fields__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 720px) {
+	.pd-product-workspace__header {
+		align-items: stretch;
+		flex-direction: column;
+		padding: var(--erp-space-3);
+	}
+
+	.pd-product-workspace__actions,
+	.pd-product-workspace__edit-actions {
+		width: 100%;
+		justify-content: stretch;
+	}
+
+	.pd-product-workspace__actions > *,
+	.pd-product-workspace__edit-actions > * {
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	.pd-fields {
+		padding: var(--erp-space-3);
+	}
+
+	.pd-fields__grid {
+		grid-template-columns: 1fr;
+	}
+}

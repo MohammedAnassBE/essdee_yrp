@@ -26,6 +26,10 @@ from essdee_yrp.purchase_invoice import (
 	build_work_order_invoice_payload,
 	project_purchase_order_items,
 )
+from essdee_yrp.work_order_billing import (
+	_validate_selected_grn,
+	create_work_order_purchase_invoice_adjustment,
+)
 
 PROJECTED_AGAINST = {"Purchase Order", "YRP Work Order"}
 
@@ -69,6 +73,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 
 	def validate(self):
 		self._reset_changed_commercial_approval()
+		self._lock_selected_grns()
 		super().validate()
 		if self.against in PROJECTED_AGAINST and self.get("essdee_rate_table_source") in {
 			MODERN_RATE_SOURCE,
@@ -76,6 +81,82 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		}:
 			self._validate_commercial_total()
 			self.total_quantity = sum(flt(row.qty) for row in self.get("essdee_items") or [])
+
+	def validate_grns(self):
+		seen = set()
+		for row in self.get("grn") or []:
+			if not row.grn:
+				frappe.throw(_("Row {0}: GRN is required.").format(row.idx))
+			if row.grn in seen:
+				frappe.throw(_("GRN {0} is duplicated.").format(row.grn))
+			seen.add(row.grn)
+			_validate_selected_grn(row.grn, self.supplier, self.against, self.name)
+
+	def _lock_selected_grns(self):
+		names = sorted({row.grn for row in self.get("grn") or [] if row.grn})
+		if not names:
+			return
+		placeholders = ", ".join(["%s"] * len(names))
+		locked = frappe.db.sql(
+			f"""
+			SELECT name, purchase_invoice_name
+			FROM `tabYRP Goods Received Note`
+			WHERE name IN ({placeholders})
+			ORDER BY name
+			FOR UPDATE
+			""",
+			tuple(names),
+			as_dict=True,
+		)
+		child_links = frappe.db.sql(
+			f"""
+			SELECT grn, parent
+			FROM `tabYRP Purchase Invoice GRN`
+			WHERE parenttype = %s AND grn IN ({placeholders})
+			ORDER BY grn, parent
+			FOR UPDATE
+			""",
+			("YRP Purchase Invoice", *names),
+			as_dict=True,
+		)
+		owner_names = sorted(
+			{
+				*[row.purchase_invoice_name for row in locked if row.purchase_invoice_name],
+				*[row.parent for row in child_links if row.parent],
+			}
+		)
+		active_owners = set()
+		if owner_names:
+			owner_placeholders = ", ".join(["%s"] * len(owner_names))
+			owner_rows = frappe.db.sql(
+				f"""
+				SELECT name, docstatus
+				FROM `tabYRP Purchase Invoice`
+				WHERE name IN ({owner_placeholders})
+				ORDER BY name
+				FOR UPDATE
+				""",
+				tuple(owner_names),
+				as_dict=True,
+			)
+			active_owners = {row.name for row in owner_rows if int(row.docstatus) != 2}
+		child_owners = {}
+		for link in child_links:
+			if link.parent in active_owners:
+				child_owners.setdefault(link.grn, set()).add(link.parent)
+		for row in locked:
+			owners = set(child_owners.get(row.name, set()))
+			if row.purchase_invoice_name in active_owners:
+				owners.add(row.purchase_invoice_name)
+			owners.discard(self.name)
+			if not owners:
+				continue
+			owner = sorted(owners)[0]
+			frappe.throw(
+				_("Goods Received Note {0} is already linked to Purchase Invoice {1}.").format(
+					row.name, owner
+				)
+			)
 
 	def before_submit(self):
 		if self.against in PROJECTED_AGAINST and self.get("essdee_rate_table_source") not in {
@@ -92,7 +173,14 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		cancel_erp_invoice(self)
 
 	def on_submit(self):
-		super().on_submit()
+		if (
+			self.against == "YRP Work Order"
+			and self.get("essdee_rate_table_source") == MODERN_RATE_SOURCE
+		):
+			self.close_bill_tracking()
+			create_work_order_purchase_invoice_adjustment(self)
+		else:
+			super().on_submit()
 		link_erp_invoice_to_bill_tracking(self)
 
 	def _rebuild_essdee_work_order_items(self):

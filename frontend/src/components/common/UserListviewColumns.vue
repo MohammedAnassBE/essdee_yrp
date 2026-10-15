@@ -120,6 +120,7 @@
 				label="Reset to Default"
 				severity="secondary"
 				outlined
+				:disabled="saving || !settingsReady"
 				:loading="saving"
 				@click="reset"
 			/>
@@ -130,7 +131,13 @@
 				:disabled="saving"
 				@click="$emit('update:visible', false)"
 			/>
-			<Button label="Save Columns" icon="pi pi-check" :loading="saving" @click="save" />
+			<Button
+				label="Save Columns"
+				icon="pi pi-check"
+				:disabled="saving || !canSaveColumnDraft(settingsReady, localColumns)"
+				:loading="saving"
+				@click="save"
+			/>
 		</template>
 	</Dialog>
 </template>
@@ -144,11 +151,19 @@ import Message from "primevue/message"
 import { computed, ref, watch } from "vue"
 
 import { resetUserListview, saveUserListview } from "../../api/frappe.js"
+import {
+	canSaveColumnDraft,
+	matchesColumnSearch,
+	syncColumnDraft,
+} from "./listColumns.js"
+import { moveDraftItem, reorderDraftItem } from "./orderedDraft.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
 	doctype: { type: String, required: true },
 	columns: { type: Array, default: () => [] },
+	settingsReady: { type: Boolean, default: false },
+	viewFields: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(["update:visible", "saved"])
@@ -159,17 +174,12 @@ const fieldSearch = ref("")
 const dragIndex = ref(null)
 const dropIndex = ref(null)
 const reorderAnnouncement = ref("")
+const draftEdited = ref(false)
 
 const visibleColumns = computed(() => localColumns.value.filter((column) => column.enabled))
-const filteredColumns = computed(() => {
-	const query = fieldSearch.value.trim().toLowerCase()
-	if (!query) return localColumns.value
-	return localColumns.value.filter((column) =>
-		[column.label, column.fieldname, column.fieldtype].some((value) =>
-			String(value || "").toLowerCase().includes(query),
-		),
-	)
-})
+const filteredColumns = computed(() =>
+	localColumns.value.filter((column) => matchesColumnSearch(column, fieldSearch.value)),
+)
 
 watch(
 	() => props.visible,
@@ -178,12 +188,21 @@ watch(
 		error.value = ""
 		fieldSearch.value = ""
 		endDrag()
-		localColumns.value = props.columns.map((column) => ({
-			fieldname: column.fieldname,
-			fieldtype: column.fieldtype,
-			label: column.label,
-			enabled: Boolean(column.enabled),
-		}))
+		draftEdited.value = false
+		localColumns.value = syncColumnDraft(localColumns.value, props.columns, {
+			visible,
+			edited: draftEdited.value,
+		})
+	},
+)
+
+watch(
+	() => props.columns,
+	(columns) => {
+		localColumns.value = syncColumnDraft(localColumns.value, columns, {
+			visible: props.visible,
+			edited: draftEdited.value,
+		})
 	},
 )
 
@@ -193,6 +212,7 @@ function setColumnEnabled(column, enabled) {
 	const next = [...localColumns.value]
 	const [updated] = next.splice(index, 1)
 	updated.enabled = Boolean(enabled)
+	draftEdited.value = true
 	if (updated.enabled) {
 		const lastEnabled = next.findLastIndex((candidate) => candidate.enabled)
 		next.splice(lastEnabled + 1, 0, updated)
@@ -224,23 +244,19 @@ function dropColumn() {
 		endDrag()
 		return
 	}
-	const ordered = [...visibleColumns.value]
-	const [moved] = ordered.splice(dragIndex.value, 1)
-	let destination = dropIndex.value
-	if (destination > dragIndex.value) destination -= 1
-	destination = Math.max(0, Math.min(destination, ordered.length))
-	ordered.splice(destination, 0, moved)
+	const moved = visibleColumns.value[dragIndex.value]
+	const ordered = reorderDraftItem(visibleColumns.value, dragIndex.value, dropIndex.value)
+	const destination = ordered.indexOf(moved)
 	applyVisibleOrder(ordered)
 	reorderAnnouncement.value = `${moved.label} moved to position ${destination + 1}.`
 	endDrag(false)
 }
 
 function moveColumn(index, direction) {
-	const ordered = [...visibleColumns.value]
-	const destination = Math.max(0, Math.min(index + direction, ordered.length - 1))
-	if (destination === index) return
-	const [moved] = ordered.splice(index, 1)
-	ordered.splice(destination, 0, moved)
+	const moved = visibleColumns.value[index]
+	const ordered = moveDraftItem(visibleColumns.value, index, direction)
+	if (ordered === visibleColumns.value) return
+	const destination = ordered.indexOf(moved)
 	applyVisibleOrder(ordered)
 	reorderAnnouncement.value = `${moved.label} moved to position ${destination + 1}.`
 }
@@ -248,6 +264,7 @@ function moveColumn(index, direction) {
 function applyVisibleOrder(ordered) {
 	const hidden = localColumns.value.filter((column) => !column.enabled)
 	localColumns.value = [...ordered, ...hidden]
+	draftEdited.value = true
 }
 
 function endDrag(clearAnnouncement = true) {
@@ -257,12 +274,17 @@ function endDrag(clearAnnouncement = true) {
 }
 
 async function save() {
+	if (!canSaveColumnDraft(props.settingsReady, localColumns.value)) {
+		error.value = "Column settings are still loading. Try again when fields are available."
+		return
+	}
 	saving.value = true
 	error.value = ""
 	try {
 		await saveUserListview(
 			props.doctype,
 			localColumns.value.map(({ fieldname, enabled }) => ({ fieldname, enabled: enabled ? 1 : 0 })),
+			props.viewFields,
 		)
 		emit("update:visible", false)
 		emit("saved")

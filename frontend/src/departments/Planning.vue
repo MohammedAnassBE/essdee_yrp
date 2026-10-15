@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Planning" accent="#059669" :show-title="false" flat full-width>
+	<DepartmentPage title="Planning" :show-title="false" flat full-width>
 		<WorkspacePlaceholder title="Planning" icon="pi pi-calendar" />
 	</DepartmentPage>
 </template>

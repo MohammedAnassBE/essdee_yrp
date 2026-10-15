@@ -20,35 +20,27 @@ def active_old_lot_transfer_rows(rows):
 
 
 def get_old_lot_received_rows(doc):
-	"""Derive destination receipts from source-side Given history.
-
-	Legacy destination rows are retained only when no equivalent source-side row
-	exists, allowing migrated old and new transfers to coexist without doubling
-	the OCR quantity.
-	"""
-	legacy_rows = active_old_lot_transfer_rows(doc.get("finishing_old_lot_received_items"))
+	"""Use source-side receipts, or legacy rows when no source history exists."""
 	if not doc.get("name"):
-		return legacy_rows
+		return active_old_lot_transfer_rows(doc.get("finishing_old_lot_received_items"))
 
-	given_rows = active_old_lot_transfer_rows(
-		frappe.get_all(
-			"SD YRP Finishing Plan Old Lot Given",
-			filters={"destination_fp": doc.name},
-			fields=[
-				"parent as source_fp",
-				"item_variant",
-				"colour",
-				"part",
-				"set_combination",
-				"size",
-				"loose_piece_given",
-				"loose_piece_set_given",
-				"lot_transfer",
-			],
-		)
+	given_rows = frappe.get_all(
+		"SD YRP Finishing Plan Old Lot Given",
+		filters={"destination_fp": doc.name},
+		fields=[
+			"parent as source_fp",
+			"item_variant",
+			"colour",
+			"part",
+			"set_combination",
+			"size",
+			"loose_piece_given",
+			"loose_piece_set_given",
+			"lot_transfer",
+		],
 	)
 	if not given_rows:
-		return legacy_rows
+		return active_old_lot_transfer_rows(doc.get("finishing_old_lot_received_items"))
 
 	source_fps = {row.source_fp for row in given_rows}
 	source_lots = {
@@ -74,13 +66,7 @@ def get_old_lot_received_rows(doc):
 		)
 		for row in given_rows
 	]
-	derived_keys = {(row.lot_transfer, row.source_fp, row.item_variant, row.size) for row in received_rows}
-	received_rows.extend(
-		row
-		for row in legacy_rows
-		if (row.lot_transfer, row.source_fp, row.item_variant, row.size) not in derived_keys
-	)
-	return received_rows
+	return active_old_lot_transfer_rows(received_rows)
 
 
 def get_old_lot_source_balance(source, item_variant):

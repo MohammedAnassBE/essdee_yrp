@@ -26,7 +26,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	get_purchase_order_defaults,
 	make_grn_completion,
 )
-from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import get_item_price_for_ui
+from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import apply_price_details
 
 from essdee_yrp.api.work_order import fetch_summary_details
 from essdee_yrp.delivery_challan_hooks import create_return_grn
@@ -38,10 +38,12 @@ from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	filter_authorized_capabilities,
 	get_document_permissions,
+	get_draft_completion_stock_entry,
 	get_effective_fields,
 	get_workspace_base,
 )
 from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.purchase.lot_cut_quantity import can_view_lot_cut_quantity
 
 DOCUMENT_KEYS = {
 	"work_orders": "YRP Work Order",
@@ -469,6 +471,48 @@ def get_purchase_order_item_price(item_detail, supplier: str, purchase_order: st
 	"""Resolve the same authoritative supplier Item Price used by the Desk PO editor."""
 
 	item_detail = item_detail if isinstance(item_detail, dict) else frappe.parse_json(item_detail or "{}")
+	_assert_purchase_order_price_preview_access(purchase_order)
+	if not supplier:
+		frappe.throw(_("Select Supplier before adding Purchase Order items."))
+	if not item_detail.get("name"):
+		frappe.throw(_("Item is required."))
+
+	preview = _preview_purchase_order_prices([{"items": [item_detail]}], supplier)
+	row = (preview.get("rows") or [{}])[0]
+	values = row.get("values") or {}
+	result = {
+		"status": row.get("status") or "missing",
+		"tax": row.get("tax"),
+		"tax_rate": row.get("tax_rate") or 0,
+		"lead_time_days": row.get("lead_time_days"),
+	}
+	if set(values) == {"default"}:
+		result["rate"] = values["default"].get("rate")
+		result["tier"] = values["default"].get("tier")
+	else:
+		result["rates"] = {key: value.get("rate") for key, value in values.items()}
+		result["tiers"] = {key: value.get("tier") for key, value in values.items()}
+	return result
+
+
+@frappe.whitelist()
+def preview_purchase_order_prices(
+	items,
+	supplier: str,
+	purchase_order: str | None = None,
+) -> dict:
+	"""Preview whole-draft rates with the same grouping used by PO validation."""
+
+	items = items if isinstance(items, list) else frappe.parse_json(items or "[]")
+	if not isinstance(items, list):
+		frappe.throw(_("Items must be a list."))
+	_assert_purchase_order_price_preview_access(purchase_order)
+	if not supplier:
+		frappe.throw(_("Select Supplier before adding Purchase Order items."))
+	return _preview_purchase_order_prices(items, supplier)
+
+
+def _assert_purchase_order_price_preview_access(purchase_order):
 	if purchase_order:
 		doc = _get_supported_document("Purchase Order", purchase_order)
 		frappe.has_permission("Purchase Order", ptype="write", doc=doc, throw=True)
@@ -477,59 +521,81 @@ def get_purchase_order_item_price(item_detail, supplier: str, purchase_order: st
 	else:
 		frappe.has_permission("Purchase Order", ptype="create", throw=True)
 	frappe.has_permission("Item", ptype="read", throw=True)
-	if not supplier:
-		frappe.throw(_("Select Supplier before adding Purchase Order items."))
-	if not item_detail.get("name"):
-		frappe.throw(_("Item is required."))
-
-	price = get_item_price_for_ui(item_detail, supplier)
-	if not price:
-		return {}
-	price = dict(price)
-	lead_time = _get_purchase_order_item_lead_time(item_detail, supplier)
-	if lead_time is not None:
-		price["lead_time_days"] = lead_time
-	return price
 
 
-def _get_purchase_order_item_lead_time(item_detail: dict, supplier: str):
-	"""Resolve MOQ/attribute lead time from the same active Item Price as the rate."""
+def _preview_purchase_order_prices(items, supplier):
+	rows, contexts, targets, preview_rows = _build_purchase_order_price_rows(items)
+	application = apply_price_details(
+		rows,
+		supplier=supplier,
+		strict=False,
+		preview_context=contexts,
+	)
+	for target, result in zip(targets, application["rows"], strict=True):
+		row = preview_rows[target[0]]
+		row["values"][target[1]] = dict(result)
 
-	from yrp.yrp.doctype.yrp_item_price.yrp_item_price import get_active_price
-
-	item_price = get_active_price(item_detail.get("name"), supplier, raise_error=False)
-	if not item_price:
-		return None
-	values = item_detail.get("values") or {}
-	attributes = item_detail.get("attributes") or {}
-	if not item_price.depends_on_attribute:
-		lead_time = item_price.validate_attribute_values(
-			qty=sum(flt(value.get("qty")) for value in values.values()),
-			get_lead_time=True,
+	for row in preview_rows:
+		value_results = list(row["values"].values())
+		if not value_results:
+			continue
+		row["status"] = max(
+			(value.get("status") or "missing" for value in value_results),
+			key=lambda status: {"ok": 0, "no_slab": 1, "missing": 2, "ambiguous": 3}.get(
+				status, 2
+			),
 		)
-	elif item_price.attribute in attributes:
-		lead_time = item_price.validate_attribute_values(
-			qty=sum(flt(value.get("qty")) for value in values.values()),
-			attribute=item_price.attribute,
-			attribute_value=attributes[item_price.attribute],
-			get_lead_time=True,
-		)
-	elif item_price.attribute == item_detail.get("primary_attribute"):
+		priced = [value for value in value_results if value.get("tax") is not None]
+		if priced:
+			row["tax"] = priced[0].get("tax")
+			row["tax_rate"] = priced[0].get("tax_rate") or 0
 		lead_times = [
-			item_price.validate_attribute_values(
-				qty=flt(value.get("qty")),
-				attribute=item_price.attribute,
-				attribute_value=key,
-				get_lead_time=True,
-			)
-			for key, value in values.items()
-			if flt(value.get("qty")) > 0
+			flt(value.get("lead_time_days"))
+			for value in value_results
+			if value.get("lead_time_days") is not None
 		]
-		lead_times = [lead_time for lead_time in lead_times if lead_time is not None and flt(lead_time) >= 0]
-		lead_time = max(lead_times, default=None)
-	else:
-		lead_time = None
-	return flt(lead_time) if lead_time is not None and flt(lead_time) >= 0 else None
+		row["lead_time_days"] = max(lead_times, default=None)
+	return {"rows": preview_rows, "warnings": application["warnings"]}
+
+
+def _build_purchase_order_price_rows(items):
+	rows = []
+	contexts = []
+	targets = []
+	preview_rows = []
+	for group_index, group in enumerate(items):
+		for item_index, item in enumerate(group.get("items") or []):
+			row_index = len(preview_rows)
+			preview_rows.append(
+				{
+					"group_index": group_index,
+					"item_index": item_index,
+					"item": item.get("name"),
+					"status": "no_slab",
+					"tax": None,
+					"tax_rate": 0,
+					"lead_time_days": None,
+					"values": {},
+				}
+			)
+			primary_attribute = item.get("primary_attribute") or group.get("primary_attribute")
+			for value_key, value in (item.get("values") or {}).items():
+				if flt(value.get("qty")) <= 0:
+					continue
+				attributes = dict(item.get("attributes") or {})
+				if primary_attribute and value_key != "default":
+					attributes[primary_attribute] = value_key
+				rows.append(
+					frappe._dict(
+						item_code=item.get("name"),
+						qty=value.get("qty"),
+					)
+				)
+				contexts.append(
+					{"parent_item": item.get("name"), "attributes": attributes}
+				)
+				targets.append((row_index, value_key))
+	return rows, contexts, targets, preview_rows
 
 
 @frappe.whitelist()
@@ -593,7 +659,10 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 			frappe.throw(_("Only Draft documents can be edited."))
 		defaults = {key: doc.get(key) for key in STOCK_OPERATION_FIELDS[operation]}
 		item_groups, _row_count = _document_item_groups(doc)
-		permissions = _permission_flags(doctype, doc)
+		permissions = {
+			**_permission_flags(doctype, doc),
+			"can_delete": bool(frappe.has_permission(doctype, ptype="delete", doc=doc)),
+		}
 	else:
 		frappe.has_permission(doctype, ptype="create", throw=True)
 		defaults = {
@@ -1077,11 +1146,24 @@ def complete_work_order_document_transfer(doctype: str, name: str) -> dict:
 	if doctype not in {"YRP Delivery Challan", "YRP Goods Received Note"}:
 		frappe.throw(_("Complete Transfer is not supported for {0}.").format(doctype))
 	_get_supported_document(doctype, name)
-	if doctype == "YRP Delivery Challan":
+	stock_entry = get_draft_completion_stock_entry(doctype, name)
+	if not stock_entry and doctype == "YRP Delivery Challan":
 		stock_entry = make_dc_completion(name)
-	else:
+	elif not stock_entry:
 		stock_entry = make_grn_completion(name)
 	return get_document("YRP Stock Entry", stock_entry)
+
+
+@frappe.whitelist()
+def discard_completion_draft(name: str, expected_modified: str | None = None) -> dict:
+	"""Delete a draft DC or GRN completion Stock Entry so a fresh one can be prepared."""
+
+	doc = _get_supported_document("YRP Stock Entry", name, "delete")
+	if cint(doc.docstatus) != 0 or doc.get("purpose") not in FABRIC_STOCK_COMPLETION_PURPOSES:
+		frappe.throw(_("Only draft completion Stock Entries can be discarded."))
+	_assert_not_stale(doc, expected_modified)
+	frappe.delete_doc("YRP Stock Entry", doc.name)
+	return {"deleted": doc.name}
 
 
 @frappe.whitelist()
@@ -1195,13 +1277,22 @@ def get_capabilities() -> dict:
 		}
 
 	reports = {}
-	if _can_run_report("YRP Stock Balance"):
+	if can_run_report("YRP Stock Balance"):
 		reports["stock_balance"] = {"label": _("Stock Balance"), "can_read": True}
 
-	if _can_run_report("SD YRP Purchase Order Itemwise"):
+	if can_run_report("SD YRP Purchase Order Itemwise"):
 		reports["purchase_order_itemwise"] = {
 			"label": _("Purchase Order Itemwise"),
 			"can_read": True,
+		}
+
+	if can_view_lot_cut_quantity():
+		reports["lot_cut_quantity"] = {
+			"label": _("Lot Cut Quantity"),
+			"can_read": True,
+			"can_read_cutting_plan": bool(
+				frappe.has_permission("SD YRP Cutting Plan", ptype="read")
+			),
 		}
 
 	if reports:
@@ -1219,7 +1310,7 @@ def get_capabilities() -> dict:
 	}
 
 
-def _can_run_report(report_name: str) -> bool:
+def can_run_report(report_name: str) -> bool:
 	"""Mirror query-report access checks without queueing permission errors."""
 	try:
 		report = frappe.get_doc("Report", report_name)

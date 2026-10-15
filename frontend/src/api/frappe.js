@@ -28,22 +28,30 @@ async function request(url, options = {}) {
 
 	if (response.status === 401) {
 		window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname)}`)
-		throw new Error("Your session has expired.")
+		throw requestError("Your session has expired.", response.status)
 	}
 
 	const payload = response.status === 204 ? {} : await response.json().catch(() => ({}))
 	if (!response.ok || payload.exc) {
-		throw new Error(extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."))
+		throw requestError(
+			extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."),
+			response.status,
+		)
 	}
 	return payload
 }
 
-export async function callMethod(method, args = {}) {
+export async function callMethod(method, args = {}, requestOptions = {}) {
 	const payload = await request(`/api/method/${method}`, {
+		...requestOptions,
 		method: "POST",
 		body: JSON.stringify(args),
 	})
 	return payload.message
+}
+
+function requestError(message, status) {
+	return Object.assign(new Error(message), { status })
 }
 
 export function uploadFile(file, options = {}) {
@@ -55,6 +63,8 @@ export function uploadFile(file, options = {}) {
 		isPrivate = 1,
 		onProgress = null,
 		signal = null,
+		method = "",
+		fields = {},
 	} = options
 
 	return new Promise((resolve, reject) => {
@@ -64,6 +74,10 @@ export function uploadFile(file, options = {}) {
 		if (doctype) form.append("doctype", doctype)
 		if (docname) form.append("docname", docname)
 		if (fieldname) form.append("fieldname", fieldname)
+		if (method) form.append("method", method)
+		for (const [key, value] of Object.entries(fields)) {
+			if (value !== undefined && value !== null && value !== "") form.append(key, String(value))
+		}
 
 		const xhr = new XMLHttpRequest()
 		let settled = false
@@ -235,19 +249,37 @@ export function bulkUpdateField(doctype, docnames, field, value) {
 	})
 }
 
-const USER_LISTVIEW_METHOD = "yrp.yrp.doctype.yrp_user_listview.yrp_user_listview"
+const USER_LISTVIEW_METHOD = "essdee_yrp.api.list_columns"
 
-export async function getUserListview(doctype) {
-	const rows = await callMethod(`${USER_LISTVIEW_METHOD}.get_user_listview`, {
+export async function getUserListview(doctype, viewFields = []) {
+	const settings = await callMethod(`${USER_LISTVIEW_METHOD}.get_user_listview`, {
 		doctype_name: doctype,
+		view_fields: viewFields,
 	})
-	return Array.isArray(rows) ? rows : null
+	if (
+		!settings
+		|| typeof settings !== "object"
+		|| !Array.isArray(settings.fields)
+		|| (settings.columns !== null && !Array.isArray(settings.columns))
+		|| (settings.currency_fields !== undefined && (
+			typeof settings.currency_fields !== "object"
+			|| settings.currency_fields === null
+			|| Array.isArray(settings.currency_fields)
+			|| Object.entries(settings.currency_fields).some(([fieldname, reference]) =>
+				!fieldname || typeof reference !== "string" || !reference.trim(),
+			)
+		))
+	) {
+		throw new Error(`Invalid list column settings returned for ${doctype}.`)
+	}
+	return { ...settings, currency_fields: settings.currency_fields || {} }
 }
 
-export function saveUserListview(doctype, columns) {
+export function saveUserListview(doctype, columns, viewFields = []) {
 	return callMethod(`${USER_LISTVIEW_METHOD}.save_user_listview`, {
 		doctype_name: doctype,
-		columns: JSON.stringify(columns),
+		columns,
+		view_fields: viewFields,
 	})
 }
 

@@ -5,7 +5,6 @@ const MOVEMENT_METHOD = "essdee_yrp.cut_panel_store.movement_workspace"
 const CUT_BUNDLE_METHOD = "essdee_yrp.cut_panel_store.cut_bundle_workspace"
 const BOX_STICKER_METHOD = "essdee_yrp.cut_panel_store.box_sticker_workspace"
 const EXCEL_STICKER_METHOD = "essdee_yrp.cut_panel_store.excel_sticker_workspace"
-const REPORT_METHOD = "essdee_yrp.cut_panel_store.report_workspace"
 
 export function getCutPanelStoreCapabilities() {
 	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
@@ -190,8 +189,4 @@ export function getExcelStickerPrintData(name, printerType) {
 		name,
 		printer_type: printerType,
 	})
-}
-
-export function getCutBundleBalance(filters = {}) {
-	return callMethod(`${REPORT_METHOD}.get_cut_bundle_balance`, { filters })
 }

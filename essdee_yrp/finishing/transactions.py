@@ -23,6 +23,7 @@ from essdee_yrp.dynamic_packing import (
 	aggregate_batch_pieces,
 	normalize_packing_batches,
 )
+from essdee_yrp.finishing.dispatch_locations import get_dispatch_locations
 from essdee_yrp.finishing.packing import (
 	get_ipd_packing_config,
 	prepare_dynamic_batch_dispatch,
@@ -105,6 +106,9 @@ def create_grn(
 	dynamic_packing = bool(
 		ipd_doc.based_on_other_attribute_mapping and ipd_doc.packing_mode == "Size Ratio Packing"
 	)
+	mapped_size_wise = bool(
+		ipd_doc.based_on_other_attribute_mapping and ipd_doc.packing_mode == "Size Wise Packing"
+	)
 	batch_rows = []
 	if dynamic_packing:
 		validate_dynamic_packing_transition(work_order, lot)
@@ -122,7 +126,7 @@ def create_grn(
 		size_quantities = _normalize_size_quantities(data)
 		total_boxes = sum(flt(quantity) for quantity in size_quantities.values())
 		total_pieces = total_boxes * flt(ipd_doc.packing_combo)
-		uom = attribute_db.get_value("SD YRP Lot", lot, "uom")
+		uom = attribute_db.get_value("SD YRP Lot", lot, "packing_uom" if mapped_size_wise else "uom")
 
 	items = _build_packing_grn_items(
 		work_order_doc,
@@ -581,8 +585,10 @@ def create_stock_entry(
 	item_name,
 	doc_name,
 	lot,
-	from_location,
-	to_location,
+	from_supplier,
+	from_warehouse,
+	to_supplier,
+	to_warehouse,
 	goods_value,
 	vehicle_no,
 	colour_details=None,
@@ -592,6 +598,7 @@ def create_stock_entry(
 	finishing_doc.check_permission("read")
 	if finishing_doc.lot != lot or finishing_doc.item != item_name:
 		frappe.throw("Finishing Plan, Lot, and Item do not match")
+	locations = get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse)
 	from essdee_yrp.finishing.packing import get_finishing_packing_summary
 
 	packing_summary = get_finishing_packing_summary(finishing_doc)
@@ -607,9 +614,9 @@ def create_stock_entry(
 		grouped = {}
 		for batch in dynamic_dispatches:
 			for size, quantity in batch["stock_quantities"].items():
-				key = (size, batch["stock_uom"])
+				key = (size, batch["stock_uom"], batch["packing_calculation_version"])
 				grouped[key] = grouped.get(key, 0) + flt(quantity)
-		for (size, uom), quantity in grouped.items():
+		for (size, uom, version), quantity in grouped.items():
 			items.append(
 				{
 					"item": get_or_create_variant(
@@ -624,6 +631,8 @@ def create_stock_entry(
 					"uom": uom,
 					"lot": lot,
 					"set_combination": "{}",
+					"_packing_finishing_plan": doc_name,
+					"_packing_calculation_version": version,
 				}
 			)
 	else:
@@ -631,6 +640,13 @@ def create_stock_entry(
 		if not quantities:
 			frappe.throw("Enter at least one dispatch quantity")
 		_validate_legacy_dispatch_balance(finishing_doc, ipd, quantities)
+		dispatch_uom = attribute_db.get_value(
+			"SD YRP Lot",
+			lot,
+			"packing_uom"
+			if ipd.based_on_other_attribute_mapping and ipd.packing_mode == "Size Wise Packing"
+			else "uom",
+		)
 		for size, quantity in quantities.items():
 			items.append(
 				{
@@ -643,9 +659,10 @@ def create_stock_entry(
 						),
 					),
 					"qty": quantity,
-					"uom": attribute_db.get_value("SD YRP Lot", lot, "uom"),
+					"uom": dispatch_uom,
 					"lot": lot,
 					"set_combination": "{}",
+					"_packing_finishing_plan": doc_name,
 				}
 			)
 
@@ -656,8 +673,7 @@ def create_stock_entry(
 			"purpose": "Material Issue",
 			"against": "SD YRP Finishing Plan",
 			"against_id": doc_name,
-			"from_warehouse": from_location,
-			"transfer_supplier": to_location,
+			**locations,
 			"vehicle_no": vehicle_no,
 			"additional_amount": goods_value,
 			"packing_batch_dispatch_json": (
@@ -680,8 +696,12 @@ def create_stock_entry(
 	)
 	for row in items:
 		row["received_type"] = default_received_type
-		stock_entry.append("items", row)
-	populate_stock_rates(stock_entry, from_location)
+		stock_row = stock_entry.append("items", row)
+		if row.get("_packing_finishing_plan"):
+			stock_row._packing_finishing_plan = row["_packing_finishing_plan"]
+			if row.get("_packing_calculation_version") is not None:
+				stock_row._packing_calculation_version = row["_packing_calculation_version"]
+	populate_stock_rates(stock_entry, from_warehouse)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name

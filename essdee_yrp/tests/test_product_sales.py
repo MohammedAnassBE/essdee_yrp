@@ -3,7 +3,7 @@ import unittest
 
 import frappe
 
-from essdee_yrp.product_sales import IPD_SETTINGS, sales_definition
+from essdee_yrp.product_sales import IPD_SETTINGS, PIECE_UOM, sales_definition
 
 SETTINGS = frappe._dict(primary='Size', packing='Finish', stage='Pack')
 
@@ -38,8 +38,8 @@ class TestProductSalesSite(unittest.TestCase):
         from yrp.attribute_values import ensure_value_master
         from yrp.yrp_retail.test_category import TestItemCategory
 
-        if not frappe.db.exists('UOM', 'Piece'):
-            self.skipTest('UOM Piece is required.')
+        if not frappe.db.exists('UOM', PIECE_UOM):
+            self.skipTest(f'UOM {PIECE_UOM} is required.')
         self.addCleanup(self.clear_caches)
         self.fixture = TestItemCategory()
         self.fixture.setUp()
@@ -66,7 +66,7 @@ class TestProductSalesSite(unittest.TestCase):
             'values': [{'attribute_value': pack}, {'attribute_value': cut}]}).insert()
         self.dependent_mapping = frappe.get_doc({'doctype': 'YRP Item Dependent Attribute Mapping',
             'dependent_attribute': self.stage.name,
-            'details': [{'attribute_value': pack, 'uom': 'Piece'}, {'attribute_value': cut, 'uom': 'Piece'}],
+            'details': [{'attribute_value': pack, 'uom': PIECE_UOM}, {'attribute_value': cut, 'uom': PIECE_UOM}],
             'mapping': [{'dependent_attribute_value': pack, 'depending_attribute': 'Size'},
                 {'dependent_attribute_value': cut, 'depending_attribute': 'Size'}]}).insert()
         self.set_ipd_settings('Size', self.stage.name, pack)
@@ -87,7 +87,7 @@ class TestProductSalesSite(unittest.TestCase):
         self.clear_caches()
 
     def template(self, **changes):
-        values = {'stock_uom': 'Piece', 'has_variants': 1, 'variant_based_on': 'Item Attribute',
+        values = {'stock_uom': PIECE_UOM, 'has_variants': 1, 'variant_based_on': 'Item Attribute',
             'primary_attribute': 'Size', 'dependent_attribute': self.stage.name,
             'dependent_attribute_mapping': self.dependent_mapping.name,
             'attributes': [{'attribute': 'Size', 'mapping': self.size_mapping.name},
@@ -140,7 +140,7 @@ class TestProductSalesSite(unittest.TestCase):
             self.template().insert()
 
     def test_invalid_sales_template_is_rejected(self):
-        for changes in ({'stock_uom': self.fixture.uom.name}, {'custom_box_per_carton': 0},
+        for changes in ({'stock_uom': self.fixture.uom.name}, {'stock_uom': 'Box'}, {'custom_box_per_carton': 0},
                 {'item_group': frappe.db.get_value('Item Group', {'is_group': 1}, 'name')}):
             with self.assertRaises(frappe.ValidationError):
                 self.template(**changes).insert()

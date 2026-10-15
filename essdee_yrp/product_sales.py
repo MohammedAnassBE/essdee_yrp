@@ -5,6 +5,7 @@ from frappe.utils import cint
 from yrp import attribute_links as attribute_db
 
 IPD_SETTINGS = 'SD YRP IPD Settings'
+PIECE_UOM = 'Pieces'
 PACKAGING_UOMS = (('Box', 'custom_pieces_per_box'), ('Carton', 'custom_pieces_per_carton'))
 SIZE_SLOTS = tuple(f'size{index}' for index in range(1, 11))
 
@@ -81,8 +82,8 @@ def validate_sales_template(item, method=None):
         frappe.throw(_('Size Range can be set only on an Item template.'))
     if frappe.db.get_value('Item Group', item.item_group, 'is_group') != 0:
         frappe.throw(_('Select a leaf Item Group for a sales Item template.'))
-    if item.stock_uom != 'Piece':
-        frappe.throw(_('Sales Size Range requires Piece as the Item template stock UOM.'))
+    if item.stock_uom != PIECE_UOM:
+        frappe.throw(_('Sales Size Range requires {0} as the Item template stock UOM.').format(PIECE_UOM))
     if cint(item.get('custom_pieces_per_box')) <= 0 or cint(item.get('custom_box_per_carton')) <= 0:
         frappe.throw(_('Pieces Per Box and Box Per Carton must be greater than zero.'))
     for uom, field in PACKAGING_UOMS:

@@ -27,6 +27,30 @@ CUSTOM_PERMISSION_FIELDS = (
 
 
 class TestAccountsHrCapabilities(TestCase):
+	def test_audit_pending_gate_is_last_and_requires_accounts_role_and_plan_read(self):
+		from essdee_yrp.accounts import web_capabilities
+
+		self.assertEqual(list(web_capabilities.REPORT_GATES)[-1], "audit_pending_finishing_plans")
+		self.assertEqual(list(web_capabilities.REPORT_GATES)[:-1], [
+			"stock_balance", "cutting_dpr", "sewing_dpr", "finishing_dispatch", "ironing_dpr",
+		])
+		original_gates = web_capabilities.REPORT_GATES
+		gates = {key: (label, lambda: False) for key, (label, _) in original_gates.items()}
+		gates["audit_pending_finishing_plans"] = original_gates["audit_pending_finishing_plans"]
+		for roles, readable, expected in (
+			(["Stock User"], True, False),
+			(["Accounts User"], False, False),
+			(["Accounts User"], True, True),
+		):
+			with self.subTest(roles=roles, readable=readable), patch.object(
+				web_capabilities, "REPORT_GATES", gates
+			), patch.object(frappe, "get_roles", return_value=roles), patch.object(
+				frappe, "has_permission", return_value=readable
+			):
+				self.assertEqual(
+					"audit_pending_finishing_plans" in web_capabilities.get_capabilities()["reports"], expected
+				)
+
 	def test_doctypes_registered_for_web(self):
 		self.assertEqual(tuple(hooks.yrp_web_doctype_catalog), WEB_DOCTYPES)
 		for doctype in ("YRP Purchase Invoice", "YRP Bill Tracking", "YRP Item Price"):
@@ -73,12 +97,12 @@ class TestAccountsHrCapabilities(TestCase):
 		self.assertEqual(result["reports"], {})
 		self.assertFalse(result["sections"]["reports"]["can_read"])
 
-	def test_report_gate_keys_are_exactly_the_five_requested(self):
+	def test_report_gate_keys_are_exactly_the_requested(self):
 		from essdee_yrp.accounts import web_capabilities
 
 		self.assertEqual(
 			list(web_capabilities.REPORT_GATES),
-			["stock_balance", "cutting_dpr", "sewing_dpr", "finishing_dispatch", "ironing_dpr"],
+			["stock_balance", "cutting_dpr", "sewing_dpr", "finishing_dispatch", "ironing_dpr", "audit_pending_finishing_plans"],
 		)
 
 	def test_hr_attendance_follows_sewing_attendance(self):
@@ -137,7 +161,7 @@ class TestAccountsReportGrants(TestCase):
 		frappe.set_user(self.user)
 		self.assertEqual(
 			list(get_capabilities()["reports"]),
-			["stock_balance", "cutting_dpr", "sewing_dpr", "finishing_dispatch", "ironing_dpr"],
+			["stock_balance", "cutting_dpr", "sewing_dpr", "finishing_dispatch", "ironing_dpr", "audit_pending_finishing_plans"],
 		)
 		self._assert_report_endpoints_run()
 

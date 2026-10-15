@@ -12,6 +12,25 @@ from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_itemwise.sd_yrp_purchase
 def get_reports() -> list[WebReport]:
 	return [
 		WebReport(
+			key="accounts-audit-pending-finishing-plans",
+			kind="callable",
+			runner="essdee_yrp.accounts.audit_pending.run",
+			access="essdee_yrp.accounts.audit_pending.require_access",
+			filters={
+				"lot": ("Link", "SD YRP Lot"),
+				"item": ("Link", "Item"),
+				"from_date": "Date",
+				"to_date": "Date",
+			},
+			link_sources={
+				"name": "SD YRP Finishing Plan", "lot": "SD YRP Lot",
+				"item": "Item", "work_order": "YRP Work Order",
+			},
+			permission_doctypes=("SD YRP Finishing Plan",),
+			dependency_doctypes="essdee_yrp.accounts.audit_pending.dependency_doctypes",
+			background="never",
+		),
+		WebReport(
 			key="purchase-order-itemwise",
 			kind="frappe_report",
 			report="SD YRP Purchase Order Itemwise",

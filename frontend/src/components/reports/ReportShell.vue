@@ -72,8 +72,8 @@
 			<div v-else-if="!hasResults" class="erp-empty-state report-shell__empty">
 				<div>
 					<i class="pi pi-inbox" aria-hidden="true" />
-					<strong>No matching records</strong>
-					<span>Try a different date, location, item, lot, or status.</span>
+					<strong>{{ emptyTitle }}</strong>
+					<span v-if="emptyDescription">{{ emptyDescription }}</span>
 				</div>
 			</div>
 			<div v-else class="report-shell__results">
@@ -104,6 +104,8 @@ const props = defineProps({
 	keepResultsWhileLoading: { type: Boolean, default: false },
 	generateDisabled: { type: Boolean, default: false },
 	statusOnly: { type: Boolean, default: false },
+	emptyTitle: { type: String, default: "No matching records" },
+	emptyDescription: { type: String, default: "Try a different date, location, item, lot, or status." },
 })
 
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-report-title`)

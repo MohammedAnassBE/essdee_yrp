@@ -1,7 +1,6 @@
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 import math
-from itertools import zip_longest
 
 import frappe
 from frappe import _
@@ -20,29 +19,24 @@ class SDYRPBoxStickerPrint(Document):
 
 @frappe.whitelist()
 def get_fg_details(fg_item, lot=None):
-	frappe.get_doc("SD YRP FG Item Master", fg_item).check_permission("read")
-	sizes, mrp = frappe.db.get_value("SD YRP FG Item Master", fg_item, ["available_sizes", "mrp"]) or ("", "")
-	sizes = (sizes or "").split(",")
-	result = []
-	if not mrp:
-		previous = frappe.get_list(
-			"SD YRP Box Sticker Print",
-			filters={"fg_item": fg_item},
-			order_by="creation desc",
-			pluck="name",
-			limit=1,
-		)
-		if previous:
-			doc = frappe.get_doc("SD YRP Box Sticker Print", previous[0])
-			doc.check_permission("read")
-			return [
-				{"size": _attribute_value(row.size), "mrp": row.mrp} for row in doc.box_sticker_print_details
-			]
-		mrp = ""
-	prices = mrp.split(",")
-	for size, price in zip_longest(sizes, prices, fillvalue=None):
-		result.append({"size": size, "mrp": price})
-	return result
+	from essdee_yrp.product_sales import get_sellable_variants
+
+	frappe.get_doc("Item", fg_item).check_permission("read")
+	rows = [{"size": row.size, "mrp": row.mrp} for row in get_sellable_variants(fg_item)]
+	if any(row["mrp"] for row in rows):
+		return rows
+	previous = frappe.get_list(
+		"SD YRP Box Sticker Print",
+		filters={"fg_item": fg_item},
+		order_by="creation desc",
+		pluck="name",
+		limit=1,
+	)
+	if not previous:
+		return rows
+	doc = frappe.get_doc("SD YRP Box Sticker Print", previous[0])
+	doc.check_permission("read")
+	return [{"size": _attribute_value(row.size), "mrp": row.mrp} for row in doc.box_sticker_print_details]
 
 
 @frappe.whitelist()
@@ -114,7 +108,7 @@ def get_template(doc, item, raw_code, label_count, fg_item, *, dpi=203):
 	months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 	mfd_year = f"{months[date.month - 1]}/{date.year}"
 	if not doc.use_item_name:
-		fg_item = frappe.db.get_value("SD YRP FG Item Master", fg_item, "display_name") or fg_item
+		fg_item = frappe.db.get_value("Item", fg_item, "custom_display_name") or fg_item
 	return frappe.render_template(
 		raw_code,
 		{

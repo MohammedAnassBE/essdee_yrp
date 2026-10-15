@@ -41,3 +41,4 @@ essdee_yrp.patches.seed_default_dia_attribute
 essdee_yrp.patches.grant_accounts_user_report_access
 essdee_yrp.patches.grant_purchase_item_permissions
 essdee_yrp.patches.recalculate_attribute_mapped_finishing_plan_statuses
+essdee_yrp.patches.seed_stage_and_size_attributes

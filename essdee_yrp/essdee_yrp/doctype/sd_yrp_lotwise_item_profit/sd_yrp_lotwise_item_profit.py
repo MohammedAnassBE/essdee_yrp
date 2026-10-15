@@ -36,4 +36,20 @@ def get_lot_qty(lot: str, quantity_type: str | None = None, **kwargs) -> dict:
 	}
 
 
+@frappe.whitelist()
+def get_item_size_rates(item: str) -> list[dict]:
+	"""Sellable sizes of an Item template with their SD YRP Sales Item Price rate."""
+	from essdee_yrp.product_sales import get_sellable_variants
+
+	frappe.get_doc('Item', item).check_permission("read")
+	variants = get_sellable_variants(item)
+	rates = dict(frappe.get_all(
+		'SD YRP Sales Item Price',
+		filters={"item_variant": ["in", [row.item for row in variants]]},
+		fields=["item_variant", "rate"],
+		as_list=True,
+	)) if variants else {}
+	return [{"size": row.size, "rate": rates.get(row.item) or 0} for row in variants]
+
+
 LotwiseItemProfit = SDYRPLotwiseItemProfit

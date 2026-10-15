@@ -11,7 +11,8 @@
  "field_order": [
   "uid",
   "name1",
-  "sizes"
+  "sizes",
+  "size_type"
  ],
  "fields": [
   {
@@ -35,12 +36,18 @@
    "label": "Sizes",
    "options": "SD YRP FG Item Size",
    "reqd": 1
+  },
+  {
+   "fieldname": "size_type",
+   "fieldtype": "Link",
+   "label": "Size Type",
+   "options": "SD YRP FG Item Size Type"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-06 19:13:35.561180",
+ "modified": "2026-10-02 23:04:55.629607",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP FG Item Size Range",
@@ -58,6 +65,15 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI Bot",
+   "select": 1
   },
   {
    "email": 1,

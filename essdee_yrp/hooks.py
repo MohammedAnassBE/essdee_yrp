@@ -401,6 +401,7 @@ doc_events = {
 	},
 	"YRP Process Cost": {"before_validate": "essdee_yrp.process_cost.before_validate"},
 	"YRP Process": {"validate": "essdee_yrp.process_validations.validate"},
+	"SD YRP FG Item Size Range": {"on_update": "essdee_yrp.product_sales.refresh_range_templates"},
 	"YRP Production Order": {
 		"onload": "essdee_yrp.production_order_workflow.onload",
 		"before_validate": "essdee_yrp.production_order_workflow.before_validate",
@@ -422,7 +423,9 @@ doc_events = {
 	"Item": {
 		"validate": "essdee_yrp.item_validations.validate",
 	},
+		"before_validate": "essdee_yrp.product_sales.validate_sales_template",
 	"Warehouse": {"autoname": "essdee_yrp.overrides.warehouse.autoname"},
+		"on_update": "essdee_yrp.product_sales.ensure_size_variants",
 	"YRP Item Production Detail": {
 		"onload": "essdee_yrp.ipd_ui.onload",
 		"before_validate": [

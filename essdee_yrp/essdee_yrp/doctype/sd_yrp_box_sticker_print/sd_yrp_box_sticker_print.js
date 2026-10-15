@@ -10,7 +10,7 @@ frappe.ui.form.on("SD YRP Box Sticker Print", {
 			filters: { attribute_name: "Size" },
 		}));
 		frm.set_query("fg_item", () => ({
-			filters: { is_temp_item: 0, disabled: 0 },
+			filters: { has_variants: 1, disabled: 0, custom_size_range: ["is", "set"] },
 		}));
 	},
 

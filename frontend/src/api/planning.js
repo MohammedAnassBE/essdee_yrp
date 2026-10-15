@@ -1,6 +1,19 @@
 import { callMethod } from "./frappe.js"
 
 const LOT_METHOD = "essdee_yrp.planning.lot_workspace"
+const BULK_CLOSE_METHOD = "essdee_yrp.essdee_yrp.page.work_order_bulk_close.work_order_bulk_close"
+
+export function getOpenWorkOrders(filters) {
+	return callMethod(`${BULK_CLOSE_METHOD}.get_open_work_orders`, filters)
+}
+
+export function getWorkOrderCloseDetails(workOrder) {
+	return callMethod(`${BULK_CLOSE_METHOD}.get_work_order_close_details`, { work_order: workOrder })
+}
+
+export function closeWorkOrders(workOrders, values) {
+	return callMethod(`${BULK_CLOSE_METHOD}.close_work_orders`, { work_orders: workOrders, ...values })
+}
 
 export function getPlanningCapabilities() {
 	return callMethod("essdee_yrp.planning.web_workspace.get_capabilities")

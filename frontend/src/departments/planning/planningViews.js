@@ -79,7 +79,27 @@ export const REPORT_GROUPS = [
 	{ value: "cutting", label: "Cutting" },
 	{ value: "sewing", label: "Sewing" },
 	{ value: "finishing", label: "Finishing" },
+	{ value: "production", label: "Production / WIP" },
 ]
+
+export const PLANNING_PRODUCTION_REPORTS = [
+	{ key: "work_order", value: "work-order", label: "Work Order", icon: "pi pi-briefcase" },
+	{ key: "dispatch_percentage", value: "dispatch-percentage", label: "Dispatch Percentage", icon: "pi pi-percentage" },
+	{ key: "work_order_pending", value: "work-order-pending", label: "Work Order Pending", icon: "pi pi-hourglass" },
+	{ key: "finishing_plan", value: "finishing-plan", label: "Finishing Plan Report", icon: "pi pi-table" },
+	{ key: "inward_quantity", value: "inward-quantity", label: "Inward Quantity", icon: "pi pi-sign-in" },
+	{ key: "inhouse_quantity", value: "inhouse-quantity", label: "In-house Quantity", icon: "pi pi-building" },
+	{ key: "month_wise_detail", value: "month-wise-detail", label: "Month-wise Detail", icon: "pi pi-calendar" },
+	{ key: "process_pending", value: "process-pending", label: "Process Pending", icon: "pi pi-clock" },
+	{ key: "size_wise_stock", value: "size-wise-stock", label: "Size-wise Stock", icon: "pi pi-th-large" },
+	{ key: "colour_wise_diff", value: "colour-wise-diff", label: "Colour-wise Diff", icon: "pi pi-palette" },
+	{ key: "work_in_progress", value: "work-in-progress", label: "Work In Progress", icon: "pi pi-chart-line" },
+	{ key: "work_order_bulk_close", value: "work-order-bulk-close", label: "Work Order Bulk Close", icon: "pi pi-lock" },
+]
+
+export function visibleProductionReports(reports = {}) {
+	return PLANNING_PRODUCTION_REPORTS.filter((report) => reports[report.key]?.can_read === true)
+}
 
 export function visibleReportGroups(groups = {}) {
 	return REPORT_GROUPS.filter((group) => groups[group.value] === true)

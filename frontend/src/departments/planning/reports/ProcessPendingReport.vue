@@ -1,0 +1,85 @@
+<template>
+	<section aria-label="Process Pending">
+		<ReportShell title="Process Pending" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+			<template #filters>
+				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
+				<AsyncLinkMultiSelect v-model="filters.item" doctype="Item" label="Items" :filters="{ has_variants: 1 }" />
+				<LinkField v-model="filters.category" doctype="SD YRP Product Category" label="Category" :show-open-button="false" show-clear />
+				<label class="common-field"><span class="erp-field-label">Lot Status *</span><Select v-model="filters.lot_status" :options="['Open', 'Closed']" aria-label="Lot Status" fluid /></label>
+				<LinkField v-model="filters.process" doctype="YRP Process" label="Process" :placeholder="defaultProcess || 'MRP Settings finishing inward process'" :show-open-button="false" show-clear />
+				<small v-if="defaultProcess">Default process: {{ defaultProcess }}</small>
+				<WorkspaceLoadError v-if="defaultsError" class="process-defaults-error" title="Default process unavailable" :message="defaultsError" @retry="loadDefaults" />
+				<Button label="Paste values" severity="secondary" outlined @click="openPaste" />
+				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
+			</template>
+			<template #actions>
+				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
+			</template>
+			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
+			
+			<template #metrics><div v-for="metric in reportSummary || []" :key="metric.label" class="report-metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></template>
+			<PlanningReportTable title="Process Pending" :columns="columns" :rows="rows" :cell-link="(column, row) => column.fieldname === 'lot' && row.lot && !row.is_total_row ? '/planning/lots/' + encodeURIComponent(row.lot) : ''" :cell-align="cellAlign" :formatted-cell="formattedCell" />
+		</ReportShell>
+		<Dialog v-model:visible="pasteVisible" header="Paste values" modal>
+			<div class="finishing-stack"><label class="common-field"><span class="erp-field-label">Apply to</span><Select v-model="pasteTarget" :options="['Lot', 'Item']" aria-label="Apply to" fluid /></label>
+			<label class="common-field"><span class="erp-field-label">One value per line or comma separated</span><Textarea v-model="pastedText" rows="8" aria-label="Values" fluid /></label></div>
+			<template #footer><Button label="Apply" :disabled="!pastedText.trim()" @click="applyPaste" /></template>
+		</Dialog>
+	</section>
+</template>
+
+<script setup>
+import Button from "primevue/button"
+import Select from "primevue/select"
+import { computed, onMounted, reactive, ref, watch } from "vue"
+import { callMethod } from "../../../api/frappe.js"
+import ReportShell from "../../../components/reports/ReportShell.vue"
+import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
+import { useWebReport } from "../../../composables/useWebReport.js"
+import PlanningReportTable from "./PlanningReportTable.vue"
+import { usePlanningQuantityColumns } from "./usePlanningQuantityColumns.js"
+import Dialog from "primevue/dialog"
+import LinkField from "../../../components/common/LinkField.vue"
+import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import Textarea from "primevue/textarea"
+import AsyncLinkMultiSelect from "../../cutting/reports/AsyncLinkMultiSelect.vue"
+import { mergePastedValues, populatedFilters } from "./productionReportFilters.js"
+
+function defaultFilters() { return { lot: [], item: [], category: "", lot_status: "Open", process: "" } }
+const filters = reactive(defaultFilters())
+const hint = computed(() => filters.lot_status ? "" : "Lot Status is required.")
+const {
+	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError,
+	trackingStartedAt, loading, isBusy, generated, statusOnly, activeFilters, payload, reportSummary,
+	generate: generateReport, filtersChanged, clear,
+} = useWebReport({ reportKey: "planning-process-pending" })
+const { columns, rows, cellAlign, formattedCell, downloadCsv } = usePlanningQuantityColumns("planning-process-pending", sourceColumns, sourceRows)
+
+function requestFilters() { return populatedFilters(filters) }
+function generate() { if (!hint.value) return generateReport(requestFilters()) }
+function rebuild() { if (!hint.value) return generateReport(requestFilters(), { refresh: true }) }
+function reset() { Object.assign(filters, defaultFilters()); clear() }
+watch(filters, () => filtersChanged(requestFilters()), { deep: true })
+watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request) }, { flush: "sync" })
+const pasteVisible = ref(false)
+const pasteTarget = ref("Lot")
+const pastedText = ref("")
+function openPaste() { pasteTarget.value = "Lot"; pastedText.value = ""; pasteVisible.value = true }
+function applyPaste() {
+	const key = pasteTarget.value === "Item" ? "item" : "lot"
+	filters[key] = mergePastedValues(filters[key], pastedText.value)
+	pasteVisible.value = false
+}
+const defaultProcess = ref("")
+const defaultsError = ref("")
+async function loadDefaults() {
+	defaultsError.value = ""
+	try { defaultProcess.value = (await callMethod("essdee_yrp.planning.reports.process_pending.get_defaults")).process }
+	catch (error) { defaultsError.value = error.message || "Unable to load the default process." }
+}
+onMounted(loadDefaults)
+</script>
+
+<style scoped>
+.process-defaults-error { width: 100%; margin: 0; padding: var(--erp-space-2); }
+</style>

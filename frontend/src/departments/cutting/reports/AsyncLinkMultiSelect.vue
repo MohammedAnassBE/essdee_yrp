@@ -11,6 +11,7 @@
 			:delay="300"
 			multiple
 			fluid
+			:disabled="disabled"
 			@complete="complete"
 		/>
 		<small v-if="helpText" class="erp-help-text">{{ helpText }}</small>
@@ -30,6 +31,7 @@ const props = defineProps({
 	placeholder: { type: String, default: "Search and add…" },
 	helpText: { type: String, default: "" },
 	filters: { type: Object, default: () => ({}) },
+	disabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(["update:modelValue"])
 

@@ -5,6 +5,16 @@ from essdee_yrp.cutting import reports as cutting_reports
 from essdee_yrp.cutting import web_capabilities as cutting_capabilities
 from essdee_yrp.fabric_store import web_workspace as fabric_store_workspace
 from essdee_yrp.finishing import web_workspace as finishing_workspace
+from essdee_yrp.planning.reports import (
+	colour_wise_diff,
+	inhouse_quantity,
+	inward_quantity,
+	month_wise_detail,
+	process_pending,
+	size_wise_stock,
+	work_in_progress,
+)
+from essdee_yrp.planning.reports.desk_adapters import can_run_desk_report
 from essdee_yrp.sales import web_workspace as sales_workspace
 from essdee_yrp.sewing import web_workspace as sewing_workspace
 from essdee_yrp.web_common import permission_flags
@@ -15,6 +25,33 @@ def _with_label(label, flags):
 
 
 def _reports_section(sewing_sections, finishing_sections):
+	production = {
+		key: {"label": _(label), "can_read": True}
+		for key, label, report in (
+			("work_order", "Work Order", "SD YRP Work Order Report"),
+			("dispatch_percentage", "Dispatch Percentage", "SD YRP Dispatch Percentage Report"),
+			("work_order_pending", "Work Order Pending", "SD YRP Work Order Pending Report"),
+		)
+		if can_run_desk_report(report)
+	}
+	if finishing_sections.get("reports", {}).get("reports", {}).get("finishing_plan_report", {}).get("can_read"):
+		production["finishing_plan"] = {"label": _("Finishing Plan Report"), "can_read": True}
+	for key, label, report in (
+		("inward_quantity", "Inward Quantity", inward_quantity),
+		("inhouse_quantity", "In-house Quantity", inhouse_quantity),
+		("month_wise_detail", "Month-wise Detail", month_wise_detail),
+		("process_pending", "Process Pending", process_pending),
+		("size_wise_stock", "Size-wise Stock", size_wise_stock),
+		("colour_wise_diff", "Colour-wise Diff", colour_wise_diff),
+		("work_in_progress", "Work In Progress", work_in_progress),
+	):
+		if report.can_view():
+			production[key] = {"label": _(label), "can_read": True}
+	if frappe.has_permission("YRP Work Order", "read"):
+		production["work_order_bulk_close"] = {
+			"label": _("Work Order Bulk Close"), "can_read": True,
+			"can_write": bool(frappe.has_permission("YRP Work Order", "write")),
+		}
 	groups = {
 		"cutting": any(
 			value for key, value in cutting_reports.get_report_permissions().items()
@@ -22,8 +59,9 @@ def _reports_section(sewing_sections, finishing_sections):
 		),
 		"sewing": bool(sewing_sections.get("reports")),
 		"finishing": bool(finishing_sections.get("reports")),
+		"production": bool(production),
 	}
-	return {"label": _("Reports"), "can_read": any(groups.values()), "groups": groups}
+	return {"label": _("Reports"), "can_read": any(groups.values()), "groups": groups, "production": production}
 
 
 @frappe.whitelist()

@@ -11,6 +11,7 @@
 			<CuttingReports v-else-if="group === 'cutting'" embedded :key="group" />
 			<SewingReports v-else-if="group === 'sewing'" embedded :key="group" />
 			<FinishingReports v-else-if="group === 'finishing'" embedded :key="group" />
+			<PlanningProductionReports v-else-if="group === 'production'" :reports="production" />
 		</section>
 	</DepartmentPage>
 </template>
@@ -31,11 +32,13 @@ import { activeReportGroup, visibleReportGroups } from "./planningViews.js"
 const CuttingReports = defineAsyncComponent(() => import("../CuttingReports.vue"))
 const SewingReports = defineAsyncComponent(() => import("../sewing/SewingReports.vue"))
 const FinishingReports = defineAsyncComponent(() => import("../finishing/FinishingReports.vue"))
+const PlanningProductionReports = defineAsyncComponent(() => import("./reports/PlanningProductionReports.vue"))
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
 const loadError = ref("")
 const groups = ref([])
+const production = ref({})
 const header = ref(null)
 const headerHeight = ref(0)
 let headerObserver
@@ -48,9 +51,12 @@ async function load() {
 	loading.value = true
 	loadError.value = ""
 	try {
-		groups.value = visibleReportGroups((await getPlanningCapabilities())?.sections?.reports?.groups)
+		const reports = (await getPlanningCapabilities())?.sections?.reports
+		groups.value = visibleReportGroups(reports?.groups)
+		production.value = reports?.production || {}
 	} catch (reason) {
 		groups.value = []
+		production.value = {}
 		loadError.value = reason?.message || "Unable to load Planning reports."
 	} finally {
 		loading.value = false

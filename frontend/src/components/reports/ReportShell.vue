@@ -9,7 +9,7 @@
 			<div class="report-shell__commands erp-command-bar" :class="{ 'report-shell__commands--with-copy': copyable }">
 				<Button
 					type="submit"
-					label="Generate"
+					:label="generateLabel"
 					icon="pi pi-play"
 					class="erp-action-button erp-action-button--primary"
 					:loading="loading"
@@ -66,7 +66,7 @@
 				<div>
 					<i class="pi pi-sliders-h" aria-hidden="true" />
 					<strong>Set the report filters</strong>
-					<span>No report data is requested until you choose Generate.</span>
+					<span>No report data is requested until you choose {{ generateLabel }}.</span>
 				</div>
 			</div>
 			<div v-else-if="!hasResults" class="erp-empty-state report-shell__empty">
@@ -103,6 +103,7 @@ const props = defineProps({
 	copyable: { type: Boolean, default: false },
 	keepResultsWhileLoading: { type: Boolean, default: false },
 	generateDisabled: { type: Boolean, default: false },
+	generateLabel: { type: String, default: "Generate" },
 	statusOnly: { type: Boolean, default: false },
 	emptyTitle: { type: String, default: "No matching records" },
 	emptyDescription: { type: String, default: "Try a different date, location, item, lot, or status." },

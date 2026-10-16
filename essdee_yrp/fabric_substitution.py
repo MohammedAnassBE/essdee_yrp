@@ -18,6 +18,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 	get_colour_attribute,
 	get_dia_attribute,
 )
+from essdee_yrp.fabric_chain import get_fabric_steps
 
 QTY_TOLERANCE = 0.000001
 
@@ -725,7 +726,9 @@ def substitution_index(lot):
 	terminal = {}
 	for row in rows:
 		ipd = row["production_detail"]
-		terminal[ipd] = max(terminal.get(ipd, -1), row["process_stage_index"])
+		if ipd not in terminal:
+			steps = get_fabric_steps(frappe.get_cached_doc("YRP Item Production Detail", ipd))
+			terminal[ipd] = steps[-1]["position"] if steps else 0
 	quantities = defaultdict(lambda: defaultdict(float))
 	received_type = _default_received_type()
 	for row in rows:

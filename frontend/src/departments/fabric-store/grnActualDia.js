@@ -25,7 +25,7 @@ export function addActualDia(group, row, context, dia) {
 	for (const key of ["row_index", "table_index", "actual_dia_error"]) delete entry[key]
 	entry.is_added_actual_dia = true
 	for (const value of cells(entry)) {
-		for (const key of ["name", "row_index", "table_index", "amount"]) delete value[key]
+		for (const key of ["name", "grn_item_name", "original_item_variant", "is_saved_actual_dia", "row_index", "table_index", "amount"]) delete value[key]
 		for (const key of ["qty", "secondary_qty", "freight_amount"]) value[key] = 0
 	}
 	changeActualDia(entry, context.attribute, dia)
@@ -33,6 +33,7 @@ export function addActualDia(group, row, context, dia) {
 	return entry
 }
 export function canRemoveActualDia(row) {
+	if (cells(row).length && cells(row).every((value) => value.grn_item_name && value.is_saved_actual_dia)) return true
 	return Boolean(row.is_added_actual_dia) && cells(row).every((value) => !Number(value.qty) && !Number(value.secondary_qty))
 }
 export function receivableBalance(group, row) {

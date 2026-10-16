@@ -175,6 +175,21 @@ class TestCuttingPlanFabricSubstitution(TestCase):
 		self.assertEqual(changed, 1)
 		self.assertEqual([row["required_weight"] for row in rows], [60, 40])
 
+	def test_knitting_receipts_without_terminal_conversions_do_not_substitute(self):
+		index = self.build_index([
+			conversion_row(0, WHITE_14, 30),
+			conversion_row(0, WHITE_145, 20),
+		])
+		self.assertNotIn(WHITE_14, index)
+		self.assertEqual(expand_cutting_rows([cloth_row()], index), ([cloth_row()], 0))
+
+	def test_ipd_without_fabric_steps_uses_stage_zero(self):
+		index = self.build_index([
+			conversion_row(0, WHITE_14, 30),
+			conversion_row(0, WHITE_145, 20),
+		], steps_by_ipd={"ZZ TEST Cloth IPD": []})
+		self.assertEqual(index, split_index())
+
 	def test_get_cloth1_comments_and_is_idempotent(self):
 		doc = CuttingPlanStub()
 		with generate_fixture(doc, split_index()) as substitutions:
@@ -268,7 +283,10 @@ class TestCuttingPlanFabricSubstitution(TestCase):
 			conversion_row(2, WHITE_145, 20),
 			conversion_row(0, other, 900, production_detail="ZZ TEST Other IPD", planned_item=other),
 			conversion_row(1, WHITE_14, 7, production_detail="ZZ TEST Other IPD", planned_item=other),
-		])
+		], steps_by_ipd={
+			"ZZ TEST Cloth IPD": [{"position": position} for position in range(3)],
+			"ZZ TEST Other IPD": [{"position": position} for position in range(2)],
+		})
 		self.assertEqual(index[other], {"actual": [{"item_variant": WHITE_14, "dia": "14", "received_qty": 7}]})
 		self.assertEqual(index[WHITE_14], {"actual": [{"item_variant": WHITE_145, "dia": "14.5", "received_qty": 20}]})
 
@@ -297,9 +315,13 @@ class TestCuttingPlanFabricSubstitution(TestCase):
 		self.assertEqual([row.required_weight for row in doc.cutting_plan_cloth_details], [60, 40])
 		self.assertEqual([row.weight for row in doc.cutting_plan_cloth_details], [0, 0])
 
-	def build_index(self, rows):
+	def build_index(self, rows, *, steps_by_ipd=None):
+		if steps_by_ipd is None:
+			steps_by_ipd = {"ZZ TEST Cloth IPD": [{"position": position} for position in range(3)]}
 		with (
 			patch.object(fabric_substitution.frappe, "get_all", return_value=rows) as get_all,
+			patch.object(fabric_substitution.frappe, "get_cached_doc", side_effect=lambda doctype, name: SimpleNamespace(name=name)),
+			patch.object(fabric_substitution, "get_fabric_steps", side_effect=lambda ipd: steps_by_ipd[ipd.name]),
 			patch.object(fabric_substitution.frappe, "get_system_settings", return_value="Banker's Rounding"),
 			patch.object(fabric_substitution, "_default_received_type", return_value="Accepted"),
 			patch.object(fabric_substitution, "get_dia_attribute", return_value="Dia"),

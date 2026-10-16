@@ -5,6 +5,15 @@ import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepare
 const context = { enabled: true, attribute: 'Dia', dia_options: ['14', '14.5', '19'] }
 const source = { name: 'Greige', item_variant: 'Greige-14', attributes: { Colour: 'Greige', Dia: '14' }, row_index: 1, table_index: 0, dimensions: { received_type: 'Accepted', lot: 'LOT-1' }, values: { default: { name: 'GRNI-1', item_variant: 'Greige-14', qty: 30, rate: 10, amount: 300, secondary_qty: 1, freight_amount: 2, pending_quantity: 50, ref_doctype: 'YRP Work Order Receivables', ref_docname: 'REC-1' } } }
 const group = { items: [source] }
+source.values.default.grn_item_name = 'GRNI-1'
+source.values.default.original_item_variant = 'Greige-14'
+source.values.default.is_saved_actual_dia = false
+const savedActual = structuredClone(source)
+savedActual.values.default.is_saved_actual_dia = true
+changeActualDia(savedActual, 'Dia', '14.5')
+assert.equal(savedActual.values.default.grn_item_name, 'GRNI-1', 'editing keeps the saved child identity')
+assert.equal(savedActual.values.default.original_item_variant, 'Greige-14', 'editing keeps the original variant')
+assert.equal(canRemoveActualDia(savedActual), true, 'saved actual Dia can be removed with its quantity')
 assert.deepEqual(unusedDias(group, source, context), ['14.5', '19'])
 assert.equal(receivableBalance(group, source), 20)
 const added = addActualDia(group, source, context, '14.5')
@@ -24,6 +33,7 @@ added.values.default.qty = 20
 assert.equal(rowValue(added), 200, 'new Dia row computes value from its quantity and inherited rate')
 added.values.default.qty = 0
 assert.equal(added.values.default.name, undefined)
+for (const field of ['grn_item_name', 'original_item_variant', 'is_saved_actual_dia']) assert.equal(added.values.default[field], undefined, 'new rows must not replace their source')
 assert.equal(canRemoveActualDia(source), false)
 assert.equal(canRemoveActualDia(added), true)
 assert.equal(addActualDia(group, source, context, '14.5'), null)

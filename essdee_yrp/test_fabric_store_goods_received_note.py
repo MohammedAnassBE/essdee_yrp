@@ -632,7 +632,9 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		self.actual_dia_context.return_value = {"enabled": True, "attribute": "Dia", "dia_options": ["14", "14.5"]}
 		source = dict(doc["items"][0], item_variant="Greige-14")
 		doc["items"] = [frappe._dict(source)]
-		browser_rows = [dict(source, quantity=10), dict(source, item_variant="Greige-14.5", quantity=20, rate=999)]
+		added_row = dict(source, item_variant="Greige-14.5", quantity=20, rate=999)
+		added_row.pop("name", None)
+		browser_rows = [dict(source, quantity=10), added_row]
 		with (
 			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
 			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
@@ -1320,7 +1322,7 @@ class TestActualDiaWorkspaceMerge(TestCase):
 			self.assertFalse(_actual_dia_context(frappe._dict(document, against="Purchase Order"))["enabled"])
 
 	def test_added_variant_with_colour_change_is_rejected(self):
-		from essdee_yrp.fabric_store.documents.goods_received_note import _actual_dia_additions
+		from essdee_yrp.fabric_store.documents.goods_received_note import _merge_actual_dia_rows
 
 		source = {"item_variant": "Greige-14", "ref_doctype": "YRP Work Order Receivables", "ref_docname": "REC-1", "quantity": 10}
 		browser = {**source, "item_variant": "Blue-14.5", "quantity": 20}
@@ -1331,4 +1333,4 @@ class TestActualDiaWorkspaceMerge(TestCase):
 			patch("essdee_yrp.fabric_grn._variant_attrs", side_effect=[{"Colour": "Greige", "Dia": "14"}, {"Colour": "Blue", "Dia": "14.5"}]),
 			self.assertRaisesRegex(frappe.ValidationError, "only Dia may differ"),
 		):
-			_actual_dia_additions([source], [browser], {"enabled": True})
+			_merge_actual_dia_rows([source], [browser])

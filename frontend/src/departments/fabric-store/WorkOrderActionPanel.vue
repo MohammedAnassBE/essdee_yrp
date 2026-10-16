@@ -26,16 +26,45 @@
 			</template>
 
 			<template v-else-if="mode === 'calculate_fabric'">
-				<div v-if="fabricContext.source_process_options?.length" class="work-order-action-panel__field"><label for="wo-source-process">Fill from source process</label><Select id="wo-source-process" v-model="draft.source_process" :options="fabricContext.source_process_options" option-label="label" option-value="value" show-clear fluid @change="refreshFabricSource" /></div>
+				<div v-if="fabricContext.source_process_options?.length" class="work-order-action-panel__field"><label for="wo-source-process">Fill from source process</label><Select id="wo-source-process" v-model="draft.source_process" :options="fabricContext.source_process_options" option-label="label" option-value="value" fluid @change="refreshFabricSource" /></div>
+				<Message v-if="fabricUnavailable" severity="warn" :closable="false"><strong>No predecessor stock available</strong><br />{{ fabricUnavailable }}</Message>
 				<Message v-for="warning in fabricContext.warnings || []" :key="warning" severity="warn" :closable="false">{{ warning }}</Message>
+				<Message v-for="warning in fabricQuantityWarnings" :key="warning" severity="warn" :closable="false">{{ warning }}</Message>
 				<div v-for="row in fabricRows" :key="row.fabric_row" class="work-order-fabric-row">
 					<header><div><strong>{{ row.cloth_item || row.treated_item }}</strong><span>{{ row.kind }}</span></div><span>{{ row.production_detail }}</span></header>
-					<div v-if="row.has_colour && !row.multi_colour && !row.reference_routed" class="work-order-action-panel__field"><label>Cloth colour</label><Select v-model="row.colour" :aria-label="`Cloth colour for ${row.cloth_item || row.treated_item || 'fabric row'}`" :options="row.colour_options || []" show-clear fluid /></div>
-					<div v-if="row.kind === 'knitting' && !row.reference_routed && (row.yarns || []).length <= 1" class="work-order-action-panel__field"><label>Yarn deliverable quantity</label><InputNumber v-model="row.yarn_qty" :aria-label="`Yarn deliverable quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`" :min="0" :max-fraction-digits="3" fluid /></div>
-					<div v-else-if="row.kind === 'knitting' && !row.reference_routed && row.yarns?.length" class="work-order-fabric-row__yarns"><span>Calculated yarn deliverables</span><strong v-for="yarn in row.yarns" :key="yarn.yarn_item">{{ yarn.yarn_item }} · {{ number(yarn.ratio) }}%</strong></div>
-					<div class="work-order-fabric-row__quantities">
-						<label v-for="entry in row.entries" :key="entry.input_key"><span>{{ entry.display_label || entry.label || attributeText(entry.out_attrs) || entry.key }}</span><InputNumber v-model="entry.qty" :aria-label="`${entry.display_label || entry.label || attributeText(entry.out_attrs) || entry.key} quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`" :min="0" :max-fraction-digits="3" fluid /></label>
+					<div v-if="row.needs_colour" class="work-order-action-panel__field"><label>Cloth colour</label><Select v-model="row.colour" :aria-label="`Cloth colour for ${row.cloth_item || row.treated_item || 'fabric row'}`" :options="row.colour_options || []" show-clear fluid /><small v-if="fabricColourError(row)" class="work-order-fabric-row__error" role="alert">{{ fabricColourError(row) }}</small></div>
+					<p v-if="row.manual_io" class="work-order-action-panel__copy">Enter the yarn quantities to deliver and the cloth quantity expected back for each knitting route.</p>
+					<div class="work-order-fabric-row__routes">
+						<section v-for="entry in row.entries" :key="entry.input_key" class="work-order-fabric-row__route">
+							<strong>{{ fabricEntryLabel(entry) }}</strong>
+							<small v-if="fabricPlanningHint(row, entry)" class="work-order-fabric-row__hint">{{ fabricPlanningHint(row, entry) }}</small>
+							<div class="work-order-fabric-row__quantities">
+								<label>
+									<span>{{ row.kind === 'knitting' ? 'Cloth quantity expected back' : 'Quantity to receive' }}</span>
+									<InputNumber
+										:model-value="entry.qty"
+										:aria-label="`${fabricEntryLabel(entry)} quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`"
+										:aria-describedby="fabricEntryError(row, entry) ? `fabric-error-${entry.input_key}` : undefined"
+										:invalid="Boolean(fabricEntryError(row, entry))"
+										:min="0"
+										:max-fraction-digits="2"
+										fluid
+										@update:model-value="setFabricClothQuantity(row, entry, $event)"
+									/>
+								</label>
+								<template v-if="row.manual_io">
+									<label v-for="input in entry.inputs" :key="input.key">
+										<span>{{ input.item }}</span>
+										<InputNumber v-model="input.qty" :aria-label="`${input.item} for ${fabricEntryLabel(entry)}`" :min="0" :max-fraction-digits="2" fluid />
+										<small>{{ attributeText(input.attrs) }} · {{ input.uom || 'Kg' }}</small>
+									</label>
+								</template>
+							</div>
+							<small v-if="fabricEntryError(row, entry)" :id="`fabric-error-${entry.input_key}`" class="work-order-fabric-row__error" role="alert">{{ fabricEntryError(row, entry) }}</small>
+						</section>
 					</div>
+					<div v-if="row.kind === 'knitting' && !row.manual_io && !row.reference_routed && (row.yarns || []).length <= 1" class="work-order-action-panel__field"><label>Yarn deliverable quantity</label><InputNumber v-model="row.yarn_qty" :aria-label="`Yarn deliverable quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`" :min="0" :max-fraction-digits="2" fluid /></div>
+					<div v-if="row.kind === 'knitting'" class="work-order-fabric-row__yarns" role="status" aria-label="Yarn totals"><span>Yarn totals</span><strong v-for="yarn in fabricYarnTotals(row).items" :key="yarn.item">{{ yarn.item }} · {{ number(yarn.qty) }} Kg</strong><strong>Total · {{ number(fabricYarnTotals(row).total) }} Kg</strong></div>
 				</div>
 			</template>
 
@@ -134,6 +163,11 @@ import { uploadFile } from "../../api/frappe.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import {
+	buildFabricPayload, canCalculateFabric, fabricColourError, fabricEntryError, fabricEntryLabel,
+	fabricPlanningHint, fabricSourceProcess, fabricUnavailableMessage, fabricWarnings, fabricYarnTotals,
+	hydrateFabricRows, setFabricClothQuantity,
+} from "./fabricCalculate.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -155,6 +189,8 @@ const garmentPrimaryValues = ref([])
 const garmentDisplayAttributes = ref([])
 const fabricRows = ref([])
 const fabricContext = ref({})
+const fabricUnavailable = computed(() => fabricUnavailableMessage(fabricContext.value))
+const fabricQuantityWarnings = computed(() => fabricWarnings(fabricRows.value))
 const closeContext = ref({})
 const reworkRows = ref([])
 const recutGroups = ref([])
@@ -187,7 +223,7 @@ const actionLabels = {
 const submitLabel = computed(() => props.mode === "create_rework" ? "Create Work Order" : props.mode.startsWith("calculate_") ? "Calculate" : actionLabels[props.mode] || "Continue")
 const canSubmit = computed(() => {
 	if (props.mode === "calculate_garment") return garmentMatrixRows.value.some((row) => row.selected && garmentRowTotal(row) > 0)
-	if (props.mode === "calculate_fabric") return fabricRows.value.some((row) => row.entries.some((entry) => Number(entry.qty || 0) > 0))
+	if (props.mode === "calculate_fabric") return canCalculateFabric(fabricContext.value, fabricRows.value)
 	if (isCloseMode.value) return Boolean(String(draft.close_reason || "").trim()) && (draft.close_reason !== "Others" || Boolean(String(draft.close_other_reason || "").trim())) && (!draft.with_debit || Boolean(String(draft.debit_no || "").trim()) && Number(draft.debit_value || 0) > 0 && Boolean(String(draft.debit_reason || "").trim()))
 	if (props.mode === "create_debit") return !uploading.value && Boolean(String(draft.debit_no || "").trim()) && Number(draft.debit_value || 0) > 0 && Boolean(String(draft.reason || "").trim())
 	if (props.mode === "create_rework") return reworkRows.value.some((row) => Number(row.qty || 0) > 0) && (draft.supplier_type !== "Different Supplier" || Boolean(draft.supplier))
@@ -207,25 +243,9 @@ function resetDraft() {
 	garmentDisplayAttributes.value = clone(garment.display_attributes || [])
 	garmentMatrixRows.value = hydrateGarmentMatrix(garment)
 	fabricContext.value = clone(props.editor.calculation_contexts?.fabric || {})
-	hydrateFabricRows(fabricContext.value)
+	draft.source_process = fabricSourceProcess(fabricContext.value)
+	fabricRows.value = hydrateFabricRows(fabricContext.value)
 	closeContext.value = {}; reworkRows.value = []; recutGroups.value = []; recutCanSubmit.value = false; changeItemContext.value = {}; changeItemPreview.value = {}; error.value = ""
-}
-function hydrateFabricRows(context) {
-	fabricRows.value = (context.rows || []).map((sourceRow) => {
-		const row = { ...sourceRow }
-		const colours = row.kind === "knitting" && row.has_colour && !row.reference_routed ? row.colour_options || [] : []
-		row.multi_colour = colours.length > 0
-		const entries = row.multi_colour
-			? colours.flatMap((colour) => (row.qty_rows || []).map((entry, index) => ({
-				...entry,
-				colour,
-				input_key: `${entry.key}:${colour}:${index}`,
-				display_label: `${colour} · ${entry.label || attributeText(entry.out_attrs) || entry.key}`,
-				qty: Number(colour === row.greige_colour ? entry.prefill ?? entry.qty ?? 0 : 0),
-			})))
-			: (row.qty_rows || []).map((entry, index) => ({ ...entry, input_key: `${entry.key}:${entry.knit_colour || index}`, qty: Number(entry.prefill ?? entry.qty ?? 0) }))
-		return { ...row, colour: row.greige_colour || "", yarn_qty: null, entries }
-	})
 }
 async function attachDebitDocument(event) {
 	const file = event.target.files?.[0]
@@ -238,11 +258,16 @@ async function attachDebitDocument(event) {
 	finally { uploading.value = false; event.target.value = "" }
 }
 async function refreshFabricSource() {
+	const previousSourceProcess = fabricSourceProcess(fabricContext.value)
 	loading.value = true; error.value = ""
 	try {
 		fabricContext.value = await getWorkOrderFabricCalculationContext(props.workOrder.name, draft.source_process) || {}
-		hydrateFabricRows(fabricContext.value)
-	} catch (reason) { error.value = reason?.message || "Unable to fill quantities from the selected source process." }
+		draft.source_process = fabricSourceProcess(fabricContext.value)
+		fabricRows.value = hydrateFabricRows(fabricContext.value)
+	} catch (reason) {
+		draft.source_process = previousSourceProcess
+		error.value = reason?.message || "Unable to fill quantities from the selected source process."
+	}
 	finally { loading.value = false }
 }
 async function initialise() {
@@ -268,7 +293,7 @@ async function initialise() {
 }
 function buildPayload() {
 	if (props.mode === "calculate_garment") return { rows: garmentMatrixRows.value.filter((row) => row.selected).flatMap((row) => garmentPrimaryValues.value.map((value) => row.values?.[value]).filter((cell) => cell?.source_row && Number(cell.qty || 0) > 0).map((cell) => ({ source_row: cell.source_row, qty: Number(cell.qty) }))) }
-	if (props.mode === "calculate_fabric") return { source_process: draft.source_process || null, rows: fabricRows.value.map((row) => ({ fabric_row: row.fabric_row, colour: row.multi_colour ? null : row.colour || null, yarn_qty: row.yarn_qty || null, entries: row.entries.filter((entry) => Number(entry.qty || 0) > 0).map((entry) => ({ key: entry.key, out_attrs: entry.out_attrs, colour: entry.colour || entry.knit_colour || null, qty: Number(entry.qty) })) })).filter((row) => row.entries.length) }
+	if (props.mode === "calculate_fabric") return buildFabricPayload(fabricContext.value, fabricRows.value)
 	if (props.mode === "create_rework") return { supplier_type: draft.supplier_type, supplier: draft.supplier, rows: reworkRows.value.filter((row) => Number(row.qty || 0) > 0).map((row) => ({ source_key: row.source_key, qty: Number(row.qty) })) }
 	if (props.mode === "create_recut") return { item_details: clone(recutGroups.value), submit: Boolean(draft.submit_recut && recutCanSubmit.value) }
 	if (props.mode === "change_item") return { selected: [...draft.selected] }
@@ -287,6 +312,7 @@ async function approveDebit(debit) {
 	finally { acting.value = "" }
 }
 async function submit() {
+	if (!canSubmit.value || busy.value) return
 	acting.value = props.mode; error.value = ""
 	try {
 		const result = await executeWorkOrderCommand(props.workOrder.name, props.mode, buildPayload(), props.workOrder.modified)
@@ -345,6 +371,10 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-fabric-row > header div { display: grid; gap: 2px; }
 .work-order-fabric-row > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-fabric-row__quantities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3); }
+.work-order-fabric-row__routes { display: grid; gap: var(--erp-space-3); }
+.work-order-fabric-row__route { display: grid; gap: var(--erp-space-2); padding: var(--erp-space-3); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
+.work-order-fabric-row__hint, .work-order-fabric-row__quantities small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.work-order-fabric-row__error { color: var(--erp-danger); }
 .work-order-fabric-row__yarns { display: flex; gap: 8px 14px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); flex-wrap: wrap; }
 .work-order-action-panel__existing { display: grid; gap: 6px; padding: var(--erp-space-3); border-left: 3px solid var(--erp-border-strong); background: var(--erp-surface-soft); }
 .work-order-action-panel__existing h3 { margin: 0 0 4px; font-size: var(--erp-font-size-section); }

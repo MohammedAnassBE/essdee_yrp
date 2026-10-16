@@ -131,10 +131,10 @@ function diaColumn(dia) {
 }
 
 const CARRY_COLUMNS = {
-	Dia: (dia) => (dia?.length ? diaColumn(dia) : { type: "text", width: 110, field: "dia" }),
-	Weight: () => ({ label: "Weight (kg)", type: "number", precision: 4, min: 0, field: "weight" }),
-	"Required GSM": () => ({ type: "number", precision: 0, min: 0 }),
-	Cloth: (_dia, cloths) => ({ type: "select", options: valueOptions(cloths), field: "cloth" }),
+	Dia: (dia) => ({ ...(dia?.length ? diaColumn(dia) : { type: "text", width: 110, field: "dia" }), fill: true }),
+	Weight: () => ({ label: "Weight (kg)", type: "number", precision: 4, min: 0, field: "weight", fill: true }),
+	"Required GSM": () => ({ type: "number", precision: 0, min: 0, fill: true }),
+	Cloth: (_dia, cloths) => ({ type: "select", options: valueOptions(cloths), field: "cloth", fill: true }),
 }
 
 export function itemsGrid(value, carry, { diaOptions = [], clothOptions = [], attributeColumns = false } = {}) {
@@ -176,13 +176,20 @@ export function stitchingAccessoryGrid(value, { colourOptions = [], clothOptions
 	const items = value?.items || []
 	const keys = uniqueKeys(items.map((row) => stitchingAccessoryKey(row, setAttribute)))
 	return {
-		rowHeaderLabel: ["Accessory", setAttribute, "Major colour"].filter(Boolean).join(" · "),
-		rows: items.map((row, index) => ({ key: keys[index], label: [row.accessory, setAttribute ? row[setAttribute] : "", row.major_colour].filter((part) => !isBlank(part)).join(" · ") })),
+		rowHeaderLabel: "Accessory",
+		rows: items.map((row, index) => ({ key: keys[index], label: row.accessory })),
 		columns: [
-			{ key: "accessory_colour", label: "Accessory colour", type: "value", options: valueOptions(colourOptions), field: "colour" },
-			{ key: "cloth_type", label: "Cloth", type: "select", options: valueOptions(clothOptions), field: "cloth" },
+			...(setAttribute ? [{ key: "set_part", label: setAttribute, type: "text", readonly: true }] : []),
+			{ key: "major_colour", label: "Major colour", type: "text", readonly: true },
+			{ key: "accessory_colour", label: "Accessory colour", type: "value", options: valueOptions(colourOptions), field: "colour", fill: true },
+			{ key: "cloth_type", label: "Cloth", type: "select", options: valueOptions(clothOptions), field: "cloth", fill: true },
 		],
-		model: Object.fromEntries(items.map((row, index) => [keys[index], { accessory_colour: row.accessory_colour ?? null, cloth_type: row.cloth_type ?? null }])),
+		model: Object.fromEntries(items.map((row, index) => [keys[index], {
+			...(setAttribute ? { set_part: row[setAttribute] ?? null } : {}),
+			major_colour: row.major_colour ?? null,
+			accessory_colour: row.accessory_colour ?? null,
+			cloth_type: row.cloth_type ?? null,
+		}])),
 	}
 }
 
@@ -197,6 +204,42 @@ export function stitchingAccessoryFromModel(value, model) {
 			return changed.length ? { ...row, ...Object.fromEntries(changed.map((field) => [field, cells[field]])) } : row
 		}),
 	}
+}
+
+function missingRowErrors(grid, row, serverErrors, isMissing) {
+	const errors = {}
+	for (const column of grid.columns.filter((column) => !column.readonly)) {
+		const value = grid.model[row.key]?.[column.key]
+		const invalid = value == null || String(value).trim() === "" || isMissing(value, column, row)
+		if (!invalid) continue
+		const message = serverErrors[row.key]?.[column.key]
+		const required = typeof invalid === "string" ? invalid : `${column.label} is required`
+		errors[column.key] = message && message !== "Fill all the combinations" ? message : required
+	}
+	return errors
+}
+
+function missingRowsSummary(grid, errors) {
+	const rows = grid.rows.filter((row) => errors[row.key])
+	if (!rows.length) return ""
+	const details = rows.slice(0, 4).map((row) => {
+		const attributes = grid.columns.filter((column) => column.readonly).map((column) => grid.model[row.key]?.[column.key])
+		const label = [row.label, ...attributes].filter((value) => value != null && String(value).trim() !== "").join(" · ")
+		const columns = grid.columns.filter((column) => errors[row.key][column.key]).map((column) => column.label)
+		return `${label} (${columns.join(", ")})`
+	})
+	if (rows.length > 4) details.push(`+${rows.length - 4} more`)
+	return `${rows.length} ${rows.length === 1 ? "row has" : "rows have"} empty or invalid cells: ${details.join("; ")}`
+}
+
+export function missingCellErrors(grid, serverErrors, isMissing = () => false) {
+	if (!Object.keys(serverErrors || {}).length) return { errors: serverErrors, summary: "" }
+	const errors = {}
+	for (const row of grid.rows.filter((row) => !row.readonly)) {
+		const cells = missingRowErrors(grid, row, serverErrors, isMissing)
+		if (Object.keys(cells).length) errors[row.key] = cells
+	}
+	return { errors, summary: missingRowsSummary(grid, errors) }
 }
 
 function assortmentRowKey(box, row, attributes) {
@@ -246,8 +289,8 @@ export function panelGroupGrid(matrix, panel, { diaOptions = [] } = {}) {
 		rowHeaderLabel: matrix?.attributes?.primary || "",
 		rows: (panel?.rows || []).map((row) => ({ key: String(row.primary_value), label: String(row.primary_value) })),
 		columns: packings.flatMap((packing) => [
-			{ key: panelColumn(packing, "dia"), label: `${packing} Dia`, ...diaColumn(diaOptions) },
-			{ key: panelColumn(packing, "weight"), label: `${packing} kg`, type: "number", precision: 4, min: 0.0001, field: "weight" },
+			{ key: panelColumn(packing, "dia"), label: `${packing} Dia`, ...diaColumn(diaOptions), fill: true },
+			{ key: panelColumn(packing, "weight"), label: `${packing} kg`, type: "number", precision: 4, min: 0.0001, field: "weight", fill: true },
 		]),
 		model: Object.fromEntries((panel?.rows || []).map((row) => [String(row.primary_value), Object.fromEntries(packings.flatMap((packing) => [
 			[panelColumn(packing, "dia"), row.values?.[packing]?.dia ?? null],
@@ -379,7 +422,7 @@ export function panelClothGrid(matrix, panel) {
 	return {
 		rowHeaderLabel: others.join(" / ") || "Mapping",
 		rows: (panel?.rows || []).map((row) => ({ key: clothRowKey(matrix, row), label: others.map((attribute) => row.attribute_values?.[attribute] || "—").join(" / ") || "Cloth" })),
-		columns: (panel?.packing_values || []).map((packing) => ({ key: packing, label: packing === SINGLE_CLOTH_KEY ? "Cloth" : packing, type: "select", options: valueOptions(matrix?.cloth_options), field: "cloth" })),
+		columns: (panel?.packing_values || []).map((packing) => ({ key: packing, label: packing === SINGLE_CLOTH_KEY ? "Cloth" : packing, type: "select", options: valueOptions(matrix?.cloth_options), field: "cloth", fill: true })),
 		model: Object.fromEntries((panel?.rows || []).map((row) => [clothRowKey(matrix, row), Object.fromEntries((panel.packing_values || []).map((packing) => [packing, row.values?.[packing]?.cloth ?? null]))])),
 	}
 }

@@ -8,6 +8,7 @@ import * as garmentGrids from '../frontend/src/departments/merch/ipd/sections/ga
 import * as packing from '../frontend/src/departments/merch/ipd/sections/packingSection.js'
 import * as documentValues from '../frontend/src/utils/documentValues.js'
 import * as focus from '../frontend/src/departments/merch/ipd/ipdFocus.js'
+import * as bomFetch from '../frontend/src/departments/merch/ipd/ipdBomFetch.js'
 import * as tabs from '../frontend/src/departments/merch/ipd/ipdTabs.js'
 import { useSectionFocus } from '../frontend/src/departments/merch/ipd/sections/sectionFocus.js'
 
@@ -205,7 +206,7 @@ try {
 		'vue-router': { useRoute: () => ({ hash: '#packing_tab' }), useRouter: () => ({ replace() {} }) },
 		'../../../router/listDocumentNavigation.js': { preserveListNavigationState() {} },
 		'../merchViews.js': { MERCH_ROUTES: {}, ipdEditRoute() {}, ipdRoute() {} },
-		'./ipdEditor.js': editorHelpers, './ipdFocus.js': focus, './ipdTabs.js': tabs,
+		'./ipdEditor.js': editorHelpers, './ipdFocus.js': focus, './ipdTabs.js': tabs, './ipdBomFetch.js': bomFetch,
 		'../../../api/merch.js': {
 			getIpdEditor: async () => payload(), checkIpd: async () => ({ problems: [] }),
 			saveIpd: async patch => { saved.push(structuredClone(patch)); stored = { ...stored, ...patch }; return payload() },

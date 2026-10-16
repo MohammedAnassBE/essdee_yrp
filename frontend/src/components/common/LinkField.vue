@@ -78,6 +78,7 @@ const props = defineProps({
 	disabled: { type: Boolean, default: false },
 	invalid: { type: Boolean, default: false },
 	showValidationMessage: { type: Boolean, default: true },
+	cellEditor: { type: Boolean, default: false },
 	dropdown: { type: Boolean, default: true },
 	delay: { type: Number, default: 300 },
 	pageLength: { type: Number, default: 20 },
@@ -98,7 +99,7 @@ const labelParts = computed(() => {
 	return match ? { text: match[1], required: true } : { text: props.label, required: props.required }
 })
 
-const emit = defineEmits(["update:modelValue", "select", "clear", "validation"])
+const emit = defineEmits(["update:modelValue", "select", "clear", "validation", "finish", "cancel"])
 
 const input = ref(null)
 const componentId = useId()
@@ -212,10 +213,21 @@ function updateInput(value) {
 }
 
 function onKeydown(event) {
-	if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229
-		&& event.target === input.value?.$el?.querySelector("input")
-		&& !(input.value?.overlayVisible && suggestions.value.length && suggestionSequence === requestSequence && !searching.value)) rejectUnselected()
+	if (event.isComposing || event.keyCode === 229) return
+	if (event.target !== input.value?.$el?.querySelector("input")) return
+	if (handleCellKey(event)) return
+	if (event.key === "Enter" && !canPickSuggestion()) rejectUnselected()
 	handleAutocompleteKey(event, input.value, restoreCommittedValue, searching.value || suggestionSequence !== requestSequence)
+}
+function canPickSuggestion() {
+	return input.value?.overlayVisible && suggestions.value.length && suggestionSequence === requestSequence && !searching.value
+}
+function handleCellKey(event) {
+	if (!props.cellEditor || !["Escape", "Tab"].includes(event.key)) return false
+	event.stopPropagation()
+	if (event.key === "Escape") { event.preventDefault(); emit("cancel") }
+	else emit("finish", event)
+	return true
 }
 async function focusFirstOption() {
 	await nextTick()
@@ -264,7 +276,7 @@ function rejectUnselected() {
 	if (!query || query === modelLabel.value) return
 	const message = searchError.value || (hasIncompleteFilters.value ? props.dependencyMessage
 		: !searching.value && !suggestions.value.length
-			? `No ${props.doctype} matches "${query}". Pick one from the list.`
+			? `No ${props.doctype || "option"} matches "${query}". Pick one from the list.`
 			: `Pick a value from the list for "${query}".`)
 	setValidation(message, query)
 }
@@ -272,11 +284,15 @@ function rejectUnselected() {
 function exactOption() {
 	if (typeof inputValue.value !== "string" || suggestionSequence !== requestSequence) return null
 	const query = inputValue.value.trim()
-	return suggestions.value.find((option) => option.name === query || option.label === query) || null
+	return suggestions.value.find((option) => String(option.name) === query || String(option.label) === query) || null
 }
 
-function finishEdit() {
+function finishEdit({ validate = false } = {}) {
 	const option = typeof inputValue.value === "string" ? exactOption() : blurredOption
+	if (validate && !option) {
+		rejectUnselected()
+		if (validationError.value) return undefined
+	}
 	blurredOption = null
 	setValidation()
 	restoreCommittedValue()
@@ -309,7 +325,18 @@ function focus() {
 	input.value?.$el?.querySelector("input")?.focus()
 }
 
-defineExpose({ focus, finishEdit })
+async function open(query = "") {
+	if (props.disabled) return
+	blurredOption = null
+	setValidation()
+	focus()
+	if (query) inputValue.value = query
+	else input.value?.$el?.querySelector("input")?.select?.()
+	await complete({ query })
+	await focusFirstOption()
+}
+
+defineExpose({ focus, open, finishEdit })
 </script>
 
 <style scoped>

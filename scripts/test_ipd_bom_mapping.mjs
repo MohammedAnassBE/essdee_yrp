@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 import {
 	disableRows, enableRows, fillColumn, freshGrid, gridFromValues, mappingCardLines, mappingColumns, mappingOutput, setRowIncluded,
 } from "../frontend/src/departments/merch/ipd/sections/bomMapping.js"
+import { BOM_ITEM_FETCH, applyBomFetch, bomFetchPlan, withoutBomFetch } from "../frontend/src/departments/merch/ipd/ipdBomFetch.js"
 import { Vue, createTestRenderer, findNodes, loadComponent } from "./helpers/vue_renderer.mjs"
 import * as garmentGrids from "../frontend/src/departments/merch/ipd/sections/garmentGrids.js"
 import * as attributeValues from "../frontend/src/departments/merch/ipd/sections/attributeValues.js"
@@ -384,5 +385,42 @@ for (const name of ["IpdAccessoriesSection", "IpdProcessesSection", "IpdStitchin
 	assert.ok(toolbars.length)
 	assert.ok(toolbars.every((toolbar) => !toolbar.includes("paste") && !toolbar.includes("clear")), name)
 	if (["IpdProcessesSection", "IpdStitchingSection", "IpdSetItemSection", "IpdPackingSection"].includes(name)) assert.ok(toolbars.every((toolbar) => toolbar === "[]"), name)
+}
+const itemBomJson = JSON.parse(readFileSync(fileURLToPath(new URL("../../yrp/yrp/yrp/doctype/yrp_item_bom/yrp_item_bom.json", import.meta.url)), "utf8"))
+const fetchFrom = Object.fromEntries(itemBomJson.fields.filter((field) => field.fetch_from).map((field) => [field.fieldname, field.fetch_from.replace(/^item\./, "")]))
+assert.deepEqual(BOM_ITEM_FETCH, fetchFrom, "client BOM fetch map must mirror YRP Item BOM fetch_from")
+{
+	const saved = [{ name: "b1", item: "Button", uom: "Nos" }, { name: "b2", item: "Thread", uom: "Cone" }]
+	const unchanged = bomFetchPlan(saved, saved.map((row) => ({ ...row, qty_of_product: 2 })))
+	assert.deepEqual(unchanged.items, [])
+	assert.equal(unchanged.rows[0].uom, "Nos")
+	const picked = bomFetchPlan(saved, [{ ...saved[0], item: "Label" }, saved[1], { item: "Zip", uom: null }, { item: null, uom: null }])
+	assert.deepEqual(picked.items, ["Label", "Zip"])
+	assert.equal(picked.rows[0].uom, null, "a changed Item clears the stale UOM until the fetch lands")
+	assert.equal(picked.rows[1], saved[1])
+	const cleared = bomFetchPlan(saved, [{ ...saved[0], item: null }])
+	assert.deepEqual(cleared.items, [])
+	assert.equal(cleared.rows[0].uom, null)
+	const filled = applyBomFetch(picked.rows, { Label: { name: "Label", stock_uom: "Nos" }, Zip: { name: "Zip", stock_uom: "Meter" } })
+	assert.deepEqual(filled.map((row) => row.uom), ["Nos", "Cone", "Meter", null])
+	assert.equal(filled[1], picked.rows[1])
+	assert.equal(applyBomFetch(filled, { Label: { name: "Label", stock_uom: "Nos" } }), filled, "no-op fetch keeps the same array")
+	assert.deepEqual(withoutBomFetch({ item: "X", item_bom: filled.slice(0, 1) }), { item: "X", item_bom: [{ name: "b1", item: "Label" }] }, "server owns fetched fields")
+	const noBom = { item: "X" }
+	assert.equal(withoutBomFetch(noBom), noBom)
+}
+for (const named of [false, true]) {
+	const previous = [{ item: "A", uom: "Nos" }, { item: "B", uom: "Kg" }]
+	if (named) previous.forEach((row, index) => { row.name = `bom-${index}` })
+	const removed = bomFetchPlan(previous, [previous[1]])
+	assert.equal(removed.rows[0], previous[1], "deleting the first row preserves the surviving row")
+	assert.equal(removed.rows[0].uom, "Kg")
+	assert.deepEqual(removed.items, [])
+	const edited = bomFetchPlan(previous, [previous[0], { ...previous[1], item: "C" }])
+	assert.equal(edited.rows[1].uom, null, "an in-place Item edit still clears the stale UOM")
+	assert.deepEqual(edited.items, ["C"])
+	const added = bomFetchPlan(previous, [{ item: "C", uom: null }, ...previous])
+	assert.deepEqual(added.rows.map((row) => row.uom), [null, "Nos", "Kg"])
+	assert.deepEqual(added.items, ["C"], "new rows with blank fetched fields still fetch")
 }
 console.log("ipd BOM mapping helper and dialog tests passed")

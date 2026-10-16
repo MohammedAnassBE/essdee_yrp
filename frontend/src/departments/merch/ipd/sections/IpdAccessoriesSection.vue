@@ -58,17 +58,17 @@
 				</div>
 				<IpdChoiceChips v-if="accessoryNames.rows.length" label="Accessory attributes" :choices="accessoryChoices" :selected="draft.accessory_attributes || []" :readonly="editor.readonly" @toggle="toggleAccessoryAttribute" />
 				<IpdGridNotice grid-key="cloth_accessory" :empty="!clothAccessory.rows.length" section="accessories" field="cloth_accessory_json" />
+				<p v-if="clothAccessoryValidation.summary" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />{{ clothAccessoryValidation.summary }}</p>
 				<EntryGrid
 					v-if="clothAccessory.rows.length"
 					ref="clothAccessoryGrid" validation-field="cloth_accessory_json"
 					title="Accessory consumption"
-					unit-hint="Dia · weight kg"
 					:row-header-label="clothAccessory.rowHeaderLabel"
 					:rows="clothAccessory.rows"
 					:columns="clothAccessory.columns"
 					:model-value="clothAccessory.model"
 					:readonly="editor.readonly"
-					:errors="editor.gridErrors('cloth_accessory_json')"
+					:errors="clothAccessoryValidation.errors"
 					:toolbar="[]"
 					:fill-shortcuts="false"
 					@update:model-value="updateClothAccessory"
@@ -77,6 +77,7 @@
 			<template v-if="part === 'stitching'">
 				<p v-if="!stitchingAccessory.rows.length" class="erp-help-text">Accessory colours appear after accessory items are added.</p>
 				<IpdGridNotice grid-key="stiching_accessory" :empty="!stitchingAccessory.rows.length" section="accessories" field="stiching_accessory_json" />
+				<p v-if="stitchingAccessoryValidation.summary" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />{{ stitchingAccessoryValidation.summary }}</p>
 				<EntryGrid
 					v-if="stitchingAccessory.rows.length"
 					ref="stitchingAccessoryRef" validation-field="stiching_accessory_json"
@@ -86,7 +87,7 @@
 					:columns="stitchingAccessory.columns"
 					:model-value="stitchingAccessory.model"
 					:readonly="editor.readonly"
-					:errors="editor.gridErrors('stiching_accessory_json')"
+					:errors="stitchingAccessoryValidation.errors"
 					:toolbar="[]"
 					:fill-shortcuts="false"
 					@update:model-value="updateStitchingAccessory"
@@ -113,6 +114,7 @@ import {
 	choiceList,
 	itemsFromModel,
 	itemsGrid,
+	missingCellErrors,
 	removeTableRow,
 	stitchingAccessoryFromModel,
 	stitchingAccessoryGrid,
@@ -173,10 +175,14 @@ const accessoryNames = computed(() => {
 })
 const canAddAccessory = computed(() => Boolean(newAccessory.value) && !(newAccessory.value in (draft.value.accessory_clothtype_json || {})) && (!isSet.value || Boolean(newPart.value)))
 const accessoryChoices = computed(() => choiceList(editor.context?.cutting_attribute_choices || [], draft.value.accessory_attributes))
-const clothAccessory = computed(() => itemsGrid(draft.value.cloth_accessory_json, ACCESSORY_CARRY))
+const clothAccessory = computed(() => itemsGrid(draft.value.cloth_accessory_json, ACCESSORY_CARRY, { attributeColumns: true, diaOptions: editor.context?.cutting?.dia_values || [] }))
+const clothAccessoryValidation = computed(() => missingCellErrors(clothAccessory.value, editor.gridErrors("cloth_accessory_json")))
 const stitchingAccessory = computed(() => stitchingAccessoryGrid(draft.value.stiching_accessory_json, {
 	colourOptions: attributeValues(editor, draft.value.packing_attribute), clothOptions: clothNames(draft.value),
 }))
+const stitchingAccessoryValidation = computed(() => missingCellErrors(stitchingAccessory.value, editor.gridErrors("stiching_accessory_json"), (value, column) => (
+	column.key === "cloth_type" && !clothNames(draft.value).includes(value) ? "Choose a cloth from Cloth Details" : false
+)))
 
 useSectionFocus(editor, props.sectionKey, {
 	item_bom: () => bomGrid.value,

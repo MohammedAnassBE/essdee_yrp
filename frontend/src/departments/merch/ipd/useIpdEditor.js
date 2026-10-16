@@ -34,6 +34,7 @@ import {
 	stableStringify,
 } from "./ipdEditor.js"
 
+import { applyBomFetch, bomFetchPlan, getBomItemValues, withoutBomFetch } from "./ipdBomFetch.js"
 import { createFocusRegistry } from "./ipdFocus.js"
 import { problemTab, tabLabel } from "./ipdTabs.js"
 
@@ -86,7 +87,7 @@ export function useIpdEditor(initialName) {
 	const shellWorkspace = computed(() => payload.value ? { ...payload.value, record: { ...record.value, doctype: "YRP Item Production Detail" } } : {})
 
 	function isCurrent(sequence, current) { return !isUnmounted && sequence === current }
-	function patch() { return dirtyPatch(draft, cleanValues.value, { isNew: isNew.value }) }
+	function patch() { return withoutBomFetch(dirtyPatch(draft, cleanValues.value, { isNew: isNew.value })) }
 
 	function resetDraft(values) {
 		for (const key of Object.keys(draft)) delete draft[key]
@@ -143,11 +144,26 @@ export function useIpdEditor(initialName) {
 	}
 
 	function setValue(fieldname, value, { skipGrids = null } = {}) {
+		if (fieldname === "item_bom") value = planBomFetch(value)
 		draft[fieldname] = clone(value)
 		markDirty(fieldname)
 		const grids = gridsForChange([fieldname]).filter((grid) => !skipGrids?.has(grid))
 		if (grids.length) queueGrids(grids)
 		scheduleChecks()
+	}
+	function planBomFetch(rows) {
+		const plan = bomFetchPlan(draft.item_bom, rows)
+		if (plan.items.length) fetchBomItems(plan.items)
+		return plan.rows
+	}
+	async function fetchBomItems(items) {
+		try {
+			const itemValues = await getBomItemValues(items)
+			const rows = applyBomFetch(draft.item_bom, itemValues)
+			if (rows !== draft.item_bom) setValue("item_bom", rows)
+		} catch (reason) {
+			actionError.value = reason?.message || "Unable to read the BOM Item details."
+		}
 	}
 	function setValues(values) {
 		for (const [fieldname, value] of Object.entries(values || {})) setValue(fieldname, value)

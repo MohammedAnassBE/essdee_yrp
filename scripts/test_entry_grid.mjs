@@ -8,7 +8,9 @@ import {
 	columnTotals,
 	displayCell,
 	fillDown,
+	fillColumn,
 	fillRight,
+	isChoiceColumn,
 	moveCell,
 	normalizeRange,
 	parsePastedBlock,
@@ -16,8 +18,22 @@ import {
 	rangeMatrix,
 	rowTotal,
 	sameForAll,
+	searchOptions,
 	toTsv,
 } from "../frontend/src/components/common/entryGrid.js"
+
+const choices = ["115 Dia", "15.25 Dia", "15.5 Dia", "150 Dia", "15 Dia", "15"].map((name) => ({ name, label: name }))
+assert.deepEqual(searchOptions(choices, "15").map(({ name }) => name), ["15", "15 Dia", "150 Dia", "15.5 Dia", "15.25 Dia", "115 Dia"])
+assert.deepEqual(searchOptions(choices, "15 DIA").map(({ name }) => name), ["15 Dia", "115 Dia"])
+assert.deepEqual(searchOptions(choices, ""), choices)
+assert.deepEqual(searchOptions(choices, "missing"), [])
+assert.equal(searchOptions(Array.from({ length: 60 }, (_, name) => ({ name })), "").length, 60)
+const labeled = [{ name: "BL", label: "Blue" }, { name: "BK", label: "Black" }]
+assert.deepEqual(searchOptions(labeled, "BLUE"), [labeled[0]])
+assert.deepEqual(searchOptions(labeled, "bk"), [labeled[1]])
+for (const type of ["select", "value", "link"]) assert.equal(isChoiceColumn({ type }), true)
+for (const type of ["text", "number", "check", undefined]) assert.equal(isChoiceColumn({ type }), false)
+assert.equal(isChoiceColumn(null), false)
 
 assert.deepEqual(parsePastedBlock("1\t2\r\n3\t4\r\n"), [["1", "2"], ["3", "4"]])
 assert.deepEqual(parsePastedBlock("a\n"), [["a"]])
@@ -62,6 +78,22 @@ const columns = [
 ]
 const model = { S: { "Black|dia": "32 Dia", "Black|weight": 0.1 } }
 const frozen = structuredClone(model)
+
+const filled = fillColumn(model, rows, columns, 1, 0.25)
+assert.deepEqual(filled.changes, [
+	{ rowKey: "S", colKey: "Black|weight", value: 0.25 },
+	{ rowKey: "M", colKey: "Black|weight", value: 0.25 },
+])
+assert.equal(filled.skipped, 1)
+assert.equal(filled.model.S["Black|dia"], "32 Dia")
+assert.equal(filled.model.M["Black|weight"], 0.25)
+assert.equal(filled.model.L, undefined)
+assert.deepEqual(model, frozen)
+const locked = fillColumn(model, rows, columns.map((column) => ({ ...column, readonly: true })), 1, 1)
+assert.deepEqual(locked.changes, [])
+assert.equal(locked.skipped, rows.length)
+assert.deepEqual(locked.model, model)
+assert.deepEqual(fillColumn(model, rows, columns, 0, null).changes.map(({ value }) => value), [null, null])
 
 const pasted = applyBlock(model, rows, columns, { row: 1, col: 2 }, parsePastedBlock("30 Dia\t0.2\t9\nx\ty\n1\t2"))
 assert.deepEqual(model, frozen)

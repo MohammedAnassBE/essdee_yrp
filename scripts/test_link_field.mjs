@@ -48,6 +48,38 @@ const modules = {
 }
 const LinkField = loadComponent("frontend/src/components/common/LinkField.vue", modules)
 const flush = async () => { await nextTick(); await nextTick(); await nextTick() }
+{
+	const reference = Vue.ref(null)
+	const queries = []
+	const root = mountComponent(LinkField, { ref: reference, doctype: "Colour", modelValue: "Black", searchHandler: async query => {
+		queries.push(query)
+		return [{ name: "Blue", label: "Blue" }, { name: "Black", label: "Black" }]
+	} })
+	const control = controls.at(-1)
+	await reference.value.open("bl")
+	await flush()
+	assert.deepEqual(queries, ["bl"])
+	assert.equal(findNodes(root, node => node.type === "autocomplete")[0].props.value, "bl")
+	assert.equal(control.overlayVisible, true)
+	assert.equal(control.focusedOptionIndex, 0)
+	assert.equal(control.suggestions[0].name, "Blue")
+	let selected = false
+	control.$el.querySelector("input").select = () => { selected = true }
+	await reference.value.open()
+	assert.equal(queries.at(-1), "")
+	assert.equal(selected, true, "empty-query open selects the current input text")
+}
+for (const validate of [false, true]) {
+	const reference = Vue.ref(null)
+	const root = mountComponent(LinkField, { ref: reference, doctype: "Sequence", cellEditor: true,
+		searchHandler: async () => [10, 20].map((name) => ({ name, label: name })),
+	})
+	const control = findNodes(root, node => node.type === "autocomplete")[0]
+	control.props.onType("20")
+	control.props.onSearch("20")
+	await flush()
+	assert.equal(reference.value.finishEdit({ validate }), 20, "typed numeric choices retain their numeric name")
+}
 function mount(extra = {}) {
 	const changes = [], picks = [], clears = []
 	const props = reactive({ doctype: "YRP Process", modelValue: "", delay: 0, showOpenButton: false, ...extra,
@@ -304,7 +336,161 @@ formProps.resetVersion = 1
 await flush()
 assert.equal(input.props.value.name, "S-0005")
 
-const EntryGrid = loadComponent("frontend/src/components/common/EntryGrid.vue", { ...modules, "./LinkField.vue": LinkField, "./entryGrid.js": gridHelpers })
+const EntryGrid = loadComponent("frontend/src/components/common/EntryGrid.vue", { ...modules, vue: { ...Vue, withDirectives: node => node }, "./LinkField.vue": LinkField, "./entryGrid.js": gridHelpers })
+function mountChoiceGrid(extra = {}) {
+	const batches = [], updates = [], focused = []
+	const props = reactive({ rows: [{ key: "front", label: "Front" }, { key: "locked", label: "Locked", readonly: true }],
+		columns: [{ key: "colour", label: "Colour", type: "select", options: ["Black", "Blue"], fill: true }, { key: "weight", label: "Weight", type: "number", min: 0, fill: true }],
+		modelValue: { front: { colour: "Blue", weight: 1 }, locked: { colour: "Black", weight: 2 } },
+		...extra, "onUpdate:modelValue": value => { updates.push(value); props.modelValue = value }, onChange: changes => batches.push(changes),
+	})
+	const root = mountComponent(EntryGrid, props)
+	const cells = () => findNodes(root, node => node.props.role === "gridcell")
+	const cell = (index = 0) => cells()[index]
+	const table = findNodes(root, node => node.props.role === "grid")[0]
+	for (const element of cells()) element.focus = () => focused.push(element.props["data-col"])
+	table.querySelector = selector => cells().find(node => selector.includes(`data-row="${node.props["data-row"]}"`) && selector.includes(`data-col="${node.props["data-col"]}"`))
+	const input = () => findNodes(root, node => node.type === "autocomplete")[0]
+	const key = async (name, extra = {}) => {
+		const pressed = event(name, undefined, extra)
+		if (input()) {
+			findNodes(root, node => String(node.props.class).includes("common-field"))[0].props.onKeydownCapture(pressed)
+			if (!pressed.stopped) pressed.target.props.onKeydown(pressed)
+		}
+		if (!pressed.stopped) table.props.onKeydown(pressed)
+		await flush()
+		return pressed
+	}
+	return { props, root, cell, table, input, key, batches, updates, focused }
+}
+{
+	const previousWindow = globalThis.window
+	globalThis.window = { addEventListener() {}, removeEventListener() {} }
+	const grid = mountChoiceGrid()
+	grid.cell().props.onMousedown(event("", null, { button: 0 }))
+	await flush()
+	assert.equal(grid.input(), undefined, "mousedown retains selection without opening")
+	grid.cell().props.onClick(event("", null, { button: 0 }))
+	await flush()
+	assert.deepEqual(controls.at(-1).suggestions.map(({ name }) => name), ["Black", "Blue"])
+	assert.equal(controls.at(-1).overlayVisible, true)
+	assert.equal(controls.at(-1).focusedOptionIndex, 0)
+	assert.equal(findNodes(grid.root, node => ["select", "datalist"].includes(node.type)).length, 0)
+	await grid.key("Enter")
+	assert.equal(grid.props.modelValue.front.colour, "Black")
+	assert.equal(grid.cell().props.tabindex, 0, "Enter commits without moving")
+	assert.equal(grid.focused.at(-1), 0)
+	await grid.key("ArrowRight")
+	assert.equal(grid.cell(1).props.tabindex, 0)
+	await grid.key("ArrowLeft")
+	await grid.key("b")
+	assert.equal(grid.input().props.value, "b", "printable input becomes the search query")
+	assert.equal(grid.props.modelValue.front.colour, "Black", "the query never becomes the committed model")
+	controls.at(-1).onArrowDownKey(event("ArrowDown"))
+	assert.equal(controls.at(-1).focusedOptionIndex, 1)
+	controls.at(-1).onArrowUpKey(event("ArrowUp"))
+	await grid.key("Enter")
+	assert.equal(grid.props.modelValue.front.colour, "Blue")
+	await grid.key("F2")
+	assert.equal(controls.at(-1).suggestions.length, 2)
+	await grid.key("Escape")
+	assert.equal(grid.input(), undefined, "Escape cancels editing in one keypress")
+	await grid.key("F2")
+	grid.input().props.onType("Bl"); grid.input().props.onSearch("Bl"); await flush()
+	await grid.key("Tab")
+	assert.equal(grid.props.modelValue.front.colour, "Blue", "Tab rejects a partial match")
+	assert.equal(grid.cell(1).props.tabindex, 0)
+	await grid.key("ArrowLeft")
+	await grid.key("F2")
+	grid.input().props.onType("Black"); grid.input().props.onSearch("Black"); await flush()
+	await grid.key("Tab")
+	assert.equal(grid.props.modelValue.front.colour, "Black", "Tab commits an exact match")
+	assert.equal(grid.cell(1).props.tabindex, 0)
+	for (const modifier of ["shiftKey", "ctrlKey", "metaKey"]) {
+		grid.cell().props.onClick(event("", null, { button: 0, [modifier]: true }))
+		await flush()
+		assert.equal(grid.input(), undefined)
+	}
+	grid.cell().props.onMousedown(event("", null, { button: 0 }))
+	grid.cell(1).props.onMouseenter()
+	grid.cell().props.onClick(event("", null, { button: 0 }))
+	await flush()
+	assert.equal(grid.input(), undefined, "dragging across cells never opens a choice editor")
+	for (const extra of [{ readonly: true }, { rows: [{ key: "front", readonly: true }] }, { columns: [{ key: "colour", type: "value", readonly: true }] }]) {
+		const locked = mountChoiceGrid(extra)
+		locked.cell().props.onClick(event("", null, { button: 0 }))
+		await locked.key("F2")
+		assert.equal(locked.input(), undefined)
+	}
+	globalThis.window = previousWindow
+}
+{
+	for (const type of ["value", "link"]) {
+		const grid = mountChoiceGrid({ columns: [{ key: "colour", label: "Colour", type, options: [{ value: "BL", label: "Blue" }, { value: "BK", label: "Black" }] }] })
+		grid.cell().props.onClick(event("", null, { button: 0 })); await flush()
+		assert.deepEqual(controls.at(-1).suggestions.map(({ name }) => name), ["BL", "BK"])
+		grid.input().props.onPick(0); await flush()
+		assert.equal(grid.props.modelValue.front.colour, "BL")
+	}
+}
+{
+	const columns = [{ key: "colour", label: "Colour", type: "select", options: Array.from({ length: 60 }, (_, index) => `Colour ${index}`) }]
+	const grid = mountChoiceGrid({ columns })
+	const heading = findNodes(grid.root, node => node.props.role === "columnheader")[1]
+	assert.equal(heading.text, "Colour", "ordinary headers retain their plain labels")
+	grid.cell().props.onClick(event("", null, { button: 0 })); await flush()
+	assert.equal(controls.at(-1).suggestions.length, 60, "large option sets expose every local option")
+	assert.equal(findNodes(grid.root, node => ["select", "datalist"].includes(node.type)).length, 0)
+	const queries = []
+	const custom = mountChoiceGrid({ columns: [{ ...columns[0], type: "link", searchHandler: query => { queries.push(query); return ["Colour 59"] } }] })
+	custom.cell().props.onClick(event("", null, { button: 0 })); await flush()
+	assert.deepEqual(queries, [""])
+	assert.deepEqual(controls.at(-1).suggestions.map(({ name }) => name), ["Colour 59"], "custom link search takes precedence over options")
+	const server = mountChoiceGrid({ columns: [{ key: "colour", label: "Colour", type: "link", doctype: "Item", filters: { disabled: 0 } }] })
+	server.cell().props.onClick(event("", null, { button: 0 })); await flush()
+	assert.deepEqual(searches.at(-1).slice(0, 3), ["Item", "", { disabled: 0 }], "server links retain their filters")
+}
+{
+	const grid = mountChoiceGrid()
+	const button = label => findNodes(grid.root, node => node.type === "button" && node.props.label === label)[0]
+	const fill = async label => { findNodes(grid.root, node => node.props["aria-label"] === `Fill ${label}` && node.type === "button")[0].props.onClick(); await flush() }
+	await fill("Colour")
+	assert.equal(controls.at(-1).overlayVisible, true)
+	grid.input().props.onPick(0); await flush()
+	assert.equal(grid.props.modelValue.front.colour, "Black")
+	assert.equal(grid.props.modelValue.locked.colour, "Black")
+	assert.equal(grid.batches.length, 1)
+	assert.equal(grid.updates.length, 1)
+	assert.deepEqual(grid.batches[0], [{ rowKey: "front", colKey: "colour", value: "Black" }])
+	assert.ok(findNodes(grid.root, node => node.text === "Filled 1 rows").length)
+	await fill("Weight")
+	let input = findNodes(grid.root, node => node.type === "input" && node.props["aria-label"] === "Fill Weight")[0]
+	assert.equal(input.props.inputmode, "decimal")
+	input.props["onUpdate:modelValue"]("oops")
+	button("Apply").props.onClick(); await flush()
+	assert.ok(findNodes(grid.root, node => node.props.role === "alert" && /not a number/.test(node.text)).length)
+	assert.equal(grid.batches.length, 1)
+	input.props["onUpdate:modelValue"]("1.25")
+	input.props.onKeydown(event("Enter")); await flush()
+	assert.equal(grid.props.modelValue.front.weight, 1.25)
+	assert.equal(grid.props.modelValue.locked.weight, 2)
+	assert.equal(grid.batches.length, 2)
+	await fill("Weight")
+	button("Apply").props.onClick(); await flush()
+	assert.equal(grid.props.modelValue.front.weight, null, "empty Fill clears the column")
+	await fill("Colour")
+	grid.input().props.onType("invalid"); grid.input().props.onSearch("invalid"); await flush()
+	button("Apply").props.onClick(); await flush()
+	assert.equal(grid.batches.length, 3, "unselected choice text must never fill blanks")
+	assert.ok(findNodes(grid.root, node => node.props.role === "alert").length)
+	button("Cancel").props.onClick(); await flush()
+	assert.equal(grid.input(), undefined)
+	await fill("Weight")
+	const header = findNodes(grid.root, node => node.props.class === "entry-grid__fill")[0]
+	header.props.onKeydownCapture(event("Escape")); await flush()
+	assert.equal(findNodes(grid.root, node => node.props.class === "entry-grid__fill").length, 0)
+	assert.equal(grid.batches.length, 3, "Escape cancels Fill")
+}
 const gridProps = reactive({ rows: [{ key: "0", label: "Yarn" }], columns: [{ key: "yarn_item", label: "Yarn item", type: "link", doctype: "Item" }], modelValue: { 0: { yarn_item: "Old yarn" } }, "onUpdate:modelValue": value => { gridProps.modelValue = value } })
 const gridRoot = mountComponent(EntryGrid, gridProps)
 findNodes(gridRoot, node => node.props.role === "grid")[0].querySelector = () => null
@@ -333,6 +519,16 @@ assert.equal(findNodes(gridRoot, node => node.type === "autocomplete").length, 0
 
 
 // Invalid Link text must be explained after Enter and after blur in every wrapper.
+for (const [doctype, expected] of [
+	["Item", 'No Item matches "zzz". Pick one from the list.'],
+	["", 'No option matches "zzz". Pick one from the list.'],
+]) {
+	const noMatch = mount({ doctype, searchHandler: async () => [] })
+	await noMatch.search("zzz")
+	await noMatch.key("Enter")
+	assert.ok(findNodes(noMatch.root, node => node.props.role === "alert" && node.text === expected).length)
+}
+
 const invalidLink = mount({ modelValue: "Knitting", searchHandler: async () => [] })
 await invalidLink.search("zzqq nothing")
 await invalidLink.key("Enter")

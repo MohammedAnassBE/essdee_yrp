@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { Vue, createTestRenderer, findNodes, loadComponent } from './helpers/vue_renderer.mjs'
 import * as focus from '../frontend/src/departments/merch/ipd/ipdFocus.js'
+import * as bomFetch from '../frontend/src/departments/merch/ipd/ipdBomFetch.js'
 import * as tabs from '../frontend/src/departments/merch/ipd/ipdTabs.js'
 import * as editorHelpers from '../frontend/src/departments/merch/ipd/ipdEditor.js'
 import * as gridHelpers from '../frontend/src/components/common/entryGrid.js'
@@ -48,7 +49,7 @@ const modules = {
 	'../../../router/listDocumentNavigation.js': { preserveListNavigationState: () => ({}) },
 	'../merchViews.js': { MERCH_ROUTES: {}, ipdEditRoute: () => ({}), ipdRoute: () => ({}) },
 	'./ipdEditor.js': editorHelpers, '../ipdEditor.js': editorHelpers,
-	'./ipdTabs.js': tabs, './ipdFocus.js': focus, '../ipdFocus.js': focus,
+	'./ipdTabs.js': tabs, './ipdFocus.js': focus, '../ipdFocus.js': focus, './ipdBomFetch.js': bomFetch,
 	'./entryGrid.js': gridHelpers, '../../../components/common/entryGrid.js': gridHelpers, './garmentGrids.js': garmentGrids,
 	'./attributeValues.js': attributeValues, './packingSection.js': packing, './clothRename.js': rename,
 	'./clothGrids.js': clothGrids, './useClothTable.js': { ...clothTable, useClothSection(props) {
@@ -370,7 +371,7 @@ try {
 		['emblishment_details_json', 'Embellishment', 0], ['cloth_detail', 'Cloth Detail', 2],
 		['cutting_items_json', 'Consumption per piece', 1], ['cutting_cloths_json', 'Cloth by combination', 0],
 		['accessory_clothtype_json', 'Accessory names', 0], ['cloth_accessory_json', 'Accessory consumption', 1],
-		['stiching_accessory_json', 'Accessory colour and cloth', 0],
+		['stiching_accessory_json', 'Accessory colour and cloth', 1],
 		['panel_wise_consumption_matrix_json', 'Front', 1, { enable_panel_wise_consumption_matrix: 1 }],
 		['panel_wise_cloth_mapping_json', 'Back', 0, { enable_panel_wise_consumption_matrix: 1 }],
 		['fabric_processes', 'Fabric processes', 4, { is_cloth_item: 1 }],

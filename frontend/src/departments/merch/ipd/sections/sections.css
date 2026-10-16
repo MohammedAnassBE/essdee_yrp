@@ -44,6 +44,25 @@
 	padding: 0;
 	border: 0;
 }
+.ipd-choices__header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	justify-content: flex-start;
+}
+.ipd-choices__toggle {
+	padding: 0;
+	color: var(--erp-accent);
+	font: inherit;
+	font-size: var(--erp-font-size-caption);
+	letter-spacing: normal;
+	text-transform: none;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+.ipd-choices__toggle:hover { text-decoration: underline; }
+.ipd-choices__toggle:focus-visible { outline: none; box-shadow: var(--erp-focus-ring); }
 .ipd-choices__list {
 	display: flex;
 	flex-wrap: wrap;

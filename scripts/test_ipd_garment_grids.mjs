@@ -306,7 +306,7 @@ async function testAccessoryValidation() {
 		"../IpdSection.vue": { render() { return Vue.h("section", this.$slots.default?.()) } },
 		"../useIpdEditor.js": { IPD_EDITOR_KEY: editorKey },
 		"./attributeValues.js": attributes, "./bomMapping.js": bomMapping, "./garmentGrids.js": grids,
-		"./BomMappingDialog.vue": blank, "./IpdChoiceChips.vue": blank, "./IpdGridNotice.vue": blank,
+		"./BomMappingDialog.vue": blank, "./IpdChoiceChips.vue": blank,
 		"./sectionFocus.js": { useSectionFocus() {} },
 	})
 	const serverErrors = Vue.reactive({})
@@ -318,6 +318,8 @@ async function testAccessoryValidation() {
 		},
 		context: { cutting: { dia_values: ["32 Dia"] } }, readonly: false,
 		gridErrors(field) { return serverErrors[field] || {} },
+		problemsFor: () => Object.keys(serverErrors).map((field) => ({ field, message: "Fill all the combinations" })),
+		gridDrift: {},
 		setValue(field, value) { this.draft[field] = value },
 	})
 	const root = { type: "root", props: {}, children: [] }
@@ -340,8 +342,10 @@ async function testAccessoryValidation() {
 			serverErrors[field] = { [rowKey]: { [first]: "Fill all the combinations" } }
 			await Vue.nextTick()
 			assert.deepEqual(Object.keys(gridFor(field).errors[rowKey]), [first, second])
-			assert.equal(notices().length, 1)
-			assert.match(findNodes(notices()[0], () => true).map((node) => node.text).join(" "), /Folding · Top/)
+			assert.equal(notices().length, 1, "only the detailed notice is shown")
+			const noticeText = findNodes(notices()[0], () => true).map((node) => node.text).join(" ")
+			assert.match(noticeText, /Folding · Top/)
+			assert.doesNotMatch(noticeText, /more in Checks/)
 			if (field === "stiching_accessory_json") assert.equal(gridFor(field).errors[rowKey][second], "Choose a cloth from Cloth Details")
 			grid["onUpdate:modelValue"]({ [rowKey]: { ...grid["model-value"][rowKey], [first]: cells[first] } })
 			await Vue.nextTick()
@@ -349,7 +353,9 @@ async function testAccessoryValidation() {
 			gridFor(field)["onUpdate:modelValue"]({ [rowKey]: { ...grid["model-value"][rowKey], ...cells } })
 			await Vue.nextTick()
 			assert.deepEqual(gridFor(field).errors, {})
-			assert.equal(notices().length, 0, "notice clears when the grid is complete")
+			delete serverErrors[field]
+			await Vue.nextTick()
+			assert.equal(notices().length, 0, "notice clears when the checks rerun")
 		}
 		const consumption = gridFor("cloth_accessory_json")
 		assert.deepEqual(consumption.columns.map((column) => column.key), ["Part", "Dia", "Weight"])
@@ -371,6 +377,18 @@ await testAccessoryValidation()
 	assert.deepEqual(toggleValueRow(rows, "attribute_value", "Navy", true, (value) => ({ attribute_value: value, quantity: 0 })).map((row) => row.attribute_value), ["Black", "Navy"])
 	assert.deepEqual(toggleValueRow(rows, "attribute_value", "Black", false), [])
 	assert.deepEqual(removeTableRow([{ name: "x" }, {}, {}], "new:1"), [{ name: "x" }, {}])
+}
+{
+	const saved = [{ name: "a", stiching_attribute_value: "Front", set_item_attribute_value: "Top", quantity: 2, category: "Rib", is_default: 1 }, { name: "b", stiching_attribute_value: "Back", set_item_attribute_value: "Top", quantity: 1, category: "Body", is_default: 0 }]
+	const memory = new Map()
+	const make = (value) => ({ stiching_attribute_value: value, set_item_attribute_value: null, quantity: 1, category: "Body", is_default: 0 })
+	const toggle = (rows, value, on, savedRows = saved) => grids.toggleRememberedRow(rows, "stiching_attribute_value", value, on, make, { memory, savedRows })
+	const cleared = toggle(toggle(saved, "Front", false), "Back", false)
+	assert.deepEqual(cleared, [])
+	const restored = toggle(toggle(cleared, "Front", true), "Back", true)
+	assert.deepEqual(restored, saved, "Clear all then Select all keeps every row value and saved row name")
+	assert.deepEqual(toggle([], "Sleeve", true), [make("Sleeve")], "a never-ticked panel gets a fresh row")
+	assert.deepEqual(toggle([], "Front", true, []), [{ ...saved[0], name: undefined }].map(({ name: _name, ...row }) => row), "a row deleted by a save drops its stale name")
 }
 
 {

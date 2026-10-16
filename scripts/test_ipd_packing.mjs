@@ -206,7 +206,7 @@ try {
 		'vue-router': { useRoute: () => ({ hash: '#packing_tab' }), useRouter: () => ({ replace() {} }) },
 		'../../../router/listDocumentNavigation.js': { preserveListNavigationState() {} },
 		'../merchViews.js': { MERCH_ROUTES: {}, ipdEditRoute() {}, ipdRoute() {} },
-		'./ipdEditor.js': editorHelpers, './ipdFocus.js': focus, './ipdTabs.js': tabs, './ipdBomFetch.js': bomFetch,
+		'./ipdEditor.js': editorHelpers, './ipdFocus.js': focus, './ipdTabs.js': tabs, './ipdBomFetch.js': bomFetch, './sections/garmentGrids.js': garmentGrids,
 		'../../../api/merch.js': {
 			getIpdEditor: async () => payload(), checkIpd: async () => ({ problems: [] }),
 			saveIpd: async patch => { saved.push(structuredClone(patch)); stored = { ...stored, ...patch }; return payload() },

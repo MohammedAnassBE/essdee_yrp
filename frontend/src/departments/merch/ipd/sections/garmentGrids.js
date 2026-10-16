@@ -63,6 +63,20 @@ export function toggleValueRow(rows, field, value, on, makeRow) {
 	return list
 }
 
+export function toggleRememberedRow(rows, field, value, on, makeRow, { memory, savedRows = [] }) {
+	const list = rows || []
+	const current = list.find((row) => row[field] === value)
+	if (!on && current) memory.set(value, current)
+	if (on && !current) return [...list, restoredRow(memory.get(value), savedRows) ?? makeRow(value)]
+	return toggleValueRow(list, field, value, on, makeRow)
+}
+
+function restoredRow(row, savedRows) {
+	if (!row?.name || savedRows.some((saved) => saved.name === row.name)) return row
+	const { name: _name, ...values } = row
+	return values
+}
+
 export function packingRow(value) {
 	return { attribute_value: value, quantity: 0 }
 }

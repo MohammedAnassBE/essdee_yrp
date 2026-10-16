@@ -771,7 +771,7 @@ def save_combination_detail_fields(doc):
 	if doc.get("stiching_item_detail"):
 		doc.set(
 			"stiching_item_combination_details",
-			save_item_details(doc.stiching_item_detail, ipd_doc=doc, column_attribute=doc.stiching_attribute),
+			save_item_details(doc.stiching_item_detail, ipd_doc=doc),
 		)
 
 
@@ -1240,8 +1240,7 @@ def check_assortment_data(data, separator_attribute, item_attr_names):
 	return errors
 
 
-def save_item_details(combination_item_detail, ipd_doc=None, column_attribute=None):
-	"""Combination rows; `column_attribute` resolves column values that are not set parts."""
+def save_item_details(combination_item_detail, ipd_doc=None):
 	combination_item_detail = update_if_string_instance(combination_item_detail)
 	item_detail = []
 	set_item_stitching_attrs = {}
@@ -1255,7 +1254,10 @@ def save_item_details(combination_item_detail, ipd_doc=None, column_attribute=No
 				_attribute_value(row.set_item_attribute_value)
 			] = _attribute_value(row.attribute_value)
 
-	for idx, item in enumerate(combination_item_detail.get("values") or []):
+	values = combination_item_detail.get("values") or []
+	if set_item_stitching_attrs:
+		values = current_set_combination_values(values, set_item_packing_combination, ipd_doc)
+	for idx, item in enumerate(values):
 		for value in item.get("val") or {}:
 			row = {
 				"index": idx,
@@ -1263,13 +1265,28 @@ def save_item_details(combination_item_detail, ipd_doc=None, column_attribute=No
 				"set_item_attribute_value": value,
 				"attribute_value": item["val"][value],
 			}
-			if column_attribute:
-				row["combination_attribute"] = column_attribute
 			if ipd_doc and ipd_doc.is_set_item and set_item_stitching_attrs.get(value):
 				part = set_item_stitching_attrs[value]
-				row["major_attribute_value"] = set_item_packing_combination[item["major_attribute"]][part]
+				row["major_attribute_value"] = set_part_colour(set_item_packing_combination, item, part)
 			item_detail.append(row)
 	return item_detail
+
+
+def current_set_combination_values(values, set_item_packing_combination, ipd_doc):
+	"""Drops stale rows of colours removed from packing."""
+	packed = {_attribute_value(row.attribute_value) for row in ipd_doc.get("packing_attribute_details") or []}
+	return [
+		item
+		for item in values
+		if item.get("major_attribute") in set_item_packing_combination or item.get("major_attribute") in packed
+	]
+
+
+def set_part_colour(set_item_packing_combination, item, part):
+	major = item.get("major_attribute")
+	if major not in set_item_packing_combination:
+		frappe.throw(f"Fill the Set Item combination for {major} before the Stitching combination.")
+	return set_item_packing_combination[major][part]
 
 
 def get_stich_details(doc):

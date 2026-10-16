@@ -93,7 +93,6 @@ import {
 	stitchingRow,
 	tableFromModel,
 	tableGrid,
-	toggleValueRow,
 } from "./garmentGrids.js"
 import IpdChoiceChips from "./IpdChoiceChips.vue"
 import IpdFields from "./IpdFields.vue"
@@ -140,7 +139,7 @@ useSectionFocus(editor, props.sectionKey, {
 }, props.part)
 
 function togglePanel(panel, on) {
-	editor.setValue("stiching_item_details", toggleValueRow(draft.value.stiching_item_details, "stiching_attribute_value", panel, on, stitchingRow))
+	editor.setValue("stiching_item_details", editor.toggledRows("stiching_item_details", "stiching_attribute_value", panel, on, stitchingRow))
 }
 function updatePanels(model) {
 	const before = draft.value.stiching_item_details || []

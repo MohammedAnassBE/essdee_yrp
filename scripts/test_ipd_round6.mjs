@@ -50,7 +50,7 @@ const modules = {
 	'../merchViews.js': { MERCH_ROUTES: {}, ipdEditRoute: () => ({}), ipdRoute: () => ({}) },
 	'./ipdEditor.js': editorHelpers, '../ipdEditor.js': editorHelpers,
 	'./ipdTabs.js': tabs, './ipdFocus.js': focus, '../ipdFocus.js': focus, './ipdBomFetch.js': bomFetch,
-	'./entryGrid.js': gridHelpers, '../../../components/common/entryGrid.js': gridHelpers, './garmentGrids.js': garmentGrids,
+	'./entryGrid.js': gridHelpers, '../../../components/common/entryGrid.js': gridHelpers, './garmentGrids.js': garmentGrids, './sections/garmentGrids.js': garmentGrids,
 	'./attributeValues.js': attributeValues, './packingSection.js': packing, './clothRename.js': rename,
 	'./clothGrids.js': clothGrids, './useClothTable.js': { ...clothTable, useClothSection(props) {
 		const editor = Vue.inject(hook.IPD_EDITOR_KEY)

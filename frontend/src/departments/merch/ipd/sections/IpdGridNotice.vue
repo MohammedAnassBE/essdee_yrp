@@ -7,7 +7,10 @@
 		<span>{{ empty ? "Rows are not built yet." : "Rows differ from the current values." }}</span>
 		<Button :label="empty ? 'Build rows' : 'Update rows'" icon="pi pi-refresh" size="small" text @click="editor.applyGrid(gridKey)" />
 	</p>
-	<p v-if="problems.length" class="ipd-grid-notice ipd-grid-notice--error" role="alert">
+	<p v-if="detail" class="ipd-grid-notice ipd-grid-notice--error" role="alert">
+		<i class="pi pi-exclamation-circle" aria-hidden="true" /><span>{{ detail }}</span>
+	</p>
+	<p v-else-if="problems.length" class="ipd-grid-notice ipd-grid-notice--error" role="alert">
 		<i class="pi pi-exclamation-circle" aria-hidden="true" />
 		<span>{{ problems[0].message }}<template v-if="problems.length > 1"> · +{{ problems.length - 1 }} more in Checks</template></span>
 	</p>
@@ -24,6 +27,7 @@ const props = defineProps({
 	section: { type: String, default: "" },
 	field: { type: String, default: "" },
 	empty: { type: Boolean, default: false },
+	detail: { type: String, default: "" },
 })
 const editor = inject(IPD_EDITOR_KEY)
 const drift = computed(() => editor.gridDrift?.[props.gridKey] || {})

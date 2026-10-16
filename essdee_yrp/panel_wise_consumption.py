@@ -90,8 +90,9 @@ def _mapping_values(doc, attribute):
 	return []
 
 
-def _natural_key(value):
-	return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", value or "")]
+def natural_key(value):
+	parts = re.split(r"(\d+(?:\.\d+)?)", value or "")
+	return [float(part) if index % 2 else part.lower() for index, part in enumerate(parts)]
 
 
 def _panel_colour_context(doc, panel_values, source_packing_values):
@@ -612,7 +613,7 @@ def panel_wise_payload(matrix, context):
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
 	dia_values = get_global_attribute_values(get_dia_attribute())
-	dia_values = sorted(_unique(dia_values), key=_natural_key)
+	dia_values = sorted(_unique(dia_values), key=natural_key)
 	for panel in matrix["panels"]:
 		for row in panel["rows"]:
 			for cell in (row.get("values") or {}).values():

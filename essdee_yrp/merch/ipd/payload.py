@@ -16,6 +16,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 )
 from essdee_yrp.ipd_ui import fetch_combination_items, get_approval_roles
 from essdee_yrp.merch.ipd import fields as registry
+from essdee_yrp.panel_wise_consumption import natural_key
 
 MAPPING = "YRP Item Item Attribute Mapping"
 MAPPING_VALUE = "YRP Item Item Attribute Mapping Value"
@@ -355,13 +356,17 @@ def context(doc, mappings):
 	}
 
 
+def sorted_dia_values(attribute):
+	return sorted(get_global_attribute_values(attribute), key=natural_key)
+
+
 def cutting_context(doc):
 	if doc.get("is_cloth_item"):
 		return None
 	attribute = frappe.db.get_single_value("SD YRP IPD Settings", "default_dia_attribute")
 	return {
 		"dia_attribute": attribute or None,
-		"dia_values": get_global_attribute_values(attribute) if attribute else [],
+		"dia_values": sorted_dia_values(attribute),
 	}
 
 
@@ -374,7 +379,7 @@ def cloth_context(doc):
 		"colour_attribute": colour,
 		"dia_attribute": dia,
 		"colour_values": get_global_attribute_values(colour),
-		"dia_values": get_global_attribute_values(dia),
+		"dia_values": sorted_dia_values(dia),
 		"mapping_roles": select_options("SD YRP IPD Fabric Value Mapping", "role"),
 	}
 

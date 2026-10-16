@@ -85,7 +85,10 @@
   "SD YRP Item Production Detail Set Item Combination": {
     "attribute_value": {"context": ["packing_attribute"]},
     "major_attribute_value": {"context": ["packing_attribute"]},
-    "set_item_attribute_value": {"context": ["combination_attribute", "set_item_attribute"]}
+    "set_item_attribute_value": {
+      "context": ["set_item_attribute"],
+      "parentfield_context": {"stiching_item_combination_details": ["stiching_attribute"]}
+    }
   },
   "SD YRP IPD Compacting Details": {
     "packing_attribute_value": {"context": ["packing_attribute"]},

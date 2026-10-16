@@ -57,8 +57,7 @@
 					<Button label="Add accessory" icon="pi pi-plus" size="small" outlined :disabled="!canAddAccessory" @click="addAccessory" />
 				</div>
 				<IpdChoiceChips v-if="accessoryNames.rows.length" label="Accessory attributes" :choices="accessoryChoices" :selected="draft.accessory_attributes || []" :readonly="editor.readonly" @toggle="toggleAccessoryAttribute" />
-				<IpdGridNotice grid-key="cloth_accessory" :empty="!clothAccessory.rows.length" section="accessories" field="cloth_accessory_json" />
-				<p v-if="clothAccessoryValidation.summary" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />{{ clothAccessoryValidation.summary }}</p>
+				<IpdGridNotice grid-key="cloth_accessory" :empty="!clothAccessory.rows.length" section="accessories" field="cloth_accessory_json" :detail="clothAccessoryValidation.summary" />
 				<EntryGrid
 					v-if="clothAccessory.rows.length"
 					ref="clothAccessoryGrid" validation-field="cloth_accessory_json"
@@ -76,8 +75,7 @@
 			</template>
 			<template v-if="part === 'stitching'">
 				<p v-if="!stitchingAccessory.rows.length" class="erp-help-text">Accessory colours appear after accessory items are added.</p>
-				<IpdGridNotice grid-key="stiching_accessory" :empty="!stitchingAccessory.rows.length" section="accessories" field="stiching_accessory_json" />
-				<p v-if="stitchingAccessoryValidation.summary" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />{{ stitchingAccessoryValidation.summary }}</p>
+				<IpdGridNotice grid-key="stiching_accessory" :empty="!stitchingAccessory.rows.length" section="accessories" field="stiching_accessory_json" :detail="stitchingAccessoryValidation.summary" />
 				<EntryGrid
 					v-if="stitchingAccessory.rows.length"
 					ref="stitchingAccessoryRef" validation-field="stiching_accessory_json"

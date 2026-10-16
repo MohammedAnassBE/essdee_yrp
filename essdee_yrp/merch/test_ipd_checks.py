@@ -9,6 +9,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
 from essdee_yrp.merch import ipd_workspace as workspace
 from essdee_yrp.merch.ipd.fields import DOCTYPE
+from essdee_yrp.merch.ipd.payload import sorted_dia_values
 from essdee_yrp.merch.ipd_test_support import SAMPLES, rolled_back, unapprove
 
 GARMENT = SAMPLES["standard"]
@@ -187,6 +188,7 @@ class TestIpdChecks(IntegrationTestCase):
 		cloth = workspace.get_ipd_workspace(SAMPLES["cloth"])["context"]["cloth"]
 		self.assertTrue(cloth["colour_attribute"] and cloth["dia_attribute"])
 		self.assertIn("14 Dia", cloth["dia_values"])
+		self.assertEqual(cloth["dia_values"], sorted_dia_values(cloth["dia_attribute"]))
 		self.assertEqual(cloth["mapping_roles"], ["Change", "Introduce", "Pin", "Consume"])
 		self.assertIsNone(workspace.get_ipd_workspace(GARMENT)["context"]["cloth"])
 
@@ -197,8 +199,9 @@ class TestIpdChecks(IntegrationTestCase):
 		self.assertTrue(attribute)
 		self.assertEqual(
 			workspace.get_ipd_workspace(GARMENT)["context"]["cutting"],
-			{"dia_attribute": attribute, "dia_values": get_global_attribute_values(attribute)},
+			{"dia_attribute": attribute, "dia_values": sorted_dia_values(attribute)},
 		)
+		self.assertCountEqual(sorted_dia_values(attribute), get_global_attribute_values(attribute))
 		self.assertIsNone(workspace.get_ipd_workspace(SAMPLES["cloth"])["context"]["cutting"])
 		try:
 			frappe.db.set_single_value(settings, field, "")
@@ -208,6 +211,18 @@ class TestIpdChecks(IntegrationTestCase):
 			)
 		finally:
 			frappe.db.set_single_value(settings, field, attribute)
+
+
+class TestDiaOrder(IntegrationTestCase):
+	"""Dia values sort by their number, decimals included."""
+
+	def test_dia_values_sort_by_number(self):
+		values = ["45", "56", "72", "10 Dia", "14.5 Dia", "14.25 Dia", "130-140", "9"]
+		with patch("essdee_yrp.merch.ipd.payload.get_global_attribute_values", return_value=values):
+			self.assertEqual(
+				sorted_dia_values("Dia"),
+				["9", "10 Dia", "14.25 Dia", "14.5 Dia", "45", "56", "72", "130-140"],
+			)
 
 
 class TestDeskClientRules(IntegrationTestCase):

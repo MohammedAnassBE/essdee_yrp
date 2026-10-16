@@ -36,6 +36,7 @@ import {
 
 import { applyBomFetch, bomFetchPlan, getBomItemValues, withoutBomFetch } from "./ipdBomFetch.js"
 import { createFocusRegistry } from "./ipdFocus.js"
+import { toggleRememberedRow } from "./sections/garmentGrids.js"
 import { problemTab, tabLabel } from "./ipdTabs.js"
 
 export const IPD_EDITOR_KEY = Symbol("ipd-editor")
@@ -67,6 +68,7 @@ export function useIpdEditor(initialName) {
 	const invalidCellCount = computed(() => [...invalidGridCells.values()].reduce((total, entry) => total + entry.count, 0))
 	const firstInvalidCell = computed(() => invalidGridCells.values().next().value?.cells[0] || null)
 	const pendingGrids = new Set()
+	const removedRows = new Map()
 	let gridTimer = null
 	let checkTimer = null
 	let gridSequence = 0
@@ -120,6 +122,7 @@ export function useIpdEditor(initialName) {
 
 	async function load(target = initialName) {
 		const sequence = ++loadSequence
+		removedRows.clear()
 		loading.value = true
 		loadError.value = ""
 		actionError.value = ""
@@ -164,6 +167,10 @@ export function useIpdEditor(initialName) {
 		} catch (reason) {
 			actionError.value = reason?.message || "Unable to read the BOM Item details."
 		}
+	}
+	function toggledRows(fieldname, keyField, value, on, makeRow) {
+		if (!removedRows.has(fieldname)) removedRows.set(fieldname, new Map())
+		return toggleRememberedRow(draft[fieldname], keyField, value, on, makeRow, { memory: removedRows.get(fieldname), savedRows: cleanValues.value[fieldname] || [] })
 	}
 	function setValues(values) {
 		for (const [fieldname, value] of Object.entries(values || {})) setValue(fieldname, value)
@@ -355,7 +362,7 @@ export function useIpdEditor(initialName) {
 		problemsFor: (sectionKey) => problemsFor(checks.value, sectionKey),
 		cellError: (field, rowKey, column) => gridErrors(checks.value, field)?.[rowKey]?.[column ?? ""] || "",
 		gridErrors: (field) => gridErrors(checks.value, field),
-		setValue, setRows: setValue, setJson: setValue, setValues,
+		setValue, setRows: setValue, setJson: setValue, setValues, toggledRows,
 		refreshGrids, applyGrid, saveAttributeValues, valueUsage, saveBomMapping, registerFocus, fieldSchema,
 	})
 	const invalidRegistry = { report: reportInvalidCells }

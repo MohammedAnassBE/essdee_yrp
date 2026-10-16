@@ -76,7 +76,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref } from "vue"
 import EntryGrid from "../../../../components/common/EntryGrid.vue"
 import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
-import { assortmentFromModel, assortmentGrid, packingRow, tableFromModel, tableGrid, toggleValueRow } from "./garmentGrids.js"
+import { assortmentFromModel, assortmentGrid, packingRow, tableFromModel, tableGrid } from "./garmentGrids.js"
 import IpdChoiceChips from "./IpdChoiceChips.vue"
 import IpdFields from "./IpdFields.vue"
 import IpdGridNotice from "./IpdGridNotice.vue"
@@ -144,7 +144,7 @@ function apply(patch) {
 	}
 }
 function togglePacking(value, on) {
-	apply({ packing_attribute_details: toggleValueRow(draft.value.packing_attribute_details, "attribute_value", value, on, packingRow) })
+	apply({ packing_attribute_details: editor.toggledRows("packing_attribute_details", "attribute_value", value, on, packingRow) })
 }
 function updateQuantities(model) {
 	apply({ packing_attribute_details: tableFromModel(draft.value.packing_attribute_details, model, ["quantity"], { keyField: "attribute_value" }).map(zeroBlank) })

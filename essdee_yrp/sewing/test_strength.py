@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 import requests
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import sentry
 from sentry_sdk.consts import DEFAULT_OPTIONS
 
@@ -33,11 +33,32 @@ class FakeHRSettings:
 	def get(self, fieldname):
 		return self.values.get(fieldname)
 
-	def get_password(self, fieldname):
-		return self.api_secret if fieldname == "hr_api_secret" else None
+	def get_password(self, fieldname, raise_exception=True):
+		secret = self.api_secret if fieldname == "hr_api_secret" else None
+		if not secret and raise_exception:
+			frappe.throw("Password not found")
+		return secret
 
 
-class TestSewingWorkerStrength(FrappeTestCase):
+class TestSewingWorkerStrength(IntegrationTestCase):
+	def test_missing_hr_password_has_clear_message_even_with_masked_field(self):
+		for masked_value in ["*****", ""]:
+			settings = FakeHRSettings(api_secret=None)
+			settings.values["hr_api_secret"] = masked_value
+			with (
+				self.subTest(masked_value=masked_value),
+				patch.object(strength.frappe, "get_single", return_value=settings),
+				patch.object(settings, "get_password", wraps=settings.get_password) as password,
+				patch.object(strength.requests, "get") as request,
+			):
+				frappe.clear_messages()
+				with self.assertRaises(frappe.ValidationError) as raised:
+					strength.get_worker_strength_report("2026-10-08", "08:00:00", "17:00:00")
+				self.assertEqual(str(raised.exception), "HR API secret is not configured in SD YRP MRP Settings")
+				self.assertEqual(frappe.message_log[-1].title, "HR configuration required")
+				password.assert_called_once_with("hr_api_secret", raise_exception=False)
+				request.assert_not_called()
+
 	def test_missing_inputs_have_specific_business_titles_without_hr_requests(self):
 		for args, field in [
 			(("", "08:00:00", "17:00:00"), "Date"),
@@ -288,20 +309,27 @@ class TestSewingWorkerStrength(FrappeTestCase):
 		self.assertEqual(result["shifts"], ["Shift A", "Shift B"])
 
 	def test_report_requires_hr_credentials(self):
-		settings = FakeHRSettings(api_key="", api_secret="")
-		with patch.object(strength.frappe, "get_single", return_value=settings):
-			with self.assertRaisesRegex(frappe.ValidationError, "Configure the HR API"):
-				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
+		for secret in ["", "hr-secret"]:
+			settings = FakeHRSettings(api_key="", api_secret=secret)
+			with (
+				self.subTest(secret_configured=bool(secret)),
+				patch.object(strength.frappe, "get_single", return_value=settings),
+			):
+				with self.assertRaises(frappe.ValidationError) as raised:
+					strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
+				self.assertEqual(str(raised.exception), "Configure the HR API Key and HR API Secret Key in MRP Settings")
 
 	def test_report_requires_hr_site_url(self):
 		with patch.object(strength.frappe, "get_single", return_value=FakeHRSettings(site_url="")):
-			with self.assertRaisesRegex(frappe.ValidationError, "HR Site URL"):
+			with self.assertRaises(frappe.ValidationError) as raised:
 				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
+			self.assertEqual(str(raised.exception), "Configure the HR Site URL in MRP Settings")
 
 	def test_report_requires_configured_shifts(self):
 		with patch.object(strength.frappe, "get_single", return_value=FakeHRSettings(shifts=[])):
-			with self.assertRaisesRegex(frappe.ValidationError, "at least one Shift"):
+			with self.assertRaises(frappe.ValidationError) as raised:
 				strength.get_worker_strength_report("2026-08-25", "08:00:00", "17:00:00")
+			self.assertEqual(str(raised.exception), "Add at least one Shift to Fetch in MRP Settings")
 
 	def test_report_rejects_invalid_hr_response(self):
 		response = MagicMock()

@@ -26,7 +26,6 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	GoodsReceivedNote,
 	_find_matching_receivable,
-	_remaining_receivable_allowance,
 	_wo_excess_percentage,
 )
 
@@ -59,29 +58,23 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			and display_rows
 			and not self.get("is_return")
 		):
-			display_rows = _selected_draft_receivable_rows(self, display_rows)
 			work_order = frappe.get_doc("YRP Work Order", self.against_id)
 			from essdee_yrp.fabric_grn import get_actual_dia_context, get_saved_actual_dia_rows
 
 			context = get_actual_dia_context(work_order.name)
+			actual_dia_enabled = context.get("enabled") and _is_standard_cloth_grn(self)
+			display_rows = _selected_draft_receivable_rows(
+				self, display_rows, include_actual_dia=actual_dia_enabled
+			)
 			actual_rows = (
-				get_saved_actual_dia_rows(self, work_order)
-				if context.get("enabled") and _is_standard_cloth_grn(self)
+				get_saved_actual_dia_rows(self, work_order, planned_rows=display_rows)
+				if actual_dia_enabled
 				else []
 			)
 			if actual_rows:
-				actual_sources = {
-					row.get("ref_docname") for row in actual_rows if row.get("ref_docname")
-				}
-				display_rows = [
-					row
-					for row in display_rows
-					if not (
-						row.get("ref_docname") in actual_sources
-						and flt(row.get("quantity")) <= 0
-					)
-				]
-				display_rows.extend(actual_rows)
+				display_rows = _order_actual_dia_display_rows(
+					[*display_rows, *actual_rows], work_order
+				)
 		if self.get("includes_packing"):
 			# A fixed-ratio packing receipt can split one size across many Work
 			# Order Receivable references. Those rows must remain separate in the
@@ -314,6 +307,21 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			return super().validate_source_pending()
 		_validate_return_quantities(self)
 
+	def validate_against_work_order_pending(self):
+		from essdee_yrp.fabric_grn import is_calculable_fabric_grn
+
+		if not is_calculable_fabric_grn(self):
+			return super().validate_against_work_order_pending()
+		work_order = frappe.get_doc("YRP Work Order", self.against_id)
+		if not work_order.get("production_detail") or not cint(
+			frappe.db.get_value(
+				"YRP Item Production Detail", work_order.production_detail, "is_cloth_item"
+			)
+		):
+			return super().validate_against_work_order_pending()
+		_validate_versioned_cloth_receivables(self, work_order)
+		self.validate_against_correction_pending(_wo_excess_percentage(self.against_id))
+
 	def update_source_pending(self, cancel=False):
 		if self.flags.get("cloth_execution_locked_work_order"):
 			return _update_versioned_cloth_receivables(
@@ -396,6 +404,11 @@ def _requires_versioned_cloth_lifecycle(doc, *, persisted=False):
 
 def _lock_versioned_cloth_lot(doc, *, persisted=False):
 	"""Enter the shared Lot-first order for Knitting, Dyeing and Washing."""
+	from essdee_yrp.fabric_substitution import lock_lot_for_default_knitting_grn
+
+	context = lock_lot_for_default_knitting_grn(doc)
+	if context:
+		return context.lot
 	if not _requires_versioned_cloth_lifecycle(doc, persisted=persisted):
 		return None
 	lot = frappe.db.get_value("YRP Work Order", doc.against_id, "lot")
@@ -456,10 +469,7 @@ def _submitted_receipts_are_grouped(grn):
 
 
 def _validate_versioned_cloth_receivables(grn, work_order):
-	"""Validate aggregate physical receipt weight against process allowance."""
-	totals = defaultdict(float)
-	targets = {}
-	rows_by_target = defaultdict(list)
+	"""Link physical receipts while retaining uncapped planned pending weight."""
 	for row in grn.get("items") or []:
 		target = _find_matching_receivable(work_order.receivables, row)
 		if not target:
@@ -471,32 +481,7 @@ def _validate_versioned_cloth_receivables(grn, work_order):
 		row.ref_doctype = "YRP Work Order Receivables"
 		row.ref_docname = target.name
 		row.pending_quantity = target.pending_quantity
-		totals[target.name] += flt(row.quantity)
-		targets[target.name] = target
-		rows_by_target[target.name].append(row)
-
-	excess_pct = _wo_excess_percentage(grn.against_id)
-	for target_name, total_qty in totals.items():
-		target = targets[target_name]
-		ordered = flt(target.qty)
-		allowance = _remaining_receivable_allowance(
-			ordered, target.pending_quantity, excess_pct
-		)
-		if total_qty > allowance + QTY_TOLERANCE:
-			frappe.throw(
-				_(
-					"Received qty {0} exceeds allowance {1} for {2} "
-					"(ordered {3}, excess allowance {4}%)."
-				).format(
-					flt(total_qty),
-					flt(allowance),
-					target.item_variant,
-					ordered,
-					flt(excess_pct),
-				)
-			)
-		for row in rows_by_target[target_name]:
-			row.max_receivable_quantity = max(flt(allowance), 0)
+		row.max_receivable_quantity = None
 
 
 def _update_versioned_cloth_receivables(grn, work_order, *, cancel=False):
@@ -898,7 +883,23 @@ def _only_default_received_type(rows):
 	return [row for row in rows or [] if not row.get("received_type") or row.get("received_type") == default]
 
 
-def _selected_draft_receivable_rows(grn, existing_rows):
+def _order_actual_dia_display_rows(rows, work_order):
+	"""Keep each receivable's planned Dia before its physical Dia splits.
+
+	Base draft rows use WO indexes with Received Type suffixes; saved splits use
+	GRN indexes. The shared matrix grouper sorts those indexes, so reindex display
+	copies together rather than mixing the two namespaces or changing saved rows.
+	"""
+	receivables = {row.name: (index, row.item_variant) for index, row in enumerate(work_order.receivables)}
+
+	def sort_key(row):
+		index, planned_item = receivables.get(row.get("ref_docname"), (len(receivables), None))
+		return index, row.get("item_variant") != planned_item
+
+	return [dict(row, row_index=index) for index, row in enumerate(sorted(rows, key=sort_key))]
+
+
+def _selected_draft_receivable_rows(grn, existing_rows, *, include_actual_dia=False):
 	"""Rebuild a draft using only Received Types the operator actually saved."""
 	from yrp.stock.dimensions import apply_dimension_defaults
 	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
@@ -919,10 +920,14 @@ def _selected_draft_receivable_rows(grn, existing_rows):
 		delivery_challan=delivery_challan,
 	)
 	default = _default_received_type()
+	planned_items = (
+		{row.name: row.item_variant for row in work_order.get("receivables") or []}
+		if include_actual_dia else {}
+	)
 	selected = {
 		(
 			row.get("ref_docname"),
-			row.get("item_variant"),
+			planned_items.get(row.get("ref_docname"), row.get("item_variant")),
 			row.get("delivery_challan_item"),
 			row.get("received_type") or default or "",
 		)

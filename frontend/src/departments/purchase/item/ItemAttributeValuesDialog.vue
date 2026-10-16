@@ -66,7 +66,9 @@ watch(() => props.visible, (visible) => {
 
 async function searchValues(text) {
 	const rows = await searchItemAttributeValues(props.attribute, text)
-	return (rows || []).filter((row) => !draft.value.some((value) => isSameAttributeValue(value, row.label)))
+	return (rows || [])
+		.filter((row) => !draft.value.some((value) => isSameAttributeValue(value, row.label)))
+		.map((row) => ({ ...row, name: row.label }))
 }
 
 function addValue(label) {

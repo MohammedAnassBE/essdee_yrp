@@ -1,8 +1,8 @@
 <template>
 	<DepartmentPage
 		title="Purchase Invoices"
-		back-to="/accounts"
-		back-label="Accounts"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -10,8 +10,7 @@
 	>
 		<section class="purchase-invoices-page erp-workspace" aria-label="Purchase Invoices">
 			<div v-if="loading" class="purchase-invoices-page__loading">
-				<Skeleton height="76px" />
-				<Skeleton height="420px" />
+				<ListPageSkeleton />
 			</div>
 			<WorkspaceLoadError
 				v-else-if="loadError"
@@ -26,7 +25,7 @@
 				v-else
 				doctype="YRP Purchase Invoice"
 				title="Purchase Invoices"
-				eyebrow="Accounts"
+				:eyebrow="eyebrow"
 				subtitle="Supplier bills, approvals and ERP invoice status"
 				search-placeholder="Search Purchase Invoices…"
 				name-column-label="Purchase Invoice"
@@ -60,13 +59,13 @@
 <script setup>
 import Button from "primevue/button"
 import Message from "primevue/message"
-import Skeleton from "primevue/skeleton"
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 
 import { getAccountsCapabilities } from "../../api/accounts.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import ListView from "../../components/common/ListView.vue"
+import ListPageSkeleton from "../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
@@ -74,6 +73,14 @@ import {
 	PURCHASE_INVOICE_LIST_COLUMNS,
 	PURCHASE_INVOICE_STATUS_OPTIONS,
 } from "./accountsViews.js"
+
+const props = defineProps({
+	backTo: { type: String, default: "/accounts" },
+	backLabel: { type: String, default: "Accounts" },
+	eyebrow: { type: String, default: "Accounts" },
+	viewRouteName: { type: String, default: "accounts-purchase-invoice" },
+	newRouteName: { type: String, default: "accounts-purchase-invoice-new" },
+})
 
 const router = useRouter()
 const loading = ref(true)
@@ -95,13 +102,13 @@ async function load() {
 
 function openPurchaseInvoice(row, snapshot) {
 	return openListDocument(router, row, snapshot, {
-		routeName: "accounts-purchase-invoice",
+		routeName: props.viewRouteName,
 		paramName: "purchaseInvoiceId",
 	})
 }
 
 function createPurchaseInvoice() {
-	router.push({ name: "accounts-purchase-invoice-new" })
+	router.push({ name: props.newRouteName })
 }
 
 function statusClass(status) {
@@ -112,9 +119,8 @@ onMounted(load)
 </script>
 
 <style scoped>
-.purchase-invoices-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; padding: 2px 0 var(--erp-space-5); }
+.purchase-invoices-page { width: 100%; min-width: 0; padding: 2px 0 var(--erp-space-5); }
 .purchase-invoices-page__loading { display: grid; gap: var(--erp-space-3); padding-top: 2px; }
-.purchase-invoices-page__loading :deep(.p-skeleton) { border-radius: var(--erp-panel-radius); }
 :deep(.purchase-invoice-status--draft) { color: var(--erp-warning); background: var(--erp-warning-soft); border-color: var(--erp-attention-border); }
 :deep(.purchase-invoice-status--approval-initiated) { color: var(--erp-danger); background: var(--erp-danger-soft); border-color: color-mix(in srgb, var(--erp-danger) 22%, transparent); }
 :deep(.purchase-invoice-status--approval-pending) { color: var(--erp-warning); background: var(--erp-warning-soft); border-color: var(--erp-attention-border); }

@@ -604,6 +604,11 @@ def get_panel_wise_consumption_matrix(doc):
 		)
 		include_saved = bool(stored_enabled)
 	matrix, context = make_panel_wise_matrix(doc, include_saved=include_saved)
+	return panel_wise_payload(matrix, context)
+
+
+def panel_wise_payload(matrix, context):
+	"""Editor payload for a built matrix: the matrix, Dia choices and the cell count."""
 	from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
 	dia_values = get_global_attribute_values(get_dia_attribute())

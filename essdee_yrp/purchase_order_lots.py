@@ -9,6 +9,12 @@ def _has_link_fields(doc):
 	return bool(doc.meta.get_field("default_lot") and doc.meta.get_field("sd_lot"))
 
 
+def purchase_order_lot_options(purchase_order) -> list[str]:
+	"""Contribute explicitly linked lots to YRP receipt choices."""
+	values = [row.get("lot") for row in purchase_order.get("sd_lot") or []]
+	return [lot for lot in values if lot]
+
+
 def _lot_dimension_field(doctype=None):
 	from yrp.stock.dimensions import get_stock_dimensions
 
@@ -194,29 +200,20 @@ def update_lot_po_links(lot, add_pos=None, remove_pos=None, comment=None):
 
 def validate_grn_lots(doc, method=None):
 	"""Apply linked-Lot restrictions for PO GRNs on every server save path."""
-	if doc.get("against") != "Purchase Order" or not doc.get("against_id"):
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+		get_purchase_order_lot_fieldname,
+		get_purchase_order_lot_options,
+		validate_purchase_order_lot,
+	)
+
+	if doc.get("is_return") or doc.get("against") != "Purchase Order" or not doc.get("against_id"):
 		return
 	if not frappe.db.get_value("Purchase Order", doc.against_id, "is_yrp_managed"):
 		return
-	dimension_field = _lot_dimension_field("YRP Goods Received Note Item")
+	dimension_field = get_purchase_order_lot_fieldname()
 	if not dimension_field:
 		return
 	po = frappe.get_doc("Purchase Order", doc.against_id)
-	allowed_lots = {row.lot for row in po.get("sd_lot") or [] if row.lot}
-	# An empty linked list deliberately means unrestricted, matching legacy policy.
-	if not allowed_lots:
-		return
-	invalid_lots = sorted(
-		{
-			row.get(dimension_field)
-			for row in doc.get("items") or []
-			if row.get(dimension_field) and row.get(dimension_field) not in allowed_lots
-		}
-	)
-	if invalid_lots:
-		frappe.throw(
-			_("Goods Received Note contains Lots not linked to Purchase Order {0}: {1}").format(
-				doc.against_id,
-				", ".join(invalid_lots),
-			)
-		)
+	lot_options = get_purchase_order_lot_options(po)
+	for index, row in enumerate(doc.get("items") or [], 1):
+		validate_purchase_order_lot(row, dimension_field, lot_options, doc.against_id, index)

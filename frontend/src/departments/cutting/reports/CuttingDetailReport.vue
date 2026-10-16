@@ -13,7 +13,7 @@
 			<DateField v-model="filters.endDate" label="To date" required />
 			<label>
 				<span class="erp-field-label">Cutting location</span>
-				<select v-model="filters.location"><option value="">All locations</option><option value="Machine Cutting">Machine Cutting</option><option value="Manual Cutting">Manual Cutting</option></select>
+				<select class="erp-native-select" v-model="filters.location"><option value="">All locations</option><option value="Machine Cutting">Machine Cutting</option><option value="Manual Cutting">Manual Cutting</option></select>
 			</label>
 		</template>
 

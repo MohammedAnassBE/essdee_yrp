@@ -1,8 +1,8 @@
 <template>
 	<DepartmentPage
 		title="Cutting Plan"
-		back-to="/cutting/plans"
-		back-label="Cutting Plans"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -123,6 +123,11 @@ import DocumentPrintButton from "./cutting/DocumentPrintButton.vue"
 import CuttingPlanSidebar from "./cutting/CuttingPlanSidebar.vue"
 import CuttingPlanTabs from "./cutting/CuttingPlanTabs.vue"
 import CuttingPlanEditor from "./cutting/plan/CuttingPlanEditor.vue"
+
+const props = defineProps({
+	backTo: { type: String, default: "/cutting/plans" },
+	backLabel: { type: String, default: "Cutting Plans" },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -247,7 +252,7 @@ function cancelEditor() {
 		editingSubmitted.value = false
 		return
 	}
-	router.push("/cutting/plans")
+	router.push(props.backTo)
 }
 
 watch(cuttingPlanId, probeEditor, { immediate: true })
@@ -273,17 +278,14 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 
 .cutting-plan-editor-route {
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
 }
-
 .cutting-plan-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 4fr) minmax(286px, 1fr);
+	grid-template-columns: minmax(0, 4fr) minmax(300px, 1fr);
 	align-items: stretch;
 	gap: var(--erp-space-3);
-	height: calc(100dvh - var(--erp-shell-header-height) - 97px);
+	height: calc(100dvh - var(--erp-shell-header-height) - 44px);
 	min-height: 0;
 	overflow: hidden;
 }
@@ -291,13 +293,11 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 .cutting-plan-layout--without-sidebar {
 	grid-template-columns: minmax(0, 1fr);
 }
-
-.cutting-plan-layout > :first-child {
+.cutting-plan-layout > * {
 	height: 100%;
 	min-width: 0;
 	min-height: 0;
 }
-
 .cutting-plan-layout :deep(.common-form-view) {
 	display: flex;
 	height: 100%;
@@ -307,16 +307,14 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: 0 12px 32px rgb(28 61 45 / 6%);
+	box-shadow: var(--erp-shadow-card);
 	flex-direction: column;
 }
-
 .cutting-plan-layout :deep(.form-toolbar) {
 	min-height: 64px;
 	padding: 10px 14px;
-	background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft));
+	background: var(--erp-surface);
 	border: 0;
-	border-top: 3px solid var(--erp-accent);
 	border-bottom: 1px solid var(--erp-border);
 	border-radius: 0;
 	box-shadow: none;
@@ -326,11 +324,10 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 	gap: 4px;
 	min-width: 0;
 }
-
 .cutting-plan-layout :deep(.form-toolbar h2) {
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-title);
-	font-weight: 760;
+	font-weight: 700;
 	letter-spacing: -0.025em;
 	line-height: 1.05;
 }
@@ -351,22 +348,9 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
-
 .cutting-plan-layout :deep(.form-toolbar__actions .p-button) {
 	min-height: var(--erp-control-height);
-	padding: 0.52rem 0.86rem;
-	color: var(--erp-text);
-	background: var(--erp-surface);
-	border-color: var(--erp-border-strong);
-	border-radius: var(--erp-control-radius);
-	box-shadow: none;
-	font-weight: 650;
-}
-
-.cutting-plan-layout :deep(.form-toolbar__actions .p-button:hover) {
-	color: var(--erp-accent-hover);
-	background: var(--erp-accent-soft);
-	border-color: color-mix(in srgb, var(--erp-accent) 35%, white);
+	white-space: nowrap;
 }
 
 .cutting-plan-main {
@@ -378,13 +362,12 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 	overflow: hidden;
 	padding: 14px;
 }
-
 :deep(.cutting-plan-status.p-tag) {
 	flex: 0 0 auto;
 	padding: 0.22rem 0.58rem;
-	border: 1px solid color-mix(in srgb, var(--erp-accent) 14%, transparent);
+	border: 0;
 	font-size: var(--erp-font-size-min);
-	font-weight: 750;
+	font-weight: 600;
 }
 
 .cutting-plan-header-meta {
@@ -403,22 +386,20 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 	border-left: 1px solid var(--erp-border);
 	white-space: nowrap;
 }
-
 .cutting-plan-header-fact small {
 	flex: 0 0 auto;
 	color: var(--erp-text-muted);
-	font-size: 11.5px;
-	font-weight: 650;
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 }
-
 .cutting-plan-header-fact strong {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--erp-text);
-	font-size: 13.5px;
-	font-weight: 720;
+	font-size: var(--erp-font-size-table);
+	font-weight: 700;
 	text-overflow: ellipsis;
 }
 
@@ -450,18 +431,45 @@ watch(cuttingPlanId, probeEditor, { immediate: true })
 	}
 }
 
-@media (max-width: 720px) {
+@media (max-width: 700px) {
 	.cutting-plan-layout :deep(.form-toolbar) {
-		align-items: flex-start;
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: start;
+		gap: 8px 10px;
 	}
-
-	.cutting-plan-header-meta {
-		flex-wrap: wrap;
-	}
-
 	.cutting-plan-header-fact--item {
 		max-width: calc(100vw - 110px);
+	}
+	.cutting-plan-layout :deep(.form-toolbar > :first-child) {
+		grid-column: 1;
+		grid-row: 1;
+	}
+	.cutting-plan-layout :deep(.form-toolbar__identity) {
+		display: contents;
+	}
+	.cutting-plan-layout :deep(.form-toolbar h2) {
+		grid-column: 2;
+		grid-row: 1;
+	}
+	.cutting-plan-layout :deep(.form-toolbar__meta) {
+		grid-column: 1 / -1;
+		justify-content: flex-start;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.cutting-plan-layout :deep(.form-toolbar__actions) {
+		grid-column: 1 / -1;
+		width: 100%;
+		margin-left: 0;
+	}
+	.cutting-plan-header-meta {
+		display: contents;
+	}
+	.cutting-plan-header-fact {
+		flex-basis: 100%;
+		padding-left: 0;
+		border-left: 0;
 	}
 }
 </style>

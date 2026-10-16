@@ -2,11 +2,11 @@
 	<div class="work-order-summary">
 		<section class="work-order-summary__section erp-card">
 			<header><h2>Work Order Summary</h2></header>
-			<WorkOrderItemMatrix :groups="summary.item_detail || []" mode="summary" />
+			<WorkOrderItemMatrix :groups="summary.item_detail || []" mode="summary" :process-cost-view-route-name="processCostViewRouteName" />
 		</section>
 		<section v-if="additionalDeliverables.length" class="work-order-summary__section erp-card">
 			<header><h2>Additional Deliverables</h2></header>
-			<WorkOrderItemMatrix :groups="additionalDeliverables" mode="additional" />
+			<WorkOrderItemMatrix :groups="additionalDeliverables" mode="additional" :process-cost-view-route-name="processCostViewRouteName" />
 		</section>
 	</div>
 </template>
@@ -16,7 +16,10 @@ import { computed } from "vue"
 
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
 
-const props = defineProps({ summary: { type: Object, default: () => ({}) } })
+const props = defineProps({
+	summary: { type: Object, default: () => ({}) },
+	processCostViewRouteName: { type: String, default: "" },
+})
 
 const additionalDeliverables = computed(() => (props.summary.deliverables || []).map((group) => ({
 	...group,

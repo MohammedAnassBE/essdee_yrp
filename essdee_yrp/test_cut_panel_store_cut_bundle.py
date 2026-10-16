@@ -1,4 +1,7 @@
+import re
 from copy import deepcopy
+from pathlib import Path
+from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -13,6 +16,24 @@ from essdee_yrp.cut_panel_store.cut_bundle_workspace import (
 	preview_cut_bundle_source,
 	save_cut_bundle,
 )
+
+
+class TestCutBundleDialogContract(TestCase):
+	def test_template_does_not_pass_events_to_defaulted_handler_arguments(self):
+		source = (Path(__file__).parent.parent / "frontend/src/departments/cut-panel-store/CutBundleEditDialog.vue").read_text()
+		template = source.split("<script setup>")[0]
+		self.assertIn('@click="preview()"', template)
+		for event, handler in re.findall(r'@([\w:.-]+)="(\w+)"', template):
+			signature = re.search(rf"function {handler}\(([^)]*)\)", source)
+			self.assertIsNotNone(signature, f"Audit {event}: {handler}")
+			self.assertNotIn("=", signature[1], f"{event} passes a payload to {handler}")
+		self.assertIn("await preview(sequence, requestedDocumentName)", source)
+
+	def test_preview_cleanup_is_owned_by_latest_request_and_source_changes_invalidate_it(self):
+		source = (Path(__file__).parent.parent / "frontend/src/departments/cut-panel-store/CutBundleEditDialog.vue").read_text()
+		self.assertIn('if (sequence === previewSequence && acting.value === "preview") acting.value = ""', source)
+		self.assertIn("function sourceChanged() { invalidatePreview();", source)
+		self.assertIn("function colourChanged() { invalidatePreview();", source)
 
 
 class TestCutPanelStoreCutBundleWorkspace(UnitTestCase):

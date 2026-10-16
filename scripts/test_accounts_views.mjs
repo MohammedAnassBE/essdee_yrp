@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 
 import {
 	ACCOUNTS_REPORTS,
@@ -22,7 +23,7 @@ import {
 } from "../frontend/src/departments/accounts/accountsViews.js"
 
 assert.deepEqual(
-	ACCOUNTS_REPORTS.map((report) => report.key),
+	ACCOUNTS_REPORTS.slice(0, -1).map((report) => report.key),
 	["stock_balance", "cutting_dpr", "sewing_dpr", "finishing_dispatch", "ironing_dpr"],
 )
 assert.deepEqual(
@@ -30,6 +31,30 @@ assert.deepEqual(
 	["sewing-dpr"],
 )
 assert.deepEqual(accountsReportTabs({}), [])
+assert.equal(ACCOUNTS_REPORTS.at(-1).key, "audit_pending_finishing_plans")
+assert.deepEqual(
+	accountsReportTabs({ audit_pending_finishing_plans: { can_read: true } }).map((tab) => tab.value),
+	["audit-pending"],
+)
+assert.deepEqual(accountsReportTabs({ audit_pending_finishing_plans: { can_read: false } }), [])
+const allAccountsTabs = accountsReportTabs(Object.fromEntries(
+	ACCOUNTS_REPORTS.map(({ key }) => [key, { can_read: true }]),
+))
+assert.deepEqual(allAccountsTabs.map(({ value }) => value), [
+	"stock-balance", "cutting-dpr", "sewing-dpr", "finishing-dispatch", "ironing-dpr", "audit-pending",
+])
+const auditPendingComponent = readFileSync(new URL("../frontend/src/departments/accounts/reports/AuditPendingFinishingPlans.vue", import.meta.url), "utf8")
+for (const contract of [
+	"ReportShell", 'useWebReport({ reportKey: "accounts-audit-pending-finishing-plans" })',
+	'doctype="SD YRP Lot"', 'doctype="Item"', 'label="Requested From"', 'label="To"',
+	"/finishing/plans/${encodeURIComponent(row.name)}", "row.days_pending >= 7", "text-align: right",
+	"Plans pending", "No Finishing Plans are waiting for audit.", ':loading="loading"', ':error="error"',
+	"Boolean(filters.from_date) !== Boolean(filters.to_date)", "filters.from_date > filters.to_date",
+]) assert.ok(auditPendingComponent.includes(contract), `Missing Audit Pending contract: ${contract}`)
+const accountsReportPage = readFileSync(new URL("../frontend/src/departments/accounts/AccountsReports.vue", import.meta.url), "utf8")
+assert.ok(accountsReportPage.includes('audit_pending_finishing_plans: defineAsyncComponent(() => import("./reports/AuditPendingFinishingPlans.vue"))'))
+const reportProvider = readFileSync(new URL("../essdee_yrp/web_reports.py", import.meta.url), "utf8")
+assert.ok(reportProvider.includes('key="accounts-audit-pending-finishing-plans"'))
 
 assert.deepEqual(
 	groupedItemTotals(

@@ -1,11 +1,11 @@
 <template>
-	<DepartmentPage title="Production Order" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Production Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="ppo-page-frame">
 			<FabricDocumentWorkspace doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
 				<template #header="{ record, headingId }">
 					<div class="ppo-page__identity">
-						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 :id="headingId">{{ record.item || "Production Order" }}</h1></div>
-						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
+						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 class="erp-doc-title" :id="headingId">{{ record.item || "Production Order" }}</h1></div>
+						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status_label" />
 					</div>
 				</template>
 				<template #header-actions><DocumentActionStrip :actions="actions" /></template>
@@ -23,7 +23,7 @@
 									<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
 								</div>
 							</TabPanel>
-							<TabPanel value="transfers"><ProductionOrderTransferHistory :rows="workspace.histories?.transfers || []" /></TabPanel>
+							<TabPanel value="transfers"><ProductionOrderTransferHistory :rows="workspace.histories?.transfers || []" :view-route-name="transferViewRouteName" /></TabPanel>
 						</TabPanels>
 					</Tabs>
 				</template>
@@ -37,6 +37,7 @@
 		</section>
 
 		<ProductionOrderActionDialog v-model:visible="actionVisible" :mode="actionMode" :matrix="workspace.matrix || []" :busy="Boolean(acting)" @submit="submitAction" />
+		<ProductionOrderUpdatePriceDialog v-model:visible="priceVisible" :production-order="workspace.record?.name || ''" :busy="Boolean(acting)" :error="error" @submit="submitPrice" />
 		<ProductionOrderLotOcrDialog v-model:visible="lotOcrVisible" :production-order="workspace.record?.name || ''" :lot="selectedLot" :item="workspace.record?.item || ''" />
 		<DocumentConfirmationDialog v-model:visible="confirmVisible" :title="confirmTitle" :message="confirmMessage" :confirm-label="confirmLabel" :busy="Boolean(acting)" @confirm="confirmAction" />
 	</DepartmentPage>
@@ -63,6 +64,16 @@ import ProductionOrderLotOcrDialog from "./ProductionOrderLotOcrDialog.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
 import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
+import ProductionOrderUpdatePriceDialog from "./ProductionOrderUpdatePriceDialog.vue"
+
+const props = defineProps({
+	backTo: { type: String, default: "/sales/production-orders" },
+	backLabel: { type: String, default: "Production Orders" },
+	viewRouteName: { type: String, default: "sales-production-order" },
+	transferViewRouteName: { type: String, default: "sales-production-order" },
+	editRouteName: { type: String, default: "sales-production-order-edit" },
+	listRouteName: { type: String, default: "sales-production-orders" },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -73,13 +84,14 @@ const acting = ref("")
 const activeTab = ref("details")
 const actionVisible = ref(false)
 const actionMode = ref("")
+const priceVisible = ref(false)
 const lotOcrVisible = ref(false)
 const selectedLot = ref("")
 const confirmVisible = ref(false)
 const pendingConfirm = ref("")
 let loadSequence = 0
 
-const dialogModes = new Set(["request_changes", "update_price", "change_dates", "change_status", "update_quantity_ratio", "transfer_quantity", "create_lot", "link_lot"])
+const dialogModes = new Set(["request_changes", "change_dates", "change_status", "update_quantity_ratio", "transfer_quantity", "create_lot", "link_lot"])
 const iconMap = { save: "pi pi-pencil", request_ppo_approval: "pi pi-send", approve_ppo: "pi pi-check-circle", request_changes: "pi pi-undo", update_price: "pi pi-indian-rupee", change_dates: "pi pi-calendar", change_status: "pi pi-sync", update_quantity_ratio: "pi pi-sliders-h", approve_quantity_ratio: "pi pi-check", approve_status: "pi pi-check", transfer_quantity: "pi pi-arrow-right-arrow-left", approve_transfer: "pi pi-check", create_lot: "pi pi-plus", link_lot: "pi pi-link", reopen: "pi pi-lock-open", cancel: "pi pi-ban", delete: "pi pi-trash", amend: "pi pi-copy" }
 const priority = ["approve_ppo", "request_ppo_approval", "approve_quantity_ratio", "approve_status", "approve_transfer", "save", "update_quantity_ratio", "update_price", "change_dates", "change_status", "transfer_quantity", "create_lot", "link_lot", "reopen", "request_changes", "cancel", "amend", "delete"]
 const actions = computed(() => priority.flatMap((key) => {
@@ -110,50 +122,128 @@ async function load(refresh = false) {
 }
 function openLotOcr(lot) { selectedLot.value = lot; lotOcrVisible.value = true }
 function beginAction(command) {
-	if (command === "save") return router.push({ name: "sales-production-order-edit", params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
+	if (command === "save") return router.push({ name: props.editRouteName, params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
+	if (command === "update_price") { error.value = ""; priceVisible.value = true; return }
 	if (dialogModes.has(command)) { actionMode.value = command; actionVisible.value = true; return }
 	pendingConfirm.value = command; confirmVisible.value = true
 }
 async function submitAction(payload) { actionVisible.value = false; await runCommand(actionMode.value, payload) }
+async function submitPrice(payload) { if (await runCommand("update_price", payload)) priceVisible.value = false }
 async function confirmAction() { const command = pendingConfirm.value; confirmVisible.value = false; pendingConfirm.value = ""; if (command) await runCommand(command) }
 async function runCommand(command, payload = {}) {
 	const source = workspace.value.record
 	acting.value = command; error.value = ""
 	try {
 		const result = await executeProductionOrderCommand(source.name, command, payload, source.modified) || {}
-		if (result.deleted) { await router.replace({ name: "sales-production-orders" }); return }
+		if (result.deleted) { await router.replace({ name: props.listRouteName }); return }
 		workspace.value = result
 		const name = result.record?.name || source.name
-		if (name !== route.params.productionOrderId) await router.replace({ name: "sales-production-order", params: { productionOrderId: name }, state: preserveListNavigationState(name) })
-	} catch (reason) { error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Production Order.` }
+		if (name !== route.params.productionOrderId) await router.replace({ name: props.viewRouteName, params: { productionOrderId: name }, state: preserveListNavigationState(name) })
+		return true
+	} catch (reason) { error.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Production Order.`; return false }
 	finally { acting.value = "" }
 }
-function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
-watch(() => route.params.productionOrderId, () => { lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
+watch(() => route.params.productionOrderId, () => { priceVisible.value = false; lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
 </script>
 
 <style scoped>
-.ppo-page-frame { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); padding: 0 clamp(2px, .7vw, 10px); }
+.ppo-page-frame {
+	width: 100%;
+	min-width: 0;
+}
 .ppo-page__identity { display: flex; min-width: 0; align-items: center; gap: 12px; padding-block: 4px; }
 .ppo-page__title { display: grid; min-width: 0; gap: 2px; }
-.ppo-page__title > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .035em; text-transform: uppercase; }
-.ppo-page__title h1 { max-width: min(980px, 70vw); margin: 0; overflow: hidden; color: var(--erp-text); font-size: clamp(19px, 1.45vw, 24px); letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
-.ppo-page__metric { display: grid; min-height: 72px; align-content: center; gap: 3px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); }
-.ppo-page__metric span, .ppo-page__metric small, .ppo-page__lots > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .035em; text-transform: uppercase; }
-.ppo-page__metric strong { color: var(--erp-accent-hover); font-size: 19px; font-variant-numeric: tabular-nums; }
+.ppo-page__title > span {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+	font-weight: var(--erp-font-weight-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ppo-page__title h1 { max-width: min(980px, 70vw); margin: 0; overflow: hidden; color: var(--erp-text); text-overflow: ellipsis; white-space: nowrap; }
+.ppo-page__metric {
+	display: grid;
+	min-width: 0;
+	min-height: 72px;
+	align-content: center;
+	gap: 3px;
+	padding: 10px 13px;
+	border-bottom: 1px solid var(--erp-border-subtle);
+	background: var(--erp-surface);
+}
+.ppo-page__metric span, .ppo-page__metric small, .ppo-page__lots > span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+	overflow-wrap: anywhere;
+}
+.ppo-page__metric strong {
+	min-width: 0;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-section);
+	font-weight: 700;
+	letter-spacing: -.01em;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
 .ppo-page__lots { display: grid; gap: 5px; padding: 12px 13px; }
-.ppo-page__lots strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.ppo-page__lots strong {
+	min-width: 0;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
 .ppo-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
 .ppo-tabs :deep(.p-tab span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
 .ppo-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
 .ppo-details { display: grid; min-width: 0; gap: 12px; }
 .ppo-activity { overflow: hidden; border-color: var(--erp-border); }
-.ppo-activity > header { padding: 9px 13px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
-.ppo-activity > header span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 740; letter-spacing: .05em; }
-.ppo-activity h2 { margin: 2px 0 0; font-size: 15px; }
+.ppo-activity > header {
+	padding: 9px 13px;
+	border-bottom: 1px solid var(--erp-border);
+	background: transparent;
+}
+.ppo-activity > header span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .05em;
+}
+.ppo-activity h2 {
+	margin: 2px 0 0;
+	font-size: var(--erp-font-size-md);
+	font-weight: 600;
+}
 .ppo-activity > div { display: grid; grid-template-columns: minmax(150px, .35fr) 1fr; gap: 10px; padding: 9px 13px; border-bottom: 1px solid var(--erp-border); font-size: var(--erp-font-size-caption); }
 .ppo-activity > div:last-child { border-bottom: 0; }
 .ppo-activity > div span { color: var(--erp-text-secondary); }
+.ppo-page__metric:last-child {
+	border-bottom: 0;
+}
+@media (max-width: 900px) {
+	.ppo-page__metric {
+		align-content: start;
+		border-bottom: 0;
+	}
+	.ppo-page__metric:nth-child(3) {
+		grid-column: 1 / -1;
+		min-height: 0;
+	}
+	.ppo-page__lots {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 12px;
+	}
+	.ppo-page__lots > span {
+		flex-basis: 100%;
+	}
+}
 </style>

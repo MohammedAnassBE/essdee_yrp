@@ -9,6 +9,7 @@ export const ACCOUNTS_REPORTS = [
 		icon: "pi pi-truck",
 	},
 	{ key: "ironing_dpr", value: "ironing-dpr", label: "Ironing DPR", icon: "pi pi-sliders-h" },
+	{ key: "audit_pending_finishing_plans", value: "audit-pending", label: "Audit Pending", icon: "pi pi-check-square" },
 ]
 
 export const PURCHASE_INVOICE_STATUS_OPTIONS = [

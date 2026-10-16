@@ -437,7 +437,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-18 11:29:59.697405",
+ "modified": "2026-10-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Cutting LaySheet",
@@ -489,6 +489,11 @@
    "role": "Production Planner",
    "select": 1,
    "share": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Merch User"
   }
  ],
  "row_format": "Dynamic",

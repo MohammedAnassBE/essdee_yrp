@@ -1,8 +1,8 @@
 <template>
 	<DepartmentPage
 		title="Bill Tracking"
-		back-to="/hr"
-		back-label="HR"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -10,8 +10,7 @@
 	>
 		<section class="bill-trackings-page erp-workspace" aria-label="Bill Tracking">
 			<div v-if="loading" class="bill-trackings-page__loading">
-				<Skeleton height="76px" />
-				<Skeleton height="420px" />
+				<ListPageSkeleton />
 			</div>
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability?.can_read" severity="warn" :closable="false">
@@ -25,7 +24,7 @@
 					ref="listView"
 					doctype="YRP Bill Tracking"
 					title="Bill Tracking"
-					eyebrow="HR"
+					:eyebrow="eyebrow"
 					subtitle="Vendor bills from receipt through assignment and invoicing"
 					search-placeholder="Search Bill Tracking…"
 					name-column-label="Bill Tracking"
@@ -93,7 +92,6 @@
 <script setup>
 import Button from "primevue/button"
 import Message from "primevue/message"
-import Skeleton from "primevue/skeleton"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
@@ -105,6 +103,7 @@ import {
 } from "../../api/hr.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import ListView from "../../components/common/ListView.vue"
+import ListPageSkeleton from "../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
@@ -116,6 +115,14 @@ import {
 	assignedToMeFilters,
 	bulkAssignSummary,
 } from "./hrViews.js"
+
+const props = defineProps({
+	backTo: { type: String, default: "/hr" },
+	backLabel: { type: String, default: "HR" },
+	eyebrow: { type: String, default: "HR" },
+	viewRouteName: { type: String, default: "hr-bill-tracking" },
+	newRouteName: { type: String, default: "hr-bill-tracking-new" },
+})
 
 const router = useRouter()
 const toast = useToast()
@@ -200,20 +207,19 @@ async function assignSelected({ assignedTo, remarks }) {
 
 function openBillTracking(row, snapshot) {
 	return openListDocument(router, row, snapshot, {
-		routeName: "hr-bill-tracking",
+		routeName: props.viewRouteName,
 		paramName: "billTrackingId",
 	})
 }
 
 function createBillTracking() {
-	router.push({ name: "hr-bill-tracking-new" })
+	router.push({ name: props.newRouteName })
 }
 
 onMounted(load)
 </script>
 
 <style scoped>
-.bill-trackings-page { display: grid; width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; gap: var(--erp-space-2); padding: 2px 0 var(--erp-space-5); }
+.bill-trackings-page { display: grid; width: 100%; min-width: 0; gap: var(--erp-space-2); padding: 2px 0 var(--erp-space-5); }
 .bill-trackings-page__loading { display: grid; gap: var(--erp-space-3); padding-top: 2px; }
-.bill-trackings-page__loading :deep(.p-skeleton) { border-radius: var(--erp-panel-radius); }
 </style>

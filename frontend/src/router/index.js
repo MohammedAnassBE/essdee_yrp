@@ -1,8 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
+import { getLockedRedirect } from "./departmentLock.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
+import { PLANNING_ROUTES } from "../departments/planning/planningViews.js"
+import { MERCH_ROUTES } from "../departments/merch/merchViews.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")
@@ -56,12 +59,28 @@ const HrReports = () => import("../departments/hr/HrReports.vue")
 const LotsList = () => import("../departments/purchase/lot/LotsList.vue")
 const LotPage = () => import("../departments/purchase/lot/LotPage.vue")
 const LotEditorPage = () => import("../departments/purchase/lot/LotEditorPage.vue")
+const PlanningLotsList = () => import("../departments/planning/lot/LotsList.vue")
+const PlanningLotPage = () => import("../departments/planning/lot/LotPage.vue")
+const PlanningLotEditorPage = () => import("../departments/planning/lot/LotEditorPage.vue")
+const PlanningReports = () => import("../departments/planning/PlanningReports.vue")
 const ItemsList = () => import("../departments/purchase/ItemsList.vue")
 const ItemPage = () => import("../departments/purchase/ItemPage.vue")
 const ItemEditorPage = () => import("../departments/purchase/ItemEditorPage.vue")
 const ItemPricesList = () => import("../departments/purchase/ItemPricesList.vue")
 const ItemPricePage = () => import("../departments/purchase/ItemPricePage.vue")
 const ItemPriceEditor = () => import("../departments/purchase/ItemPriceEditor.vue")
+const IpdList = () => import("../departments/merch/ipd/IpdList.vue")
+const MerchLotsList = () => import("../departments/merch/lot/MerchLotsList.vue")
+const MerchLotPage = () => import("../departments/merch/lot/MerchLotPage.vue")
+const MerchLotEditorPage = () => import("../departments/merch/lot/MerchLotEditorPage.vue")
+const MerchReports = () => import("../departments/merch/MerchReports.vue")
+const IpdPage = () => import("../departments/merch/ipd/IpdPage.vue")
+const IpdEditorPage = () => import("../departments/merch/ipd/IpdEditorPage.vue")
+const ProcessCostsList = () => import("../departments/merch/process-cost/ProcessCostsList.vue")
+const ProcessCostPage = () => import("../departments/merch/process-cost/ProcessCostPage.vue")
+const ProcessCostEditorPage = () => import("../departments/merch/process-cost/ProcessCostEditorPage.vue")
+
+const idProps = (param, extra) => (route) => ({ [param]: String(route.params[param] || ""), ...extra })
 
 const Debits = () => import("../departments/accounts/Debits.vue")
 
@@ -556,6 +575,143 @@ const routes = [
 	{ path: "/purchase/lots/:lotId", name: PURCHASE_ROUTES.lot, component: LotPage, props: true },
 	{ path: "/purchase/lots/:lotId/edit", name: PURCHASE_ROUTES.lotEdit, component: LotEditorPage, props: true },
 	{
+		path: "/planning/cutting-plans", name: PLANNING_ROUTES.cuttingPlans, component: CuttingPlans,
+		props: { backTo: "/planning", backLabel: "Planning", viewRouteName: PLANNING_ROUTES.cuttingPlan, newRouteName: PLANNING_ROUTES.cuttingPlanNew },
+	},
+	{
+		path: "/planning/cutting-plans/new", name: PLANNING_ROUTES.cuttingPlanNew, component: CuttingPlanEditorPage,
+		props: { backTo: "/planning/cutting-plans", backLabel: "Cutting Plans", viewRouteName: PLANNING_ROUTES.cuttingPlan },
+	},
+	{
+		path: "/planning/cutting-plans/:cuttingPlanId", name: PLANNING_ROUTES.cuttingPlan, component: CuttingPlan,
+		props: { backTo: "/planning/cutting-plans", backLabel: "Cutting Plans" },
+	},
+	{
+		path: "/planning/sewing-plans", name: PLANNING_ROUTES.sewingPlans, component: SewingPlans,
+		props: { backTo: "/planning", backLabel: "Planning" },
+	},
+	{
+		path: "/planning/finishing-plans", name: PLANNING_ROUTES.finishingPlans, component: FinishingPlans,
+		props: { backTo: "/planning", backLabel: "Planning", viewRouteName: PLANNING_ROUTES.finishingPlan },
+	},
+	{
+		path: "/planning/finishing-plans/:finishingPlanId", name: PLANNING_ROUTES.finishingPlan, component: FinishingPlan,
+		props: { backTo: "/planning/finishing-plans", backLabel: "Finishing Plans" },
+	},
+	{ path: "/planning/lots", name: PLANNING_ROUTES.lots, component: PlanningLotsList },
+	{ path: "/planning/lots/:lotId", name: PLANNING_ROUTES.lot, component: PlanningLotPage, props: true },
+	{ path: "/planning/lots/:lotId/edit", name: PLANNING_ROUTES.lotEdit, component: PlanningLotEditorPage, props: true },
+	{
+		path: "/planning/production-orders", name: PLANNING_ROUTES.productionOrders, component: SalesSection,
+		props: { backTo: "/planning", backLabel: "Planning", viewRouteName: PLANNING_ROUTES.productionOrder, newRouteName: PLANNING_ROUTES.productionOrderNew },
+	},
+	{
+		path: "/planning/production-orders/new", name: PLANNING_ROUTES.productionOrderNew, component: ProductionOrderEditorPage,
+		props: { backTo: "/planning/production-orders", backLabel: "Production Orders", viewRouteName: PLANNING_ROUTES.productionOrder },
+	},
+	{
+		path: "/planning/production-orders/:productionOrderId/edit", name: PLANNING_ROUTES.productionOrderEdit, component: ProductionOrderEditorPage,
+		props: idProps("productionOrderId", { backTo: "/planning/production-orders", backLabel: "Production Orders", viewRouteName: PLANNING_ROUTES.productionOrder }),
+	},
+	{
+		path: "/planning/production-orders/:productionOrderId", name: PLANNING_ROUTES.productionOrder, component: ProductionOrder,
+		props: { backTo: "/planning/production-orders", backLabel: "Production Orders", viewRouteName: PLANNING_ROUTES.productionOrder, editRouteName: PLANNING_ROUTES.productionOrderEdit, listRouteName: PLANNING_ROUTES.productionOrders },
+	},
+	{
+		path: "/planning/work-orders", name: PLANNING_ROUTES.workOrders, component: FabricStoreSection,
+		props: { section: "work_orders", storeName: "Planning", basePath: "/planning", workOrderViewRouteName: PLANNING_ROUTES.workOrder, workOrderNewRouteName: PLANNING_ROUTES.workOrderNew },
+	},
+	{
+		path: "/planning/work-orders/new", name: PLANNING_ROUTES.workOrderNew, component: FabricWorkOrderEditorPage,
+		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", listRouteName: PLANNING_ROUTES.workOrders, viewRouteName: PLANNING_ROUTES.workOrder },
+	},
+	{
+		path: "/planning/work-orders/:workOrderId/edit", name: PLANNING_ROUTES.workOrderEdit, component: FabricWorkOrderEditorPage,
+		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", listRouteName: PLANNING_ROUTES.workOrders, viewRouteName: PLANNING_ROUTES.workOrder },
+	},
+	{
+		path: "/planning/work-orders/:workOrderId", name: PLANNING_ROUTES.workOrder, component: FabricWorkOrder,
+		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", viewRouteName: PLANNING_ROUTES.workOrder, newRouteName: PLANNING_ROUTES.workOrderNew, editRouteName: PLANNING_ROUTES.workOrderEdit },
+	},
+	{ path: "/planning/reports", name: PLANNING_ROUTES.reports, component: PlanningReports },
+	{ path: "/merch/item-production-details", name: MERCH_ROUTES.ipds, component: IpdList },
+	{ path: "/merch/lots", name: MERCH_ROUTES.lots, component: MerchLotsList },
+	{ path: "/merch/lots/new", name: MERCH_ROUTES.lotNew, component: MerchLotEditorPage },
+	{ path: "/merch/lots/:lotId", name: MERCH_ROUTES.lot, component: MerchLotPage, props: true },
+	{ path: "/merch/lots/:lotId/edit", name: MERCH_ROUTES.lotEdit, component: MerchLotEditorPage, props: true },
+	{ path: "/merch/reports", name: MERCH_ROUTES.reports, component: MerchReports },
+	{ path: "/merch/item-production-details/new", name: MERCH_ROUTES.ipdNew, component: IpdEditorPage },
+	{ path: "/merch/item-production-details/:ipdId", name: MERCH_ROUTES.ipd, component: IpdPage, props: true },
+	{ path: "/merch/item-production-details/:ipdId/edit", name: MERCH_ROUTES.ipdEdit, component: IpdEditorPage, props: true },
+	{
+		path: "/merch/production-orders", name: MERCH_ROUTES.productionOrders, component: SalesSection,
+		props: { backTo: "/merch", backLabel: "Merch", viewRouteName: MERCH_ROUTES.productionOrder, newRouteName: MERCH_ROUTES.productionOrderNew, initialStatus: "PPO Request", eyebrow: "Merch" },
+	},
+	{
+		path: "/merch/production-orders/new", name: MERCH_ROUTES.productionOrderNew, component: ProductionOrderEditorPage,
+		props: { backTo: "/merch/production-orders", backLabel: "Production Orders", viewRouteName: MERCH_ROUTES.productionOrder },
+	},
+	{
+		path: "/merch/production-orders/:productionOrderId/edit", name: MERCH_ROUTES.productionOrderEdit, component: ProductionOrderEditorPage,
+		props: idProps("productionOrderId", { backTo: "/merch/production-orders", backLabel: "Production Orders", viewRouteName: MERCH_ROUTES.productionOrder }),
+	},
+	{
+		path: "/merch/production-orders/:productionOrderId", name: MERCH_ROUTES.productionOrder, component: ProductionOrder,
+		props: { backTo: "/merch/production-orders", backLabel: "Production Orders", viewRouteName: MERCH_ROUTES.productionOrder, transferViewRouteName: MERCH_ROUTES.productionOrder, editRouteName: MERCH_ROUTES.productionOrderEdit, listRouteName: MERCH_ROUTES.productionOrders },
+	},
+	{
+		path: "/merch/work-orders", name: MERCH_ROUTES.workOrders, component: FabricStoreSection,
+		props: { section: "work_orders", storeName: "Merch", basePath: "/merch", workOrderViewRouteName: MERCH_ROUTES.workOrder, workOrderNewRouteName: MERCH_ROUTES.workOrderNew },
+	},
+	{
+		path: "/merch/work-orders/new", name: MERCH_ROUTES.workOrderNew, component: FabricWorkOrderEditorPage,
+		props: { backTo: "/merch/work-orders", backLabel: "Work Orders", listRouteName: MERCH_ROUTES.workOrders, viewRouteName: MERCH_ROUTES.workOrder },
+	},
+	{
+		path: "/merch/work-orders/:workOrderId/edit", name: MERCH_ROUTES.workOrderEdit, component: FabricWorkOrderEditorPage,
+		props: { backTo: "/merch/work-orders", backLabel: "Work Orders", listRouteName: MERCH_ROUTES.workOrders, viewRouteName: MERCH_ROUTES.workOrder },
+	},
+	{
+		path: "/merch/work-orders/:workOrderId", name: MERCH_ROUTES.workOrder, component: FabricWorkOrder,
+		props: { backTo: "/merch/work-orders", backLabel: "Work Orders", viewRouteName: MERCH_ROUTES.workOrder, newRouteName: MERCH_ROUTES.workOrderNew, editRouteName: MERCH_ROUTES.workOrderEdit, processCostViewRouteName: MERCH_ROUTES.processCost },
+	},
+	{
+		path: "/merch/bill-tracking", name: MERCH_ROUTES.billTrackings, component: BillTrackings,
+		props: { backTo: "/merch", backLabel: "Merch", eyebrow: "Merch", viewRouteName: MERCH_ROUTES.billTracking, newRouteName: MERCH_ROUTES.billTrackingNew },
+	},
+	{
+		path: "/merch/bill-tracking/new", name: MERCH_ROUTES.billTrackingNew, component: BillTrackingEditorPage,
+		props: { basePath: "/merch/bill-tracking", viewRouteName: MERCH_ROUTES.billTracking, listRouteName: MERCH_ROUTES.billTrackings },
+	},
+	{
+		path: "/merch/bill-tracking/:billTrackingId/edit", name: MERCH_ROUTES.billTrackingEdit, component: BillTrackingEditorPage,
+		props: idProps("billTrackingId", { basePath: "/merch/bill-tracking", viewRouteName: MERCH_ROUTES.billTracking, listRouteName: MERCH_ROUTES.billTrackings }),
+	},
+	{
+		path: "/merch/bill-tracking/:billTrackingId", name: MERCH_ROUTES.billTracking, component: BillTracking,
+		props: idProps("billTrackingId", { backTo: "/merch/bill-tracking", backLabel: "Bill Tracking", listRouteName: MERCH_ROUTES.billTrackings, editRouteName: MERCH_ROUTES.billTrackingEdit, purchaseInvoiceNewRouteName: MERCH_ROUTES.purchaseInvoiceNew, purchaseInvoiceViewRouteName: MERCH_ROUTES.purchaseInvoice }),
+	},
+	{
+		path: "/merch/purchase-invoices", name: MERCH_ROUTES.purchaseInvoices, component: PurchaseInvoices,
+		props: { backTo: "/merch", backLabel: "Merch", eyebrow: "Merch", viewRouteName: MERCH_ROUTES.purchaseInvoice, newRouteName: MERCH_ROUTES.purchaseInvoiceNew },
+	},
+	{
+		path: "/merch/purchase-invoices/new", name: MERCH_ROUTES.purchaseInvoiceNew, component: PurchaseInvoiceEditorPage,
+		props: { basePath: "/merch/purchase-invoices", viewRouteName: MERCH_ROUTES.purchaseInvoice, listRouteName: MERCH_ROUTES.purchaseInvoices },
+	},
+	{
+		path: "/merch/purchase-invoices/:purchaseInvoiceId/edit", name: MERCH_ROUTES.purchaseInvoiceEdit, component: PurchaseInvoiceEditorPage,
+		props: idProps("purchaseInvoiceId", { basePath: "/merch/purchase-invoices", viewRouteName: MERCH_ROUTES.purchaseInvoice, listRouteName: MERCH_ROUTES.purchaseInvoices }),
+	},
+	{
+		path: "/merch/purchase-invoices/:purchaseInvoiceId", name: MERCH_ROUTES.purchaseInvoice, component: PurchaseInvoice,
+		props: idProps("purchaseInvoiceId", { backTo: "/merch/purchase-invoices", backLabel: "Purchase Invoices", listRouteName: MERCH_ROUTES.purchaseInvoices, editRouteName: MERCH_ROUTES.purchaseInvoiceEdit }),
+	},
+	{ path: "/merch/process-costs", name: MERCH_ROUTES.processCosts, component: ProcessCostsList },
+	{ path: "/merch/process-costs/new", name: MERCH_ROUTES.processCostNew, component: ProcessCostEditorPage },
+	{ path: "/merch/process-costs/:processCostId", name: MERCH_ROUTES.processCost, component: ProcessCostPage, props: true },
+	{ path: "/merch/process-costs/:processCostId/edit", name: MERCH_ROUTES.processCostEdit, component: ProcessCostEditorPage, props: true },
+	{
 		path: "/purchase/items",
 		name: PURCHASE_ROUTES.items,
 		component: ItemsList,
@@ -721,7 +877,11 @@ const routes = [
 	},
 ]
 
-export default createRouter({
+const router = createRouter({
 	history: createWebHistory("/web/"),
 	routes,
 })
+
+router.beforeEach((to) => getLockedRedirect(to.path))
+
+export default router

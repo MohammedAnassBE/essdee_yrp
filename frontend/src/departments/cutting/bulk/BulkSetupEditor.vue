@@ -104,7 +104,7 @@ async function saveSetup() {
 		const payload = await saveBulkLaySheets({
 			main_lot: form.main_lot, from_location: form.from_location, posting_date: form.posting_date,
 			cutting_spreader: form.cutting_spreader, cutter: form.cutter,
-			lot_details: form.lot_details.map(({ _row_key, ...row }) => ({ ...row, name: row.name || undefined })),
+			lot_details: form.lot_details.map((row) => ({ name: row.name || undefined, lot: row.lot, cutting_plan: row.cutting_plan, cutting_marker: row.cutting_marker })),
 		}, { name: props.name, expectedModified: modified.value })
 		emit("saved", payload)
 	} catch (reason) { actionError.value = reason?.message || "Unable to save Bulk LaySheets setup." }

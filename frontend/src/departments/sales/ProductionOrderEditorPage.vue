@@ -1,6 +1,6 @@
 <template>
-	<DepartmentPage title="Production Order" back-to="/sales/production-orders" back-label="Production Orders" :show-title="false" flat full-width inline-navigation>
-		<div class="ppo-editor-page erp-workspace"><ProductionOrderEditor :name="productionOrderId" @saved="saved" @cancel="router.push('/sales/production-orders')" /></div>
+	<DepartmentPage title="Production Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
+		<div class="ppo-editor-page erp-workspace"><ProductionOrderEditor :name="productionOrderId" @saved="saved" @cancel="router.push(backTo)" /></div>
 	</DepartmentPage>
 </template>
 
@@ -10,9 +10,14 @@ import DepartmentPage from "../../components/DepartmentPage.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import ProductionOrderEditor from "./ProductionOrderEditor.vue"
 
-defineProps({ productionOrderId: { type: String, default: "" } })
+const props = defineProps({
+	productionOrderId: { type: String, default: "" },
+	backTo: { type: String, default: "/sales/production-orders" },
+	backLabel: { type: String, default: "Production Orders" },
+	viewRouteName: { type: String, default: "sales-production-order" },
+})
 const router = useRouter()
-function saved(record) { if (record?.name) router.replace({ name: "sales-production-order", params: { productionOrderId: record.name }, state: preserveListNavigationState(record.name) }) }
+function saved(record) { if (record?.name) router.replace({ name: props.viewRouteName, params: { productionOrderId: record.name }, state: preserveListNavigationState(record.name) }) }
 </script>
 
-<style scoped>.ppo-editor-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }</style>
+<style scoped>.ppo-editor-page { width: 100%; min-width: 0; }</style>

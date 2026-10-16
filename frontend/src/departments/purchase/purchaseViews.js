@@ -1,3 +1,5 @@
+import { itemTableProblems, itemTableSaveValues, itemTableValues } from "./item/itemTables.js"
+
 export const PURCHASE_ROUTES = {
 	lots: "purchase-lots",
 	lot: "purchase-lot",
@@ -48,6 +50,7 @@ export function itemCodeHint(name, brand) {
 
 export function itemEditorValues(values = {}) {
 	return {
+		...itemTableValues(values),
 		name: values.name || "",
 		brand: values.brand || "",
 		item_group: values.item_group || "",
@@ -56,6 +59,9 @@ export function itemEditorValues(values = {}) {
 		description: values.description || "",
 		disabled: Number(values.disabled || 0),
 		primary_attribute: values.primary_attribute || "",
+		dependent_attribute: values.dependent_attribute || "",
+		dependent_details: clone(values.dependent_details || []) || [],
+		dependent_mapping_modified: values.dependent_mapping_modified || null,
 		attributes: (clone(values.attributes || []) || []).map((row) => ({
 			...row,
 			values: attributeValueLabels(row.values),
@@ -69,13 +75,13 @@ export function itemSaveValues(values = {}, options = {}) {
 		mapping_modified: row.mapping_modified || null,
 		values: attributeValueLabels(row.values),
 	}))
-	const selectedAttributes = new Set(attributes.map((row) => row.attribute).filter(Boolean))
-	const primaryAttribute = attributes.length === 1
-		? (selectedAttributes.has(values.primary_attribute)
-			? values.primary_attribute
-			: (options.defaultSinglePrimary === false ? null : attributes[0].attribute || null))
-		: (selectedAttributes.has(values.primary_attribute) ? values.primary_attribute : null)
+	const selected = new Set(attributes.map((row) => row.attribute).filter(Boolean))
+	const primaryAttribute = itemPrimaryAttribute(values, attributes, selected, options)
+	const dependentAttribute = selected.has(values.dependent_attribute) && values.dependent_attribute !== primaryAttribute
+		? values.dependent_attribute
+		: null
 	return {
+		...itemTableSaveValues(values),
 		name: String(values.name || "").trim(),
 		brand: values.brand || null,
 		item_group: values.item_group || null,
@@ -84,8 +90,60 @@ export function itemSaveValues(values = {}, options = {}) {
 		description: values.description || null,
 		disabled: Number(values.disabled || 0),
 		primary_attribute: primaryAttribute,
+		dependent_attribute: dependentAttribute,
+		dependent_details: dependentAttribute ? dependentDetailSaveRows(values.dependent_details, selected) : [],
+		dependent_mapping_modified: values.dependent_mapping_modified || null,
 		attributes,
 	}
+}
+
+function itemPrimaryAttribute(values, attributes, selected, options) {
+	if (selected.has(values.primary_attribute)) return values.primary_attribute
+	if (attributes.length !== 1 || options.defaultSinglePrimary === false) return null
+	return attributes[0].attribute || null
+}
+
+export function itemDependentValues(values = {}) {
+	const row = (values.attributes || []).find((entry) => entry.attribute && entry.attribute === values.dependent_attribute)
+	return row ? attributeValueLabels(row.values) : []
+}
+
+export function itemCombinationAttributes(values = {}, numericAttributes = []) {
+	const numeric = new Set(numericAttributes || [])
+	return (values.attributes || [])
+		.map((row) => row.attribute)
+		.filter((attribute) => attribute && attribute !== values.dependent_attribute && !numeric.has(attribute))
+}
+
+export function dependentDetailRows(values = {}, stockUom = "") {
+	if (!values.dependent_attribute) return []
+	const previous = new Map((values.dependent_details || []).map((row) => [row.value, row]))
+	const allowed = new Set((values.attributes || []).map((row) => row.attribute).filter((attribute) => attribute && attribute !== values.dependent_attribute))
+	const keepAllowed = (row) => ({ ...row, attributes: (row.attributes || []).filter((attribute) => allowed.has(attribute)) })
+	return itemDependentValues(values).map((value) => previous.has(value) ? keepAllowed(previous.get(value)) : {
+		value,
+		uom: stockUom || "",
+		display_name: "",
+		attributes: values.primary_attribute ? [values.primary_attribute] : [],
+	})
+}
+
+function dependentDetailSaveRows(rows = [], selected = new Set()) {
+	return (rows || []).map((row) => ({
+		value: row.value,
+		uom: row.uom || null,
+		display_name: String(row.display_name || "").trim(),
+		attributes: (row.attributes || []).filter((attribute) => selected.has(attribute)),
+	}))
+}
+
+export function itemDependentProblem(values = {}) {
+	const dependent = values.dependent_attribute
+	if (!dependent) return ""
+	if (!itemDependentValues(values).length) return `Please configure values for Dependent Attribute ${dependent}.`
+	if (!values.primary_attribute) return "Please set Primary Attribute for this Item."
+	if ((values.dependent_details || []).some((row) => !row.uom)) return `Set the UOM for every ${dependent} value.`
+	return ""
 }
 
 export function itemCanSave(values = {}) {
@@ -93,7 +151,9 @@ export function itemCanSave(values = {}) {
 		String(values.name || "").trim()
 		&& values.item_group
 		&& values.stock_uom
-		&& (values.attributes || []).every((row) => row.attribute),
+		&& (values.attributes || []).every((row) => row.attribute)
+		&& !itemDependentProblem(values)
+		&& !itemTableProblems(values).length,
 	)
 }
 
@@ -210,7 +270,7 @@ export function itemPriceEditorValues(values = {}) {
 		to_date: values.to_date || "",
 		depends_on_attribute: Number(values.depends_on_attribute || 0),
 		attribute: values.attribute || "",
-		item_price_values: clone(values.item_price_values || []) || [],
+		item_price_values: activePriceTiers({ tiers: clone(values.item_price_values || []) || [] }),
 	}
 }
 
@@ -228,8 +288,10 @@ export function itemPriceEditorRequestKey({ name = "", routeName = "", item = ""
 	})
 }
 
-export function itemPriceSaveValues(values = {}) {
+export function itemPriceSaveValues(values = {}, attributeValueOptions = []) {
 	const dependsOnAttribute = Number(values.depends_on_attribute || 0)
+	const labels = new Map((attributeValueOptions || []).map((option) => [option.name, option.label]))
+	const labelOf = (value) => String(labels.get(value) || value || "")
 	return {
 		...itemPriceEditorValues(values),
 		depends_on_attribute: dependsOnAttribute,
@@ -240,7 +302,7 @@ export function itemPriceSaveValues(values = {}) {
 			lead_time: row.lead_time,
 			attribute_value: dependsOnAttribute ? row.attribute_value || null : null,
 		})).sort((left, right) => {
-			const attributeOrder = String(left.attribute_value || "").localeCompare(String(right.attribute_value || ""))
+			const attributeOrder = labelOf(left.attribute_value).localeCompare(labelOf(right.attribute_value))
 			return attributeOrder || Number(left.moq || 0) - Number(right.moq || 0)
 		}),
 	}
@@ -264,23 +326,47 @@ export function itemPriceCanSave(values = {}) {
 	))
 }
 
-export function itemPriceGroups(rows = []) {
-	const groups = new Map()
-	for (const row of rows) {
-		const key = row.attribute_value || "__all__"
-		if (!groups.has(key)) groups.set(key, {
-			key,
-			label: row.attribute_value_label || (key === "__all__" ? "All quantities" : key),
-			rows: [],
-		})
-		groups.get(key).rows.push(row)
-	}
-	return [...groups.values()]
-		.map((group) => ({
-			...group,
-			rows: [...group.rows].sort((left, right) => Number(left.moq || 0) - Number(right.moq || 0)),
-		}))
-		.sort((left, right) => left.label.localeCompare(right.label))
+export const ITEM_PRICE_SECTIONS = [
+	{ key: "item", label: "Item & supplier", description: "What is priced and who supplies it", icon: "pi pi-box", fields: ["item_name", "supplier", "supplier_name"] },
+	{ key: "validity", label: "UOM & validity", description: "Unit and the dates this price applies", icon: "pi pi-calendar", fields: ["uom", "from_date", "to_date"] },
+	{ key: "tax", label: "Tax & approval", description: "Tax slab and who approved the price", icon: "pi pi-verified", fields: ["tax", "approved_by"] },
+]
+
+export function itemPriceOverviewFields(workspace = {}) {
+	const approvedBy = itemPriceApprovedBy(workspace.record || {})
+	return (workspace.fields || []).map((field) => (field.fieldname === "approved_by" ? { ...field, value: approvedBy } : field))
+}
+
+export function itemPriceFieldLabel(fields, fieldname, fallback) {
+	const field = Array.isArray(fields) ? fields.find((row) => row.fieldname === fieldname) : fields?.[fieldname]
+	return field?.label || fallback
+}
+
+export function itemPriceDateLimit(value) {
+	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/)
+	return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : undefined
+}
+
+export function itemPriceTierValue(field = {}, value) {
+	if (value === null || value === undefined || value === "") return "—"
+	const number = Number(value)
+	if (!Number.isFinite(number)) return "—"
+	const precision = itemPriceTierPrecision({ [field.fieldname]: field }, field.fieldname)
+	const minimum = field.fieldtype === "Currency" ? Math.min(2, precision) : 0
+	return number.toLocaleString("en-IN", { minimumFractionDigits: minimum, maximumFractionDigits: precision })
+}
+
+export function itemPriceAttributeHint(itemName, attributes = []) {
+	if (!itemName) return "Choose an Item first"
+	return attributes.length ? "" : "This Item has no attributes"
+}
+
+export function itemPriceSummaryLabel(summary) {
+	if (summary === undefined || summary === null) return "…"
+	if (!summary.slab_count) return "—"
+	const format = (value) => Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+	if (summary.min_price === summary.max_price) return format(summary.min_price)
+	return `${format(summary.min_price)} – ${format(summary.max_price)}`
 }
 
 export function activePriceTiers(price = {}) {

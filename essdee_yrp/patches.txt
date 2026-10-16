@@ -46,3 +46,7 @@ essdee_yrp.patches.copy_template_flags_to_variants
 
 essdee_yrp.patches.seed_essdee_received_types
 essdee_yrp.patches.backfill_lot_fabric_conversions
+essdee_yrp.patches.add_ipd_copied_from
+essdee_yrp.patches.grant_purchase_dependent_mapping_permissions
+essdee_yrp.patches.grant_purchase_item_master_permissions
+essdee_yrp.patches.backfill_cancelled_cutting_statuses

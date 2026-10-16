@@ -10,6 +10,10 @@ export function getProductionOrderWorkspace(productionOrder) {
 	return callMethod(`${METHOD}.get_production_order_workspace`, { production_order: productionOrder })
 }
 
+export function getPriceUpdateContext(productionOrder) {
+	return callMethod("essdee_yrp.production_order_workflow.get_price_update_context", { production_order: productionOrder })
+}
+
 export function getLotOcrDetails(productionOrder, lot) {
 	return callMethod(`${METHOD}.get_lot_ocr_details`, {
 		production_order: productionOrder,

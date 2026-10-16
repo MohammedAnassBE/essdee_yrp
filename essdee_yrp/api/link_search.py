@@ -81,12 +81,7 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 	"""
 	if not doctype:
 		return []
-	if isinstance(filters, str):
-		try:
-			filters = json.loads(filters)
-		except (TypeError, ValueError):
-			filters = {}
-	filters = filters or {}
+	filters = _parse_filters(filters)
 	if doctype == "Item Attribute Value":
 		return _search_item_attribute_values(txt, filters, page_length)
 
@@ -120,11 +115,38 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 		limit_page_length=page_len,
 		order_by="modified desc",
 	)
+	if txt:
+		rows = _exact_matches_first(doctype, txt, filters, fields, page_len, rows)
 	out = []
 	for r in rows:
 		label = (r.get(label_field) if label_field else None) or r["name"]
 		out.append({"name": r["name"], "label": label})
 	return out
+
+
+def _parse_filters(filters):
+	if isinstance(filters, str):
+		try:
+			filters = json.loads(filters)
+		except (TypeError, ValueError):
+			return {}
+	return filters or {}
+
+
+def _exact_matches_first(doctype, text, filters, fields, page_length, rows):
+	# Equality uses the same case-insensitive collation as the regular search.
+	exact = frappe.get_list(
+		doctype,
+		filters=filters,
+		or_filters=[[fieldname, "=", text] for fieldname in fields],
+		fields=fields,
+		limit_page_length=page_length,
+		order_by="modified desc",
+	)
+	if not exact:
+		return rows
+	combined = list({row["name"]: row for row in [*exact, *rows]}.values())
+	return combined[:page_length] if page_length > 0 else combined
 
 
 @frappe.whitelist()
@@ -227,4 +249,5 @@ def _search_item_attribute_values(txt, filters, page_length):
 		if _attribute_value(row.attribute_value)
 		and (not needle or needle in _attribute_value(row.attribute_value).casefold())
 	]
+	values.sort(key=lambda value: value.casefold() != needle)
 	return [{"name": value, "label": value} for value in values[:page_len]]

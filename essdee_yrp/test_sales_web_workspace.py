@@ -18,7 +18,7 @@ class FakeProductionOrder:
 		self.modified = values.pop("modified", "2026-10-09 10:30:00.000000")
 		self._values = values
 		self.checked_permissions = []
-		self.meta = SimpleNamespace(fields=[])
+		self.meta = SimpleNamespace(fields=[], is_submittable=1)
 
 	def get(self, key, default=None):
 		if key == "name":
@@ -31,6 +31,9 @@ class FakeProductionOrder:
 
 	def check_permission(self, permission):
 		self.checked_permissions.append(permission)
+
+	def has_permission(self, permission):
+		return frappe.has_permission(self.doctype, ptype=permission, doc=self)
 
 	def run_method(self, method):
 		if method != "onload":
@@ -48,6 +51,94 @@ class FakeChildRow:
 
 
 class TestSalesWebWorkspace(TestCase):
+	def setUp(self):
+		# Permission tests allow printing unless the test explicitly disables a setting.
+		settings = patch.object(frappe.db, "get_single_value", return_value=1)
+		settings.start()
+		self.addCleanup(settings.stop)
+
+	def test_workspace_print_availability_respects_print_settings(self):
+		workspace = self._workspace()
+		for docstatus, setting_enabled, expected in ((2, 0, False), (2, 1, True), (0, 0, False), (0, 1, True), (1, 0, True)):
+			with self.subTest(docstatus=docstatus, setting_enabled=setting_enabled):
+				doc = FakeProductionOrder(docstatus=docstatus)
+				with (
+					patch.object(frappe, "get_doc", return_value=doc),
+					patch.object(frappe, "has_permission", return_value=True),
+					patch.object(frappe.db, "get_single_value", return_value=setting_enabled),
+				):
+					payload = workspace.get_production_order_workspace(doc.name)
+				self.assertEqual(bool(payload["print_formats"]), expected)
+				self.assertEqual(payload["permissions"]["can_print"], expected)
+				self.assertEqual(payload["capabilities"]["print"]["allowed"], expected)
+
+	def test_workspace_display_status_and_print_permissions_for_all_document_states(self):
+		workspace = self._workspace()
+		cases = ((0, None, "Draft"), (0, "PPO Request", "PPO Request"), (1, "Open", "Open"), (1, None, "Submitted"), (2, None, "Cancelled"), (2, "Open", "Cancelled"))
+		for docstatus, stored_status, label in cases:
+			for can_print in (True, False):
+				with self.subTest(docstatus=docstatus, status=stored_status, can_print=can_print):
+					doc = FakeProductionOrder(docstatus=docstatus, status=stored_status)
+					with (
+						patch.object(frappe, "get_doc", return_value=doc),
+						patch.object(frappe, "has_permission", side_effect=lambda _doctype, ptype="read", **_kwargs: ptype != "print" or can_print),
+					):
+						payload = workspace.get_production_order_workspace(doc.name)
+					self.assertEqual(payload["record"]["status_label"], label)
+					self.assertEqual(payload["record"]["status"], stored_status)
+					self.assertEqual(doc.get("status"), stored_status)
+					self.assertEqual(payload["print_formats"], [{"label": "Production Order", "format": "Essdee Production Order"}] if can_print else [])
+
+	def test_editor_and_save_reject_invalid_items_before_matrix_or_insert(self):
+		from essdee_yrp.test_sales_production_order_commands import FakeEditableProductionOrder
+
+		workspace = self._workspace()
+		cases = (None, frappe._dict(has_variants=0), frappe._dict(has_variants=1, variant_of="Parent"), frappe._dict(has_variants=1, disabled=1))
+		for item_values in cases:
+			with self.subTest(item_values=item_values):
+				doc = FakeEditableProductionOrder()
+				with (
+					patch.object(frappe, "new_doc", return_value=doc),
+					patch.object(frappe, "has_permission", return_value=True),
+					patch.object(frappe.db, "get_value", return_value=item_values),
+					patch.object(workspace.workflow, "get_order_editor_context") as matrix,
+				):
+					with self.assertRaisesRegex(frappe.ValidationError, "Select a template Item"):
+						workspace.get_production_order_editor(source={"item": "ZZ TEST Invalid"})
+					with self.assertRaisesRegex(frappe.ValidationError, "Select a template Item"):
+						workspace.save_production_order({"item": "ZZ TEST Invalid", "item_details": [{"item": "ZZ TEST Invalid", "entries": [{"qty": 1}]}]})
+				matrix.assert_not_called()
+				self.assertEqual(doc.inserted, 0)
+				self.assertEqual(doc.saved, 0)
+
+	def test_save_rejects_variant_in_matrix_even_with_valid_header_item(self):
+		from essdee_yrp.test_sales_production_order_commands import FakeEditableProductionOrder
+
+		workspace = self._workspace()
+		doc = FakeEditableProductionOrder()
+		with (
+			patch.object(frappe, "new_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(frappe.db, "get_value", side_effect=lambda _doctype, name, *_args, **_kwargs: frappe._dict(has_variants=name == "ZZ TEST Template", variant_of=None, disabled=0)),
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "Select a template Item"):
+				workspace.save_production_order({"item": "ZZ TEST Template", "item_details": [{"item": "ZZ TEST Variant", "entries": [{"qty": 1}]}]})
+		self.assertEqual(doc.inserted, 0)
+
+	def test_cancel_refreshes_display_status_without_changing_stored_status(self):
+		from essdee_yrp.test_sales_production_order_commands import FakeEditableProductionOrder
+
+		workspace = self._workspace()
+		doc = FakeEditableProductionOrder(docstatus=1, status="Open")
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+		):
+			payload = workspace.execute_production_order_command(doc.name, "cancel")
+		self.assertEqual(payload["record"]["status_label"], "Cancelled")
+		self.assertEqual(doc.get("status"), "Open")
+		self.assertEqual({key for key, value in payload["capabilities"].items() if value["allowed"]}, {"amend", "print"})
+
 	def _workspace(self):
 		module = "essdee_yrp.sales.web_workspace"
 		self.assertIsNotNone(find_spec(module), "The Sales web workspace must exist")
@@ -389,3 +480,39 @@ class TestSalesWebWorkspace(TestCase):
 					frappe.is_whitelisted(endpoint)
 				finally:
 					frappe.set_user(original_user)
+
+
+class TestSalesProductionOrderLiveQueries(TestCase):
+	def test_every_existing_production_order_item_is_found_first(self):
+		from essdee_yrp.api.link_search import link_search
+
+		items = set(frappe.get_all("YRP Production Order", pluck="item", limit_page_length=0)) - {None, ""}
+		self.assertTrue(items)
+		filters = {"has_variants": 1, "variant_of": ["is", "not set"], "disabled": 0}
+		for item in sorted(items):
+			with self.subTest(item=item):
+				results = link_search("Item", item, filters)
+				self.assertTrue(results)
+				self.assertEqual(results[0]["name"].casefold(), item.casefold())
+				self.assertEqual(link_search("Item", item.swapcase(), filters)[0]["name"].casefold(), item.casefold())
+
+	def test_status_queries_partition_real_documents_without_changing_status(self):
+		from essdee_yrp.sales.web_workspace import get_production_order_status
+
+		rows = frappe.get_all("YRP Production Order", fields=["name", "docstatus", "status"], limit_page_length=0)
+		self.assertTrue(rows)
+		statuses = ("Draft", "PPO Request", "Open", "Pending Request", "Item Changed", "Not Processed", "Closed", "Cancelled")
+		seen = set()
+		for status in statuses:
+			if status == "Cancelled":
+				filters = [["docstatus", "=", 2]]
+			else:
+				filters = [["docstatus", "=", 0 if status in {"Draft", "PPO Request"} else 1]]
+				filters.append(["status", "in", ["Draft", ""]] if status == "Draft" else ["status", "=", status])
+			actual = set(frappe.get_list("YRP Production Order", filters=filters, pluck="name", limit_page_length=0))
+			expected = {row.name for row in rows if get_production_order_status(row) == status}
+			with self.subTest(status=status):
+				self.assertEqual(actual, expected)
+				self.assertFalse(seen & actual)
+			seen.update(actual)
+		self.assertEqual(seen, {row.name for row in rows})

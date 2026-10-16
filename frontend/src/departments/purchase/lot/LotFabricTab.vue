@@ -2,7 +2,6 @@
 	<div class="lot-tab-stack">
 		<Button v-if="lot && canWrite" label="Build Cloth Program" icon="pi pi-cog" @click="builderOpen = true" />
 		<ClothProgramDialog v-if="lot" v-model:visible="builderOpen" :lot="lot" :modified="modified" @built="emit('changed')" />
-		<div><label>Search conversions <InputText v-model="conversionSearch" /></label><label>Process <Select v-model="conversionProcess" :options="[...new Set([...fabrics.flatMap((entry) => entry.conversions || []), ...otherConversions].map((row) => row.process_name))]" show-clear /></label></div>
 		<section
 			v-for="(entry, index) in cards"
 			:key="entry.cloth_item || index"
@@ -159,9 +158,10 @@
 						</section>
 					</div>
 				</section>
-				<section v-if="entry.conversions?.length" class="lot-group">
+				<section class="lot-group">
 					<header class="lot-group__header">
 						<strong>Actual Dia Conversions</strong>
+						<span>{{ conversions(entry, index).changed }} changed · {{ conversions(entry, index).routes }} routes</span>
 						<label class="lot-conversion-toggle">
 							<Checkbox
 								v-model="includeUnchanged[index]"
@@ -171,8 +171,13 @@
 							Include unchanged routes
 						</label>
 					</header>
+					<div class="lot-conversion-controls">
+						<InputText v-model="conversionSearch[index]" placeholder="Search conversions" aria-label="Search Actual Dia conversions" />
+						<Select v-model="conversionProcess[index]" :options="[{ label: 'All', value: '' }, ...conversionProcesses(entry.conversions).map((name) => ({ label: name, value: name }))]" option-label="label" option-value="value" placeholder="All processes" aria-label="Conversion process" />
+						<span>{{ conversions(entry, index).rows.length }} shown</span>
+					</div>
 					<div
-						v-if="visibleConversions(entry.conversions, includeUnchanged[index]).length"
+						v-if="conversions(entry, index).rows.length"
 						class="erp-table-wrap lot-table-wrap"
 						role="region"
 						tabindex="0"
@@ -189,27 +194,24 @@
 							</thead>
 							<tbody>
 								<tr
-									v-for="(row, rowIndex) in visibleConversions(
-										entry.conversions,
-										includeUnchanged[index],
-									)"
+									v-for="(row, rowIndex) in conversions(entry, index).rows"
 									:key="rowIndex"
 								>
 									<td>{{ row.process_name }}</td>
-									<td>{{ row.planned_item }} → {{ row.actual_item }}</td>
+									<td><a :href="itemPath(row.planned_item)">{{ row.planned_item }}</a> → <a :href="itemPath(row.actual_item)">{{ row.actual_item }}</a></td>
 									<td class="erp-number">
 										{{ formatQuantity(row.actual_quantity) }}
 										{{ row.stock_uom }}
 									</td>
-									<td>{{ countLabel(row.source_grn_count || 0, "GRN") }}</td>
+									<td>{{ countLabel(row.source_grn_count || 0, "GRN") }}<br /><a v-if="row.production_detail" :href="`/web/merch/item-production-details/${encodeURIComponent(row.production_detail)}`">{{ row.production_detail }}</a></td>
 								</tr>
 							</tbody>
 						</table>
 					</div>
 					<LotEmptyState
 						v-else
-						title="No changed routes"
-						reason="Include unchanged routes to see all recorded conversions."
+						:title="entry.conversions?.length ? 'No matching routes' : 'No Actual Dia conversions'"
+						:reason="entry.conversions?.length ? 'Adjust the search, process or Include unchanged routes filter.' : 'Conversions appear after submitting Default Knitting GRNs.'"
 					/>
 				</section>
 				<section v-if="entry.legacy.length" class="lot-group">
@@ -282,7 +284,8 @@ import {
 	planBadge,
 	quantityTotal,
 	stepSections,
-	buildActualDiaConversionView,
+	conversionProcesses,
+	conversionView,
 	weightMatrix,
 } from "./lotViews.js"
 
@@ -296,9 +299,10 @@ const props = defineProps({
 const emit = defineEmits(["changed"])
 const builderOpen = ref(false)
 const includeUnchanged = ref({})
-const conversionSearch = ref("")
-const conversionProcess = ref("")
-function visibleConversions(rows, include) { return buildActualDiaConversionView(rows, { includeUnchanged: include, search: conversionSearch.value, process: conversionProcess.value }).filteredRows }
+const conversionSearch = ref({})
+const conversionProcess = ref({})
+function conversions(entry, index) { return conversionView(entry.conversions, { search: conversionSearch.value[index], process: conversionProcess.value[index], includeUnchanged: includeUnchanged.value[index] }) }
+function itemPath(item) { return `/app/item/${encodeURIComponent(item)}` }
 const cards = computed(() => {
 	const entries = [...props.fabrics]
 	if (props.otherConversions.length) entries.push({ conversions: props.otherConversions })
@@ -356,3 +360,7 @@ function balanceClass(value) {
 	return value < 0 ? "lot-negative" : value > 0 ? "lot-positive" : ""
 }
 </script>
+
+<style scoped>
+.lot-conversion-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px; }
+</style>

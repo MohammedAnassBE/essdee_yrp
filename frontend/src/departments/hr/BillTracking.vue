@@ -1,8 +1,8 @@
 <template>
 	<DepartmentPage
 		title="Bill Tracking"
-		back-to="/hr/bill-tracking"
-		back-label="Bill Tracking"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -148,6 +148,12 @@ const DETAIL_GROUPS = [
 
 const props = defineProps({
 	billTrackingId: { type: String, default: "" },
+	backTo: { type: String, default: "/hr/bill-tracking" },
+	backLabel: { type: String, default: "Bill Tracking" },
+	listRouteName: { type: String, default: "hr-bill-trackings" },
+	editRouteName: { type: String, default: "hr-bill-tracking-edit" },
+	purchaseInvoiceNewRouteName: { type: String, default: "accounts-purchase-invoice-new" },
+	purchaseInvoiceViewRouteName: { type: String, default: "accounts-purchase-invoice" },
 })
 const route = useRoute()
 const router = useRouter()
@@ -354,7 +360,7 @@ async function runDocumentCommand(command) {
 		const result = await executeBillTrackingCommand(request.name, command, record.modified) || {}
 		if (!isOriginatingRecord(request)) return false
 		if (result.deleted) {
-			await router.replace({ name: "hr-bill-trackings" })
+			await router.replace({ name: props.listRouteName })
 			return true
 		}
 		workspace.value = result
@@ -372,7 +378,7 @@ async function runDocumentCommand(command) {
 function openEditor() {
 	const record = workspace.value.record || {}
 	router.push({
-		name: "hr-bill-tracking-edit",
+		name: props.editRouteName,
 		params: { billTrackingId: record.name },
 		state: preserveListNavigationState(record.name, record.modified),
 	})
@@ -380,14 +386,14 @@ function openEditor() {
 
 function createPurchaseInvoice() {
 	router.push({
-		name: "accounts-purchase-invoice-new",
+		name: props.purchaseInvoiceNewRouteName,
 		query: { bill_tracking: recordName() },
 	})
 }
 
 function showPurchaseInvoice() {
 	const name = workspace.value.record?.purchase_invoice
-	if (name) router.push({ name: "accounts-purchase-invoice", params: { purchaseInvoiceId: name } })
+	if (name) router.push({ name: props.purchaseInvoiceViewRouteName, params: { purchaseInvoiceId: name } })
 }
 
 function showErpPurchaseInvoice() {
@@ -424,7 +430,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.bill-tracking-page { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); padding: 0 clamp(2px, .7vw, 10px); }
+.bill-tracking-page { width: 100%; min-width: 0; margin: 0 0 var(--erp-space-3); }
 .bill-tracking-header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 14px; padding-block: 3px; }
 .bill-tracking-header__identity { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .bill-tracking-header__identity h1 { margin: 0; overflow: hidden; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; text-overflow: ellipsis; white-space: nowrap; }

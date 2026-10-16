@@ -5,7 +5,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, now_datetime, nowtime
+from frappe.utils import flt, getdate, now_datetime, nowtime
 from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
@@ -32,53 +32,10 @@ class SDYRPCuttingBulkLaySheets(Document):
 	def _validate_lot_rows(self):
 		if not self.lot_details:
 			frappe.throw(_("Add at least one split Lot."))
-
-		existing_rows = {}
-		if not self.is_new():
-			old_setup = frappe.db.get_value(
-				self.doctype,
-				self.name,
-				["main_lot", "from_location", "posting_date", "cutting_spreader", "cutter"],
-				as_dict=True,
-			)
-			existing_rows = {
-				row.name: row
-				for row in frappe.get_all(
-					"SD YRP Cutting Bulk Lay Sheet Detail",
-					filters={"parent": self.name, "parenttype": self.doctype},
-					fields=[
-						"name",
-						"lot",
-						"cutting_plan",
-						"cutting_marker",
-						"cutting_laysheet",
-						"lot_transfer",
-						"delivery_challan",
-					],
-				)
-			}
-			if any(row.cutting_laysheet for row in existing_rows.values()):
-				for fieldname, label in (
-					("main_lot", "Main Stock Lot"),
-					("from_location", "Stock Location"),
-					("posting_date", "Posting Date"),
-					("cutting_spreader", "SD YRP Cutting Spreader"),
-					("cutter", "SD YRP Cutter"),
-				):
-					if old_setup and self.get(fieldname) != old_setup.get(fieldname):
-						frappe.throw(_("{0} cannot change after Lay Sheets are created.").format(label))
-
+		existing_rows = self._existing_setup_rows()
+		self._validate_retained_laysheets(existing_rows)
 		seen_lots = set()
 		seen_plans = set()
-		current_names = {row.name for row in self.lot_details if row.name}
-		for old_row in existing_rows.values():
-			if old_row.cutting_laysheet and old_row.name not in current_names:
-				frappe.throw(
-					_("Split Lot row {0} cannot be removed after its Lay Sheet is created.").format(
-						old_row.lot
-					)
-				)
-
 		for row in self.lot_details:
 			if row.lot == self.main_lot:
 				frappe.throw(
@@ -91,59 +48,121 @@ class SDYRPCuttingBulkLaySheets(Document):
 			seen_lots.add(row.lot)
 			seen_plans.add(row.cutting_plan)
 
-			plan = frappe.db.get_value(
-				"SD YRP Cutting Plan",
-				row.cutting_plan,
-				["lot", "work_order", "docstatus", "cp_status"],
-				as_dict=True,
+			row.work_order = self._validated_row_plan(row).work_order
+			self._validate_row_marker(row)
+			self._restore_existing_row(row, existing_rows.get(row.name))
+
+	def _existing_setup_rows(self):
+		if self.is_new():
+			return {}
+		old_setup = frappe.db.get_value(
+			self.doctype,
+			self.name,
+			["main_lot", "from_location", "posting_date", "cutting_spreader", "cutter"],
+			as_dict=True,
+		)
+		existing_rows = {
+			row.name: row
+			for row in frappe.get_all(
+				"SD YRP Cutting Bulk Lay Sheet Detail",
+				filters={"parent": self.name, "parenttype": self.doctype},
+				fields=[
+					"name",
+					"lot",
+					"cutting_plan",
+					"cutting_marker",
+					"cutting_laysheet",
+					"lot_transfer",
+					"delivery_challan",
+					"status",
+				],
 			)
-			if not plan or plan.docstatus != 1:
-				frappe.throw(_("Row {0}: Select a submitted Cutting Plan.").format(row.idx))
-			if plan.lot != row.lot:
+		}
+		self._validate_setup_lock(old_setup, existing_rows)
+		return existing_rows
+
+	def _validate_setup_lock(self, old_setup, existing_rows):
+		if any(row.cutting_laysheet for row in existing_rows.values()):
+			for fieldname, label in (
+				("main_lot", "Main Stock Lot"),
+				("from_location", "Stock Location"),
+				("posting_date", "Posting Date"),
+				("cutting_spreader", "SD YRP Cutting Spreader"),
+				("cutter", "SD YRP Cutter"),
+			):
+				if not old_setup:
+					continue
+				current, previous = self.get(fieldname), old_setup.get(fieldname)
+				if fieldname == "posting_date":
+					current, previous = getdate(current), getdate(previous)
+				if current != previous:
+					frappe.throw(_("{0} cannot change after Lay Sheets are created.").format(label))
+
+	def _validate_retained_laysheets(self, existing_rows):
+		current_names = {row.name for row in self.lot_details if row.name}
+		for old_row in existing_rows.values():
+			if old_row.cutting_laysheet and old_row.name not in current_names:
 				frappe.throw(
-					_("Row {0}: Cutting Plan {1} belongs to Lot {2}, not {3}.").format(
-						row.idx, row.cutting_plan, plan.lot, row.lot
+					_("Split Lot row {0} cannot be removed after its Lay Sheet is created.").format(
+						old_row.lot
 					)
 				)
-			if plan.cp_status == "Completed":
-				frappe.throw(_("Row {0}: Cutting Plan {1} is completed.").format(row.idx, row.cutting_plan))
-			if not plan.work_order:
-				frappe.throw(
-					_("Row {0}: Cutting Plan {1} has no Work Order.").format(row.idx, row.cutting_plan)
-				)
 
-			marker = frappe.db.get_value(
-				"SD YRP Cutting Marker",
-				row.cutting_marker,
-				["cutting_plan", "docstatus"],
-				as_dict=True,
+	def _validated_row_plan(self, row):
+		plan = frappe.db.get_value(
+			"SD YRP Cutting Plan",
+			row.cutting_plan,
+			["lot", "work_order", "docstatus", "cp_status"],
+			as_dict=True,
+		)
+		if not plan or plan.docstatus != 1:
+			frappe.throw(_("Row {0}: Select a submitted Cutting Plan.").format(row.idx))
+		if plan.lot != row.lot:
+			frappe.throw(
+				_("Row {0}: Cutting Plan {1} belongs to Lot {2}, not {3}.").format(
+					row.idx, row.cutting_plan, plan.lot, row.lot
+				)
 			)
-			if not marker or marker.docstatus != 1:
-				frappe.throw(_("Row {0}: Select a submitted Cutting Marker.").format(row.idx))
-			if marker.cutting_plan != row.cutting_plan:
-				frappe.throw(
-					_("Row {0}: Cutting Marker {1} is not against Cutting Plan {2}.").format(
-						row.idx, row.cutting_marker, row.cutting_plan
-					)
-				)
-			row.work_order = plan.work_order
+		if plan.cp_status == "Completed":
+			frappe.throw(_("Row {0}: Cutting Plan {1} is completed.").format(row.idx, row.cutting_plan))
+		if not plan.work_order:
+			frappe.throw(
+				_("Row {0}: Cutting Plan {1} has no Work Order.").format(row.idx, row.cutting_plan)
+			)
+		return plan
 
-			old_row = existing_rows.get(row.name)
-			if old_row and old_row.cutting_laysheet:
-				for fieldname, label in (
-					("lot", "Split Lot"),
-					("cutting_plan", "SD YRP Cutting Plan"),
-					("cutting_marker", "SD YRP Cutting Marker"),
-				):
-					if row.get(fieldname) != old_row.get(fieldname):
-						frappe.throw(
-							_("Row {0}: {1} cannot change after its Lay Sheet is created.").format(
-								row.idx, label
-							)
+	def _validate_row_marker(self, row):
+		marker = frappe.db.get_value(
+			"SD YRP Cutting Marker",
+			row.cutting_marker,
+			["cutting_plan", "docstatus"],
+			as_dict=True,
+		)
+		if not marker or marker.docstatus != 1:
+			frappe.throw(_("Row {0}: Select a submitted Cutting Marker.").format(row.idx))
+		if marker.cutting_plan != row.cutting_plan:
+			frappe.throw(
+				_("Row {0}: Cutting Marker {1} is not against Cutting Plan {2}.").format(
+					row.idx, row.cutting_marker, row.cutting_plan
+				)
+			)
+
+	def _restore_existing_row(self, row, old_row):
+		if old_row and old_row.cutting_laysheet:
+			for fieldname, label in (
+				("lot", "Split Lot"),
+				("cutting_plan", "SD YRP Cutting Plan"),
+				("cutting_marker", "SD YRP Cutting Marker"),
+			):
+				if row.get(fieldname) != old_row.get(fieldname):
+					frappe.throw(
+						_("Row {0}: {1} cannot change after its Lay Sheet is created.").format(
+							row.idx, label
 						)
-				row.cutting_laysheet = old_row.cutting_laysheet
-				row.lot_transfer = old_row.lot_transfer
-				row.delivery_challan = old_row.delivery_challan
+					)
+		if old_row:
+			for fieldname in ("cutting_laysheet", "lot_transfer", "delivery_challan", "status"):
+				row.set(fieldname, old_row.get(fieldname))
 
 	def _save_active_laysheet_editor(self):
 		if not self.active_cutting_laysheet or not self.get("item_details"):

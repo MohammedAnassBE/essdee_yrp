@@ -13,6 +13,7 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
+from essdee_yrp.item_roles import get_variant_inherited_values, resolve_variant_target_role
 from essdee_yrp.migration.engine import (
 	SYSTEM_FIELDS,
 	MigrationError,
@@ -97,11 +98,13 @@ def item_variant_to_standard_item(
 	"""Represent a legacy physical Item Variant as a standard ERPNext Item."""
 
 	attributes = document.get("attributes") or []
-	standalone = not attributes and document.get("name") == document.get("item")
+	role = resolve_variant_target_role(document.get("name"), document.get("item"), attributes, "template")
+	standalone = role != "variant"
 	output = _system_values(document)
 	output.update(
 		{
 			"doctype": "Item",
+			**get_variant_inherited_values(document),
 			"item_code": document.get("name"),
 			"item_name": document.get("name"),
 			"variant_of": None if standalone else document.get("item"),
@@ -112,13 +115,14 @@ def item_variant_to_standard_item(
 				{
 					**_system_values(row),
 					"doctype": "Item Variant Attribute",
-					"variant_of": document.get("item"),
+					"variant_of": None if standalone else document.get("item"),
 					"attribute": row.get("attribute"),
 					"attribute_value": row.get("attribute_value"),
 					"display_name": row.get("display_name"),
 					"display_name_is_empty": row.get("display_name_is_empty") or 0,
 				}
 				for row in attributes
+				if not standalone
 			],
 		}
 	)

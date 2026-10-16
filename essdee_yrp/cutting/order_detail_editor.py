@@ -11,11 +11,10 @@ from frappe.utils import cint, sbool
 from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document
 
-from essdee_yrp.ipd_ui import fetch_combination_items, get_new_combination
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order_detail.sd_yrp_cutting_order_detail import (
 	get_co_new_combination,
 )
-
+from essdee_yrp.ipd_ui import fetch_combination_items, get_new_combination
 
 DOCTYPE = "SD YRP Cutting Order Detail"
 EDITABLE_FIELDS = {
@@ -32,6 +31,7 @@ EDITABLE_FIELDS = {
 	"cloth_details",
 	"set_item_combination",
 	"stiching_combination",
+	"regenerate_combinations",
 }
 
 
@@ -190,15 +190,24 @@ def _merge_authoritative_combination(expected, incoming, label):
 
 	expected = deepcopy(expected or {"attributes": [], "values": []})
 	incoming = _parse_json(incoming, {})
-	if not incoming or not incoming.get("values"):
+	if not incoming.get("values"):
 		return expected
 	expected_attributes = list(expected.get("attributes") or [])
-	if list(incoming.get("attributes") or expected_attributes) != expected_attributes:
+	received_attributes = list(incoming.get("attributes", expected_attributes) or [])
+	if len(received_attributes) != len(expected_attributes) or set(received_attributes) != set(expected_attributes):
 		frappe.throw(_("{0} attributes changed. Regenerate the combinations and try again.").format(label))
 	expected_rows = {
 		str(row.get("major_attribute")): row
 		for row in (expected.get("values") or [])
 	}
+	received_rows = _combination_row_values(expected_rows, incoming, expected_attributes, label)
+	for key, row in expected_rows.items():
+		row["val"] = {attribute: received_rows[key][attribute] for attribute in expected_attributes}
+	return expected
+
+
+def _combination_row_values(expected_rows, incoming, expected_attributes, label):
+	"""Validate row identities and columns before accepting cell values."""
 	received_rows = {}
 	for row in incoming.get("values") or []:
 		key = str(row.get("major_attribute"))
@@ -210,13 +219,12 @@ def _merge_authoritative_combination(expected, incoming, label):
 		received_rows[key] = values
 	if set(received_rows) != set(expected_rows):
 		frappe.throw(_("{0} rows changed. Regenerate the combinations and try again.").format(label))
-	for key, row in expected_rows.items():
-		row["val"] = {attribute: received_rows[key][attribute] for attribute in expected_attributes}
-	return expected
+	return received_rows
 
 
 def _save_authoritative_combinations(doc, values):
 	colours = _colour_rows(doc)
+	regenerate = sbool(values.get("regenerate_combinations"))
 	if _doc_value(doc, "is_set_item"):
 		mapping = _mapping_for(doc, _doc_value(doc, "set_item_attribute"))
 		major = _attribute_value(_doc_value(doc, "major_attribute_value"))
@@ -225,7 +233,7 @@ def _save_authoritative_combinations(doc, values):
 		expected = get_new_combination(mapping, colours, major)
 		merged = _merge_authoritative_combination(
 			expected,
-			values.get("set_item_combination"),
+			None if regenerate else values.get("set_item_combination"),
 			_("Set Item Combination"),
 		)
 		doc.set_item_detail = frappe.as_json(merged)
@@ -244,7 +252,7 @@ def _save_authoritative_combinations(doc, values):
 		)
 		merged = _merge_authoritative_combination(
 			expected,
-			values.get("stiching_combination"),
+			None if regenerate else values.get("stiching_combination"),
 			_("Panel Combination"),
 		)
 		doc.stiching_item_detail = frappe.as_json(merged)

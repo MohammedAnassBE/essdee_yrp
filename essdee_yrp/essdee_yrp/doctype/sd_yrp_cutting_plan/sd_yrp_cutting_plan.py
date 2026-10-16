@@ -13,6 +13,7 @@ from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
+from essdee_yrp.cutting.cloth_substitution import expand_cutting_rows
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	_save_laysheet_terminal_transition,
 	update_cutting_plan,
@@ -20,6 +21,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_layshe
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
 from essdee_yrp.fabric_requirement import calculate_cloth, get_cloth_combination, get_stitching_combination
+from essdee_yrp.fabric_substitution import substitution_index
 
 DEFAULT_PIECE_WEIGHT_TOLERANCE = 0.003
 
@@ -140,47 +142,16 @@ def change_approval_grammage(doc_name, piece_weight_tolerance):
 
 
 class SDYRPCuttingPlan(Document):
+	def on_cancel(self):
+		self.db_set("cp_status", "Cancelled")
+
 	def on_update_after_submit(self):
+		if self.docstatus == 2:
+			return
 		if self.no_of_colours == 0:
 			self.no_of_colours = self.get_no_of_colours()
 
-		updated_status = None
-		status = self.cp_status
-		if status in ["Planned", "Ready to Cut", "Fabric Partially Received"]:
-			if not self.cutting_plan_cloth_details:
-				# An empty requirement table is not evidence that all cloth was
-				# received. Historical plans can reach this state when Generate was
-				# skipped, so keep them safely Planned until Fetch regenerates rows.
-				updated_status = "Planned"
-			else:
-				percent = frappe.db.get_single_value("SD YRP MRP Settings", "cloth_allowance_percentage")
-				check = True
-				for row in self.cutting_plan_cloth_details:
-					if row.weight < row.required_weight:
-						percent_weight = (row.weight / 100) * percent
-						if row.weight < (row.required_weight - percent_weight):
-							check = False
-
-				if check:
-					updated_status = "Ready to Cut"
-				else:
-					updated_status = "Fabric Partially Received"
-
-		if not updated_status:
-			completed_json = update_if_string_instance(self.completed_items_json)
-			check = True
-			one_colour_completed = False
-			for row in completed_json["items"]:
-				if row["completed"]:
-					one_colour_completed = True
-				if not row["completed"]:
-					check = False
-			if check:
-				updated_status = "Completed"
-			elif one_colour_completed:
-				updated_status = "Partially Completed"
-			else:
-				updated_status = "Cutting In Progress"
+		updated_status = self._fabric_receipt_status() or self._completion_status()
 
 		completed_colours = self.get_completed_colours(updated_status)
 		frappe.db.sql(
@@ -194,6 +165,28 @@ class SDYRPCuttingPlan(Document):
 		frappe.db.set_value(self.doctype, self.name, "no_of_colours_completed", completed_colours)
 		frappe.db.set_value(self.doctype, self.name, "no_of_colours", self.no_of_colours)
 		self.reload()
+
+	def _fabric_receipt_status(self):
+		if self.cp_status not in ["Planned", "Ready to Cut", "Fabric Partially Received"]:
+			return None
+		if not self.cutting_plan_cloth_details:
+			return "Planned"
+		percent = frappe.db.get_single_value("SD YRP MRP Settings", "cloth_allowance_percentage")
+		for row in self.cutting_plan_cloth_details:
+			if row.weight < row.required_weight:
+				percent_weight = (row.weight / 100) * percent
+				if row.weight < (row.required_weight - percent_weight):
+					return "Fabric Partially Received"
+		return "Ready to Cut"
+
+	def _completion_status(self):
+		completed_json = update_if_string_instance(self.completed_items_json)
+		completed = [row["completed"] for row in completed_json["items"]]
+		if all(completed):
+			return "Completed"
+		if any(completed):
+			return "Partially Completed"
+		return "Cutting In Progress"
 
 	def get_completed_colours(self, status):
 		if status in ["Draft", "Planned", "Ready to Cut", "Cutting In Progress", "Completed"]:
@@ -280,6 +273,8 @@ class SDYRPCuttingPlan(Document):
 		self.set_onload("item_accessory_details", accessory_items)
 
 	def before_validate(self):
+		if self.docstatus == 0 and self.amended_from:
+			self.cp_status = "Draft"
 		if not flt(self.piece_weight_tolerance):
 			self.piece_weight_tolerance = get_mrp_piece_weight_tolerance()
 
@@ -493,6 +488,11 @@ def get_cloth1(cutting_plan):
 	counts = _generate_cloth_requirements(cutting_plan_doc)
 	text = f"Cloth Generated on {datetime.now()} by {frappe.session.user}"
 	cutting_plan_doc.add_comment("Comment", text=text)
+	if counts["substituted_rows"] > 0:
+		n = counts["substituted_rows"]
+		cutting_plan_doc.add_comment(
+			"Comment", text=f"Applied Lot fabric substitutions to {n} planned cloth row(s)."
+		)
 	cutting_plan_doc.save()
 	return counts
 
@@ -600,11 +600,9 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 
 def _generate_cloth_requirements(cutting_plan_doc, preserve_operational_values=True):
 	required_cloth_details, required_accessory_details = _build_cloth_requirement_rows(cutting_plan_doc)
-	from essdee_yrp.cutting_plan import expand_cutting_rows
-	from essdee_yrp.fabric_substitution import substitution_index
-
+	changed = 0
 	if cutting_plan_doc.get("lot"):
-		required_cloth_details, _ = expand_cutting_rows(
+		required_cloth_details, changed = expand_cutting_rows(
 			required_cloth_details, substitution_index(cutting_plan_doc.lot)
 		)
 	if preserve_operational_values:
@@ -619,6 +617,7 @@ def _generate_cloth_requirements(cutting_plan_doc, preserve_operational_values=T
 	return {
 		"cloth_requirements": len(required_cloth_details),
 		"accessory_requirements": len(required_accessory_details),
+		"substituted_rows": changed,
 	}
 
 

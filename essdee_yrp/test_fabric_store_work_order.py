@@ -586,20 +586,57 @@ class TestFabricStoreWorkOrder(TestCase):
 		self.assertEqual(context["close_other_reason"], "")
 		self.assertEqual(context["close_remarks"], "Short receipt approved")
 
-	def test_forged_create_debit_requires_target_create_permission(self):
+	def test_create_debit_capability_uses_owner_permission_and_open_submitted_state(self):
+		from essdee_yrp.fabric_store.documents.work_order import _capability_candidates
+
+		for docstatus, open_status, allowed, expected in (
+			(1, "Open", True, True),
+			(1, "Open", False, False),
+			(0, "Open", True, False),
+			(2, "Open", True, False),
+			(1, "Close", True, False),
+			(1, "Close Request", True, False),
+		):
+			with self.subTest(docstatus=docstatus, open_status=open_status, allowed=allowed), patch(
+				"essdee_yrp.fabric_store.documents.work_order.has_debit_request_permission",
+				return_value=allowed,
+			):
+				doc = self.make_document(docstatus=docstatus, open_status=open_status)
+				capabilities = _capability_candidates(doc, {}, {}, {})
+				self.assertEqual(capabilities["create_debit"]["eligible"], expected)
+
+	def test_create_debit_forwards_attachment_and_refreshes_workspace(self):
 		doc = self.make_document(docstatus=1)
+		refreshed = {"record": {"name": doc.name}}
+		for attachment in ("/private/files/debit.pdf", ""):
+			with (
+				self.subTest(attachment=attachment),
+				patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
+				patch("essdee_yrp.fabric_store.documents.work_order.has_debit_request_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.documents.work_order.create_debit") as create,
+				patch("essdee_yrp.fabric_store.documents.work_order.get_work_order_workspace", return_value=refreshed),
+			):
+				result = execute_work_order_command(
+					doc.name,
+					"create_debit",
+					{"debit_no": "D-1", "debit_value": 250, "reason": "Short receipt", "debit_document": attachment},
+					expected_modified=doc.modified,
+				)
+				self.assertEqual(result, refreshed)
+				create.assert_called_once_with(
+					doc.name,
+					debit_no="D-1",
+					debit_value=250,
+					reason="Short receipt",
+					debit_document=attachment or None,
+					on_close=0,
+				)
 
-		def permissions(doctype, ptype="read", **_kwargs):
-			if doctype == "YRP Debit" and ptype == "create":
-				raise frappe.PermissionError
-			return True
-
+	def test_forged_create_debit_requires_owner_permission(self):
+		doc = self.make_document(docstatus=1)
 		with (
 			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
-			patch(
-				"essdee_yrp.fabric_store.documents.work_order.frappe.has_permission",
-				side_effect=permissions,
-			),
+			patch("essdee_yrp.fabric_store.documents.work_order.has_debit_request_permission", return_value=False),
 			patch("essdee_yrp.fabric_store.documents.work_order.create_debit") as create,
 			self.assertRaises(frappe.PermissionError),
 		):

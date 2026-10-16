@@ -14,8 +14,8 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 	get_ocr_details as build_lot_ocr_details,
 )
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
+from essdee_yrp.print_registry import get_document_print_formats
 from essdee_yrp.sales import ppo_report
-
 
 DOCTYPE = "YRP Production Order"
 PERMISSION_TYPES = ("read", "create", "write", "delete", "submit", "cancel", "print", "report")
@@ -323,6 +323,13 @@ def _production_order_actions(doc, permissions: dict, onload: Mapping) -> dict:
 	return actions
 
 
+def get_production_order_status(doc) -> str:
+	docstatus = cint(doc.docstatus)
+	if docstatus == 2:
+		return "Cancelled"
+	return doc.get("status") or ("Submitted" if docstatus == 1 else "Draft")
+
+
 @frappe.whitelist()
 def get_production_order_workspace(production_order: str) -> dict:
 	doc = frappe.get_doc(DOCTYPE, production_order)
@@ -330,12 +337,15 @@ def get_production_order_workspace(production_order: str) -> dict:
 	doc.run_method("onload")
 	onload = doc.get("__onload") or {}
 	permissions = _permission_flags(doc)
+	print_formats = get_document_print_formats(doc)
+	permissions["can_print"] = permissions["can_print"] and bool(print_formats)
 	matrix = _serialize_matrix(doc.get("production_order_details"))
 	ordered = _serialize_ordered(doc.get("production_ordered_details"))
 	record = {
 		"doctype": DOCTYPE,
 		"name": doc.name,
 		"docstatus": cint(doc.docstatus),
+		"status_label": get_production_order_status(doc),
 		"modified": doc.get("modified"),
 		"total_quantity": sum(flt(row["quantity"]) for row in matrix),
 	}
@@ -360,6 +370,7 @@ def get_production_order_workspace(production_order: str) -> dict:
 			"comments": doc.get("comment_log") or "",
 		},
 		"permissions": permissions,
+		"print_formats": print_formats,
 		"capabilities": _production_order_actions(doc, permissions, onload),
 	}
 
@@ -411,6 +422,12 @@ def _editor_field(doc, fieldname: str) -> dict:
 	return {"fieldname": fieldname, **schema, "value": value}
 
 
+def _validate_production_order_item(item) -> None:
+	values = frappe.db.get_value("Item", item, ["has_variants", "variant_of", "disabled"], as_dict=True) if item else None
+	if not values or not cint(values.has_variants) or values.variant_of or cint(values.disabled):
+		frappe.throw(_("Select a template Item (with variants) for a Production Order."))
+
+
 @frappe.whitelist()
 def get_production_order_editor(name: str | None = None, source=None) -> dict:
 	if name:
@@ -428,6 +445,7 @@ def get_production_order_editor(name: str | None = None, source=None) -> dict:
 	item = doc.get("item")
 	matrix = {}
 	if item:
+		_validate_production_order_item(item)
 		matrix = workflow.get_order_editor_context(
 			item=item,
 			production_order=doc.name if name else doc.get("amended_from"),
@@ -470,6 +488,8 @@ def save_production_order(values, name: str | None = None, submit: bool = False,
 	for fieldname in EDITOR_FIELDS:
 		if fieldname in values:
 			doc.set(fieldname, values[fieldname])
+	for item in {doc.get("item"), *(group.get("item") for group in item_details)}:
+		_validate_production_order_item(item)
 	doc.set("item_details", frappe.as_json(item_details))
 	if name:
 		doc.save()

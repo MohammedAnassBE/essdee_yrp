@@ -2,7 +2,7 @@
 	<section data-sewing-report="dpr" aria-label="DPR">
 		<ReportShell title="DPR" :loading="loading" :generated="generated" :has-results="blocked || groups.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
-				<div class="common-field"><label for="dpr-mode">DPR Mode</label><select id="dpr-mode" v-model="filters.mode" :disabled="loading"><option value="daily">Daily</option><option value="range">Date range</option></select></div>
+				<div class="common-field"><label for="dpr-mode" class="erp-field-label">DPR Mode</label><select class="erp-native-select" id="dpr-mode" v-model="filters.mode" :disabled="loading"><option value="daily">Daily</option><option value="range">Date range</option></select></div>
 				<DateField v-if="filters.mode === 'daily'" v-model="filters.date" label="DPR Date" :disabled="loading" />
 				<template v-else><DateField v-model="filters.fromDate" label="From Date" :disabled="loading" /><DateField v-model="filters.toDate" label="To Date" :disabled="loading" /></template>
 				<LinkField v-model="filters.workStation" doctype="YRP Work Station" label="Work Station" :show-open-button="false" show-clear :disabled="loading" />
@@ -81,6 +81,12 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 </script>
 
 <style scoped>
+.common-field {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
 .dpr-day, article { display: grid; min-width: 0; gap: 10px; }
 .dpr-day { gap: 16px; }
 h2, h3 { margin: 0; color: var(--erp-text); font-size: 15px; }

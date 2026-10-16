@@ -112,17 +112,14 @@ def increment_lay_no(parent_dt, parent_name, new_lay_no):
 
 def update_parent_status_on_first_lay(parent_dt, parent_name):
 	"""Sets status to 'Cutting In Progress' on first laysheet."""
-	if parent_dt == "SD YRP Cutting Plan":
-		frappe.db.sql(
-			f"""
-				UPDATE `tabSD YRP Cutting Plan` SET cp_status = 'Cutting In Progress'
-				WHERE name = {frappe.db.escape(parent_name)}
-			"""
-		)
-	else:
-		frappe.db.set_value(
-			"SD YRP Cutting Order", parent_name, "co_status", "Cutting In Progress", update_modified=False
-		)
+	status_field = "cp_status" if parent_dt == "SD YRP Cutting Plan" else "co_status"
+	frappe.db.set_value(
+		parent_dt,
+		{"name": parent_name, "docstatus": 1},
+		status_field,
+		"Cutting In Progress",
+		update_modified=False,
+	)
 
 
 def has_cloth_tracking(parent_dt):

@@ -1,9 +1,10 @@
 <template>
 	<div class="app-shell" data-ui="essdee-erp">
+		<div class="app-route-progress" :class="{ 'is-active': isNavigating }" aria-hidden="true"></div>
 		<a class="app-skip-link" href="#app-main">Skip to main content</a>
 
 		<header class="app-topbar">
-			<RouterLink class="app-brand" to="/" aria-label="Essdee YRP administrator home">
+			<RouterLink class="app-brand" :to="getHomePath()" aria-label="Essdee YRP administrator home">
 				<span class="app-brand__mark" aria-hidden="true">EY</span>
 				<span class="app-brand__copy">
 					<span class="app-brand__name">Essdee YRP</span>
@@ -15,7 +16,7 @@
 				<span v-if="activeDepartment" class="app-topbar__context" aria-current="page">
 					{{ activeDepartment.label }}
 				</span>
-				<RouterLink class="app-topbar__home" to="/" aria-label="Workspaces">
+				<RouterLink v-if="!lockedDepartment" class="app-topbar__home" to="/" aria-label="Workspaces">
 					<i class="pi pi-th-large" aria-hidden="true" />
 					<span>Workspaces</span>
 				</RouterLink>
@@ -38,12 +39,37 @@
 <script setup>
 import ConfirmDialog from "primevue/confirmdialog"
 import Toast from "primevue/toast"
-import { computed, nextTick, watch } from "vue"
-import { RouterLink, RouterView, useRoute } from "vue-router"
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
 import { departments } from "./departments/registry.js"
+import { getHomePath, lockedDepartment } from "./router/departmentLock.js"
 
 const route = useRoute()
+const router = useRouter()
+const isNavigating = ref(false)
+let pendingNavigation = null
+const removeBeforeEach = router.beforeEach((to) => {
+	pendingNavigation = to
+	isNavigating.value = true
+})
+const removeAfterEach = router.afterEach((to) => {
+	if (to === pendingNavigation) {
+		isNavigating.value = false
+	}
+})
+const removeOnError = router.onError((error, to) => {
+	if (!to || to === pendingNavigation) {
+		isNavigating.value = false
+	}
+})
+
+onBeforeUnmount(() => {
+	removeBeforeEach()
+	removeAfterEach()
+	removeOnError()
+})
+
 const activeDepartment = computed(() =>
 	departments.find(
 		(department) =>

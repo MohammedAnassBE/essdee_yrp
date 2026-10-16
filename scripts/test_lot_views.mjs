@@ -363,4 +363,39 @@ assert.deepEqual(
 	],
 )
 
+
+const { conversionProcesses, conversionView } = await import('../frontend/src/departments/purchase/lot/lotViews.js')
+const conversionRows = [
+	{ process_name: 'Washing', process_stage_index: 2, planned_item: 'Blue-14', actual_item: 'Blue-14.5', production_detail: 'IPD-CLOTH' },
+	{ process_name: 'Knitting', process_stage_index: 0, planned_item: 'Greige-14', actual_item: 'Greige-14.5', production_detail: 'IPD-CLOTH' },
+	{ process_name: 'Dyeing', process_stage_index: 1, planned_item: 'Blue-14', actual_item: 'Blue-14.5', production_detail: 'IPD-CLOTH' },
+	{ process_name: 'Knitting', process_stage_index: 0, planned_item: 'Greige-19', actual_item: 'Greige-19', production_detail: 'IPD-OTHER' },
+]
+assert.deepEqual(conversionProcesses(conversionRows), ['Knitting', 'Dyeing', 'Washing'])
+assert.deepEqual(conversionProcesses([{ process_name: 'Washing' }, { process_name: 'Dyeing' }, { process_name: 'Knitting' }]), ['Knitting', 'Dyeing', 'Washing'])
+assert.deepEqual(conversionView(conversionRows), { rows: conversionRows.slice(0, 3), changed: 3, routes: 4 })
+assert.equal(conversionView(conversionRows, { includeUnchanged: true }).rows.length, 4)
+assert.equal(conversionView(conversionRows, { search: ' 14.5 ' }).rows.length, 3)
+assert.equal(conversionView(conversionRows, { process: 'Dyeing' }).changed, 3)
+assert.equal(conversionView(conversionRows, { search: 'IPD-OTHER', includeUnchanged: true }).rows.length, 1)
+assert.equal(conversionView(conversionRows, { search: 'knitting', includeUnchanged: true }).routes, 4)
+assert.equal(conversionView(conversionRows, { search: 'missing' }).routes, 4)
+const lotConversions = [
+	...conversionRows.slice(0, 3),
+	...['19', '20'].flatMap((dia) => ['Knitting', 'Dyeing', 'Washing'].map((process_name) => ({ process_name, planned_item: `Greige-${dia}`, actual_item: `Greige-${dia}` }))),
+]
+for (const options of [
+	{}, { search: '14.5' }, { process: 'Dyeing' }, { includeUnchanged: true },
+	{ search: '19', process: 'Knitting', includeUnchanged: true }, { search: 'missing' },
+]) {
+	const view = conversionView(lotConversions, options)
+	assert.equal(view.changed, 3, 'header keeps Lot changed total')
+	assert.equal(view.routes, 9, 'header keeps Lot route total')
+}
+assert.equal(conversionView(lotConversions, { search: '14.5' }).rows.length, 3)
+assert.equal(conversionView(lotConversions, { process: 'Dyeing' }).rows.length, 1)
+assert.equal(conversionView(lotConversions, { includeUnchanged: true }).rows.length, 9)
+assert.equal(conversionView(lotConversions, { search: 'missing' }).rows.length, 0)
+assert.deepEqual(conversionView(), { rows: [], changed: 0, routes: 0 })
+
 console.log("lot views OK")

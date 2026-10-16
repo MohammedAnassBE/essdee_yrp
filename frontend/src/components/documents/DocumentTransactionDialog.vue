@@ -15,6 +15,10 @@
 					<DocumentStatusBadge :docstatus="payload.record.docstatus" :label="payload.record.status" />
 					<small>Updated {{ formatDate(payload.record.modified, true) }}</small>
 				</div>
+				<section v-if="payload.transit?.status" class="document-transit-status">
+					<strong>{{ payload.transit.status }}</strong>
+					<div v-if="payload.transit.received_entries?.length">Received Stock Entries: <a v-for="entry in payload.transit.received_entries" :key="entry.name" :href="stockEntryPath(entry.name)" target="_blank" rel="noopener">{{ entry.name }}{{ entry.docstatus === 0 ? ' (Draft)' : '' }} </a></div>
+				</section>
 				<section v-if="summaryDetails.length" class="document-summary-strip" aria-label="Document totals">
 					<div v-for="field in summaryDetails" :key="field.fieldname" class="document-summary-metric"><span>{{ field.label }}</span><strong :title="formatField(field)">{{ formatField(field) }}</strong></div>
 				</section>
@@ -32,6 +36,7 @@
 				<div>
 					<DocumentPrintButton v-if="payload.permissions?.can_print" :doctype="payload.record?.doctype || doctype" :name="payload.record?.name || name" :formats="payload.print_formats || []" :disabled="Boolean(acting)" />
 					<Button v-if="payload.actions?.can_make_delivery_challan" label="Make Delivery Challan" icon="pi pi-send" severity="secondary" outlined @click="makeDcVisible = true" />
+					<Button v-if="payload.actions?.can_end_transit" label="End Transit" icon="pi pi-check" :loading="acting === 'end-transit'" @click="endTransit" />
 					<Button v-if="payload.actions?.can_complete_transfer" label="Complete Transfer" icon="pi pi-arrow-right-arrow-left" severity="secondary" outlined :loading="acting === 'complete-transfer'" @click="completeTransfer" />
 					<Button v-if="payload.actions?.can_return" label="Return" icon="pi pi-replay" severity="secondary" outlined :disabled="Boolean(acting)" @click="emit('return', payload)" />
 					<Button v-if="showEdit && payload.permissions?.can_write" label="Edit" icon="pi pi-pencil" severity="secondary" outlined :disabled="Boolean(acting)" @click="editDocument" />
@@ -43,6 +48,7 @@
 		</template>
 	</Dialog>
 	<StockEntryMakeDcModal v-if="payload.record?.doctype === 'YRP Stock Entry'" v-model:visible="makeDcVisible" :stock-entry="payload.record.name" @created="deliveryChallanCreated" />
+	<FabricStockOperationDialog v-model:visible="receiptVisible" operation="stock_entry" :initial-editor="receiptEditor" @changed="receiptChanged" />
 	<DocumentErrorDialog :message="error" :title="`${dialogTitle} could not be completed`" @dismiss="error = ''" />
 
 	<Dialog v-model:visible="closeConfirmationVisible" class="erp-dialog--sm" modal header="Discard changes?">
@@ -59,8 +65,9 @@ import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 
-import { changeFabricStoreDocumentStatus, completeWorkOrderDocumentTransfer, getFabricStoreDocument } from "../../api/fabricStore.js"
+import { changeFabricStoreDocumentStatus, endStockEntryTransit, completeWorkOrderDocumentTransfer, getFabricStoreDocument } from "../../api/fabricStore.js"
 import { getActiveWorkflow } from "../../api/frappe.js"
+import FabricStockOperationDialog from "../../departments/fabric-store/FabricStockOperationDialog.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import StockItemMatrix from "../stock/StockItemMatrix.vue"
 import DocumentErrorDialog from "./DocumentErrorDialog.vue"
@@ -86,6 +93,8 @@ const loading = ref(false)
 const acting = ref("")
 const error = ref("")
 const payload = ref({})
+const receiptVisible = ref(false)
+const receiptEditor = ref(null)
 const dirty = ref(false)
 const closeConfirmationVisible = ref(false)
 const dialogTitle = computed(() => `${payload.value.record?.doctype || props.doctype}${payload.value.record?.name || props.name ? ` · ${payload.value.record?.name || props.name}` : ""}`)
@@ -166,6 +175,21 @@ async function completeTransfer() {
 	} finally {
 		acting.value = ""
 	}
+}
+
+function stockEntryPath(name) { return `/app/yrp-stock-entry/${encodeURIComponent(name)}` }
+async function endTransit() {
+	acting.value = "end-transit"
+	error.value = ""
+	try {
+		receiptEditor.value = await endStockEntryTransit(payload.value.record.name)
+		receiptVisible.value = true
+	} catch (reason) { error.value = reason?.message || "Unable to prepare the receiving entry." }
+	finally { acting.value = "" }
+}
+async function receiptChanged(saved) {
+	await load()
+	emit("changed", saved)
 }
 
 function requestVisibility(value) {

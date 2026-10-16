@@ -22,7 +22,7 @@
 					<TimeField v-model="form.posting_time" label="Posting Time" disabled />
 					<label class="cut-bundle-select"><span>Colour</span><Select v-model="form.selected_colour" :options="choices.colours" :disabled="!canEdit || busy" fluid placeholder="Select colour" @change="colourChanged" /></label>
 					<div class="cut-bundle-context"><span>Printed Time</span><strong>{{ formattedPrintedTime }}</strong></div>
-					<Button v-if="canEdit" label="Fetch Bundles" icon="pi pi-refresh" severity="secondary" outlined :loading="acting === 'preview'" :disabled="!form.lot || !form.warehouse || busy" @click="preview" />
+					<Button v-if="canEdit" label="Fetch Bundles" icon="pi pi-refresh" severity="secondary" outlined :loading="acting === 'preview'" :disabled="!form.lot || !form.warehouse || busy" @click="preview()" />
 				</div>
 			</section>
 
@@ -196,8 +196,9 @@ function resetLoadedState() {
 	acting.value = ""
 }
 
-function sourceChanged() { dirty.value = true; form.selected_colour = ""; Object.assign(choices, { colours: [], sizes: [], panels: [] }); available.value = {}; inputs.value = []; outputs.value = []; selectedKeys.value = new Set(); previewed.value = false }
-function colourChanged() { dirty.value = true; available.value = {}; selectedKeys.value = new Set(); inputs.value = []; outputs.value = []; if (form.selected_colour) preview() }
+function invalidatePreview() { previewSequence += 1; if (acting.value === "preview") acting.value = "" }
+function sourceChanged() { invalidatePreview(); dirty.value = true; form.selected_colour = ""; Object.assign(choices, { colours: [], sizes: [], panels: [] }); available.value = {}; inputs.value = []; outputs.value = []; selectedKeys.value = new Set(); previewed.value = false }
+function colourChanged() { invalidatePreview(); dirty.value = true; available.value = {}; selectedKeys.value = new Set(); inputs.value = []; outputs.value = []; if (form.selected_colour) preview() }
 
 async function preview(parentLoadSequence = loadSequence, requestedDocumentName = props.documentName) {
 	const sequence = ++previewSequence
@@ -213,7 +214,7 @@ async function preview(parentLoadSequence = loadSequence, requestedDocumentName 
 	} catch (reason) {
 		if (sequence === previewSequence && !loadIsStale(parentLoadSequence, requestedDocumentName)) error.value = reason.message || "Unable to fetch available bundles."
 	} finally {
-		if (sequence === previewSequence && !loadIsStale(parentLoadSequence, requestedDocumentName)) acting.value = ""
+		if (sequence === previewSequence && acting.value === "preview") acting.value = ""
 	}
 }
 

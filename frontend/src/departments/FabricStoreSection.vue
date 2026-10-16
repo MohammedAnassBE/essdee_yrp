@@ -2,8 +2,7 @@
 	<DepartmentPage :title="definition.label" :back-to="basePath" :back-label="storeName" :show-title="false" flat full-width inline-navigation>
 		<section class="fabric-store-section erp-workspace" :aria-label="definition.label">
 			<div v-if="loading" class="fabric-store-section__loading">
-				<Skeleton height="76px" />
-				<Skeleton height="420px" />
+				<ListPageSkeleton />
 			</div>
 			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
@@ -14,11 +13,11 @@
 
 <script setup>
 import Message from "primevue/message"
-import Skeleton from "primevue/skeleton"
 import { computed, onMounted, ref, watch } from "vue"
 
 import { getFabricStoreCapabilities } from "../api/fabricStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import ListPageSkeleton from "../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import FabricPurchaseOrders from "./fabric-store/FabricPurchaseOrders.vue"
 import FabricReports from "./fabric-store/FabricReports.vue"
@@ -78,9 +77,7 @@ watch(() => props.section, load)
 <style scoped>
 .fabric-store-section {
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
 	padding: 2px 0 var(--erp-space-5);
 }
 
@@ -88,10 +85,5 @@ watch(() => props.section, load)
 	display: grid;
 	gap: var(--erp-space-3);
 	padding-top: 2px;
-}
-
-.fabric-store-section__loading :deep(.p-skeleton) {
-	border-radius: var(--erp-panel-radius);
-	background: color-mix(in srgb, var(--erp-surface-muted) 74%, white);
 }
 </style>

@@ -17,6 +17,7 @@ from collections.abc import Mapping
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp.party_addresses import get_party_address
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import (
 	group_correction_items_for_ui,
@@ -26,7 +27,10 @@ from yrp.stock.save_stock_items import (
 )
 from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	get_purchase_order_defaults,
+	get_purchase_order_lot_fieldname,
+	get_purchase_order_lot_options,
 	make_grn_completion,
+	validate_purchase_order_lot,
 )
 
 from essdee_yrp.fabric_store.documents.common import (
@@ -297,6 +301,17 @@ def _dimension_projection(doc) -> list[dict]:
 	return projected
 
 
+def _purchase_order_lot_context(doc) -> dict:
+	if doc.get("against") != "Purchase Order" or not doc.get("against_id") or doc.get("is_return"):
+		return {}
+	po = frappe.get_doc("Purchase Order", doc.against_id)
+	return {
+		"lot_options": get_purchase_order_lot_options(po),
+		"lot_fieldname": get_purchase_order_lot_fieldname(),
+		"purchase_order": po.name,
+	}
+
+
 def _related_documents(doc) -> dict:
 	related = {"inspection_entries": [], "completion_entries": []}
 	if frappe.has_permission("YRP Inspection Entry", ptype="read"):
@@ -425,6 +440,7 @@ def get_goods_received_note_workspace(name: str | None = None, source=None) -> d
 			defaults = {
 				"item_details": item_matrix,
 				"correction_item_details": correction_matrix,
+				**_purchase_order_lot_context(original),
 			}
 			return _new_workspace(
 				doc,
@@ -462,6 +478,8 @@ def get_goods_received_note_workspace(name: str | None = None, source=None) -> d
 				"correction_items": correction_matrix,
 			},
 			"dimensions": _dimension_projection(doc),
+			**_purchase_order_lot_context(doc),
+			"actual_dia": _actual_dia_context(doc),
 			"special_source": _special_source_context(doc),
 			"inspection": inspection,
 			"related": related,
@@ -472,6 +490,16 @@ def get_goods_received_note_workspace(name: str | None = None, source=None) -> d
 		}
 	)
 	return workspace
+
+
+def _actual_dia_context(doc):
+	from essdee_yrp.fabric_grn import get_actual_dia_context
+
+	if cint(doc.get("docstatus")) or doc.get("against") != "YRP Work Order":
+		return {"enabled": False, "dia_options": []}
+	if _special_source_context(doc)["active"]:
+		return {"enabled": False, "dia_options": []}
+	return get_actual_dia_context(doc.get("against_id"))
 
 
 def _resolve_source(source) -> tuple[dict, str, str, str | None]:
@@ -490,15 +518,57 @@ def _resolve_source(source) -> tuple[dict, str, str, str | None]:
 
 def _source_defaults(against: str, against_id: str, delivery_challan: str | None = None) -> dict:
 	if against == "YRP Work Order":
-		return get_work_order_defaults(against_id, delivery_challan)
-	return get_purchase_order_defaults(against_id)
+		defaults = get_work_order_defaults(against_id, delivery_challan)
+	else:
+		defaults = get_purchase_order_defaults(against_id)
+		if not defaults.get("delivery_location") and defaults.get("to_warehouse"):
+			defaults["delivery_location"] = frappe.db.get_value("Warehouse", defaults["to_warehouse"], "supplier")
+	if not defaults.get("delivery_address"):
+		defaults["delivery_address"] = get_delivery_address(
+			defaults.get("delivery_location"), against_id if against == "Purchase Order" else None
+		)
+	if not defaults.get("supplier_address"):
+		defaults["supplier_address"] = get_supplier_address(
+			defaults.get("supplier"), against_id if against == "Purchase Order" else None
+		)
+	return defaults
+
+
+@frappe.whitelist()
+def get_delivery_address(delivery_location=None, purchase_order=None) -> str:
+	frappe.has_permission("YRP Goods Received Note", ptype="read", throw=True)
+	address = get_party_address(delivery_location, preferred_type="Shipping")
+	if address or not purchase_order:
+		return address or ""
+	po = frappe.get_doc("Purchase Order", purchase_order)
+	po.check_permission("read")
+	return po.get("shipping_address") or ""
+
+
+@frappe.whitelist()
+def get_supplier_address(supplier=None, purchase_order=None) -> str:
+	frappe.has_permission("YRP Goods Received Note", ptype="read", throw=True)
+	address = get_party_address(supplier, preferred_type="Billing")
+	if address or not purchase_order:
+		return address or ""
+	po = frappe.get_doc("Purchase Order", purchase_order)
+	po.check_permission("read")
+	return po.get("supplier_address") or ""
 
 
 def _source_values(defaults: Mapping, browser_values: Mapping | None = None) -> dict:
 	values = {
 		key: value
 		for key, value in defaults.items()
-		if key not in {"items", "item_details", "correction_items", "correction_item_details"}
+		if key
+		not in {
+			"items",
+			"item_details",
+			"correction_items",
+			"correction_item_details",
+			"lot_options",
+			"lot_fieldname",
+		}
 	}
 	for fieldname in GOODS_RECEIVED_NOTE_EDITOR_FIELDS:
 		if browser_values and fieldname in browser_values:
@@ -557,6 +627,9 @@ def _new_workspace(doc, defaults: Mapping, can_submit: bool) -> dict:
 		"values": _document_values(doc, readable_fields),
 		"matrices": {"items": item_matrix, "correction_items": correction_matrix},
 		"dimensions": _dimension_projection(doc),
+		"lot_options": defaults.get("lot_options") or {},
+		"lot_fieldname": defaults.get("lot_fieldname"),
+		"actual_dia": _actual_dia_context(doc),
 		"special_source": _special_source_context(doc),
 		"inspection": {"initial_payload": [], "entries": [], "reason": "", "can_create": False},
 		"related": {},
@@ -695,22 +768,79 @@ def _row_index_for_received_type(source: Mapping, received_type: str) -> object:
 	return f"{base}::{received_type}" if received_type else base
 
 
-def _actual_dia_allowed(doc):
-	if doc.get("against") != "YRP Work Order":
-		return False
-	from essdee_yrp.fabric_grn import get_actual_dia_context
+def _merge_purchase_order_rows(authoritative, browser_rows, lot_options, lot_fieldname, purchase_order):
+	"""Clone trusted PO siblings with operator-selected lot and received type."""
+	dimensions = _dimension_fieldnames()
+	lineage_dimensions = tuple(fieldname for fieldname in dimensions if fieldname != lot_fieldname)
+	lineages = defaultdict(list)
+	for row in authoritative or []:
+		lineages[_business_key(row, lineage_dimensions, include_received_type=False)].append(row)
+	browser_lineages = {
+		_business_key(row, lineage_dimensions, include_received_type=False) for row in browser_rows or []
+	}
+	# Omitted source lineages retain their rows; submitted lineages replace all prior splits.
+	rows = [
+		_row_dict(row)
+		for row in authoritative or []
+		if _business_key(row, lineage_dimensions, include_received_type=False) not in browser_lineages
+		and flt(row.get("quantity")) > 0
+	]
+	seen = set()
+	for index, browser in enumerate(browser_rows or [], 1):
+		if flt(browser.get("quantity")) <= 0 and flt(browser.get("secondary_qty")) <= 0:
+			continue
+		key = _business_key(browser, dimensions, include_received_type=True)
+		if key in seen:
+			frappe.throw(_("The item matrix contains a duplicate lot / Received Type row."))
+		siblings = lineages.get(_business_key(browser, lineage_dimensions, include_received_type=False))
+		if not siblings:
+			frappe.throw(
+				_("The available item rows changed. Refresh the editor and enter the quantities again.")
+			)
+		clone = _clone_purchase_order_split(siblings, browser, lot_fieldname)
+		validate_purchase_order_lot(clone, lot_fieldname, lot_options, purchase_order, index)
+		rows.append(clone)
+		seen.add(key)
+	return rows
 
-	return bool(get_actual_dia_context(doc.get("against_id")).get("enabled"))
+
+def _clone_purchase_order_split(siblings, browser, fieldname):
+	split_key = (browser.get(fieldname), browser.get("received_type") or "")
+	source = next(
+		(row for row in siblings if (row.get(fieldname), row.get("received_type") or "") == split_key),
+		siblings[0],
+	)
+	received_type = browser.get("received_type") or ""
+	if received_type != (source.get("received_type") or ""):
+		if not received_type or not frappe.db.exists("YRP Received Type", received_type):
+			frappe.throw(_("Select a valid Received Type."))
+	clone = _copy_operator_values(source, browser)
+	if (source.get(fieldname), source.get("received_type") or "") != split_key:
+		clone.pop("name", None)
+	if fieldname:
+		clone[fieldname] = browser.get(fieldname)
+	clone["received_type"] = received_type
+	# Lots already separate matrix entries by dimension. Keep the trusted
+	# logical index for existing splits and new lots of the same received type.
+	if received_type != (source.get("received_type") or ""):
+		clone["row_index"] = _row_index_for_received_type(source, received_type)
+	return clone
 
 
-def _merge_authoritative_rows(authoritative, browser_rows, *, actual_dia=False) -> list[dict]:
-	"""Merge quantities and safe split fields onto saved/source-owned rows.
+def _merge_authoritative_rows(
+	authoritative, browser_rows, *, lot_options=None, lot_fieldname=None, purchase_order=None
+) -> list[dict]:
+	"""Merge operator values onto trusted receipt rows."""
 
-	An operator may introduce another valid Received Type for an existing source
-	line.  That row is cloned from a trusted sibling; references, item, UOM,
-	rate, lot, and every non-Received-Type stock dimension remain authoritative.
-	"""
+	if lot_options is not None:
+		return _merge_purchase_order_rows(
+			authoritative, browser_rows, lot_options, lot_fieldname, purchase_order
+		)
+	return _merge_received_type_rows(authoritative, browser_rows)
 
+
+def _merge_received_type_rows(authoritative, browser_rows):
+	"""Allow received-type splits while retaining source dimensions."""
 	dimensions = _dimension_fieldnames()
 	authoritative = [_row_dict(row) for row in authoritative or []]
 	exact = defaultdict(list)
@@ -748,13 +878,6 @@ def _merge_authoritative_rows(authoritative, browser_rows, *, actual_dia=False) 
 
 		lineage_key = _business_key(browser, dimensions, include_received_type=False)
 		lineage_candidates = lineages.get(lineage_key) or []
-		if not lineage_candidates and actual_dia:
-			# Only physical Item may differ for Actual Dia. Every source reference,
-			# UOM, set combination and non-Received-Type dimension remains trusted.
-			for index, source in enumerate(authoritative):
-				candidate = {**browser, "item_variant": source.get("item_variant")}
-				if _business_key(candidate, dimensions, include_received_type=False) == _business_key(source, dimensions, include_received_type=False):
-					lineage_candidates.append(index)
 		if not lineage_candidates:
 			frappe.throw(
 				_("The available item rows changed. Refresh the editor and enter the quantities again.")
@@ -767,8 +890,6 @@ def _merge_authoritative_rows(authoritative, browser_rows, *, actual_dia=False) 
 			frappe.throw(_("The item matrix contains a duplicate Received Type row."))
 		clone = _copy_operator_values(authoritative[lineage_candidates[0]], browser)
 		clone.pop("name", None)
-		if actual_dia:
-			clone["item_variant"] = browser.get("item_variant")
 		clone["received_type"] = received_type
 		clone["row_index"] = _row_index_for_received_type(
 			authoritative[lineage_candidates[0]], received_type
@@ -784,6 +905,41 @@ def _merge_authoritative_rows(authoritative, browser_rows, *, actual_dia=False) 
 			merged.append(row)
 	merged.extend(row for row in additions if flt(row.get("quantity")) > 0)
 	return merged
+
+
+def _actual_dia_additions(authoritative, browser_rows, context):
+	"""Seed new Dia lineages from trusted receivables."""
+	if not context.get("enabled"):
+		return authoritative
+	from essdee_yrp.fabric_grn import validate_actual_dia_variant
+
+	dimensions = _dimension_fieldnames()
+	rows = [_row_dict(row) for row in authoritative]
+	known = {_business_key(row, dimensions, include_received_type=False) for row in rows}
+	positive_rows = [row for row in browser_rows if flt(row.get("quantity")) > 0]
+	for index, browser in enumerate(positive_rows, 1):
+		key = _business_key(browser, dimensions, include_received_type=False)
+		if key in known:
+			continue
+		source = next((row for row in rows if _is_actual_dia_lineage(row, browser, dimensions)), None)
+		if source is None:
+			continue
+		validate_actual_dia_variant(source["item_variant"], browser["item_variant"], index)
+		row_index = max((cint(row.get("row_index")) for row in rows), default=-1) + 1
+		clone = {**source, "item_variant": browser["item_variant"], "quantity": 0, "row_index": row_index}
+		clone.pop("name", None)
+		rows.append(clone)
+		known.add(key)
+	return rows
+
+
+def _is_actual_dia_lineage(source, browser, dimensions):
+	if not browser.get("ref_docname"):
+		return False
+	candidate = {**browser, "item_variant": source.get("item_variant")}
+	return _business_key(source, dimensions, include_received_type=False) == _business_key(
+		candidate, dimensions, include_received_type=False
+	)
 
 
 def _browser_rows(values: Mapping, *, corrections: bool, fallback_rows) -> tuple[list, bool]:
@@ -910,8 +1066,15 @@ def save_goods_received_note(
 		browser_corrections, has_correction_matrix = _browser_rows(
 			values, corrections=True, fallback_rows=authoritative_corrections
 		)
+		authoritative_items = _actual_dia_additions(
+			authoritative_items, browser_items, _actual_dia_context(doc)
+		)
 		items = (
-			_merge_authoritative_rows(authoritative_items, browser_items, actual_dia=not submitted_update and _actual_dia_allowed(doc))
+			_merge_authoritative_rows(
+				authoritative_items,
+				browser_items,
+				**(_purchase_order_lot_context(doc) if cint(doc.docstatus) == 0 else {}),
+			)
 			if has_item_matrix
 			else authoritative_items
 		)

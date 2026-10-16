@@ -7,7 +7,7 @@
 					<span class="adc-count">{{ changedCount }} {{ __("changed") }}</span>
 					<span class="adc-count adc-count--muted">{{ rows.length }} {{ __("routes") }}</span>
 				</div>
-				<p>{{ __("Built automatically from submitted versioned Knitting GRNs.") }}</p>
+				<p>{{ __("Built automatically from submitted Default Knitting GRNs.") }}</p>
 			</div>
 		</header>
 
@@ -33,7 +33,7 @@
 
 		<div v-if="!rows.length" class="adc-empty">
 			<strong>{{ __("No knitting receipts yet") }}</strong>
-			<span>{{ __("Submit a versioned Knitting GRN to build this table.") }}</span>
+			<span>{{ __("Submit a Default Knitting GRN to build this table.") }}</span>
 		</div>
 		<div v-else-if="!filteredRows.length" class="adc-empty">
 			<strong v-if="!includeUnchanged && !search && !process">{{ __("No actual Dia changes") }}</strong>

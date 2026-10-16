@@ -107,7 +107,7 @@ class TestLotFabricConversionSchema(unittest.TestCase):
 
 
 class TestActualDiaAllocation(unittest.TestCase):
-	@patch("essdee_yrp.fabric_substitution.get_supported_execution_route")
+	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
 	@patch.object(frappe, "get_cached_doc")
 	@patch.object(frappe.db, "exists", return_value=True)
 	def test_standard_knitting_context_accepts_keyed_receivable_without_calculated_field(
@@ -128,11 +128,7 @@ class TestActualDiaAllocation(unittest.TestCase):
 		)
 		ipd = frappe._dict(name="IPD-1")
 		get_cached_doc.side_effect = [work_order, ipd]
-		get_route.return_value = {
-			"knitting": {"process_name": "Knitting"},
-			"dyeing": {"process_name": "Dyeing"},
-			"washing": {"process_name": "Washing"},
-		}
+
 		grn = frappe._dict(
 			against="YRP Work Order",
 			against_id=work_order.name,
@@ -146,12 +142,12 @@ class TestActualDiaAllocation(unittest.TestCase):
 
 		self.assertEqual(context.lot, "LOT-1")
 		self.assertEqual(context.work_order, "WO-KNIT-1")
-		get_route.assert_called_once_with(ipd)
+		get_route.assert_called_once_with()
 
-	@patch("essdee_yrp.fabric_substitution.get_supported_execution_route")
+	@patch("essdee_yrp.fabric_substitution._default_knitting_process", return_value="Knitting")
 	@patch.object(frappe, "get_cached_doc")
 	@patch.object(frappe.db, "exists", return_value=True)
-	def test_standard_knitting_context_rejects_incomplete_receivable_contracts(
+	def test_standard_knitting_context_accepts_unversioned_and_unkeyed_receivables(
 		self, _exists, get_cached_doc, get_route
 	):
 		work_order = frappe._dict(
@@ -163,11 +159,7 @@ class TestActualDiaAllocation(unittest.TestCase):
 			cloth_execution_version=1,
 		)
 		ipd = frappe._dict(name="IPD-1")
-		get_route.return_value = {
-			"knitting": {"process_name": "Knitting"},
-			"dyeing": {"process_name": "Dyeing"},
-			"washing": {"process_name": "Washing"},
-		}
+
 		grn = frappe._dict(
 			against="YRP Work Order",
 			against_id=work_order.name,
@@ -187,10 +179,10 @@ class TestActualDiaAllocation(unittest.TestCase):
 			with self.subTest(receivables=receivables):
 				work_order.receivables = receivables
 				get_cached_doc.side_effect = [work_order, ipd]
-				self.assertIsNone(
-					fabric_substitution.get_default_knitting_grn_context(grn)
-				)
-		get_route.assert_called_with(ipd)
+				work_order.cloth_execution_version = 0
+				context = fabric_substitution.get_default_knitting_grn_context(grn)
+				self.assertEqual(context.lot, "LOT-1")
+		get_route.assert_called_with()
 
 	@patch.object(frappe.db, "exists", side_effect=AssertionError("additional GRN queried a work order"))
 	def test_additional_grn_is_not_standard_knitting_context(self, _exists):
@@ -403,6 +395,7 @@ class TestLotFabricConversionRebuild(unittest.TestCase):
 				frappe._dict(
 					source_grn_item="GRN-ITEM-LEGACY",
 					lot="LOT-Z",
+					cloth_execution_version=1,
 					additional_parameters={},
 				),
 			],
@@ -419,7 +412,8 @@ class TestLotFabricConversionRebuild(unittest.TestCase):
 		self.assertIn("tabYRP Goods Received Note Item", discovery_query)
 		self.assertIn("tabYRP Work Order Receivables", discovery_query)
 		self.assertIn("tabYRP Work Order", discovery_query)
-		self.assertIn("wo.cloth_execution_version = 1", discovery_query)
+		self.assertIn("IFNULL(wo.production_detail, '') != ''", discovery_query)
+		self.assertNotIn("wo.cloth_execution_version = 1", discovery_query)
 		self.assertIn("IFNULL(grn.additional_grn, 0) = 0", discovery_query)
 		self.assertEqual(
 			sql.call_args_list[0].args[1]["grn_items"],
@@ -569,6 +563,7 @@ class TestLotFabricConversionRebuild(unittest.TestCase):
 			[
 				frappe._dict(
 					source_grn="GRN-OLD",
+					cloth_execution_version=1,
 					fabric_execution_key=None,
 					production_detail="IPD-1",
 					planned_item="CLOTH-36",
@@ -607,6 +602,7 @@ class TestLotFabricConversionRebuild(unittest.TestCase):
 		]
 		receipt = frappe._dict(
 			production_detail="IPD-1",
+			is_stage_projection=True,
 			planned_item="KNIT-PLANNED",
 			actual_item="KNIT-ACTUAL",
 			stock_qty=10,
@@ -628,7 +624,6 @@ class TestCuttingFabricSubstitutions(unittest.TestCase):
 		self.assertEqual(result, [3.889, 3.111])
 		self.assertEqual(round(sum(result), 3), 7)
 
-
 	def test_unmapped_cutting_row_is_unchanged(self):
 		row = {
 			"cloth_item_variant": "CLOTH-36-RED",
@@ -638,7 +633,6 @@ class TestCuttingFabricSubstitutions(unittest.TestCase):
 		expanded, changed = expand_cutting_rows([row], {})
 		self.assertEqual(changed, 0)
 		self.assertEqual(expanded, [row])
-
 
 	def test_stale_conversion_never_coerces_exact_projection(self):
 		with self.assertRaisesRegex(
@@ -650,3 +644,45 @@ class TestCuttingFabricSubstitutions(unittest.TestCase):
 				planned_item="PLAN",
 				projected_item="ACTUAL-32",
 			)
+
+
+class TestKnittingOnlyConversions(unittest.TestCase):
+	@patch("essdee_yrp.fabric_substitution._validate_knitting_variance")
+	@patch("essdee_yrp.fabric_substitution.get_supported_execution_route")
+	@patch.object(frappe, "get_cached_doc")
+	def test_unversioned_or_unsupported_receipts_store_knitting_only(self, get_document, get_route, _validate):
+		get_document.return_value = frappe._dict(name="IPD-OTHER")
+		for version, route in ((0, None), (1, None), (0, {"knitting": {"process_name": "Knitting", "position": 0}, "dyeing": {"process_name": "Dyeing", "position": 1}})):
+			with self.subTest(version=version, route=route):
+				get_route.return_value = route
+				rows = fabric_substitution.build_conversion_rows([
+					frappe._dict(production_detail="IPD-OTHER", planned_item="Greige-14", actual_item="Greige-14.5", stock_qty=20, stock_uom="Kg", source_grn="GRN-1", cloth_execution_version=version, fabric_execution_key="key" if version else None),
+				], "Knitting")
+				self.assertEqual(len(rows), 1)
+				self.assertEqual(rows[0]["process_name"], "Knitting")
+				self.assertEqual(rows[0]["process_stage_index"], 0)
+				self.assertEqual(rows[0]["knitting_actual_item"], "Greige-14.5")
+				self.assertEqual(rows[0]["knitting_planned_item"], "Greige-14")
+				self.assertEqual(rows[0]["actual_quantity"], 20)
+
+
+class TestTerminalConversionSelection(unittest.TestCase):
+	def test_unversioned_knitting_uses_its_recorded_terminal_stage(self):
+		lot = {"lot_fabric_conversions": [
+			{"production_detail": "LOCAL-TEST-IPD", "process_name": "Knitting",
+			 "process_stage_index": 0, "actual_quantity": 12},
+		]}
+		self.assertEqual(fabric_substitution._selected_terminal_steps(lot), [
+			{"production_detail": "LOCAL-TEST-IPD", "process_name": "Knitting"},
+		])
+
+	def test_terminal_selection_precedes_receipt_eligibility(self):
+		rows = [
+			{"production_detail": "LOCAL-TEST-IPD", "process_stage_index": 1,
+			 "actual_quantity": 20, "received_type": "Accepted"},
+			{"production_detail": "LOCAL-TEST-IPD", "process_stage_index": 2,
+			 "actual_quantity": 0, "received_type": "Rejected"},
+			{"production_detail": "LOCAL-TEST-OTHER-IPD", "process_stage_index": 0,
+			 "actual_quantity": 8, "received_type": "Accepted"},
+		]
+		self.assertEqual(fabric_substitution._terminal_conversion_rows(rows), rows[1:])

@@ -218,22 +218,7 @@ export function isChangedConversion(row) {
 	return row.planned_item !== row.actual_item
 }
 export function visibleConversions(rows = [], includeUnchanged = false) {
-	return rows.filter((row) => Number(row.actual_quantity) > 0 && (!row.received_type || row.received_type === "Accepted") && (includeUnchanged || isChangedConversion(row)))
-}
-
-export function buildActualDiaConversionView(rows = [], { process = "", search = "", includeUnchanged = false } = {}) {
-	const eligible = visibleConversions(rows, true)
-	const query = search.trim().toLowerCase()
-	const filteredRows = visibleConversions(rows, includeUnchanged).filter((row) =>
-		(!process || row.process_name === process) && (!query || Object.values(row).join(" ").toLowerCase().includes(query)),
-	)
-	const groups = new Map()
-	for (const row of filteredRows) {
-		const key = row.production_detail || ""
-		if (!groups.has(key)) groups.set(key, { productionDetail: key, rows: [] })
-		groups.get(key).rows.push(row)
-	}
-	return { changedCount: eligible.filter(isChangedConversion).length, processes: [...new Set(eligible.map((row) => row.process_name))].filter(Boolean), filteredRows, groups: [...groups.values()] }
+	return rows.filter((row) => (includeUnchanged || isChangedConversion(row)))
 }
 
 export function planBadge(entry = {}) {
@@ -386,4 +371,23 @@ export function formatLotDate(value, includeTime = false) {
 	if (!match) return value || "—"
 	const date = `${match[3]}-${match[2]}-${match[1]}`
 	return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date
+}
+
+export function conversionProcesses(rows = []) {
+	const stages = new Map()
+	for (const row of rows) {
+		const name = row.process_name
+		if (name) stages.set(name, Math.min(stages.get(name) ?? Infinity, Number(row.process_stage_index ?? ({ knitting: 0, dyeing: 1, washing: 2 }[String(name).toLowerCase()] ?? Infinity))))
+	}
+	return [...stages].sort(([left, leftStage], [right, rightStage]) => leftStage - rightStage || left.localeCompare(right)).map(([name]) => name)
+}
+
+export function conversionView(rows = [], { search = "", process = "", includeUnchanged = false } = {}) {
+	const query = search.trim().toLocaleLowerCase()
+	const matching = rows.filter((row) => (!process || row.process_name === process) && [row.process_name, row.planned_item, row.actual_item, row.production_detail].some((value) => String(value || "").toLocaleLowerCase().includes(query)))
+	return {
+		rows: visibleConversions(matching, includeUnchanged),
+		changed: rows.filter(isChangedConversion).length,
+		routes: rows.length,
+	}
 }

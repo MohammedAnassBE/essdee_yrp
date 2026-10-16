@@ -99,29 +99,27 @@ function formatValue(column, row) {
 
 <style scoped>
 .material-requirement-groups { display: grid; gap: 10px; min-width: 0; }
-.material-requirement-group { overflow: hidden; min-width: 0; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.material-requirement-group { overflow: hidden; min-width: 0; background: var(--erp-surface); }
 .material-requirement-group__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 10px 8px 12px; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }
 .material-requirement-group__identity { display: grid; min-width: 0; gap: 2px; }
 .material-requirement-group__identity strong,
 .material-requirement-group__identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.material-requirement-group__identity strong { color: var(--erp-text); font-size: 13px; font-weight: 770; line-height: 1.25; }
-.material-requirement-group__identity span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 590; }
+.material-requirement-group__identity strong { color: var(--erp-text); font-size: var(--erp-font-size-table); font-weight: 600; line-height: 1.25; }
+.material-requirement-group__identity span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 600; }
 .material-requirement-group__meta { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 6px; }
 .material-requirement-group__type,
-.material-requirement-group__count { display: inline-flex; min-height: 24px; align-items: center; padding: 3px 8px; border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 700; white-space: nowrap; }
-.material-requirement-group__type { color: var(--erp-accent-hover); background: var(--erp-accent-soft); border: 1px solid var(--erp-accent-border); }
-.material-requirement-group__count { color: var(--erp-text-muted); background: var(--erp-surface); border: 1px solid var(--erp-border); }
+.material-requirement-group__count { display: inline-flex; min-height: 24px; align-items: center; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 500; white-space: nowrap; }
 .material-requirement-table-wrap { max-height: none; overflow-x: auto; overflow-y: visible; scrollbar-color: var(--erp-border-strong) transparent; scrollbar-width: thin; }
 .material-requirement-table-wrap:focus-visible { outline: 2px solid var(--erp-accent-dark); outline-offset: -2px; }
-.material-requirement-table { width: 100%; min-width: 660px; border-collapse: collapse; color: var(--erp-text); font-size: 13px; font-variant-numeric: tabular-nums; }
+.material-requirement-table { width: 100%; min-width: 660px; border-collapse: collapse; color: var(--erp-text); font-size: var(--erp-font-size-table); font-variant-numeric: tabular-nums; }
 .material-requirement-table th,
 .material-requirement-table td { padding: 8px 9px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
-.material-requirement-table th { color: var(--erp-text-secondary); background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); font-weight: 750; white-space: nowrap; }
+.material-requirement-table th { color: var(--erp-text-secondary); background: var(--erp-surface-muted); font-size: var(--erp-font-size-min); font-weight: 700; white-space: nowrap; }
 .material-requirement-table tbody tr:last-child td { border-bottom: 0; }
 .material-requirement-table th:last-child,
 .material-requirement-table td:last-child { border-right: 0; }
 .material-requirement-table__number { text-align: right !important; }
-.material-requirement-table .requirement-balance { font-weight: 780; }
+.material-requirement-table .requirement-balance { font-weight: 700; }
 .material-requirement-table .requirement-balance--positive { color: var(--erp-success-text); background: var(--erp-success-soft); }
 .material-requirement-table .requirement-balance--negative { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .material-requirement-table .requirement-balance--zero { color: var(--erp-text-muted); background: var(--erp-surface-soft); }
@@ -130,7 +128,7 @@ function formatValue(column, row) {
 @media (max-width: 700px) {
 	.material-requirement-group__header { align-items: flex-start; flex-direction: column; }
 	.material-requirement-group__meta { justify-content: flex-start; }
-	.material-requirement-table-wrap { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
+	.material-requirement-table-wrap { -webkit-mask-image: linear-gradient(to right, var(--erp-text) 0, var(--erp-text) calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, var(--erp-text) 0, var(--erp-text) calc(100% - 18px), transparent 100%); }
 	.material-requirement-table__actions :deep(.p-button) { width: 2.25rem; height: 2.25rem; }
 }
 </style>

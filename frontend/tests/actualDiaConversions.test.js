@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import * as fabricShapes from "../src/departments/purchase/lot/lotViews.js"
+import { conversionProcesses, conversionView } from "../src/departments/purchase/lot/lotViews.js"
 
 const rows = [
 	{
@@ -40,24 +40,25 @@ const rows = [
 	},
 ]
 
-test("actual Dia Lot view shows only positive Accepted physical conversions", () => {
-	assert.equal(typeof fabricShapes.buildActualDiaConversionView, "function")
-	const view = fabricShapes.buildActualDiaConversionView(rows)
+test("actual Dia Lot view shows changed routes regardless of quantity or receipt type", () => {
+	const view = conversionView(rows)
 
-	assert.equal(view.changedCount, 1)
-	assert.deepEqual(view.processes, ["Knitting"])
-	assert.deepEqual(view.filteredRows.map((row) => row.name), ["row-1"])
-	assert.deepEqual(view.groups.map((group) => group.productionDetail), ["IPD-1"])
+	assert.equal(view.changed, 3)
+	assert.equal(view.routes, 4)
+	assert.deepEqual(conversionProcesses(rows), ["Knitting"])
+	assert.deepEqual(view.rows.map((row) => row.name), ["row-1", "row-2", "row-4"])
 })
 
 test("actual Dia Lot view filters by process, search and unchanged visibility", () => {
-	assert.equal(typeof fabricShapes.buildActualDiaConversionView, "function")
-	const view = fabricShapes.buildActualDiaConversionView(rows, {
+	const view = conversionView(rows, {
 		process: "Knitting",
 		search: "30-greige",
 		includeUnchanged: true,
 	})
 
-	assert.deepEqual(view.filteredRows.map((row) => row.name), ["row-3"])
-	assert.deepEqual(view.groups.map((group) => group.productionDetail), ["IPD-2"])
+	assert.deepEqual(view.rows.map((row) => row.name), ["row-2", "row-3", "row-4"])
+	assert.equal(view.changed, 3)
+	assert.equal(view.routes, 4)
+	assert.deepEqual(conversionView(rows, { search: "22-GREIGE" }).rows.map((row) => row.name), ["row-1"])
+	assert.deepEqual(conversionView(rows, { process: "Dyeing", includeUnchanged: true }).rows, [])
 })

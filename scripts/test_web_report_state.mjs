@@ -11,6 +11,7 @@ import {
 	isReportTrackingState,
 	isTerminalReportState,
 	pollingDelay,
+	reportErrorMessage,
 	resumeStorageKey,
 	shouldRemoveStoredTracking,
 } from "../frontend/src/composables/webReportState.js"
@@ -21,6 +22,10 @@ assert.equal(envelopeState({ mode: "background", job: { status: "Started" } }), 
 assert.equal(envelopeState({ mode: "background", job: { status: "Completed" } }), "ready")
 assert.equal(envelopeState({ mode: "background", job: { status: "Error" } }), "error")
 assert.equal(envelopeState({ expired: true, job: { status: "Completed" } }), "expired")
+
+assert.equal(reportErrorMessage(new TypeError("Failed to fetch")), "The report server did not respond. Narrow the filters or try again.")
+assert.equal(reportErrorMessage(new Error("Too many stock ledger entries (500000+). Please narrow your filters.")), "Too many stock ledger entries (500000+). Please narrow your filters.")
+assert.equal(reportErrorMessage(undefined), "Unable to generate this report.")
 
 assert.equal(pollingDelay(0), 2_000)
 assert.equal(pollingDelay(9_999), 2_000)

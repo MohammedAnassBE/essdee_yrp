@@ -35,9 +35,9 @@
 						</TabList>
 						<TabPanels class="work-order-panels">
 							<TabPanel value="overview"><WorkOrderOverview :details="visibleFields" /></TabPanel>
-							<TabPanel v-if="deliverables.length" value="deliverables"><WorkOrderDetails :deliverables="deliverables" matrices-only /></TabPanel>
-							<TabPanel v-if="receivables.length" value="receivables"><WorkOrderDetails :receivables="receivables" matrices-only /></TabPanel>
-							<TabPanel v-if="showSummary" value="summary"><WorkOrderSummary :summary="workspace.summary || {}" /></TabPanel>
+							<TabPanel v-if="deliverables.length" value="deliverables"><WorkOrderDetails :deliverables="deliverables" :process-cost-view-route-name="processCostViewRouteName" matrices-only /></TabPanel>
+							<TabPanel v-if="receivables.length" value="receivables"><WorkOrderDetails :receivables="receivables" :process-cost-view-route-name="processCostViewRouteName" matrices-only /></TabPanel>
+							<TabPanel v-if="showSummary" value="summary"><WorkOrderSummary :summary="workspace.summary || {}" :process-cost-view-route-name="processCostViewRouteName" /></TabPanel>
 						</TabPanels>
 					</Tabs>
 				</template>
@@ -100,6 +100,7 @@ const props = defineProps({
 	viewRouteName: { type: String, default: "fabric-work-order" },
 	newRouteName: { type: String, default: "fabric-work-order-new" },
 	editRouteName: { type: String, default: "fabric-work-order-edit" },
+	processCostViewRouteName: { type: String, default: "" },
 })
 
 const route = useRoute()
@@ -338,7 +339,7 @@ watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: t
 </script>
 
 <style scoped>
-.fabric-work-order-frame { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); padding: 0 clamp(2px, .7vw, 10px); }
+.fabric-work-order-frame { width: 100%; min-width: 0; margin: 0 0 var(--erp-space-3); }
 .work-order-page__identity { display: grid; width: 100%; min-width: 0; padding-block: 5px; }
 .work-order-page__title-row { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .work-order-page__title { display: grid; min-width: 0; gap: 3px; }
@@ -359,5 +360,5 @@ watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: t
 .work-order-page__total strong { color: var(--erp-accent-hover); font-size: 17px; font-weight: 780; }
 .work-order-grn-source { display: grid; gap: var(--erp-space-3); }
 @media (max-width: 900px) { .work-order-page__totals, :deep(.work-order-activity-rail) { grid-column: 1 / -1; } }
-@media (max-width: 650px) { .fabric-work-order-frame { margin-bottom: 0; padding: 0; } .work-order-page__identity { width: 100%; } .work-order-page__meta { align-items: flex-start; flex-direction: column; gap: 2px; } .work-order-page__date { padding-left: 0; border-left: 0; } .work-order-page__identity h1 { max-width: calc(100vw - 132px); } .work-order-page__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-panels { padding: var(--erp-space-2); } }
+@media (max-width: 650px) { .fabric-work-order-frame { margin-bottom: 0; } .work-order-page__identity { width: 100%; } .work-order-page__meta { align-items: flex-start; flex-direction: column; gap: 2px; } .work-order-page__date { padding-left: 0; border-left: 0; } .work-order-page__identity h1 { max-width: calc(100vw - 132px); } .work-order-page__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-panels { padding: var(--erp-space-2); } }
 </style>

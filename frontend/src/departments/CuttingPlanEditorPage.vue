@@ -1,7 +1,7 @@
 <template>
-	<DepartmentPage title="Cutting Plan" back-to="/cutting/plans" back-label="Cutting Plans" :show-title="false" flat full-width>
+	<DepartmentPage title="Cutting Plan" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="cutting-plan-editor-page erp-workspace">
-			<CuttingPlanEditor :initial-source="source" @saved="saved" @cancel="router.push('/cutting/plans')" />
+			<CuttingPlanEditor :initial-source="source" @saved="saved" @cancel="router.push(backTo)" />
 		</div>
 	</DepartmentPage>
 </template>
@@ -14,6 +14,12 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import CuttingPlanEditor from "./cutting/plan/CuttingPlanEditor.vue"
 
+const props = defineProps({
+	backTo: { type: String, default: "/cutting/plans" },
+	backLabel: { type: String, default: "Cutting Plans" },
+	viewRouteName: { type: String, default: "cutting-plan" },
+})
+
 const route = useRoute()
 const router = useRouter()
 const source = computed(() => Object.fromEntries(
@@ -22,10 +28,10 @@ const source = computed(() => Object.fromEntries(
 
 function saved(record) {
 	if (!record?.name) return
-	router.replace({ name: "cutting-plan", params: { cuttingPlanId: record.name }, state: preserveListNavigationState(record.name) })
+	router.replace({ name: props.viewRouteName, params: { cuttingPlanId: record.name }, state: preserveListNavigationState(record.name) })
 }
 </script>
 
 <style scoped>
-.cutting-plan-editor-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
+.cutting-plan-editor-page { width: 100%; min-width: 0; }
 </style>

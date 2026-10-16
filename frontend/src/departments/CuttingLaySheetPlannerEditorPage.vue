@@ -47,5 +47,5 @@ async function save(values) {
 </script>
 
 <style scoped>
-.planner-new { width: 100%; max-width: 1500px; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); margin: 0 auto; }.planner-new > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }.planner-new h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); }.planner-new__actions { display: flex; align-items: center; gap: 6px; }.planner-new > :deep(.p-message) { margin-top: 10px; }.planner-new__loading { padding-block: var(--erp-space-4); }
+.planner-new { width: 100%; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); }.planner-new > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }.planner-new h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); }.planner-new__actions { display: flex; align-items: center; gap: 6px; }.planner-new > :deep(.p-message) { margin-top: 10px; }.planner-new__loading { padding-block: var(--erp-space-4); }
 </style>

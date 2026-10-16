@@ -7,7 +7,7 @@
 					<span v-if="editing" class="lot-page__editing">· Editing</span>
 					<span v-if="deliveryDate" class="lot-page__date"><span>Delivery</span><strong>{{ formatLotDate(deliveryDate) }}</strong></span>
 				</div>
-				<h1 :id="headingId" :aria-label="[name || draftName || 'New Lot', item].filter(Boolean).join(' · ')">
+				<h1 class="erp-doc-title" :id="headingId" :aria-label="[name || draftName || 'New Lot', item].filter(Boolean).join(' · ')">
 					<span class="lot-page__lot">{{ name || draftName || "New Lot" }}</span>
 					<template v-if="item"><span class="lot-page__title-separator" aria-hidden="true">·</span><span>{{ item }}</span></template>
 				</h1>

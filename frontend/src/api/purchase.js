@@ -17,6 +17,10 @@ export function searchItemAttributeValues(attribute, text = "", item = null) {
 	return callMethod(`${ITEM_METHOD}.search_attribute_values`, { attribute, txt: text, item })
 }
 
+export function searchItemEditorLinks(doctype, text = "", key = null) {
+	return callMethod("essdee_yrp.purchase.item_tables.search_item_editor_links", { doctype, txt: text, key })
+}
+
 export function getItemAttributeCounts(items) {
 	return callMethod(`${ITEM_METHOD}.get_item_attribute_counts`, { items })
 }
@@ -33,8 +37,20 @@ export function updateItem(name, values, expectedModified) {
 	})
 }
 
+export function setItemDisabled(name, disabled, expectedModified) {
+	return callMethod(`${ITEM_METHOD}.set_item_disabled`, {
+		name,
+		disabled,
+		expected_modified: expectedModified,
+	})
+}
+
 export function getItemPriceWorkspace(name) {
 	return callMethod(`${ITEM_PRICE_METHOD}.get_item_price_workspace`, { name })
+}
+
+export function getItemPriceSummaries(names) {
+	return callMethod(`${ITEM_PRICE_METHOD}.get_item_price_summaries`, { names })
 }
 
 export function getItemPriceEditor(name = null, item = null) {

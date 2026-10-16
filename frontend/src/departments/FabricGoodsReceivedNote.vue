@@ -74,6 +74,6 @@ function compactSource(source) {
 </script>
 
 <style scoped>
-.fabric-goods-received-note-frame { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); }
+.fabric-goods-received-note-frame { width: 100%; min-width: 0; margin: 0 0 var(--erp-space-3); }
 @media (max-width: 650px) { .fabric-goods-received-note-frame { margin-bottom: 0; } }
 </style>

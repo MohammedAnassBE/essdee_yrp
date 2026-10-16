@@ -113,11 +113,14 @@
 					</header>
 					<div class="goods-received-note-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="goods-received-note-matrix__group">
-							<header><div><strong>{{ section.name || "Unspecified item" }}</strong></div></header>
+							<header><div><strong>{{ section.name || "Unspecified item" }}</strong><small v-if="section.lot && !canEditLots">{{ section.lot }}</small></div></header>
 							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
+										<th v-if="hasActualDia && block.kind === 'items'">Actual Dia</th>
+										<th v-if="hasActualDia && block.kind === 'items'">Balance</th>
+										<th v-if="canEditLots && block.kind === 'items'">Lot</th>
 									<template v-if="hasPrimaryAttribute(section.group)">
 										<th v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity-heading">{{ value }}</th>
 									</template>
@@ -131,6 +134,22 @@
 									<tbody>
 										<tr v-for="(row, rowIndex) in section.items" :key="rowKey(row, rowIndex)">
 											<td v-for="column in identityColumns(section.group)" :key="column.key">{{ identityValue(row, column) }}</td>
+											<td v-if="hasActualDia && block.kind === 'items'">
+												<Select :model-value="row.attributes?.[actualDia.attribute]" :options="unusedDias(section.group, row, actualDia, true)" aria-label="Actual Dia" :invalid="Boolean(row.actual_dia_error)" @update:model-value="changeDia(row, $event)" />
+												<div v-if="diaSiblings(section.group, row)[0] === row && unusedDias(section.group, row, actualDia).length">
+													<Select v-model="row.actual_dia_selection" :options="unusedDias(section.group, row, actualDia)" placeholder="Choose Dia" aria-label="Dia to add" />
+													<Button label="Add Dia" text size="small" :disabled="!row.actual_dia_selection" @click="addDia(section.group, row)" />
+												</div>
+												<Button v-if="canRemoveActualDia(row)" icon="pi pi-trash" aria-label="Remove Dia" text size="small" @click="removeLot(section.group, row)" />
+												<small v-if="row.actual_dia_error" class="grn-dia-error" role="alert">{{ row.actual_dia_error }}</small>
+											</td>
+											<td v-if="hasActualDia && block.kind === 'items'" class="erp-number">{{ formatQty(receivableBalance(section.group, row)) }}</td>
+											<td v-if="canEditLots && block.kind === 'items'">
+												<Select v-if="canEditLotForEntry(row, workspace.lot_options, lotFieldname)" v-model="row.dimensions[lotFieldname]" :options="lotChoicesForEntry(row, workspace.lot_options, lotFieldname)" option-label="label" option-value="value" option-disabled="disabled" placeholder="Choose lot" aria-label="Receipt lot" @update:model-value="markDirty" />
+												<span v-else>{{ row.dimensions?.[lotFieldname] }}</span>
+												<Button v-if="unusedLots(section.group, row).length" label="Add lot" text size="small" @click="addLot(section.group, row)" />
+												<Button v-if="canRemoveLot(section.group, row)" label="Remove" text size="small" @click="removeLot(section.group, row)" />
+											</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity goods-received-note-matrix__primary-cell">
 												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Receive', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
@@ -203,8 +222,8 @@
 
 		<Dialog v-model:visible="splitVisible" modal header="Add receipt split" class="erp-dialog--sm">
 			<LinkField v-model="splitDraft.received_type" label="Received Type" doctype="YRP Received Type" :show-open-button="false" />
-			<label v-if="actualDiaContext.enabled && splitSource?.group.primary_attribute === actualDiaContext.attribute">Planned Dia <Select v-model="splitDraft.sourcePrimary" :options="splitSource.group.primary_attribute_values" fluid /></label>
-			<label v-if="actualDiaContext.enabled">Actual Dia <Select v-model="splitDraft.dia" :options="actualDiaContext.dia_options || []" show-clear fluid /></label>
+			<label v-if="actualDia.enabled && splitSource?.group.primary_attribute === actualDia.attribute">Planned Dia <Select v-model="splitDraft.sourcePrimary" :options="splitSource.group.primary_attribute_values" fluid /></label>
+			<label v-if="actualDia.enabled">Actual Dia <Select v-model="splitDraft.dia" :options="actualDia.dia_options || []" show-clear fluid /></label>
 			<p>Enter the new split quantity in the receipt matrix. The original source is retained.</p>
 			<template #footer><Button label="Close" severity="secondary" text @click="splitVisible = false" /><Button label="Add split" :disabled="!splitDraft.received_type" @click="addSplit" /></template>
 		</Dialog>
@@ -220,12 +239,12 @@
 </template>
 
 <script setup>
-import Select from "primevue/select"
 import LinkField from "../../components/common/LinkField.vue"
 import InputText from "primevue/inputtext"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
+import Select from "primevue/select"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
@@ -239,11 +258,13 @@ import {
 	calculateGoodsReceivedNote,
 	executeGoodsReceivedNoteCommand,
 	getGoodsReceivedNoteCalculation,
+	getGoodsReceivedNoteDeliveryAddress,
+	getGoodsReceivedNoteSupplierAddress,
 	getGoodsReceivedNoteWorkspace,
 	saveGoodsReceivedNote,
 	saveGoodsReceivedNoteInspection,
 } from "../../api/fabricStore.js"
-import { callMethod, searchLinkedDocument } from "../../api/frappe.js"
+import { searchLink, searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -254,6 +275,8 @@ import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
+import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
+import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, unusedLotsForEntry } from "./grnLotOptions.js"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
 
@@ -275,7 +298,6 @@ const dirty = ref(false)
 const editingSubmitted = ref(false)
 const workspace = ref({})
 const currentName = ref("")
-const actualDiaContext = ref({})
 const splitVisible = ref(false)
 const splitSource = ref(null)
 const splitDraft = reactive({ received_type: "", dia: "", sourcePrimary: "" })
@@ -292,6 +314,11 @@ const pendingLifecycleCommand = ref("")
 const form = reactive({})
 let loadSequence = 0
 let actionSequence = 0
+const addressDefaults = reactive({
+	delivery_address: { sequence: 0, pending: false },
+	supplier_address: { sequence: 0, pending: false },
+})
+const addressPending = computed(() => Object.values(addressDefaults).some((state) => state.pending))
 const primaryTotals = new Set(["total_received_quantity", "total", "grand_total", "total_receivable_cost"])
 const headerFieldnames = new Set(["against", "against_id", "delivery_challan", "process_name", "item", "supplier", "supplier_name"])
 const sourceFieldnames = new Set(["against", "against_id", "delivery_challan"])
@@ -302,7 +329,7 @@ const afterMatrixFieldnames = new Set(["freight_charges", "comments", "is_intern
 
 const capabilities = computed(() => workspace.value.capabilities || {})
 const goodsReceivedNoteActions = computed(() => {
-	const busy = Boolean(acting.value)
+	const busy = Boolean(acting.value) || addressPending.value
 	const actions = []
 	const add = (key, fallback, icon, command, options = {}) => {
 		if (!capabilities.value[key]) return
@@ -346,6 +373,10 @@ const canOfferSubmittedEdit = computed(() => Boolean(
 	&& !workspace.value.special_source?.read_only,
 ))
 const canEdit = computed(() => canEditDraft.value || editingSubmitted.value)
+const actualDia = computed(() => workspace.value.actual_dia || { enabled: false, dia_options: [] })
+const hasActualDia = computed(() => canEditDraft.value && actualDia.value.enabled)
+const lotFieldname = computed(() => workspace.value.lot_fieldname || "lot")
+const canEditLots = computed(() => canEditDraft.value && form.against === "Purchase Order" && !form.is_return && itemsNeedLotEditor(itemGroups.value, workspace.value.lot_options, lotFieldname.value))
 function canEditMatrixBlock(kind) {
 	if (!canEdit.value || workspace.value.special_source?.read_only) return false
 	if (!editingSubmitted.value) return true
@@ -465,6 +496,7 @@ function actionIsStale(sequence, requestedRouteName) {
 }
 
 function clearWorkspaceState(name = "") {
+	invalidateAddresses()
 	workspace.value = {}
 	currentName.value = name
 	for (const key of Object.keys(form)) delete form[key]
@@ -480,15 +512,8 @@ function clearWorkspaceState(name = "") {
 }
 
 function applyWorkspace(nextWorkspace) {
+	invalidateAddresses()
 	workspace.value = nextWorkspace || {}
-	actualDiaContext.value = {}
-	const source = workspace.value.record || workspace.value.values || {}
-	if (source.against === "YRP Work Order" && source.against_id) {
-		const name = source.against_id
-		callMethod("essdee_yrp.fabric_grn.get_actual_dia_context", { work_order: name }).then((context) => {
-			if ((workspace.value.record || workspace.value.values)?.against_id === name) actualDiaContext.value = context || {}
-		}).catch((reason) => { error.value = reason.message })
-	}
 	currentName.value = workspace.value.record?.name || ""
 	for (const key of Object.keys(form)) delete form[key]
 	Object.assign(form, clone(workspace.value.values || {}))
@@ -498,7 +523,7 @@ function applyWorkspace(nextWorkspace) {
 		if (!form.posting_date) form.posting_date = defaults.date
 		if (!form.posting_time) form.posting_time = defaults.time
 	}
-	itemGroups.value = normalizeGroups(workspace.value.matrices?.items || workspace.value.item_groups || [])
+	itemGroups.value = prepareActualDiaGroups(normalizeGroups(workspace.value.matrices?.items || workspace.value.item_groups || []), actualDia.value)
 	correctionGroups.value = clone(workspace.value.matrices?.correction_items || workspace.value.correction_item_groups || [])
 	for (const correction of correctionGroups.value) correction.item_details = normalizeGroups(correction.item_details || [])
 	if (!workspace.value.capabilities?.calculate) calculationOpen.value = false
@@ -513,10 +538,35 @@ function applyWorkspace(nextWorkspace) {
 async function setField(fieldname, value) {
 	if (editingSubmitted.value && !allowOnSubmitFields.value.has(fieldname)) return
 	form[fieldname] = value
-	if (fieldname === "supplier") { form.supplier_address = ""; form.contact_person = ""; form.billing_address = "" }
-	if (fieldname === "delivery_location") form.delivery_address = ""
+	if (fieldname === "supplier") { form.contact_person = ""; form.billing_address = "" }
+	if (fieldname in addressDefaults) invalidateAddress(fieldname)
 	if (["posting_date", "posting_time"].includes(fieldname)) form.edit_posting_date_and_time = 1
 	markDirty()
+	if (fieldname === "delivery_location") await defaultAddress("delivery_address", value)
+	if (fieldname === "supplier") await defaultAddress("supplier_address", value)
+}
+
+function invalidateAddress(fieldname) { addressDefaults[fieldname].sequence += 1; addressDefaults[fieldname].pending = false }
+function invalidateAddresses() { for (const fieldname of Object.keys(addressDefaults)) invalidateAddress(fieldname) }
+async function defaultAddress(fieldname, party) {
+	invalidateAddress(fieldname)
+	const state = addressDefaults[fieldname]
+	const sequence = state.sequence
+	const requestedLoad = loadSequence
+	const isCurrent = () => sequence === state.sequence && requestedLoad === loadSequence
+	form[fieldname] = ""
+	if (!party) return
+	state.pending = true
+	try {
+		const address = await (fieldname === "supplier_address"
+			? getGoodsReceivedNoteSupplierAddress(party)
+			: getGoodsReceivedNoteDeliveryAddress(party))
+		if (isCurrent() && !form[fieldname]) form[fieldname] = address || ""
+	} catch (reason) {
+		if (isCurrent()) error.value = reason?.message || `Unable to default the ${fieldname === "supplier_address" ? "Supplier" : "Delivery"} Address.`
+	} finally {
+		if (isCurrent()) state.pending = false
+	}
 }
 
 async function runWorkspaceAction(action) {
@@ -596,7 +646,8 @@ async function save(submit) {
 		emit("changed", workspace.value)
 	} catch (reason) {
 		if (actionIsStale(sequence, requestedRouteName)) return
-		error.value = reason?.message || `Unable to ${submit ? "submit" : "save"} this Goods Received Note.`
+		const message = reason?.message || `Unable to ${submit ? "submit" : "save"} this Goods Received Note.`
+		if (!hasActualDia.value || !setActualDiaRowError(itemGroups.value, message)) error.value = message
 	} finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 
@@ -719,7 +770,7 @@ function fieldOrder(fieldname) { const index = grnFieldOrder.indexOf(fieldname);
 function fieldGroupKey(fieldname) { return Object.entries(grnGroupFields).find(([, fields]) => fields.includes(fieldname))?.[0] || "additional" }
 function linkSearchHandler(field) {
 	if (field.fieldname === "supplier_address" || field.fieldname === "billing_address") return (text) => searchLinkedDocument("Address", "Supplier", form.supplier, text)
-	if (field.fieldname === "delivery_address") return (text) => searchLinkedDocument("Address", "Supplier", form.delivery_location, text)
+	if (field.fieldname === "delivery_address") return (text) => searchLink("Address", text, { disabled: 0 })
 	if (field.fieldname === "contact_person") return (text) => searchLinkedDocument("Contact", "Supplier", form.supplier, text)
 	return null
 }
@@ -776,15 +827,15 @@ function openSplit(group, row) {
 	splitSource.value = { group, row }
 	splitDraft.received_type = row.dimensions?.received_type || ""
 	splitDraft.sourcePrimary = group.primary_attribute_values?.find((value) => row.values?.[value]?.ref_docname) || group.primary_attribute_values?.[0] || "default"
-	splitDraft.dia = row.attributes?.[actualDiaContext.value.attribute || "Dia"] || ""
+	splitDraft.dia = row.attributes?.[actualDia.value.attribute || "Dia"] || ""
 	splitVisible.value = true
 }
 function addSplit() {
 	const { group, row } = splitSource.value
 	const split = clone(row)
 	split.dimensions = { ...split.dimensions, received_type: splitDraft.received_type }
-	if (actualDiaContext.value.enabled && splitDraft.dia) {
-		const attribute = actualDiaContext.value.attribute || "Dia"
+	if (actualDia.value.enabled && splitDraft.dia) {
+		const attribute = actualDia.value.attribute || "Dia"
 		if (group.primary_attribute === attribute) {
 			const source = split.values?.[splitDraft.sourcePrimary] || {}
 			split.values = { [splitDraft.dia]: source }
@@ -802,14 +853,38 @@ function itemSections(groups) {
 		const sections = new Map()
 		for (const row of group.items || []) {
 			const name = row.name || row.item || row.item_variant || ""
-			const lot = row.dimensions?.lot || row.lot || ""
-			const key = `${groupIndex}-${name || "item"}-${lot}`
+			const lot = row.dimensions?.[lotFieldname.value] || row.lot || ""
+			const key = `${groupIndex}-${name || "item"}-${canEditLots.value ? '' : lot}`
 			if (!sections.has(key)) sections.set(key, { group, name, lot, key, items: [] })
 			sections.get(key).items.push(row)
 		}
 		return [...sections.values()]
 	})
 }
+function changeDia(row, dia) { changeActualDia(row, actualDia.value.attribute, dia); markDirty() }
+function addDia(group, row) {
+	if (addActualDia(group, row, actualDia.value, row.actual_dia_selection)) { row.actual_dia_selection = null; markDirty() }
+}
+function lotSiblingKey(row) {
+	return JSON.stringify([row.name, row.attributes, row.set_combination, row.dimensions?.received_type,
+		Object.entries(row.values || {}).map(([key, value]) => [key, value.ref_docname])])
+}
+function lotSiblings(group, row) { return group.items.filter((entry) => lotSiblingKey(entry) === lotSiblingKey(row)) }
+function unusedLots(group, row) {
+	const used = new Set(lotSiblings(group, row).map((entry) => entry.dimensions?.[lotFieldname.value]))
+	return unusedLotsForEntry(row, workspace.value.lot_options, used)
+}
+function addLot(group, row) {
+	const entry = clone(row)
+	entry.dimensions[lotFieldname.value] = unusedLots(group, row)[0]
+	for (const value of Object.values(entry.values || {})) { value.qty = 0; value.secondary_qty = 0; value.freight_amount = 0 }
+	group.items.push(entry)
+	markDirty()
+}
+function canRemoveLot(group, row) {
+	return lotSiblings(group, row).length > 1 && Object.values(row.values || {}).every((value) => !Number(value.qty) && !Number(value.secondary_qty))
+}
+function removeLot(group, row) { group.items.splice(group.items.indexOf(row), 1); markDirty() }
 function identityColumns(group) {
 	const columns = (group.attributes || []).map((key) => ({ key, label: titleCase(key), source: "attributes" }))
 	const dimensions = []
@@ -841,6 +916,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 </script>
 
 <style scoped>
+.grn-dia-error { display: block; color: var(--p-red-600, #dc2626); max-width: 280px; white-space: normal; }
 .goods-received-note-workspace { width: 100%; min-width: 0; }
 .goods-received-note-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
 .goods-received-note-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
@@ -859,7 +935,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .goods-received-note-after-matrix__fact strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; }
 @media (max-width: 1000px) { .goods-received-note-after-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .goods-received-note-after-matrix { grid-template-columns: 1fr; } .goods-received-note-after-matrix__wide { grid-column: auto; } }
-.goods-received-note-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
+.goods-received-note-workspace--page { padding-bottom: var(--erp-space-3); }
 .goods-received-note-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .goods-received-note-header__title { display: grid; min-width: 0; gap: 2px; }
 .goods-received-note-header__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
@@ -917,7 +993,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .goods-received-note-related small { color: var(--erp-text-muted); }
 @media (max-width: 1100px) { .goods-received-note-header__facts { overflow-x: auto; padding-right: 18px; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .goods-received-note-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .goods-received-note-header__facts > div { flex: 0 0 auto; } }
 @media (max-width: 760px) { .goods-received-note-header__identity { align-items: flex-start; flex-wrap: wrap; } .goods-received-note-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; } .goods-received-note-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .goods-received-note-header__identity--embedded .goods-received-note-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; } }
-@media (max-width: 620px) { .goods-received-note-workspace--page { padding-right: 0; padding-left: 0; } .goods-received-note-field-fact { min-height: 46px; padding: 6px 8px; } .goods-received-note-matrix__stack { padding: var(--erp-space-2); } }
+@media (max-width: 620px) { .goods-received-note-field-fact { min-height: 46px; padding: 6px 8px; } .goods-received-note-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

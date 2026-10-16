@@ -18,7 +18,7 @@ class FakeEditableProductionOrder:
 		self.saved = 0
 		self.inserted = 0
 		self.cancelled = 0
-		self.meta = SimpleNamespace(fields=[], get_field=lambda _fieldname: None)
+		self.meta = SimpleNamespace(fields=[], is_submittable=1, get_field=lambda _fieldname: None)
 
 	def get(self, key, default=None):
 		if key in {"name", "docstatus", "modified"}:
@@ -30,6 +30,9 @@ class FakeEditableProductionOrder:
 
 	def check_permission(self, permission):
 		self.checked_permissions.append(permission)
+
+	def has_permission(self, permission):
+		return frappe.has_permission(self.doctype, ptype=permission, doc=self)
 
 	def run_method(self, method):
 		if method != "onload":
@@ -67,6 +70,7 @@ class TestSalesProductionOrderCommands(TestCase):
 		with (
 			patch.object(frappe, "get_doc", return_value=doc),
 			patch.object(web_workspace.workflow, "get_order_editor_context", return_value=context),
+			patch.object(frappe.db, "get_value", return_value=frappe._dict(has_variants=1, variant_of=None, disabled=0)),
 		):
 			payload = web_workspace.get_production_order_editor(doc.name)
 
@@ -86,6 +90,7 @@ class TestSalesProductionOrderCommands(TestCase):
 		)
 		self.assertEqual(payload["matrix"], context)
 		self.assertEqual(payload["modified"], doc.modified)
+		self.assertEqual(next(field["value"] for field in payload["fields"] if field["fieldname"] == "item"), "Premium Polo")
 
 	def test_save_draft_uses_allowlist_and_preserves_matrix_payload(self):
 		doc = FakeEditableProductionOrder(item="Old Item")
@@ -102,6 +107,7 @@ class TestSalesProductionOrderCommands(TestCase):
 		with (
 			patch.object(frappe, "get_doc", return_value=doc),
 			patch.object(web_workspace, "get_production_order_workspace", return_value={"record": {"name": doc.name}}),
+			patch.object(frappe.db, "get_value", return_value=frappe._dict(has_variants=1, variant_of=None, disabled=0)),
 		):
 			payload = web_workspace.save_production_order(values, name=doc.name, expected_modified=doc.modified)
 
@@ -141,6 +147,7 @@ class TestSalesProductionOrderCommands(TestCase):
 		with (
 			patch.object(frappe, "get_doc", return_value=doc),
 			patch.object(web_workspace.workflow, "request_ppo_approval", side_effect=lambda production_order: calls.append(production_order)),
+			patch.object(frappe.db, "get_value", return_value=frappe._dict(has_variants=1, variant_of=None, disabled=0)),
 			patch.object(web_workspace, "get_production_order_workspace", return_value={"record": {"name": doc.name}}),
 		):
 			web_workspace.save_production_order(values, name=doc.name, submit=True)
@@ -158,7 +165,11 @@ class TestSalesProductionOrderCommands(TestCase):
 				{"production_order": "PPO-0001", "size_quantities": {"S": 10}, "size_ratios": {"S": 1}, "requested_by": "Buyer", "reason": "Revised order"},
 			),
 			"approve_quantity_ratio": ("approve_quantity_and_ratio", {}, {"production_order": "PPO-0001"}),
-			"update_price": ("update_price", {"item_details": [{"size": "S", "mrp": 799}]}, {"production_order": "PPO-0001", "item_details": [{"size": "S", "mrp": 799}]}),
+			"update_price": (
+				"update_price",
+				{"item_details": {"items": {"S": {"selected_source": "sales_mrp"}}, "lot_price_overrides": {"LOT-1": {"S": 799}}}},
+				{"production_order": "PPO-0001", "item_details": {"items": {"S": {"selected_source": "sales_mrp"}}, "lot_price_overrides": {"LOT-1": {"S": 799}}}},
+			),
 			"change_dates": (
 				"update_production_order_date",
 				{"date_field": "Delivery Date", "new_date": "2026-10-22", "reason": "Buyer request"},
@@ -203,7 +214,7 @@ class TestSalesProductionOrderCommands(TestCase):
 		self.assertEqual(result["record"]["docstatus"], 2)
 
 	def test_amend_creates_a_new_draft_and_delete_returns_without_refetching(self):
-		cancelled = FakeEditableProductionOrder(docstatus=2, status="Cancelled")
+		cancelled = FakeEditableProductionOrder(docstatus=2, status="Open")
 		amended = FakeEditableProductionOrder(name="PPO-0002", docstatus=0, status="Draft")
 		with (
 			patch.object(frappe, "get_doc", return_value=cancelled),
@@ -213,6 +224,8 @@ class TestSalesProductionOrderCommands(TestCase):
 		):
 			result = web_workspace.execute_production_order_command(cancelled.name, "amend")
 		self.assertEqual(amended.get("amended_from"), cancelled.name)
+		self.assertEqual(amended.get("status"), "Draft")
+		self.assertEqual(cancelled.get("status"), "Open")
 		self.assertEqual(amended.inserted, 1)
 		refresh.assert_called_once_with(amended.name)
 		self.assertEqual(result["record"]["name"], amended.name)

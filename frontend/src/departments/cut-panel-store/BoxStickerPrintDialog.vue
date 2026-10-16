@@ -17,35 +17,40 @@
 		<div v-else class="box-sticker-dialog__body">
 			<section class="box-sticker-document" aria-label="Box Sticker Print details">
 				<header class="box-sticker-section-head">
-					<div><span>DOCUMENT</span><h3>Label source</h3></div>
+					<div><h3>Box Sticker Print</h3></div>
 					<DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" />
 				</header>
 				<div class="box-sticker-document__grid">
 					<LinkField
+						:key="`lot-${sourceFieldKey}`"
 						:model-value="form.lot"
 						label="Lot"
 						doctype="SD YRP Lot"
+						placeholder="Search Lot…"
 						required
 						:disabled="!canEdit || busy"
 						@update:model-value="requestSourceChange('lot', $event)"
 					/>
 					<LinkField
+						:key="`fg-item-${sourceFieldKey}`"
 						:model-value="form.fg_item"
-						label="FG Item"
+						label="Item"
 						doctype="SD YRP FG Item Master"
+						placeholder="Search Item…"
 						required
 						:filters="{ is_temp_item: 0, disabled: 0 }"
 						:disabled="!canEdit || busy"
 						@update:model-value="requestSourceChange('fg_item', $event)"
 					/>
-					<label class="box-sticker-field">
-						<span>Size <small>Optional</small></span>
-						<InputText v-model="form.size" fluid :disabled="!canEdit || busy" @update:model-value="markDirty" />
-					</label>
+					<div class="common-field box-sticker-field">
+						<label class="common-field__label erp-field-label" for="box-sticker-size">Size</label>
+						<InputText id="box-sticker-size" v-model="form.size" fluid :disabled="!canEdit || busy" @update:model-value="markDirty" />
+					</div>
 					<LinkField
 						v-model="form.print_format"
 						label="Print Format"
 						doctype="YRP ZPL Raw Print Format"
+						placeholder="Search Print Format…"
 						required
 						:disabled="!canEdit || busy"
 						@update:model-value="documentValueChanged"
@@ -62,8 +67,8 @@
 						/>
 						<span><strong>Use Item Name</strong><small>Print the item name instead of its display name.</small></span>
 					</label>
-					<div class="box-sticker-context">
-						<span>Display Name</span>
+					<div class="common-field box-sticker-context">
+						<span class="common-field__label erp-field-label">Display Name</span>
 						<strong>{{ displayName }}</strong>
 					</div>
 					<Button
@@ -79,123 +84,122 @@
 				</div>
 			</section>
 
-			<div class="box-sticker-workspace">
-				<section class="box-sticker-rows" aria-label="Box Sticker size rows">
-					<header class="box-sticker-section-head">
-						<div><span>SIZE ROWS</span><h3>Quantities and pricing</h3></div>
-						<strong>{{ rows.length }} {{ rows.length === 1 ? "size" : "sizes" }}</strong>
-					</header>
+			<section class="box-sticker-rows" aria-label="Box Sticker size rows">
+				<header class="box-sticker-section-head">
+					<div><h3>Box Sticker Print Details</h3></div>
+					<strong>{{ rows.length }} {{ rows.length === 1 ? "size" : "sizes" }}</strong>
+				</header>
 
-					<div v-if="rows.length" class="box-sticker-table-wrap" tabindex="0" role="region" aria-label="Box Sticker quantities">
-						<table>
-							<thead>
-								<tr>
-									<th>Size</th>
-									<th>MRP</th>
-									<th>Total Qty</th>
-									<th>Printed</th>
-									<th>Allow Excess</th>
-									<th>Excess %</th>
-									<th>Allowed</th>
-									<th>Remaining</th>
-									<th>Print Qty</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-for="(row, index) in rows" :key="row.name || `${row.size}-${index}`">
-									<td><strong>{{ row.size || "Not set" }}</strong></td>
-									<td class="box-sticker-number-cell"><span>{{ money(row.mrp) }}</span></td>
-									<td class="box-sticker-number-cell">
-										<InputNumber
-											v-if="canEdit"
-											v-model="row.quantity"
-											:min="0"
-											:max-fraction-digits="0"
-											:use-grouping="false"
-											:disabled="busy"
-											:aria-label="`Total quantity for ${row.size || `row ${index + 1}`}`"
-											fluid
-											@update:model-value="markDirty"
-										/>
-										<span v-else>{{ number(row.quantity) }}</span>
-									</td>
-									<td class="box-sticker-number-cell"><span>{{ number(row.printed_quantity) }}</span></td>
-									<td class="box-sticker-excess-cell">
-										<Checkbox v-model="row.allow_excess_quantity" binary :true-value="1" :false-value="0" disabled :aria-label="`Allow excess for ${row.size || `row ${index + 1}`}`" />
-									</td>
-									<td class="box-sticker-number-cell">
-										<InputNumber
-											v-if="canEdit"
-											v-model="row.allow_excess_percentage"
-											suffix="%"
-											:min="0"
-											:max="100"
-											:max-fraction-digits="0"
-											:use-grouping="false"
-											:disabled="busy || Boolean(row.allow_excess_quantity)"
-											:aria-label="`Excess percentage for ${row.size || `row ${index + 1}`}`"
-											fluid
-											@update:model-value="markDirty"
-										/>
-										<span v-else>{{ number(row.allow_excess_percentage) }}%</span>
-									</td>
-									<td class="box-sticker-number-cell"><span>{{ authoritativeNumber(row.allowed_quantity) }}</span></td>
-									<td class="box-sticker-number-cell"><span>{{ authoritativeNumber(row.remaining_quantity) }}</span></td>
-									<td class="box-sticker-print-quantity">
-										<InputNumber
-											v-model="row.print_quantity"
-											:min="0"
-											:max-fraction-digits="0"
-											:use-grouping="false"
-											:disabled="!canPrint || busy"
-											:aria-label="`Print quantity for ${row.size || `row ${index + 1}`}`"
-											fluid
-										/>
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-					<div v-else class="box-sticker-empty">
-						<i class="pi pi-tags" aria-hidden="true" />
-						<strong>No size rows loaded</strong>
-						<span>Select a Lot and FG Item, then fetch the authoritative size rows.</span>
-					</div>
-				</section>
+				<div v-if="rows.length" ref="tableWrap" class="box-sticker-table-wrap" tabindex="0" role="region" aria-label="Box Sticker quantities">
+					<table>
+						<thead>
+							<tr>
+								<th>Size</th>
+								<th>MRP</th>
+								<th>Quantity</th>
+								<th>Printed Quantity</th>
+								<th>Allow Excess Quantity</th>
+								<th>Allow Excess Percentage</th>
+								<th>Allowed</th>
+								<th>Remaining</th>
+								<th :class="{ 'box-sticker-print-column': canPrint }">Print Quantity</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="(row, index) in rows" :key="row.name || `${row.size}-${index}`">
+								<td><strong>{{ row.size || "Not set" }}</strong></td>
+								<td class="box-sticker-number-cell"><span>{{ money(row.mrp) }}</span></td>
+								<td class="box-sticker-number-cell">
+									<InputNumber
+										v-if="canEdit"
+										v-model="row.quantity"
+										:min="0"
+										:max-fraction-digits="0"
+										:use-grouping="false"
+										:disabled="busy"
+										:aria-label="`Total quantity for ${row.size || `row ${index + 1}`}`"
+										fluid
+										@update:model-value="markDirty"
+									/>
+									<span v-else>{{ number(row.quantity) }}</span>
+								</td>
+								<td class="box-sticker-number-cell"><span>{{ number(row.printed_quantity) }}</span></td>
+								<td class="box-sticker-excess-cell">
+									<Checkbox v-model="row.allow_excess_quantity" binary :true-value="1" :false-value="0" disabled :aria-label="`Allow excess for ${row.size || `row ${index + 1}`}`" />
+								</td>
+								<td class="box-sticker-number-cell">
+									<InputNumber
+										v-if="canEdit"
+										v-model="row.allow_excess_percentage"
+										suffix="%"
+										:min="0"
+										:max="100"
+										:max-fraction-digits="0"
+										:use-grouping="false"
+										:disabled="busy || Boolean(row.allow_excess_quantity)"
+										:aria-label="`Excess percentage for ${row.size || `row ${index + 1}`}`"
+										fluid
+										@update:model-value="markDirty"
+									/>
+									<span v-else>{{ number(row.allow_excess_percentage) }}%</span>
+								</td>
+								<td class="box-sticker-number-cell"><span>{{ authoritativeNumber(row.allowed_quantity) }}</span></td>
+								<td class="box-sticker-number-cell"><span>{{ authoritativeNumber(row.remaining_quantity) }}</span></td>
+								<td class="box-sticker-print-quantity">
+									<InputNumber
+										v-model="row.print_quantity"
+										:min="0"
+										:max-fraction-digits="0"
+										:use-grouping="false"
+										:disabled="!canPrint || busy"
+										:aria-label="`Print quantity for ${row.size || `row ${index + 1}`}`"
+										fluid
+										@update:model-value="printHint = ''"
+									/>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div v-else class="box-sticker-empty">
+					<i class="pi pi-tags" aria-hidden="true" />
+					<strong>No size rows loaded</strong>
+					<span>Select a Lot and Item to load the size rows.</span>
+				</div>
+			</section>
 
-				<section class="box-sticker-preview" aria-label="Label preview">
-					<header class="box-sticker-section-head">
-						<div><span>PREVIEW</span><h3>Rendered label</h3></div>
-						<Button
-							v-if="record?.name"
-							icon="pi pi-refresh"
-							severity="secondary"
-							text
-							rounded
-							aria-label="Refresh label preview"
-							:loading="previewLoading"
-							:disabled="dirty || busy"
-							@click="loadPreview"
-						/>
-					</header>
-					<div class="box-sticker-preview__canvas">
-						<Skeleton v-if="previewLoading" width="82%" height="250px" />
-						<img v-else-if="previewUrl" :src="previewUrl" :alt="`Label preview for ${record?.name || 'Box Sticker Print'}`" @error="previewImageFailed" />
-						<div v-else-if="previewError" class="box-sticker-preview__message box-sticker-preview__message--error" role="status">
-							<i class="pi pi-image" aria-hidden="true" /><strong>Preview unavailable</strong><span>{{ previewError }}</span>
-						</div>
-						<div v-else class="box-sticker-preview__message">
-							<i class="pi pi-image" aria-hidden="true" /><strong>{{ previewEmptyTitle }}</strong><span>{{ previewEmptyMessage }}</span>
-						</div>
+			<section class="box-sticker-preview" aria-label="Label preview">
+				<header class="box-sticker-section-head">
+					<div><h3>Preview</h3></div>
+					<Button
+						v-if="record?.name"
+						icon="pi pi-refresh"
+						severity="secondary"
+						text
+						rounded
+						aria-label="Refresh label preview"
+						:loading="previewLoading"
+						:disabled="dirty || busy"
+						@click="loadPreview"
+					/>
+				</header>
+				<div class="box-sticker-preview__canvas">
+					<Skeleton v-if="previewLoading" width="320px" height="180px" />
+					<img v-else-if="previewUrl" :src="previewUrl" :alt="`Label preview for ${record?.name || 'Box Sticker Print'}`" @error="previewImageFailed" />
+					<div v-else-if="previewError" class="box-sticker-preview__message box-sticker-preview__message--error" role="status">
+						<i class="pi pi-image" aria-hidden="true" /><strong>Preview unavailable</strong><span>{{ previewError }}</span>
 					</div>
-					<footer v-if="record?.name && dirty"><i class="pi pi-info-circle" /> Save changes to refresh this preview.</footer>
-				</section>
-			</div>
+					<div v-else class="box-sticker-preview__message">
+						<i class="pi pi-image" aria-hidden="true" /><strong>{{ previewEmptyTitle }}</strong><span>{{ previewEmptyMessage }}</span>
+					</div>
+				</div>
+				<footer v-if="record?.name && dirty"><i class="pi pi-info-circle" /> Save changes to refresh this preview.</footer>
+			</section>
 		</div>
 
 		<template #footer>
 			<div class="box-sticker-dialog__footer">
-				<span>{{ footerSummary }}</span>
+				<span :class="{ 'box-sticker-print-hint': printHint }" role="status">{{ printHint || footerSummary }}</span>
 				<div>
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
 					<Button
@@ -253,8 +257,8 @@
 						icon="pi pi-print"
 						severity="secondary"
 						outlined
-						:disabled="busy || !hasPositivePrintQuantity"
-						@click="printerVisible = true"
+						:disabled="busy"
+						@click="startPrint"
 					/>
 					<Button v-if="documentPermissions.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :disabled="busy || Boolean(pendingPrintConfirmation)" @click="requestCommand('cancel')" />
 					<Button v-if="documentPermissions.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty || !rows.length" @click="requestCommand('submit')" />
@@ -295,7 +299,7 @@ import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Skeleton from "primevue/skeleton"
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue"
 
 import {
 	confirmBoxStickerPrint,
@@ -339,8 +343,12 @@ const previewLoading = ref(false)
 const previewUrl = ref("")
 const previewError = ref("")
 const pendingPrintConfirmation = ref(null)
+const sourceFieldKey = ref(0)
+const printHint = ref("")
+const tableWrap = ref(null)
 let previewObjectUrl = ""
 let loadSequence = 0
+let sourceSequence = 0
 let previewSequence = 0
 let previewAbortController = null
 let printIntentKey = ""
@@ -394,6 +402,13 @@ watch(() => [props.visible, props.documentName], ([visible]) => {
 	}
 })
 
+watch(confirmationVisible, (visible) => {
+	if (visible || pendingAction.value !== "replace-source") return
+	pendingSource.value = null
+	pendingAction.value = ""
+	sourceFieldKey.value += 1
+})
+
 onBeforeUnmount(revokePreviewUrl)
 
 async function load() {
@@ -416,6 +431,9 @@ async function load() {
 
 function resetEditorState() {
 	previewSequence += 1
+	sourceSequence += 1
+	if (acting.value === "source") acting.value = ""
+	printHint.value = ""
 	previewAbortController?.abort()
 	previewAbortController = null
 	revokePreviewUrl()
@@ -448,6 +466,7 @@ function applyRecordPayload(payload) {
 	const changed = payload?.record || payload
 	if (!changed?.name) return false
 	editor.record = clone(changed)
+	editor.context = { ...editor.context, display_name: changed.display_name || changed.fg_item }
 	setForm(changed)
 	rows.value = normaliseRows(changed.rows || [])
 	dirty.value = false
@@ -488,19 +507,21 @@ function requestRowsRefresh() {
 
 async function loadSourceRows() {
 	if (!form.lot || !form.fg_item) return
+	const sequence = ++sourceSequence
 	acting.value = "source"
 	error.value = ""
 	revokePreviewUrl()
 	try {
 		const payload = await previewBoxStickerSource(form.lot, form.fg_item, sourcePreviewValues(), record.value?.name || "")
+		if (sequence !== sourceSequence) return
 		editor.context = { ...editor.context, ...(payload?.context || {}) }
 		editor.choices = { ...editor.choices, ...(payload?.choices || {}) }
 		rows.value = normaliseRows(payload?.rows || [])
 		dirty.value = true
 	} catch (reason) {
-		error.value = messageOf(reason, "Unable to load the authoritative size rows.")
+		if (sequence === sourceSequence) error.value = messageOf(reason, "Unable to load the authoritative size rows.")
 	} finally {
-		acting.value = ""
+		if (sequence === sourceSequence) acting.value = ""
 	}
 }
 
@@ -633,6 +654,17 @@ async function confirmAction() {
 		acting.value = ""
 		pendingAction.value = ""
 	}
+}
+
+async function startPrint() {
+	if (hasPositivePrintQuantity.value) {
+		printHint.value = ""
+		printerVisible.value = true
+		return
+	}
+	printHint.value = "Enter Print Quantity for at least one size"
+	await nextTick()
+	tableWrap.value?.querySelector(".box-sticker-print-quantity input")?.focus()
 }
 
 async function configuredPrinters(detected) {
@@ -1000,7 +1032,8 @@ function clone(value) {
 </script>
 
 <style scoped>
-.box-sticker-dialog__loading,.box-sticker-dialog__body{display:grid;gap:12px}.box-sticker-document,.box-sticker-rows,.box-sticker-preview{min-width:0;overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.box-sticker-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;padding:9px 12px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.box-sticker-section-head>div{display:flex;align-items:center;gap:9px;min-width:0}.box-sticker-section-head span{color:var(--erp-accent-hover);font-size:var(--erp-font-size-min);font-weight:800;letter-spacing:.08em}.box-sticker-section-head h3{margin:0;color:var(--erp-text);font-size:.95rem}.box-sticker-section-head>strong,.box-sticker-section-head>em{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.box-sticker-document__status--1{color:var(--erp-accent-hover)!important}.box-sticker-document__status--2{color:var(--erp-danger)!important}.box-sticker-document__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;padding:12px}.box-sticker-field,.box-sticker-context{display:grid;gap:7px}.box-sticker-field>span,.box-sticker-context>span{color:var(--erp-text);font-size:var(--erp-font-size-caption);font-weight:700}.box-sticker-field small{margin-left:4px;color:var(--erp-text-muted);font-weight:550}.box-sticker-context strong{display:block;min-height:auto;padding:2px 0 7px;border:0;border-bottom:1px solid var(--erp-border);border-radius:0;background:transparent;color:var(--erp-text);font-size:13px;font-weight:750}.box-sticker-check{display:flex;align-items:center;gap:9px;min-height:40px;padding:8px 10px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft);cursor:pointer}.box-sticker-check>span{display:grid;gap:2px}.box-sticker-check strong{color:var(--erp-text);font-size:var(--erp-font-size-caption)}.box-sticker-check small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3}.box-sticker-workspace{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(290px,.8fr);gap:12px;min-width:0}.box-sticker-table-wrap{max-width:100%;overflow:auto}.box-sticker-table-wrap table{width:100%;min-width:1050px;border-collapse:collapse}.box-sticker-table-wrap th{padding:8px 9px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-muted);color:var(--erp-text-muted);font-size:var(--erp-font-size-min);text-align:left;text-transform:uppercase;white-space:nowrap}.box-sticker-table-wrap td{height:52px;padding:7px 9px;border-bottom:1px solid var(--erp-border-subtle);color:var(--erp-text-secondary);font-size:12px}.box-sticker-table-wrap tbody tr:last-child td{border-bottom:0}.box-sticker-table-wrap td>strong{color:var(--erp-text)}.box-sticker-number-cell{min-width:105px;text-align:right}.box-sticker-excess-cell{text-align:center}.box-sticker-print-quantity{min-width:125px}.box-sticker-empty{display:grid;min-height:250px;padding:32px;color:var(--erp-text-muted);text-align:center;place-content:center;justify-items:center}.box-sticker-empty i{margin-bottom:11px;color:var(--erp-accent);font-size:24px}.box-sticker-empty strong{margin-bottom:4px;color:var(--erp-text);font-size:14px}.box-sticker-empty span{max-width:360px;font-size:12px;line-height:1.5}.box-sticker-preview{align-self:start}.box-sticker-preview__canvas{display:grid;min-height:315px;padding:18px;background:color-mix(in srgb,var(--erp-surface-muted) 65%,white);place-items:center}.box-sticker-preview__canvas img{display:block;width:100%;max-width:440px;max-height:360px;object-fit:contain;border:1px solid var(--erp-border-strong);border-radius:var(--erp-control-radius);background:white;box-shadow:0 9px 24px color-mix(in srgb,var(--erp-accent-hover) 10%,transparent)}.box-sticker-preview__message{display:grid;max-width:280px;justify-items:center;color:var(--erp-text-muted);text-align:center}.box-sticker-preview__message i{margin-bottom:10px;color:var(--erp-border-strong);font-size:27px}.box-sticker-preview__message strong{margin-bottom:5px;color:var(--erp-text);font-size:13px}.box-sticker-preview__message span{font-size:12px;line-height:1.5}.box-sticker-preview__message--error i{color:var(--erp-danger)}.box-sticker-preview>footer{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--erp-border);color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.box-sticker-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%}.box-sticker-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.box-sticker-dialog__footer>div{display:flex;gap:8px}.box-sticker-table-wrap :deep(.p-inputnumber-input){min-width:74px;padding:7px 8px;font-size:12px;text-align:right}
-@media(max-width:1050px){.box-sticker-document__grid{grid-template-columns:repeat(2,minmax(0,1fr))}.box-sticker-workspace{grid-template-columns:1fr}.box-sticker-preview__canvas{min-height:260px}}
+.box-sticker-dialog__loading,.box-sticker-dialog__body{display:grid;gap:12px}.box-sticker-document,.box-sticker-rows,.box-sticker-preview{min-width:0;overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.box-sticker-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;padding:9px 12px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.box-sticker-section-head>div{display:flex;align-items:center;gap:9px;min-width:0}.box-sticker-section-head h3{margin:0;color:var(--erp-text);font-size:.95rem}.box-sticker-section-head>strong,.box-sticker-section-head>em{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.box-sticker-document__status--1{color:var(--erp-accent-hover)!important}.box-sticker-document__status--2{color:var(--erp-danger)!important}.box-sticker-document__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;padding:12px}.box-sticker-field,.box-sticker-context{display:grid;gap:7px}.box-sticker-context strong{display:block;min-height:auto;padding:2px 0 7px;border:0;border-bottom:1px solid var(--erp-border);border-radius:0;background:transparent;color:var(--erp-text);font-size:13px;font-weight:750}.box-sticker-check{display:flex;align-items:center;gap:9px;min-height:40px;padding:8px 10px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft);cursor:pointer}.box-sticker-check>span{display:grid;gap:2px}.box-sticker-check strong{color:var(--erp-text);font-size:var(--erp-font-size-caption)}.box-sticker-check small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3}.box-sticker-table-wrap{max-width:100%;overflow:auto}.box-sticker-table-wrap table{width:100%;min-width:900px;border-collapse:collapse}.box-sticker-table-wrap th{padding:8px 9px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-muted);color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3;text-align:center;text-transform:uppercase;vertical-align:middle}.box-sticker-table-wrap th.box-sticker-print-column{background:color-mix(in srgb,var(--erp-accent) 14%,var(--erp-surface-muted));color:var(--erp-accent-hover)}.box-sticker-table-wrap td{height:52px;padding:7px 9px;border-bottom:1px solid var(--erp-border-subtle);color:var(--erp-text-secondary);font-size:12px;text-align:center;vertical-align:middle}.box-sticker-table-wrap tbody tr:last-child td{border-bottom:0}.box-sticker-table-wrap td>strong{color:var(--erp-text)}.box-sticker-number-cell{min-width:90px}.box-sticker-print-quantity{min-width:110px}.box-sticker-print-hint{color:var(--erp-warning)!important;font-weight:700}.box-sticker-empty{display:grid;min-height:250px;padding:32px;color:var(--erp-text-muted);text-align:center;place-content:center;justify-items:center}.box-sticker-empty i{margin-bottom:11px;color:var(--erp-accent);font-size:24px}.box-sticker-empty strong{margin-bottom:4px;color:var(--erp-text);font-size:14px}.box-sticker-empty span{max-width:360px;font-size:12px;line-height:1.5}.box-sticker-preview__canvas{display:grid;min-height:180px;padding:14px;background:color-mix(in srgb,var(--erp-surface-muted) 65%,white);place-items:center}.box-sticker-preview__canvas img{display:block;width:auto;max-width:100%;max-height:220px;object-fit:contain;border:1px solid var(--erp-border-strong);border-radius:var(--erp-control-radius);background:white;box-shadow:0 9px 24px color-mix(in srgb,var(--erp-accent-hover) 10%,transparent)}.box-sticker-preview__message{display:grid;max-width:280px;justify-items:center;color:var(--erp-text-muted);text-align:center}.box-sticker-preview__message i{margin-bottom:10px;color:var(--erp-border-strong);font-size:27px}.box-sticker-preview__message strong{margin-bottom:5px;color:var(--erp-text);font-size:13px}.box-sticker-preview__message span{font-size:12px;line-height:1.5}.box-sticker-preview__message--error i{color:var(--erp-danger)}.box-sticker-preview>footer{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--erp-border);color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.box-sticker-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%}.box-sticker-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.box-sticker-dialog__footer>div{display:flex;gap:8px}.box-sticker-table-wrap :deep(.p-inputnumber-input){min-width:64px;padding:7px 8px;font-size:12px;text-align:center}
+.box-sticker-table-wrap td:first-child,.box-sticker-table-wrap th:first-child{position:sticky;left:0;z-index:1;white-space:nowrap;background:var(--erp-surface);box-shadow:1px 0 0 var(--erp-border-subtle)}.box-sticker-table-wrap th:first-child{background:var(--erp-surface-muted)}
+@media(max-width:1050px){.box-sticker-document__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.box-sticker-document__grid{grid-template-columns:1fr}.box-sticker-dialog__footer{align-items:stretch;flex-direction:column}.box-sticker-dialog__footer>div{justify-content:flex-end;flex-wrap:wrap}.box-sticker-dialog__footer>span{text-align:right}.box-sticker-preview__canvas{min-height:180px;padding:12px}.box-sticker-preview__canvas img{max-height:220px}.box-sticker-empty{min-height:160px;padding:22px}}
 </style>

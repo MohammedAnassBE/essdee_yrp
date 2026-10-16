@@ -7,6 +7,7 @@ app_license = "mit"
 required_apps = ["erpnext", "yrp"]
 
 yrp_web_reports = ["essdee_yrp.web_reports.get_reports"]
+yrp_purchase_order_lot_options = ["essdee_yrp.purchase_order_lots.purchase_order_lot_options"]
 
 # Sidebar conditions run before the asynchronous toolbar defaults request.
 boot_session = "essdee_yrp.boot.boot_session"
@@ -184,6 +185,24 @@ yrp_web_doctype_catalog = [
 	"YRP Bill Tracking",
 ]
 
+# /web department workspaces a YRP UI Layout may select (Registered Experience).
+# Keys match frontend departments/registry.js; `workspaces` lists launcher card keys.
+yrp_registered_experiences = {
+	"cutting": ["workspaces"],
+	"fabric-store": ["workspaces"],
+	"cut-panel-store": ["workspaces"],
+	"accessory-store": ["workspaces"],
+	"sewing": ["workspaces"],
+	"finishing": ["workspaces"],
+	"purchase": ["workspaces"],
+	"sales": ["workspaces"],
+	"planning": ["workspaces"],
+	"pd": ["workspaces"],
+	"accounts": ["workspaces"],
+	"hr": ["workspaces"],
+	"merch": ["workspaces"],
+}
+
 # Post-login landing: ordinary users land on the custom /web work hub;
 # System Manager / Administrator keep the Desk default (function returns None
 # for them, so Frappe falls through). See essdee_yrp/www_home.py.
@@ -202,6 +221,7 @@ yrp_web_doctype_catalog = [
 # app_include_css = "/assets/essdee_yrp/css/essdee_yrp.css"
 app_include_js = [
 	"essdee_yrp.bundle.js",
+	"/assets/essdee_yrp/js/address_creation.js",
 	"assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.js",
 ]
 app_include_css = ["assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.css"]
@@ -465,7 +485,10 @@ doc_events = {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"after_insert": "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.record_delivery_challan",
 		"onload": "essdee_yrp.delivery_challan_hooks.onload",
-		"before_validate": "essdee_yrp.delivery_challan_hooks.before_validate",
+		"before_validate": [
+			"essdee_yrp.delivery_challan_hooks.before_validate",
+			"essdee_yrp.fabric_store.documents.delivery_challan.validate_location_addresses",
+		],
 		"before_cancel": "essdee_yrp.cutting.movement.before_cancel",
 		"on_submit": [
 			"essdee_yrp.cutting.movement.on_submit",

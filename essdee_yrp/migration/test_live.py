@@ -162,7 +162,10 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			variant_based_on="Item Attribute",
 		)
 		with (
-			patch("essdee_yrp.migration.live.frappe.get_all", return_value=[existing]),
+			patch(
+				"essdee_yrp.migration.live.frappe.get_all",
+				side_effect=lambda *args, **kwargs: [existing.name] if kwargs.get("pluck") else [existing],
+			),
 			patch("essdee_yrp.migration.live.frappe.db.exists") as exists,
 		):
 			result = _prepare_item_migration_documents("Item Variant", [document])
@@ -2916,6 +2919,346 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 				_validate_required_target_values(
 					{"doctype": "SD YRP IPD Settings", "name": "SD YRP IPD Settings"}, schema
 				)
+
+
+class ItemMigrationRolesTest(unittest.TestCase):
+	def item_lookup(self, rows):
+		def lookup(doctype, **kwargs):
+			names = {name.casefold() for name in kwargs["filters"]["name"][1]}
+			found = [row for row in rows if row["name"].casefold() in names]
+			return [row["name"] for row in found] if kwargs.get("pluck") else found
+
+		return patch("frappe.get_all", side_effect=lookup)
+
+	def test_case_only_item_clash_uses_sparse_canonical_merge(self):
+		document = {
+			"doctype": "Item",
+			"name": "AAMA POLO",
+			"item_code": "AAMA POLO",
+			"has_variants": 1,
+			"variant_of": None,
+			"item_name": "Do not overwrite",
+			"attributes": [{"parent": "AAMA POLO", "attribute": "Size"}],
+		}
+		with self.item_lookup([{"name": "Aama Polo", "has_variants": 1, "variant_of": None}]):
+			result = _prepare_item_migration_documents("Item", [document])[0]
+		self.assertEqual(result["name"], "Aama Polo")
+		self.assertEqual(result["item_code"], "Aama Polo")
+		self.assertEqual(result["attributes"][0]["parent"], "Aama Polo")
+		self.assertNotIn("item_name", result)
+		self.assertEqual(document["name"], "AAMA POLO")
+
+	def test_case_only_role_change_checks_canonical_stock_history(self):
+		with (
+			self.item_lookup([{"name": "Aama Polo", "has_variants": 0, "variant_of": None}]),
+			patch("frappe.db.exists", return_value=True) as exists,
+			self.assertRaisesRegex(MigrationError, "Aama Polo.*stock history"),
+		):
+			_prepare_item_migration_documents("Item", [{"name": "AAMA POLO", "has_variants": 1}])
+		exists.assert_called_once_with("Stock Ledger Entry", {"item_code": "Aama Polo", "is_cancelled": 0})
+
+	def test_variant_and_parent_names_are_canonicalized(self):
+		rows = [{"name": "Fabric", "has_variants": 1}, {"name": "Fabric-Red", "variant_of": "Fabric"}]
+		document = {
+			"name": "FABRIC-RED",
+			"variant_of": "FABRIC",
+			"attributes": [{"attribute": "Colour", "attribute_value": "Red", "variant_of": "FABRIC"}],
+		}
+		with self.item_lookup(rows), patch("frappe.db.exists", return_value=False):
+			result = _prepare_item_migration_documents("Item Variant", [document])[0]
+		self.assertEqual(result["name"], "Fabric-Red")
+		self.assertEqual(result["variant_of"], "Fabric")
+		self.assertEqual(result["attributes"][0]["parent"], "Fabric-Red")
+		self.assertEqual(result["attributes"][0]["variant_of"], "Fabric")
+
+	def test_zipper_orphan_variant_is_standalone_and_diagnosed(self):
+		document = {
+			"name": "Zipper-7 Inch",
+			"variant_of": "ZIPPER",
+			"item_tuple_attribute": "tuple",
+			"attributes": [{"attribute": "Size", "attribute_value": "7 Inch"}],
+		}
+		diagnostics = []
+		with self.item_lookup([{"name": "Zipper", "has_variants": 0}]):
+			result = _prepare_item_migration_documents("Item Variant", [document], diagnostics)[0]
+		self.assertIsNone(result["variant_of"])
+		self.assertEqual(result["has_variants"], 0)
+		self.assertEqual(result["attributes"], [])
+		self.assertEqual(result["item_tuple_attribute"], "tuple")
+		self.assertEqual(diagnostics, ["Zipper-7 Inch"])
+
+	def test_item_precedes_item_variant_in_plan(self):
+		from essdee_yrp.migration.engine import build_plan
+		from essdee_yrp.migration.rules import RULES
+		from essdee_yrp.migration.transformers import POST_TRANSFORMERS, TRANSFORMERS
+
+		plan = build_plan(
+			{"Item": {"fields": []}, "Item Variant": {"fields": []}},
+			{"Item": {"fields": []}},
+			rules=RULES,
+			transformers=TRANSFORMERS,
+			post_transformers=POST_TRANSFORMERS,
+		)
+		self.assertLess(plan.parent_doctypes.index("Item"), plan.parent_doctypes.index("Item Variant"))
+
+	def test_unique_item_counts_report_merge_and_role_mismatch(self):
+		from essdee_yrp.migration.live import _verify_source_identities
+
+		plan = SimpleNamespace(
+			parent_doctypes=("Item", "Item Variant"), target_schemas={"Item": {"fields": []}}
+		)
+		source = Mock()
+		source.reference_data.return_value = {}
+		source.iter_orphan_children.return_value = []
+		source.iter_documents.side_effect = lambda doctype, **kwargs: (
+			[{"doctype": "Item", "name": "Fabric", "has_variants": 1}]
+			if doctype == "Item"
+			else [{"doctype": "Item", "name": "FABRIC", "item": "Fabric", "attributes": []}]
+		)
+		with (
+			self.item_lookup([{"name": "Fabric", "has_variants": 0}]),
+			patch(
+				"essdee_yrp.migration.live.transform_document",
+				side_effect=lambda document, plan: dict(document),
+			),
+			patch("essdee_yrp.migration.live._resolve_and_validate_required_target_values"),
+			patch("essdee_yrp.migration.live._migration_generated_identity_allowances", return_value={}),
+			patch("essdee_yrp.migration.live._identity_scope_count", return_value=2),
+			patch("essdee_yrp.migration.live._verify_target_variant_parents", return_value=[]),
+			patch("frappe.get_meta", return_value=SimpleNamespace(issingle=False, istable=False)),
+		):
+			result = _verify_source_identities(plan, source, "test")
+		self.assertEqual(result["doctypes"][0]["source_identity_count"], 1)
+		self.assertEqual(result["merged"], 1)
+		self.assertEqual(result["doctypes"][0]["unexpected_target_only_count"], 0)
+		self.assertEqual(result["doctypes"][0]["preserved_target_owned_count"], 1)
+		self.assertEqual(result["doctypes"][0]["status"], "Failed")
+		self.assertTrue(any("role mismatch" in failure for failure in result["failures"]))
+
+	def test_item_status_ignores_unrelated_item_attribute_failures(self):
+		from essdee_yrp.migration.live import _verify_source_identities
+
+		plan = SimpleNamespace(
+			parent_doctypes=("Item",),
+			target_schemas={
+				"Item": {"fields": []},
+				"Item Attribute": {"fields": []},
+			},
+		)
+		source = Mock()
+		source.reference_data.return_value = {}
+		source.iter_documents.return_value = [{"doctype": "Item", "name": "Fabric", "has_variants": 1}]
+		source.iter_orphan_children.return_value = [{"doctype": "Item Attribute", "name": "Missing"}]
+		with (
+			self.item_lookup([{"name": "Fabric", "has_variants": 1}]),
+			patch(
+				"essdee_yrp.migration.live.transform_document",
+				side_effect=lambda document, plan: dict(document),
+			),
+			patch(
+				"essdee_yrp.migration.preservation.transform_orphan",
+				side_effect=lambda document, plan: dict(document),
+			),
+			patch("essdee_yrp.migration.live._resolve_and_validate_required_target_values"),
+			patch("essdee_yrp.migration.live._migration_generated_identity_allowances", return_value={}),
+			patch("essdee_yrp.migration.live._identity_scope_count", return_value=2),
+			patch("essdee_yrp.migration.live._verify_target_variant_parents", return_value=[]),
+			patch("frappe.get_meta", return_value=SimpleNamespace(issingle=False, istable=False)),
+		):
+			result = _verify_source_identities(plan, source, "test")
+		self.assertIn("Missing Item Attribute Missing", result["failures"])
+		item = next(row for row in result["doctypes"] if row["target_doctype"] == "Item")
+		self.assertEqual(item["status"], "Pass")
+
+	def test_transform_failure_stops_before_checkpoint_can_skip_row(self):
+		from essdee_yrp.migration.live import _run_documents
+
+		checkpoint = {"version": 2, "doctypes": {}}
+		source = Mock()
+		source.reference_data.return_value = {}
+		source.iter_related_business_masters.return_value = []
+		source.iter_documents.return_value = iter([{"name": "A"}, {"name": "B"}, {"name": "C"}])
+		plan = SimpleNamespace(
+			parent_doctypes=("Example",), specs={"Example": SimpleNamespace(target="Example")}
+		)
+		with ExitStack() as stack:
+			for name, value in {
+				"_load_checkpoint": checkpoint,
+				"_bind_checkpoint_to_source_snapshot": checkpoint,
+				"_validate_external_references": (0, {}),
+				"_ensure_supporting_masters": None,
+				"_load_supporting_external_masters": {},
+				"_run_approved_frappe_data": {"processed": 0},
+				"_resolve_and_validate_required_target_values": 0,
+			}.items():
+				stack.enter_context(patch(f"essdee_yrp.migration.live.{name}", return_value=value))
+			stack.enter_context(patch("frappe.db.set_value"))
+			stack.enter_context(patch("frappe.db.commit"))
+			stack.enter_context(patch("essdee_yrp.migration.live.FrappeBulkTarget"))
+			transform = stack.enter_context(
+				patch(
+					"essdee_yrp.migration.live._transform_source_document",
+					side_effect=[{"doctype": "Example", "name": "A"}, ValueError("bad transform")],
+				)
+			)
+			flush = stack.enter_context(patch("essdee_yrp.migration.live._flush_batch", wraps=_flush_batch))
+			with self.assertRaisesRegex(MigrationError, "Example:B: bad transform"):
+				_run_documents("test", plan, source, dry_run=False, batch_size=1, source_snapshot={})
+			flush.assert_called_once()
+			self.assertEqual(transform.call_count, 2)
+		self.assertEqual(checkpoint["doctypes"]["Example"]["last_name"], "A")
+
+	def test_variant_parent_must_exist(self):
+		with self.item_lookup([]), self.assertRaisesRegex(MigrationError, "Missing parent Item Parent"):
+			_prepare_item_migration_documents("Item Variant", [{"name": "Variant", "variant_of": "Parent"}])
+
+	def test_variant_inherits_parent_uom_and_keeps_other_explicit_source_values(self):
+		document = {
+			"name": "Variant",
+			"variant_of": "Parent",
+			"stock_uom": "Nos",
+			"item_group": None,
+			"description": "",
+			"is_stock_item": 0,
+			"attributes": [{"attribute": "Size", "attribute_value": "One"}],
+		}
+		with self.item_lookup(
+			[
+				{
+					"name": "Parent",
+					"has_variants": 1,
+					"stock_uom": "Kg",
+					"item_group": "Parent Group",
+					"description": "Inherited",
+					"is_stock_item": 1,
+				}
+			]
+		):
+			result = _prepare_item_migration_documents("Item Variant", [document])[0]
+		self.assertEqual(result["stock_uom"], "Kg")
+		self.assertEqual(result["item_group"], "Parent Group")
+		self.assertEqual(result["description"], "Inherited")
+		self.assertEqual(result["is_stock_item"], 0)
+
+	def test_canonicalization_rewrites_other_child_tables(self):
+		from essdee_yrp.migration.live import _canonicalize_item_document
+
+		document = {"name": "FABRIC", "uoms": [{"parent": "FABRIC", "uom": "Nos"}]}
+		_canonicalize_item_document(document, {"fabric": "Fabric"})
+		self.assertEqual(document["uoms"][0]["parent"], "Fabric")
+
+	def test_standalone_existing_item_keeps_sparse_merge(self):
+		rows = [
+			{"name": "Parent", "has_variants": 0, "disabled": 1, "description": "Parent description"},
+			{"name": "Child", "has_variants": 0, "disabled": 0, "description": "ERP description"},
+		]
+		document = {"name": "Child", "_source_item_parent": "Parent", "attributes": []}
+		with self.item_lookup(rows):
+			result = _prepare_item_migration_documents("Item Variant", [document])[0]
+		self.assertNotIn("disabled", result)
+		self.assertNotIn("description", result)
+		self.assertNotIn("stock_uom", result)
+
+	def test_ambiguous_casefold_database_names_fail(self):
+		from essdee_yrp.item_roles import get_canonical_item_names
+
+		with (
+			patch("frappe.get_all", return_value=["Fabric", "FABRIC"]),
+			self.assertRaisesRegex(ValueError, "Ambiguous Item names"),
+		):
+			get_canonical_item_names(["FABRIC"])
+
+	def test_all_target_variant_parents_are_checked(self):
+		from essdee_yrp.migration.live import _verify_target_variant_parents
+
+		with patch("frappe.db.sql", return_value=[("Orphan", "Plain")]):
+			self.assertEqual(
+				_verify_target_variant_parents(), ["Item Orphan variant_of Plain is not a template"]
+			)
+
+	def test_dry_run_variants_use_projected_item_parents_without_writes(self):
+		checkpoint = {"doctypes": {}, "standalone_orphan_variants": ["Old", "Old"]}
+		parents = {}
+		target = Mock()
+		with self.item_lookup([]), patch("frappe.db.set_value") as set_value:
+			_flush_batch(
+				"test",
+				"Item",
+				"Item",
+				[
+					(
+						{"name": "Parent"},
+						{
+							"name": "Parent",
+							"has_variants": 1,
+							"stock_uom": "Nos",
+							"attributes": [{"attribute": "Size"}],
+							"unused": "large",
+						},
+					)
+				],
+				target,
+				checkpoint,
+				True,
+				dry_run_item_parents=parents,
+			)
+			_flush_batch(
+				"test",
+				"Item Variant",
+				"Item",
+				[
+					(
+						{"name": "Child"},
+						{
+							"name": "Child",
+							"variant_of": "Parent",
+							"attributes": [{"attribute": "Size", "attribute_value": "One"}],
+						},
+					)
+				],
+				target,
+				checkpoint,
+				True,
+				dry_run_item_parents=parents,
+			)
+		self.assertNotIn("dry_run_item_parents", checkpoint)
+		self.assertEqual(parents, {"parent": {"name": "Parent", "has_variants": 1, "stock_uom": "Nos"}})
+		self.assertEqual(checkpoint["standalone_orphan_variants"], ["Old"])
+		target.upsert_batch.assert_not_called()
+		set_value.assert_not_called()
+
+	def test_flush_variant_strips_source_parent_before_upsert(self):
+		target = Mock()
+		document = {
+			"name": "Child",
+			"_source_item_parent": "Parent",
+			"has_variants": 0,
+			"variant_of": None,
+			"attributes": [],
+		}
+		with (
+			self.item_lookup([{"name": "Parent", "has_variants": 1}]),
+			patch("frappe.db.set_value"),
+			patch("frappe.db.commit"),
+		):
+			_flush_batch(
+				"test",
+				"Item Variant",
+				"Item",
+				[({"name": "Child"}, document)],
+				target,
+				{"doctypes": {}},
+				False,
+			)
+		documents = target.upsert_batch.call_args.args[1]
+		self.assertEqual(len(documents), 1)
+		self.assertNotIn("_source_item_parent", documents[0])
+
+	def test_item_surplus_is_preserved_and_deficit_is_unexpected(self):
+		from essdee_yrp.migration.live import _classify_target_only_identities
+
+		self.assertEqual(_classify_target_only_identities("Item", 5), (5, 0))
+		self.assertEqual(_classify_target_only_identities("Item", -1), (0, -1))
 
 
 if __name__ == "__main__":

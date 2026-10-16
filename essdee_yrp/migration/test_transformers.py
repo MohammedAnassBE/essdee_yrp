@@ -718,5 +718,48 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(row["item_attributes"][0]["doctype"], "YRP IPD Item Attribute")
 
 
+class ItemRoleTransformerTest(unittest.TestCase):
+	def test_attributed_item_is_template(self):
+		from essdee_yrp.migration.transformers import item_to_standard_item
+
+		result = item_to_standard_item(
+			{}, {"name": "Fabric", "attributes": [{"attribute": "Colour"}]}, None, None, None
+		)
+		self.assertEqual(result["has_variants"], 1)
+		self.assertIsNone(result["variant_of"])
+
+	def test_attribute_less_item_is_plain(self):
+		from essdee_yrp.migration.transformers import item_to_standard_item
+
+		result = item_to_standard_item({}, {"name": "Zipper"}, None, None, None)
+		self.assertEqual(result["has_variants"], 0)
+		self.assertIsNone(result["variant_of"])
+
+	def test_self_named_empty_variant_is_standalone(self):
+		from essdee_yrp.migration.transformers import item_variant_to_standard_item
+
+		result = item_variant_to_standard_item({"name": "Zipper", "item": "Zipper"}, None, None)
+		self.assertEqual(result["name"], "Zipper")
+		self.assertIsNone(result["variant_of"])
+		self.assertEqual(result["attributes"], [])
+		self.assertNotIn("_source_item_parent", result)
+
+	def test_differently_named_empty_variant_is_standalone(self):
+		from essdee_yrp.migration.transformers import item_variant_to_standard_item
+
+		result = item_variant_to_standard_item({"name": "Zipper-Other", "item": "Zipper"}, None, None)
+		self.assertIsNone(result["variant_of"])
+		self.assertEqual(result["has_variants"], 0)
+		self.assertEqual(result["attributes"], [])
+		self.assertNotIn("_source_item_parent", result)
+
+	def test_variant_parent_cannot_be_missing_or_a_variant(self):
+		from essdee_yrp.item_roles import resolve_variant_target_role
+
+		for parent, role in ((None, None), ("Parent", "variant")):
+			with self.subTest(parent=parent), self.assertRaises(ValueError):
+				resolve_variant_target_role("Child", parent, [], role)
+
+
 if __name__ == "__main__":
 	unittest.main()

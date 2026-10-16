@@ -41,17 +41,18 @@
 				>
 					<template #default="{ group }">
 						<template v-if="canEdit">
-							<FormField
-								v-for="field in group.fields"
-								:key="fieldKey(field)"
-								:field="field"
-								:model-value="form[field.fieldname]"
-								:form="form"
-								:required="Boolean(field.reqd || field.mandatory)"
-								compact
-								:search-handler="linkSearchHandler(field)"
-								@update:model-value="setField(field.fieldname, $event)"
-							/>
+							<div v-for="field in group.fields" :key="fieldKey(field)" :class="{ 'form-field--wide': ['Small Text', 'Text', 'Long Text', 'Text Editor', 'Code'].includes(field.fieldtype) }">
+								<FormField
+									:field="field" :reset-version="field.fieldname === 'work_order' ? sourceFieldRevision : 0"
+									:model-value="form[field.fieldname]"
+									:form="form"
+									:required="Boolean(field.reqd || field.mandatory)"
+									compact
+									:search-handler="linkSearchHandler(field)"
+									@update:model-value="setField(field.fieldname, $event)"
+								/>
+								<small v-if="addressStatus[field.fieldname]?.message" class="delivery-challan-address-message" role="status">{{ addressStatus[field.fieldname].message }} <a :href="addressCreationUrl(addressStatus[field.fieldname])" target="_blank" rel="noopener">Create address</a></small>
+							</div>
 						</template>
 						<template v-else>
 							<div v-for="field in group.fields" :key="`fact-${field.fieldname}`" class="delivery-challan-field-fact">
@@ -90,7 +91,7 @@
 				>
 					<template #default="{ group }">
 						<template v-if="canEdit">
-							<FormField v-for="field in group.fields" :key="fieldKey(field)" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
+							<FormField v-for="field in group.fields" :key="fieldKey(field)" :field="field" :reset-version="field.fieldname === 'work_order' ? sourceFieldRevision : 0" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
 						</template>
 						<template v-else>
 							<div v-for="field in group.fields" :key="`fact-${field.fieldname}`" class="delivery-challan-field-fact"><span>{{ field.label }}</span><strong :title="String(formatFieldValue(field))">{{ formatFieldValue(field) }}</strong></div>
@@ -155,7 +156,7 @@
 			<template #after-matrix>
 				<div v-if="canEdit && afterMatrixFields.length" class="delivery-challan-after-matrix" aria-label="Delivery Challan final details">
 					<template v-if="canEdit">
-						<FormField v-for="field in afterMatrixFields" :key="`after-${fieldKey(field)}`" :field="field" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
+						<FormField v-for="field in afterMatrixFields" :key="`after-${fieldKey(field)}`" :field="field" :reset-version="field.fieldname === 'work_order' ? sourceFieldRevision : 0" :model-value="form[field.fieldname]" :form="form" :required="Boolean(field.reqd || field.mandatory)" compact :search-handler="linkSearchHandler(field)" @update:model-value="setField(field.fieldname, $event)" />
 					</template>
 					<template v-else>
 						<div v-for="field in afterMatrixFields" :key="`after-fact-${field.fieldname}`" class="delivery-challan-after-matrix__fact"><span>{{ field.label }}</span><strong>{{ formatFieldValue(field) }}</strong></div>
@@ -211,12 +212,13 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { useToast } from "primevue/usetoast"
-import { computed, onMounted, reactive, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 
 import {
 	executeDeliveryChallanCommand,
 	getDeliveryChallanWorkspace,
+	getLocationAddressStatus,
 	previewDeliveryChallanSource,
 	saveDeliveryChallan,
 } from "../../api/fabricStore.js"
@@ -247,6 +249,7 @@ const toast = useToast()
 const loading = ref(true)
 const acting = ref("")
 const error = ref("")
+const addressStatus = reactive({})
 const dirty = ref(false)
 const editingSubmitted = ref(false)
 const workspace = ref({})
@@ -491,6 +494,7 @@ function applyWorkspace(nextWorkspace) {
 
 async function setField(fieldname, value) {
 	if (editingSubmitted.value && !allowOnSubmitFields.value.has(fieldname)) return
+	if ((value ?? "") === (form[fieldname] ?? "")) return
 	if (fieldname === "work_order" && !currentName.value && value !== form.work_order) {
 		if (dirty.value) {
 			pendingSourceWorkOrder.value = value
@@ -703,7 +707,7 @@ async function createdReturnChanged() {
 	await load(true)
 	emit("changed", workspace.value)
 }
-function fieldKey(field) { return `${field.fieldname}-${field.fieldname === "work_order" ? sourceFieldRevision.value : field.idx || "value"}` }
+function fieldKey(field) { return `${field.fieldname}-${field.idx || "value"}` }
 const dcFieldGroups = [
 	{ key: "document", eyebrow: "Document", label: "Document & posting", description: "Series, source and posting controls." },
 	{ key: "movement", eyebrow: "Route", label: "Source & receiver", description: "Choose the dispatch source and receiving destination." },
@@ -722,6 +726,22 @@ const dcGroupFields = {
 const dcFieldOrder = Object.values(dcGroupFields).flat()
 function fieldOrder(fieldname) { const index = dcFieldOrder.indexOf(fieldname); return index === -1 ? dcFieldOrder.length + 1 : index }
 function fieldGroupKey(fieldname) { return Object.entries(dcGroupFields).find(([, fields]) => fields.includes(fieldname))?.[0] || "additional" }
+function addressCreationUrl(status) {
+	return `/desk/address/new?${new URLSearchParams({ essdee_supplier: status.party, address_title: status.supplier_name })}`
+}
+async function refreshAddressStatus() {
+	await Promise.all([['from_address', 'from_location'], ['supplier_address', 'supplier']].map(async ([fieldname, partyField]) => {
+		const party = form[partyField]
+		delete addressStatus[fieldname]
+		if (!party) return
+		try {
+			const status = await getLocationAddressStatus(party)
+			if (form[partyField] === party) addressStatus[fieldname] = status
+		} catch { /* Address search and save still report permission errors. */ }
+	}))
+}
+watch(() => [form.from_location, form.supplier], refreshAddressStatus)
+
 function linkSearchHandler(field) {
 	if (field.fieldname === "from_address") return (text) => searchLinkedDocument("Address", "Supplier", form.from_location, text)
 	if (field.fieldname === "supplier_address") return (text) => searchLinkedDocument("Address", "Supplier", form.supplier, text)
@@ -824,7 +844,8 @@ function currentPostingDefaults() {
 	}
 }
 
-onMounted(() => load())
+onMounted(() => { load(); window.addEventListener("focus", refreshAddressStatus) })
+onBeforeUnmount(() => window.removeEventListener("focus", refreshAddressStatus))
 watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, source], previous) => {
 	if (!previous || name === previous[0] && source === previous[1]) return
 	loadSequence += 1
@@ -835,6 +856,8 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 </script>
 
 <style scoped>
+.delivery-challan-address-message { display: block; margin-top: 6px; color: var(--erp-danger); }
+.delivery-challan-address-message a { text-decoration: underline; }
 .delivery-challan-workspace { width: 100%; min-width: 0; }
 .delivery-challan-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }
 .delivery-challan-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
@@ -852,7 +875,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .delivery-challan-after-matrix__fact strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; }
 @media (max-width: 1100px) { .delivery-challan-after-matrix { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .delivery-challan-after-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.delivery-challan-workspace--page { max-width: 1840px; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
+.delivery-challan-workspace--page { padding-bottom: var(--erp-space-3); }
 .delivery-challan-header__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
 .delivery-challan-header__title { display: grid; min-width: 0; gap: 2px; }
 .delivery-challan-header__identity h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
@@ -908,7 +931,7 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 .delivery-challan-special-context > div span { padding: 5px 9px; color: var(--erp-accent); font-size: var(--erp-font-size-caption); font-weight: 750; border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); background: var(--erp-accent-soft); }
 @media (max-width: 1100px) { .delivery-challan-header__facts { overflow-x: auto; padding-right: 18px; flex-wrap: nowrap; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } .delivery-challan-header__facts:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; } .delivery-challan-header__facts > div { flex: 0 0 auto; } }
 @media (max-width: 760px) { .delivery-challan-header__identity { align-items: flex-start; flex-wrap: wrap; } .delivery-challan-header__facts { width: 100%; flex: 1 0 100%; gap: 8px 14px; padding: 8px 18px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; } .delivery-challan-header__identity--embedded { align-items: center; flex-wrap: nowrap; } .delivery-challan-header__identity--embedded .delivery-challan-header__facts { width: auto; padding-top: 0; border-top: 0; flex: 1 1 auto; } }
-@media (max-width: 620px) { .delivery-challan-workspace--page { padding-right: 0; padding-left: 0; } .delivery-challan-field-fact { min-height: 46px; padding: 6px 8px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
+@media (max-width: 620px) { .delivery-challan-field-fact { min-height: 46px; padding: 6px 8px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
 </style>

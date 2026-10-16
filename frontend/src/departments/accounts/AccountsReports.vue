@@ -47,6 +47,7 @@ const REPORT_COMPONENTS = {
 	sewing_dpr: defineAsyncComponent(() => import("./reports/AccountsSewingDpr.vue")),
 	finishing_dispatch: defineAsyncComponent(() => import("../finishing/reports/FinishingDispatchReport.vue")),
 	ironing_dpr: defineAsyncComponent(() => import("../finishing/reports/FinishingIroningDpr.vue")),
+	audit_pending_finishing_plans: defineAsyncComponent(() => import("./reports/AuditPendingFinishingPlans.vue")),
 }
 
 const route = useRoute()

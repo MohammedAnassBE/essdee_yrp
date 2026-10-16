@@ -95,21 +95,20 @@ function documentRoute(doctype, name) {
 </script>
 
 <style scoped>
-.purchase-invoice-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: var(--erp-space-3); }
+.purchase-invoice-overview { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); align-items: start; gap: var(--erp-space-4); }
 .purchase-invoice-overview__groups { display: contents; }
 .purchase-invoice-overview__groups :deep(.document-overview__section--wide) { grid-column: 1 / -1; }
-.purchase-invoice-overview__supplier { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
-.purchase-invoice-overview__supplier > header { display: flex; min-height: 64px; align-items: center; gap: 10px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 78%, white); }
-.purchase-invoice-overview__supplier h2 { margin: 0; color: var(--erp-text); font-size: 14px; font-weight: 760; letter-spacing: -.01em; }
-.purchase-invoice-overview__icon { display: inline-grid; width: 34px; height: 34px; flex: 0 0 auto; color: var(--erp-accent-hover); border: 1px solid var(--erp-accent-border); border-radius: 9px; background: var(--erp-accent-soft); place-items: center; }
-.purchase-invoice-overview__icon i { font-size: .88rem; }
-.purchase-invoice-overview__supplier dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
-.purchase-invoice-overview__supplier dl > div { display: grid; min-width: 0; min-height: 62px; align-content: center; gap: 4px; padding: 10px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
-.purchase-invoice-overview__supplier dl > div:nth-child(2n) { border-right: 0; }
-.purchase-invoice-overview__supplier dl > div:nth-last-child(-n + 2) { border-bottom: 0; }
-.purchase-invoice-overview__supplier dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .035em; text-transform: uppercase; }
-.purchase-invoice-overview__supplier dd { min-width: 0; margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
-.purchase-invoice-overview__supplier a { color: var(--erp-accent-hover); text-decoration: none; }
-.purchase-invoice-overview__supplier a:hover { text-decoration: underline; }
-@media (max-width: 760px) { .purchase-invoice-overview { grid-template-columns: 1fr; } .purchase-invoice-overview__groups :deep(.document-overview__section--wide) { grid-column: auto; } }
+.purchase-invoice-overview__supplier { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-card); }
+.purchase-invoice-overview__supplier > header { display: flex; align-items: center; gap: var(--erp-space-2); padding: 10px 16px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
+.purchase-invoice-overview__supplier h2 { margin: 0; color: var(--erp-text-secondary); font-size: var(--erp-font-size-table); font-weight: var(--erp-font-weight-bold); letter-spacing: .02em; }
+.purchase-invoice-overview__icon { display: inline-grid; flex: 0 0 auto; color: var(--erp-accent-ink); place-items: center; }
+.purchase-invoice-overview__icon i { font-size: var(--erp-font-size-table); }
+.purchase-invoice-overview__supplier dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px; margin: 0; padding: 16px 18px 18px; }
+.purchase-invoice-overview__supplier dl > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--erp-border); }
+.purchase-invoice-overview__supplier dt { order: 2; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-semibold); letter-spacing: .03em; text-transform: uppercase; }
+.purchase-invoice-overview__supplier dd { order: 1; min-width: 0; margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: var(--erp-font-weight-semibold); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.purchase-invoice-overview__supplier a { color: var(--erp-accent-ink); text-decoration: underline dotted; text-underline-offset: 2px; }
+.purchase-invoice-overview__supplier a:hover { text-decoration-style: solid; }
+@media (min-width: 1400px) { .purchase-invoice-overview { grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); } }
+@media (max-width: 640px) { .purchase-invoice-overview__supplier dl { grid-template-columns: 1fr; padding: 8px 14px 12px; } }
 </style>

@@ -2,8 +2,7 @@
 	<DepartmentPage :title="definition.label" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="cut-panel-store-section erp-workspace" :aria-label="definition.label">
 			<div v-if="loading" class="cut-panel-store-section__loading">
-				<Skeleton height="76px" />
-				<Skeleton height="420px" />
+				<ListPageSkeleton />
 			</div>
 			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
@@ -19,11 +18,11 @@
 
 <script setup>
 import Message from "primevue/message"
-import Skeleton from "primevue/skeleton"
 import { computed, onMounted, ref, watch } from "vue"
 
 import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import ListPageSkeleton from "../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import CutPanelMovements from "./cut-panel-store/CutPanelMovements.vue"
 import CutBundleEdits from "./cut-panel-store/CutBundleEdits.vue"
@@ -75,9 +74,7 @@ watch(() => props.section, load)
 <style scoped>
 .cut-panel-store-section {
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
 	padding: 2px 0 var(--erp-space-5);
 }
 
@@ -85,11 +82,6 @@ watch(() => props.section, load)
 	display: grid;
 	gap: var(--erp-space-3);
 	padding-top: 2px;
-}
-
-.cut-panel-store-section__loading :deep(.p-skeleton) {
-	border-radius: var(--erp-panel-radius);
-	background: color-mix(in srgb, var(--erp-surface-muted) 74%, white);
 }
 
 .cut-panel-store-section__empty {

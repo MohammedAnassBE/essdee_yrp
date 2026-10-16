@@ -1,0 +1,4139 @@
+{
+ "panel_grouped": {
+  "bom_mappings": {},
+  "name": "Hamic - White Vest RN-1",
+  "values": {
+   "accessory_clothtype_json": {
+    "Folding": null
+   },
+   "cloth_accessory_json": {
+    "attributes": [
+     "Colour",
+     "Accessory",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Accessory",
+    "items": [
+     {
+      "Accessory": "Folding",
+      "Colour": "White",
+      "Dia": "14 Dia",
+      "Weight": 0.007
+     }
+    ],
+    "select_list": [
+     "Folding"
+    ]
+   },
+   "cloth_detail": [
+    {
+     "cloth": "40's VL White Fabric",
+     "is_bom_item": 0,
+     "name": "4qsbbf4iku",
+     "name1": "White Fabric",
+     "required_gsm": 117.0
+    }
+   ],
+   "cutting_cloths_json": {
+    "attributes": [
+     "Panel",
+     "Colour",
+     "Cloth"
+    ],
+    "combination_type": "Cloth",
+    "items": [
+     {
+      "Cloth": "White Fabric",
+      "Colour": "White",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "White Fabric",
+      "Colour": "White",
+      "Panel": "Front"
+     }
+    ],
+    "select_list": [
+     "White Fabric"
+    ]
+   },
+   "cutting_items_json": {
+    "attributes": [
+     "Size",
+     "Panel",
+     "Colour",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Cutting",
+    "items": [
+     {
+      "Colour": "White",
+      "Dia": "14 Dia",
+      "Panel": "Back",
+      "Size": "75 cm",
+      "Weight": 0.026
+     },
+     {
+      "Colour": "White",
+      "Dia": "14 Dia",
+      "Panel": "Front",
+      "Size": "75 cm",
+      "Weight": 0.026
+     },
+     {
+      "Colour": "White",
+      "Dia": "15 Dia",
+      "Panel": "Back",
+      "Size": "80 cm",
+      "Weight": 0.028
+     },
+     {
+      "Colour": "White",
+      "Dia": "15 Dia",
+      "Panel": "Front",
+      "Size": "80 cm",
+      "Weight": 0.028
+     },
+     {
+      "Colour": "White",
+      "Dia": "16 Dia",
+      "Panel": "Back",
+      "Size": "85 cm",
+      "Weight": 0.03
+     },
+     {
+      "Colour": "White",
+      "Dia": "16 Dia",
+      "Panel": "Front",
+      "Size": "85 cm",
+      "Weight": 0.03
+     },
+     {
+      "Colour": "White",
+      "Dia": "17 Dia",
+      "Panel": "Back",
+      "Size": "90 cm",
+      "Weight": 0.0325
+     },
+     {
+      "Colour": "White",
+      "Dia": "17 Dia",
+      "Panel": "Front",
+      "Size": "90 cm",
+      "Weight": 0.0325
+     },
+     {
+      "Colour": "White",
+      "Dia": "18 Dia",
+      "Panel": "Back",
+      "Size": "95 cm",
+      "Weight": 0.036
+     },
+     {
+      "Colour": "White",
+      "Dia": "18 Dia",
+      "Panel": "Front",
+      "Size": "95 cm",
+      "Weight": 0.036
+     },
+     {
+      "Colour": "White",
+      "Dia": "19 Dia",
+      "Panel": "Back",
+      "Size": "100 cm",
+      "Weight": 0.039
+     },
+     {
+      "Colour": "White",
+      "Dia": "19 Dia",
+      "Panel": "Front",
+      "Size": "100 cm",
+      "Weight": 0.039
+     }
+    ],
+    "select_list": {}
+   },
+   "emblishment_details_json": {},
+   "ipd_processes": [],
+   "is_set_item": 0,
+   "item_bom": [],
+   "marker_groups": [],
+   "packing_assortment_json": null,
+   "packing_attribute": "Colour",
+   "packing_attribute_details": [
+    {
+     "attribute_value": "White",
+     "name": "8l12gou0sr",
+     "quantity": 0.0
+    }
+   ],
+   "packing_size_details": [],
+   "panel_wise_cloth_mapping_json": {
+    "attributes": [
+     "Panel",
+     "Colour"
+    ],
+    "cloth_options": [
+     "White Fabric"
+    ],
+    "other_attributes": [],
+    "packing_attribute": "Colour",
+    "panel_attribute": "Panel",
+    "panels": [
+     {
+      "group_id": "Back\u001fFront",
+      "packing_values": [
+       "White"
+      ],
+      "panel_value": "Back + Front",
+      "panel_values": [
+       "Back",
+       "Front"
+      ],
+      "rows": [
+       {
+        "attribute_values": {},
+        "values": {
+         "White": {
+          "cloth": "White Fabric"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "schema_version": 1
+   },
+   "panel_wise_consumption_matrix_json": {
+    "attributes": {
+     "packing": "Colour",
+     "panel": "Panel",
+     "primary": "Size"
+    },
+    "packing_values": [
+     "White"
+    ],
+    "panel_values": [
+     "Back",
+     "Front"
+    ],
+    "panels": [
+     {
+      "group_id": "Back\u001fFront",
+      "packing_values": [
+       "White"
+      ],
+      "panel_value": "Back + Front",
+      "panel_values": [
+       "Back",
+       "Front"
+      ],
+      "rows": [
+       {
+        "primary_value": "75 cm",
+        "values": {
+         "White": {
+          "dia": "14 Dia",
+          "weight": 0.052
+         }
+        }
+       },
+       {
+        "primary_value": "80 cm",
+        "values": {
+         "White": {
+          "dia": "15 Dia",
+          "weight": 0.056
+         }
+        }
+       },
+       {
+        "primary_value": "85 cm",
+        "values": {
+         "White": {
+          "dia": "16 Dia",
+          "weight": 0.06
+         }
+        }
+       },
+       {
+        "primary_value": "90 cm",
+        "values": {
+         "White": {
+          "dia": "17 Dia",
+          "weight": 0.065
+         }
+        }
+       },
+       {
+        "primary_value": "95 cm",
+        "values": {
+         "White": {
+          "dia": "18 Dia",
+          "weight": 0.072
+         }
+        }
+       },
+       {
+        "primary_value": "100 cm",
+        "values": {
+         "White": {
+          "dia": "19 Dia",
+          "weight": 0.078
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "primary_values": [
+     "75 cm",
+     "80 cm",
+     "85 cm",
+     "90 cm",
+     "95 cm",
+     "100 cm"
+    ],
+    "schema_version": 4
+   },
+   "set_item_attribute": null,
+   "set_item_detail": {
+    "attributes": [],
+    "values": []
+   },
+   "stiching_accessory_json": {
+    "attributes": [
+     "Accessory",
+     "Major Colour",
+     "Accessory Colour",
+     "Cloth"
+    ],
+    "is_set_item": 0,
+    "items": [
+     {
+      "accessory": "Folding",
+      "accessory_colour": "White",
+      "cloth_type": "White Fabric",
+      "major_colour": "White"
+     }
+    ],
+    "select_list": [
+     "White Fabric"
+    ]
+   },
+   "stiching_attribute": "Panel",
+   "stiching_item_detail": {
+    "attributes": [
+     "Back",
+     "Front"
+    ],
+    "values": [
+     {
+      "major_attribute": "White",
+      "val": {
+       "Back": "White",
+       "Front": "White"
+      }
+     }
+    ]
+   },
+   "stiching_item_details": [
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "8l12k3uafc",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Back"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "8l12r56eec",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Front"
+    }
+   ],
+   "stiching_major_attribute_value": "Back"
+  }
+ },
+ "panel_wise": {
+  "bom_mappings": {
+   "mh559i1upa": {
+    "bom_item_attributes": [
+     "Size",
+     "Colour"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour",
+     "Size"
+    ],
+    "mapping": "mh7sj3ki49",
+    "mapping_modified": "2026-08-25 11:31:09.636837",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Navy",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Andhra Melange",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Maroon melange",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Olive Green",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Peacock Blue",
+      "index": 5,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 5,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "mh566g8j2n": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour"
+    ],
+    "mapping": "mh60b74eim",
+    "mapping_modified": "2026-08-25 11:30:28.003352",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Navy",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Andhra Melange",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Maroon melange",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Olive Green",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Peacock Blue",
+      "index": 5,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 5,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "mh5rcf8l50": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour"
+    ],
+    "mapping": "mh771qes8d",
+    "mapping_modified": "2026-08-25 11:30:43.598588",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Navy",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Andhra Melange",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Maroon melange",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Olive Green",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Peacock Blue",
+      "index": 5,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 5,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   }
+  },
+  "name": "Casual Designer Vest - 4-18",
+  "values": {
+   "accessory_clothtype_json": {
+    "Folding Fabric": null
+   },
+   "cloth_accessory_json": {
+    "attributes": [
+     "Colour",
+     "Accessory",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Accessory",
+    "items": [
+     {
+      "Accessory": "Folding Fabric",
+      "Colour": "Black",
+      "Dia": "26 Dia",
+      "Weight": 0.015
+     },
+     {
+      "Accessory": "Folding Fabric",
+      "Colour": "Navy",
+      "Dia": "26 Dia",
+      "Weight": 0.015
+     },
+     {
+      "Accessory": "Folding Fabric",
+      "Colour": "Andhra Melange",
+      "Dia": "26 Dia",
+      "Weight": 0.015
+     },
+     {
+      "Accessory": "Folding Fabric",
+      "Colour": "Maroon melange",
+      "Dia": "26 Dia",
+      "Weight": 0.015
+     },
+     {
+      "Accessory": "Folding Fabric",
+      "Colour": "Olive Green",
+      "Dia": "26 Dia",
+      "Weight": 0.015
+     },
+     {
+      "Accessory": "Folding Fabric",
+      "Colour": "Peacock Blue",
+      "Dia": "26 Dia",
+      "Weight": 0.015
+     }
+    ],
+    "select_list": [
+     "Folding Fabric"
+    ]
+   },
+   "cloth_detail": [
+    {
+     "cloth": "25's OE Cloth",
+     "is_bom_item": 1,
+     "name": "g6la0rfrfu",
+     "name1": "Main Fabric",
+     "required_gsm": 175.0
+    }
+   ],
+   "cutting_cloths_json": {
+    "attributes": [
+     "Panel",
+     "Colour",
+     "Cloth"
+    ],
+    "combination_type": "Cloth",
+    "items": [
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Black",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Black",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Navy",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Navy",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Andhra Melange",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Andhra Melange",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Maroon melange",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Maroon melange",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Olive Green",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Olive Green",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Peacock Blue",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "Main Fabric",
+      "Colour": "Peacock Blue",
+      "Panel": "Back"
+     }
+    ],
+    "select_list": [
+     "Main Fabric"
+    ]
+   },
+   "cutting_items_json": {
+    "attributes": [
+     "Size",
+     "Panel",
+     "Colour",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Cutting",
+    "items": [
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "S",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "M",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "L",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Navy",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Andhra Melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Maroon melange",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Olive Green",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Size": "2XL",
+      "Weight": 0.0635
+     },
+     {
+      "Colour": "Peacock Blue",
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Size": "2XL",
+      "Weight": 0.0635
+     }
+    ],
+    "select_list": {}
+   },
+   "emblishment_details_json": {
+    "Printing": [
+     "Front"
+    ],
+    "Yolk Fusing": [
+     "Back"
+    ]
+   },
+   "ipd_processes": [
+    {
+     "in_stage": "Cut",
+     "name": "tanndsm55m",
+     "out_stage": "Cut",
+     "process_item": null,
+     "process_name": "Printing"
+    },
+    {
+     "in_stage": "Cut",
+     "name": "tanv9r8pt6",
+     "out_stage": "Cut",
+     "process_item": null,
+     "process_name": "Yolk Fusing"
+    },
+    {
+     "in_stage": "Piece",
+     "name": "7olcarvbt1",
+     "out_stage": "Piece",
+     "process_item": null,
+     "process_name": "Ironing"
+    }
+   ],
+   "is_set_item": 0,
+   "item_bom": [
+    {
+     "attribute_mapping": "mh60b74eim",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Inner Card Big",
+     "name": "mh566g8j2n",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Piece",
+     "item": "Casual Designer vest - 4 Photo Card",
+     "name": "mh50b787ij",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Piece",
+     "item": "Casual Designer Vest - 4 Top Box",
+     "name": "mh5fllpagf",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 5.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Piece",
+     "item": "Casual Designer vest - Bottom Box",
+     "name": "mh5iou9ovk",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 5.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "mh771qes8d",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Plain Poly Bag PP (37 Micron)",
+     "name": "mh5rcf8l50",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "mh7sj3ki49",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Fusing Sticker-Designer Vest (Essdee)",
+     "name": "mh559i1upa",
+     "process_name": "Yolk Fusing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    }
+   ],
+   "marker_groups": [],
+   "packing_assortment_json": null,
+   "packing_attribute": "Colour",
+   "packing_attribute_details": [
+    {
+     "attribute_value": "Black",
+     "name": "g6lu4m6neg",
+     "quantity": 0.0
+    },
+    {
+     "attribute_value": "Navy",
+     "name": "g6lk32i51u",
+     "quantity": 0.0
+    },
+    {
+     "attribute_value": "Andhra Melange",
+     "name": "g6l63cgmia",
+     "quantity": 0.0
+    },
+    {
+     "attribute_value": "Maroon melange",
+     "name": "g6lmhcn2mm",
+     "quantity": 0.0
+    },
+    {
+     "attribute_value": "Olive Green",
+     "name": "g6l3id0qna",
+     "quantity": 0.0
+    },
+    {
+     "attribute_value": "Peacock Blue",
+     "name": "g6lji6s5t0",
+     "quantity": 0.0
+    }
+   ],
+   "packing_size_details": [],
+   "panel_wise_cloth_mapping_json": {
+    "attributes": [
+     "Panel",
+     "Colour"
+    ],
+    "cloth_options": [
+     "Main Fabric"
+    ],
+    "other_attributes": [],
+    "packing_attribute": "Colour",
+    "panel_attribute": "Panel",
+    "panels": [
+     {
+      "group_id": "Front\u001fBack",
+      "packing_values": [
+       "Black",
+       "Navy",
+       "Andhra Melange",
+       "Maroon melange",
+       "Olive Green",
+       "Peacock Blue"
+      ],
+      "panel_value": "Front + Back",
+      "panel_values": [
+       "Front",
+       "Back"
+      ],
+      "rows": [
+       {
+        "attribute_values": {},
+        "values": {
+         "Andhra Melange": {
+          "cloth": "Main Fabric"
+         },
+         "Black": {
+          "cloth": "Main Fabric"
+         },
+         "Maroon melange": {
+          "cloth": "Main Fabric"
+         },
+         "Navy": {
+          "cloth": "Main Fabric"
+         },
+         "Olive Green": {
+          "cloth": "Main Fabric"
+         },
+         "Peacock Blue": {
+          "cloth": "Main Fabric"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "schema_version": 1
+   },
+   "panel_wise_consumption_matrix_json": {
+    "attributes": {
+     "packing": "Colour",
+     "panel": "Panel",
+     "primary": "Size"
+    },
+    "packing_values": [
+     "Black",
+     "Navy",
+     "Andhra Melange",
+     "Maroon melange",
+     "Olive Green",
+     "Peacock Blue"
+    ],
+    "panel_values": [
+     "Front",
+     "Back"
+    ],
+    "panels": [
+     {
+      "group_id": "Front\u001fBack",
+      "packing_values": [
+       "Black",
+       "Navy",
+       "Andhra Melange",
+       "Maroon melange",
+       "Olive Green",
+       "Peacock Blue"
+      ],
+      "panel_value": "Front + Back",
+      "panel_values": [
+       "Front",
+       "Back"
+      ],
+      "rows": [
+       {
+        "primary_value": "S",
+        "values": {
+         "Andhra Melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Black": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Maroon melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Navy": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Olive Green": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Peacock Blue": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         }
+        }
+       },
+       {
+        "primary_value": "M",
+        "values": {
+         "Andhra Melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Black": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Maroon melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Navy": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Olive Green": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Peacock Blue": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         }
+        }
+       },
+       {
+        "primary_value": "L",
+        "values": {
+         "Andhra Melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Black": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Maroon melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Navy": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Olive Green": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Peacock Blue": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         }
+        }
+       },
+       {
+        "primary_value": "XL",
+        "values": {
+         "Andhra Melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Black": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Maroon melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Navy": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Olive Green": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Peacock Blue": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         }
+        }
+       },
+       {
+        "primary_value": "2XL",
+        "values": {
+         "Andhra Melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Black": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Maroon melange": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Navy": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Olive Green": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         },
+         "Peacock Blue": {
+          "dia": "32 Dia",
+          "weight": 0.127
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "primary_values": [
+     "S",
+     "M",
+     "L",
+     "XL",
+     "2XL"
+    ],
+    "schema_version": 4
+   },
+   "set_item_attribute": null,
+   "set_item_detail": {
+    "attributes": [],
+    "values": []
+   },
+   "stiching_accessory_json": {
+    "attributes": [
+     "Accessory",
+     "Major Colour",
+     "Accessory Colour",
+     "Cloth"
+    ],
+    "is_set_item": 0,
+    "items": [
+     {
+      "accessory": "Folding Fabric",
+      "accessory_colour": "Black",
+      "cloth_type": "Main Fabric",
+      "major_colour": "Black"
+     },
+     {
+      "accessory": "Folding Fabric",
+      "accessory_colour": "Navy",
+      "cloth_type": "Main Fabric",
+      "major_colour": "Navy"
+     },
+     {
+      "accessory": "Folding Fabric",
+      "accessory_colour": "Andhra Melange",
+      "cloth_type": "Main Fabric",
+      "major_colour": "Andhra Melange"
+     },
+     {
+      "accessory": "Folding Fabric",
+      "accessory_colour": "Maroon melange",
+      "cloth_type": "Main Fabric",
+      "major_colour": "Maroon melange"
+     },
+     {
+      "accessory": "Folding Fabric",
+      "accessory_colour": "Olive Green",
+      "cloth_type": "Main Fabric",
+      "major_colour": "Olive Green"
+     },
+     {
+      "accessory": "Folding Fabric",
+      "accessory_colour": "Peacock Blue",
+      "cloth_type": "Main Fabric",
+      "major_colour": "Peacock Blue"
+     }
+    ],
+    "select_list": [
+     "Main Fabric"
+    ]
+   },
+   "stiching_attribute": "Panel",
+   "stiching_item_detail": {
+    "attributes": [
+     "Front",
+     "Back"
+    ],
+    "values": [
+     {
+      "major_attribute": "Black",
+      "val": {
+       "Back": "Black",
+       "Front": "Black"
+      }
+     },
+     {
+      "major_attribute": "Navy",
+      "val": {
+       "Back": "Navy",
+       "Front": "Navy"
+      }
+     },
+     {
+      "major_attribute": "Andhra Melange",
+      "val": {
+       "Back": "Andhra Melange",
+       "Front": "Andhra Melange"
+      }
+     },
+     {
+      "major_attribute": "Maroon melange",
+      "val": {
+       "Back": "Maroon melange",
+       "Front": "Maroon melange"
+      }
+     },
+     {
+      "major_attribute": "Olive Green",
+      "val": {
+       "Back": "Olive Green",
+       "Front": "Olive Green"
+      }
+     },
+     {
+      "major_attribute": "Peacock Blue",
+      "val": {
+       "Back": "Peacock Blue",
+       "Front": "Peacock Blue"
+      }
+     }
+    ]
+   },
+   "stiching_item_details": [
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "g6l5lsugk4",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Front"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "g6lu6o2g03",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Back"
+    }
+   ],
+   "stiching_major_attribute_value": "Front"
+  }
+ },
+ "set_item": {
+  "bom_mappings": {
+   "m3g1e4can0": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3m46nq7bo",
+    "mapping_modified": "2026-06-26 18:48:03.871261",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "48cmx56cmx15cm",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3g33q8ndo": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3krtvr95c",
+    "mapping_modified": "2026-06-26 18:48:03.614955",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "29\"x48\"",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3g7ekgfgf": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3lk50gp2f",
+    "mapping_modified": "2026-06-26 18:48:03.787373",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3g8goca3c": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "m3l1ssohcc",
+    "mapping_modified": "2026-06-26 18:48:03.723557",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "m3g8j1lnn8": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3j2bve0i9",
+    "mapping_modified": "2026-06-26 18:48:03.526374",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3ga1rv71l": {
+    "bom_item_attributes": [
+     "Colour",
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3j090afa4",
+    "mapping_modified": "2026-07-08 12:20:28.436876",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 5.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "Bright Red",
+      "index": 0,
+      "quantity": 5.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "18 L",
+      "index": 0,
+      "quantity": 5.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3ga7vaff3": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3j99mn46o",
+    "mapping_modified": "2026-06-26 18:48:03.552059",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3gck1tuf7": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "m3nadecmeu",
+    "mapping_modified": "2026-06-26 18:48:03.919528",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Part",
+      "attribute_value": "Bottom",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "m3ghfdtq84": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3jt6m7393",
+    "mapping_modified": "2026-06-26 18:48:03.596032",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3glq6bufl": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "m3mebc7fj0",
+    "mapping_modified": "2026-06-26 18:48:03.810229",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "m3gpst3qsp": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "m3kp2kb5e4",
+    "mapping_modified": "2026-06-26 18:48:03.636880",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "m3gucmao57": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3l6qmj52e",
+    "mapping_modified": "2026-06-26 18:48:03.698428",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Bottom",
+      "index": 1,
+      "quantity": 0.92,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "30 mm",
+      "index": 1,
+      "quantity": 0.92,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "m3gudq2s2g": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "m3nt5bjsfc",
+    "mapping_modified": "2026-06-26 18:48:03.897321",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "47cm",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   }
+  },
+  "name": "437807-Ladies Bow Frill-2",
+  "values": {
+   "accessory_clothtype_json": {
+    "BOTTOM FRILL": "Bottom",
+    "FOLDING": "Top",
+    "TOP FRILL": "Top"
+   },
+   "cloth_accessory_json": {
+    "attributes": [
+     "Part",
+     "Accessory",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Accessory",
+    "items": [
+     {
+      "Accessory": "FOLDING",
+      "Dia": "30 Dia",
+      "Part": "Top",
+      "Weight": 0.009
+     },
+     {
+      "Accessory": "TOP FRILL",
+      "Dia": "30 Dia",
+      "Part": "Top",
+      "Weight": 0.01
+     },
+     {
+      "Accessory": "BOTTOM FRILL",
+      "Dia": "30 Dia",
+      "Part": "Bottom",
+      "Weight": 0.01
+     }
+    ],
+    "select_list": [
+     "FOLDING",
+     "TOP FRILL",
+     "BOTTOM FRILL"
+    ]
+   },
+   "cloth_detail": [
+    {
+     "cloth": "FCC - 95%Poly,5%Elast Yummy Jersey Fabric",
+     "is_bom_item": 1,
+     "name": "m3dh6j804b",
+     "name1": "MAIN FABRIC",
+     "required_gsm": 150.0
+    },
+    {
+     "cloth": "Polyester Single Jersey Fabric",
+     "is_bom_item": 1,
+     "name": "m3dhrs4hg7",
+     "name1": "PIPING FABRIC",
+     "required_gsm": 150.0
+    }
+   ],
+   "cutting_cloths_json": {
+    "attributes": [
+     "Part",
+     "Cloth"
+    ],
+    "combination_type": "Cloth",
+    "items": [
+     {
+      "Cloth": "MAIN FABRIC",
+      "Part": "Top"
+     },
+     {
+      "Cloth": "MAIN FABRIC",
+      "Part": "Bottom"
+     }
+    ],
+    "select_list": [
+     "MAIN FABRIC",
+     "PIPING FABRIC"
+    ]
+   },
+   "cutting_items_json": {
+    "attributes": [
+     "Part",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Cutting",
+    "items": [
+     {
+      "Dia": "68 Dia",
+      "Part": "Top",
+      "Weight": 0.263
+     },
+     {
+      "Dia": "68 Dia",
+      "Part": "Bottom",
+      "Weight": 0.24
+     }
+    ],
+    "select_list": {}
+   },
+   "emblishment_details_json": {},
+   "ipd_processes": [
+    {
+     "in_stage": "Piece",
+     "name": "m3c5ibq6tr",
+     "out_stage": "Piece",
+     "process_item": null,
+     "process_name": "Ironing"
+    }
+   ],
+   "is_set_item": 1,
+   "item_bom": [
+    {
+     "attribute_mapping": "m3j2bve0i9",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Additional Tag",
+     "name": "m3g8j1lnn8",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3j99mn46o",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Tag Bullet",
+     "name": "m3ga7vaff3",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3j090afa4",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Button 4holes",
+     "name": "m3ga1rv71l",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 5.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3jt6m7393",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Hanger Clip",
+     "name": "m3ghfdtq84",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3krtvr95c",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Pack",
+     "item": "Jobwork-Hanger Cut Polybag",
+     "name": "m3g33q8ndo",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3kp2kb5e4",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Hanger Sticker",
+     "name": "m3gpst3qsp",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3l6qmj52e",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Inner Elastic",
+     "name": "m3gucmao57",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 0.92,
+     "qty_of_product": 1.0,
+     "uom": "Meter",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3l1ssohcc",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Main Label",
+     "name": "m3g8goca3c",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3lk50gp2f",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Oval Price Sticker",
+     "name": "m3g7ekgfgf",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3mebc7fj0",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Main Tag",
+     "name": "m3glq6bufl",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3m46nq7bo",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Pack",
+     "item": "Jobwork-Carton Box",
+     "name": "m3g1e4can0",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3nt5bjsfc",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-PP Black Coat Hanger",
+     "name": "m3gudq2s2g",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "m3nadecmeu",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Washcare Label",
+     "name": "m3gck1tuf7",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    }
+   ],
+   "marker_groups": [],
+   "packing_assortment_json": null,
+   "packing_attribute": "Colour",
+   "packing_attribute_details": [
+    {
+     "attribute_value": "Pink Stripes Bow AO",
+     "name": "m3chf22aj7",
+     "quantity": 0.0
+    }
+   ],
+   "packing_size_details": [
+    {
+     "attribute_value": "8-10",
+     "name": "m39doav2if",
+     "quantity": 2
+    },
+    {
+     "attribute_value": "12-14",
+     "name": "m39ruftrav",
+     "quantity": 3
+    },
+    {
+     "attribute_value": "16-18",
+     "name": "m39rra25qt",
+     "quantity": 3
+    },
+    {
+     "attribute_value": "20-22",
+     "name": "m39fel84ml",
+     "quantity": 2
+    }
+   ],
+   "panel_wise_cloth_mapping_json": null,
+   "panel_wise_consumption_matrix_json": null,
+   "set_item_attribute": "Part",
+   "set_item_detail": {
+    "attributes": [
+     "Top",
+     "Bottom"
+    ],
+    "values": [
+     {
+      "major_attribute": "Pink Stripes Bow AO",
+      "val": {
+       "Bottom": "Pink Stripes Bow AO",
+       "Top": "Pink Stripes Bow AO"
+      }
+     }
+    ]
+   },
+   "stiching_accessory_json": {
+    "attributes": [
+     "Accessory",
+     "Part",
+     "Major Colour",
+     "Accessory Colour",
+     "Cloth"
+    ],
+    "is_set_item": 1,
+    "items": [
+     {
+      "Part": "Top",
+      "accessory": "FOLDING",
+      "accessory_colour": "Bright Red",
+      "cloth_type": "PIPING FABRIC",
+      "major_colour": "Pink Stripes Bow AO"
+     },
+     {
+      "Part": "Top",
+      "accessory": "TOP FRILL",
+      "accessory_colour": "Bright Red",
+      "cloth_type": "PIPING FABRIC",
+      "major_colour": "Pink Stripes Bow AO"
+     },
+     {
+      "Part": "Bottom",
+      "accessory": "BOTTOM FRILL",
+      "accessory_colour": "Bright Red",
+      "cloth_type": "PIPING FABRIC",
+      "major_attr_value": "Pink Stripes Bow AO",
+      "major_colour": "Pink Stripes Bow AO"
+     }
+    ],
+    "select_list": [
+     "MAIN FABRIC",
+     "PIPING FABRIC"
+    ],
+    "set_attr": "Part"
+   },
+   "stiching_attribute": "Panel",
+   "stiching_item_detail": {
+    "attributes": [
+     "Top Front Left",
+     "Top Front Right",
+     "Top Back",
+     "Sleeve",
+     "Self collar",
+     "Pocket",
+     "Pocket Flap",
+     "Top Yolk Panel",
+     "Front Placket Left",
+     "Front Placket Right",
+     "Bottom Front Left",
+     "Bottom Front Right",
+     "Bottom Back Left",
+     "Bottom Back Right"
+    ],
+    "values": [
+     {
+      "major_attribute": "Pink Stripes Bow AO",
+      "val": {
+       "Bottom Back Left": "Pink Stripes Bow AO",
+       "Bottom Back Right": "Pink Stripes Bow AO",
+       "Bottom Front Left": "Pink Stripes Bow AO",
+       "Bottom Front Right": "Pink Stripes Bow AO",
+       "Front Placket Left": "Pink Stripes Bow AO",
+       "Front Placket Right": "Pink Stripes Bow AO",
+       "Pocket": "Pink Stripes Bow AO",
+       "Pocket Flap": "Pink Stripes Bow AO",
+       "Self collar": "Pink Stripes Bow AO",
+       "Sleeve": "Pink Stripes Bow AO",
+       "Top Back": "Pink Stripes Bow AO",
+       "Top Front Left": "Pink Stripes Bow AO",
+       "Top Front Right": "Pink Stripes Bow AO",
+       "Top Yolk Panel": "Pink Stripes Bow AO"
+      }
+     }
+    ]
+   },
+   "stiching_item_details": [
+    {
+     "category": "Body",
+     "is_default": 1,
+     "name": "m3c15pom33",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Front Left"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3cn39fjqg",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Front Right"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3crt35n95",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Back"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3cv4b8n56",
+     "quantity": 2,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Sleeve"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3cn228o4t",
+     "quantity": 2,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Self collar"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3ce2bm47m",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Pocket"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3cpodt8e2",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Pocket Flap"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3ctrt75rp",
+     "quantity": 2,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Yolk Panel"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3ckn9g725",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Front Placket Left"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "m3c84pivq8",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Front Placket Right"
+    },
+    {
+     "category": "Shorts",
+     "is_default": 1,
+     "name": "m3cktlc8hp",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Front Left"
+    },
+    {
+     "category": "Shorts",
+     "is_default": 0,
+     "name": "m3c8fln13v",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Front Right"
+    },
+    {
+     "category": "Shorts",
+     "is_default": 0,
+     "name": "m3ciuedkr8",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Back Left"
+    },
+    {
+     "category": "Shorts",
+     "is_default": 0,
+     "name": "m3cvuddchq",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Back Right"
+    }
+   ],
+   "stiching_major_attribute_value": "Top Front Left"
+  }
+ },
+ "set_size_ratio": {
+  "bom_mappings": {
+   "03ima6urqd": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "03j55ujebe",
+    "mapping_modified": "2026-09-03 14:14:45.223354",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "oc86mjcn7e": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "ocb2cbe66e",
+    "mapping_modified": "2026-09-03 13:17:11.030226",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "40cmx44cmx12cm",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "oc88iigldh": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "ocavp3rvih",
+    "mapping_modified": "2026-09-03 13:15:52.937349",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "oc8u6h87gi": {
+    "bom_item_attributes": [
+     "Colour",
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "ocbg6647ma",
+    "mapping_modified": "2026-09-03 13:16:36.236007",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "16 L",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "p8t2ebuo5i": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "p8vlb26sis",
+    "mapping_modified": "2026-09-03 17:20:01.546775",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "7-8",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "7-8",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "8-9",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "8-9",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9-10",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9-10",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10-11",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10-11",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "11-12",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "11-12",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "p8t8vu5vk4": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "p8uf27bb2j",
+    "mapping_modified": "2026-09-03 13:17:47.520945",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "qvccfka87i": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Size"
+    ],
+    "mapping": "qvepvfft9r",
+    "mapping_modified": "2026-09-03 17:20:31.309007",
+    "rows": [
+     {
+      "attribute": "Size",
+      "attribute_value": "7-8",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "7-8",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "8-9",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "8-9",
+      "index": 1,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9-10",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9-10",
+      "index": 2,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10-11",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10-11",
+      "index": 3,
+      "quantity": 1.0,
+      "type": "bom"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "11-12",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "11-12",
+      "index": 4,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "qvcf64hhmq": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part",
+     "Size"
+    ],
+    "mapping": "qve6cvs8c0",
+    "mapping_modified": "2026-09-03 14:08:07.637800",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   },
+   "qvcfoo90n9": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "qve8i10l8d",
+    "mapping_modified": "2026-09-03 13:19:48.151613",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "20\"x36\"",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "riu7pqcbvu": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "riv7dtpf5q",
+    "mapping_modified": "2026-09-03 17:02:12.170388",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 2.6,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "2 mm",
+      "index": 0,
+      "quantity": 2.6,
+      "type": "bom"
+     },
+     {
+      "attribute": "Part",
+      "attribute_value": "Bottom",
+      "index": 1,
+      "quantity": 0.4,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "2 mm",
+      "index": 1,
+      "quantity": 0.4,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "riukt2nk44": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "rivjvh7t35",
+    "mapping_modified": "2026-09-03 14:09:55.520959",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "36cm",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "sgc90uobkm": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "sgeaehn4qv",
+    "mapping_modified": "2026-09-03 14:10:34.454090",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Bottom",
+      "index": 1,
+      "quantity": 0.64,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "20 mm",
+      "index": 1,
+      "quantity": 0.64,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "v7s6vmscrm": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Part"
+    ],
+    "mapping": "v7uqf4r45c",
+    "mapping_modified": "2026-09-03 14:12:49.030477",
+    "rows": [
+     {
+      "attribute": "Part",
+      "attribute_value": "Top",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   }
+  },
+  "name": "441057-O.KIDS CAPYBARA VALENTINES BU-1",
+  "values": {
+   "accessory_clothtype_json": {
+    "FOLDING": "Top",
+    "PIPING ": "Bottom",
+    "TOP PIPING ": "Top"
+   },
+   "cloth_accessory_json": {
+    "attributes": [
+     "Part",
+     "Accessory",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Accessory",
+    "items": [
+     {
+      "Accessory": "FOLDING",
+      "Dia": "32 Dia",
+      "Part": "Top",
+      "Weight": 0.006
+     },
+     {
+      "Accessory": "TOP PIPING ",
+      "Dia": "32 Dia",
+      "Part": "Top",
+      "Weight": 0.007
+     },
+     {
+      "Accessory": "PIPING ",
+      "Dia": "32 Dia",
+      "Part": "Bottom",
+      "Weight": 0.004
+     }
+    ],
+    "select_list": [
+     "FOLDING",
+     "TOP PIPING ",
+     "PIPING "
+    ]
+   },
+   "cloth_detail": [
+    {
+     "cloth": "FCC - 95%Poly,5%Elast Yummy Jersey Fabric",
+     "is_bom_item": 1,
+     "name": "26ejm55lif",
+     "name1": "MAIN FABRIC",
+     "required_gsm": 150.0
+    },
+    {
+     "cloth": "Polyester Single Jersey Fabric",
+     "is_bom_item": 1,
+     "name": "26ec0p60f9",
+     "name1": "FOLDING AND PIPING FABRIC",
+     "required_gsm": 150.0
+    }
+   ],
+   "cutting_cloths_json": {
+    "attributes": [
+     "Part",
+     "Cloth"
+    ],
+    "combination_type": "Cloth",
+    "items": [
+     {
+      "Cloth": "MAIN FABRIC",
+      "Part": "Top"
+     },
+     {
+      "Cloth": "MAIN FABRIC",
+      "Part": "Bottom"
+     }
+    ],
+    "select_list": [
+     "MAIN FABRIC",
+     "FOLDING AND PIPING FABRIC"
+    ]
+   },
+   "cutting_items_json": {
+    "attributes": [
+     "Part",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Cutting",
+    "items": [
+     {
+      "Dia": "68 Dia",
+      "Part": "Top",
+      "Weight": 0.198
+     },
+     {
+      "Dia": "68 Dia",
+      "Part": "Bottom",
+      "Weight": 0.156
+     }
+    ],
+    "select_list": {}
+   },
+   "emblishment_details_json": {},
+   "ipd_processes": [
+    {
+     "in_stage": "Piece",
+     "name": "2rgstahmqk",
+     "out_stage": "Piece",
+     "process_item": null,
+     "process_name": "Ironing"
+    }
+   ],
+   "is_set_item": 1,
+   "item_bom": [
+    {
+     "attribute_mapping": "ocavp3rvih",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Tag Bullet",
+     "name": "oc88iigldh",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "ocbg6647ma",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Button 4holes",
+     "name": "oc8u6h87gi",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 5.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "ocb2cbe66e",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Pack",
+     "item": "Jobwork-Carton Box",
+     "name": "oc86mjcn7e",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "p8uf27bb2j",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Hanger Sticker",
+     "name": "p8t8vu5vk4",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "p8vlb26sis",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Main Label",
+     "name": "p8t2ebuo5i",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Mobilon Tape",
+     "name": "qvc1o76cn4",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 0.46,
+     "qty_of_product": 1.0,
+     "uom": "Meter",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "qve8i10l8d",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Pack",
+     "item": "Jobwork-Hanger Cut Polybag",
+     "name": "qvcfoo90n9",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "qvepvfft9r",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Washcare Label",
+     "name": "qvccfka87i",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "qve6cvs8c0",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Main Tag",
+     "name": "qvcf64hhmq",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Pack",
+     "item": "Jobwork-Barcode Sticker",
+     "name": "qvc5spugqp",
+     "process_name": "Packing",
+     "qty_of_bom_item": 2.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "riv7dtpf5q",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Piping Rope",
+     "name": "riu7pqcbvu",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 2.0,
+     "qty_of_product": 1.0,
+     "uom": "Meter",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "rivjvh7t35",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-PP Black Coat Hanger",
+     "name": "riukt2nk44",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "sgeaehn4qv",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Inner Elastic",
+     "name": "sgc90uobkm",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 0.92,
+     "qty_of_product": 1.0,
+     "uom": "Meter",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "v7uqf4r45c",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Hanger Clip",
+     "name": "v7s6vmscrm",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "03j55ujebe",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Jobwork-Oval Price Sticker",
+     "name": "03ima6urqd",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    }
+   ],
+   "marker_groups": [],
+   "packing_assortment_json": {
+    "assortment_attributes": [
+     "Colour"
+    ],
+    "boxes": [
+     {
+      "box": "7-8",
+      "rows": [
+       {
+        "Colour": "White",
+        "qty": 0
+       }
+      ],
+      "separator_value": "7-8"
+     },
+     {
+      "box": "8-9",
+      "rows": [
+       {
+        "Colour": "White",
+        "qty": 0
+       }
+      ],
+      "separator_value": "8-9"
+     },
+     {
+      "box": "9-10",
+      "rows": [
+       {
+        "Colour": "White",
+        "qty": 0
+       }
+      ],
+      "separator_value": "9-10"
+     },
+     {
+      "box": "10-11",
+      "rows": [
+       {
+        "Colour": "White",
+        "qty": 0
+       }
+      ],
+      "separator_value": "10-11"
+     },
+     {
+      "box": "11-12",
+      "rows": [
+       {
+        "Colour": "White",
+        "qty": 0
+       }
+      ],
+      "separator_value": "11-12"
+     }
+    ],
+    "separator_attribute": "Size"
+   },
+   "packing_attribute": "Colour",
+   "packing_attribute_details": [
+    {
+     "attribute_value": "White",
+     "name": "c64ngqq90l",
+     "quantity": 0.0
+    }
+   ],
+   "packing_size_details": [
+    {
+     "attribute_value": "7-8",
+     "name": "c64nujrjd0",
+     "quantity": 2
+    },
+    {
+     "attribute_value": "8-9",
+     "name": "c64nil8k1l",
+     "quantity": 2
+    },
+    {
+     "attribute_value": "9-10",
+     "name": "c64o7thr56",
+     "quantity": 2
+    },
+    {
+     "attribute_value": "10-11",
+     "name": "c64og2ra87",
+     "quantity": 2
+    },
+    {
+     "attribute_value": "11-12",
+     "name": "c64otd5ivn",
+     "quantity": 2
+    }
+   ],
+   "panel_wise_cloth_mapping_json": null,
+   "panel_wise_consumption_matrix_json": null,
+   "set_item_attribute": "Part",
+   "set_item_detail": {
+    "attributes": [
+     "Top",
+     "Bottom"
+    ],
+    "values": [
+     {
+      "major_attribute": "White",
+      "val": {
+       "Bottom": "White",
+       "Top": "White"
+      }
+     }
+    ]
+   },
+   "stiching_accessory_json": {
+    "attributes": [
+     "Accessory",
+     "Part",
+     "Major Colour",
+     "Accessory Colour",
+     "Cloth"
+    ],
+    "is_set_item": 1,
+    "items": [
+     {
+      "Part": "Top",
+      "accessory": "FOLDING",
+      "accessory_colour": "White",
+      "cloth_type": "FOLDING AND PIPING FABRIC",
+      "major_colour": "White"
+     },
+     {
+      "Part": "Top",
+      "accessory": "TOP PIPING ",
+      "accessory_colour": "White",
+      "cloth_type": "FOLDING AND PIPING FABRIC",
+      "major_colour": "White"
+     },
+     {
+      "Part": "Bottom",
+      "accessory": "PIPING ",
+      "accessory_colour": "White",
+      "cloth_type": "FOLDING AND PIPING FABRIC",
+      "major_attr_value": "White",
+      "major_colour": "White"
+     }
+    ],
+    "select_list": [
+     "MAIN FABRIC",
+     "FOLDING AND PIPING FABRIC"
+    ],
+    "set_attr": "Part"
+   },
+   "stiching_attribute": "Panel",
+   "stiching_item_detail": {
+    "attributes": [
+     "Top Front Left",
+     "Top Front Right",
+     "Top Back",
+     "Top Sleeve",
+     "Top Sleeve Cuff",
+     "Front Placket Left",
+     "Front Placket Right",
+     "Top Yolk Panel",
+     "Collar",
+     "Pocket",
+     "Pocket Flap",
+     "Bottom Front Left",
+     "Bottom Front Right",
+     "Bottom Back Left",
+     "Bottom Back Right",
+     "Bottom Cuff"
+    ],
+    "values": [
+     {
+      "major_attribute": "White",
+      "val": {
+       "Bottom Back Left": "White",
+       "Bottom Back Right": "White",
+       "Bottom Cuff": "White",
+       "Bottom Front Left": "White",
+       "Bottom Front Right": "White",
+       "Collar": "White",
+       "Front Placket Left": "White",
+       "Front Placket Right": "White",
+       "Pocket": "White",
+       "Pocket Flap": "White",
+       "Top Back": "White",
+       "Top Front Left": "White",
+       "Top Front Right": "White",
+       "Top Sleeve": "White",
+       "Top Sleeve Cuff": "White",
+       "Top Yolk Panel": "White"
+      }
+     }
+    ]
+   },
+   "stiching_item_details": [
+    {
+     "category": "Body",
+     "is_default": 1,
+     "name": "qne1fhrtc5",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Front Left"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qneejba6um",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Front Right"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnekouhhn8",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Back"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qne9aasast",
+     "quantity": 2,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Sleeve"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnegauhdtc",
+     "quantity": 2,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Sleeve Cuff"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qne2d3a11j",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Front Placket Left"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnen3e8vg7",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Front Placket Right"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qneek9685d",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Top Yolk Panel"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qne1n6lumo",
+     "quantity": 2,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Collar"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnefq88ufk",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Pocket"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnefrler1s",
+     "quantity": 1,
+     "set_item_attribute_value": "Top",
+     "stiching_attribute_value": "Pocket Flap"
+    },
+    {
+     "category": "Body",
+     "is_default": 1,
+     "name": "qneioqgtl5",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Front Left"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnel6459ov",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Front Right"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnenf0goic",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Back Left"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnerm0cnim",
+     "quantity": 1,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Back Right"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "qnenivbsue",
+     "quantity": 2,
+     "set_item_attribute_value": "Bottom",
+     "stiching_attribute_value": "Bottom Cuff"
+    }
+   ],
+   "stiching_major_attribute_value": "Top Front Left"
+  }
+ },
+ "standard": {
+  "bom_mappings": {
+   "10ubt5srbp": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour"
+    ],
+    "mapping": "111m0n2d2k",
+    "mapping_modified": "2026-09-12 17:37:05.725596",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "10 x 12 + 2",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "10ubth0e6p": {
+    "bom_item_attributes": [],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour"
+    ],
+    "mapping": "1100vbuf9p",
+    "mapping_modified": "2026-09-12 17:37:05.677444",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     }
+    ],
+    "same_attributes": []
+   },
+   "10uphbprdo": {
+    "bom_item_attributes": [
+     "Size"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour"
+    ],
+    "mapping": "111tntk4d1",
+    "mapping_modified": "2026-09-12 17:37:05.700007",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Size",
+      "attribute_value": "9 x 10",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": []
+   },
+   "29s1dfbda1": {
+    "bom_item_attributes": [
+     "Size",
+     "Colour"
+    ],
+    "is_shared": false,
+    "item_attributes": [
+     "Colour",
+     "Size"
+    ],
+    "mapping": "29s1alhss3",
+    "mapping_modified": "2026-09-21 13:02:46.447755",
+    "rows": [
+     {
+      "attribute": "Colour",
+      "attribute_value": "Black",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "item"
+     },
+     {
+      "attribute": "Colour",
+      "attribute_value": "White",
+      "index": 0,
+      "quantity": 1.0,
+      "type": "bom"
+     }
+    ],
+    "same_attributes": [
+     "Size"
+    ]
+   }
+  },
+  "name": "Premium Black Thermal Mens - R/Neck 11900-5",
+  "values": {
+   "accessory_clothtype_json": {
+    "FOLDING FABRIC": null
+   },
+   "cloth_accessory_json": {
+    "attributes": [
+     "Colour",
+     "Accessory",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Accessory",
+    "items": [
+     {
+      "Accessory": "FOLDING FABRIC",
+      "Colour": "Black",
+      "Dia": "32 Dia",
+      "Weight": 0.004
+     }
+    ],
+    "select_list": [
+     "FOLDING FABRIC"
+    ]
+   },
+   "cloth_detail": [
+    {
+     "cloth": "Thermal Fabric",
+     "is_bom_item": 1,
+     "name": "10tpld26pm",
+     "name1": "MAIN FABRIC",
+     "required_gsm": 225.0
+    },
+    {
+     "cloth": "Thermal Rib",
+     "is_bom_item": 1,
+     "name": "10tkq0ddcv",
+     "name1": "RIB FABRIC",
+     "required_gsm": 260.0
+    }
+   ],
+   "cutting_cloths_json": {
+    "attributes": [
+     "Panel",
+     "Cloth"
+    ],
+    "combination_type": "Cloth",
+    "items": [
+     {
+      "Cloth": "MAIN FABRIC",
+      "Panel": "Front"
+     },
+     {
+      "Cloth": "MAIN FABRIC",
+      "Panel": "Back"
+     },
+     {
+      "Cloth": "MAIN FABRIC",
+      "Panel": "Sleeve"
+     },
+     {
+      "Cloth": "RIB FABRIC",
+      "Panel": "Sleeve Cuff"
+     },
+     {
+      "Cloth": "RIB FABRIC",
+      "Panel": "Neck Rib"
+     }
+    ],
+    "select_list": [
+     "MAIN FABRIC",
+     "RIB FABRIC"
+    ]
+   },
+   "cutting_items_json": {
+    "attributes": [
+     "Panel",
+     "Dia",
+     "Weight"
+    ],
+    "combination_type": "Cutting",
+    "items": [
+     {
+      "Dia": "32 Dia",
+      "Panel": "Front",
+      "Weight": 0.0943
+     },
+     {
+      "Dia": "32 Dia",
+      "Panel": "Back",
+      "Weight": 0.0943
+     },
+     {
+      "Dia": "32 Dia",
+      "Panel": "Sleeve",
+      "Weight": 0.0943
+     },
+     {
+      "Dia": "30 Dia",
+      "Panel": "Sleeve Cuff",
+      "Weight": 0.013
+     },
+     {
+      "Dia": "30 Dia",
+      "Panel": "Neck Rib",
+      "Weight": 0.013
+     }
+    ],
+    "select_list": {}
+   },
+   "emblishment_details_json": {
+    "Yolk Fusing": [
+     "Back"
+    ]
+   },
+   "ipd_processes": [
+    {
+     "in_stage": "Cut",
+     "name": "10thlndgfr",
+     "out_stage": "Cut",
+     "process_item": null,
+     "process_name": "Yolk Fusing"
+    },
+    {
+     "in_stage": "Piece",
+     "name": "10tqbpgh6a",
+     "out_stage": "Piece",
+     "process_item": null,
+     "process_name": "Ironing"
+    }
+   ],
+   "is_set_item": 0,
+   "item_bom": [
+    {
+     "attribute_mapping": "1100vbuf9p",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Compo Label 53% Cot,47% Poly(Taffeta)-Premium Thermal",
+     "name": "10ubth0e6p",
+     "process_name": "Stitching",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "111tntk4d1",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Inner Card Big",
+     "name": "10uphbprdo",
+     "process_name": "Ironing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Piece",
+     "item": "Premium Black Thermal Mens Single Box",
+     "name": "10ufu7riim",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": null,
+     "based_on_attribute_mapping": 0,
+     "dependent_attribute_value": "Piece",
+     "item": "Premium Black Thermal Mens Outer Box",
+     "name": "10ucbi5gq2",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 5.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "111m0n2d2k",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Plain Poly Bag PP (37 Micron)",
+     "name": "10ubt5srbp",
+     "process_name": "Packing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    },
+    {
+     "attribute_mapping": "29s1alhss3",
+     "based_on_attribute_mapping": 1,
+     "dependent_attribute_value": "Piece",
+     "item": "Fusing Sticker-MoveWarm (XS-2XL)",
+     "name": "29s1dfbda1",
+     "process_name": "Yolk Fusing",
+     "qty_of_bom_item": 1.0,
+     "qty_of_product": 1.0,
+     "uom": "Nos",
+     "wastage_pct": 0.0
+    }
+   ],
+   "marker_groups": [],
+   "packing_assortment_json": null,
+   "packing_attribute": "Colour",
+   "packing_attribute_details": [
+    {
+     "attribute_value": "Black",
+     "name": "10tptc15a8",
+     "quantity": 0.0
+    }
+   ],
+   "packing_size_details": [],
+   "panel_wise_cloth_mapping_json": null,
+   "panel_wise_consumption_matrix_json": null,
+   "set_item_attribute": null,
+   "set_item_detail": {
+    "attributes": [],
+    "values": []
+   },
+   "stiching_accessory_json": {
+    "attributes": [
+     "Accessory",
+     "Major Colour",
+     "Accessory Colour",
+     "Cloth"
+    ],
+    "is_set_item": 0,
+    "items": [
+     {
+      "accessory": "FOLDING FABRIC",
+      "accessory_colour": "Black",
+      "cloth_type": "MAIN FABRIC",
+      "major_colour": "Black"
+     }
+    ],
+    "select_list": [
+     "MAIN FABRIC",
+     "RIB FABRIC"
+    ]
+   },
+   "stiching_attribute": "Panel",
+   "stiching_item_detail": {
+    "attributes": [
+     "Front",
+     "Back",
+     "Sleeve",
+     "Sleeve Cuff",
+     "Neck Rib"
+    ],
+    "values": [
+     {
+      "major_attribute": "Black",
+      "val": {
+       "Back": "Black",
+       "Front": "Black",
+       "Neck Rib": "Black",
+       "Sleeve": "Black",
+       "Sleeve Cuff": "Black"
+      }
+     }
+    ]
+   },
+   "stiching_item_details": [
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "10t4sc2bhb",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Front"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "10thf0kq8c",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Back"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "10thmk31p8",
+     "quantity": 2,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Sleeve"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "10t1e0r5pb",
+     "quantity": 2,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Sleeve Cuff"
+    },
+    {
+     "category": "Body",
+     "is_default": 0,
+     "name": "10t39juf3n",
+     "quantity": 1,
+     "set_item_attribute_value": null,
+     "stiching_attribute_value": "Neck Rib"
+    }
+   ],
+   "stiching_major_attribute_value": "Front"
+  }
+ }
+}

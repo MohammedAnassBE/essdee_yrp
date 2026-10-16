@@ -13,7 +13,7 @@
 	>
 		<template #filters>
 			<div class="report-mode" role="group" aria-label="Report mode">
-				<span class="report-mode__label">Report mode</span>
+				<span class="report-mode__label erp-field-label">Report mode</span>
 				<div>
 					<button type="button" :class="{ 'is-active': !summaryMode }" :aria-pressed="!summaryMode" @click="setMode(false)">
 						<i class="pi pi-calendar" />Daily
@@ -32,7 +32,7 @@
 			</template>
 			<label class="production-report-filter">
 				<span class="erp-field-label">Cutting location</span>
-				<select v-model="filters.location">
+				<select class="erp-native-select" v-model="filters.location">
 					<option value="">All locations</option>
 					<option value="Machine Cutting">Machine Cutting</option>
 					<option value="Manual Cutting">Manual Cutting</option>
@@ -241,12 +241,6 @@ watch(activeFilters, restoreFilters, { flush: "sync" })
 	gap: 5px;
 }
 
-.report-mode__label {
-	color: #52665d;
-	font-size: var(--erp-font-size-min);
-	font-weight: 750;
-}
-
 .report-mode > div {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -269,8 +263,8 @@ watch(activeFilters, restoreFilters, { flush: "sync" })
 	color: var(--erp-text-muted);
 	cursor: pointer;
 	font: inherit;
-	font-size: var(--erp-font-size-min);
-	font-weight: 750;
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-medium);
 }
 
 .report-mode button i {
@@ -279,8 +273,9 @@ watch(activeFilters, restoreFilters, { flush: "sync" })
 
 .report-mode button.is-active {
 	background: var(--erp-surface);
-	color: var(--erp-accent);
-	box-shadow: inset 0 0 0 1px var(--erp-border);
+	color: var(--erp-accent-ink);
+	box-shadow: var(--erp-shadow-xs);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .erp-field-label b {

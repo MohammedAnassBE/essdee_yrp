@@ -22,6 +22,8 @@ class SDYRPCuttingOrder(Document):
 				pass
 
 	def validate(self):
+		if self.docstatus == 0 and self.amended_from:
+			self.co_status = "Draft"
 		if not self.cutting_order_detail:
 			frappe.throw("Cutting Order Detail is required")
 
@@ -144,7 +146,12 @@ class SDYRPCuttingOrder(Document):
 	def on_submit(self):
 		pass
 
+	def on_cancel(self):
+		self.db_set("co_status", "Cancelled")
+
 	def on_update_after_submit(self):
+		if self.docstatus == 2:
+			return
 		completed_json = update_if_string_instance(self.completed_items_json)
 		all_completed = True
 		any_completed = False

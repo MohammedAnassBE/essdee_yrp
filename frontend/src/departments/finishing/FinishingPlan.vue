@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan" back-to="/finishing/plans" back-label="Finishing Plans" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan"><Skeleton height="64px" /><Skeleton height="420px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -27,7 +27,7 @@
 					<FinishingPlanActions :workspace="workspace" :busy="busy" @command="(command) => runCommand(command)" @entry="openEntry" />
 				</div>
 			</header>
-			<Message v-if="workspace.locked" severity="warn" :closable="false" class="finishing-plan__notice">
+			<Message v-if="workspace.locked" severity="warn" :closable="false" class="finishing-plan__notice erp-attention-note">
 				<strong>{{ record.fp_status }}</strong> — this Finishing Plan is locked. Creating new entries has been disabled.
 			</Message>
 			<FinishingPlanTabs
@@ -85,6 +85,11 @@ import FinishingEntryDialog from "./FinishingEntryDialog.vue"
 import FinishingPlanActions from "./FinishingPlanActions.vue"
 import FinishingPlanTabs from "./FinishingPlanTabs.vue"
 import "./finishing.css"
+
+const props = defineProps({
+	backTo: { type: String, default: "/finishing/plans" },
+	backLabel: { type: String, default: "Finishing Plans" },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -254,7 +259,7 @@ watch(finishingPlanId, () => {
 
 <style scoped>
 .finishing-plan__probe { display: grid; gap: var(--erp-space-3); }
-.finishing-plan { display: flex; min-width: 0; padding: 12px 14px; flex-direction: column; gap: 8px; border-top: 3px solid var(--accent, var(--erp-accent)); }
+.finishing-plan { display: flex; min-width: 0; padding: 12px 14px; flex-direction: column; gap: 8px; }
 .finishing-plan__header { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 48px; padding-bottom: 10px; border-bottom: 1px solid var(--erp-border); }
 .finishing-plan__header > :first-child { flex: 0 0 auto; }
 .finishing-plan__identity { display: flex; flex: 1 1 auto; align-items: center; gap: 14px; min-width: 0; }

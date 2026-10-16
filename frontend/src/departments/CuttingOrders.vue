@@ -46,7 +46,7 @@ const capability = ref(null)
 const loadError = ref("")
 const loadingCapability = ref(true)
 const defaultColumns = ["cutting_order_detail", "item", "co_status", "lay_no", "cutting_location"]
-const statusOptions = ["Draft", "Submitted", "Cutting In Progress", "Partially Completed", "Completed"]
+const statusOptions = ["Draft", "Submitted", "Cutting In Progress", "Partially Completed", "Completed", "Cancelled"]
 
 function openCuttingOrder(row, snapshot) {
 	return openListDocument(router, row, snapshot, { routeName: "cutting-order", paramName: "cuttingOrderId" })

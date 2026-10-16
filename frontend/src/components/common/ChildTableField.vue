@@ -16,51 +16,13 @@
 			/>
 		</header>
 
-		<DataTable
+		<EditableDataTable
 			:value="modelValue"
 			scrollable
 			size="small"
 			class="child-table-field__table"
 			:pt="{ tableContainer: { tabindex: 0, role: 'region', 'aria-label': `${field.label || field.fieldname} rows` } }"
 		>
-			<Column header="#" frozen class="child-table-field__index">
-				<template #body="{ index }">{{ index + 1 }}</template>
-			</Column>
-			<Column
-				v-for="column in columns"
-				:key="column.fieldname"
-				:header="column.label || column.fieldname"
-				:style="{ minWidth: columnWidth(column) }"
-			>
-				<template #body="{ data, index }">
-					<FormField
-						:field="columnFilters ? { ...column, link_filters: columnFilters(column, data) ?? column.link_filters } : column"
-						:model-value="data[column.fieldname]"
-						:form="data"
-						:disabled="isDisabled"
-						:required="Boolean(column.reqd)"
-						:invalid="Boolean(errors[`${index}.${column.fieldname}`])"
-						:error="errors[`${index}.${column.fieldname}`] || ''"
-						:show-label="false"
-						:show-open-button="false"
-						:input-id="`${field.fieldname}-${index + 1}-${column.fieldname}`"
-						:aria-label="`${column.label || column.fieldname}, row ${index + 1}`"
-						@update:model-value="setCell(index, column.fieldname, $event)"
-					/>
-				</template>
-			</Column>
-			<Column v-if="!isDisabled" header="" frozen align-frozen="right">
-				<template #body="{ index }">
-					<Button
-						icon="pi pi-trash"
-						severity="danger"
-						text
-						rounded
-						:aria-label="`Remove row ${index + 1}`"
-						@click="removeRow(index)"
-					/>
-				</template>
-			</Column>
 			<template #empty>
 				<div class="child-table-field__empty">
 					<i class="pi pi-table" aria-hidden="true"></i>
@@ -68,7 +30,7 @@
 					<span v-if="!isDisabled">Use Add Row to create the first line.</span>
 				</div>
 			</template>
-		</DataTable>
+		</EditableDataTable>
 	</section>
 </template>
 
@@ -76,9 +38,10 @@
 import Button from "primevue/button"
 import Column from "primevue/column"
 import DataTable from "primevue/datatable"
-import { computed } from "vue"
+import { computed, defineComponent, h } from "vue"
 
 import FormField from "./FormField.vue"
+import { childTableColumnField } from "./childTableFields.js"
 
 const props = defineProps({
 	field: { type: Object, required: true },
@@ -121,6 +84,52 @@ const columns = computed(() => {
 	)
 	return preferred.length ? preferred : eligibleColumns.value.slice(0, 6)
 })
+
+// BodyCell renders the body slot as a component; its function must keep its identity.
+const cellBodies = new Map()
+const indexBody = ({ index }) => index + 1
+const removeBody = ({ index }) => h(Button, {
+	icon: "pi pi-trash", severity: "danger", text: true, rounded: true,
+	"aria-label": `Remove row ${index + 1}`, onClick: () => removeRow(index),
+})
+const EditableDataTable = defineComponent({
+	inheritAttrs: false,
+	setup(_, { attrs, slots }) {
+		return () => h(DataTable, attrs, { ...slots, default: renderColumns })
+	},
+})
+
+function renderColumns() {
+	return [
+		h(Column, { columnKey: "__index", header: "#", frozen: true, class: "child-table-field__index" }, { body: indexBody }),
+		...columns.value.map((column) => {
+			const fieldname = column.fieldname
+			if (!cellBodies.has(fieldname)) {
+				cellBodies.set(fieldname, (cell) => renderCell(fieldname, cell))
+			}
+			return h(Column, {
+				key: fieldname, columnKey: fieldname, field: fieldname,
+				header: column.label || fieldname, style: { minWidth: columnWidth(column) },
+			}, { body: cellBodies.get(fieldname) })
+		}),
+		...(!isDisabled.value ? [h(Column, { columnKey: "__remove", header: "", frozen: true, alignFrozen: "right" }, { body: removeBody })] : []),
+	]
+}
+
+function renderCell(fieldname, { data, index }) {
+	const column = columns.value.find((item) => item.fieldname === fieldname)
+	if (!column) return null
+	const field = childTableColumnField(column, props.columnFilters, data)
+	const error = props.errors[`${index}.${fieldname}`] || ""
+	return h(FormField, {
+		field, modelValue: data[fieldname], form: data, disabled: isDisabled.value,
+		required: Boolean(column.reqd), invalid: Boolean(error), error,
+		showLabel: false, showOpenButton: false,
+		inputId: `${props.field.fieldname}-${index + 1}-${fieldname}`,
+		ariaLabel: `${column.label || fieldname}, row ${index + 1}`,
+		"onUpdate:modelValue": (value) => setCell(index, fieldname, value),
+	})
+}
 
 function updateRows(rows) {
 	emit("update:modelValue", rows)
@@ -179,15 +188,15 @@ function columnWidth(column) {
 .child-table-field__header h3 {
 	margin: 0;
 	color: var(--erp-text);
-	font-size: 0.9rem;
-	font-weight: 740;
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .child-table-field__header small {
 	display: block;
 	margin-top: 4px;
 	color: var(--erp-text-muted);
-	font-size: var(--erp-font-size-min);
+	font-size: var(--erp-font-size-caption);
 }
 
 .child-table-field__table {
@@ -196,6 +205,11 @@ function columnWidth(column) {
 	border-radius: var(--erp-panel-radius);
 	overflow: hidden;
 	box-shadow: var(--erp-shadow-xs);
+}
+
+.child-table-field__table :deep(.p-datatable-table-container:focus-visible) {
+	outline: 2px solid var(--erp-accent);
+	outline-offset: -2px;
 }
 
 .child-table-field__index {
@@ -215,7 +229,7 @@ function columnWidth(column) {
 .child-table-field__empty i {
 	margin-bottom: 4px;
 	color: var(--erp-accent);
-	font-size: 1.15rem;
+	font-size: var(--erp-font-size-hero);
 }
 
 .child-table-field__empty strong {
@@ -229,10 +243,10 @@ function columnWidth(column) {
 
 .child-table-field__table :deep(.p-datatable-thead > tr > th) {
 	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
-	color: var(--erp-text-secondary);
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 800;
-	letter-spacing: 0.04em;
+	font-weight: var(--erp-font-weight-semibold);
+	letter-spacing: .06em;
 	text-transform: uppercase;
 	background: var(--erp-surface-muted);
 }
@@ -244,18 +258,13 @@ function columnWidth(column) {
 }
 
 .child-table-field__table :deep(.p-datatable-tbody > tr:hover) {
-	background: color-mix(in srgb, var(--erp-accent) 3%, white);
-}
-
-.child-table-field__table :deep(.p-datatable-table-container:focus-visible) {
-	outline: 2px solid var(--erp-accent-dark);
-	outline-offset: -2px;
+	background: var(--erp-surface-hover);
 }
 
 @media (max-width: 620px) {
 	.child-table-field__table :deep(.p-datatable-table-container) {
-		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
-		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+		-webkit-mask-image: linear-gradient(to right, var(--erp-text) 0, var(--erp-text) calc(100% - 18px), transparent 100%);
+		mask-image: linear-gradient(to right, var(--erp-text) 0, var(--erp-text) calc(100% - 18px), transparent 100%);
 	}
 	.child-table-field__header {
 		align-items: stretch;

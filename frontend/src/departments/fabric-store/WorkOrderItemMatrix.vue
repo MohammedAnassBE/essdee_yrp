@@ -5,6 +5,9 @@
 				<div>
 					<strong>{{ section.name || "Unspecified item" }}</strong>
 					<span v-if="section.lot">{{ section.lot }}</span>
+					<template v-if="processCostViewRouteName">
+						<RouterLink v-for="name in processCostNames(section.items)" :key="name" :to="{ name: processCostViewRouteName, params: { processCostId: name } }">Process Cost · {{ name }}</RouterLink>
+					</template>
 				</div>
 				<span>{{ section.items.length }} {{ section.items.length === 1 ? "combination" : "combinations" }}</span>
 			</header>
@@ -83,6 +86,7 @@ import { computed } from "vue"
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
 	mode: { type: String, default: "items" },
+	processCostViewRouteName: { type: String, default: "" },
 })
 
 const itemSections = computed(() => props.groups.flatMap((group, groupIndex) => {
@@ -99,6 +103,10 @@ const itemSections = computed(() => props.groups.flatMap((group, groupIndex) => 
 
 function primaryValues(group) {
 	return group.primary_attribute_values?.length ? group.primary_attribute_values : ["default"]
+}
+
+function processCostNames(items) {
+	return [...new Set(items.map((item) => item.process_cost).filter(Boolean))]
 }
 
 function hasPrimaryBreakdown(group) {
@@ -227,9 +235,6 @@ function money(value) {
 .matrix-total { color: var(--erp-text); font-weight: 800; }
 .work-order-matrix-empty { min-height: 130px; }
 .work-order-matrix-empty div { display: grid; justify-items: center; gap: 6px; }
-.work-order-matrix-empty i { color: #8ca39a; font-size: 20px; }
-.work-order-matrix-empty strong { font-size: var(--erp-font-size-caption); }
-.work-order-matrix-empty span { font-size: var(--erp-font-size-min); }
 @media (max-width: 620px) {
 	.work-order-matrix-empty { min-height: 78px; padding: 12px; }
 	.work-order-matrix-empty div { grid-template-columns: auto 1fr; align-items: center; justify-items: start; column-gap: 9px; }

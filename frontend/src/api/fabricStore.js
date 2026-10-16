@@ -96,6 +96,14 @@ export function previewGoodsReceivedNoteSource(source = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.preview_goods_received_note_source`, { source })
 }
 
+export function getGoodsReceivedNoteDeliveryAddress(deliveryLocation) {
+	return callMethod("essdee_yrp.fabric_store.documents.goods_received_note.get_delivery_address", { delivery_location: deliveryLocation })
+}
+
+export function getGoodsReceivedNoteSupplierAddress(supplier) {
+	return callMethod("essdee_yrp.fabric_store.documents.goods_received_note.get_supplier_address", { supplier })
+}
+
 export function saveGoodsReceivedNote(values, options = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.save_goods_received_note`, {
 		values,
@@ -245,4 +253,12 @@ export function saveFabricStockOperation(operation, values, options = {}) {
 
 export function discardCompletionDraft(name, expectedModified = "") {
 	return callMethod(`${WORKSPACE_METHOD}.discard_completion_draft`, { name, expected_modified: expectedModified || undefined })
+}
+
+export function getLocationAddressStatus(party) {
+	return callMethod(`${WORKSPACE_METHOD}.get_location_address_status`, { party })
+}
+
+export function endStockEntryTransit(name) {
+	return callMethod(`${WORKSPACE_METHOD}.end_stock_entry_transit`, { name })
 }

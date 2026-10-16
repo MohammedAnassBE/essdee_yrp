@@ -318,7 +318,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "CP Status",
-   "options": "\nDraft\nPlanned\nFabric Partially Received\nReady to Cut\nCutting In Progress\nPartially Completed\nCompleted\nCut Panel Dispatch Pending",
+   "options": "\nDraft\nPlanned\nFabric Partially Received\nReady to Cut\nCutting In Progress\nPartially Completed\nCompleted\nCut Panel Dispatch Pending\nCancelled",
    "read_only": 1
   },
   {

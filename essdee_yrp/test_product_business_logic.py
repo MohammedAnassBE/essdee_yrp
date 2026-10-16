@@ -11,12 +11,87 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product import (
 	_assert_file_attached_to,
 	_validated_pdf,
 	get_grouped_files,
+	get_product_colour_codes,
 	get_table_struct_data,
 	process_pdf_to_images,
 	process_single_page_pdf,
 	release_tech_pack,
 )
 from essdee_yrp.product_development import web_workspace
+
+
+class TestProductColourCodes(IntegrationTestCase):
+	def setUp(self):
+		super().setUp()
+		frappe.set_user("Administrator")
+		token = frappe.generate_hash(length=10)
+		group = frappe.get_doc({
+			"doctype": "SD YRP Product Group", "product_group_name": f"Print group {token}",
+		}).insert()
+		self.colours = []
+		for index, code in enumerate(["#123456", "#654321"]):
+			colour = frappe.get_doc({
+				"doctype": "SD YRP Product Colour Code",
+				"colour": f"Print colour {token} {index}", "colour_code": code,
+			}).insert()
+			colour.submit()
+			self.colours.append(colour)
+		self.product = frappe.get_doc({
+			"doctype": "SD YRP Product", "style_no": f"PD-PRINT-{token}",
+			"product_group": group.name, "description": "Print test", "item_name": "Print test",
+			"fabric_details": "Cotton", "product_colours": [{"product_colour": self.colours[0].name}],
+		}).insert()
+
+	def make_release(self, is_set_item=False):
+		return frappe.get_doc({
+			"doctype": "SD YRP Product Release", "product": self.product.name,
+			"is_set_item": int(is_set_item),
+			"product_colours": [{"product_colour": self.colours[0].name}],
+			"product_set_colours": [{
+				"top_colour": self.colours[0].name, "bottom_colour": self.colours[1].name,
+			}] if is_set_item else [],
+		}).insert()
+
+	def test_product_colour_codes_use_product_rows(self):
+		self.assertEqual(
+			get_product_colour_codes(self.product.doctype, self.product.name),
+			{self.colours[0].name: "#123456"},
+		)
+
+	def test_release_colour_codes_use_snapshot_after_live_product_changes(self):
+		release = self.make_release()
+		self.product.set("product_colours", [{"product_colour": self.colours[1].name}])
+		self.product.save()
+		self.assertEqual(
+			get_product_colour_codes(release.doctype, release.name), {self.colours[0].name: "#123456"},
+		)
+		self.assertEqual(
+			get_product_colour_codes(self.product.doctype, self.product.name), {self.colours[1].name: "#654321"},
+		)
+
+	def test_set_release_colour_codes_use_both_snapshot_parts(self):
+		release = self.make_release(is_set_item=True)
+		self.colours[0].db_set("colour_code", "#abcdef")
+		self.colours[1].db_set("colour_code", "#fedcba")
+		self.assertEqual(get_product_colour_codes(release.doctype, release.name), {
+			self.colours[0].name: "#123456", self.colours[1].name: "#654321",
+		})
+
+	def test_colour_codes_require_read_permission_on_each_target(self):
+		release = self.make_release()
+		frappe.set_user("Guest")
+		try:
+			for doc in [self.product, release]:
+				with self.subTest(doctype=doc.doctype), self.assertRaises(frappe.PermissionError):
+					get_product_colour_codes(doc.doctype, doc.name)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_colour_codes_reject_other_doctypes_before_loading(self):
+		with patch.object(frappe, "get_doc") as get_doc:
+			with self.assertRaisesRegex(frappe.ValidationError, "only for Product or Product Release"):
+				get_product_colour_codes("User", "Administrator")
+		get_doc.assert_not_called()
 
 
 class TestProductPdfStaging(TestCase):

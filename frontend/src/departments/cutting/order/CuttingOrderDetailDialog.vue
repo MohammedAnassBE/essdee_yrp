@@ -66,7 +66,7 @@
 					</TabPanel>
 
 					<TabPanel value="combinations">
-						<div v-if="canEdit" class="combination-actions"><Button label="Generate from Setup" icon="pi pi-sync" severity="secondary" outlined size="small" :loading="saving" @click="save" /></div>
+						<div v-if="canEdit" class="combination-actions"><Button label="Generate from Setup" icon="pi pi-sync" severity="secondary" outlined size="small" :loading="saving" @click="save(true)" /></div>
 						<CombinationMatrix v-if="form.is_set_item" title="Set Item Combination" :model="setCombination" :editable="canEdit" />
 						<CombinationMatrix title="Panel Combination" :model="stitchingCombination" :editable="canEdit" />
 						<div v-if="!setCombination.values?.length && !stitchingCombination.values?.length" class="detail-empty">Combination values are generated from the saved attribute, colour, and panel setup.</div>
@@ -77,7 +77,7 @@
 
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="requestVisible(false)" />
-			<Button v-if="canEdit" label="Save Detail" icon="pi pi-save" :loading="saving" :disabled="!form.item" @click="save" />
+			<Button v-if="canEdit" label="Save Detail" icon="pi pi-save" :loading="saving" :disabled="!form.item" @click="save(false)" />
 		</template>
 	</Dialog>
 
@@ -152,11 +152,12 @@ function applyPayload(payload) {
 	cleanSignature.value = signature.value
 }
 
-async function save() {
+async function save(regenerateCombinations = false) {
 	saving.value = true
 	error.value = ""
 	try {
-		const payload = await saveCuttingOrderDetail(payloadValues(), { name: form.name, expectedModified: form.modified })
+		const values = { ...payloadValues(), regenerate_combinations: regenerateCombinations }
+		const payload = await saveCuttingOrderDetail(values, { name: form.name, expectedModified: form.modified })
 		applyPayload(payload)
 		emit("saved", payload)
 	} catch (reason) { actionError.value = reason?.message || "Unable to save the Cutting Order Detail." }

@@ -18,10 +18,6 @@
 				<label class="ppo-action-field"><span>Reason *</span><Textarea v-model="form.reason" rows="2" fluid /></label>
 				<div class="ppo-action-matrix ppo-action-field--wide"><table><thead><tr><th>Size</th><th>Quantity</th><th>Ratio</th></tr></thead><tbody><tr v-for="row in editableRows" :key="row.size"><th>{{ row.size }}</th><td><InputNumber v-model="row.quantity" :min="0" :max-fraction-digits="0" :use-grouping="false" /></td><td><InputNumber v-model="row.ratio" :min="0" :max-fraction-digits="3" :use-grouping="false" /></td></tr></tbody></table></div>
 			</template>
-			<template v-else-if="mode === 'update_price'">
-				<p class="ppo-action-hint ppo-action-field--wide">Choose the approved MRP source for each size. Existing Lot overrides remain unchanged.</p>
-				<div class="ppo-action-matrix ppo-action-field--wide"><table><thead><tr><th>Size</th><th>Current MRP</th><th>MRP source</th></tr></thead><tbody><tr v-for="row in editableRows" :key="row.size"><th>{{ row.size }}</th><td>INR {{ number(row.prices?.mrp).toLocaleString('en-IN') }}</td><td><Select v-model="row.selected_source" :options="priceSources" option-label="label" option-value="value" fluid /></td></tr></tbody></table></div>
-			</template>
 			<template v-else-if="mode === 'transfer_quantity'">
 				<LinkField v-model="form.target_production_order" label="Target Production Order *" doctype="YRP Production Order" :show-open-button="false" />
 				<label class="ppo-action-field"><span>Reason *</span><Textarea v-model="form.reason" rows="3" fluid /></label>
@@ -56,16 +52,14 @@ const editableRows = ref([])
 const dateFields = [{ label: "Delivery Date", value: "Delivery Date" }, { label: "Don't Deliver After", value: "Don't Deliver After" }]
 const statuses = ["Open", "Item Changed", "Not Processed"]
 const requestedByOptions = ["Sales Team", "Planning Team", "Merch Team"]
-const priceSources = [{ label: "Current Production Order MRP", value: "production_order_mrp" }, { label: "Sales MRP", value: "sales_mrp" }, { label: "Box Sticker MRP", value: "box_sticker_mrp" }]
-const titles = { request_changes: "Request PPO changes", update_price: "Update price", change_dates: "Change delivery dates", change_status: "Change status", update_quantity_ratio: "Update quantity & ratio", transfer_quantity: "Transfer quantity", create_lot: "Create Lot", link_lot: "Link existing Lot" }
+const titles = { request_changes: "Request PPO changes", change_dates: "Change delivery dates", change_status: "Change status", update_quantity_ratio: "Update quantity & ratio", transfer_quantity: "Transfer quantity", create_lot: "Create Lot", link_lot: "Link existing Lot" }
 const title = computed(() => titles[props.mode] || "Production Order action")
-const submitLabel = computed(() => ({ request_changes: "Request Changes", update_price: "Update Price", change_dates: "Change Dates", change_status: "Change Status", update_quantity_ratio: "Send Request", transfer_quantity: "Send Transfer Request", create_lot: "Create Lot", link_lot: "Link Lot" }[props.mode] || "Continue"))
+const submitLabel = computed(() => ({ request_changes: "Request Changes", change_dates: "Change Dates", change_status: "Change Status", update_quantity_ratio: "Send Request", transfer_quantity: "Send Transfer Request", create_lot: "Create Lot", link_lot: "Link Lot" }[props.mode] || "Continue"))
 const valid = computed(() => {
 	if (props.mode === "request_changes") return Boolean(form.reason.trim())
 	if (props.mode === "change_dates") return Boolean(form.date_field && form.new_date && form.reason.trim())
 	if (props.mode === "change_status") return Boolean(form.new_status && form.reason.trim())
 	if (props.mode === "update_quantity_ratio") return Boolean(form.requested_by && form.reason.trim() && editableRows.value.length)
-	if (props.mode === "update_price") return Boolean(editableRows.value.length && editableRows.value.every((row) => row.selected_source))
 	if (props.mode === "transfer_quantity") return Boolean(form.target_production_order && form.reason.trim())
 	return Boolean(form.lot_name)
 })
@@ -73,12 +67,11 @@ const valid = computed(() => {
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 function reset() {
 	Object.assign(form, { reason: "", date_field: "Delivery Date", new_date: "", new_status: "", requested_by: "", target_production_order: "", lot_name: "" })
-	editableRows.value = props.matrix.map((row) => ({ ...JSON.parse(JSON.stringify(row)), quantity: number(row.quantity), ratio: number(row.ratio), selected_source: "production_order_mrp" }))
+	editableRows.value = props.matrix.map((row) => ({ ...JSON.parse(JSON.stringify(row)), quantity: number(row.quantity), ratio: number(row.ratio) }))
 }
 function submit() {
 	let payload = { ...form }
 	if (props.mode === "update_quantity_ratio") payload = { size_quantities: Object.fromEntries(editableRows.value.map((row) => [row.size, row.quantity])), size_ratios: Object.fromEntries(editableRows.value.map((row) => [row.size, row.ratio])), requested_by: form.requested_by, reason: form.reason }
-	if (props.mode === "update_price") payload = { item_details: Object.fromEntries(editableRows.value.map((row) => [row.size, { selected_source: row.selected_source }])) }
 	emit("submit", payload)
 }
 watch(() => props.visible, (visible) => { if (visible) reset() })
@@ -89,7 +82,6 @@ watch(() => props.visible, (visible) => { if (visible) reset() })
 .ppo-action-field { display: grid; align-content: start; gap: 6px; }
 .ppo-action-field > span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .ppo-action-field--wide { grid-column: 1 / -1; }
-.ppo-action-hint { margin: 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .ppo-action-matrix { max-height: min(48dvh, 420px); overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .ppo-action-matrix table { width: 100%; border-collapse: collapse; }
 .ppo-action-matrix th, .ppo-action-matrix td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--erp-border); }

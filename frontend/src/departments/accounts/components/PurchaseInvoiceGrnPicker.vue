@@ -259,7 +259,7 @@ function displayDate(value) {
 </script>
 
 <style scoped>
-.purchase-invoice-grn-picker { overflow: hidden; border: 1px solid var(--erp-border); border-top: 3px solid color-mix(in srgb, var(--erp-accent) 74%, white); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
+.purchase-invoice-grn-picker { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
 .purchase-invoice-grn-picker > header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .purchase-invoice-grn-picker > header > div { display: grid; gap: 2px; }
 .purchase-invoice-grn-picker > header span { color: var(--erp-accent-dark); font-size: var(--erp-font-size-min); font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }

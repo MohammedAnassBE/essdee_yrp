@@ -1,7 +1,8 @@
 <template>
-	<label class="async-multi">
+	<label class="async-multi" @keydown.capture="onKeydown">
 		<span class="erp-field-label">{{ label }}</span>
 		<AutoComplete
+			ref="input"
 			v-model="selected"
 			:input-id="inputId"
 			:aria-label="label"
@@ -9,19 +10,26 @@
 			option-label="label"
 			:placeholder="placeholder"
 			:delay="300"
+			auto-option-focus
+			focus-on-hover
 			multiple
 			fluid
+			:disabled="disabled"
 			@complete="complete"
+			@before-show="focusFirstOption"
 		/>
 		<small v-if="helpText" class="erp-help-text">{{ helpText }}</small>
 	</label>
 </template>
 
 <script setup>
-import AutoComplete from "primevue/autocomplete"
-import { computed, ref, watch } from "vue"
+import PrimeAutoComplete from "primevue/autocomplete"
+import { computed, nextTick, ref, watch } from "vue"
 
+import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "../../../components/common/autocompleteKeys.js"
 import { searchLink } from "../../../api/frappe.js"
+
+const AutoComplete = withAutocompleteCompositionGuard(PrimeAutoComplete)
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -30,11 +38,13 @@ const props = defineProps({
 	placeholder: { type: String, default: "Search and add…" },
 	helpText: { type: String, default: "" },
 	filters: { type: Object, default: () => ({}) },
+	disabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(["update:modelValue"])
 
 const inputId = computed(() => `async-multi-${props.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`)
 
+const input = ref(null)
 const selected = ref([])
 const suggestions = ref([])
 let sequence = 0
@@ -55,6 +65,12 @@ watch(
 	(value) => emit("update:modelValue", (value || []).map((row) => row.name || row).filter(Boolean)),
 	{ deep: true },
 )
+
+function onKeydown(event) { handleAutocompleteKey(event, input.value, () => {}, input.value?.searching) }
+async function focusFirstOption() {
+	await nextTick()
+	if (input.value?.overlayVisible) input.value.focusedOptionIndex = input.value.findFirstOptionIndex()
+}
 
 async function complete(event) {
 	const request = ++sequence

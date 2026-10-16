@@ -8,12 +8,34 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 
 
 def validate(doc, method=None):
-	"""Require a complete reusable yarn recipe whenever Item is a cloth."""
+	"""Validate template structure and reusable cloth yarn recipes."""
+	_validate_variant_attribute_lock(doc)
 	if getattr(doc.flags, "skip_cloth_yarn_ratio_validation", False):
 		return
 	if not cint(doc.get("is_cloth_item")):
 		return
 	_validate_yarn_rows(doc.get("yarn_ratio_details") or [], cloth_item=doc.name)
+
+
+def _validate_variant_attribute_lock(doc):
+	"""Keep template attribute names stable while variants exist."""
+	if doc.is_new():
+		return
+	previous = doc.get_doc_before_save()
+	if previous is None:
+		return
+	current_names = {row.get("attribute") for row in doc.get("attributes") or []}
+	previous_names = {row.get("attribute") for row in previous.get("attributes") or []}
+	if current_names == previous_names:
+		return
+	count = frappe.db.count("Item", {"variant_of": doc.name})
+	if count:
+		frappe.throw(
+			_(
+				"Cannot add or remove attributes on Item {0}: it has {1} variant(s). "
+				"Delete or migrate the variants first."
+			).format(frappe.bold(doc.name), count)
+		)
 
 
 def validate_sync_payload(data):
@@ -57,6 +79,7 @@ def _validate_yarn_rows(rows, cloth_item=None):
 			frappe.throw(
 				_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(row_number, yarn_item)
 			)
+		_validate_yarn_template(yarn_item, row_number)
 		attributes = set(
 			frappe.get_all(
 				"Item Variant Attribute",
@@ -77,3 +100,11 @@ def _validate_yarn_rows(rows, cloth_item=None):
 
 	if abs(total - 100.0) > 0.001:
 		frappe.throw(_("Yarn Ratio total must be exactly 100%. Current total is {0}%.").format(flt(total, 3)))
+
+
+def _validate_yarn_template(yarn_item, row_number):
+	template = frappe.db.get_value("Item", yarn_item, "variant_of")
+	if template and frappe.db.get_value("Item", template, "is_cloth_item"):
+		frappe.throw(
+			_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(row_number, yarn_item)
+		)

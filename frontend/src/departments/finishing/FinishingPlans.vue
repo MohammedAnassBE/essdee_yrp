@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plans" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plans" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Finishing Plans unavailable" message="You do not have permission to view Finishing Plans." :retryable="false" />
@@ -38,6 +38,12 @@ import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
 
+const props = defineProps({
+	backTo: { type: String, default: "/finishing" },
+	backLabel: { type: String, default: "Finishing" },
+	viewRouteName: { type: String, default: "finishing-plan" },
+})
+
 const router = useRouter()
 const capability = ref(null)
 const loadError = ref("")
@@ -47,7 +53,7 @@ const columnLabels = { fp_status: "Status", finishing_start_date: "Start Date", 
 const statusOptions = ["Planned", "Partially Received", "Ready to Pack", "Partially Dispatched", "Dispatched", "Fully Dispatched", "Ready for Audit", "Audit Completed", "Auto Closed", "OCR Completed", "P&L Submitted"]
 
 function openFinishingPlan(row, snapshot) {
-	return openListDocument(router, row, snapshot, { routeName: "finishing-plan", paramName: "finishingPlanId" })
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "finishingPlanId" })
 }
 
 async function load() {

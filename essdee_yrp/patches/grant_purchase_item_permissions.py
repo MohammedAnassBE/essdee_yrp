@@ -42,37 +42,41 @@ PERMISSION_GRANTS = {
 
 
 def execute():
-	for doctype, role_grants in PERMISSION_GRANTS.items():
+	grant_permissions(PERMISSION_GRANTS)
+
+
+def grant_permissions(grants, permlevel=0):
+	for doctype, role_grants in grants.items():
 		setup_custom_perms(doctype)
 		for role, permission_types in role_grants.items():
-			_grant_permissions(doctype, role, permission_types)
+			_grant_permissions(doctype, role, permission_types, permlevel)
 		frappe.clear_cache(doctype=doctype)
 
 
-def _grant_permissions(doctype, role, permission_types):
+def _grant_permissions(doctype, role, permission_types, permlevel=0):
 	filters = {
 		"parent": doctype,
 		"role": role,
-		"permlevel": 0,
+		"permlevel": permlevel,
 		"if_owner": 0,
 	}
 	permission_name = frappe.db.get_value("Custom DocPerm", filters, "name")
 	created = not permission_name
 	if created:
-		permission_name = add_permission(doctype, role, 0, permission_types[0])
+		permission_name = add_permission(doctype, role, permlevel, permission_types[0])
 	if not permission_name:
 		frappe.throw(f"Could not create an unrestricted {role} permission for {doctype}")
 
 	same_level_count = frappe.db.count(
 		"Custom DocPerm",
-		{"parent": doctype, "role": role, "permlevel": 0},
+		{"parent": doctype, "role": role, "permlevel": permlevel},
 	)
 	for permission_type in permission_types:
 		if same_level_count == 1:
 			update_permission_property(
 				doctype,
 				role,
-				0,
+				permlevel,
 				permission_type,
 				1,
 				if_owner=0,

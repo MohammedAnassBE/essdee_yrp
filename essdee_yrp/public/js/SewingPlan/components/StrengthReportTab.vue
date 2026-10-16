@@ -217,6 +217,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import * as XLSX from 'xlsx'
+import { extractServerMessage } from '../../../../../frontend/src/api/errorMessages.js'
 
 const report_date_wrapper = ref(null)
 const from_time_wrapper = ref(null)
@@ -327,7 +328,7 @@ function fetchReport() {
         },
         error: response => {
             loading.value = false
-            errorMessage.value = response?.message || 'Check the HR settings and try again.'
+            errorMessage.value = extractServerMessage(response?.responseJSON || response, 'Check the HR settings and try again.')
         },
     })
 }

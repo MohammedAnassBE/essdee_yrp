@@ -156,7 +156,7 @@ function linkFilters(field) {
 
 .quick-filters__grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(200px, 260px));
 	gap: 10px;
 }
 
@@ -168,13 +168,15 @@ function linkFilters(field) {
 
 .quick-filter-field > label {
 	color: var(--erp-text-muted);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .03em;
+	text-transform: uppercase;
 	transition: color var(--erp-transition-fast);
 }
 
 .quick-filter-field:focus-within > label {
-	color: var(--erp-accent-hover);
+	color: var(--erp-accent-ink);
 }
 
 .quick-filter-field :deep(.p-inputtext),
@@ -183,12 +185,12 @@ function linkFilters(field) {
 .quick-filter-field :deep(.p-inputnumber-input) {
 	height: var(--erp-control-height);
 	background: var(--erp-surface);
-	border-color: var(--erp-border-strong);
+	border-color: var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	box-shadow: none;
 	transition:
-		border-color 160ms ease,
-		box-shadow 160ms ease;
+		border-color var(--erp-transition-fast),
+		box-shadow var(--erp-transition-base);
 }
 
 .quick-filter-field :deep(.p-inputtext:focus),
@@ -196,12 +198,15 @@ function linkFilters(field) {
 .quick-filter-field :deep(.p-autocomplete:focus-within .p-inputtext),
 .quick-filter-field :deep(.p-inputnumber:focus-within .p-inputnumber-input) {
 	border-color: var(--erp-accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
+	box-shadow: var(--erp-focus-ring);
 }
 
-@media (min-width: 800px) and (max-width: 950px) {
-	.quick-filters__grid {
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+@media (min-width: 1025px) {
+	.quick-filters {
+		padding: 0;
+		background: transparent;
+		border: 0;
+		box-shadow: none;
 	}
 }
 

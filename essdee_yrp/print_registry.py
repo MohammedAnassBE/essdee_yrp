@@ -7,8 +7,11 @@ print, matching the legacy Desk print menu.
 
 from __future__ import annotations
 
+import frappe
+from frappe.utils import cint
 
 DOCUMENT_PRINT_FORMATS = {
+	"YRP Production Order": (("Production Order", "Essdee Production Order"),),
 	"SD YRP Cutting Plan": (
 		("Cutting Plan", "Essdee Cutting Plan"),
 		("Cutting Plan Summary", "Essdee Cutting Plan Summary"),
@@ -52,6 +55,10 @@ def get_document_print_formats(doc):
 	"""Return the legacy-equivalent print menu for a readable document."""
 	if not doc or not doc.has_permission("print"):
 		return []
+	if doc.meta.is_submittable:
+		setting = {0: "allow_print_for_draft", 2: "allow_print_for_cancelled"}.get(cint(doc.docstatus))
+		if setting and not cint(frappe.db.get_single_value("Print Settings", setting)):
+			return []
 	return [
 		{"label": label, "format": print_format}
 		for label, print_format in DOCUMENT_PRINT_FORMATS.get(

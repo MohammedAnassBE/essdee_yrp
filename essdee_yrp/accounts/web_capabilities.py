@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 
+from essdee_yrp.accounts import audit_pending
 from essdee_yrp.cutting.reports import get_report_permissions
 from essdee_yrp.fabric_store.web_workspace import can_run_report
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
@@ -33,6 +34,7 @@ REPORT_GATES = {
 	"sewing_dpr": ("Sewing DPR", lambda: _sewing_report_allowed("dpr")),
 	"finishing_dispatch": ("Finishing Dispatch", can_view_dispatch_report),
 	"ironing_dpr": ("Ironing DPR", lambda: _finishing_report_allowed("ironing_dpr")),
+	"audit_pending_finishing_plans": ("Audit Pending Finishing Plans", audit_pending.can_view),
 }
 
 

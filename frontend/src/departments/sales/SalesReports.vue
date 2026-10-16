@@ -78,7 +78,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.sales-reports { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; padding: 2px 0 var(--erp-space-5); }
+.sales-reports { width: 100%; min-width: 0; padding: 2px 0 var(--erp-space-5); }
 .sales-reports__loading { display: grid; gap: var(--erp-space-3); padding-top: 2px; }
 .sales-reports__loading :deep(.p-skeleton) { border-radius: var(--erp-panel-radius); }
 .sales-reports__tabs { min-width: 0; }

@@ -1,7 +1,7 @@
 """Server-owned Actual-Dia conversion projection for versioned cloth execution."""
 
 from collections import defaultdict
-from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 import frappe
 from frappe import _
@@ -9,7 +9,6 @@ from frappe.utils import flt
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import get_variant_attributes
 
-from essdee_yrp.fabric_chain import get_fabric_steps
 from essdee_yrp.cloth_execution import (
 	get_row_execution_parameters,
 	get_supported_execution_route,
@@ -145,7 +144,7 @@ def build_actual_dia_factors(rows, planned_qty):
 
 
 def get_default_knitting_grn_context(grn):
-	"""Resolve the guarded Lot/IPD context for a versioned Knitting GRN."""
+	"""Resolve the Lot and IPD for a standard Default Knitting GRN."""
 	if grn.get("against") != "YRP Work Order" or not grn.get("against_id"):
 		return None
 	if any(
@@ -159,16 +158,9 @@ def get_default_knitting_grn_context(grn):
 	if not (
 		work_order.get("lot")
 		and work_order.get("production_detail")
-		and work_order.get("cloth_execution_version") == 1
 	):
 		return None
-	ipd = frappe.get_cached_doc("YRP Item Production Detail", work_order.production_detail)
-	route = get_supported_execution_route(ipd)
-	if not route or work_order.process_name != route["knitting"]["process_name"]:
-		return None
-	# Receivables have no is_calculated flag; execution keys mark calculator rows.
-	receivables = work_order.get("receivables") or []
-	if not receivables or not all(has_fabric_execution_key(row) for row in receivables):
+	if not work_order.get("process_name") or work_order.process_name != _default_knitting_process():
 		return None
 	return frappe._dict(
 		lot=work_order.lot,
@@ -214,6 +206,7 @@ def get_default_knitting_lots_for_grn_items(grn_item_names, *, for_update=False)
 		f"""
 		SELECT item.name AS source_grn_item,
 			wo.lot,
+			wo.cloth_execution_version,
 			receivable.additional_parameters
 		FROM `tabYRP Goods Received Note Item` item
 		JOIN `tabYRP Goods Received Note` grn
@@ -233,7 +226,7 @@ def get_default_knitting_lots_for_grn_items(grn_item_names, *, for_update=False)
 			AND IFNULL(grn.additional_grn, 0) = 0
 			AND IFNULL(grn.includes_packing, 0) = 0
 			AND wo.process_name = %(process_name)s
-			AND wo.cloth_execution_version = 1
+			AND IFNULL(wo.production_detail, '') != ''
 			AND IFNULL(wo.lot, '') != ''
 		ORDER BY item.name
 		{lock_clause}
@@ -244,7 +237,7 @@ def get_default_knitting_lots_for_grn_items(grn_item_names, *, for_update=False)
 		},
 		as_dict=True,
 	)
-	return sorted({row.lot for row in rows if row.lot and has_fabric_execution_key(row)})
+	return sorted({row.lot for row in rows if row.lot and _is_eligible_knitting_receipt(row)})
 
 
 def lock_lots_for_default_knitting_grn_items(grn_item_names):
@@ -312,7 +305,7 @@ def _fetch_default_knitting_receipts(lot):
 		FROM `tabYRP Work Order`
 		WHERE lot = %(lot)s
 			AND process_name = %(process_name)s
-			AND cloth_execution_version = 1
+			AND IFNULL(production_detail, '') != ''
 		ORDER BY name
 		FOR UPDATE
 		""",
@@ -353,6 +346,7 @@ def _fetch_default_knitting_receipts(lot):
 			item.stock_uom,
 			item.received_type,
 			wo.production_detail,
+			wo.cloth_execution_version,
 			wo.item AS cloth_item,
 			receivable.item_variant AS planned_item,
 			receivable.qty AS planned_qty,
@@ -380,7 +374,7 @@ def _fetch_default_knitting_receipts(lot):
 		_normalise_accepted_receipts,
 	)
 
-	keyed_rows = [row for row in rows if has_fabric_execution_key(row)]
+	keyed_rows = [row for row in rows if _is_eligible_knitting_receipt(row)]
 	rows = _normalise_accepted_receipts(
 		keyed_rows,
 		_accepted_inspection_adjustments(keyed_rows, for_update=True),
@@ -391,7 +385,7 @@ def _fetch_default_knitting_receipts(lot):
 		parameters = get_row_execution_parameters(row)
 		execution_key = parameters.get("fabric_execution_key")
 		quantity = flt(row.stock_qty, 6)
-		if not execution_key or quantity <= QTY_TOLERANCE:
+		if quantity <= QTY_TOLERANCE:
 			continue
 		row.fabric_execution_key = execution_key
 		row.received_type = default_received_type
@@ -400,13 +394,19 @@ def _fetch_default_knitting_receipts(lot):
 	return result
 
 
+def _is_eligible_knitting_receipt(row):
+	return row.get("cloth_execution_version") != 1 or bool(row.get("fabric_execution_key")) or has_fabric_execution_key(row)
+
+
 def build_conversion_rows(receipts, default_process):
 	"""Project keyed physical Knitting receipts through Dyeing and Washing."""
 	groups = {}
 	for row in receipts or []:
-		if not row.get("fabric_execution_key") or flt(row.get("stock_qty"), 6) <= QTY_TOLERANCE:
+		if not _is_eligible_knitting_receipt(row) or flt(row.get("stock_qty"), 6) <= QTY_TOLERANCE:
 			continue
+		is_stage_projection = bool(row.get("cloth_execution_version") == 1 and row.get("fabric_execution_key"))
 		key = (
+			is_stage_projection,
 			row.get("production_detail"),
 			row.get("route_item") or "",
 			row.get("planned_item"),
@@ -417,6 +417,8 @@ def build_conversion_rows(receipts, default_process):
 		group = groups.setdefault(
 			key,
 			frappe._dict(
+				is_stage_projection=is_stage_projection,
+				default_process=default_process,
 				production_detail=row.get("production_detail"),
 				route_item=row.get("route_item"),
 				planned_item=row.get("planned_item"),
@@ -442,8 +444,6 @@ def build_conversion_rows(receipts, default_process):
 
 def _project_receipt_group(group, ipd):
 	route = get_supported_execution_route(ipd)
-	if not route:
-		return []
 	_validate_knitting_variance(group.planned_item, group.actual_item)
 	base = {
 		"production_detail": group.production_detail,
@@ -454,6 +454,14 @@ def _project_receipt_group(group, ipd):
 		"stock_uom": group.get("stock_uom"),
 		"actual_quantity": flt(group.stock_qty, 6),
 	}
+	if not route or not group.get("is_stage_projection"):
+		return [{
+			**base,
+			"process_name": group.get("default_process") or _default_knitting_process(),
+			"process_stage_index": 0,
+			"planned_item": group.planned_item,
+			"actual_item": group.actual_item,
+		}]
 	planned_item = group.planned_item
 	actual_item = group.actual_item
 	rows = []
@@ -797,46 +805,50 @@ def build_lot_fabric_substitutions(
 	}
 
 
-def substitution_index(lot, *, process_name=None, production_detail=None):
-	result = build_lot_fabric_substitutions(
-		lot,
-		process_name=process_name,
-		production_detail=production_detail,
-	)
-	return {
-		row["from_item_variant"]: row
-		for row in result["mappings"]
-		if row.get("actual")
-	}
+def _terminal_conversion_rows(rows):
+	"""Select the latest recorded stage per IPD before filtering receipt eligibility."""
+	terminal = {}
+	for row in rows:
+		ipd = row.get("production_detail")
+		terminal[ipd] = max(terminal.get(ipd, -1), row.get("process_stage_index") or 0)
+	return [
+		row for row in rows
+		if (row.get("process_stage_index") or 0) == terminal[row.get("production_detail")]
+	]
 
 
 def _selected_terminal_steps(lot_doc, *, process_name=None, production_detail=None):
-	selected = []
-	for fabric in lot_doc.get("lot_fabric_details") or []:
-		if (
-			production_detail
-			and fabric.get("production_detail") != production_detail
-		):
+	rows = lot_doc.get("lot_fabric_conversions") or []
+	if not process_name:
+		rows = _terminal_conversion_rows(rows)
+	keys = {
+		(row.get("production_detail"), row.get("process_name"))
+		for row in rows
+		if (not production_detail or row.get("production_detail") == production_detail)
+		and (not process_name or row.get("process_name") == process_name)
+	}
+	return [{"production_detail": ipd, "process_name": process} for ipd, process in keys]
+
+
+def substitution_index(lot):
+	"""Index default receipts from each cloth IPD's terminal conversion stage."""
+	rows = frappe.get_all(
+		"SD YRP Lot Fabric Conversion",
+		filters={"parent": lot, "parenttype": "SD YRP Lot", "parentfield": "lot_fabric_conversions"},
+		fields=["production_detail", "process_stage_index", "planned_item", "actual_item", "actual_quantity", "received_type"],
+	)
+	quantities = defaultdict(lambda: defaultdict(float))
+	received_type = _default_received_type()
+	for row in _terminal_conversion_rows(rows):
+		if (row["received_type"] != received_type
+			or flt(row["actual_quantity"]) <= QTY_TOLERANCE):
 			continue
-		if not fabric.get("production_detail"):
-			continue
-		ipd = frappe.get_cached_doc(
-			"YRP Item Production Detail", fabric.production_detail
-		)
-		steps = get_fabric_steps(ipd)
-		if not steps:
-			continue
-		step = (
-			next(
-				(row for row in steps if row["process_name"] == process_name),
-				None,
-			)
-			if process_name else steps[-1]
-		)
-		if not step:
-			continue
-		selected.append({
-			"production_detail": fabric.production_detail,
-			"process_name": step["process_name"],
-		})
-	return selected
+		quantities[row["planned_item"]][row["actual_item"]] += flt(row["actual_quantity"])
+	return {
+		planned: {"actual": [
+			{"item_variant": item, "dia": get_variant_attributes(item).get(get_dia_attribute()),
+				"received_qty": flt(quantity, 6)}
+			for item, quantity in sorted(actual.items())
+		]}
+		for planned, actual in quantities.items()
+	}

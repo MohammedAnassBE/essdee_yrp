@@ -80,7 +80,7 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 		self.assertIn('primary_action_label: "Fill Column"', desk_source)
 		self.assertIn("bindDiaMenuPosition", desk_source)
 		self.assertIn("syncDiaLink(el, binding.value)", desk_source)
-		self.assertIn("target.dia = source.dia", desk_source)
+		self.assertIn("target.dia = frappe.yrp.attribute_value(source.dia)", desk_source)
 
 	def test_ipd_child_grids_expose_synced_values(self):
 		expected_columns = {

@@ -1371,6 +1371,7 @@ class TestMergedFabricSources(TestCase):
 			patch("essdee_yrp.api.work_order._resolve_variant", side_effect=resolve),
 			patch("essdee_yrp.api.work_order._variant_attrs", side_effect=attrs),
 			patch("essdee_yrp.fabric_source._conversion_factor", return_value=1),
+			patch("essdee_yrp.fabric_source.get_dia_attribute", return_value="Dia"),
 		):
 			unmatched = fabric_source._project_receipt_buckets(
 				rows, buckets, variant_info, route_targets=targets
@@ -1448,6 +1449,7 @@ class TestMergedFabricSources(TestCase):
 			patch("essdee_yrp.api.work_order._resolve_variant", side_effect=resolve),
 			patch("essdee_yrp.api.work_order._variant_attrs", side_effect=attrs),
 			patch("essdee_yrp.fabric_source._conversion_factor", return_value=1),
+			patch("essdee_yrp.fabric_source.get_dia_attribute", return_value="Dia"),
 		):
 			unmatched = fabric_source._project_receipt_buckets(
 				rows, buckets, variant_info, route_targets=targets

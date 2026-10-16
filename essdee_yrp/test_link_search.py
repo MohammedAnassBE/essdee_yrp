@@ -48,7 +48,7 @@ class TestLinkSearch(UnitTestCase):
 		)
 		self.assertEqual(
 			get_list.call_args.kwargs["filters"],
-			{"name": ["in", ["SUPPLIER-1-Billing", "SUPPLIER-1-Shipping"]]},
+			{"name": ["in", ["SUPPLIER-1-Billing", "SUPPLIER-1-Shipping"]], "disabled": 0},
 		)
 
 	def test_visible_only_search_does_not_match_hidden_search_fields(self):

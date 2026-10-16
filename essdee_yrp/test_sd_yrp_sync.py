@@ -445,7 +445,7 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		self.assertEqual(filtered["lot_price_overrides"][0]["mrp"], 499)
 
 
-	def test_mrp_settings_ignores_unavailable_module_fields(self):
+	def test_mrp_settings_keeps_supported_module_fields(self):
 		filtered = filter_doc_fields({
 			"doctype": "SD YRP MRP Settings",
 			"name": "SD YRP MRP Settings",
@@ -466,8 +466,8 @@ class TestSDYRPSyncSetup(IntegrationTestCase):
 		self.assertEqual(filtered["production_order_action_roles"][0]["role"], "System Manager")
 		self.assertEqual(filtered["production_order_quantity_approver_role"], "System Manager")
 		self.assertEqual(filtered["non_set_box_sticker"], "TEST-ZPL-FORMAT")
-		self.assertNotIn("sewing_plan_status_summary", filtered)
-		self.assertNotIn("default_major_aql_level", filtered)
+		self.assertEqual(filtered["sewing_plan_status_summary"][0]["input_type"], "Sewing")
+		self.assertEqual(filtered["default_major_aql_level"], "Level-1.5")
 
 
 	def test_mrp_settings_upsert_replaces_supported_child_tables(self):

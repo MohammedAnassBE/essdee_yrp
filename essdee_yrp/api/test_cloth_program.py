@@ -6,7 +6,8 @@ frappe.db.commit(). compute_cloth_demand is monkeypatched with a controlled
 demand so the CPD-build / matrix / reachability / plan flow is exercised without
 a full garment IPD (that path is covered by test_fabric_requirement)."""
 
-from unittest.mock import patch
+from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
@@ -2829,3 +2830,50 @@ class TestClothProgram(IntegrationTestCase):
 				source_rows,
 				f"{table_field} changed while duplicating the cloth IPD",
 			)
+
+
+class TestRegenerateClothIPDMatrix(TestCase):
+	def _document(self):
+		doc = MagicMock(name="cloth_ipd")
+		doc.name = "LOCAL-TEST-CLOTH-IPD"
+		doc.modified = "2026-10-16 10:00:00"
+		doc.get.side_effect = lambda field: field == "is_cloth_item"
+		return doc
+
+	def test_rebuild_uses_scoped_approved_update_and_reports_matrix_counts(self):
+		from essdee_yrp.ipd_ui import regenerate_ipd_matrix
+
+		doc = self._document()
+		previous = frappe.flags.get("generated_cloth_ipd_updates")
+		doc.save.side_effect = lambda: self.assertIn(doc.name, frappe.flags.generated_cloth_ipd_updates)
+		with (
+			patch("frappe.get_doc", return_value=doc),
+			patch("frappe.get_all", return_value=[frappe._dict(process_name="Knitting"),
+				frappe._dict(process_name="Knitting"), frappe._dict(process_name="Washing")]) as matrices,
+		):
+			result = regenerate_ipd_matrix(doc.name, modified=doc.modified)
+		doc.check_permission.assert_called_once_with("write")
+		doc.save.assert_called_once()
+		self.assertEqual(result["matrix_count"], 3)
+		self.assertEqual(result["process_counts"], {"Knitting": 2, "Washing": 1})
+		self.assertEqual(matrices.call_args.args[0], "YRP IPD Process Matrix")
+		self.assertIs(frappe.flags.get("generated_cloth_ipd_updates"), previous)
+
+	def test_stale_request_does_not_save(self):
+		from essdee_yrp.ipd_ui import regenerate_ipd_matrix
+
+		doc = self._document()
+		with patch("frappe.get_doc", return_value=doc):
+			with self.assertRaises(frappe.TimestampMismatchError):
+				regenerate_ipd_matrix(doc.name, modified="2026-10-15 10:00:00")
+		doc.save.assert_not_called()
+
+	def test_write_permission_is_required_before_rebuild(self):
+		from essdee_yrp.ipd_ui import regenerate_ipd_matrix
+
+		doc = self._document()
+		doc.check_permission.side_effect = frappe.PermissionError
+		with patch("frappe.get_doc", return_value=doc):
+			with self.assertRaises(frappe.PermissionError):
+				regenerate_ipd_matrix(doc.name)
+		doc.save.assert_not_called()

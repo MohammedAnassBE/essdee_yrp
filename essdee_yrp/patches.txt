@@ -43,3 +43,6 @@ essdee_yrp.patches.grant_purchase_item_permissions
 essdee_yrp.patches.recalculate_attribute_mapped_finishing_plan_statuses
 essdee_yrp.patches.seed_stage_and_size_attributes
 essdee_yrp.patches.copy_template_flags_to_variants
+
+essdee_yrp.patches.seed_essdee_received_types
+essdee_yrp.patches.backfill_lot_fabric_conversions

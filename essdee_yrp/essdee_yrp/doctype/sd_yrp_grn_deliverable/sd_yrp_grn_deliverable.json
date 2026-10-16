@@ -28,16 +28,19 @@
    "fieldname": "item_variant",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Item Variant",
+   "label": "Consumed Item Variant",
    "options": "Item",
-   "reqd": 1
+   "reqd": 1,
+   "read_only": 1
   },
   {
    "fieldname": "quantity",
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Quantity",
-   "reqd": 1
+   "reqd": 1,
+   "precision": "6",
+   "read_only": 1
   },
   {
    "fieldname": "uom",
@@ -45,7 +48,8 @@
    "in_list_view": 1,
    "label": "UOM",
    "options": "UOM",
-   "reqd": 1
+   "reqd": 1,
+   "read_only": 1
   },
   {
    "fieldname": "goods_received_note_item",
@@ -76,30 +80,36 @@
    "fieldname": "lot",
    "fieldtype": "Link",
    "label": "Lot",
-   "options": "SD YRP Lot"
+   "options": "SD YRP Lot",
+   "read_only": 1
   },
   {
    "fieldname": "received_type",
    "fieldtype": "Link",
    "label": "Received Type",
-   "options": "YRP Received Type"
+   "options": "YRP Received Type",
+   "read_only": 1
   },
   {
    "fieldname": "valuation_rate",
    "fieldtype": "Currency",
-   "label": "Valuation Rate"
+   "label": "Actual Valuation Rate",
+   "precision": "6",
+   "read_only": 1
   },
   {
    "fieldname": "set_combination",
    "fieldtype": "JSON",
-   "label": "Set Combination"
+   "label": "Set Combination",
+   "read_only": 1
   },
   {
    "fieldname": "stock_qty",
    "fieldtype": "Float",
    "hidden": 1,
-   "label": "Stock Quantity",
-   "read_only": 1
+   "label": "Stock Qty",
+   "read_only": 1,
+   "precision": "6"
   },
   {
    "fieldname": "stock_uom",
@@ -114,7 +124,8 @@
    "fieldtype": "Float",
    "hidden": 1,
    "label": "Conversion Factor",
-   "read_only": 1
+   "read_only": 1,
+   "default": "1"
   },
   {
    "default": "{}",
@@ -127,9 +138,10 @@
   {
    "fieldname": "material_value",
    "fieldtype": "Currency",
-   "hidden": 1,
    "label": "Material Value",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "6",
+   "in_list_view": 1
   },
   {
    "fieldname": "consumption_sle",

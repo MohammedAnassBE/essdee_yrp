@@ -678,6 +678,8 @@ def _number(value, label: str) -> float:
 def _copy_operator_values(source: Mapping, browser: Mapping) -> dict:
 	row = _row_dict(source)
 	row["quantity"] = _number(browser.get("quantity"), _("Item quantity"))
+	if "comments" in browser:
+		row["comments"] = browser.get("comments") or ""
 	if "secondary_qty" in browser:
 		row["secondary_qty"] = _number(browser.get("secondary_qty"), _("Secondary quantity"))
 	if "freight_amount" in browser:
@@ -693,7 +695,15 @@ def _row_index_for_received_type(source: Mapping, received_type: str) -> object:
 	return f"{base}::{received_type}" if received_type else base
 
 
-def _merge_authoritative_rows(authoritative, browser_rows) -> list[dict]:
+def _actual_dia_allowed(doc):
+	if doc.get("against") != "YRP Work Order":
+		return False
+	from essdee_yrp.fabric_grn import get_actual_dia_context
+
+	return bool(get_actual_dia_context(doc.get("against_id")).get("enabled"))
+
+
+def _merge_authoritative_rows(authoritative, browser_rows, *, actual_dia=False) -> list[dict]:
 	"""Merge quantities and safe split fields onto saved/source-owned rows.
 
 	An operator may introduce another valid Received Type for an existing source
@@ -738,6 +748,13 @@ def _merge_authoritative_rows(authoritative, browser_rows) -> list[dict]:
 
 		lineage_key = _business_key(browser, dimensions, include_received_type=False)
 		lineage_candidates = lineages.get(lineage_key) or []
+		if not lineage_candidates and actual_dia:
+			# Only physical Item may differ for Actual Dia. Every source reference,
+			# UOM, set combination and non-Received-Type dimension remains trusted.
+			for index, source in enumerate(authoritative):
+				candidate = {**browser, "item_variant": source.get("item_variant")}
+				if _business_key(candidate, dimensions, include_received_type=False) == _business_key(source, dimensions, include_received_type=False):
+					lineage_candidates.append(index)
 		if not lineage_candidates:
 			frappe.throw(
 				_("The available item rows changed. Refresh the editor and enter the quantities again.")
@@ -750,6 +767,8 @@ def _merge_authoritative_rows(authoritative, browser_rows) -> list[dict]:
 			frappe.throw(_("The item matrix contains a duplicate Received Type row."))
 		clone = _copy_operator_values(authoritative[lineage_candidates[0]], browser)
 		clone.pop("name", None)
+		if actual_dia:
+			clone["item_variant"] = browser.get("item_variant")
 		clone["received_type"] = received_type
 		clone["row_index"] = _row_index_for_received_type(
 			authoritative[lineage_candidates[0]], received_type
@@ -892,7 +911,7 @@ def save_goods_received_note(
 			values, corrections=True, fallback_rows=authoritative_corrections
 		)
 		items = (
-			_merge_authoritative_rows(authoritative_items, browser_items)
+			_merge_authoritative_rows(authoritative_items, browser_items, actual_dia=not submitted_update and _actual_dia_allowed(doc))
 			if has_item_matrix
 			else authoritative_items
 		)
@@ -903,6 +922,9 @@ def save_goods_received_note(
 		)
 	doc.set("items", items)
 	doc.set("correction_items", corrections)
+	from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+	validate_actual_dia_rows(doc)
 	doc.set("item_details", None)
 	doc.set("correction_item_details", None)
 

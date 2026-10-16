@@ -15,8 +15,10 @@
 				<label v-if="operation === 'stock_reconciliation'" class="fabric-select-field"><span>Purpose *</span><Select v-model="form.purpose" :options="editor.purpose_options || []" placeholder="Select purpose" fluid @change="markDirty" /></label>
 				<label v-if="operation === 'stock_update'" class="fabric-select-field"><span>Update type *</span><Select v-model="form.update_type" :options="editor.update_type_options || []" placeholder="Select Add or Reduce" fluid @change="markDirty" /></label>
 
-				<LinkField v-if="operation === 'stock_entry'" v-model="form.from_warehouse" label="From warehouse *" doctype="Warehouse" :disabled="editor.protected_completion" :show-open-button="false" :show-clear="!editor.protected_completion" @update:model-value="markDirty" />
-				<LinkField v-if="operation === 'stock_entry' && (form.purpose === 'Send to Warehouse' || editor.protected_completion)" v-model="form.to_warehouse" label="To warehouse *" doctype="Warehouse" :disabled="editor.protected_completion" :show-open-button="false" :show-clear="!editor.protected_completion" @update:model-value="markDirty" />
+				<LinkField v-if="operation === 'stock_entry'" v-model="form.from_supplier" :disabled="editor.protected_completion" label="From location" doctype="Supplier" :filters="{ disabled: 0 }" :show-open-button="false" @update:model-value="form.from_warehouse = ''; markDirty()" />
+				<LinkField v-if="operation === 'stock_entry'" v-model="form.to_supplier" :disabled="editor.protected_completion" label="To location" doctype="Supplier" :filters="{ disabled: 0 }" :show-open-button="false" @update:model-value="form.to_warehouse = ''; markDirty()" />
+				<LinkField v-if="operation === 'stock_entry'" v-model="form.from_warehouse" :search-handler="stockEntryFields.linkSearchHandlers.from_warehouse(form)" :filters="{ disabled: 0, ...(form.from_supplier ? { supplier: form.from_supplier } : {}) }" label="From warehouse *" doctype="Warehouse" :disabled="editor.protected_completion" :show-open-button="false" :show-clear="!editor.protected_completion" @update:model-value="markDirty" />
+				<LinkField v-if="operation === 'stock_entry' && (form.purpose === 'Send to Warehouse' || editor.protected_completion)" v-model="form.to_warehouse" :search-handler="stockEntryFields.linkSearchHandlers.to_warehouse(form)" :filters="{ disabled: 0, ...(form.to_supplier ? { supplier: form.to_supplier } : {}) }" label="To warehouse *" doctype="Warehouse" :disabled="editor.protected_completion" :show-open-button="false" :show-clear="!editor.protected_completion" @update:model-value="markDirty" />
 				<LinkField v-if="operation === 'stock_reconciliation'" v-model="form.default_warehouse" label="Warehouse *" doctype="Warehouse" :show-open-button="false" show-clear @update:model-value="markDirty" />
 				<LinkField v-if="operation === 'stock_reconciliation'" v-model="form.default_supplier" label="Supplier" doctype="Supplier" :show-open-button="false" show-clear @update:model-value="markDirty" />
 				<LinkField v-if="operation === 'stock_update'" v-model="form.warehouse" label="Warehouse *" doctype="Warehouse" :show-open-button="false" show-clear @update:model-value="markDirty" />
@@ -48,6 +50,7 @@
 </template>
 
 <script setup>
+import stockEntryFields from "../../config/fields/stock-entry.js"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Select from "primevue/select"
@@ -162,7 +165,7 @@ function requestVisibility(value) {
 	})
 	emit("update:visible", false)
 }
-function emptyForm() { return { purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, comments: "" } }
+function emptyForm() { return { from_supplier: "", to_supplier: "", purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, comments: "" } }
 function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 </script>
 

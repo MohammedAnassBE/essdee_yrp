@@ -468,7 +468,9 @@ function copyFirstColourToRow(row) {
 		return;
 	}
 	currentPackingValues.value.forEach((packing) => {
-		row.values[packing] = { dia: frappe.yrp.attribute_value(source.dia), weight: source.weight };
+		const target = cellFor(row, packing);
+		target.dia = frappe.yrp.attribute_value(source.dia);
+		target.weight = source.weight;
 	});
 	markDirty();
 }
@@ -503,10 +505,9 @@ function fillConsumptionColumn(packing) {
 		primary_action(values) {
 			const weight = parseWeight(values.weight);
 			currentPanel.value.rows.forEach((row) => {
-				row.values[packing] = {
-					dia: frappe.yrp.attribute_value(values.dia),
-					weight,
-				};
+				const target = cellFor(row, packing);
+				target.dia = frappe.yrp.attribute_value(values.dia);
+				target.weight = weight;
 			});
 			dialog.hide();
 			markDirty();
@@ -530,7 +531,9 @@ function copyFirstColourToPanel() {
 	currentPanel.value.rows.forEach((row) => {
 		const source = cellFor(row, first);
 		currentPackingValues.value.forEach((packing) => {
-			row.values[packing] = { dia: frappe.yrp.attribute_value(source.dia), weight: source.weight };
+			const target = cellFor(row, packing);
+			target.dia = frappe.yrp.attribute_value(source.dia);
+			target.weight = source.weight;
 		});
 	});
 	markDirty();
@@ -867,6 +870,7 @@ defineExpose({ load_data, get_data });
 }
 .pwc-copy-button,
 .pwc-apply-button,
+.pwc-column-fill-button,
 .pwc-fill-button {
 	border: 1px solid var(--border-color, #dfe3e8);
 	border-radius: 8px;
@@ -909,12 +913,9 @@ defineExpose({ load_data, get_data });
 	font-weight: 600;
 	line-height: 1.2;
 }
-.pwc-column-fill-button:hover {
-	border-color: #75bdb3;
-	background: #eef9f7;
-}
 .pwc-copy-button:hover,
 .pwc-apply-button:not(:disabled):hover,
+.pwc-column-fill-button:hover,
 .pwc-fill-button:hover {
 	border-color: #75bdb3;
 	background: #eef9f7;

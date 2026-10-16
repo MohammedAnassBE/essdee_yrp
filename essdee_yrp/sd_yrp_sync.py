@@ -15,9 +15,16 @@ LEGACY_DOCTYPE_ALIASES = {
 	"IPD Consumption": "IPD Compacting",
 }
 
+# Active source-to-consumer names. Unlike legacy aliases, these source DocTypes
+# must remain in Spine Consumer Config so new messages continue to be routed.
+SOURCE_DOCTYPE_ALIASES = {
+	"GRN Item Type": "Received Type",
+}
+
 EXACT_MATCH_DOCTYPES = (
 	"Item Attribute",
 	"Item Attribute Value",
+	"Received Type",
 	"UOM",
 	"Item Group",
 	"Brand",
@@ -56,6 +63,7 @@ SYNC_DOCTYPES = EXACT_MATCH_DOCTYPES + CUSTOM_MAPPER_DOCTYPES
 TARGET_DOCTYPE_BY_SOURCE = {
 	"Item Attribute": "Item Attribute",
 	"Item Attribute Value": "Item Attribute Value",
+	"Received Type": "YRP Received Type",
 	"UOM": "UOM",
 	"Item Group": "Item Group",
 	"Brand": "Brand",
@@ -88,7 +96,11 @@ TARGET_DOCTYPE_BY_SOURCE = {
 }
 SOURCE_DOCTYPE_BY_TARGET = {target: source for source, target in TARGET_DOCTYPE_BY_SOURCE.items()}
 TARGET_CUSTOM_MAPPER_DOCTYPES = tuple(TARGET_DOCTYPE_BY_SOURCE[doctype] for doctype in CUSTOM_MAPPER_DOCTYPES)
-CONSUMER_DOCTYPES = tuple(dict.fromkeys((*SYNC_DOCTYPES, *TARGET_DOCTYPE_BY_SOURCE.values())))
+CONSUMER_DOCTYPES = tuple(
+	doctype
+	for doctype in dict.fromkeys((*SYNC_DOCTYPES, *TARGET_DOCTYPE_BY_SOURCE.values(), *SOURCE_DOCTYPE_ALIASES))
+	if doctype not in SOURCE_DOCTYPE_ALIASES.values()
+)
 HANDLER_PATH = "essdee_yrp.sd_yrp_sync.handle_sd_yrp_message"
 
 TABLE_FIELD_TYPES = {"Table", "Table MultiSelect"}
@@ -118,11 +130,14 @@ def handle_sd_yrp_message(payload):
 	header = payload.get("Header") or {}
 	source_doctype = header.get("DocType")
 	canonical_source_doctype = SOURCE_DOCTYPE_BY_TARGET.get(source_doctype, source_doctype)
+	canonical_source_doctype = SOURCE_DOCTYPE_ALIASES.get(canonical_source_doctype, canonical_source_doctype)
 	canonical_source_doctype = LEGACY_DOCTYPE_ALIASES.get(canonical_source_doctype, canonical_source_doctype)
 	doctype = TARGET_DOCTYPE_BY_SOURCE.get(canonical_source_doctype)
 	event = header.get("Event")
 	topic = header.get("Topic")
 	data = payload.get("Payload") or {}
+	if source_doctype == "GRN Item Type":
+		data = map_grn_item_type(data)
 	if doctype:
 		data = copy.deepcopy(data)
 		data["doctype"] = doctype
@@ -148,6 +163,18 @@ def handle_sd_yrp_message(payload):
 		return cancel_synced_doc(data)
 
 	frappe.throw(f"Unsupported SD YRP sync event {event}")
+
+
+def map_grn_item_type(data):
+	"""Map the MRP master onto YRP's equivalent Received Type schema."""
+	mapped = copy.deepcopy(data)
+	received_type = mapped.get("grn_type") or mapped.get("name")
+	mapped.update({
+		"doctype": "YRP Received Type",
+		"name": received_type,
+		"received_type_name": received_type,
+	})
+	return mapped
 
 
 def handle_exact_match(payload):
@@ -820,7 +847,8 @@ def map_production_ordered_rows(data):
 		item_variant = row.get("item_variant")
 		validate_required_link("Item", item_variant, f"{source_context} Production Ordered Detail row")
 		lot = row.get("lot")
-		# F15's `lot` Link maps onto base yrp's generic dynamic reference.
+		# Preserve F15's direct `lot` Link in the Essdee customization and mirror
+		# it into base YRP's generic dynamic reference.
 		# Lot syncs AFTER Production Order in the initial order, so the lot
 		# record may not exist yet — stamp the reference without validating
 		# (DB-level sync, source is authoritative).

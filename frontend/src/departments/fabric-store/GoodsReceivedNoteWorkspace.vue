@@ -126,7 +126,7 @@
 										<th class="erp-number goods-received-note-matrix__quantity-heading">Receive</th>
 										<th v-if="hasSecondaryQuantity(section.group)" class="erp-number">Secondary</th>
 									</template>
-										<th class="erp-number">Total qty</th><th class="erp-number">Value</th><th>UOM</th>
+										<th>Comments / split</th><th class="erp-number">Total qty</th><th class="erp-number">Value</th><th>UOM</th>
 									</tr></thead>
 									<tbody>
 										<tr v-for="(row, rowIndex) in section.items" :key="rowKey(row, rowIndex)">
@@ -146,7 +146,7 @@
 												<small>{{ secondaryUom(row, "default") }}</small>
 											</td>
 										</template>
-											<td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
+											<td><InputText v-model="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="markDirty" /><Button v-if="block.kind === 'items' && canEditDraft && !workspace.special_source?.active" label="Add split" size="small" severity="secondary" text @click="openSplit(section.group, row)" /></td><td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td class="erp-number goods-received-note-matrix__value">{{ formatMoney(rowValue(row)) }}</td>
 											<td>{{ row.default_uom || row.uom || "—" }}</td>
 										</tr>
@@ -201,6 +201,13 @@
 			</template>
 		</FabricDocumentWorkspace>
 
+		<Dialog v-model:visible="splitVisible" modal header="Add receipt split" class="erp-dialog--sm">
+			<LinkField v-model="splitDraft.received_type" label="Received Type" doctype="YRP Received Type" :show-open-button="false" />
+			<label v-if="actualDiaContext.enabled && splitSource?.group.primary_attribute === actualDiaContext.attribute">Planned Dia <Select v-model="splitDraft.sourcePrimary" :options="splitSource.group.primary_attribute_values" fluid /></label>
+			<label v-if="actualDiaContext.enabled">Actual Dia <Select v-model="splitDraft.dia" :options="actualDiaContext.dia_options || []" show-clear fluid /></label>
+			<p>Enter the new split quantity in the receipt matrix. The original source is retained.</p>
+			<template #footer><Button label="Close" severity="secondary" text @click="splitVisible = false" /><Button label="Add split" :disabled="!splitDraft.received_type" @click="addSplit" /></template>
+		</Dialog>
 		<Dialog v-model:visible="calculationOpen" modal header="Calculate Goods Received Note" class="fabric-action-dialog fabric-action-dialog--wide erp-dialog--lg" :closable="!acting">
 			<GrnCalculatePanel :context="calculationContext" :acting="acting" :error="panelError" @apply="calculate" @close="closeCalculation" />
 		</Dialog>
@@ -213,6 +220,9 @@
 </template>
 
 <script setup>
+import Select from "primevue/select"
+import LinkField from "../../components/common/LinkField.vue"
+import InputText from "primevue/inputtext"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
@@ -233,7 +243,7 @@ import {
 	saveGoodsReceivedNote,
 	saveGoodsReceivedNoteInspection,
 } from "../../api/fabricStore.js"
-import { searchLinkedDocument } from "../../api/frappe.js"
+import { callMethod, searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -265,6 +275,10 @@ const dirty = ref(false)
 const editingSubmitted = ref(false)
 const workspace = ref({})
 const currentName = ref("")
+const actualDiaContext = ref({})
+const splitVisible = ref(false)
+const splitSource = ref(null)
+const splitDraft = reactive({ received_type: "", dia: "", sourcePrimary: "" })
 const itemGroups = ref([])
 const correctionGroups = ref([])
 const calculationOpen = ref(false)
@@ -467,6 +481,14 @@ function clearWorkspaceState(name = "") {
 
 function applyWorkspace(nextWorkspace) {
 	workspace.value = nextWorkspace || {}
+	actualDiaContext.value = {}
+	const source = workspace.value.record || workspace.value.values || {}
+	if (source.against === "YRP Work Order" && source.against_id) {
+		const name = source.against_id
+		callMethod("essdee_yrp.fabric_grn.get_actual_dia_context", { work_order: name }).then((context) => {
+			if ((workspace.value.record || workspace.value.values)?.against_id === name) actualDiaContext.value = context || {}
+		}).catch((reason) => { error.value = reason.message })
+	}
 	currentName.value = workspace.value.record?.name || ""
 	for (const key of Object.keys(form)) delete form[key]
 	Object.assign(form, clone(workspace.value.values || {}))
@@ -749,6 +771,31 @@ function normalizeGroups(groups) {
 	const normalized = clone(groups || [])
 	for (const group of normalized) for (const row of group.items || []) { row.values ||= {}; for (const value of primaryValues(group)) row.values[value] ||= { qty: 0 } }
 	return normalized
+}
+function openSplit(group, row) {
+	splitSource.value = { group, row }
+	splitDraft.received_type = row.dimensions?.received_type || ""
+	splitDraft.sourcePrimary = group.primary_attribute_values?.find((value) => row.values?.[value]?.ref_docname) || group.primary_attribute_values?.[0] || "default"
+	splitDraft.dia = row.attributes?.[actualDiaContext.value.attribute || "Dia"] || ""
+	splitVisible.value = true
+}
+function addSplit() {
+	const { group, row } = splitSource.value
+	const split = clone(row)
+	split.dimensions = { ...split.dimensions, received_type: splitDraft.received_type }
+	if (actualDiaContext.value.enabled && splitDraft.dia) {
+		const attribute = actualDiaContext.value.attribute || "Dia"
+		if (group.primary_attribute === attribute) {
+			const source = split.values?.[splitDraft.sourcePrimary] || {}
+			split.values = { [splitDraft.dia]: source }
+			if (!group.primary_attribute_values.includes(splitDraft.dia)) group.primary_attribute_values.push(splitDraft.dia)
+		} else split.attributes = { ...split.attributes, [attribute]: splitDraft.dia }
+	}
+	for (const cell of Object.values(split.values || {})) { cell.qty = 0; cell.secondary_qty = 0 }
+	group.items.push(split)
+	for (const item of group.items) for (const value of primaryValues(group)) item.values[value] ||= { qty: 0 }
+	splitVisible.value = false
+	markDirty()
 }
 function itemSections(groups) {
 	return (groups || []).flatMap((group, groupIndex) => {

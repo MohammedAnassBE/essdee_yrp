@@ -14,6 +14,16 @@ function queryString(params) {
 	return value ? `?${value}` : ""
 }
 
+function sessionExpired(status, payload = {}) {
+	return status === 401 || (status === 403 && (
+		["AuthenticationError", "SessionExpired"].some((type) => String(payload.exc_type || payload.exception || "").includes(type))
+		|| (payload.exc_type === "PermissionError" && /Login to access/i.test(extractServerMessage(payload, "")))
+	))
+}
+function redirectToLogin() {
+	window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`)
+}
+
 async function request(url, options = {}) {
 	const response = await fetch(url, {
 		credentials: "include",
@@ -26,12 +36,12 @@ async function request(url, options = {}) {
 		},
 	})
 
-	if (response.status === 401) {
-		window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname)}`)
+	const payload = response.status === 204 ? {} : await response.json().catch(() => ({}))
+	if (sessionExpired(response.status, payload)) {
+		redirectToLogin()
 		throw requestError("Your session has expired.", response.status)
 	}
 
-	const payload = response.status === 204 ? {} : await response.json().catch(() => ({}))
 	if (!response.ok || payload.exc) {
 		throw requestError(
 			extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."),
@@ -103,8 +113,8 @@ export function uploadFile(file, options = {}) {
 		xhr.addEventListener("load", () => {
 			let payload = {}
 			try { payload = xhr.responseText ? JSON.parse(xhr.responseText) : {} } catch { /* handled below */ }
-			if (xhr.status === 401) {
-				window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname)}`)
+			if (sessionExpired(xhr.status, payload)) {
+				redirectToLogin()
 				finish(reject, new Error("Your session has expired."))
 				return
 			}
@@ -123,6 +133,10 @@ export function uploadFile(file, options = {}) {
 			xhr.send(form)
 		}
 	})
+}
+
+export function getActiveWorkflow(doctype) {
+	return callMethod("essdee_yrp.api.workflow.get_active_workflow", { doctype })
 }
 
 export async function getMeta(doctype) {
@@ -161,17 +175,11 @@ export async function updateDoc(doctype, name, values) {
 }
 
 export function submitDoc(doctype, name, modified = "") {
-	return updateDoc(doctype, name, {
-		docstatus: 1,
-		...(modified ? { modified } : {}),
-	})
+	return callMethod("essdee_yrp.api.lifecycle.submit_document", { doctype, name, modified: modified || undefined })
 }
 
 export function cancelDoc(doctype, name, modified = "") {
-	return updateDoc(doctype, name, {
-		docstatus: 2,
-		...(modified ? { modified } : {}),
-	})
+	return callMethod("essdee_yrp.api.lifecycle.cancel_document", { doctype, name, modified: modified || undefined })
 }
 
 export async function getList(

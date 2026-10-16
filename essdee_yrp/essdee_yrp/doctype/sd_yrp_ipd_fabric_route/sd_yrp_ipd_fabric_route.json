@@ -44,6 +44,15 @@
   },
   {
    "columns": 2,
+   "default": "0",
+   "description": "When enabled, the knitting output colour is locked to the Finished Colour.",
+   "fieldname": "use_dyed_yarn",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Use Dyed Yarn"
+  },
+  {
+   "columns": 2,
    "description": "Physical Dia received from knitting. A different Finished Dia requires a real Dia-changing/compacting process.",
    "fieldname": "knitting_output_dia",
    "fieldtype": "Link",
@@ -51,15 +60,6 @@
    "label": "Knitting Output Dia",
    "reqd": 1,
    "options": "YRP Item Attribute Value"
-  },
-  {
-   "columns": 2,
-   "default": "0",
-   "description": "When enabled, the knitting output colour is locked to the Finished Colour.",
-   "fieldname": "use_dyed_yarn",
-   "fieldtype": "Check",
-   "in_list_view": 1,
-   "label": "Use Dyed Yarn"
   }
  ],
  "index_web_pages_for_search": 1,

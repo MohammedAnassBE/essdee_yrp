@@ -8,6 +8,7 @@ receive_grn_transfer commits (it runs in its own HTTP request in production), so
 tearDown cancels+deletes every Stock Entry it created for the test source_grns.
 """
 
+from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -483,3 +484,23 @@ class TestReceiveGrnTransfer(IntegrationTestCase):
 		self.assertFalse(se.get("source_grn"))
 		se.cancel()  # must NOT raise
 		self.assertEqual(se.docstatus, 2)
+
+
+class TestTransferDimensions(TestCase):
+	def test_dynamic_dimensions_preserve_mandatory_transfer_identity(self):
+		from essdee_yrp.api.stock_transfer import _apply_transfer_dimensions
+
+		values = {"item": "LOCAL-TEST-CLOTH", "qty": 5}
+		row = {"lot": "LOCAL-TEST-LOT", "received_type": "Rejected", "shade": "LOCAL-TEST-SHADE"}
+		self.assertEqual(
+			_apply_transfer_dimensions(values, row, ["shade"]),
+			{**values, "lot": "LOCAL-TEST-LOT", "received_type": "Rejected", "shade": "LOCAL-TEST-SHADE"},
+		)
+
+	def test_empty_optional_dimension_does_not_replace_existing_value(self):
+		from essdee_yrp.api.stock_transfer import _apply_transfer_dimensions
+
+		values = {"shade": "LOCAL-TEST-SHADE"}
+		row = {"lot": "LOCAL-TEST-LOT", "received_type": "Accepted", "shade": ""}
+		_apply_transfer_dimensions(values, row, ["shade"])
+		self.assertEqual(values["shade"], "LOCAL-TEST-SHADE")

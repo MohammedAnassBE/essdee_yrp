@@ -467,6 +467,7 @@ import {
 	getCount,
 	getList,
 	getMeta,
+	getActiveWorkflow,
 	getUserListview,
 	submitDoc,
 } from "../../api/frappe.js"
@@ -641,10 +642,13 @@ const hasActiveQuery = computed(
 const activeQuickFilterCount = computed(() =>
 	standardFilterFields.value.filter((field) => hasFilterValue(quickFilters.value[field.fieldname])).length,
 )
+const activeWorkflow = ref(null)
+const workflowReady = ref(false)
 const isSubmittable = computed(() => Boolean(Number(doctypeMeta.value?.is_submittable)))
 const detectedStatusField = computed(() => {
+	if (activeWorkflow.value?.state_field) return activeWorkflow.value.state_field
 	if (props.statusField) return props.statusField
-	const selectableStatus = ["status", "workflow_state"]
+	const selectableStatus = ["status"]
 		.map((fieldname) => metaFields.value.find((field) => field.fieldname === fieldname))
 		.find((field) => field?.fieldtype === "Select" && selectFieldOptions(field).length)
 	if (selectableStatus) return selectableStatus.fieldname
@@ -657,6 +661,7 @@ const effectiveStatusField = computed(() => {
 		: ""
 })
 const effectiveStatusOptions = computed(() => {
+	if (activeWorkflow.value) return activeWorkflow.value.states || []
 	if (props.statusOptions.length) return props.statusOptions
 	if (effectiveStatusField.value === "docstatus") {
 		return [
@@ -683,8 +688,8 @@ const isEmptyResult = computed(() =>
 )
 
 const canBulkEdit = computed(() => hasDoctypePermission("write"))
-const canBulkSubmit = computed(() => hasDoctypePermission("submit"))
-const canBulkCancel = computed(() => hasDoctypePermission("cancel"))
+const canBulkSubmit = computed(() => workflowReady.value && !activeWorkflow.value && hasDoctypePermission("submit"))
+const canBulkCancel = computed(() => workflowReady.value && !activeWorkflow.value && hasDoctypePermission("cancel"))
 const showBulkSelection = computed(
 	() => props.selectable || (props.allowBulkActions
 		&& (canBulkEdit.value || (isSubmittable.value && (canBulkSubmit.value || canBulkCancel.value)))),
@@ -910,9 +915,12 @@ async function initialise() {
 	allowedFieldsReady.value = false
 	userColumns.value = null
 	try {
-		const metas = await getMeta(doctype)
+		workflowReady.value = false
+		const [metas, workflow] = await Promise.all([getMeta(doctype), getActiveWorkflow(doctype)])
 		if (!initialisationGuard.isCurrent(request, props.doctype)) return
 		const meta = metas.find((row) => row.name === doctype) || metas[0]
+		activeWorkflow.value = workflow
+		workflowReady.value = true
 		doctypeMeta.value = meta || null
 		metaDocuments.value = metas
 		metaFields.value = meta?.fields || []
@@ -1234,6 +1242,7 @@ async function applyBulkEdit() {
 }
 
 function requestBulkAction(action) {
+	if (!workflowReady.value || activeWorkflow.value) return
 	const candidates = action === "submit" ? selectedDraftRows.value : selectedSubmittedRows.value
 	if (!candidates.length) return
 	pendingBulkAction.value = action
@@ -1249,6 +1258,7 @@ async function confirmBulkAction() {
 }
 
 async function runBulkAction(action, candidates) {
+	if (!workflowReady.value || activeWorkflow.value) return
 	if (!candidates.length) return
 	bulkActing.value = action
 	bulkError.value = null

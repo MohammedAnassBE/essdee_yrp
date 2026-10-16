@@ -600,6 +600,13 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 
 def _generate_cloth_requirements(cutting_plan_doc, preserve_operational_values=True):
 	required_cloth_details, required_accessory_details = _build_cloth_requirement_rows(cutting_plan_doc)
+	from essdee_yrp.cutting_plan import expand_cutting_rows
+	from essdee_yrp.fabric_substitution import substitution_index
+
+	if cutting_plan_doc.get("lot"):
+		required_cloth_details, _ = expand_cutting_rows(
+			required_cloth_details, substitution_index(cutting_plan_doc.lot)
+		)
 	if preserve_operational_values:
 		required_cloth_details = _preserve_cloth_operational_values(
 			required_cloth_details, cutting_plan_doc.cutting_plan_cloth_details

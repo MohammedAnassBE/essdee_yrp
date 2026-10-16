@@ -72,6 +72,7 @@ class SDYRPLotTransfer(Document):
 		apply_item_uom(row, item_field="item")
 		row.stock_qty = flt(row.qty) * flt(row.conversion_factor)
 		source_dimensions = self._stock_dimensions(row, row.from_lot)
+		row.stock_dimensions = frappe.as_json(source_dimensions)
 		_balance, stock_uom_rate = get_stock_balance(
 			row.item,
 			row.warehouse,

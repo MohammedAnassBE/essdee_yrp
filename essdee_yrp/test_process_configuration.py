@@ -1,7 +1,10 @@
+from unittest.mock import MagicMock, patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.fabric_ipd import get_process_transform
+from essdee_yrp.ipd_ui import regenerate_ipd_matrix
 
 
 class TestProcessConversionConfiguration(IntegrationTestCase):
@@ -79,3 +82,24 @@ class TestProcessConversionConfiguration(IntegrationTestCase):
 		process.append("conversion_output_attributes", {"attribute": "Dia"})
 		with self.assertRaisesRegex(frappe.ValidationError, "Cloth Conversion Attributes"):
 			process.insert()
+
+	def test_regenerate_matrix_saves_an_approved_cloth_ipd(self):
+		doc = MagicMock()
+		doc.name = "_Test Approved Cloth IPD"
+		doc.modified = "2026-09-05 10:00:00"
+		doc.approval_status = "Approved"
+		doc.get.side_effect = lambda field: {"is_cloth_item": 1}.get(field)
+		matrices = [
+			frappe._dict(process_name="Knitting"),
+			frappe._dict(process_name="Dyeing"),
+		]
+		with (
+			patch("frappe.get_doc", return_value=doc),
+			patch("frappe.get_all", return_value=matrices),
+		):
+			result = regenerate_ipd_matrix(doc.name, doc.modified)
+
+		doc.check_permission.assert_called_once_with("write")
+		doc.save.assert_called_once_with()
+		self.assertEqual(result["matrix_count"], 2)
+		self.assertEqual(result["process_counts"], {"Knitting": 1, "Dyeing": 1})

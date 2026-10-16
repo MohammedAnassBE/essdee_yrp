@@ -2144,3 +2144,65 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 		}
 		self.assertAlmostEqual(planned[v["cloth"]], 20.0, places=3)
 		self.assertAlmostEqual(planned[chemical], 1.0, places=3)
+
+
+class TestFabricSourceContextMerge(TestCase):
+	def test_source_totals_and_unavailable_fabrics_are_preserved(self):
+		from essdee_yrp.api.work_order import _merge_source_context
+
+		first = {"value": "1:Knitting", "received": 10, "reserved": 2, "available": 8,
+			"sources": ["LOCAL-TEST-GRN-1"], "unmatched": ["LOCAL-TEST-OTHER"]}
+		second = {"value": "1:Knitting", "received": 5, "reserved": 5, "available": 0,
+			"sources": ["LOCAL-TEST-GRN-2"], "unavailable": True, "unmatched": ["LOCAL-TEST-OTHER"]}
+		for left, right in ((first, second), (second, first)):
+			result = _merge_source_context(left, right)
+			self.assertEqual([result[key] for key in ("received", "reserved", "available")], [15, 7, 8])
+			self.assertTrue(result["unavailable"])
+			self.assertEqual(set(result["sources"]), {"LOCAL-TEST-GRN-1", "LOCAL-TEST-GRN-2"})
+			self.assertEqual(result["unmatched"], ["LOCAL-TEST-OTHER"])
+		self.assertNotIn("unavailable", first)
+
+	def test_different_predecessor_steps_are_rejected(self):
+		from essdee_yrp.api.work_order import _merge_source_context
+
+		with self.assertRaises(frappe.ValidationError):
+			_merge_source_context({"value": "1:Knitting"}, {"value": "2:Dyeing"})
+
+	def test_duplicate_production_detail_selection_is_rejected(self):
+		row = frappe._dict(production_detail="LOCAL-TEST-IPD", cloth_item="LOCAL-TEST-CLOTH")
+		lot = frappe._dict(name="LOCAL-TEST-LOT", lot_fabric_details=[row, row.copy()])
+		with self.assertRaises(frappe.ValidationError):
+			_selected_lot_fabrics(frappe._dict(production_detail="LOCAL-TEST-IPD"), lot)
+
+
+class TestTerminalFabricSubstitutions(TestCase):
+	def test_terminal_rows_use_current_conversion_schema_and_configured_attributes(self):
+		from essdee_yrp import fabric_substitution
+
+		def conversion(actual, quantity, received_type="LOCAL-TEST-ACCEPTED", process="Washing"):
+			return frappe._dict(production_detail="LOCAL-TEST-IPD", process_name=process,
+				planned_item="LOCAL-TEST-PLANNED", actual_item=actual,
+				actual_quantity=quantity, received_type=received_type)
+
+		lot = frappe._dict(name="LOCAL-TEST-LOT", lot_fabric_conversions=[
+			conversion("LOCAL-TEST-ACTUAL-1", 12), conversion("LOCAL-TEST-ACTUAL-1", 3),
+			conversion("LOCAL-TEST-ACTUAL-2", 5), conversion("LOCAL-TEST-REJECTED", 7, "Rejected"),
+			conversion("LOCAL-TEST-EARLIER", 20, process="Knitting"),
+		])
+		with (
+			patch.object(fabric_substitution, "_selected_terminal_steps", return_value=[
+				{"production_detail": "LOCAL-TEST-IPD", "process_name": "Washing"}]),
+			patch.object(fabric_substitution, "_default_received_type", return_value="LOCAL-TEST-ACCEPTED"),
+			patch.object(fabric_substitution, "get_dia_attribute", return_value="LOCAL-TEST-DIA"),
+			patch.object(fabric_substitution, "get_colour_attribute", return_value="LOCAL-TEST-COLOUR"),
+			patch.object(fabric_substitution, "_item_state", return_value={
+				"attrs": {"LOCAL-TEST-DIA": "24", "LOCAL-TEST-COLOUR": "Blue"}}),
+		):
+			result = fabric_substitution.build_lot_fabric_substitutions(lot)
+		mapping = result["mappings"][0]
+		self.assertEqual(len(result["mappings"]), 1)
+		self.assertEqual(mapping["from_item_variant"], "LOCAL-TEST-PLANNED")
+		self.assertEqual([row["received_qty"] for row in mapping["actual"]], [15, 5])
+		self.assertEqual(mapping["actual"][0]["dia"], "24")
+		self.assertEqual(mapping["actual"][0]["colour"], "Blue")
+		self.assertTrue(mapping["is_substituted"])

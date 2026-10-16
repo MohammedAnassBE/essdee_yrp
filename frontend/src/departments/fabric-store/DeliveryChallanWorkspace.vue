@@ -127,19 +127,19 @@
 											<td v-for="column in identityColumns(section.group)" :key="column.key">{{ identityValue(row, column) }}</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number delivery-challan-matrix__quantity delivery-challan-matrix__primary-cell">
-												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
+												<InputNumber :model-value="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, value, $event)" />
 												<small>Pending {{ formatQty(pendingQuantity(row.values[value])) }}</small>
-												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><span>{{ secondaryUom(row, value) }}</span></div>
+												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber :model-value="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, value, $event)" /><span>{{ secondaryUom(row, value) }}</span></div>
 											</td>
 										</template>
 										<template v-else>
 											<td class="erp-number delivery-challan-matrix__pending">{{ formatQty(pendingQuantity(row.values.default)) }}</td>
-											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber v-model="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /></td>
+											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber :model-value="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, 'default', $event)" /></td>
 											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number delivery-challan-matrix__secondary">
-												<InputNumber v-model="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><small>{{ secondaryUom(row, "default") }}</small>
+												<InputNumber :model-value="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, 'default', $event)" /><small>{{ secondaryUom(row, "default") }}</small>
 											</td>
 										</template>
-											<td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
+											<td><InputText :model-value="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="setDisplayComment(row, $event)" /></td><td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td>{{ row.default_uom || row.uom || "—" }}</td>
 										</tr>
 									</tbody>
@@ -200,6 +200,8 @@
 </template>
 
 <script setup>
+import { groupItemsForDisplay, setAggregatedCellQuantity, setAggregatedItemField } from "../../engine/stock/groupItemsForDisplay.js"
+import InputText from "primevue/inputtext"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
@@ -784,8 +786,11 @@ function normalizeGroups(groups) {
 	}
 	return normalized
 }
+function setDisplayQuantity(row, value, quantity) { setAggregatedCellQuantity(row, value, quantity); markDirty() }
+function setDisplaySecondaryQuantity(row, value, quantity) { setAggregatedCellQuantity(row, value, quantity, "secondary_qty"); markDirty() }
+function setDisplayComment(row, comment) { setAggregatedItemField(row, "comments", comment); markDirty() }
 function itemSections(groups) {
-	return (groups || []).flatMap((group, groupIndex) => {
+	return groupItemsForDisplay(groups).flatMap((group, groupIndex) => {
 		const sections = new Map()
 		for (const row of group.items || []) {
 			const name = row.name || row.item || row.item_variant || ""

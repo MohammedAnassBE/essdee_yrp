@@ -56,6 +56,10 @@ def validate(doc, method=None):
 		validate_work_order_source_allocations(doc)
 
 
+def before_update_after_submit(doc, method=None):
+	validate_fabric_execution_immutable(doc)
+
+
 def validate_fabric_execution_immutable(doc):
 	"""Allow generated contract changes only through Calculate/lifecycle code."""
 	flags = doc.flags or frappe._dict()

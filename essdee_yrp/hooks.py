@@ -166,6 +166,7 @@ yrp_web_doctype_catalog = [
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",
+	"YRP Debit",
 	"YRP Delivery Challan",
 	"YRP Goods Received Note",
 	"YRP Process Cost",
@@ -447,6 +448,7 @@ doc_events = {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"onload": "essdee_yrp.work_order_hooks.onload",
 		"validate": "essdee_yrp.work_order_hooks.validate",
+		"before_update_after_submit": "essdee_yrp.work_order_hooks.before_update_after_submit",
 		"before_cancel": "essdee_yrp.sewing.plan.before_work_order_cancel",
 		"on_submit": [
 			"essdee_yrp.finishing.work_order.on_submit",

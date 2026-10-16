@@ -9,6 +9,7 @@ from frappe.utils import flt
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import get_variant_attributes
 
+from essdee_yrp.fabric_chain import get_fabric_steps
 from essdee_yrp.cloth_execution import (
 	get_row_execution_parameters,
 	get_supported_execution_route,
@@ -704,3 +705,138 @@ def resolve_process_conversion(index, *, route_item, planned_item, projected_ite
 			"Lot fabric conversion is out of date for {0}: calculated {1}, but the Lot contains {2}."
 		).format(planned_item, projected_item, ", ".join(sorted(targets)))
 	)
+
+
+@frappe.whitelist()
+def get_lot_fabric_substitutions(lot, process_name=None, production_detail=None):
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	lot_doc.check_permission("read")
+	return build_lot_fabric_substitutions(
+		lot_doc,
+		process_name=process_name,
+		production_detail=production_detail,
+	)
+
+
+def build_lot_fabric_substitutions(
+	lot, *, process_name=None, production_detail=None
+):
+	lot_doc = frappe.get_doc("SD YRP Lot", lot) if isinstance(lot, str) else lot
+	selected = _selected_terminal_steps(
+		lot_doc,
+		process_name=process_name,
+		production_detail=production_detail,
+	)
+	selected_keys = {
+		(row["production_detail"], row["process_name"])
+		for row in selected
+	}
+	groups = {}
+	for row in lot_doc.get("lot_fabric_conversions") or []:
+		key = (row.get("production_detail"), row.get("process_name"))
+		if key not in selected_keys:
+			continue
+		if (
+			row.get("received_type") or _default_received_type()
+		) != _default_received_type():
+			continue
+		from_item = row.get("planned_item")
+		to_item = row.get("actual_item")
+		if (
+			not from_item
+			or not to_item
+			or flt(row.get("actual_quantity")) <= QTY_TOLERANCE
+		):
+			continue
+		group_key = (row.get("production_detail"), from_item)
+		group = groups.setdefault(group_key, {
+			"from_item_variant": from_item,
+			"production_detail": row.get("production_detail"),
+			"processes": set(),
+			"actual": defaultdict(float),
+		})
+		group["processes"].add(row.get("process_name"))
+		group["actual"][to_item] += flt(row.get("actual_quantity"))
+
+	mappings = []
+	for (_ipd, from_item), group in sorted(groups.items()):
+		actual_rows = []
+		for to_item, quantity in sorted(group["actual"].items()):
+			state = _item_state(to_item)
+			actual_rows.append({
+				"item_variant": to_item,
+				"dia": state["attrs"].get(get_dia_attribute()),
+				"colour": state["attrs"].get(get_colour_attribute()),
+				"received_qty": flt(quantity, 3),
+			})
+		actual_variants = {row["item_variant"] for row in actual_rows}
+		mappings.append({
+			"from_item_variant": from_item,
+			"production_detail": group["production_detail"],
+			"process_name": ", ".join(
+				sorted(p for p in group["processes"] if p)
+			),
+			"planned": [],
+			"actual": actual_rows,
+			"planned_qty": flt(
+				sum(row["received_qty"] for row in actual_rows), 3
+			),
+			"received_qty": flt(
+				sum(row["received_qty"] for row in actual_rows), 3
+			),
+			"is_substituted": (
+				actual_variants != {from_item} or len(actual_rows) > 1
+			),
+		})
+	return {
+		"lot": lot_doc.name,
+		"process_name": process_name,
+		"production_detail": production_detail,
+		"mappings": mappings,
+		"unmapped_receipts": [],
+	}
+
+
+def substitution_index(lot, *, process_name=None, production_detail=None):
+	result = build_lot_fabric_substitutions(
+		lot,
+		process_name=process_name,
+		production_detail=production_detail,
+	)
+	return {
+		row["from_item_variant"]: row
+		for row in result["mappings"]
+		if row.get("actual")
+	}
+
+
+def _selected_terminal_steps(lot_doc, *, process_name=None, production_detail=None):
+	selected = []
+	for fabric in lot_doc.get("lot_fabric_details") or []:
+		if (
+			production_detail
+			and fabric.get("production_detail") != production_detail
+		):
+			continue
+		if not fabric.get("production_detail"):
+			continue
+		ipd = frappe.get_cached_doc(
+			"YRP Item Production Detail", fabric.production_detail
+		)
+		steps = get_fabric_steps(ipd)
+		if not steps:
+			continue
+		step = (
+			next(
+				(row for row in steps if row["process_name"] == process_name),
+				None,
+			)
+			if process_name else steps[-1]
+		)
+		if not step:
+			continue
+		selected.append({
+			"production_detail": fabric.production_detail,
+			"process_name": step["process_name"],
+		})
+	return selected

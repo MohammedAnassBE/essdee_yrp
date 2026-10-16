@@ -322,6 +322,11 @@ frappe.ui.form.on("YRP Item Production Detail", {
 			frm.page.set_indicator(__(approval_status), approval_colour)
 		}
 		if (!frm.is_new()) {
+			if (frm.doc.is_cloth_item && frappe.model.can_write("YRP Item Production Detail")) {
+				frm.add_custom_button(__("Regenerate Matrix"), () => regenerate_matrix(frm));
+				frm.change_custom_button_type(__("Regenerate Matrix"), null, "primary");
+			}
+
 			frappe.xcall("essdee_yrp.ipd_ui.get_approval_roles").then(settings => {
 				let allowed = settings || [];
 				if (allowed.some(role => frappe.user_roles.includes(role))) {
@@ -1667,6 +1672,31 @@ function fabric_swap_write_back(frm, cfg, rows) {
 	});
 	frm.refresh_field(cfg.table_field);
 	frm.dirty();
+}
+
+async function regenerate_matrix(frm) {
+	// Matrices are generated from persisted process configuration. If the user
+	// has just edited a Draft IPD, save those changes before rebuilding so the
+	// action cannot silently regenerate from stale server-side rows.
+	if (frm.is_dirty()) {
+		await frm.save();
+	}
+
+	const response = await frappe.call({
+		method: "essdee_yrp.ipd_ui.regenerate_ipd_matrix",
+		args: {
+			doc_name: frm.doc.name,
+			modified: frm.doc.modified,
+		},
+		freeze: true,
+		freeze_message: __("Regenerating process matrices"),
+	});
+	const count = Number(response.message?.matrix_count || 0);
+	await frm.reload_doc();
+	frappe.show_alert({
+		message: __("{0} process matrices regenerated", [count]),
+		indicator: "green",
+	});
 }
 
 // ===========================================================================

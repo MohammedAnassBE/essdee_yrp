@@ -44,7 +44,7 @@ def on_grn_cancel(doc, method=None):
 def _apply_grn(grn, sign):
 	if grn.get("against") != "YRP Work Order" or not grn.get("against_id"):
 		return
-	if grn.get("is_rework"):
+	if grn.get("is_return") or grn.get("is_rework"):
 		return
 	wo = frappe.get_cached_doc("YRP Work Order", grn.against_id)
 	if not wo.get("lot"):

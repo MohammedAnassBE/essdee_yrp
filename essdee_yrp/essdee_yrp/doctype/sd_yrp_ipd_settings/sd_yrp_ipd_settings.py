@@ -41,7 +41,7 @@ def get_knitting_colour(value, colour_attribute=None):
 	)
 	if not row or row.attribute_name != colour_attribute:
 		frappe.throw(
-			_("Default Knitting Yarn Colour must be a {0} value from YRP Item Attribute Value.").format(
+			_("Default Non-Dyed Colour must be a {0} value from YRP Item Attribute Value.").format(
 				colour_attribute
 			)
 		)

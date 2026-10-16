@@ -129,6 +129,7 @@ class TestLotTransfer(IntegrationTestCase):
 			transfer._update_stock_ledger()
 
 		entries = make_entries.call_args.args[0]
+		self.assertAlmostEqual(entries[0]["qty"] + entries[1]["qty"], 0)
 		self.assertEqual(entries[0]["_transfer_role"], "outgoing")
 		self.assertEqual(entries[1]["_transfer_role"], "incoming")
 		self.assertEqual(entries[0]["_transfer_key"], entries[1]["_transfer_key"])

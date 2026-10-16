@@ -7,6 +7,7 @@ from unittest.mock import call, patch
 import frappe
 
 from essdee_yrp import fabric_substitution
+from essdee_yrp.cutting_plan import _split_required_weight, expand_cutting_rows
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 	preserve_lot_fabric_conversions,
 )
@@ -619,3 +620,33 @@ class TestLotFabricConversionRebuild(unittest.TestCase):
 		self.assertEqual([row["process_name"] for row in rows], ["KNITTING", "DYEING", "WASHING"])
 		self.assertEqual(project_stage.call_count, 2)
 		validate_knitting_variance.assert_called_once_with("KNIT-PLANNED", "KNIT-ACTUAL")
+
+
+class TestCuttingFabricSubstitutions(unittest.TestCase):
+	def test_cutting_split_preserves_total_after_rounding(self):
+		result = _split_required_weight(7, [5, 4])
+		self.assertEqual(result, [3.889, 3.111])
+		self.assertEqual(round(sum(result), 3), 7)
+
+
+	def test_unmapped_cutting_row_is_unchanged(self):
+		row = {
+			"cloth_item_variant": "CLOTH-36-RED",
+			"required_weight": 9,
+			"weight": 2,
+		}
+		expanded, changed = expand_cutting_rows([row], {})
+		self.assertEqual(changed, 0)
+		self.assertEqual(expanded, [row])
+
+
+	def test_stale_conversion_never_coerces_exact_projection(self):
+		with self.assertRaisesRegex(
+			frappe.ValidationError, "Lot fabric conversion is out of date"
+		):
+			fabric_substitution.resolve_process_conversion(
+				{("ROUTE", "PLAN"): {"ACTUAL-30": 5}},
+				route_item="ROUTE",
+				planned_item="PLAN",
+				projected_item="ACTUAL-32",
+			)

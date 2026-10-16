@@ -63,7 +63,11 @@ const ItemPricesList = () => import("../departments/purchase/ItemPricesList.vue"
 const ItemPricePage = () => import("../departments/purchase/ItemPricePage.vue")
 const ItemPriceEditor = () => import("../departments/purchase/ItemPriceEditor.vue")
 
+const Debits = () => import("../departments/accounts/Debits.vue")
+
 const routes = [
+	{ path: "/accounts/debits", name: "accounts-debits", component: Debits },
+	{ path: "/accounts/debits/:debitId", name: "accounts-debit", component: Debits },
 	{
 		path: "/",
 		name: "administrator",

@@ -70,11 +70,12 @@
    "reqd": 1
   },
   {
-   "description": "Prefills Knitting Output Colour in the Build Cloth Programs popup when no exact saved fabric route exists.",
+   "description": "Physical colour used for every non-dyed yarn variant and as the default Knitting output when Knitting does not produce the finished colour.",
    "fieldname": "default_knitting_output_colour",
    "fieldtype": "Link",
    "options": "YRP Item Attribute Value",
-   "label": "Default Knitting Yarn Colour"
+   "label": "Default Non-Dyed Colour",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_cloth_program",

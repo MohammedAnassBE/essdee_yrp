@@ -40,8 +40,9 @@ fabric-process Work Orders calculated from that.
    never hand-authored (standing 2026-06-25 rule).
 8. **`Item.is_cloth_item`** checkbox gates IPD behaviour: cloth IPDs
    show fabric-process tabs and hide garment tabs.
-9. Custom Fields deploy **via fixtures only** (no create_custom_fields
-   patches) — standing 2026-07-02 workflow.
+9. Custom Fields deploy **via fixtures only** and are created through the
+   Custom Field DocType, never from patches or application functions —
+   standing 2026-07-02 workflow.
 
 ## 3. Data model changes (all essdee_yrp)
 

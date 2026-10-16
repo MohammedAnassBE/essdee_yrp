@@ -79,6 +79,7 @@
 							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
 								<LotFabricTab
 									:fabrics="workspace.fabrics"
+									:lot="workspace.name" :modified="workspace.modified" :can-write="Boolean(workspace.permissions?.can_write)" @changed="load(true)"
 									:other-conversions="workspace.other_conversions"
 								/>
 							</TabPanel>

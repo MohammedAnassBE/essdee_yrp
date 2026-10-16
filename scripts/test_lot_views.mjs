@@ -197,8 +197,8 @@ assert.deepEqual(
 	],
 )
 const conversions = [
-	{ planned_item: "A", actual_item: "B" },
-	{ planned_item: "A", actual_item: "A" },
+	{ planned_item: "A", actual_item: "B", actual_quantity: 7, received_type: "Accepted" },
+	{ planned_item: "A", actual_item: "A", actual_quantity: 3, received_type: "Accepted" },
 ]
 assert.equal(isChangedConversion(conversions[0]), true)
 assert.equal(isChangedConversion(conversions[1]), false)

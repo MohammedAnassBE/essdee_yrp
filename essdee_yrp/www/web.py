@@ -48,6 +48,7 @@ WEB_DOCTYPES = (
 	"SD YRP Lot",
 	"YRP Work Order",
 	"YRP Work Order Correction",
+	"YRP Debit",
 	"YRP Delivery Challan",
 	"YRP Goods Received Note",
 	"YRP Process Cost",
@@ -157,9 +158,8 @@ def get_boot():
 		"dev_server": bool(frappe._dev_server),
 		"app_logo": _website_asset("app_logo", "essdee-logo.png"),
 		"user": user,
-		# Per-user UI config (spec §8.1): resolved server-side by base yrp and
-		# injected synchronously — no async race, no loading flash. None on any
-		# failure; the SPA then renders its compiled-in Default (= today's UI).
+		# Per-user UI config is resolved by Essdee and injected synchronously.
+		# On failure, the SPA uses its compiled-in workspace defaults.
 		"ui_config": _safe_ui_config(),
 	}
 
@@ -172,7 +172,7 @@ def _safe_ui_config():
 	survives the import itself failing (e.g. a base-yrp deploy mid-flight), so
 	the /web page can never 500 because of UI config."""
 	try:
-		from yrp.yrp.api.ui_config import get_config_for_boot
+		from essdee_yrp.ui_config import get_config_for_boot
 
 		return get_config_for_boot()
 	except Exception:

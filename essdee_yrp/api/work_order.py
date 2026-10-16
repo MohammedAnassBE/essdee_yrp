@@ -128,9 +128,14 @@ def _selected_lot_fabrics(wo, lot):
 	"""
 	fabrics = list(lot.get("lot_fabric_details") or [])
 	if wo.get("production_detail"):
-		return [
+		selected = [
 			fabric for fabric in fabrics if fabric.get("production_detail") == wo.get("production_detail")
 		]
+		if len(selected) > 1:
+			frappe.throw(
+				_("Lot {0} contains Production Detail {1} more than once. Keep one cloth row per Production Detail before calculating this Work Order.").format(lot.name, wo.production_detail)
+			)
+		return selected
 	if wo.get("item"):
 		return [fabric for fabric in fabrics if fabric.get("cloth_item") == wo.get("item")]
 	return fabrics
@@ -583,6 +588,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 	warnings = []
 	kind = None
 	source_options = []
+	source_option_signature = None
 	selected_source = None
 	for fabric in _selected_lot_fabrics(wo, lot):
 		if not fabric.production_detail:
@@ -617,8 +623,12 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 			)
 
 			row_source_options = get_source_process_options(ipd, wo.process_name)
-			if not source_options:
+			row_signature = tuple((option["value"], option["process_name"]) for option in row_source_options)
+			if source_option_signature is None:
+				source_option_signature = row_signature
 				source_options = row_source_options
+			elif row_signature != source_option_signature:
+				frappe.throw(_("The selected Lot fabrics do not have the same earlier-process chain. Create separate Work Orders for those fabrics."))
 			selected_source_step = source_process
 			if versioned_execution and not selected_source_step and row_source_options:
 				saved_step = wo.get("fabric_source_process_step")
@@ -628,7 +638,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 					else row_source_options[0]["value"]
 				)
 			if selected_source_step:
-				selected_source = fill_from_source_grns(
+				filled_source = fill_from_source_grns(
 					qty_rows,
 					lot=lot.name,
 					ipd=ipd,
@@ -636,11 +646,12 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 					current_work_order=wo.name,
 					source_process=selected_source_step,
 				)
-				if selected_source.get("unmatched"):
+				selected_source = _merge_source_context(selected_source, filled_source)
+				if filled_source.get("unmatched"):
 					warnings.append(
 						_("{0} GRN receipt(s) do not enter this process and were ignored: {1}").format(
-							selected_source["process_name"],
-							", ".join(selected_source["unmatched"]),
+							filled_source["process_name"],
+							", ".join(filled_source["unmatched"]),
 						)
 					)
 		reference_routed = row_kind == "knitting" and any(
@@ -706,6 +717,40 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 		"source_process_options": source_options,
 		"source_process": selected_source,
 	}
+
+
+def _merge_source_context(current, incoming):
+	"""Combine compatible per-fabric source summaries for one Work Order popup."""
+	if not current:
+		return incoming
+	if not incoming:
+		return current
+	if current.get("value") != incoming.get("value"):
+		frappe.throw(_(
+			"The selected Lot fabrics resolve to different source-process steps. "
+			"Create separate Work Orders for those fabrics."
+		))
+	merged = dict(current)
+	# A Work Order can contain more than one fabric/IPD row.  The popup is a
+	# single transaction, so it must remain blocked when *any* selected fabric
+	# has no predecessor stock.  Carrying only the first context made that
+	# decision depend on the Lot child-row order.
+	merged["unavailable"] = bool(
+		current.get("unavailable") or incoming.get("unavailable")
+	)
+	for fieldname in ("received", "reserved", "available"):
+		merged[fieldname] = flt(
+			flt(current.get(fieldname)) + flt(incoming.get(fieldname)), 3
+		)
+	merged["sources"] = [
+		*(current.get("sources") or []),
+		*(incoming.get("sources") or []),
+	]
+	merged["unmatched"] = list(dict.fromkeys([
+		*(current.get("unmatched") or []),
+		*(incoming.get("unmatched") or []),
+	]))
+	return merged
 
 
 def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):

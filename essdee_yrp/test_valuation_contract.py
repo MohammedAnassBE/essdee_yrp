@@ -8,6 +8,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import Good
 
 from essdee_yrp.api.work_order import _normalize_generated_uom_rows
 from essdee_yrp import delivery_challan_hooks as dc_hooks
+from essdee_yrp.work_order_hooks import validate_fabric_execution_immutable
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	calculate_cutting_consumption_plan,
 )
@@ -2454,3 +2455,86 @@ class TestEssdeeValuationContract(UnitTestCase):
 				frappe.ValidationError, "does not match linked Work Order Deliverable"
 			):
 				_resolve_deliverable_source(row, {source.name: source}, work_order)
+
+
+class TestIncomingValuationRegressions(UnitTestCase):
+	def test_managed_contract_rejects_appended_unkeyed_rows(self):
+		parameters = '{"fabric_execution_key":"fabric-test"}'
+		before = frappe._dict(
+			lot="LOT-1", production_detail="IPD-1", process_name="Dyeing",
+			item="CLOTH", supplier="SUP-1", delivery_location="LOC-1",
+			fabric_source_process="Knitting",
+			fabric_source_process_step="0::Knitting", open_status="Open",
+			deliverables=[frappe._dict(
+				name="WOD-1", item_variant="CLOTH-GREY", qty=5, uom="Kg",
+				pending_quantity=5, stock_update=0,
+				additional_parameters=parameters,
+			)],
+			receivables=[frappe._dict(
+				name="WOR-1", item_variant="CLOTH-RED", qty=5, uom="Kg",
+				pending_quantity=5, stock_update=0,
+				additional_parameters=parameters,
+			)],
+		)
+		current = frappe._dict(before.copy())
+		current.deliverables = list(before.deliverables) + [frappe._dict(
+			name="WOD-EXTRA", item_variant="YARN-EXTRA", qty=1, uom="Kg",
+		)]
+		current.receivables = list(before.receivables)
+		current.flags = frappe._dict()
+		current.get_doc_before_save = lambda: before
+		with patch(
+			"yrp.stock.dimensions.get_dimension_fieldnames",
+			return_value=["received_type"],
+		):
+			with self.assertRaisesRegex(
+				frappe.ValidationError, "only through Calculate"
+			):
+				validate_fabric_execution_immutable(current)
+
+
+	def test_fabric_grn_quantity_tolerance_is_defined(self):
+		self.assertEqual(QTY_TOLERANCE, 0.000001)
+
+
+	def test_generated_rows_keep_physical_stock_qty_when_master_uom_changes(self):
+		rows = [
+			{
+				"item_variant": "PACKED-ITEM",
+				"qty": 20,
+				"pending_quantity": 20,
+				"stock_update": 10,
+				"uom": "Piece",
+			}
+		]
+		with (
+			patch(
+				"yrp.stock.uom.resolve_item_uom",
+				return_value=frappe._dict(
+					uom="Box", stock_uom="Piece", conversion_factor=10
+				),
+			),
+			patch(
+				"yrp.stock.utils.get_conversion_factor",
+				return_value={"stock_uom": "Piece", "conversion_factor": 1},
+			),
+		):
+			_normalize_generated_uom_rows(rows)
+
+		self.assertEqual(rows[0]["uom"], "Box")
+		self.assertEqual(rows[0]["qty"], 2)
+		self.assertEqual(rows[0]["pending_quantity"], 2)
+		self.assertEqual(rows[0]["stock_update"], 1)
+
+
+	def test_return_grn_does_not_increment_forward_fabric_tracking(self):
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id="WO-TEST",
+			is_return=1,
+		)
+		with patch("frappe.get_cached_doc") as get_cached_doc:
+			from essdee_yrp.fabric_tracking import _apply_grn
+
+			_apply_grn(grn, 1)
+		get_cached_doc.assert_not_called()

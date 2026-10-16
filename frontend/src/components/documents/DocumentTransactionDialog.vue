@@ -31,16 +31,18 @@
 				<Button label="Close" severity="secondary" text :disabled="Boolean(acting)" @click="requestVisibility(false)" />
 				<div>
 					<DocumentPrintButton v-if="payload.permissions?.can_print" :doctype="payload.record?.doctype || doctype" :name="payload.record?.name || name" :formats="payload.print_formats || []" :disabled="Boolean(acting)" />
+					<Button v-if="payload.actions?.can_make_delivery_challan" label="Make Delivery Challan" icon="pi pi-send" severity="secondary" outlined @click="makeDcVisible = true" />
 					<Button v-if="payload.actions?.can_complete_transfer" label="Complete Transfer" icon="pi pi-arrow-right-arrow-left" severity="secondary" outlined :loading="acting === 'complete-transfer'" @click="completeTransfer" />
 					<Button v-if="payload.actions?.can_return" label="Return" icon="pi pi-replay" severity="secondary" outlined :disabled="Boolean(acting)" @click="emit('return', payload)" />
 					<Button v-if="showEdit && payload.permissions?.can_write" label="Edit" icon="pi pi-pencil" severity="secondary" outlined :disabled="Boolean(acting)" @click="editDocument" />
 					<Button v-if="payload.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :loading="acting === 'amend'" @click="changeStatus('amend')" />
-					<Button v-if="payload.permissions?.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="changeStatus('cancel')" />
-					<Button v-if="payload.permissions?.can_submit" label="Submit" icon="pi pi-check" :loading="acting === 'submit'" @click="changeStatus('submit')" />
+					<Button v-if="payload.permissions?.can_cancel && workflowReady && !activeWorkflow" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="changeStatus('cancel')" />
+					<Button v-if="payload.permissions?.can_submit && workflowReady && !activeWorkflow" label="Submit" icon="pi pi-check" :loading="acting === 'submit'" @click="changeStatus('submit')" />
 				</div>
 			</div>
 		</template>
 	</Dialog>
+	<StockEntryMakeDcModal v-if="payload.record?.doctype === 'YRP Stock Entry'" v-model:visible="makeDcVisible" :stock-entry="payload.record.name" @created="deliveryChallanCreated" />
 	<DocumentErrorDialog :message="error" :title="`${dialogTitle} could not be completed`" @dismiss="error = ''" />
 
 	<Dialog v-model:visible="closeConfirmationVisible" class="erp-dialog--sm" modal header="Discard changes?">
@@ -50,12 +52,15 @@
 </template>
 
 <script setup>
+import { useRouter } from "vue-router"
+import StockEntryMakeDcModal from "../../views/dynamic/StockEntryMakeDcModal.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 
 import { changeFabricStoreDocumentStatus, completeWorkOrderDocumentTransfer, getFabricStoreDocument } from "../../api/fabricStore.js"
+import { getActiveWorkflow } from "../../api/frappe.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import StockItemMatrix from "../stock/StockItemMatrix.vue"
 import DocumentErrorDialog from "./DocumentErrorDialog.vue"
@@ -72,6 +77,11 @@ const props = defineProps({
 const emit = defineEmits(["update:visible", "changed", "amended", "edit", "return", "replacement"])
 const confirmAction = useActionConfirmation()
 
+const workflowReady = ref(false)
+const activeWorkflow = ref(null)
+const makeDcVisible = ref(false)
+const router = useRouter()
+function deliveryChallanCreated(created) { emit("update:visible", false); router.push(`/fabric-store/delivery-challans/${encodeURIComponent(created.name || created)}`) }
 const loading = ref(false)
 const acting = ref("")
 const error = ref("")
@@ -98,12 +108,19 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	dirty.value = false
-	try { payload.value = await getFabricStoreDocument(props.doctype, props.name) || {} }
+	workflowReady.value = false
+	try {
+		const [document, workflow] = await Promise.all([getFabricStoreDocument(props.doctype, props.name), getActiveWorkflow(props.doctype)])
+		payload.value = document || {}
+		activeWorkflow.value = workflow
+		workflowReady.value = true
+	}
 	catch (reason) { error.value = reason?.message || `Unable to load ${props.doctype}.` }
 	finally { loading.value = false }
 }
 
 async function changeStatus(action) {
+	if (["submit", "cancel"].includes(action) && (!workflowReady.value || activeWorkflow.value)) return
 	if (["cancel", "amend"].includes(action)) {
 		const actionLabel = action === "cancel" ? "Cancel" : "Amend"
 		return confirmAction({
@@ -120,6 +137,7 @@ async function changeStatus(action) {
 }
 
 async function performStatusChange(action) {
+	if (["submit", "cancel"].includes(action) && (!workflowReady.value || activeWorkflow.value)) return
 	acting.value = action
 	error.value = ""
 	try {

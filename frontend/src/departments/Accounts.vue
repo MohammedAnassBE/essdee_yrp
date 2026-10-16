@@ -24,6 +24,7 @@ const loading = ref(true)
 const loadError = ref("")
 const sections = ref({})
 const workspaces = [
+	{ key: "debits", label: "Debits", description: "Work Order debits and approval status.", icon: "pi pi-wallet", to: "/accounts/debits" },
 	{
 		key: "purchase_invoices",
 		label: "Purchase Invoice",

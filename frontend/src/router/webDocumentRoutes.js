@@ -1,4 +1,5 @@
 const recordRoutes = {
+	"YRP Debit": (name) => `/web/accounts/debits/${encodeURIComponent(name)}`,
 	"SD YRP Lot": (name) => `/web/purchase/lots/${encodeURIComponent(name)}`,
 	"YRP Work Order": (name) => `/web/fabric-store/work-orders/${encodeURIComponent(name)}`,
 	"Purchase Order": (name) => `/web/fabric-store/purchase-orders/${encodeURIComponent(name)}`,

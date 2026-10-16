@@ -47,6 +47,7 @@ def get_capabilities() -> dict:
 		}
 	return {
 		"sections": {
+			"debits": {"label": _("Debits"), "can_read": bool(frappe.has_permission("YRP Debit", ptype="read"))},
 			"purchase_invoices": {
 				"label": _("Purchase Invoice"),
 				"can_read": bool(frappe.has_permission("YRP Purchase Invoice", ptype="read")),

@@ -894,6 +894,8 @@ def _related_work_order_documents(work_order: str, key: str) -> list[dict]:
 def _document_actions(doc) -> dict[str, bool]:
 	if cint(doc.docstatus) != 1:
 		return {}
+	if doc.doctype == "YRP Stock Entry":
+		return {"can_make_delivery_challan": bool(frappe.has_permission("YRP Delivery Challan", ptype="create"))}
 	if doc.doctype == "YRP Delivery Challan":
 		return {
 			"can_return": bool(frappe.has_permission("YRP Goods Received Note", ptype="create")),

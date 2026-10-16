@@ -1309,3 +1309,266 @@ class TestFabricSourceTransactions(IntegrationTestCase):
 			current_work_order=self.current,
 		)
 		self.assertEqual(available["net"], {self.variant: 120})
+
+
+class TestMergedFabricSources(TestCase):
+	def test_factor_targets_prefill_each_colour_and_actual_dia_once(self):
+		rows = [
+			{
+				"key": "BLACK", "output_item": "Test Cloth", "output_qty": 1,
+				"reference_item_variant": "FINAL-BLACK",
+				"input_specs": [{
+					"item": "Test Cloth", "attrs": {"Dia": "18 Dia", "Colour": "Greige"},
+					"qty": 1,
+				}],
+				"out_attrs": {"Dia": "18 Dia", "Colour": "Black"},
+			},
+			{
+				"key": "NAVY", "output_item": "Test Cloth", "output_qty": 1,
+				"reference_item_variant": "FINAL-NAVY",
+				"input_specs": [{
+					"item": "Test Cloth", "attrs": {"Dia": "18 Dia", "Colour": "Greige"},
+					"qty": 1,
+				}],
+				"out_attrs": {"Dia": "18 Dia", "Colour": "Navy"},
+			},
+		]
+		buckets = [
+			{
+				"key": "GRNI-22::-", "item_variant": "CLOTH-22-GREIGE",
+				"available_stock_qty": 60, "received_stock_qty": 60,
+				"source_grn": "GRN-1", "source_grn_item": "GRNI-22",
+			},
+			{
+				"key": "GRNI-24::-", "item_variant": "CLOTH-24-GREIGE",
+				"available_stock_qty": 30, "received_stock_qty": 30,
+				"source_grn": "GRN-1", "source_grn_item": "GRNI-24",
+			},
+		]
+		variant_info = {
+			"CLOTH-22-GREIGE": {
+				"item": "Test Cloth", "attrs": {"Dia": "22 Dia", "Colour": "Greige"},
+			},
+			"CLOTH-24-GREIGE": {
+				"item": "Test Cloth", "attrs": {"Dia": "24 Dia", "Colour": "Greige"},
+			},
+		}
+		targets = {
+			("BLACK", "CLOTH-22-GREIGE"): 24,
+			("BLACK", "CLOTH-24-GREIGE"): 12,
+			("NAVY", "CLOTH-22-GREIGE"): 36,
+			("NAVY", "CLOTH-24-GREIGE"): 18,
+		}
+
+		def resolve(_item, attrs):
+			return f"{attrs.get('Dia')}-{attrs.get('Colour')}"
+
+		def attrs(variant):
+			dia, colour = variant.split("-", 1)
+			return {"Dia": dia, "Colour": colour}
+
+		with (
+			patch("essdee_yrp.api.work_order._resolve_variant", side_effect=resolve),
+			patch("essdee_yrp.api.work_order._variant_attrs", side_effect=attrs),
+			patch("essdee_yrp.fabric_source._conversion_factor", return_value=1),
+		):
+			unmatched = fabric_source._project_receipt_buckets(
+				rows, buckets, variant_info, route_targets=targets
+			)
+
+		self.assertEqual(unmatched, [])
+		self.assertTrue(all(row["source_stock_available"] > 0 for row in rows))
+		self.assertTrue(all(row["source_stock_per_output"] > 0 for row in rows))
+		self.assertEqual(
+			{
+				(row["matrix_key"], row["source_item_variant"]): row["prefill"]
+				for row in rows
+			},
+			{
+				("BLACK", "CLOTH-22-GREIGE"): 24,
+				("BLACK", "CLOTH-24-GREIGE"): 12,
+				("NAVY", "CLOTH-22-GREIGE"): 36,
+				("NAVY", "CLOTH-24-GREIGE"): 18,
+			},
+		)
+
+
+	def test_factor_targets_do_not_reuse_one_exact_grn_row_across_routes(self):
+		rows = [
+			{
+				"key": "NAVY", "output_item": "Test Cloth", "output_qty": 1,
+				"input_specs": [{
+					"item": "Test Cloth",
+					"attrs": {"Dia": "26 Dia", "Colour": "Greige"},
+					"qty": 1,
+				}],
+				"out_attrs": {"Dia": "26 Dia", "Colour": "Navy"},
+			},
+			{
+				"key": "GREY", "output_item": "Test Cloth", "output_qty": 1,
+				"input_specs": [{
+					"item": "Test Cloth",
+					"attrs": {"Dia": "26 Dia", "Colour": "Greige"},
+					"qty": 1,
+				}],
+				"out_attrs": {"Dia": "26 Dia", "Colour": "Grey"},
+			},
+		]
+		buckets = [
+			{
+				"key": "GRNI-1::-", "item_variant": "CLOTH-30-GREIGE",
+				"available_stock_qty": 10, "received_stock_qty": 10,
+				"source_grn": "GRN-1", "source_grn_item": "GRNI-1",
+			},
+			{
+				"key": "GRNI-2::-", "item_variant": "CLOTH-30-GREIGE",
+				"available_stock_qty": 20, "received_stock_qty": 20,
+				"source_grn": "GRN-2", "source_grn_item": "GRNI-2",
+			},
+		]
+		variant_info = {
+			"CLOTH-30-GREIGE": {
+				"item": "Test Cloth",
+				"attrs": {"Dia": "30 Dia", "Colour": "Greige"},
+			},
+		}
+		targets = {
+			("NAVY", "CLOTH-30-GREIGE"): 18,
+			("GREY", "CLOTH-30-GREIGE"): 12,
+		}
+
+		def resolve(_item, attrs):
+			return f"{attrs.get('Dia')}-{attrs.get('Colour')}"
+
+		def attrs(variant):
+			dia, colour = variant.split("-", 1)
+			return {"Dia": dia, "Colour": colour}
+
+		with (
+			patch("essdee_yrp.api.work_order._resolve_variant", side_effect=resolve),
+			patch("essdee_yrp.api.work_order._variant_attrs", side_effect=attrs),
+			patch("essdee_yrp.fabric_source._conversion_factor", return_value=1),
+		):
+			unmatched = fabric_source._project_receipt_buckets(
+				rows, buckets, variant_info, route_targets=targets
+			)
+
+		self.assertEqual(unmatched, [])
+		self.assertEqual(len(rows), 3)
+		source_totals = {}
+		route_totals = {}
+		for row in rows:
+			source_totals[row["source_grn_item"]] = (
+				source_totals.get(row["source_grn_item"], 0) + row["prefill"]
+			)
+			route_totals[row["matrix_key"]] = (
+				route_totals.get(row["matrix_key"], 0) + row["prefill"]
+			)
+		self.assertEqual(source_totals, {"GRNI-1": 10, "GRNI-2": 20})
+		self.assertEqual(route_totals, {"NAVY": 18, "GREY": 12})
+
+
+	def test_source_breakdown_hides_fully_exhausted_historical_rows(self):
+		buckets = [
+			{
+				"key": "OLD-GRN-ITEM::-",
+				"source_grn": "OLD-GRN",
+				"received_stock_qty": 5,
+				"reserved_stock_qty": 5,
+				"available_stock_qty": 0,
+			},
+			{
+				"key": "MIN-PRECISION-GRN-ITEM::-",
+				"source_grn": "MIN-PRECISION-GRN",
+				"received_stock_qty": 0.001,
+				"reserved_stock_qty": 0,
+				"available_stock_qty": 0.001,
+			},
+			{
+				"key": "ACTIVE-GRN-ITEM::-",
+				"source_grn": "ACTIVE-GRN",
+				"received_stock_qty": 9,
+				"reserved_stock_qty": 4,
+				"available_stock_qty": 5,
+			},
+		]
+
+		self.assertEqual(
+			[row["key"] for row in fabric_source._source_breakdown(buckets)],
+			["MIN-PRECISION-GRN-ITEM::-", "ACTIVE-GRN-ITEM::-"],
+		)
+
+
+	def test_compatible_multi_fabric_source_summaries_are_combined(self):
+		from essdee_yrp.api.work_order import _merge_source_context
+
+		merged = _merge_source_context(
+			{
+				"value": "0::Knitting",
+				"process_name": "Knitting",
+				"received": 10,
+				"reserved": 2,
+				"available": 8,
+				"sources": [{"key": "GRNI-1::-"}],
+				"unmatched": ["Variant A"],
+			},
+			{
+				"value": "0::Knitting",
+				"process_name": "Knitting",
+				"received": 20,
+				"reserved": 5,
+				"available": 15,
+				"sources": [{"key": "GRNI-2::-"}],
+				"unmatched": ["Variant A", "Variant B"],
+			},
+		)
+
+		self.assertEqual(merged["received"], 30)
+		self.assertEqual(merged["reserved"], 7)
+		self.assertEqual(merged["available"], 23)
+		self.assertEqual(
+			[source["key"] for source in merged["sources"]],
+			["GRNI-1::-", "GRNI-2::-"],
+		)
+		self.assertEqual(merged["unmatched"], ["Variant A", "Variant B"])
+
+
+	def test_incompatible_multi_fabric_source_steps_are_rejected(self):
+		from essdee_yrp.api.work_order import _merge_source_context
+
+		with self.assertRaisesRegex(
+			frappe.ValidationError, "different source-process steps"
+		):
+			_merge_source_context(
+				{"value": "0::Knitting"},
+				{"value": "1::Knitting"},
+			)
+
+
+	def test_multi_fabric_merge_is_unavailable_when_either_fabric_has_no_stock(self):
+		from essdee_yrp.api.work_order import _merge_source_context
+
+		available = {
+			"value": "0::Knitting",
+			"received": 10,
+			"reserved": 2,
+			"available": 8,
+			"sources": [{"key": "GRNI-1::-"}],
+		}
+		unavailable = {
+			"value": "0::Knitting",
+			"received": 0,
+			"reserved": 0,
+			"available": 0,
+			"unavailable": True,
+			"sources": [],
+		}
+
+		for first, second in (
+			(available, unavailable),
+			(unavailable, available),
+		):
+			with self.subTest(first_unavailable=bool(first.get("unavailable"))):
+				merged = _merge_source_context(first, second)
+				self.assertTrue(merged["unavailable"])
+				self.assertEqual(merged["available"], 8)

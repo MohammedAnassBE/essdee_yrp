@@ -50,9 +50,9 @@ essdee_yrp.configure_actual_dia_button = function (frm) {
 		method: "essdee_yrp.fabric_grn.get_actual_dia_context",
 		args: { work_order: frm.doc.against_id },
 		callback(r) {
+			essdee_yrp.mount_physical_grn_editor(frm);
 			if (!r.message?.enabled || !(r.message.dia_options || []).length) return;
 			frm._essdee_actual_dia = r.message;
-			essdee_yrp.mount_physical_grn_editor(frm);
 			if (frm.doc.docstatus === 0) {
 				frm.add_custom_button(
 					__("Add Actual Dia"),

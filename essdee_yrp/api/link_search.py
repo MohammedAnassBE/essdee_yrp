@@ -179,7 +179,7 @@ def linked_document_search(
 		page_len = 20
 	rows = frappe.get_list(
 		doctype,
-		filters={"name": ["in", linked_names]},
+		filters={"name": ["in", linked_names], **({"disabled": 0} if doctype == "Address" else {})},
 		or_filters=or_filters,
 		fields=["name"] + ([label_field] if label_field else []),
 		limit_page_length=page_len,

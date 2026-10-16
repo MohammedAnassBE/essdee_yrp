@@ -310,6 +310,8 @@ def _merge_authoritative_rows(authoritative, browser_rows, *, quantity_field: st
 		if quantity < 0:
 			frappe.throw(_("Item quantity cannot be negative."))
 		row[quantity_field] = quantity
+		if "comments" in browser:
+			row["comments"] = browser.get("comments") or ""
 		if quantity_field == "qty":
 			row["delivered_quantity"] = quantity
 		if "secondary_qty" in browser:

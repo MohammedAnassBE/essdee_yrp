@@ -1,70 +1,88 @@
 <template>
-	<div class="actual-dia-conversions">
-		<div class="conversion-heading">
+	<div class="adc-shell">
+		<header class="adc-head">
 			<div>
-				<h5>{{ __("Actual Dia Conversions") }}</h5>
+				<div class="adc-title-row">
+					<h5>{{ __("Actual Dia Conversions") }}</h5>
+					<span class="adc-count">{{ changedCount }} {{ __("changed") }}</span>
+					<span class="adc-count adc-count--muted">{{ rows.length }} {{ __("routes") }}</span>
+				</div>
 				<p>{{ __("Built automatically from submitted versioned Knitting GRNs.") }}</p>
 			</div>
-			<div class="conversion-counts">
-				<span class="changed-count">{{ changedCount }} {{ __("changed") }}</span>
-				<span>{{ rows.length }} {{ __("routes") }}</span>
-			</div>
-		</div>
+		</header>
 
-		<div v-if="rows.length" class="conversion-toolbar">
-			<input v-model.trim="search" type="search" class="form-control"
-				:placeholder="__('Search process or Item')" />
-			<select v-model="process" class="form-control">
+		<div v-if="rows.length" class="adc-toolbar">
+			<div class="adc-search-wrap">
+				<span class="adc-search-icon">⌕</span>
+				<input
+					v-model.trim="search"
+					type="search"
+					class="adc-control adc-search"
+					:placeholder="__('Search process or item')"
+				/>
+			</div>
+			<select v-model="process" class="adc-control adc-process">
 				<option value="">{{ __("All Processes") }}</option>
 				<option v-for="value in processes" :key="value" :value="value">{{ value }}</option>
 			</select>
-			<label>
+			<label class="adc-toggle">
 				<input v-model="includeUnchanged" type="checkbox" />
-				{{ __("Include unchanged routes") }}
+				<span>{{ __("Include unchanged routes") }}</span>
 			</label>
 		</div>
 
-		<div v-if="!rows.length" class="conversion-empty">
+		<div v-if="!rows.length" class="adc-empty">
 			<strong>{{ __("No knitting receipts yet") }}</strong>
 			<span>{{ __("Submit a versioned Knitting GRN to build this table.") }}</span>
 		</div>
-		<div v-else-if="!filteredRows.length" class="conversion-empty">
-			<strong>{{ !includeUnchanged && !search && !process
-				? __("No actual Dia changes") : __("No matching conversions") }}</strong>
-			<button v-if="!includeUnchanged && !search && !process" type="button"
-				class="btn btn-xs btn-default" @click="includeUnchanged = true">
+		<div v-else-if="!filteredRows.length" class="adc-empty">
+			<strong v-if="!includeUnchanged && !search && !process">{{ __("No actual Dia changes") }}</strong>
+			<strong v-else>{{ __("No matching conversions") }}</strong>
+			<span v-if="!includeUnchanged && !search && !process">
+				{{ __("All {0} routes keep their planned Dia.", [rows.length]) }}
+			</span>
+			<span v-else>{{ __("Change the search or filter to see more rows.") }}</span>
+			<button
+				v-if="!includeUnchanged && !search && !process"
+				type="button"
+				class="adc-link-button"
+				@click="includeUnchanged = true"
+			>
 				{{ __("Show unchanged routes") }}
 			</button>
 		</div>
 
-		<section v-for="group in groups" :key="group.productionDetail" class="conversion-card">
-			<header>
-				<button type="button" @click="openDoc('YRP Item Production Detail', group.productionDetail)">
+		<section v-for="group in groups" :key="group.productionDetail" class="adc-card">
+			<header class="adc-card-head">
+				<button type="button" class="adc-ipd" @click="openDoc('YRP Item Production Detail', group.productionDetail)">
 					{{ group.productionDetail || __("Unspecified cloth route") }}
 				</button>
 				<span>{{ group.rows.length }} {{ group.rows.length === 1 ? __("row") : __("rows") }}</span>
 			</header>
-			<div class="table-wrap">
-				<table class="table table-bordered table-sm">
+			<div class="adc-table-wrap">
+				<table class="adc-table">
 					<thead>
 						<tr>
-							<th>{{ __("Process") }}</th>
+							<th class="adc-process-col">{{ __("Process") }}</th>
 							<th>{{ __("Planned Item") }}</th>
-							<th class="arrow"></th>
+							<th class="adc-arrow-col" aria-label="To"></th>
 							<th>{{ __("Actual Item") }}</th>
-							<th class="quantity">{{ __("Quantity") }}</th>
-							<th>{{ __("Source") }}</th>
+							<th class="adc-qty-col">{{ __("Quantity") }}</th>
+							<th class="adc-source-col">{{ __("Source") }}</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr v-for="row in group.rows" :key="row.name || rowKey(row)"
-							:class="{ unchanged: !isChanged(row) }">
-							<td><span class="process-badge">{{ row.process_name || "—" }}</span></td>
-							<td><button type="button" @click="openDoc('Item', row.planned_item)">{{ row.planned_item || "—" }}</button></td>
-							<td class="arrow">→</td>
-							<td><button type="button" class="actual-item" @click="openDoc('Item', row.actual_item)">{{ row.actual_item || "—" }}</button></td>
-							<td class="quantity">{{ formatQty(row.actual_quantity) }} <small>{{ row.stock_uom || "" }}</small></td>
-							<td>{{ sourceLabel(row.source_grn_count) }}</td>
+						<tr v-for="row in group.rows" :key="row.name || rowKey(row)" :class="{ 'adc-row--unchanged': !isChanged(row) }">
+							<td><span class="adc-process-badge">{{ row.process_name || "—" }}</span></td>
+							<td>
+								<button type="button" class="adc-item" @click="openDoc('Item', row.planned_item)">{{ row.planned_item || "—" }}</button>
+							</td>
+							<td class="adc-arrow">→</td>
+							<td>
+								<button type="button" class="adc-item adc-item--actual" @click="openDoc('Item', row.actual_item)">{{ row.actual_item || "—" }}</button>
+							</td>
+							<td class="adc-qty">{{ formatQty(row.actual_quantity) }} <small>{{ row.stock_uom || "" }}</small></td>
+							<td class="adc-source">{{ sourceLabel(row.source_grn_count) }}</td>
 						</tr>
 					</tbody>
 				</table>
@@ -95,8 +113,10 @@ function isChanged(row) {
 }
 
 const changedCount = computed(() => rows.value.filter(isChanged).length);
-const processes = computed(() => [...new Set(rows.value.map((row) => row.process_name).filter(Boolean))]
-	.sort((a, b) => String(a).localeCompare(String(b))));
+const processes = computed(() =>
+	[...new Set(rows.value.map((row) => row.process_name).filter(Boolean))]
+		.sort((a, b) => String(a).localeCompare(String(b))),
+);
 const filteredRows = computed(() => {
 	const term = search.value.toLowerCase();
 	return rows.value.filter((row) => {
@@ -109,32 +129,30 @@ const filteredRows = computed(() => {
 });
 const groups = computed(() => {
 	const result = [];
-	const byProductionDetail = new Map();
+	const byIpd = new Map();
 	for (const row of filteredRows.value) {
 		const key = row.production_detail || "";
-		if (!byProductionDetail.has(key)) {
+		if (!byIpd.has(key)) {
 			const group = { productionDetail: key, rows: [] };
-			byProductionDetail.set(key, group);
+			byIpd.set(key, group);
 			result.push(group);
 		}
-		byProductionDetail.get(key).rows.push(row);
+		byIpd.get(key).rows.push(row);
 	}
 	return result;
 });
 
 function formatQty(value) {
-	return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+	const number = Number(value || 0);
+	return number.toLocaleString(undefined, { maximumFractionDigits: 3 });
 }
-
 function sourceLabel(value) {
 	const count = Number(value || 0);
 	return count === 1 ? __("1 GRN") : __("{0} GRNs", [count]);
 }
-
 function rowKey(row) {
 	return [row.production_detail, row.process_name, row.planned_item, row.actual_item, row.actual_quantity].join("|");
 }
-
 function openDoc(doctype, name) {
 	if (name) frappe.set_route("Form", doctype, name);
 }
@@ -143,39 +161,52 @@ defineExpose({ load_data });
 </script>
 
 <style scoped>
-.actual-dia-conversions { padding: 4px 0 18px; }
-.conversion-heading, .conversion-heading > div, .conversion-toolbar, .conversion-card > header {
-	display: flex;
-	align-items: center;
-}
-.conversion-heading { justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.conversion-heading h5 { margin: 0; font-size: 15px; }
-.conversion-heading p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
-.conversion-counts { gap: 7px; font-size: 11px; color: var(--text-muted); }
-.conversion-counts span { padding: 2px 7px; border-radius: 999px; background: var(--subtle-fg); }
-.conversion-counts .changed-count { background: var(--green-100, #d1fadf); color: var(--green-700, #027a48); font-weight: 600; }
-.conversion-toolbar { flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.conversion-toolbar input[type="search"] { flex: 1 1 260px; }
-.conversion-toolbar select { width: 170px; }
-.conversion-toolbar label { display: flex; align-items: center; gap: 6px; margin: 0; }
-.conversion-empty { display: flex; align-items: center; flex-direction: column; gap: 6px; padding: 32px; border: 1px dashed var(--border-color); border-radius: 8px; color: var(--text-muted); }
-.conversion-card { margin-top: 12px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-.conversion-card > header { justify-content: space-between; padding: 8px 11px; background: var(--subtle-fg); }
-.conversion-card button { border: 0; padding: 0; background: transparent; color: var(--primary); font: inherit; cursor: pointer; }
-.conversion-card > header button { font-weight: 600; }
-.conversion-card > header span { color: var(--text-muted); font-size: 11px; }
-.table-wrap { max-height: 520px; overflow: auto; }
-.table { min-width: 820px; margin: 0; font-size: 12px; }
-.table th { position: sticky; top: 0; z-index: 1; background: var(--subtle-fg); }
-.table td, .table th { vertical-align: middle; }
-.process-badge { padding: 2px 7px; border-radius: 999px; background: var(--blue-100, #d1e9ff); color: var(--blue-700, #175cd3); font-size: 11px; font-weight: 600; }
-.actual-item { color: var(--green-700, #027a48) !important; }
-.arrow { width: 34px; color: var(--text-muted); text-align: center; }
-.quantity { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
-.quantity small { color: var(--text-muted); }
-.unchanged { opacity: 0.65; }
+.adc-shell { padding: 4px 0 18px; }
+.adc-head, .adc-title-row, .adc-toolbar, .adc-card-head { display: flex; align-items: center; }
+.adc-head { justify-content: space-between; margin-bottom: 12px; }
+.adc-title-row { flex-wrap: wrap; gap: 7px; }
+.adc-title-row h5 { margin: 0 4px 0 0; font-size: 15px; }
+.adc-head p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
+.adc-count { padding: 2px 7px; border-radius: 999px; background: var(--green-100, #d1fadf); color: var(--green-700, #027a48); font-size: 11px; font-weight: 600; }
+.adc-count--muted { background: var(--subtle-fg); color: var(--text-muted); }
+.adc-toolbar { flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.adc-control { height: 34px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--control-bg, var(--fg-color)); color: var(--text-color); font-size: 12px; outline: none; }
+.adc-control:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--gray-100); }
+.adc-search-wrap { position: relative; flex: 1 1 260px; }
+.adc-search-icon { position: absolute; top: 7px; left: 10px; color: var(--text-muted); font-size: 16px; pointer-events: none; }
+.adc-search { width: 100%; padding: 0 10px 0 31px; }
+.adc-process { min-width: 150px; padding: 0 28px 0 10px; }
+.adc-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; margin: 0; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; cursor: pointer; }
+.adc-toggle input { margin: 0; }
+.adc-empty { display: flex; align-items: center; flex-direction: column; gap: 5px; padding: 34px 20px; border: 1px dashed var(--border-color); border-radius: 8px; background: var(--subtle-fg); color: var(--text-muted); text-align: center; }
+.adc-empty strong { color: var(--text-color); }
+.adc-link-button, .adc-ipd, .adc-item { border: 0; background: transparent; color: var(--primary); font: inherit; text-align: left; cursor: pointer; }
+.adc-link-button { margin-top: 4px; font-weight: 600; }
+.adc-card { margin-top: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg, var(--fg-color)); overflow: hidden; }
+.adc-card-head { justify-content: space-between; gap: 12px; padding: 8px 11px; border-bottom: 1px solid var(--border-color); background: var(--subtle-fg); }
+.adc-card-head span { color: var(--text-muted); font-size: 11px; }
+.adc-ipd { padding: 0; font-weight: 600; }
+.adc-table-wrap { max-height: 520px; overflow: auto; }
+.adc-table { width: 100%; min-width: 880px; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.adc-table th, .adc-table td { padding: 8px 10px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+.adc-table th:last-child, .adc-table td:last-child { border-right: 0; }
+.adc-table tbody tr:last-child td { border-bottom: 0; }
+.adc-table th { position: sticky; top: 0; z-index: 1; background: var(--subtle-fg); color: var(--text-muted); font-weight: 500; text-align: left; }
+.adc-process-col { width: 105px; }
+.adc-arrow-col { width: 34px; }
+.adc-qty-col { width: 110px; text-align: right !important; }
+.adc-source-col { width: 78px; }
+.adc-process-badge { display: inline-block; padding: 2px 7px; border-radius: 999px; background: var(--blue-100, #d1e9ff); color: var(--blue-700, #175cd3); font-size: 11px; font-weight: 600; }
+.adc-item { display: block; width: 100%; padding: 0; color: var(--text-color); font-weight: 500; overflow-wrap: anywhere; }
+.adc-item:hover, .adc-ipd:hover { color: var(--primary); text-decoration: underline; }
+.adc-item--actual { color: var(--green-700, #027a48); }
+.adc-arrow { color: var(--text-muted); text-align: center; }
+.adc-qty { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; white-space: nowrap; }
+.adc-qty small, .adc-source { color: var(--text-muted); font-weight: 400; }
+.adc-row--unchanged { opacity: 0.65; }
 @media (max-width: 700px) {
-	.conversion-heading, .conversion-toolbar { align-items: stretch; flex-direction: column; }
-	.conversion-toolbar select { width: 100%; }
+	.adc-toolbar { align-items: stretch; flex-direction: column; }
+	.adc-search-wrap { flex-basis: auto; }
+	.adc-process { width: 100%; }
 }
 </style>

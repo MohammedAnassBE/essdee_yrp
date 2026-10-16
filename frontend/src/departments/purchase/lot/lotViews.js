@@ -75,7 +75,7 @@ export function lotTabs(workspace = {}) {
 		{
 			key: "fabric",
 			label: "Cloth Program",
-			visible: Boolean(workspace.fabrics?.length || workspace.other_conversions?.length),
+			visible: Boolean(workspace.permissions?.can_write || workspace.fabrics?.length || workspace.other_conversions?.length),
 		},
 	]
 		.filter((tab) => tab.visible)
@@ -218,7 +218,22 @@ export function isChangedConversion(row) {
 	return row.planned_item !== row.actual_item
 }
 export function visibleConversions(rows = [], includeUnchanged = false) {
-	return includeUnchanged ? rows : rows.filter(isChangedConversion)
+	return rows.filter((row) => Number(row.actual_quantity) > 0 && (!row.received_type || row.received_type === "Accepted") && (includeUnchanged || isChangedConversion(row)))
+}
+
+export function buildActualDiaConversionView(rows = [], { process = "", search = "", includeUnchanged = false } = {}) {
+	const eligible = visibleConversions(rows, true)
+	const query = search.trim().toLowerCase()
+	const filteredRows = visibleConversions(rows, includeUnchanged).filter((row) =>
+		(!process || row.process_name === process) && (!query || Object.values(row).join(" ").toLowerCase().includes(query)),
+	)
+	const groups = new Map()
+	for (const row of filteredRows) {
+		const key = row.production_detail || ""
+		if (!groups.has(key)) groups.set(key, { productionDetail: key, rows: [] })
+		groups.get(key).rows.push(row)
+	}
+	return { changedCount: eligible.filter(isChangedConversion).length, processes: [...new Set(eligible.map((row) => row.process_name))].filter(Boolean), filteredRows, groups: [...groups.values()] }
 }
 
 export function planBadge(entry = {}) {

@@ -2,7 +2,7 @@ import json
 from itertools import groupby, zip_longest
 
 import frappe
-from frappe.utils import cint
+from frappe.utils import cint, get_datetime
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document, get_mapping_values
@@ -1009,3 +1009,46 @@ def copy_child_row(row):
 	]:
 		value.pop(fieldname, None)
 	return value
+
+
+@frappe.whitelist()
+def regenerate_ipd_matrix(doc_name, modified=None):
+	"""Rebuild a cloth IPD's generated matrices from its saved configuration.
+
+	The full document save is intentional: it runs the same validation, route
+	reconciliation, matrix generation, reachability, and Lot-plan hooks as a
+	normal IPD update. Approval is a UI editing lock, not a reason to leave an
+	approved IPD with stale generated matrices.
+	"""
+	from essdee_yrp.ipd_validations import allow_generated_cloth_ipd_update, is_cloth_ipd
+
+	doc = frappe.get_doc("YRP Item Production Detail", doc_name)
+	doc.check_permission("write")
+	if not is_cloth_ipd(doc):
+		frappe.throw("Regenerate Matrix is available only for cloth Item Production Details.")
+	if modified and get_datetime(doc.modified) != get_datetime(modified):
+		frappe.throw(
+			"This Item Production Detail changed since you opened it. Reload and try again.",
+			exc=frappe.TimestampMismatchError,
+		)
+
+	# Saving an Approved document through this narrow endpoint is deliberate.
+	# No approval fields or user-authored child rows are changed here; the normal
+	# hooks rebuild only their generated dependants and any referencing Lot plan.
+	with allow_generated_cloth_ipd_update(doc):
+		doc.save()
+	matrices = frappe.get_all(
+		"YRP IPD Process Matrix",
+		filters={"ipd": doc.name},
+		fields=["process_name"],
+	)
+	process_counts = {}
+	for row in matrices:
+		process = row.process_name or "Unspecified"
+		process_counts[process] = process_counts.get(process, 0) + 1
+	return {
+		"status": "success",
+		"modified": doc.modified,
+		"matrix_count": len(matrices),
+		"process_counts": process_counts,
+	}

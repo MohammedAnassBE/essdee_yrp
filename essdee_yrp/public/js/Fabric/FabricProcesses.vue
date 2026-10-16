@@ -1067,7 +1067,7 @@ const recipeTotalValid = computed(() => {
 	return (
 		rows.length > 0 &&
 		items.length === rows.length &&
-		frappe.yrp.attribute_value(new Set(items).size) === items.length &&
+		new Set(items).size === items.length &&
 		rows.every((row) => Number(row.ratio) > 0) &&
 		Math.abs(recipeTotal.value - 100) <= 0.001
 	);

@@ -1,6 +1,7 @@
 # Copyright (c) 2026, anas@essdee.fit and contributors
 # For license information, please see license.txt
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -65,6 +66,22 @@ def _centre_panel_context():
 
 
 class TestPanelWiseConsumption(IntegrationTestCase):
+	def test_panel_dia_editor_matches_production_fill_behaviour(self):
+		desk_source = Path(
+			frappe.get_app_path(
+				"essdee_yrp",
+				"public",
+				"js",
+				"Item_Po_detail",
+				"PanelWiseConsumptionMatrix.vue",
+			)
+		).read_text()
+		self.assertIn("fillConsumptionColumn(packing)", desk_source)
+		self.assertIn('primary_action_label: "Fill Column"', desk_source)
+		self.assertIn("bindDiaMenuPosition", desk_source)
+		self.assertIn("syncDiaLink(el, binding.value)", desk_source)
+		self.assertIn("target.dia = source.dia", desk_source)
+
 	def test_ipd_child_grids_expose_synced_values(self):
 		expected_columns = {
 			"SD YRP Stiching Item Detail": (

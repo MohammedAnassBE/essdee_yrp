@@ -1,5 +1,8 @@
 <template>
 	<div class="lot-tab-stack">
+		<Button v-if="lot && canWrite" label="Build Cloth Program" icon="pi pi-cog" @click="builderOpen = true" />
+		<ClothProgramDialog v-if="lot" v-model:visible="builderOpen" :lot="lot" :modified="modified" @built="emit('changed')" />
+		<div><label>Search conversions <InputText v-model="conversionSearch" /></label><label>Process <Select v-model="conversionProcess" :options="[...new Set([...fabrics.flatMap((entry) => entry.conversions || []), ...otherConversions].map((row) => row.process_name))]" show-clear /></label></div>
 		<section
 			v-for="(entry, index) in cards"
 			:key="entry.cloth_item || index"
@@ -262,6 +265,11 @@
 </template>
 
 <script setup>
+import { programDia, programColour } from "../../../engine/lotClothProgram.js"
+import Button from "primevue/button"
+import ClothProgramDialog from "./ClothProgramDialog.vue"
+import InputText from "primevue/inputtext"
+import Select from "primevue/select"
 import Checkbox from "primevue/checkbox"
 import Message from "primevue/message"
 import Tag from "primevue/tag"
@@ -274,15 +282,23 @@ import {
 	planBadge,
 	quantityTotal,
 	stepSections,
-	visibleConversions,
+	buildActualDiaConversionView,
 	weightMatrix,
 } from "./lotViews.js"
 
 const props = defineProps({
+	lot: { type: String, default: "" },
+	modified: { type: String, default: "" },
+	canWrite: { type: Boolean, default: false },
 	fabrics: { type: Array, default: () => [] },
 	otherConversions: { type: Array, default: () => [] },
 })
+const emit = defineEmits(["changed"])
+const builderOpen = ref(false)
 const includeUnchanged = ref({})
+const conversionSearch = ref("")
+const conversionProcess = ref("")
+function visibleConversions(rows, include) { return buildActualDiaConversionView(rows, { includeUnchanged: include, search: conversionSearch.value, process: conversionProcess.value }).filteredRows }
 const cards = computed(() => {
 	const entries = [...props.fabrics]
 	if (props.otherConversions.length) entries.push({ conversions: props.otherConversions })
@@ -308,8 +324,8 @@ function fabricMatrices(entry) {
 			label: "Knitting Program (Dia × Colour, Kg)",
 			rows: entry.program || [],
 			options: {
-				dia: (row) => row.finished_dia || row.dia,
-				colour: (row) => row.finished_colour || row.colour,
+				dia: programDia,
+				colour: programColour,
 			},
 		},
 	]

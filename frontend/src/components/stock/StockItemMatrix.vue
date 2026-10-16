@@ -18,7 +18,7 @@
 						<i v-if="!groupByItem" class="pi pi-th-large"></i>
 						<strong>{{ groupByItem ? group.itemIdentity : group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong>
 						<small v-if="groupByItem && group.itemLot && !showLotColumn">{{ group.itemLot }}</small>
-						<small v-if="isPurchaseOrder && groupByItem && group.itemComment" class="item-matrix__item-comment">{{ group.itemComment }}</small>
+						<small v-if="groupByItem && group.itemComment" class="item-matrix__item-comment">{{ group.itemComment }}</small>
 					</div>
 					<span>{{ group.items?.length || 0 }} {{ group.items?.length === 1 ? "row" : "rows" }}</span>
 				</header>
@@ -40,7 +40,7 @@
 						<tbody>
 							<tr v-for="(row, rowIndex) in group.items || []" :key="`${row.name}-${rowIndex}`">
 								<td v-if="!groupByItem" class="item-matrix__index">{{ rowIndex + 1 }}</td>
-								<td v-if="!groupByItem" class="item-matrix__item"><strong>{{ row.name || "—" }}</strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="isPurchaseOrder && normalizedComment(row.comments)" class="item-matrix__item-comment">{{ normalizedComment(row.comments) }}</small></td>
+								<td v-if="!groupByItem" class="item-matrix__item"><strong>{{ row.name || "—" }}</strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="normalizedComment(row.comments)" class="item-matrix__item-comment">{{ normalizedComment(row.comments) }}</small></td>
 								<td v-for="column in leadingContextColumns(group)" :key="column.key">{{ contextDisplay(row, column) }}</td>
 								<td v-for="attribute in group.attributes || []" :key="attribute"><span class="item-matrix__attribute">{{ display(row.attributes?.[attribute]) }}</span></td>
 								<td v-for="column in trailingContextColumns(group)" :key="column.key">{{ contextDisplay(row, column) }}</td>
@@ -66,6 +66,7 @@
 </template>
 
 <script setup>
+import { groupItemsForDisplay } from "../../engine/stock/groupItemsForDisplay.js"
 import { computed } from "vue"
 
 const props = defineProps({
@@ -86,8 +87,9 @@ const props = defineProps({
 const logicalRowCount = computed(() => props.groups.reduce((total, group) => total + (group.items?.length || 0), 0))
 const isPurchaseOrder = computed(() => props.doctype === "Purchase Order")
 const displayGroups = computed(() => {
-	if (!props.groupByItem) return props.groups
-	return props.groups.flatMap((group, groupIndex) => {
+	const groups = ["YRP Work Order", "YRP Delivery Challan"].includes(props.doctype) ? groupItemsForDisplay(props.groups) : props.groups
+	if (!props.groupByItem) return groups
+	return groups.flatMap((group, groupIndex) => {
 		const sections = new Map()
 		for (const item of group.items || []) {
 			const itemIdentity = item.name || "Unspecified item"

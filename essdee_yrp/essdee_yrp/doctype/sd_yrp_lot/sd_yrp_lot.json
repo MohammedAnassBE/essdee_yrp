@@ -547,7 +547,7 @@
    "fieldname": "lot_fabric_conversions",
    "fieldtype": "Table",
    "hidden": 1,
-   "label": "Lot Fabric Conversions",
+   "label": "Actual Dia Conversions",
    "no_copy": 1,
    "options": "SD YRP Lot Fabric Conversion",
    "read_only": 1

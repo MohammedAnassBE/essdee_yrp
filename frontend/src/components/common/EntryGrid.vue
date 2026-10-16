@@ -23,6 +23,7 @@
 				@keydown="onKeydown"
 				@copy="onCopy"
 				@paste="onPaste"
+				@entry-grid-finish-edit="finishCellEdit"
 			>
 				<thead>
 					<tr role="row" aria-rowindex="1">
@@ -52,7 +53,7 @@
 							@dblclick="startEdit('edit')"
 						>
 							<template v-if="isEditing(rowIndex, colIndex)">
-								<LinkField v-if="column.type === 'link'" ref="editor" class="entry-grid__link" :model-value="editText" :doctype="column.doctype || ''" :filters="column.filters || {}" :show-open-button="false" :aria-label="cellLabel(row, column)" :invalid="Boolean(cellError(rowIndex, colIndex))" :show-validation-message="false" @validation="linkValidation" @select="commitLink($event.name)" />
+								<LinkField v-if="column.type === 'link'" ref="editor" class="entry-grid__link" :model-value="editText" :doctype="column.doctype || ''" :filters="column.filters || {}" :show-open-button="false" :aria-label="cellLabel(row, column)" :invalid="Boolean(cellError(rowIndex, colIndex))" :aria-describedby="cellError(rowIndex, colIndex) ? `${gridId}-error` : undefined" :show-validation-message="false" @validation="linkValidation" @select="commitLink($event.name)" />
 								<select v-else-if="usesNativeSelect(column)" ref="editor" v-model="editText" class="entry-grid__box entry-grid__input" :aria-label="cellLabel(row, column)" @keydown="onEditorKeydown" @blur="commitEdit()">
 									<option value="" />
 									<option v-for="option in normalizedOptions(column)" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -80,13 +81,13 @@
 				</tfoot>
 			</table>
 		</div>
-		<p class="entry-grid__error" role="status" aria-live="polite">{{ activeError }}</p>
+		<p :id="`${gridId}-error`" class="entry-grid__error" role="status" aria-live="polite">{{ activeError }}</p>
 	</section>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from "vue"
+import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch } from "vue"
 
 import LinkField from "./LinkField.vue"
 import {
@@ -118,7 +119,6 @@ const TOOL_LABELS = { fillRight: "Fill right", fillDown: "Fill down", sameForAll
 const TOOL_ICONS = { fillRight: "pi pi-arrow-right", fillDown: "pi pi-arrow-down", sameForAll: "pi pi-clone", paste: "pi pi-clipboard", clear: "pi pi-eraser" }
 const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }
 const ROW_HEADER_WIDTH = 140
-let gridSequence = 0
 
 const props = defineProps({
 	rows: { type: Array, default: () => [] },
@@ -136,10 +136,11 @@ const props = defineProps({
 	totalLabel: { type: String, default: "Total" },
 	toolbar: { type: Array, default: () => ["fillRight", "fillDown", "paste", "clear"] },
 	removableRows: { type: Boolean, default: false },
+	validationField: { type: String, default: "" },
 })
 const emit = defineEmits(["update:modelValue", "change", "paste-report", "remove-row"])
 
-const gridId = `entry-grid-${++gridSequence}`
+const gridId = `entry-grid-${useId()}`
 const gridRoot = ref(null)
 const table = ref(null)
 const scroller = ref(null)
@@ -167,12 +168,14 @@ const tableMinWidth = computed(() => `max(100%, ${ROW_HEADER_WIDTH + props.colum
 watch(() => [props.rows.length, props.columns.length], clampActive)
 
 const invalidRegistry = inject(ENTRY_GRID_INVALID_KEY, null)
-const liveInvalidCount = computed(() => {
+const liveInvalidCells = computed(() => {
 	const rowKeys = new Set(props.rows.map((row) => row.key))
 	const colKeys = new Set(props.columns.map((column) => column.key))
-	return Object.values(invalidCells.value).filter((cell) => rowKeys.has(cell.rowKey) && colKeys.has(cell.colKey)).length
+	return Object.values(invalidCells.value).filter((cell) => rowKeys.has(cell.rowKey) && colKeys.has(cell.colKey))
 })
-if (invalidRegistry) watch(liveInvalidCount, (count) => invalidRegistry.report(gridId, count), { immediate: true })
+if (invalidRegistry) watch(liveInvalidCells, (cells) => invalidRegistry.report(gridId, cells.length, {
+	field: props.validationField, cells, focusCell,
+}), { immediate: true })
 
 function clampActive() {
 	const row = Math.min(active.value.row, Math.max(props.rows.length - 1, 0))
@@ -231,13 +234,9 @@ function select(position, extend = false) {
 }
 function focusCell(rowKey, colKey) {
 	const row = rowKey == null ? 0 : props.rows.findIndex((candidate) => candidate.key === rowKey)
-	const col = props.columns.findIndex((candidate) => candidate.key === colKey)
-	if (row < 0 || !props.rows.length || !props.columns.length) {
-		gridRoot.value?.scrollIntoView?.({ block: "nearest", inline: "nearest" })
-		gridRoot.value?.focus?.({ preventScroll: true })
-		return Boolean(gridRoot.value && document.activeElement === gridRoot.value)
-	}
-	select({ row, col: Math.max(col, 0) })
+	const col = colKey == null || colKey === '' ? 0 : props.columns.findIndex((candidate) => candidate.key === colKey)
+	if (row < 0 || col < 0 || !props.rows.length || !props.columns.length) return false
+	select({ row, col })
 	return true
 }
 
@@ -269,7 +268,19 @@ function stopEdit() {
 	editing.value = ""
 	focusActive()
 }
-function commitEdit(direction = null, { picked = false } = {}) {
+function finishCellEdit() {
+	if (!editing.value) return
+	const { row, col } = active.value
+	if (props.columns[col].type !== "link") { commitEdit(); return }
+	const element = Array.isArray(editor.value) ? editor.value[0] : editor.value
+	const value = element?.finishEdit()
+	delete invalidCells.value[cellKey(row, col)]
+	if (value != null) {
+		editText.value = value
+		commitEdit(null, { picked: true, focus: false })
+	} else editing.value = ""
+}
+function commitEdit(direction = null, { picked = false, focus = true } = {}) {
 	if (!editing.value) return
 	const { row, col } = active.value
 	const column = props.columns[col]
@@ -280,7 +291,7 @@ function commitEdit(direction = null, { picked = false } = {}) {
 	else if (value !== rawValue(row, col) || invalidCells.value[cellKey(row, col)]) emitChanges(setCells(props.modelValue, [{ ...cell, value }]), [{ ...cell, value }])
 	editing.value = ""
 	if (direction) move(direction)
-	else focusActive()
+	else if (focus) focusActive()
 }
 function linkValidation({ message, query }) {
 	const { row, col } = active.value

@@ -12,7 +12,7 @@ export function loadComponent(filename, modules) {
 	const { descriptor } = parse(readFileSync(path, "utf8"), { filename: path })
 	const compiled = compileScript(descriptor, { id: path, inlineTemplate: true })
 	const dependencies = { vue: Vue, ...modules }
-	const source = compiled.content.replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];?/g, (_, names, specifier) => {
+	const source = compiled.content.replace(/^import\s+["'][^"']+\.css["'];?$/gm, "").replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];?/g, (_, names, specifier) => {
 		if (!(specifier in dependencies)) {
 			if (!specifier.endsWith(".vue")) throw new Error(`Missing test module: ${specifier}`)
 			dependencies[specifier] = loadComponent(resolve(dirname(path), specifier), modules)

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import AutoComplete from "../frontend/node_modules/primevue/autocomplete/index.mjs"
-import { Vue, findNodes, loadComponent, mountComponent } from "./helpers/vue_renderer.mjs"
+import { Vue, createTestRenderer, findNodes, loadComponent, mountComponent } from "./helpers/vue_renderer.mjs"
 import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "../frontend/src/components/common/autocompleteKeys.js"
 import * as gridHelpers from "../frontend/src/components/common/entryGrid.js"
 
@@ -38,11 +38,12 @@ const AutoCompleteHost = {
 	},
 }
 const searches = []
+let gridSearchHandler = null
 const modules = {
 	"primevue/autocomplete": AutoCompleteHost,
 	"primevue/button": { render: () => h("button") },
 	"./autocompleteKeys.js": { handleAutocompleteKey, withAutocompleteCompositionGuard },
-	"../../api/frappe.js": { searchLink: async (...args) => { searches.push(args); return ["Knitting", "Knitting second"] } },
+	"../../api/frappe.js": { searchLink: async (...args) => { searches.push(args); return gridSearchHandler ? gridSearchHandler(...args) : args[1] === "ZZ no such item qq" ? [] : ["Knitting", "Knitting second"] } },
 	"../../router/webDocumentRoutes.js": { webDocumentPath: (doctype, name) => `${doctype}/${name}` },
 }
 const LinkField = loadComponent("frontend/src/components/common/LinkField.vue", modules)
@@ -241,6 +242,44 @@ await flush()
 assert.equal(waiting.props.modelValue, "Knitting")
 assert.equal(waiting.control.overlayVisible, false)
 assert.equal(waiting.node().props.value.label, "Knitting")
+
+// Invalidate at the keystroke, before the next debounced search even starts.
+function deferred() {
+	let resolve, reject
+	const promise = new Promise((yes, no) => { resolve = yes; reject = no })
+	return { promise, resolve, reject }
+}
+for (const oldResult of ["success", "failure"]) {
+	const oldSearch = deferred(), currentSearch = deferred()
+	const race = mount({ modelValue: "Original", searchHandler: query => query === "Knitt" ? oldSearch.promise : currentSearch.promise })
+	await race.search("Knitt")
+	race.node().props.onType("Dye"); await flush()
+	assert.deepEqual(race.control.suggestions, [], "typing clears old suggestions during the debounce gap")
+	assert.equal(race.control.focusedOptionIndex, -1)
+	if (oldResult === "success") oldSearch.resolve(["Knitting"])
+	else oldSearch.reject(new Error("obsolete search failed"))
+	await flush()
+	assert.deepEqual(race.control.suggestions, [], "a superseded response cannot repopulate the list")
+	assert.equal(race.node().props.value, "Dye")
+	await race.key("Enter")
+	assert.equal(race.props.modelValue, "Original", "Enter must not pick the old query's first result")
+	assert.doesNotMatch(findNodes(race.root, node => node.props.role === "alert").map(node => node.text).join(""), /obsolete search failed/)
+	race.node().props.onSearch("Dye"); await flush()
+	await race.key("Enter")
+	assert.equal(race.props.modelValue, "Original", "Enter must wait for current results")
+	currentSearch.resolve(["Dyeing"]); await flush()
+	assert.equal(race.control.focusedOptionIndex, 0, "current results still highlight the first option")
+	await race.key("Enter")
+	assert.equal(race.props.modelValue, "Dyeing")
+}
+const stalePick = mount({ modelValue: "Original" })
+await stalePick.search("Knitt")
+const obsoleteOption = stalePick.control.suggestions[0]
+stalePick.node().props.onType("Dye")
+// A click/Tab selection already queued by PrimeVue must also fail the token check.
+stalePick.control.onOptionSelect({}, obsoleteOption); await flush()
+assert.equal(stalePick.props.modelValue, "Original")
+assert.deepEqual(stalePick.control.suggestions, [])
 // FormField is the DC wrapper; Item Production Detail > Yarn Ratio uses this EntryGrid link column.
 const FormField = loadComponent("frontend/src/components/common/FormField.vue", {
 	...modules, "./LinkField.vue": LinkField,
@@ -291,6 +330,173 @@ findNodes(gridRoot, node => node.props.role === "grid")[0].props.onKeydown(close
 await flush()
 assert.equal(gridProps.modelValue[0].yarn_item, "Knitting second")
 assert.equal(findNodes(gridRoot, node => node.type === "autocomplete").length, 0)
+
+
+// Invalid Link text must be explained after Enter and after blur in every wrapper.
+const invalidLink = mount({ modelValue: "Knitting", searchHandler: async () => [] })
+await invalidLink.search("zzqq nothing")
+await invalidLink.key("Enter")
+const processError = 'No YRP Process matches "zzqq nothing". Pick one from the list.'
+assert.ok(findNodes(invalidLink.root, node => node.props.role === "alert" && node.text === processError).length)
+assert.equal(invalidLink.control.invalid, true)
+assert.match(invalidLink.control.pt.pcInputText.root["aria-describedby"], /link-error/)
+invalidLink.node().props.onBlur(); await flush()
+assert.equal(invalidLink.props.modelValue, "Knitting")
+assert.ok(findNodes(invalidLink.root, node => node.text === processError).length, "blur must retain the explanation after restoring the prior value")
+await invalidLink.search("try again")
+assert.equal(findNodes(invalidLink.root, node => node.props.role === "alert").length, 0, "typing clears the previous error")
+await invalidLink.key("Escape")
+assert.equal(findNodes(invalidLink.root, node => node.props.role === "alert").length, 0)
+invalidLink.props.searchHandler = async () => ["Dyeing"]
+await flush()
+await invalidLink.search("Dye"); await invalidLink.key("Enter")
+assert.equal(invalidLink.props.modelValue, "Dyeing")
+assert.equal(invalidLink.control.invalid, false)
+
+formProps.searchHandler = async () => []
+await flush()
+input = findNodes(formRoot, node => node.type === "autocomplete")[0]
+input.props.onType("zzqq nothing"); input.props.onSearch("zzqq nothing"); await flush()
+input.props.onBlur(); await flush()
+assert.equal(formProps.modelValue, "S-0005")
+assert.ok(findNodes(formRoot, node => node.props.class === "form-field__error" && node.text === 'No Supplier matches "zzqq nothing". Pick one from the list.').length)
+assert.equal(controls.find(control => control.$el === input).invalid, true)
+assert.match(controls.find(control => control.$el === input).pt.pcInputText.root["aria-describedby"], /-error/)
+formProps.resetVersion += 1; await flush()
+assert.equal(findNodes(formRoot, node => node.props.class === "form-field__error").length, 0)
+
+// Use the Item BOM Link-cell configuration, including the grid's invalid registry.
+const invalidCounts = new Map()
+const invalidGridRoot = { type: "root", text: "", props: {}, children: [] }
+const invalidGridProps = reactive({ rows: [{ key: "bom-1", label: "1" }], columns: [{ key: "item", label: "Item", type: "link", doctype: "Item" }], modelValue: { "bom-1": { item: "Original" } }, "onUpdate:modelValue": value => { invalidGridProps.modelValue = value } })
+const invalidGridApp = createTestRenderer().createApp({
+	setup() {
+		Vue.provide(gridHelpers.ENTRY_GRID_INVALID_KEY, { report: (key, count) => invalidCounts.set(key, count), remove: key => invalidCounts.delete(key) })
+		return () => h(EntryGrid, invalidGridProps)
+	},
+})
+invalidGridApp.mount(invalidGridRoot)
+const invalidTable = findNodes(invalidGridRoot, node => node.props.role === "grid")[0]
+invalidTable.querySelector = () => null
+const invalidCell = () => findNodes(invalidGridRoot, node => node.props.role === "gridcell")[0]
+invalidCell().props.onDblclick(); await flush()
+input = findNodes(invalidGridRoot, node => node.type === "autocomplete")[0]
+input.props.onType("ZZ no such item qq"); input.props.onSearch("ZZ no such item qq"); await flush()
+findNodes(invalidGridRoot, node => node.props.onKeydownCapture)[0].props.onKeydownCapture(event("Enter")); await flush()
+const itemError = 'No Item matches "ZZ no such item qq". Pick one from the list.'
+assert.equal(invalidCell().props["aria-invalid"], true)
+assert.equal(invalidCell().props.title, itemError)
+assert.ok(findNodes(invalidGridRoot, node => node.props["aria-live"] === "polite" && node.text === itemError).length)
+assert.equal([...invalidCounts.values()].reduce((sum, count) => sum + count, 0), 1)
+assert.equal(invalidGridProps.modelValue["bom-1"].item, "Original")
+input.props.onBlur(); await flush()
+assert.ok(findNodes(invalidGridRoot, node => node.text === itemError).length)
+input.props.onType("Knitt"); input.props.onSearch("Knitt"); await flush()
+findNodes(invalidGridRoot, node => node.props.onKeydownCapture)[0].props.onKeydownCapture(event("Enter")); await flush()
+assert.equal(invalidGridProps.modelValue["bom-1"].item, "Knitting")
+assert.equal([...invalidCounts.values()].reduce((sum, count) => sum + count, 0), 0)
+
+// Mount the actual tab-switch finish handler around the real grid and LinkField.
+// The stub supplies only tab layout/routing; before-change runs production code.
+const route = reactive({ hash: "#cutting_tab", query: {} })
+const IpdSections = loadComponent("frontend/src/departments/merch/ipd/IpdSections.vue", {
+	"primevue/usetoast": { useToast: () => ({ add() {} }) },
+	"vue-router": { useRoute: () => route, useRouter: () => ({ replace() {} }) },
+	"../../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({}) },
+	"./ipdSectionRegistry.js": { preloadSectionComponents() {}, sectionComponent: () => ({ render: () => null }) },
+	"./ipdTabs.js": { visibleTabs: tabs => tabs, resolveTab: (_tabs, key) => key, preloadSectionKeys: () => [] },
+	"./ipdFocus.js": { focusElement: () => false, GRID_FOCUS_PART: {} },
+	"./IpdTabs.vue": {
+		props: ["modelValue"], emits: ["before-change", "update:modelValue"],
+		setup(_props, { emit }) {
+			return () => h("tabs", { onSwitch: () => emit("before-change") }, [h("panel", { role: "tabpanel" }, [h(EntryGrid, invalidGridProps)])])
+		},
+	},
+})
+const switchRoot = { type: "root", text: "", props: {}, children: [] }
+const switchApp = createTestRenderer().createApp({
+	setup() {
+		Vue.provide(gridHelpers.ENTRY_GRID_INVALID_KEY, { report: (key, count) => invalidCounts.set(key, count) })
+		return () => h(IpdSections, { tabs: [], doc: {} })
+	},
+})
+switchApp.mount(switchRoot)
+const switchPanel = findNodes(switchRoot, node => node.props.role === "tabpanel")[0]
+const switchGrid = findNodes(switchRoot, node => node.props.role === "grid")[0]
+const switchCell = () => findNodes(switchRoot, node => node.props.role === "gridcell")[0]
+switchRoot.children[0].querySelector = () => switchPanel
+switchPanel.querySelectorAll = () => [switchGrid]
+switchPanel.contains = () => false // the tab already received focus on native mousedown
+switchGrid.querySelector = () => null
+switchGrid.dispatchEvent = event => switchGrid.props.onEntryGridFinishEdit(event)
+const beforeSwitchDocument = globalThis.document
+globalThis.document = { activeElement: null }
+const switchTabs = findNodes(switchRoot, node => node.type === "tabs")[0]
+const assertFinished = (expected) => {
+	assert.equal(invalidGridProps.modelValue["bom-1"].item, expected)
+	assert.equal(switchCell().props["aria-invalid"], undefined)
+	assert.equal(switchCell().props.title, undefined)
+	assert.equal(findNodes(switchRoot, node => node.type === "autocomplete").length, 0)
+	assert.equal([...invalidCounts.values()].reduce((sum, count) => sum + count, 0), 0, "Save must not remain blocked")
+	assert.equal(findNodes(switchCell(), node => node.text === expected).length, 1)
+}
+for (const blurFirst of [false, true]) {
+	invalidGridProps.modelValue = { "bom-1": { item: "Thermal Fabric" } }; await flush()
+	switchCell().props.onDblclick(); await flush()
+	input = findNodes(switchRoot, node => node.type === "autocomplete")[0]
+	input.props.onType("Thermal FabricZZpartial"); input.props.onSearch("Thermal FabricZZpartial"); await flush()
+	if (blurFirst) {
+		input.props.onBlur(); await flush()
+		assert.equal(switchCell().props.title, 'Pick a value from the list for "Thermal FabricZZpartial".')
+		assert.equal(switchCell().props["aria-invalid"], true)
+	}
+	switchTabs.props.onSwitch(); await flush()
+	assertFinished("Thermal Fabric")
+	// Finishing again, as jumpTo/watch do, must be harmless.
+	switchTabs.props.onSwitch(); await flush()
+	assertFinished("Thermal Fabric")
+	for (const exactText of ["Knitting", "Knitting second"]) {
+		switchCell().props.onDblclick(); await flush()
+		input = findNodes(switchRoot, node => node.type === "autocomplete")[0]
+		input.props.onType(exactText); input.props.onSearch(exactText); await flush()
+		if (blurFirst) { input.props.onBlur(); await flush() }
+		switchTabs.props.onSwitch(); await flush()
+		assertFinished(exactText)
+	}
+}
+
+// The grid uses this same LinkField search; cover its pending-response race too.
+const oldGridSearch = deferred(), currentGridSearch = deferred()
+gridSearchHandler = (_doctype, query) => query === "Knitt" ? oldGridSearch.promise : currentGridSearch.promise
+switchCell().props.onDblclick(); await flush()
+input = findNodes(switchRoot, node => node.type === "autocomplete")[0]
+input.props.onType("Knitt"); input.props.onSearch("Knitt"); await flush()
+input.props.onType("Dye"); await flush()
+oldGridSearch.resolve(["Knitting"]); await flush()
+findNodes(switchRoot, node => node.props.onKeydownCapture)[0].props.onKeydownCapture(event("Enter")); await flush()
+assert.equal(invalidGridProps.modelValue["bom-1"].item, "Knitting second")
+assert.deepEqual(input.props.suggestions, [])
+input.props.onSearch("Dye"); await flush()
+currentGridSearch.resolve(["Dyeing"]); await flush()
+assert.equal(input.props.focused, 0)
+findNodes(switchRoot, node => node.props.onKeydownCapture)[0].props.onKeydownCapture(event("Enter")); await flush()
+assertFinished("Dyeing")
+gridSearchHandler = null
+
+// Form and grid wrappers must share the same grammatical Link error.
+formProps.field.options = "Item"
+formProps.searchHandler = async () => ["Other item"]
+await flush()
+input = findNodes(formRoot, node => node.type === "autocomplete")[0]
+input.props.onType("partial"); input.props.onSearch("partial"); await flush()
+input.props.onBlur(); await flush()
+assert.ok(findNodes(formRoot, node => node.props.class === "form-field__error" && node.text === 'Pick a value from the list for "partial".').length)
+globalThis.document = beforeSwitchDocument
+const previousWindow = globalThis.window
+globalThis.window = { removeEventListener() {} }
+switchApp.unmount()
+invalidGridApp.unmount()
+globalThis.window = previousWindow
 
 
 const AsyncMulti = loadComponent("frontend/src/departments/cutting/reports/AsyncLinkMultiSelect.vue", {

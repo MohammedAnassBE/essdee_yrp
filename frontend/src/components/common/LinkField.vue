@@ -110,6 +110,8 @@ const validationError = ref("")
 const committedName = ref("")
 const committedLabel = ref("")
 let requestSequence = 0
+let suggestionSequence = null
+let blurredOption = null
 
 const modelLabel = computed(() => committedName.value === props.modelValue
 	? committedLabel.value || String(props.modelValue || "")
@@ -143,12 +145,14 @@ const autocompletePt = computed(() => ({
 
 watch(
 	() => [props.modelValue, props.resetVersion],
-	() => { setValidation(); syncModelValue() },
+	() => { blurredOption = null; cancelSearch(); setValidation(); syncModelValue() },
 	{ immediate: true },
 )
 
 async function complete(event) {
 	const sequence = ++requestSequence
+	suggestionSequence = null
+	suggestions.value = []
 	searching.value = true
 	searchError.value = ""
 	try {
@@ -162,6 +166,9 @@ async function complete(event) {
 				props.matchVisibleOnly,
 			)
 		if (sequence !== requestSequence) return
+		suggestionSequence = sequence
+		// Re-arm PrimeVue's suggestions watcher after clearing the previous results.
+		if (input.value) input.value.searching = true
 		suggestions.value = (rows || []).map((row) =>
 			typeof row === "string"
 				? { name: row, label: row }
@@ -169,6 +176,7 @@ async function complete(event) {
 		)
 	} catch (error) {
 		if (sequence !== requestSequence) return
+		if (input.value) input.value.searching = true
 		suggestions.value = []
 		searchError.value = error.message || "Search failed"
 	} finally {
@@ -177,8 +185,12 @@ async function complete(event) {
 }
 
 function select(event) {
-	setValidation()
 	const selected = event.value
+	if (suggestionSequence !== requestSequence || !suggestions.value.includes(selected)) {
+		restoreCommittedValue()
+		return
+	}
+	setValidation()
 	const name = typeof selected === "object" ? selected?.name : selected
 	if (name === undefined || name === null || name === "") return
 	committedName.value = name
@@ -189,6 +201,11 @@ function select(event) {
 }
 
 function updateInput(value) {
+	blurredOption = null
+	if (typeof value === "string") {
+		cancelSearch()
+		searchError.value = ""
+	}
 	setValidation()
 	inputValue.value = value
 	if (value === "" || value === null) clear()
@@ -197,16 +214,18 @@ function updateInput(value) {
 function onKeydown(event) {
 	if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229
 		&& event.target === input.value?.$el?.querySelector("input")
-		&& !(input.value?.overlayVisible && suggestions.value.length && !searching.value)) rejectUnselected()
-	handleAutocompleteKey(event, input.value, restoreCommittedValue, searching.value)
+		&& !(input.value?.overlayVisible && suggestions.value.length && suggestionSequence === requestSequence && !searching.value)) rejectUnselected()
+	handleAutocompleteKey(event, input.value, restoreCommittedValue, searching.value || suggestionSequence !== requestSequence)
 }
 async function focusFirstOption() {
 	await nextTick()
 	if (input.value?.overlayVisible) input.value.focusedOptionIndex = input.value.findFirstOptionIndex()
 }
 function onBlur() {
+	// A tab click blurs the input before its before-change handler runs.
+	blurredOption = exactOption()
 	rejectUnselected()
-	restoreCommittedValue()
+	restoreCommittedValue({ keepBlurredOption: true })
 	input.value?.hide()
 }
 
@@ -226,10 +245,13 @@ function clear() {
 
 function cancelSearch() {
 	requestSequence += 1
+	suggestionSequence = null
+	suggestions.value = []
 	searching.value = false
 	if (input.value) {
 		clearTimeout(input.value.searchTimeout)
 		input.value.searching = false
+		input.value.focusedOptionIndex = -1
 	}
 }
 
@@ -243,11 +265,27 @@ function rejectUnselected() {
 	const message = searchError.value || (hasIncompleteFilters.value ? props.dependencyMessage
 		: !searching.value && !suggestions.value.length
 			? `No ${props.doctype} matches "${query}". Pick one from the list.`
-			: `Pick a ${props.doctype} from the list for "${query}".`)
+			: `Pick a value from the list for "${query}".`)
 	setValidation(message, query)
 }
 
-function restoreCommittedValue() {
+function exactOption() {
+	if (typeof inputValue.value !== "string" || suggestionSequence !== requestSequence) return null
+	const query = inputValue.value.trim()
+	return suggestions.value.find((option) => option.name === query || option.label === query) || null
+}
+
+function finishEdit() {
+	const option = typeof inputValue.value === "string" ? exactOption() : blurredOption
+	blurredOption = null
+	setValidation()
+	restoreCommittedValue()
+	input.value?.hide()
+	return option?.name ?? null
+}
+
+function restoreCommittedValue({ keepBlurredOption = false } = {}) {
+	if (!keepBlurredOption) blurredOption = null
 	cancelSearch()
 	syncModelValue()
 }
@@ -271,7 +309,7 @@ function focus() {
 	input.value?.$el?.querySelector("input")?.focus()
 }
 
-defineExpose({ focus })
+defineExpose({ focus, finishEdit })
 </script>
 
 <style scoped>

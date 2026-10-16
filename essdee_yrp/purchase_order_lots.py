@@ -203,15 +203,20 @@ def update_lot_po_links(lot, add_pos=None, remove_pos=None, comment=None):
 
 def validate_grn_lots(doc, method=None):
 	"""Apply linked-Lot restrictions for PO GRNs on every server save path."""
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+		get_purchase_order_lot_fieldname,
+		get_purchase_order_lot_options,
+	)
+
 	if doc.get("against") != "Purchase Order" or not doc.get("against_id"):
 		return
 	if not frappe.db.get_value("Purchase Order", doc.against_id, "is_yrp_managed"):
 		return
-	dimension_field = _lot_dimension_field("YRP Goods Received Note Item")
+	dimension_field = get_purchase_order_lot_fieldname()
 	if not dimension_field:
 		return
 	po = frappe.get_doc("Purchase Order", doc.against_id)
-	allowed_lots = {row.lot for row in po.get("sd_lot") or [] if row.lot}
+	allowed_lots = set(get_purchase_order_lot_options(po))
 	# An empty linked list deliberately means unrestricted, matching legacy policy.
 	if not allowed_lots:
 		return

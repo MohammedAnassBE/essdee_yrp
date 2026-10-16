@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from yrp.yrp.doctype.yrp_goods_received_note import yrp_goods_received_note as grn_controller
 
 from essdee_yrp import lot_packing_setup, packing_hooks, purchase_order_lots, work_order_hooks
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot import sd_yrp_lot as lot_controller
@@ -113,7 +114,12 @@ class TestLotPackingBoundary(FrappeTestCase):
 			items=[frappe._dict(lot="LOT-B")],
 		)
 		with (
-			patch.object(purchase_order_lots, "_lot_dimension_field", return_value="lot"),
+			patch.object(grn_controller, "get_purchase_order_lot_fieldname", return_value="lot"),
+			patch.object(
+				frappe,
+				"get_hooks",
+				return_value=["essdee_yrp.purchase_order_lots.purchase_order_lot_options"],
+			),
 			patch.object(frappe.db, "get_value", return_value=1),
 			patch.object(frappe, "get_doc", return_value=po),
 			self.assertRaisesRegex(frappe.ValidationError, "LOT-B"),
@@ -127,7 +133,12 @@ class TestLotPackingBoundary(FrappeTestCase):
 			items=[frappe._dict(lot="LOT-A")],
 		)
 		with (
-			patch.object(purchase_order_lots, "_lot_dimension_field", return_value="lot"),
+			patch.object(grn_controller, "get_purchase_order_lot_fieldname", return_value="lot"),
+			patch.object(
+				frappe,
+				"get_hooks",
+				return_value=["essdee_yrp.purchase_order_lots.purchase_order_lot_options"],
+			),
 			patch.object(frappe.db, "get_value", return_value=1),
 			patch.object(
 				frappe,
@@ -139,7 +150,62 @@ class TestLotPackingBoundary(FrappeTestCase):
 			),
 		):
 			purchase_order_lots.validate_grn_lots(grn)
+			grn["items"][0].lot = "LOT-B"
 			purchase_order_lots.validate_grn_lots(grn)
+
+	def test_grn_accepts_header_lot_and_rejects_unlinked_lot(self):
+		po = FakePurchaseOrder(
+			lot="B",
+			items=[frappe._dict(lot="A")],
+			default_lot="A",
+			sd_lot=[frappe._dict(lot="A")],
+		)
+		grn = frappe._dict(against="Purchase Order", against_id="PO-TEST", items=[frappe._dict(lot="B")])
+		with (
+			patch.object(grn_controller, "get_purchase_order_lot_fieldname", return_value="lot"),
+			patch.object(
+				frappe,
+				"get_hooks",
+				return_value=["essdee_yrp.purchase_order_lots.purchase_order_lot_options"],
+			),
+			patch.object(frappe.db, "get_value", return_value=1),
+			patch.object(frappe, "get_doc", return_value=po),
+		):
+			purchase_order_lots.validate_grn_lots(grn)
+			grn["items"][0].lot = "C"
+			with self.assertRaisesRegex(frappe.ValidationError, "C"):
+				purchase_order_lots.validate_grn_lots(grn)
+
+	def test_grn_validator_agrees_with_purchase_order_lot_options(self):
+		po = FakePurchaseOrder(
+			lot="HEADER",
+			items=[frappe._dict(lot="ITEM")],
+			default_lot="DEFAULT",
+			sd_lot=[frappe._dict(lot="LINKED")],
+		)
+		grn = frappe._dict(against="Purchase Order", against_id="PO-TEST", items=[])
+		with (
+			patch.object(grn_controller, "get_purchase_order_lot_fieldname", return_value="lot"),
+			patch.object(
+				frappe,
+				"get_hooks",
+				return_value=["essdee_yrp.purchase_order_lots.purchase_order_lot_options"],
+			),
+			patch.object(frappe.db, "get_value", return_value=1),
+			patch.object(frappe, "get_doc", return_value=po),
+		):
+			options = set(grn_controller.get_purchase_order_lot_options(po))
+			self.assertEqual(options, {"HEADER", "ITEM", "DEFAULT", "LINKED"})
+			accepted = set()
+			for lot in ["HEADER", "ITEM", "DEFAULT", "LINKED", "UNLINKED"]:
+				grn["items"] = [frappe._dict(lot=lot)]
+				if lot in options:
+					purchase_order_lots.validate_grn_lots(grn)
+					accepted.add(lot)
+				else:
+					with self.assertRaisesRegex(frappe.ValidationError, lot):
+						purchase_order_lots.validate_grn_lots(grn)
+			self.assertEqual(accepted, options)
 
 	def test_link_mutation_rejects_cancelled_po_and_missing_reason(self):
 		cancelled = FakePurchaseOrder(docstatus=2)

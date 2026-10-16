@@ -1,0 +1,60 @@
+.ipd-cloth-stack {
+	display: grid;
+	gap: var(--erp-space-3);
+	min-width: 0;
+}
+
+.ipd-cloth-strip {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 10px;
+	border-radius: var(--erp-control-radius);
+	font-size: var(--erp-font-size-caption);
+	font-weight: 500;
+}
+
+.ipd-cloth-strip--error {
+	background: var(--erp-danger-soft);
+	color: var(--erp-danger);
+}
+
+.ipd-cloth-strip--ok {
+	background: var(--erp-success-soft);
+	color: var(--erp-success-text);
+}
+
+.ipd-cloth-strip--info {
+	background: var(--erp-info-soft);
+	color: var(--erp-info);
+}
+
+.ipd-cloth-empty {
+	margin: 0;
+}
+
+.ipd-cloth-dialog__body {
+	display: grid;
+	gap: 14px;
+}
+
+.ipd-cloth-dialog__field {
+	display: grid;
+	gap: 6px;
+}
+
+.ipd-cloth-dialog__choices {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+	gap: 8px 16px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.ipd-cloth-dialog__choices label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--erp-font-size-table);
+}

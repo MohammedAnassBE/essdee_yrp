@@ -1,0 +1,49 @@
+.merch-lot-frame,
+.merch-lot-frame .lot-panels {
+	min-width: 0;
+	max-width: 100%;
+}
+.merch-ipd-facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+	gap: 16px;
+	margin: 0;
+	padding: 16px;
+}
+.merch-ipd-facts dt {
+	color: var(--erp-text-muted);
+	font-size: 12px;
+}
+.merch-ipd-facts dd {
+	margin: 4px 0 0;
+	overflow-wrap: anywhere;
+}
+.merch-field-error {
+	display: block;
+	color: var(--erp-danger);
+	margin-top: 4px;
+}
+.merch-cloth-field {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+.merch-cloth-dialog .lot-section h2 {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.merch-cloth-dialog .erp-table-wrap {
+	overflow-x: auto;
+}
+.merch-cloth-dialog .lot-section__body {
+	padding: 16px;
+}
+.merch-box-total {
+	margin: 0;
+	color: var(--erp-text-secondary);
+}
+@media (min-width: 901px) {
+	.merch-lot-frame .fabric-document-workspace__matrix:has(> .p-message) {
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+}

@@ -357,8 +357,8 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 
 		lot = meta.get_field("lot")
 		self.assertEqual(
-			(lot.fieldtype, lot.options, lot.reqd, lot.read_only),
-			("Link", "SD YRP Lot", 1, 0),
+			(lot.fieldtype, lot.options, lot.reqd, lot.read_only, lot.mandatory_depends_on),
+			("Link", "SD YRP Lot", 0, 0, "eval:doc.against!='Purchase Order'"),
 		)
 
 	def test_cutting_grn_sizes_share_one_logical_row(self):

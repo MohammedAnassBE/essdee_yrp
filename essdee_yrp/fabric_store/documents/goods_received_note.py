@@ -627,7 +627,7 @@ def _new_workspace(doc, defaults: Mapping, can_submit: bool) -> dict:
 		"values": _document_values(doc, readable_fields),
 		"matrices": {"items": item_matrix, "correction_items": correction_matrix},
 		"dimensions": _dimension_projection(doc),
-		"lot_options": defaults.get("lot_options") or [],
+		"lot_options": defaults.get("lot_options") or {},
 		"lot_fieldname": defaults.get("lot_fieldname"),
 		"actual_dia": _actual_dia_context(doc),
 		"special_source": _special_source_context(doc),
@@ -787,7 +787,6 @@ def _merge_purchase_order_rows(authoritative, browser_rows, lot_options, lot_fie
 	for index, browser in enumerate(browser_rows or [], 1):
 		if flt(browser.get("quantity")) <= 0 and flt(browser.get("secondary_qty")) <= 0:
 			continue
-		validate_purchase_order_lot(browser, lot_fieldname, lot_options, purchase_order, index)
 		key = _business_key(browser, dimensions, include_received_type=True)
 		if key in seen:
 			frappe.throw(_("The item matrix contains a duplicate lot / Received Type row."))
@@ -796,7 +795,9 @@ def _merge_purchase_order_rows(authoritative, browser_rows, lot_options, lot_fie
 			frappe.throw(
 				_("The available item rows changed. Refresh the editor and enter the quantities again.")
 			)
-		rows.append(_clone_purchase_order_split(siblings, browser, lot_fieldname))
+		clone = _clone_purchase_order_split(siblings, browser, lot_fieldname)
+		validate_purchase_order_lot(clone, lot_fieldname, lot_options, purchase_order, index)
+		rows.append(clone)
 		seen.add(key)
 	return rows
 

@@ -11,10 +11,7 @@ def _has_link_fields(doc):
 
 def purchase_order_lot_options(purchase_order) -> list[str]:
 	"""Contribute explicitly linked lots to YRP receipt choices."""
-	values = [
-		*(row.get("lot") for row in purchase_order.get("sd_lot") or []),
-		purchase_order.get("default_lot"),
-	]
+	values = [row.get("lot") for row in purchase_order.get("sd_lot") or []]
 	return [lot for lot in values if lot]
 
 
@@ -206,9 +203,10 @@ def validate_grn_lots(doc, method=None):
 	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 		get_purchase_order_lot_fieldname,
 		get_purchase_order_lot_options,
+		validate_purchase_order_lot,
 	)
 
-	if doc.get("against") != "Purchase Order" or not doc.get("against_id"):
+	if doc.get("is_return") or doc.get("against") != "Purchase Order" or not doc.get("against_id"):
 		return
 	if not frappe.db.get_value("Purchase Order", doc.against_id, "is_yrp_managed"):
 		return
@@ -216,21 +214,6 @@ def validate_grn_lots(doc, method=None):
 	if not dimension_field:
 		return
 	po = frappe.get_doc("Purchase Order", doc.against_id)
-	allowed_lots = set(get_purchase_order_lot_options(po))
-	# An empty linked list deliberately means unrestricted, matching legacy policy.
-	if not allowed_lots:
-		return
-	invalid_lots = sorted(
-		{
-			row.get(dimension_field)
-			for row in doc.get("items") or []
-			if row.get(dimension_field) and row.get(dimension_field) not in allowed_lots
-		}
-	)
-	if invalid_lots:
-		frappe.throw(
-			_("Goods Received Note contains Lots not linked to Purchase Order {0}: {1}").format(
-				doc.against_id,
-				", ".join(invalid_lots),
-			)
-		)
+	lot_options = get_purchase_order_lot_options(po)
+	for index, row in enumerate(doc.get("items") or [], 1):
+		validate_purchase_order_lot(row, dimension_field, lot_options, doc.against_id, index)

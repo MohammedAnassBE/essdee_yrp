@@ -145,7 +145,8 @@
 											</td>
 											<td v-if="hasActualDia && block.kind === 'items'" class="erp-number">{{ formatQty(receivableBalance(section.group, row)) }}</td>
 											<td v-if="canEditLots && block.kind === 'items'">
-												<Select v-model="row.dimensions[lotFieldname]" :options="workspace.lot_options" aria-label="Receipt lot" @update:model-value="markDirty" />
+												<Select v-if="canEditLotForEntry(row, workspace.lot_options, lotFieldname)" v-model="row.dimensions[lotFieldname]" :options="lotChoicesForEntry(row, workspace.lot_options, lotFieldname)" option-label="label" option-value="value" option-disabled="disabled" placeholder="Choose lot" aria-label="Receipt lot" @update:model-value="markDirty" />
+												<span v-else>{{ row.dimensions?.[lotFieldname] }}</span>
 												<Button v-if="unusedLots(section.group, row).length" label="Add lot" text size="small" @click="addLot(section.group, row)" />
 												<Button v-if="canRemoveLot(section.group, row)" label="Remove" text size="small" @click="removeLot(section.group, row)" />
 											</td>
@@ -266,6 +267,7 @@ import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/document
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
+import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, unusedLotsForEntry } from "./grnLotOptions.js"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
 
@@ -362,7 +364,7 @@ const canEdit = computed(() => canEditDraft.value || editingSubmitted.value)
 const actualDia = computed(() => workspace.value.actual_dia || { enabled: false, dia_options: [] })
 const hasActualDia = computed(() => canEditDraft.value && actualDia.value.enabled)
 const lotFieldname = computed(() => workspace.value.lot_fieldname || "lot")
-const canEditLots = computed(() => canEditDraft.value && form.against === "Purchase Order" && !form.is_return && (workspace.value.lot_options || []).length > 1)
+const canEditLots = computed(() => canEditDraft.value && form.against === "Purchase Order" && !form.is_return && itemsNeedLotEditor(itemGroups.value, workspace.value.lot_options, lotFieldname.value))
 function canEditMatrixBlock(kind) {
 	if (!canEdit.value || workspace.value.special_source?.read_only) return false
 	if (!editingSubmitted.value) return true
@@ -833,7 +835,7 @@ function lotSiblingKey(row) {
 function lotSiblings(group, row) { return group.items.filter((entry) => lotSiblingKey(entry) === lotSiblingKey(row)) }
 function unusedLots(group, row) {
 	const used = new Set(lotSiblings(group, row).map((entry) => entry.dimensions?.[lotFieldname.value]))
-	return (workspace.value.lot_options || []).filter((lot) => !used.has(lot))
+	return unusedLotsForEntry(row, workspace.value.lot_options, used)
 }
 function addLot(group, row) {
 	const entry = clone(row)

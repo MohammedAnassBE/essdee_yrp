@@ -706,7 +706,7 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 			patch(
 				"essdee_yrp.fabric_store.documents.goods_received_note._purchase_order_lot_context",
 				return_value={
-					"lot_options": ["LOT-1", "Open Lot"],
+					"lot_options": {"PO-ROW": ["LOT-1", "Open Lot"]},
 					"lot_fieldname": "lot",
 					"purchase_order": "PO-1",
 				},
@@ -1027,7 +1027,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 				rows = self.merge(
 					[{"name": "FORGED", "row_index": 7, "quantity": 6}],
 					source_values={"name": "GRNI-1", "row_index": row_index},
-					lot_options=["LOT-1"],
+					lot_options={"PO-ROW": ["LOT-1"]},
 					lot_fieldname="lot",
 					purchase_order="PO-1",
 				)
@@ -1039,7 +1039,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 				rows = self.merge(
 					[{"quantity": 4}, {"lot": "Open Lot", "row_index": 7, "quantity": 6}],
 					source_values={"name": "GRNI-1", "row_index": row_index},
-					lot_options=["LOT-1", "Open Lot"],
+					lot_options={"PO-ROW": ["LOT-1", "Open Lot"]},
 					lot_fieldname="lot",
 					purchase_order="PO-1",
 				)
@@ -1051,7 +1051,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 		rows = self.merge(
 			[{"lot": "Open Lot", "received_type": "Rejected", "quantity": 6}],
 			source_values={"name": "GRNI-1", "row_index": "0::Accepted"},
-			lot_options=["LOT-1", "Open Lot"],
+			lot_options={"PO-ROW": ["LOT-1", "Open Lot"]},
 			lot_fieldname="lot",
 			purchase_order="PO-1",
 		)
@@ -1061,7 +1061,11 @@ class TestPurchaseOrderLotMerge(TestCase):
 	def test_po_lot_splits_survive_group_ungroup_and_merge(self):
 		from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui
 
-		options = {"lot_options": ["LOT-1", "Open Lot"], "lot_fieldname": "lot", "purchase_order": "PO-1"}
+		options = {
+			"lot_options": {"PO-ROW": ["LOT-1", "Open Lot"]},
+			"lot_fieldname": "lot",
+			"purchase_order": "PO-1",
+		}
 		rows = self.merge(
 			[{"quantity": 4}, {"lot": "Open Lot", "quantity": 6}],
 			source_values={"name": "GRNI-1", "row_index": "0"},
@@ -1099,20 +1103,22 @@ class TestPurchaseOrderLotMerge(TestCase):
 					[("GRNI-1", "LOT-1", 4, "0"), ("GRNI-2", "Open Lot", 6, "0")],
 				)
 
-	def test_po_empty_lot_options_are_unrestricted(self):
-		rows = self.merge(
-			[{"lot": "ANY-LOT", "quantity": 6}],
-			lot_options=[],
-			lot_fieldname="lot",
-			purchase_order="PO-1",
-		)
-		self.assertEqual([(row["lot"], row["quantity"]) for row in rows], [("ANY-LOT", 6)])
+	def test_po_no_linked_lots_allows_only_own_lot(self):
+		options = {"lot_options": {"PO-ROW": ["LOT-1"]}, "lot_fieldname": "lot", "purchase_order": "PO-1"}
+		rows = self.merge([{"quantity": 6}], **options)
+		self.assertEqual([(row["lot"], row["quantity"]) for row in rows], [("LOT-1", 6)])
+		with self.assertRaisesRegex(frappe.ValidationError, "ANY-LOT"):
+			self.merge([{"lot": "ANY-LOT", "quantity": 6}], **options)
+
+	def test_po_empty_lot_map_still_validates(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Row 1.*LOT-1.*PO-1"):
+			self.merge([{"quantity": 6}], lot_options={}, lot_fieldname="lot", purchase_order="PO-1")
 
 	def test_po_omitted_lineage_is_kept_while_present_lineage_changes_lot(self):
 		rows = self.merge(
 			[{"lot": "Open Lot", "received_type": "Rejected", "quantity": 6}],
 			extra_sources=[{"ref_docname": "PO-ROW-2", "quantity": 7, "rate": 30}],
-			lot_options=["LOT-1", "Open Lot"],
+			lot_options={"PO-ROW": ["LOT-1", "Open Lot"]},
 			lot_fieldname="lot",
 			purchase_order="PO-1",
 		)
@@ -1128,7 +1134,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 		rows = self.merge(
 			[{"quantity": 0}],
 			extra_sources=[{"lot": "Open Lot", "quantity": 3}],
-			lot_options=["LOT-1", "Open Lot"],
+			lot_options={"PO-ROW": ["LOT-1", "Open Lot"]},
 			lot_fieldname="lot",
 			purchase_order="PO-1",
 		)
@@ -1137,7 +1143,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 	def test_po_lot_change_keeps_trusted_fields(self):
 		rows = self.merge(
 			[{"lot": "Open Lot", "quantity": 6, "rate": 1, "uom": "Forged"}],
-			lot_options=["LOT-1", "Open Lot"],
+			lot_options={"PO-ROW": ["LOT-1", "Open Lot"]},
 			lot_fieldname="lot",
 			purchase_order="PO-1",
 		)
@@ -1153,7 +1159,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 				{"lot": "Open Lot", "quantity": 3},
 				{"lot": "Open Lot", "received_type": "Rejected", "quantity": 3},
 			],
-			lot_options=["LOT-1", "Open Lot"],
+			lot_options={"PO-ROW": ["LOT-1", "Open Lot"]},
 			lot_fieldname="lot",
 			purchase_order="PO-1",
 		)
@@ -1164,13 +1170,40 @@ class TestPurchaseOrderLotMerge(TestCase):
 
 	def test_po_invalid_lot_names_row_lot_and_order(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "Row 1.*BAD.*PO-1"):
-			self.merge([{"lot": "BAD"}], lot_options=["LOT-1"], lot_fieldname="lot", purchase_order="PO-1")
+			self.merge(
+				[{"lot": "BAD"}],
+				lot_options={"PO-ROW": ["LOT-1"]},
+				lot_fieldname="lot",
+				purchase_order="PO-1",
+			)
 
-	def test_po_split_cannot_change_source_reference(self):
+	def test_po_split_cannot_smuggle_lot_with_another_source_reference(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "available item rows changed"):
 			self.merge(
 				[{"ref_docname": "FORGED", "lot": "Open Lot"}],
-				lot_options=["LOT-1", "Open Lot"],
+				lot_options={"PO-ROW": ["LOT-1"], "FORGED": ["Open Lot"]},
+				lot_fieldname="lot",
+				purchase_order="PO-1",
+			)
+
+	def test_po_lot_validation_uses_trusted_clone(self):
+		from essdee_yrp.fabric_store.documents.goods_received_note import _clone_purchase_order_split
+
+		def clone_with_trusted_reference(siblings, browser, fieldname):
+			clone = _clone_purchase_order_split(siblings, browser, fieldname)
+			clone["ref_docname"] = "TRUSTED-ROW"
+			return clone
+
+		with (
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note._clone_purchase_order_split",
+				side_effect=clone_with_trusted_reference,
+			),
+			self.assertRaisesRegex(frappe.ValidationError, "Row 1.*Open Lot.*PO-1"),
+		):
+			self.merge(
+				[{"lot": "Open Lot"}],
+				lot_options={"PO-ROW": ["Open Lot"], "TRUSTED-ROW": ["LOT-1"]},
 				lot_fieldname="lot",
 				purchase_order="PO-1",
 			)
@@ -1179,7 +1212,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "duplicate lot"):
 			self.merge(
 				[{"quantity": 4}, {"quantity": 6}],
-				lot_options=["LOT-1"],
+				lot_options={"PO-ROW": ["LOT-1"]},
 				lot_fieldname="lot",
 				purchase_order="PO-1",
 			)
@@ -1233,7 +1266,7 @@ class TestPurchaseOrderLotWorkspace(FrappeTestCase):
 		workspace = get_goods_received_note_workspace(created["record"]["name"])
 		rows = ungroup_items_from_ui(workspace["matrices"]["items"], "YRP Goods Received Note")
 		self.assertEqual({row[fieldname]: row["quantity"] for row in rows}, {first_lot: 4, other_lot: 6})
-		self.assertIn(other_lot, workspace["lot_options"])
+		self.assertIn(other_lot, workspace["lot_options"][po.items[0].name])
 		result = save_goods_received_note(
 			{"item_details": workspace["matrices"]["items"]},
 			name=workspace["record"]["name"],
@@ -1251,8 +1284,26 @@ class TestPurchaseOrderLotWorkspace(FrappeTestCase):
 		for group in values["item_details"]:
 			for entry in group["items"]:
 				entry["dimensions"][fieldname] = "NOT-LINKED"
-		with self.assertRaisesRegex(frappe.ValidationError, f"Row 1.*NOT-LINKED.*{po.name}"):
-			save_goods_received_note(values)
+		for submit in (False, True):
+			with (
+				self.subTest(submit=submit),
+				self.assertRaisesRegex(frappe.ValidationError, f"Row 1.*NOT-LINKED.*{po.name}"),
+			):
+				save_goods_received_note(values, submit=submit)
+
+	def test_web_submit_revalidates_existing_draft_after_lot_is_unlinked(self):
+		po, _fieldname, _first_lot, other_lot, values = self.receipt_values([0, 6])
+		created = save_goods_received_note(values)
+		frappe.db.delete(
+			po.meta.get_field("sd_lot").options, {"parent": po.name, "parenttype": "Purchase Order"}
+		)
+		with self.assertRaisesRegex(frappe.ValidationError, f"Row 1.*{other_lot}.*{po.name}"):
+			save_goods_received_note(
+				{},
+				name=created["record"]["name"],
+				expected_modified=created["record"]["modified"],
+				submit=True,
+			)
 
 
 class TestActualDiaWorkspaceMerge(TestCase):

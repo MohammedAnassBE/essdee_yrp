@@ -94,6 +94,8 @@ export const PLANNING_PRODUCTION_REPORTS = [
 	{ key: "size_wise_stock", value: "size-wise-stock", label: "Size-wise Stock", icon: "pi pi-th-large" },
 	{ key: "colour_wise_diff", value: "colour-wise-diff", label: "Colour-wise Diff", icon: "pi pi-palette" },
 	{ key: "work_in_progress", value: "work-in-progress", label: "Work In Progress", icon: "pi pi-chart-line" },
+	{ key: "multi_ccr", value: "multi-ccr", label: "Multi CCR", icon: "pi pi-chart-scatter" },
+	{ key: "ppo_report", value: "ppo-report", label: "PPO Report", icon: "pi pi-file" },
 	{ key: "work_order_bulk_close", value: "work-order-bulk-close", label: "Work Order Bulk Close", icon: "pi pi-lock" },
 ]
 

@@ -112,7 +112,12 @@ import PurchaseInvoiceEditorHeader from "./components/PurchaseInvoiceEditorHeade
 
 const FORM_FIELDS = PURCHASE_INVOICE_EDITOR_GROUPS.flatMap((group) => group.fields)
 
-const props = defineProps({ purchaseInvoiceId: { type: String, default: "" } })
+const props = defineProps({
+	purchaseInvoiceId: { type: String, default: "" },
+	basePath: { type: String, default: "/accounts/purchase-invoices" },
+	viewRouteName: { type: String, default: "accounts-purchase-invoice" },
+	listRouteName: { type: String, default: "accounts-purchase-invoices" },
+})
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -139,8 +144,8 @@ let isAlive = true
 
 const currentName = computed(() => String(props.purchaseInvoiceId || route.params.purchaseInvoiceId || ""))
 const backTo = computed(() => currentName.value
-	? `/accounts/purchase-invoices/${encodeURIComponent(currentName.value)}`
-	: "/accounts/purchase-invoices")
+	? `${props.basePath}/${encodeURIComponent(currentName.value)}`
+	: props.basePath)
 const backLabel = computed(() => currentName.value ? "Purchase Invoice" : "Purchase Invoices")
 const billTracking = computed(() => queryValue(route.query.bill_tracking))
 const shouldFetchExpenseHeads = computed(() => queryValue(route.query.fetchExpenseHead) === "1")
@@ -344,7 +349,7 @@ async function finishSave(workspace, submit) {
 		life: 3500,
 	})
 	await router.replace({
-		name: "accounts-purchase-invoice",
+		name: props.viewRouteName,
 		params: { purchaseInvoiceId: record.name },
 		state: preserveListNavigationState(record.name, record.modified),
 	})
@@ -378,11 +383,11 @@ function discardChanges() {
 
 function navigateBack() {
 	if (!currentName.value) {
-		router.push({ name: "accounts-purchase-invoices" })
+		router.push({ name: props.listRouteName })
 		return
 	}
 	router.push({
-		name: "accounts-purchase-invoice",
+		name: props.viewRouteName,
 		params: { purchaseInvoiceId: currentName.value },
 		state: preserveListNavigationState(currentName.value, editor.value.modified),
 	})

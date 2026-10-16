@@ -1,12 +1,9 @@
 .pd-product-workspace {
 	display: grid;
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
 	gap: var(--erp-space-3);
 }
-
 .pd-product-workspace__header {
 	display: flex;
 	min-width: 0;
@@ -14,11 +11,10 @@
 	justify-content: space-between;
 	gap: var(--erp-space-3);
 	padding: var(--erp-space-3) var(--erp-space-4);
-	border-top: 3px solid var(--erp-accent);
-	border-bottom: 1px solid var(--erp-border);
+	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
-	box-shadow: var(--erp-shadow-sm);
+	box-shadow: var(--erp-shadow-card);
 }
 
 .pd-product-workspace__identity {
@@ -26,12 +22,11 @@
 	min-width: 0;
 	gap: 4px;
 }
-
 .pd-product-workspace__eyebrow {
 	overflow: hidden;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 720;
+	font-weight: 700;
 	letter-spacing: 0.04em;
 	text-overflow: ellipsis;
 	text-transform: uppercase;
@@ -51,29 +46,26 @@
 	min-width: 0;
 	flex-wrap: wrap;
 }
-
 .pd-product-workspace__title-row h1 {
 	min-width: 0;
 	margin: 0;
 	overflow: hidden;
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-title);
-	font-weight: 780;
+	font-weight: 700;
 	letter-spacing: -0.025em;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-
 .pd-product-workspace__chip {
 	display: inline-flex;
 	align-items: center;
 	min-height: 24px;
-	padding: 3px 9px;
-	color: var(--erp-accent-hover);
+	padding: 1px 8px;
+	color: var(--erp-accent-ink);
 	font-size: var(--erp-font-size-min);
-	font-weight: 720;
-	border: 1px solid color-mix(in srgb, var(--erp-accent) 24%, var(--erp-border));
-	border-radius: 999px;
+	font-weight: 600;
+	border-radius: var(--erp-pill-radius);
 	background: var(--erp-accent-soft);
 	white-space: nowrap;
 }
@@ -110,22 +102,21 @@
 	min-width: 0;
 	gap: var(--erp-space-3);
 }
-
 .pd-product-fields-group > h2 {
 	margin: 0;
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-section);
-	font-weight: 760;
+	font-weight: 700;
 }
-
 .pd-fields {
 	display: grid;
 	min-width: 0;
 	gap: var(--erp-space-4);
 	padding: var(--erp-space-4);
 	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
-	box-shadow: var(--erp-shadow-xs);
+	box-shadow: var(--erp-shadow-card);
 }
 
 .pd-fields__grid {

@@ -1,7 +1,10 @@
 <template>
-	<section class="ppo-overview erp-card" aria-label="Production Order overview">
-		<div v-for="field in visibleFields" :key="field.fieldname" :class="{ 'ppo-overview__wide': /comments/i.test(field.fieldname) }">
-			<span>{{ field.label }}</span><strong>{{ display(field) }}</strong>
+	<section class="ppo-overview erp-card" aria-labelledby="ppo-overview-heading">
+		<header><h2 id="ppo-overview-heading">Details</h2></header>
+		<div class="ppo-overview__facts">
+			<div v-for="field in visibleFields" :key="field.fieldname" :class="{ 'ppo-overview__wide': /comments/i.test(field.fieldname) }">
+				<span>{{ field.label }}</span><strong>{{ display(field) }}</strong>
+			</div>
 		</div>
 	</section>
 </template>
@@ -27,13 +30,80 @@ function display(field) {
 </script>
 
 <style scoped>
-.ppo-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; overflow: hidden; border-color: var(--erp-border); box-shadow: var(--erp-shadow-xs); }
-.ppo-overview > div { display: grid; min-width: 0; min-height: 62px; align-content: center; gap: 4px; padding: 10px 13px; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
-.ppo-overview > div:nth-child(3n) { border-right: 0; }
-.ppo-overview__wide { grid-column: 1 / -1; border-right: 0 !important; }
-.ppo-overview span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 740; letter-spacing: .035em; text-transform: uppercase; }
-.ppo-overview strong { min-width: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); line-height: 1.4; overflow-wrap: anywhere; text-overflow: ellipsis; white-space: nowrap; }
-.ppo-overview__wide strong { white-space: normal; }
-@media (max-width: 760px) { .ppo-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ppo-overview > div:nth-child(3n) { border-right: 1px solid var(--erp-border); } .ppo-overview > div:nth-child(2n) { border-right: 0; } }
-@media (max-width: 480px) { .ppo-overview { grid-template-columns: 1fr; } .ppo-overview > div { border-right: 0; } }
+.ppo-overview {
+	min-width: 0;
+	overflow: hidden;
+}
+
+.ppo-overview > header {
+	padding: 10px 16px;
+	background: var(--erp-surface-soft);
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.ppo-overview h2 {
+	margin: 0;
+	color: var(--erp-text-secondary);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-bold);
+	letter-spacing: .02em;
+}
+
+.ppo-overview__facts {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 4px 28px;
+	padding: 16px 18px 18px;
+}
+
+.ppo-overview__facts > div {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+	padding: 9px 0;
+	border-bottom: 1px solid var(--erp-border);
+}
+
+.ppo-overview__wide {
+	grid-column: 1 / -1;
+}
+
+.ppo-overview span {
+	order: 2;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: var(--erp-font-weight-semibold);
+	letter-spacing: .03em;
+	text-transform: uppercase;
+}
+
+.ppo-overview strong {
+	order: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-section);
+	font-weight: var(--erp-font-weight-semibold);
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ppo-overview__wide strong {
+	white-space: normal;
+}
+
+@media (max-width: 760px) {
+	.ppo-overview__facts {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 480px) {
+	.ppo-overview__facts {
+		grid-template-columns: 1fr;
+	}
+}
 </style>

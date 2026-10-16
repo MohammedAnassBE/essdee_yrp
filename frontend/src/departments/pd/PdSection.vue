@@ -10,8 +10,7 @@
 	>
 		<section class="pd-section erp-workspace" :aria-label="sectionTitle">
 			<div v-if="loading" class="pd-section__loading">
-				<Skeleton height="76px" />
-				<Skeleton height="420px" />
+				<ListPageSkeleton />
 			</div>
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability?.can_read" severity="warn" :closable="false">
@@ -26,11 +25,11 @@
 
 <script setup>
 import Message from "primevue/message"
-import Skeleton from "primevue/skeleton"
 import { computed, onMounted, ref } from "vue"
 
 import { getPdCapabilities } from "../../api/pd.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
+import ListPageSkeleton from "../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import LotwiseItemProfits from "./LotwiseItemProfits.vue"
 import ProductReleases from "./ProductReleases.vue"
@@ -70,12 +69,9 @@ onMounted(load)
 <style scoped>
 .pd-section {
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
 	padding: 2px 0 var(--erp-space-5);
 }
 
 .pd-section__loading { display: grid; gap: var(--erp-space-3); padding-top: 2px; }
-.pd-section__loading :deep(.p-skeleton) { border-radius: var(--erp-panel-radius); }
 </style>

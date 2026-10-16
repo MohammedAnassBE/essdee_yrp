@@ -56,7 +56,6 @@ function formatValue(value, type) {
 	align-self: start;
 	overflow: hidden;
 	border: 1px solid var(--erp-border);
-	border-top: 3px solid var(--erp-accent);
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-surface);
 	box-shadow: var(--erp-shadow-sm);

@@ -114,10 +114,6 @@ defineExpose({ load, activate: () => load(true) })
 .erp-record-metrics b { color: var(--erp-text); font-size: 13px; font-variant-numeric: tabular-nums; }
 .erp-linked-note { display: flex; align-items: center; gap: 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .erp-linked-note i { color: var(--erp-accent); }
-.erp-empty-state { display: grid; justify-items: center; gap: 6px; padding: 38px 18px; color: var(--erp-text-muted); text-align: center; background: var(--erp-surface-soft); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
-.erp-empty-state > i { display: grid; width: 38px; height: 38px; color: var(--erp-accent); background: var(--erp-accent-soft); border-radius: var(--erp-control-radius); place-items: center; }
-.erp-empty-state strong { color: var(--erp-text); font-size: 13px; }
-.erp-empty-state span { font-size: var(--erp-font-size-caption); }
 @media (max-width: 1050px) { .erp-record-grid { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .erp-workspace-header, .erp-panel-heading { align-items: stretch; flex-direction: column; } .erp-record-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

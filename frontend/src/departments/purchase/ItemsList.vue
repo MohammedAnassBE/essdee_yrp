@@ -70,7 +70,7 @@ const modes = [
 	{ label: "Disabled", value: "disabled" },
 ]
 const columns = ["item_group", "stock_uom", "has_variants", "disabled"]
-const columnLabels = { stock_uom: "UOM", has_variants: "Attributes" }
+const columnLabels = { stock_uom: "UOM", has_variants: "Attributes", disabled: "Status" }
 
 async function load() {
 	loading.value = true

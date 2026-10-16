@@ -11,7 +11,7 @@
 					<tr v-for="(row, index) in rows" :key="row.transfer_reference || `${row.counterpart_production_order}-${index}`">
 						<td data-label="Movement"><span class="ppo-transfer-history__movement" :class="movementClass(row.movement)">{{ row.movement || "—" }}</span></td>
 						<td data-label="Production Order">
-							<RouterLink v-if="row.counterpart_production_order" :to="{ name: 'sales-production-order', params: { productionOrderId: row.counterpart_production_order } }">{{ row.counterpart_production_order }}</RouterLink>
+							<RouterLink v-if="row.counterpart_production_order" :to="{ name: viewRouteName, params: { productionOrderId: row.counterpart_production_order } }">{{ row.counterpart_production_order }}</RouterLink>
 							<strong v-else>—</strong>
 							<small v-if="row.transfer_reference">{{ row.transfer_reference }}</small>
 						</td>
@@ -29,7 +29,10 @@
 </template>
 
 <script setup>
-defineProps({ rows: { type: Array, default: () => [] } })
+defineProps({
+	rows: { type: Array, default: () => [] },
+	viewRouteName: { type: String, default: "sales-production-order" },
+})
 
 function movementClass(movement) {
 	return String(movement || "").toLowerCase() === "reduced" ? "is-reduced" : "is-added"

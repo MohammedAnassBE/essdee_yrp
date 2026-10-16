@@ -405,31 +405,29 @@ const RecutTable = defineComponent({
 	min-width: 0;
 	background: var(--erp-surface);
 }
-
 .cutting-tabs :deep(.p-tablist-tab-list) {
 	gap: 18px;
 	padding: 0 2px;
+	scroll-padding-inline: 12px;
 	background: transparent;
 	border-bottom: 1px solid var(--erp-border);
 }
-
 .cutting-tabs :deep(.p-tab) {
 	padding: 12px 2px 11px;
 	color: var(--erp-text-muted);
 	border-color: transparent;
-	font-size: 0.82rem;
-	font-weight: 680;
-	transition: color 140ms ease, background 140ms ease;
+	font-size: var(--erp-font-size-table);
+	font-weight: 600;
+	transition: color var(--erp-transition-fast), background var(--erp-transition-fast);
 }
 
 .cutting-tabs :deep(.p-tab:hover) {
 	color: var(--erp-accent-hover);
 	background: transparent;
 }
-
 .cutting-tabs :deep(.p-tab-active) {
 	color: var(--erp-accent);
-	font-weight: 780;
+	font-weight: 700;
 }
 
 .cutting-tabs :deep(.p-tablist-active-bar) {
@@ -453,16 +451,13 @@ const RecutTable = defineComponent({
 	gap: 12px;
 	padding-bottom: 2px;
 }
-
 .content-card {
 	overflow: hidden;
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-panel-radius);
-	box-shadow: none;
+	box-shadow: var(--erp-shadow-card);
 }
-
-
 .cutting-tabs :deep(.section-heading) {
 	display: flex;
 	align-items: center;
@@ -470,33 +465,28 @@ const RecutTable = defineComponent({
 	gap: 12px;
 	min-height: 42px;
 	padding: 10px 14px;
-	background: var(--erp-surface-soft);
 	border-bottom: 1px solid var(--erp-border);
 }
-
 .cutting-tabs :deep(.section-heading h3) {
 	display: flex;
 	align-items: center;
 	gap: 9px;
 	margin: 0;
-	color: var(--erp-text);
-	font-size: 0.91rem;
-	font-weight: 780;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-table);
+	font-weight: 600;
 }
-
 .cutting-tabs :deep(.section-heading h3 i) {
 	color: var(--erp-accent);
-	font-size: 0.98rem;
+	font-size: var(--erp-font-size-section);
 }
-
 .cutting-tabs :deep(.section-heading .row-count) {
-	padding: 3px 7px;
-	color: var(--erp-text-muted);
-	background: var(--erp-surface);
-	border: 1px solid var(--erp-border);
-	border-radius: 999px;
+	padding: 1px 7px;
+	color: var(--erp-accent-ink);
+	background: var(--erp-accent-soft);
+	border-radius: var(--erp-pill-radius);
 	font-size: var(--erp-font-size-min);
-	font-weight: 650;
+	font-weight: 600;
 	white-space: nowrap;
 }
 
@@ -506,90 +496,10 @@ const RecutTable = defineComponent({
 	padding: 10px 12px 12px;
 }
 
-.requirement-groups {
-	display: grid;
-	gap: 10px;
-}
-
-.requirement-group {
-	overflow: hidden;
-	background: var(--erp-surface);
-	border: 1px solid var(--erp-border);
-	border-radius: 9px;
-}
-
-.requirement-group__header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 14px;
-	min-height: 48px;
-	padding: 8px 10px 8px 12px;
-	background: var(--erp-surface-soft);
-	border-bottom: 1px solid var(--erp-border);
-}
-
-.requirement-group__identity {
-	display: grid;
-	gap: 2px;
-	min-width: 0;
-}
-
-.requirement-group__identity strong {
-	overflow: hidden;
-	color: var(--erp-text);
-	font-size: 13px;
-	font-weight: 770;
-	line-height: 1.25;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.requirement-template {
-	overflow: hidden;
-	color: var(--erp-text-muted);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 590;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.requirement-group__meta {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	flex: 0 0 auto;
-	gap: 6px;
-}
-
-.requirement-type,
-.requirement-count {
-	display: inline-flex;
-	align-items: center;
-	min-height: 24px;
-	padding: 3px 8px;
-	border-radius: var(--erp-pill-radius);
-	font-size: var(--erp-font-size-min);
-	font-weight: 700;
-	white-space: nowrap;
-}
-
-.requirement-type {
-	color: var(--erp-accent-hover);
-	background: var(--erp-accent-soft);
-	border: 1px solid var(--erp-accent-border);
-}
-
-.requirement-count {
-	color: var(--erp-text-muted);
-	background: var(--erp-surface);
-	border: 1px solid var(--erp-border);
-}
-
 .cutting-tabs :deep(.table-scroll) {
 	overflow-x: auto;
 	border: 1px solid var(--erp-border);
-	border-radius: 10px;
+	border-radius: var(--erp-panel-radius);
 	scrollbar-color: var(--erp-border-strong) transparent;
 	scrollbar-width: thin;
 }
@@ -597,12 +507,6 @@ const RecutTable = defineComponent({
 .cutting-tabs :deep(.table-scroll:focus-visible) {
 	outline: 2px solid var(--erp-accent-dark);
 	outline-offset: -2px;
-}
-
-.cutting-tabs :deep(.requirement-table-scroll) {
-	border: 0;
-	border-top: 1px solid var(--erp-border);
-	border-radius: 0;
 }
 
 .cutting-tabs :deep(.requirement-table) {
@@ -622,13 +526,11 @@ const RecutTable = defineComponent({
 .cutting-tabs :deep(.requirement-table th:nth-child(n + 3)) {
 	text-align: right;
 }
-
 .cutting-tabs :deep(.requirement-table .requirement-attribute) {
-	font-weight: 650;
+	font-weight: 600;
 }
-
 .cutting-tabs :deep(.requirement-table .requirement-balance) {
-	font-weight: 780;
+	font-weight: 700;
 }
 
 .cutting-tabs :deep(.requirement-table .requirement-balance--positive) {
@@ -645,13 +547,12 @@ const RecutTable = defineComponent({
 	color: var(--erp-text-muted);
 	background: var(--erp-surface-soft);
 }
-
 .cutting-tabs :deep(.data-table) {
 	width: 100%;
 	min-width: 760px;
 	border-collapse: collapse;
 	color: var(--erp-text);
-	font-size: 13px;
+	font-size: var(--erp-font-size-table);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -677,12 +578,11 @@ const RecutTable = defineComponent({
 .cutting-tabs :deep(.data-table tbody tr:last-child td) {
 	border-bottom: 0;
 }
-
 .cutting-tabs :deep(.data-table th) {
 	white-space: nowrap;
 	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-min);
-	font-weight: 780;
+	font-weight: 700;
 	letter-spacing: 0.035em;
 	background: var(--erp-surface-muted);
 }
@@ -699,28 +599,25 @@ const RecutTable = defineComponent({
 	font-variant-numeric: tabular-nums;
 	text-align: right !important;
 }
-
 .cutting-tabs :deep(.strong-cell),
 .cutting-tabs :deep(.total-row td) {
-	color: var(--erp-text);
-	font-weight: 780;
+	background: var(--erp-surface-muted);
 }
 
 .cutting-tabs :deep(.total-row td) {
 	background: var(--erp-accent-soft);
 	border-color: var(--erp-accent-border);
 }
-
 .panel-strip {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	padding: 8px 10px;
 	color: var(--erp-text-muted);
-	font-size: 0.75rem;
+	font-size: var(--erp-font-size-caption);
 	background: var(--erp-surface-soft);
 	border: 1px solid var(--erp-border);
-	border-radius: 8px;
+	border-radius: var(--erp-control-radius);
 }
 
 .panel-strip strong {
@@ -734,53 +631,22 @@ const RecutTable = defineComponent({
 .incomplete-icon {
 	color: var(--erp-text-subtle);
 }
-
 .cutting-tabs :deep(.empty-state) {
-	display: grid;
-	align-items: center;
-	justify-content: center;
-	grid-template-columns: auto auto;
-	gap: 10px;
 	min-height: 62px;
-	padding: 12px;
-	color: var(--erp-text-muted);
-	background: var(--erp-surface-soft);
-	border: 1px dashed var(--erp-border-strong);
-	border-radius: 9px;
-	font-size: 0.76rem;
 }
-
-.cutting-tabs :deep(.empty-state > i) {
-	color: var(--erp-accent);
-	font-size: 1rem;
-}
-
 .cutting-tabs :deep(.empty-state__copy) {
 	display: grid;
 	gap: 2px;
 }
-
-.cutting-tabs :deep(.empty-state__copy strong) {
-	color: var(--erp-text);
-	font-size: 0.76rem;
-	font-weight: 650;
-}
-
-.cutting-tabs :deep(.empty-state__copy small) {
-	color: var(--erp-text-muted);
-	font-size: var(--erp-font-size-min);
-}
-
 .cutting-tabs :deep(.loading-state) {
 	display: grid;
 	gap: 10px;
 }
-
 .detail-kind {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	font-weight: 650;
+	font-weight: 600;
 	white-space: nowrap;
 }
 
@@ -819,15 +685,6 @@ const RecutTable = defineComponent({
 }
 
 @media (max-width: 780px) {
-	.requirement-group__header {
-		align-items: flex-start;
-		flex-direction: column;
-	}
-
-	.requirement-group__meta {
-		justify-content: flex-start;
-	}
-
 	.cutting-tabs :deep(.p-tab) {
 		padding-inline: 8px;
 		font-size: var(--erp-font-size-caption);
@@ -837,9 +694,5 @@ const RecutTable = defineComponent({
 		gap: 8px;
 	}
 
-	.cutting-tabs :deep(.table-scroll) {
-		-webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
-		mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
-	}
 }
 </style>

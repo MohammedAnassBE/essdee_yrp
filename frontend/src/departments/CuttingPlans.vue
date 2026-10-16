@@ -57,7 +57,7 @@ const loadingCapability = ref(true)
 const defaultColumns = ["lot", "item", "cp_status", "no_of_colours", "no_of_colours_completed"]
 const columnLabels = { cp_status: "Status", no_of_colours: "Colours", no_of_colours_completed: "Completed Colours" }
 const linkFilters = { item: { has_variants: 1 } }
-const statusOptions = ["Draft", "Planned", "Fabric Partially Received", "Ready to Cut", "Cutting In Progress", "Partially Completed", "Completed", "Cut Panel Dispatch Pending"]
+const statusOptions = ["Draft", "Planned", "Fabric Partially Received", "Ready to Cut", "Cutting In Progress", "Partially Completed", "Completed", "Cut Panel Dispatch Pending", "Cancelled"]
 
 function openCuttingPlan(row, snapshot) {
 	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "cuttingPlanId" })

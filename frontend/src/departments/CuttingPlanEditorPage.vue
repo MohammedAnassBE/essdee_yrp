@@ -33,5 +33,5 @@ function saved(record) {
 </script>
 
 <style scoped>
-.cutting-plan-editor-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
+.cutting-plan-editor-page { width: 100%; min-width: 0; }
 </style>

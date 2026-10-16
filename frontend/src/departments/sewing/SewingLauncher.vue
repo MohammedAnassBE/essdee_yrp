@@ -5,7 +5,6 @@
 			:items="workspaces(capabilities, supplier)"
 			empty-text="No permitted Sewing workspaces"
 			:skeleton-count="4"
-			eyebrow=""
 			compact
 		>
 			<template #navigation><SewingBackLink to="/" label="Workspaces" /></template>

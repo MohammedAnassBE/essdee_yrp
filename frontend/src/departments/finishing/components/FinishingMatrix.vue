@@ -27,7 +27,7 @@
 				</tbody>
 			</table>
 		</div>
-		<p v-else class="finishing-empty">{{ emptyText }}</p>
+		<p v-else class="erp-empty-state"><span class="erp-empty-state__text">{{ emptyText }}</span></p>
 	</section>
 </template>
 

@@ -384,9 +384,7 @@ onBeforeUnmount(() => {
 .lotwise-workspace {
 	display: grid;
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
 	gap: var(--erp-space-3);
 }
 

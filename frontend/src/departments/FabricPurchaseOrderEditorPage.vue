@@ -39,6 +39,5 @@ function cancel() {
 </script>
 
 <style scoped>
-.fabric-purchase-order-editor-page { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto; padding: 0 clamp(2px, .7vw, 10px) var(--erp-space-3); }
-@media (max-width: 620px) { .fabric-purchase-order-editor-page { padding-right: 0; padding-left: 0; } }
+.fabric-purchase-order-editor-page { width: 100%; min-width: 0; padding-bottom: var(--erp-space-3); }
 </style>

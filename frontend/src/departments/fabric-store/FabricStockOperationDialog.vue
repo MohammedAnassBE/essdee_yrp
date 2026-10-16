@@ -11,18 +11,7 @@
 		<div v-if="loading" class="fabric-stock-loading"><Skeleton v-for="index in 6" :key="index" height="3rem" /></div>
 		<div v-else class="fabric-stock-stack">
 			<section class="fabric-operation-fields">
-				<label v-if="operation === 'stock_entry'" class="fabric-select-field"><span>Purpose *</span><Select v-model="form.purpose" :options="editor.purpose_options || []" :disabled="editor.purpose_locked" placeholder="Select purpose" fluid @change="markDirty" /></label>
-				<label v-if="operation === 'stock_reconciliation'" class="fabric-select-field"><span>Purpose *</span><Select v-model="form.purpose" :options="editor.purpose_options || []" placeholder="Select purpose" fluid @change="markDirty" /></label>
-				<label v-if="operation === 'stock_update'" class="fabric-select-field"><span>Update type *</span><Select v-model="form.update_type" :options="editor.update_type_options || []" placeholder="Select Add or Reduce" fluid @change="markDirty" /></label>
-
-				<LinkField v-if="operation === 'stock_entry'" v-model="form.from_warehouse" label="From warehouse *" doctype="Warehouse" :disabled="editor.protected_completion" :show-open-button="false" :show-clear="!editor.protected_completion" @update:model-value="markDirty" />
-				<LinkField v-if="operation === 'stock_entry' && (form.purpose === 'Send to Warehouse' || editor.protected_completion)" v-model="form.to_warehouse" label="To warehouse *" doctype="Warehouse" :disabled="editor.protected_completion" :show-open-button="false" :show-clear="!editor.protected_completion" @update:model-value="markDirty" />
-				<LinkField v-if="operation === 'stock_reconciliation'" v-model="form.default_warehouse" label="Warehouse *" doctype="Warehouse" :show-open-button="false" show-clear @update:model-value="markDirty" />
-				<LinkField v-if="operation === 'stock_reconciliation'" v-model="form.default_supplier" label="Supplier" doctype="Supplier" :show-open-button="false" show-clear @update:model-value="markDirty" />
-				<LinkField v-if="operation === 'stock_update'" v-model="form.warehouse" label="Warehouse *" doctype="Warehouse" :show-open-button="false" show-clear @update:model-value="markDirty" />
-				<LinkField v-if="operation === 'stock_update'" v-model="form.supplier" label="Supplier" doctype="Supplier" :show-open-button="false" show-clear @update:model-value="markDirty" />
-				<DateField v-model="form.posting_date" label="Posting date" :disabled="editor.protected_completion" @update:model-value="markPostingDateTimeDirty" />
-				<TimeField v-model="form.posting_time" label="Posting time" :disabled="editor.protected_completion" @update:model-value="markPostingDateTimeDirty" />
+				<FormField v-for="field in headerFields" :key="field.fieldname" :class="{ 'fabric-select-field': field.fieldtype === 'Select' }" :field="field" :form="form" :model-value="form[field.fieldname]" :required="Boolean(field.reqd)" :invalid="Boolean(fieldErrors[field.fieldname])" :error="fieldErrors[field.fieldname] || ''" :show-open-button="false" :show-clear="!field.read_only" @update:model-value="updateField(field.fieldname, $event)" />
 			</section>
 
 			<StockItemComposer
@@ -50,17 +39,15 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import { discardCompletionDraft, getFabricStockItemSchema, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
-import DateField from "../../components/common/DateField.vue"
-import LinkField from "../../components/common/LinkField.vue"
+import FormField from "../../components/common/FormField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
-import TimeField from "../../components/common/TimeField.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
+import { mapFieldError, requiredFieldErrors } from "../../utils/fieldErrors.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 
 const props = defineProps({
@@ -68,6 +55,7 @@ const props = defineProps({
 	operation: { type: String, required: true },
 	name: { type: String, default: "" },
 	expectedModified: { type: String, default: "" },
+	initialEditor: { type: Object, default: null },
 	sourceContext: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(["update:visible", "changed"])
@@ -78,6 +66,7 @@ const loading = ref(false)
 const saving = ref(false)
 const saveMode = ref("")
 const error = ref("")
+const fieldErrors = ref({})
 const dirty = ref(false)
 const editor = ref({ dimensions: [], permissions: {} })
 const itemDetails = ref([])
@@ -87,25 +76,53 @@ const canSave = computed(() => {
 	const canMutate = editor.value.protected_completion
 		? editor.value.permissions?.can_submit
 		: editor.value.permissions?.can_create || editor.value.permissions?.can_write
-	if (!canMutate || !itemDetails.value.some((group) => group.items?.length)) return false
-	if (props.operation === "stock_entry" && (!form.purpose || !form.from_warehouse)) return false
-	if (props.operation === "stock_entry" && form.purpose === "Send to Warehouse" && !form.to_warehouse) return false
-	if (props.operation === "stock_reconciliation" && (!form.purpose || !form.default_warehouse)) return false
-	if (props.operation === "stock_update" && (!form.update_type || !form.warehouse)) return false
-	return true
+	return Boolean(canMutate)
 })
+
+const headerFields = computed(() => {
+	const fields = []
+	const protectedFields = Boolean(editor.value.protected_completion)
+	const receipt = form.purpose === "Receive at Warehouse"
+	const link = (fieldname, label, options, required = false, readOnly = false) => fields.push({ fieldname, label, options, fieldtype: "Link", reqd: required, read_only: readOnly })
+	if (["stock_entry", "stock_reconciliation"].includes(props.operation)) fields.push({ fieldname: "purpose", label: "Purpose", fieldtype: "Select", options: (editor.value.purpose_options || []).join("\n"), reqd: true, read_only: editor.value.purpose_locked })
+	if (props.operation === "stock_entry") {
+		if (receipt) link("outgoing_stock_entry", "Outgoing Stock Entry", "YRP Stock Entry", true, true)
+		link("from_warehouse", "From Warehouse", "Warehouse", form.purpose !== "Material Receipt", protectedFields || receipt || form.purpose === "Material Receipt")
+		if (["Send to Warehouse", "Material Receipt", "Receive at Warehouse"].includes(form.purpose) || protectedFields) link("to_warehouse", "To Warehouse", "Warehouse", true, protectedFields || receipt)
+		if (form.purpose === "Send to Warehouse") fields.push({ fieldname: "skip_transit", label: "Skip Transit", fieldtype: "Check" })
+	}
+	if (props.operation === "stock_reconciliation") {
+		link("default_warehouse", "Warehouse", "Warehouse", true)
+		link("default_supplier", "Supplier", "Supplier")
+	}
+	if (props.operation === "stock_update") {
+		fields.push({ fieldname: "update_type", label: "Update Type", fieldtype: "Select", options: (editor.value.update_type_options || []).join("\n"), reqd: true })
+		link("warehouse", "Warehouse", "Warehouse", true)
+		link("supplier", "Supplier", "Supplier")
+	}
+	if (editor.value.posting_fields?.length) fields.push({ fieldname: "edit_posting_date_and_time", label: "Edit Posting Date and Time", fieldtype: "Check", read_only: protectedFields })
+	for (const field of editor.value.posting_fields || []) fields.push({ ...field, fieldtype: field.fieldname === "posting_date" ? "Date" : "Time", reqd: field.reqd || Boolean(form.edit_posting_date_and_time), read_only: protectedFields || !form.edit_posting_date_and_time })
+	return fields
+})
+function updateField(fieldname, value) {
+	form[fieldname] = value
+	delete fieldErrors.value[fieldname]
+	if (fieldname === "purpose" && value === "Material Receipt") form.from_warehouse = ""
+	markDirty()
+}
 
 const canDiscard = computed(() => Boolean(props.name && editor.value.protected_completion && editor.value.permissions?.can_delete))
 
-watch(() => [props.visible, props.operation, props.name, JSON.stringify(props.sourceContext || {})], ([visible]) => { if (visible) load() }, { immediate: true })
+watch(() => [props.visible, props.operation, props.name, JSON.stringify(props.sourceContext || {}), props.initialEditor], ([visible]) => { if (visible) load() }, { immediate: true })
 
 async function load() {
 	loading.value = true
 	error.value = ""
+	fieldErrors.value = {}
 	itemDetails.value = []
 	Object.assign(form, emptyForm())
 	try {
-		editor.value = await getFabricStockOperationEditor(props.operation, { name: props.name, sourceContext: props.sourceContext }) || { dimensions: [], permissions: {} }
+		editor.value = props.initialEditor || await getFabricStockOperationEditor(props.operation, { name: props.name, sourceContext: props.sourceContext }) || { dimensions: [], permissions: {} }
 		Object.assign(form, editor.value.defaults || {})
 		itemDetails.value = clone(editor.value.item_groups || [])
 		dirty.value = false
@@ -115,9 +132,11 @@ async function load() {
 
 function loadSchema(operation, item) { return getFabricStockItemSchema(operation, item) }
 function markDirty() { if (!loading.value) dirty.value = true }
-function markPostingDateTimeDirty() { form.edit_posting_date_and_time = 1; markDirty() }
 async function save(submit) {
 	if (!canSave.value) return
+	fieldErrors.value = requiredFieldErrors(headerFields.value, form)
+	if (Object.keys(fieldErrors.value).length) return
+	if (!itemDetails.value.some((group) => group.items?.length)) { error.value = "Add at least one Item."; return }
 	saving.value = true
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
@@ -126,7 +145,11 @@ async function save(submit) {
 		dirty.value = false
 		emit("changed", saved)
 		emit("update:visible", false)
-	} catch (reason) { error.value = reason?.message || "Unable to save this stock document." }
+	} catch (reason) {
+		const mapped = mapFieldError(reason, headerFields.value, "Unable to save this stock document.")
+		fieldErrors.value = mapped.fields
+		error.value = mapped.message
+	}
 	finally { saving.value = false; saveMode.value = "" }
 }
 function requestDiscard() {
@@ -162,7 +185,7 @@ function requestVisibility(value) {
 	})
 	emit("update:visible", false)
 }
-function emptyForm() { return { purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, comments: "" } }
+function emptyForm() { return { outgoing_stock_entry: "", skip_transit: 0, purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, comments: "" } }
 function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 </script>
 

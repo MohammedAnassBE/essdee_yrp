@@ -96,10 +96,8 @@ onMounted(load)
 <style scoped>
 .cutting-reports {
 	width: 100%;
-	max-width: 1800px;
 	min-width: 0;
-	margin: 0 auto;
-	padding: 0 2px var(--erp-space-5);
+	padding: 0 0 var(--erp-space-5);
 }
 
 .report-permission-loading {

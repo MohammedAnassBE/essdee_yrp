@@ -1,68 +1,73 @@
 <template>
 	<DepartmentPage title="Item Price" back-to="/purchase/item-prices" back-label="Item Prices" :show-title="false" flat full-width inline-navigation>
-		<div class="price-record-page erp-workspace">
-		<section class="price-page erp-card" aria-label="Item Price page" :aria-busy="loading">
-			<header class="price-page__header">
-				<InlinePageNavigation title-target="item-price-title" show-document-navigation :current-name="priceId" document-label="Item Price" :navigation-disabled="loading || Boolean(acting)" />
-				<div class="price-page__identity"><span>Purchase · Item Price</span><div><h1 id="item-price-title">{{ priceId }}</h1><DocumentStatusBadge v-if="!loading && !loadError" :label="record.workflow_state" /></div></div>
-				<dl v-if="!loading && !loadError" class="price-page__facts">
-					<div><dt>Item</dt><dd>{{ record.item_name || "—" }}</dd></div>
-					<div><dt>Supplier</dt><dd>{{ record.supplier_name || record.supplier || "—" }}</dd></div>
-					<div><dt>Validity</dt><dd>{{ dateRange(record.from_date, record.to_date) }}</dd></div>
-				</dl>
-				<DocumentActionStrip v-if="actions.length" :actions="actions" />
-			</header>
-
-			<div v-if="loading" class="price-page__loading"><Skeleton height="220px" /><Skeleton height="280px" /></div>
-			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
-			<div v-else class="price-page__content">
-				<main class="price-page__main">
-					<section class="price-summary-card">
-						<header><div><span>Commercial terms</span><h2>Price slabs</h2></div><strong>{{ record.uom || "—" }}</strong></header>
-						<div class="price-summary-facts"><div><span>Tax slab</span><strong>{{ record.tax || "—" }}</strong></div><div><span>Attribute</span><strong>{{ record.depends_on_attribute ? record.attribute : "Not used" }}</strong></div><div class="price-summary-facts__approver"><span>Approved by</span><strong :title="itemPriceApprovedBy(record)">{{ itemPriceApprovedBy(record) || "—" }}</strong></div></div>
-						<div v-if="tierGroups.length" class="price-groups">
-							<section v-for="group in tierGroups" :key="group.key" class="price-group">
-								<h3 v-if="record.depends_on_attribute">{{ group.label }}</h3>
-								<DataTable :value="group.rows" size="small" scrollable>
-									<Column field="moq" header="From qty" />
-									<Column field="price" header="Price (excl. tax)" />
-									<Column field="lead_time" header="Lead time"><template #body="{ data }">{{ data.lead_time }} days</template></Column>
-								</DataTable>
-							</section>
+		<section class="item-price-frame">
+			<FabricDocumentWorkspace doctype="YRP Item Price" title="Item Price" :workspace="workspace" :loading="loading" :error="loadError" :acting="acting" :show-lifecycle-actions="false" @reload="load">
+				<template #header="{ record: header, headingId }">
+					<div class="item-price-page__identity">
+						<div><h1 class="erp-doc-title" :id="headingId">Item Price</h1><span class="erp-doc-id">{{ header.name }}</span></div>
+						<DocumentStatusBadge :docstatus="header.docstatus" :label="header.workflow_state" />
+						<div class="item-price-page__facts" role="region" aria-label="Item Price context" tabindex="0">
+							<div><span>{{ fieldLabel("item_name", "Item") }}</span><strong :title="header.item_name">{{ header.item_name || "—" }}</strong></div>
+							<div><span>{{ fieldLabel("supplier", "Supplier") }}</span><strong :title="header.supplier_name || header.supplier">{{ header.supplier_name || header.supplier || "—" }}</strong></div>
+							<div><span>{{ fieldLabel("from_date", "From Date") }}</span><strong>{{ formatDate(header.from_date) }}</strong></div>
 						</div>
-						<div v-else class="price-page-empty">No price slabs.</div>
-					</section>
-				</main>
+					</div>
+				</template>
 
-				<aside class="price-rail" aria-label="Item Price timeline and versions">
+				<template #header-actions>
+					<DocumentActionStrip v-if="actions.length" :actions="actions" />
+				</template>
+
+				<template #fields>
+					<DocumentOverview :fields="overviewFields" :definitions="ITEM_PRICE_SECTIONS" include-empty aria-label="Item Price overview" id-prefix="item-price-overview" />
+					<section class="item-price-values" aria-labelledby="item-price-values-title">
+						<header>
+							<div class="item-price-values__icon" aria-hidden="true"><i class="pi pi-list" /></div>
+							<div><h2 id="item-price-values-title">Price Values</h2><p>MOQ slabs with price and lead time</p></div>
+						</header>
+						<dl class="item-price-values__facts">
+							<div><dt>{{ fieldLabel("depends_on_attribute", "Depends On Attribute") }}</dt><dd>{{ record.depends_on_attribute ? "Yes" : "No" }}</dd></div>
+							<div v-if="record.depends_on_attribute"><dt>{{ fieldLabel("attribute", "Attribute") }}</dt><dd>{{ record.attribute || "—" }}</dd></div>
+						</dl>
+						<div class="item-price-values__body">
+						<DataTable v-if="tiers.length" :value="tiers" size="small" scrollable class="erp-data-table item-price-values__table">
+							<Column header="No." class="item-price-values__index"><template #body="{ index }">{{ index + 1 }}</template></Column>
+							<Column v-if="record.depends_on_attribute" :header="tierLabel('attribute_value', 'Attribute Value')"><template #body="{ data }">{{ data.attribute_value_label || data.attribute_value || "—" }}</template></Column>
+							<Column v-for="fieldname in NUMBER_COLUMNS" :key="fieldname" :header="tierLabel(fieldname, fieldname)" class="item-price-values__number"><template #body="{ data }">{{ formatTier(fieldname, data[fieldname]) }}</template></Column>
+						</DataTable>
+						<div v-else class="erp-empty-state"><span class="erp-empty-state__text">No price values.</span></div>
+						</div>
+					</section>
+				</template>
+
+				<template #rail>
 					<section class="price-timeline">
 						<header><span>Timeline</span><strong>{{ workspace.timeline?.length || 0 }}</strong></header>
 						<div v-if="workspace.timeline?.length" class="price-timeline__list">
 							<article v-for="entry in workspace.timeline" :key="entry.name">
 								<div><strong>{{ entry.label }}</strong><small>{{ timelineDate(entry.creation) }}</small></div>
 								<p>{{ entry.content }}</p>
-								<span v-if="entry.by">{{ entry.by }}</span>
+								<small v-if="entry.by && !entry.content?.includes(entry.by)">{{ entry.by }}</small>
 							</article>
 						</div>
-						<div v-else class="price-history__empty">No timeline entries.</div>
+						<div v-else class="price-history__empty erp-empty-state erp-empty-state--compact"><span class="erp-empty-state__text">No timeline entries.</span></div>
 					</section>
 					<section class="price-history">
 						<header><span>Versions</span><strong>{{ workspace.history?.length || 0 }}</strong></header>
 						<div v-if="workspace.history?.length" class="price-history__list">
 							<RouterLink v-for="entry in workspace.history" :key="entry.name" :to="historyPath(entry.name)">
 								<div><strong>{{ entry.name }}</strong><DocumentStatusBadge :label="entry.workflow_state" /></div>
-								<span>{{ dateRange(entry.from_date, entry.to_date) }}</span>
+								<span>{{ formatDate(entry.from_date) }} → {{ entry.to_date ? formatDate(entry.to_date) : "Open" }}</span>
 								<small v-if="itemPriceApprovedBy(entry)">Approved by {{ itemPriceApprovedBy(entry) }}</small>
 							</RouterLink>
 						</div>
-						<div v-else class="price-history__empty">No earlier versions.</div>
+						<div v-else class="price-history__empty erp-empty-state erp-empty-state--compact"><span class="erp-empty-state__text">No earlier versions.</span></div>
 					</section>
-				</aside>
-			</div>
+				</template>
+			</FabricDocumentWorkspace>
 		</section>
 
 		<ItemPriceActionDialog v-model:visible="actionVisible" :action="selectedAction" :busy="Boolean(acting)" @confirm="runWorkflowAction" />
-		</div>
 		<DocumentConfirmationDialog v-model:visible="deleteVisible" title="Delete Item Price?" :message="`Delete ${pendingDelete?.name || priceId}? This cannot be undone.`" confirm-label="Delete Price" confirm-icon="pi pi-trash" severity="danger" :busy="Boolean(acting)" @confirm="deletePrice" />
 		<DocumentErrorDialog :message="actionError" title="Item Price action failed" @dismiss="actionError = ''" />
 	</DepartmentPage>
@@ -71,19 +76,19 @@
 <script setup>
 import Column from "primevue/column"
 import DataTable from "primevue/datatable"
-import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"
 import { RouterLink, useRouter } from "vue-router"
 
 import { deleteItemPrice, executeItemPriceAction, getItemPriceWorkspace } from "../../api/purchase.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
-import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
-import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
-import { PURCHASE_ROUTES, captureRecordTarget, isCurrentRecordRequest, itemPriceActionItems, itemPriceApprovedBy, itemPriceGroups } from "./purchaseViews.js"
+import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
+import { ITEM_PRICE_SECTIONS, PURCHASE_ROUTES, activePriceTiers, captureRecordTarget, isCurrentRecordRequest, itemPriceActionItems, itemPriceApprovedBy, itemPriceFieldLabel, itemPriceOverviewFields, itemPriceTierValue } from "./purchaseViews.js"
 import ItemPriceActionDialog from "./ItemPriceActionDialog.vue"
 
 const props = defineProps({ priceId: { type: String, required: true } })
@@ -100,7 +105,9 @@ const pendingDelete = ref(null)
 let loadSequence = 0
 
 const record = computed(() => workspace.value.record || {})
-const tierGroups = computed(() => itemPriceGroups(workspace.value.tiers || []))
+const NUMBER_COLUMNS = ["moq", "price", "lead_time"]
+const overviewFields = computed(() => itemPriceOverviewFields(workspace.value))
+const tiers = computed(() => activePriceTiers({ tiers: workspace.value.tiers }))
 const actions = computed(() => {
 	if (loading.value || loadError.value) return []
 	return itemPriceActionItems(workspace.value, {
@@ -190,8 +197,20 @@ function historyPath(name) {
 	return { name: PURCHASE_ROUTES.itemPrice, params: { priceId: name } }
 }
 
-function dateRange(fromDate, toDate) {
-	return `${fromDate || "—"} → ${toDate || "Open"}`
+function fieldLabel(fieldname, fallback) {
+	return itemPriceFieldLabel(workspace.value.fields, fieldname, fallback)
+}
+
+function tierLabel(fieldname, fallback) {
+	return itemPriceFieldLabel(workspace.value.tier_fields, fieldname, fallback)
+}
+
+function formatTier(fieldname, value) {
+	return itemPriceTierValue(workspace.value.tier_fields?.[fieldname], value)
+}
+
+function formatDate(value) {
+	return formatDocumentOverviewValue({ fieldtype: "Date", value })
 }
 
 function timelineDate(value) {
@@ -204,67 +223,67 @@ watch(() => props.priceId, load, { immediate: true })
 </script>
 
 <style scoped>
-.price-record-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
-.price-page { display: flex; width: 100%; min-width: 0; overflow: hidden; flex-direction: column; border-top: 3px solid var(--erp-accent); }
-.price-page__header { display: flex; min-width: 0; align-items: center; gap: 18px; padding: 13px clamp(16px, 2vw, 24px); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); }
-.price-page__identity { display: grid; min-width: 0; gap: 4px; }
-.price-page__identity > span, .price-summary-card header span, .price-history > header span, .price-timeline > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .045em; text-transform: uppercase; }
-.price-page__identity > div { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.price-page__identity h1 { margin: 0; overflow: hidden; color: var(--erp-text); font-size: clamp(20px, 2vw, 25px); letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
-.price-page__facts { display: flex; min-width: 0; margin: 0 0 0 auto; }
-.price-page__facts div { display: grid; min-width: 110px; max-width: 210px; gap: 2px; padding: 0 12px; border-left: 1px solid var(--erp-border); }
-.price-page__facts dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; text-transform: uppercase; }
-.price-page__facts dd { margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
-.price-page__loading, .price-page__content { min-width: 0; padding: clamp(14px, 2vw, 22px) clamp(14px, 2vw, 22px) 14px; }
-.price-page__loading { display: grid; gap: 16px; }
-.price-page__content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 290px); align-items: start; gap: 16px; }
-.price-summary-card, .price-history, .price-timeline { display: grid; min-width: 0; gap: 14px; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-xs); }
-.price-summary-card { padding: 17px; }
-.price-summary-card > header, .price-history > header, .price-timeline > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.price-summary-card h2 { margin: 2px 0 0; color: var(--erp-text); font-size: 1rem; }
-.price-summary-card > header > strong, .price-history > header > strong, .price-timeline > header > strong { color: var(--erp-accent-hover); font-size: var(--erp-font-size-caption); }
-.price-summary-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-border); gap: 1px; }
-.price-summary-facts > div { display: grid; min-height: 58px; align-content: center; gap: 3px; padding: 9px 11px; background: var(--erp-surface-muted); }
-.price-summary-facts span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; text-transform: uppercase; }
-.price-summary-facts strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
-.price-groups { display: grid; gap: 12px; }
-.price-group { display: grid; gap: 7px; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
-.price-group h3 { margin: 0; padding: 9px 11px 2px; color: var(--erp-accent-hover); font-size: var(--erp-font-size-caption); }
-.price-rail { display: grid; min-width: 0; gap: 16px; }
-.price-history, .price-timeline { gap: 0; overflow: hidden; }
-.price-history > header, .price-timeline > header { padding: 13px; border-bottom: 1px solid var(--erp-border); }
-.price-timeline__list, .price-history__list { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
-.price-timeline__list { display: grid; }
-.price-timeline__list article { display: grid; gap: 5px; padding: 11px 13px; border-bottom: 1px solid var(--erp-border); }
-.price-timeline__list article:last-child { border-bottom: 0; }
-.price-timeline__list article > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.price-timeline__list strong, .price-timeline__list p { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
+.item-price-frame { width: 100%; min-width: 0; }
+.item-price-frame :deep(.fabric-document-workspace__rail) { overflow-y: auto; }
+.item-price-page__identity { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.item-price-page__identity > div:first-child { display: grid; min-width: 0; gap: 2px; }
+.item-price-page__identity h1 { margin: 0; color: var(--erp-text); }
+.item-price-page__facts { display: flex; min-width: 0; align-items: center; gap: 18px; padding-left: 14px; border-left: 1px solid var(--erp-border); }
+.item-price-page__facts > div { display: grid; min-width: 0; gap: 2px; }
+.item-price-page__facts span, .price-history > header span, .price-timeline > header span {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .03em;
+	text-transform: uppercase;
+}
+.item-price-page__facts strong {
+	overflow: hidden;
+	max-width: 260px;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-md);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.item-price-values { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-card); }
+.item-price-values > header { display: flex; align-items: center; gap: var(--erp-space-2); padding: 10px 16px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
+.item-price-values__icon { display: inline-grid; place-items: center; color: var(--erp-accent-ink); font-size: var(--erp-font-size-table); }
+.item-price-values > header > div:last-child { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 2px var(--erp-space-2); }
+.item-price-values h2 { margin: 0; color: var(--erp-text-secondary); font-size: var(--erp-font-size-table); font-weight: var(--erp-font-weight-bold); letter-spacing: .02em; }
+.item-price-values header p { margin: 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.item-price-values__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px; margin: 0; padding: 12px 18px 4px; }
+.item-price-values__facts > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--erp-border); }
+.item-price-values__facts dt { order: 2; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-semibold); letter-spacing: .03em; text-transform: uppercase; }
+.item-price-values__facts dd { order: 1; margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: var(--erp-font-weight-semibold); }
+.item-price-values__body { min-width: 0; padding: 12px 18px 18px; }
+.item-price-values__table { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.item-price-values__table :deep(.item-price-values__index) { width: 56px; color: var(--erp-text-muted); text-align: center; }
+.item-price-values__table :deep(th.item-price-values__index .p-datatable-column-header-content) { justify-content: center; }
+.item-price-values__table :deep(.item-price-values__number) { text-align: right; font-variant-numeric: tabular-nums; }
+.item-price-values__table :deep(th.item-price-values__number .p-datatable-column-header-content) { justify-content: flex-end; }
+.price-timeline, .price-history { display: grid; min-width: 0; border-bottom: 1px solid var(--erp-border); }
+.price-history { border-bottom: 0; }
+.price-history > header, .price-timeline > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border-subtle); }
+.price-history > header > strong, .price-timeline > header > strong { padding: 1px 7px; color: var(--erp-accent-ink); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
+.price-timeline__list, .price-history__list { display: grid; align-content: start; max-height: 320px; overflow: auto; overscroll-behavior: contain; }
+.price-timeline__list article { display: grid; gap: 4px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border-subtle); }
+.price-timeline__list article:last-child, .price-history__list a:last-child { border-bottom: 0; }
+.price-timeline__list article > div, .price-history__list a > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.price-timeline__list strong, .price-timeline__list p, .price-history__list strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .price-timeline__list p { margin: 0; line-height: 1.35; }
-.price-timeline__list small, .price-timeline__list span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.price-history__list { display: grid; align-content: start; }
-.price-history__list a { display: grid; gap: 6px; padding: 12px 13px; color: inherit; text-decoration: none; border-bottom: 1px solid var(--erp-border); }
-.price-history__list a:last-child { border-bottom: 0; }
+.price-timeline__list small, .price-history__list span, .price-history__list small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.price-history__list a { display: grid; gap: 5px; padding: 10px 13px; color: inherit; text-decoration: none; border-bottom: 1px solid var(--erp-border-subtle); }
 .price-history__list a:hover { background: var(--erp-surface-muted); }
-.price-history__list a > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.price-history__list strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
-.price-history__list span, .price-history__list small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.price-history__empty, .price-page-empty { display: grid; min-height: 90px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); place-items: center; }
-@media (max-width: 1050px) { .price-page__header { align-items: flex-start; flex-wrap: wrap; } .price-page__facts { width: 100%; margin: 0; order: 3; } .price-page__facts div:first-child { padding-left: 0; border-left: 0; } .price-page__content { grid-template-columns: 1fr; } .price-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); } .price-history__list a:nth-child(odd) { border-right: 1px solid var(--erp-border); } }
+.price-history__empty { margin: 12px; }
+@media (max-width: 1100px) { .item-price-page__identity { align-items: flex-start; flex-wrap: wrap; } }
+@media (max-width: 900px) { .item-price-frame :deep(.fabric-document-workspace__rail) { grid-template-columns: 1fr; } }
 @media (max-width: 650px) {
-	.price-page__header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 10px; padding: 8px 14px; }
-	.price-page__header:has(> .document-action-strip) > .price-page__identity { grid-column: 1 / -1; grid-row: 2; }
-	.price-page__header > :deep(.document-action-strip) { grid-column: 2; grid-row: 1; width: auto; justify-self: end; }
-	.price-page__identity > span { display: none; }
-	.price-page__identity :deep(.document-status-badge) { flex-shrink: 0; }
-	.price-page__facts { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-	.price-page__facts div { min-width: 0; padding-inline: 8px; }
-	.price-page__facts dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
-	.price-summary-facts > div { min-height: 0; padding: 8px 9px; }
-	.price-summary-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.price-summary-facts__approver { grid-column: 1 / -1; }
-	.price-summary-facts strong { overflow-wrap: anywhere; }
-	.price-summary-facts__approver strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.price-history__list, .price-rail { grid-template-columns: 1fr; }
-	.price-history__list a:nth-child(odd) { border-right: 0; }
+	.item-price-frame :deep(.fabric-document-workspace__header) { align-items: flex-start; }
+	.item-price-page__identity { width: 100%; }
+	.item-price-page__facts { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; padding: 8px 0 0; border-top: 1px solid var(--erp-border); border-left: 0; }
+	.item-price-values__facts { grid-template-columns: 1fr; padding: 8px 14px 4px; }
+	.item-price-values__body { padding: 10px 14px 14px; }
 }
 </style>

@@ -11,8 +11,7 @@
 		<section class="purchase-lots-page erp-workspace" aria-label="Purchase lots">
 			<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
 			<div v-else-if="loading" class="purchase-lots-page__loading" aria-label="Loading Lots">
-				<Skeleton height="180px" />
-				<Skeleton height="320px" />
+				<ListPageSkeleton />
 			</div>
 			<Message v-else-if="!capability" severity="warn" :closable="false">
 				You do not have permission to view Lots.
@@ -61,13 +60,13 @@
 <script setup>
 import Button from "primevue/button"
 import Message from "primevue/message"
-import Skeleton from "primevue/skeleton"
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 
 import { getPurchaseCapabilities } from "../../../api/purchase.js"
 import DepartmentPage from "../../../components/DepartmentPage.vue"
 import ListView from "../../../components/common/ListView.vue"
+import ListPageSkeleton from "../../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../../router/listDocumentNavigation.js"

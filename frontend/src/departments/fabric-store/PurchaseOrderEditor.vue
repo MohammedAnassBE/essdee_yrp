@@ -1,8 +1,8 @@
 <template>
 	<section class="purchase-order-editor erp-card erp-editor-shell" aria-label="Purchase Order editor" :aria-busy="loading">
 		<header class="purchase-order-editor__header erp-editor-header">
-			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1>{{ name ? "Edit Purchase Order" : "New Purchase Order" }}</h1></div>
-			<div class="purchase-order-editor__actions erp-editor-actions">
+			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Purchase Order" : "New Purchase Order" }}</h1></div>
+			<div class="erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
 				<Button v-if="canDraft" label="Save" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
 			</div>
@@ -19,7 +19,7 @@
 			<section class="purchase-order-editor__section purchase-order-editor__document-setup">
 				<header><div><span>Document setup</span><h2>Series & order date</h2></div><small>Set the document identity, company and transaction currency.</small></header>
 				<div class="purchase-order-editor__document-fields">
-					<label class="purchase-order-editor__control" for="po-naming-series"><span>{{ fieldLabel('naming_series', 'Naming Series', true, true) }}</span><Select v-model="form.naming_series" input-id="po-naming-series" :aria-label="fieldLabel('naming_series', 'Naming Series', true, true)" aria-required="true" :options="fieldOptions('naming_series')" :disabled="busy || isReadOnly('naming_series')" fluid @change="markDirty" /></label>
+					<label class="purchase-order-editor__control" for="po-naming-series"><span class="erp-field-label">{{ fieldLabel('naming_series', 'Naming Series', false) }}<span v-if="isRequired('naming_series', true)" class="erp-required-mark" aria-hidden="true">*</span></span><Select v-model="form.naming_series" input-id="po-naming-series" :aria-label="fieldLabel('naming_series', 'Naming Series', true, true)" aria-required="true" :options="fieldOptions('naming_series')" :disabled="busy || isReadOnly('naming_series')" fluid @change="markDirty" /></label>
 					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" :label="fieldLabel('transaction_date', 'Order date', false)" :required="isRequired('transaction_date', true)" :disabled="busy || isReadOnly('transaction_date')" @update:model-value="markDirty" />
 					<LinkField v-model="form.company" :label="fieldLabel('company', 'Company', false)" doctype="Company" :required="isRequired('company')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('company')" @update:model-value="markDirty" />
 					<LinkField v-model="form.currency" :label="fieldLabel('currency', 'Currency', false)" doctype="Currency" :required="isRequired('currency')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('currency')" @update:model-value="markDirty" />
@@ -30,7 +30,7 @@
 				<section class="purchase-order-editor__section purchase-order-editor__entry-card">
 					<header><div><span>Procurement</span><h2>Supplier & schedule</h2></div><small>Choose the supplier and required delivery date.</small></header>
 					<div class="purchase-order-editor__fields">
-						<LinkField input-id="field-supplier-value" :key="`supplier-${sourceRevision}`" :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier', true, true)" doctype="Supplier" :required="isRequired('supplier', true)" :filters="{ disabled: 0 }" :show-open-button="false" show-clear :disabled="busy || isReadOnly('supplier')" @update:model-value="changeSupplier" />
+						<LinkField input-id="field-supplier-value" :reset-version="sourceRevision" :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier', true, true)" doctype="Supplier" :required="isRequired('supplier', true)" :filters="{ disabled: 0 }" :show-open-button="false" show-clear :disabled="loading || composerPreparing || previewPending || (Boolean(saving) && saving !== 'source') || isReadOnly('supplier')" @update:model-value="changeSupplier" />
 						<DateField v-model="form.schedule_date" class="purchase-order-editor__date" :label="fieldLabel('schedule_date', 'Required by', false)" :required="isRequired('schedule_date', true)" :disabled="busy || isReadOnly('schedule_date')" @update:model-value="markDirty" />
 					</div>
 				</section>
@@ -48,7 +48,7 @@
 					<header><div><span>Commercial</span><h2>Terms & notes</h2></div><small>Capture the agreed terms and operator comments.</small></header>
 					<div class="purchase-order-editor__fields">
 						<LinkField v-model="form.terms_and_condition" :label="fieldLabel('terms_and_condition', 'Terms and condition', false)" doctype="YRP Terms and Condition" :required="isRequired('terms_and_condition')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('terms_and_condition')" @update:model-value="markDirty" />
-						<label class="purchase-order-editor__comments"><span>{{ fieldLabel('comments', 'Comments', false) }}</span><Textarea v-model="form.comments" rows="3" auto-resize fluid :disabled="busy || isReadOnly('comments')" @input="markDirty" /></label>
+						<label class="purchase-order-editor__comments"><span class="erp-field-label">{{ fieldLabel('comments', 'Comments', false) }}</span><Textarea v-model="form.comments" rows="3" auto-resize fluid :disabled="busy || isReadOnly('comments')" @input="markDirty" /></label>
 					</div>
 				</section>
 			</div>
@@ -82,8 +82,8 @@
 						/>
 						<DateField :model-value="values.schedule_date" label="Required by" required :disabled="busy" @update:model-value="setItemRequiredBy(values, $event)" />
 						<label class="purchase-order-editor__item-check"><Checkbox :model-value="Boolean(values.fetch_delivery_date)" binary :disabled="busy" @update:model-value="values.fetch_delivery_date = $event ? 1 : 0" /><span>Use Item Price lead time</span></label>
-						<label class="purchase-order-editor__item-control"><span>Discount %</span><InputNumber :model-value="Number(values.discount_percentage || 0)" :min="0" :max="100" :max-fraction-digits="2" fluid :disabled="busy" @update:model-value="values.discount_percentage = Number($event || 0)" /></label>
-						<label class="purchase-order-editor__item-control purchase-order-editor__item-comments"><span>Comments</span><Textarea :model-value="values.comments || ''" rows="1" auto-resize fluid :disabled="busy" @update:model-value="values.comments = $event" /></label>
+						<label class="purchase-order-editor__item-control"><span class="erp-field-label">Discount %</span><InputNumber :model-value="Number(values.discount_percentage || 0)" :min="0" :max="100" :max-fraction-digits="2" fluid :disabled="busy" @update:model-value="values.discount_percentage = Number($event || 0)" /></label>
+						<label class="purchase-order-editor__item-control purchase-order-editor__item-comments"><span class="erp-field-label">Comments</span><Textarea :model-value="values.comments || ''" rows="1" auto-resize fluid :disabled="busy" @update:model-value="values.comments = $event" /></label>
 						<LinkField
 							v-for="parameter in values.additional_parameters || []"
 							:key="parameter.additional_parameter_key"
@@ -278,7 +278,7 @@ function setItemRequiredBy(values, value) {
 function markDirty() { if (!loading.value) dirty.value = true }
 async function changeSupplier(value) {
 	if (previewPending.value || composerPreparing.value) return
-	if (value === form.supplier) return
+	if ((value || "") === (form.supplier || "")) return
 	if (hasEnteredQuantities()) {
 		pendingSupplierValue.value = value || ""
 		supplierConfirmVisible.value = true
@@ -413,40 +413,91 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
-.purchase-order-editor { --purchase-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--purchase-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
-.purchase-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: var(--erp-shell-header-height); display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--purchase-order-editor-inline)); padding: 7px var(--purchase-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
-.purchase-order-editor__header > div:first-child { display: grid; gap: 2px; }
-.purchase-order-editor__header span, .purchase-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
-.purchase-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
-.purchase-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
+.purchase-order-editor {
+	display: flex;
+	width: 100%;
+	min-height: calc(100dvh - var(--erp-shell-header-height) - 78px);
+	flex-direction: column;
+	gap: var(--erp-space-3);
+	padding: 0 0 var(--erp-space-4);
+	border-color: color-mix(in srgb, var(--erp-border) 84%, white);
+	background: var(--erp-bg);
+}
+.purchase-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .purchase-order-editor__loading, .purchase-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .purchase-order-editor__recovery { display: grid; min-height: 220px; place-content: center; justify-items: center; gap: 10px; padding: var(--erp-space-6); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
-.purchase-order-editor__recovery > i { color: var(--erp-danger); font-size: 24px; }.purchase-order-editor__recovery > div { display: grid; gap: 4px; }.purchase-order-editor__recovery strong { color: var(--erp-text); }.purchase-order-editor__recovery span { max-width: 520px; font-size: var(--erp-font-size-caption); }
-.purchase-order-editor__section { display: grid; gap: var(--erp-space-3); padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 8px 24px rgb(28 61 45 / 4%); }
+.purchase-order-editor__recovery > i { color: var(--erp-danger); font-size: var(--erp-font-size-title); }.purchase-order-editor__recovery > div { display: grid; gap: 4px; }.purchase-order-editor__recovery strong { color: var(--erp-text); }.purchase-order-editor__recovery span { max-width: 520px; font-size: var(--erp-font-size-caption); }
+.purchase-order-editor__section { display: grid; gap: var(--erp-space-3); padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-card); }
 .purchase-order-editor__section > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .purchase-order-editor__section h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .purchase-order-editor__section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.purchase-order-editor__document-setup { border-top: 3px solid color-mix(in srgb, var(--erp-accent) 76%, white); }
 .purchase-order-editor__document-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px 16px; }
 .purchase-order-editor__card-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
-.purchase-order-editor__entry-card { min-width: 0; align-content: start; box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
+.purchase-order-editor__entry-card { min-width: 0; align-content: start; box-shadow: var(--erp-shadow-card); }
 .purchase-order-editor__notes-card { grid-column: 1 / -1; }
 .purchase-order-editor__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 11px 14px; }
 .purchase-order-editor__delivery-fields { grid-template-columns: minmax(150px, .8fr) minmax(200px, 1fr) minmax(200px, 1fr); }
-.purchase-order-editor__control { display: grid; min-width: 0; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
-.purchase-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.purchase-order-editor__control {
+	display: grid;
+	min-width: 0;
+	gap: 6px;
+}
+
+.purchase-order-editor__check {
+	display: flex;
+	min-height: var(--erp-control-height);
+	align-items: center;
+	gap: 8px;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-medium);
+}
 .purchase-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; }
-.purchase-order-editor__comments > span { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; text-transform: none; letter-spacing: normal; }
-.purchase-order-editor__item-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; padding: 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); }
-.purchase-order-editor__item-check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
-.purchase-order-editor__item-control { display: grid; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+
+.purchase-order-editor__item-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; padding: 11px 0; background: transparent; }
+.purchase-order-editor__item-check {
+	display: flex;
+	min-height: var(--erp-control-height);
+	align-items: center;
+	gap: 8px;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-medium);
+}
+.purchase-order-editor__item-control {
+	display: grid;
+	gap: 6px;
+}
 .purchase-order-editor__item-comments { grid-column: span 2; }
 .purchase-order-editor__item-hint { align-self: center; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.purchase-order-editor__price-warning { display: flex; max-width: 260px; align-items: center; gap: 5px; margin-top: 4px; color: var(--erp-warning); font-size: var(--erp-font-size-min); font-weight: 650; white-space: normal; }
-.purchase-order-editor__price-warning a { color: var(--erp-accent-dark); font-weight: 750; white-space: nowrap; }
+.purchase-order-editor__price-warning { display: flex; max-width: 260px; align-items: center; gap: 5px; margin-top: 4px; color: var(--erp-warning); font-size: var(--erp-font-size-min); font-weight: 600; white-space: normal; }
+.purchase-order-editor__price-warning a { color: var(--erp-accent-dark); font-weight: 600; white-space: nowrap; }
 .purchase-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1100px) { .purchase-order-editor__document-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__card-grid { grid-template-columns: 1fr; } .purchase-order-editor__notes-card { grid-column: auto; } }
 @media (max-width: 900px) { .purchase-order-editor__delivery-fields, .purchase-order-editor__item-details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .purchase-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .purchase-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .purchase-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .purchase-order-editor__header > div:first-child > span { display: none; } .purchase-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .purchase-order-editor__section { padding: var(--erp-space-3); } .purchase-order-editor__section > header small { display: none; } .purchase-order-editor__document-fields, .purchase-order-editor__fields, .purchase-order-editor__delivery-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__document-fields > *, .purchase-order-editor__fields > * { grid-column: 1 / -1; } .purchase-order-editor__date :deep(.p-datepicker-input) { padding-inline: 8px; font-size: 13px; } .purchase-order-editor__date :deep(.p-datepicker-dropdown) { width: 44px; min-width: 44px; } .purchase-order-editor__comments { grid-column: auto; } .purchase-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .purchase-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } }
+@media (max-width: 620px) {
+	.purchase-order-editor__section {
+		padding: var(--erp-space-3);
+	}
+	.purchase-order-editor__section > header small {
+		display: none;
+	}
+	.purchase-order-editor__document-fields, .purchase-order-editor__fields, .purchase-order-editor__delivery-fields {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.purchase-order-editor__document-fields > *, .purchase-order-editor__fields > * {
+		grid-column: 1 / -1;
+	}
+	.purchase-order-editor__date :deep(.p-datepicker-input) {
+		padding-inline: 8px;
+	}
+	.purchase-order-editor__date :deep(.p-datepicker-dropdown) {
+		width: 44px;
+		min-width: 44px;
+	}
+	.purchase-order-editor__comments {
+		grid-column: auto;
+	}
+}
 @media (max-width: 340px) { .purchase-order-editor__document-fields, .purchase-order-editor__fields, .purchase-order-editor__delivery-fields { grid-template-columns: 1fr; } .purchase-order-editor__date { grid-column: 1 / -1; } }
 </style>

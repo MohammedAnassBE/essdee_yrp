@@ -372,3 +372,22 @@ export function formatLotDate(value, includeTime = false) {
 	const date = `${match[3]}-${match[2]}-${match[1]}`
 	return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date
 }
+
+export function conversionProcesses(rows = []) {
+	const stages = new Map()
+	for (const row of rows) {
+		const name = row.process_name
+		if (name) stages.set(name, Math.min(stages.get(name) ?? Infinity, Number(row.process_stage_index ?? ({ knitting: 0, dyeing: 1, washing: 2 }[String(name).toLowerCase()] ?? Infinity))))
+	}
+	return [...stages].sort(([left, leftStage], [right, rightStage]) => leftStage - rightStage || left.localeCompare(right)).map(([name]) => name)
+}
+
+export function conversionView(rows = [], { search = "", process = "", includeUnchanged = false } = {}) {
+	const query = search.trim().toLocaleLowerCase()
+	const matching = rows.filter((row) => (!process || row.process_name === process) && [row.process_name, row.planned_item, row.actual_item, row.production_detail].some((value) => String(value || "").toLocaleLowerCase().includes(query)))
+	return {
+		rows: visibleConversions(matching, includeUnchanged),
+		changed: rows.filter(isChangedConversion).length,
+		routes: rows.length,
+	}
+}

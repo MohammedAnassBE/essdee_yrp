@@ -7,7 +7,7 @@
 						<InlinePageNavigation :title-target="headingId" />
 						<div class="purchase-editor__identity">
 							<span>Purchase · Item</span>
-							<div class="purchase-editor__title"><h1 :id="headingId">{{ isEdit ? (itemId || "Item") : "Create Item" }}</h1><DocumentStatusBadge :label="itemKindLabel(form.attributes)" /></div>
+							<div class="purchase-editor__title"><h1 class="erp-doc-title" :id="headingId">{{ isEdit ? (itemId || "Item") : "Create Item" }}</h1><DocumentStatusBadge :label="itemKindLabel(form.attributes)" /></div>
 						</div>
 					</div>
 					<div class="erp-editor-actions">
@@ -20,15 +20,16 @@
 				<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 				<form v-else class="purchase-editor__body" @submit.prevent="save">
 					<Message v-if="!canEditPermission" severity="warn" :closable="false">You do not have permission to edit this Item.</Message>
+					<Message v-for="warning in tableWarnings" :key="warning" severity="warn" :closable="false">{{ warning }}</Message>
 					<section class="purchase-form-section">
 						<header><div><span>BASICS</span><h2>Identity &amp; purchasing defaults</h2></div></header>
 						<div class="purchase-form-section__content">
 							<div class="purchase-form-grid">
-								<label class="purchase-field"><span>Name <b>*</b></span><InputText v-model="form.name" fluid :disabled="formDisabled" /></label>
-								<LinkField v-model="form.brand" label="Brand" doctype="Brand" show-clear :show-open-button="false" :disabled="formDisabled" />
-								<label class="purchase-field"><span>Item Group <b>*</b></span><Select v-model="form.item_group" :options="editor.options?.item_groups || []" option-label="label" option-value="value" filter show-clear fluid :disabled="formDisabled" /></label>
-								<label class="purchase-field"><span>Unit <b>*</b></span><Select v-model="form.stock_uom" :options="editor.options?.uoms || []" option-label="label" option-value="value" filter show-clear fluid :disabled="formDisabled || Boolean(editor.fields?.stock_uom?.read_only)" /></label>
-								<LinkField v-model="form.gst_hsn_code" label="HSN" doctype="GST HSN Code" show-clear :show-open-button="false" :disabled="formDisabled" />
+								<label class="purchase-field"><span class="erp-field-label">{{ fieldLabel("name", "Item Name") }} <b>*</b></span><InputText v-model="form.name" fluid :disabled="formDisabled" /></label>
+								<LinkField v-model="form.brand" :label="fieldLabel('brand', 'Brand')" doctype="Brand" show-clear :show-open-button="false" :disabled="formDisabled" />
+								<label class="purchase-field"><span class="erp-field-label">{{ fieldLabel("item_group", "Item Group") }} <b>*</b></span><Select v-model="form.item_group" :options="editor.options?.item_groups || []" option-label="label" option-value="value" filter show-clear fluid :disabled="formDisabled" /></label>
+								<label class="purchase-field"><span class="erp-field-label">{{ fieldLabel("stock_uom", "Default Unit of Measure") }} <b>*</b></span><Select v-model="form.stock_uom" :options="editor.options?.uoms || []" option-label="label" option-value="value" filter show-clear fluid :disabled="formDisabled || Boolean(editor.fields?.stock_uom?.read_only)" /></label>
+								<LinkField v-model="form.gst_hsn_code" :label="fieldLabel('gst_hsn_code', 'HSN/SAC')" doctype="GST HSN Code" show-clear :show-open-button="false" :disabled="formDisabled" />
 								<p class="purchase-code-hint">Saved as: <code>{{ savedAs || "—" }}</code></p>
 						</div>
 						</div>
@@ -48,10 +49,19 @@
 								</article>
 							</div>
 							<div v-else class="attribute-empty"><i class="pi pi-sliders-h" /><span>No attributes. This will be saved as a plain item.</span></div>
-							<div v-if="form.attributes.length >= 2" class="purchase-form-grid"><label class="purchase-field purchase-field--main"><span>Main attribute</span><Select v-model="form.primary_attribute" :options="selectedAttributeOptions" option-label="label" option-value="value" fluid :disabled="formDisabled || attributesLocked" /></label></div>
+							<div v-if="selectedAttributeOptions.length" class="purchase-form-grid">
+								<label class="purchase-field purchase-field--primary"><span class="erp-field-label">{{ fieldLabel("primary_attribute", "Primary Attribute") }}</span><Select v-model="form.primary_attribute" :options="selectedAttributeOptions" option-label="label" option-value="value" show-clear fluid :disabled="formDisabled || attributesLocked" @update:model-value="changePrimary" /></label>
+								<label class="purchase-field purchase-field--dependent"><span class="erp-field-label">{{ fieldLabel("dependent_attribute", "Dependent Attribute") }}</span><Select v-model="form.dependent_attribute" :options="dependentAttributeOptions" option-label="label" option-value="value" show-clear fluid placeholder="None" :disabled="formDisabled || attributesLocked" /></label>
+							</div>
 							<ItemAttributeValues v-if="selectedAttributeOptions.length" :attributes="form.attributes" :editable="canEditAttributes && !formDisabled" @edit="openValues" />
+							<Message v-if="dependentProblem" class="purchase-dependent-problem" severity="error" :closable="false">{{ dependentProblem }}</Message>
+							<ItemDependentAttributeTable v-if="form.dependent_attribute && form.dependent_details.length" :dependent-attribute="form.dependent_attribute" :rows="form.dependent_details" :attributes="combinationAttributes" :editable="canEditPermission && !formDisabled" :uoms="form.uoms" :problems="tableProblems" />
 						</div>
 					</section>
+					<ItemUomConversions :values="form" :field="editor.fields?.uoms" editable :disabled="formDisabled" :problems="problemsFor('uoms')" />
+					<ItemAdditionalParameters :values="form" :field="editor.fields?.additional_parameters" editable :disabled="formDisabled" :problems="problemsFor('additional_parameters')" />
+					<ItemMasterFields :values="form" :fields="editor.fields" :categories="editor.options?.categories" editable :disabled="formDisabled" :problems="problemsFor('po_excess_allowed_percentage')" />
+					<ItemYarnRatio v-if="Number(form.is_cloth_item)" :values="form" :item-name="currentName || savedAs" :field="editor.fields?.yarn_ratio_details" editable :disabled="formDisabled" :problems="problemsFor('yarn_ratio_details')" />
 				</form>
 
 			</section>
@@ -80,7 +90,13 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import ItemAttributeValues from "./item/ItemAttributeValues.vue"
 import ItemAttributeValuesDialog from "./item/ItemAttributeValuesDialog.vue"
-import { PURCHASE_ROUTES, itemCanSave, itemCodeHint, itemEditorValues, itemKindLabel, itemSaveValues, resetAttributeRow, storedAttributeMappings } from "./purchaseViews.js"
+import ItemDependentAttributeTable from "./item/ItemDependentAttributeTable.vue"
+import ItemAdditionalParameters from "./item/ItemAdditionalParameters.vue"
+import ItemMasterFields from "./item/ItemMasterFields.vue"
+import ItemUomConversions from "./item/ItemUomConversions.vue"
+import ItemYarnRatio from "./item/ItemYarnRatio.vue"
+import { itemTableProblems, itemTableWarnings, stockUomRows } from "./item/itemTables.js"
+import { PURCHASE_ROUTES, dependentDetailRows, itemCanSave, itemCodeHint, itemCombinationAttributes, itemDependentProblem, itemDependentValues, itemEditorValues, itemKindLabel, itemSaveValues, resetAttributeRow, storedAttributeMappings } from "./purchaseViews.js"
 
 const props = defineProps({ itemId: { type: String, default: "" } })
 const headingId = "purchase-item-editor-title"
@@ -115,6 +131,25 @@ const storedMappings = computed(() => storedAttributeMappings(editor.value.value
 const valuesRow = computed(() => form.attributes.find((row) => row.attribute && row.attribute === valuesAttribute.value) || null)
 const formDisabled = computed(() => saving.value || !canEditPermission.value)
 const canSave = computed(() => !loading.value && !saving.value && canEditPermission.value && itemCanSave(form))
+const dependentAttributeOptions = computed(() => selectedAttributeOptions.value.filter((option) => option.value !== form.primary_attribute))
+const combinationAttributes = computed(() => itemCombinationAttributes(form, editor.value.options?.numeric_attributes))
+const dependentProblem = computed(() => itemDependentProblem(form))
+const tableProblems = computed(() => itemTableProblems(form))
+const tableWarnings = computed(() => itemTableWarnings(form, editor.value, editor.value.values))
+const problemsFor = (field) => tableProblems.value.filter((problem) => problem.field === field)
+
+function fieldLabel(fieldname, fallback) {
+	return editor.value.fields?.[fieldname]?.label || fallback
+}
+
+function changePrimary(attribute) {
+	if (attribute && attribute === form.dependent_attribute) form.dependent_attribute = ""
+}
+
+function syncDependentDetails() {
+	form.dependent_details = dependentDetailRows(form, form.stock_uom)
+	for (const row of form.dependent_details) row.uom ||= form.stock_uom
+}
 
 function newRow(row = {}) {
 	return { values: [], new_values: [], ...row, key: `attribute-${++rowSequence}` }
@@ -159,13 +194,16 @@ function removeAttribute(index) {
 	form.attributes.splice(index, 1)
 	attributesChanged.value = true
 	if (!selectedNames.value.has(form.primary_attribute)) form.primary_attribute = ""
+	if (!selectedNames.value.has(form.dependent_attribute)) form.dependent_attribute = ""
 }
 
 function changeAttribute(row, attribute) {
 	if ((attribute || "") === row.attribute) return
 	if (form.primary_attribute === row.attribute) form.primary_attribute = ""
+	if (form.dependent_attribute === row.attribute) form.dependent_attribute = ""
 	Object.assign(row, resetAttributeRow(storedMappings.value, attribute || ""))
 	attributesChanged.value = true
+	if (!form.primary_attribute && selectedNames.value.size === 1) form.primary_attribute = [...selectedNames.value][0]
 }
 
 function openValues(attribute) {
@@ -209,15 +247,22 @@ function cancel() {
 }
 
 watch(() => [currentName.value, route.name], load, { immediate: true })
+watch(() => form.stock_uom, (stockUom, previousStockUom) => {
+	form.uoms = stockUomRows(form.uoms, stockUom, previousStockUom)
+	if (!isEdit.value && !form.uoms.some((row) => row.uom === previousStockUom)) {
+		for (const row of form.dependent_details) if (row.uom === previousStockUom) row.uom = stockUom
+	}
+})
+watch(() => [form.dependent_attribute, form.primary_attribute, form.stock_uom, [...selectedNames.value].join("\u0001"), itemDependentValues(form).join("\u0001")], syncDependentDetails)
 </script>
 
 <style scoped>
-.purchase-editor-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
+.purchase-editor-page { width: 100%; min-width: 0; }
 .purchase-editor { display: flex; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); flex-direction: column; gap: var(--erp-space-3); }
 .purchase-editor__header > .purchase-editor__leading { display: flex; min-width: 0; align-items: center; gap: var(--erp-space-3); }
 .purchase-editor__identity { min-width: 0; }
 .purchase-editor__identity > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .04em; text-transform: uppercase; }
-.purchase-editor__header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
+.purchase-editor__header h1 { margin: 0; color: var(--erp-text); }
 .purchase-editor__header .purchase-editor__title h1 { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
 .purchase-editor__loading, .purchase-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .purchase-form-section { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
@@ -225,9 +270,19 @@ watch(() => [currentName.value, route.name], load, { immediate: true })
 .purchase-form-section > header span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
 .purchase-form-section h2 { margin: 2px 0 0; color: var(--erp-text); font-size: 15px; }
 .purchase-form-section__content { display: grid; min-width: 0; gap: var(--erp-space-3); padding: 13px; }
-.purchase-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 13px 18px; }
-.purchase-field { display: grid; min-width: 0; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
-.purchase-field b { color: var(--erp-danger); }
+.purchase-form-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	align-items: end;
+	gap: 16px 28px;
+}
+.purchase-field {
+	display: grid;
+	min-width: 0;
+	gap: 6px;
+}
+
+.purchase-dependent-problem { margin: 0; }
 .purchase-code-hint { display: flex; min-width: 0; min-height: var(--erp-control-height); align-items: center; gap: 5px; margin: 0; padding: 0 11px; border-left: 3px solid var(--erp-accent); background: var(--erp-accent-soft); }
 .purchase-code-hint code { overflow-wrap: anywhere; color: var(--erp-accent-hover); font-family: inherit; font-weight: 750; }
 .attribute-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--erp-space-3); }
@@ -235,7 +290,13 @@ watch(() => [currentName.value, route.name], load, { immediate: true })
 .attribute-empty { display: flex; min-height: 90px; align-items: center; justify-content: center; gap: 9px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 .attribute-empty i { color: var(--erp-accent); }
 @media (max-width: 900px) { .purchase-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.purchase-editor__title { display: flex; min-width: 0; align-items: center; gap: var(--erp-space-2); }
+.purchase-editor__title { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px var(--erp-space-2); }
 .purchase-editor__title :deep(.document-status-badge) { flex-shrink: 0; }
 @media (max-width: 620px) { .purchase-form-grid, .attribute-rows { grid-template-columns: minmax(0, 1fr); } .purchase-editor__identity > span { display: none; } }
+@media (max-width: 620px) {
+	.purchase-form-section > header,
+	.purchase-form-section__content {
+		padding-inline: var(--erp-space-3);
+	}
+}
 </style>

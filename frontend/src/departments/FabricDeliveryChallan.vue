@@ -74,6 +74,6 @@ function compactSource(source) {
 </script>
 
 <style scoped>
-.fabric-delivery-challan-frame { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); }
+.fabric-delivery-challan-frame { width: 100%; min-width: 0; margin: 0 0 var(--erp-space-3); }
 @media (max-width: 650px) { .fabric-delivery-challan-frame { margin-bottom: 0; } }
 </style>

@@ -219,7 +219,7 @@ watch(dispatchId, () => {
 </script>
 
 <style scoped>
-.finishing-dispatch { display: grid; min-width: 0; gap: var(--erp-space-4); padding: 12px 14px; border-top: 3px solid var(--accent, var(--erp-accent)); }
+.finishing-dispatch { display: grid; min-width: 0; gap: var(--erp-space-4); padding: 12px 14px; }
 .finishing-dispatch__header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--erp-border); }
 .finishing-dispatch__identity { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-width: 0; }
 .finishing-dispatch__title { display: grid; gap: 3px; }

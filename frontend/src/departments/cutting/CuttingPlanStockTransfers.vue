@@ -305,37 +305,6 @@ defineExpose({ load, activate: () => load(true) })
 	color: var(--erp-danger);
 }
 
-.erp-empty-state {
-	display: grid;
-	justify-items: center;
-	gap: 6px;
-	padding: 32px 18px;
-	border: 1px dashed var(--erp-border-strong);
-	border-radius: var(--erp-control-radius);
-	background: var(--erp-surface-soft);
-	color: var(--erp-text-muted);
-	text-align: center;
-}
-
-.erp-empty-state > i {
-	display: grid;
-	width: 38px;
-	height: 38px;
-	color: var(--erp-accent);
-	background: var(--erp-accent-soft);
-	border-radius: var(--erp-control-radius);
-	place-items: center;
-}
-
-.erp-empty-state strong {
-	color: #344a3e;
-	font-size: 13px;
-}
-
-.erp-empty-state span {
-	font-size: var(--erp-font-size-caption);
-}
-
 @media (max-width: 1050px) {
 	.erp-activity-overview {
 		grid-template-columns: repeat(3, minmax(0, 1fr));

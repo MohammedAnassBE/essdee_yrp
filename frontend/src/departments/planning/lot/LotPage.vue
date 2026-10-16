@@ -131,7 +131,7 @@ import LotBomTab from "./LotBomTab.vue"
 import LotDocumentDialog from "./LotDocumentDialog.vue"
 import LotDocumentsRail from "./LotDocumentsRail.vue"
 import LotEmptyState from "./LotEmptyState.vue"
-import LotFabricTab from "./LotFabricTab.vue"
+import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotOrderDetailsTab from "./LotOrderDetailsTab.vue"
 import LotOrderItemsTab from "./LotOrderItemsTab.vue"
 import {

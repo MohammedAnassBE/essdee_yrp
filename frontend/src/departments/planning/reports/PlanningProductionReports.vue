@@ -11,7 +11,7 @@
 					<Tab v-for="tab in tabs" :key="tab.value" :value="tab.value"><i :class="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></Tab>
 				</TabList>
 				<TabPanels class="planning-production__panels">
-					<TabPanel :key="active" :value="active"><component :is="currentTab.component" v-bind="currentTab.key === 'work_order_bulk_close' ? { permissions: reports[currentTab.key] } : {}" /></TabPanel>
+					<TabPanel :key="active" :value="active"><component :is="currentTab.component" v-bind="componentProps(currentTab.key)" /></TabPanel>
 				</TabPanels>
 			</Tabs>
 		</template>
@@ -47,6 +47,8 @@ const components = {
 	size_wise_stock: defineAsyncComponent(() => import("./SizeWiseStockReport.vue")),
 	colour_wise_diff: defineAsyncComponent(() => import("./ColourWiseDiffReport.vue")),
 	work_in_progress: defineAsyncComponent(() => import("./WorkInProgressReport.vue")),
+	multi_ccr: defineAsyncComponent(() => import("../../cutting/reports/MultiCCRReport.vue")),
+	ppo_report: defineAsyncComponent(() => import("../../sales/PpoReport.vue")),
 	work_order_bulk_close: defineAsyncComponent(() => import("./WorkOrderBulkClose.vue")),
 }
 const route = useRoute()
@@ -56,6 +58,11 @@ const active = computed({
 	get: () => tabs.value.some((tab) => tab.value === route.query.report) ? route.query.report : tabs.value[0]?.value,
 	set: (report) => router.replace({ query: { ...route.query, report } }),
 })
+function componentProps(key) {
+	if (key === "work_order_bulk_close") return { permissions: props.reports[key] }
+	if (key === "ppo_report") return { canExport: Boolean(props.reports[key]?.can_export) }
+	return {}
+}
 const currentTab = computed(() => tabs.value.find((tab) => tab.value === active.value) || tabs.value[0])
 </script>
 

@@ -3,7 +3,7 @@
 		<header class="cutting-plan-editor__header erp-editor-header">
 			<div>
 				<span class="cutting-plan-editor__eyebrow">{{ name ? name : "New document" }}</span>
-				<h1>{{ name ? "Edit Cutting Plan" : "New Cutting Plan" }}</h1>
+				<h1 class="erp-doc-title">{{ name ? "Edit Cutting Plan" : "New Cutting Plan" }}</h1>
 			</div>
 			<div class="cutting-plan-editor__actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
@@ -296,7 +296,7 @@ watch(() => props.name, () => load())
 }
 
 .cutting-plan-editor__eyebrow { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: 0.04em; text-transform: uppercase; }
-.cutting-plan-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 780; letter-spacing: -0.025em; }
+.cutting-plan-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); }
 .cutting-plan-editor__body { display: grid; gap: var(--erp-space-3); min-width: 0; }
 .cutting-plan-editor__loading { display: grid; gap: var(--erp-space-3); }
 .cutting-plan-editor__card-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }

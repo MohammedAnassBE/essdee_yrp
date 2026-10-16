@@ -9,11 +9,11 @@
 
 		<section v-if="!fieldsOnly && deliverables.length" class="work-order-section erp-card">
 			<header><div><span>Inputs</span><h2>Deliverables</h2></div><span class="erp-count">{{ itemCount(deliverables) }} rows</span></header>
-			<WorkOrderItemMatrix :groups="deliverables" />
+			<WorkOrderItemMatrix :groups="deliverables" :process-cost-view-route-name="processCostViewRouteName" />
 		</section>
 		<section v-if="!fieldsOnly && receivables.length" class="work-order-section erp-card">
 			<header><div><span>Outputs</span><h2>Receivables</h2></div><span class="erp-count">{{ itemCount(receivables) }} rows</span></header>
-			<WorkOrderItemMatrix :groups="receivables" />
+			<WorkOrderItemMatrix :groups="receivables" :process-cost-view-route-name="processCostViewRouteName" />
 		</section>
 	</div>
 </template>
@@ -30,6 +30,7 @@ const props = defineProps({
 	receivables: { type: Array, default: () => [] },
 	fieldsOnly: { type: Boolean, default: false },
 	matricesOnly: { type: Boolean, default: false },
+	processCostViewRouteName: { type: String, default: "" },
 })
 
 const visibleDetails = computed(() => props.details.filter((field) => !["supplier_name", "process_name", "item", "lot"].includes(field.fieldname)))

@@ -1,5 +1,5 @@
 <template>
-	<p v-if="!logs.length" class="finishing-empty">No dispatches recorded yet.</p>
+	<p v-if="!logs.length" class="erp-empty-state"><span class="erp-empty-state__text">No dispatches recorded yet.</span></p>
 	<div v-else class="finishing-scroll" role="region" tabindex="0" aria-label="Dispatch history">
 		<table class="finishing-table">
 			<thead>

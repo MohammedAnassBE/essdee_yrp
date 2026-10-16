@@ -1,8 +1,8 @@
 <template>
 	<section class="work-order-editor erp-card erp-editor-shell" aria-label="Work Order editor" :aria-busy="loading">
 		<header class="work-order-editor__header erp-editor-header">
-			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1>{{ name ? "Edit Work Order" : "New Work Order" }}</h1></div>
-			<div class="work-order-editor__actions erp-editor-actions">
+			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Work Order" : "New Work Order" }}</h1></div>
+			<div class="erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
 				<Button v-if="calculationMode" :label="calculationLabel" icon="pi pi-calculator" severity="secondary" outlined :disabled="busy" @click="openCalculation" />
 				<Button v-if="canDraft" label="Save Work Order" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
@@ -30,9 +30,9 @@
 				<section class="work-order-editor__section work-order-editor__entry-card">
 					<header><div><span>Source</span><h2>Production source</h2></div><small>These fields define the calculation source.</small></header>
 					<div class="work-order-editor__fields">
-						<LinkField input-id="field-process_name-value" :key="`process-${sourceRevision}`" :model-value="form.process_name" :label="fieldLabel('process_name', 'Process')" doctype="YRP Process" :required="isRequired('process_name')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('process_name')" @update:model-value="changeSource('process_name', $event)" />
-						<LinkField input-id="field-lot-value" :key="`lot-${sourceRevision}`" :model-value="form.lot" :label="fieldLabel('lot', 'Lot')" doctype="SD YRP Lot" :required="isRequired('lot')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('lot')" @update:model-value="changeSource('lot', $event)" />
-						<LinkField input-id="field-item-value" :key="`item-${sourceRevision}`" :model-value="form.item" :label="fieldLabel('item', 'Item')" doctype="Item" :required="isRequired('item')" :search-handler="searchAllowedItems" :show-open-button="false" show-clear :disabled="busy || isReadOnly('item') || !selectionContext.options?.length" @update:model-value="changeItem" />
+						<LinkField input-id="field-process_name-value" :reset-version="sourceRevision" :model-value="form.process_name" :label="fieldLabel('process_name', 'Process')" doctype="YRP Process" :required="isRequired('process_name')" :show-open-button="false" show-clear :disabled="loading || (Boolean(saving) && saving !== 'source') || isReadOnly('process_name')" @update:model-value="changeSource('process_name', $event)" />
+						<LinkField input-id="field-lot-value" :reset-version="sourceRevision" :model-value="form.lot" :label="fieldLabel('lot', 'Lot')" doctype="SD YRP Lot" :required="isRequired('lot')" :show-open-button="false" show-clear :disabled="loading || (Boolean(saving) && saving !== 'source') || isReadOnly('lot')" @update:model-value="changeSource('lot', $event)" />
+						<LinkField input-id="field-item-value" :reset-version="sourceRevision" :model-value="form.item" :label="fieldLabel('item', 'Item')" doctype="Item" :required="isRequired('item')" :search-handler="searchAllowedItems" :show-open-button="false" show-clear :disabled="busy || isReadOnly('item') || !selectionContext.options?.length" @update:model-value="changeItem" />
 						<LinkField v-model="form.production_detail" :label="fieldLabel('production_detail', 'Production detail')" doctype="YRP Item Production Detail" :required="isRequired('production_detail')" :show-open-button="false" :disabled="true" />
 					</div>
 				</section>
@@ -137,6 +137,7 @@ const actionVisible = ref(false)
 const pendingCancel = ref(false)
 const sourceConfirmVisible = ref(false)
 const pendingSourceChange = ref(null)
+const queuedSourceChanges = new Map()
 let allowNavigation = false
 let pendingNavigation = null
 
@@ -220,7 +221,8 @@ function searchSupplierAddresses(text) { return searchLinkedDocument("Address", 
 function searchDeliveryAddresses(text) { return searchLinkedDocument("Address", "Supplier", form.delivery_location, text) }
 function hasCalculatedWork() { return Boolean(editor.value.calculated_items?.length || deliverableDetails.value.some((group) => group.items?.length) || receivableDetails.value.some((group) => group.items?.length)) }
 async function changeSource(fieldname, value) {
-	if (value === form[fieldname]) return
+	if (saving.value === "source") { queuedSourceChanges.set(fieldname, value); return }
+	if ((value || "") === (form[fieldname] || "")) return
 	if (hasCalculatedWork()) {
 		pendingSourceChange.value = { kind: "source", fieldname, value, label: fieldname === "lot" ? "Lot" : "Process" }
 		sourceConfirmVisible.value = true
@@ -238,10 +240,17 @@ async function applySourceChange(fieldname, value) {
 		if (!(context.options || []).some((row) => row.item === form.item && row.production_detail === form.production_detail)) { form.item = ""; form.production_detail = "" }
 		clearCalculatedRows(); markDirty(); sourceRevision.value += 1
 	} catch (reason) { error.value = reason?.message || "Unable to validate this Work Order source."; sourceRevision.value += 1 }
-	finally { saving.value = "" }
+	finally { saving.value = ""; await applyNextSourceChange() }
+}
+async function applyNextSourceChange() {
+	const next = queuedSourceChanges.entries().next().value
+	if (!next) return
+	queuedSourceChanges.delete(next[0])
+	await changeSource(...next)
+	if (saving.value !== "source") await applyNextSourceChange()
 }
 function changeItem(value) {
-	if (value === form.item) return
+	if ((value || "") === (form.item || "")) return
 	if (hasCalculatedWork()) {
 		pendingSourceChange.value = { kind: "item", value, label: "Item" }
 		sourceConfirmVisible.value = true
@@ -310,39 +319,43 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
-.work-order-editor { --work-order-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--work-order-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
-.work-order-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: var(--erp-shell-header-height); display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--work-order-editor-inline)); padding: 7px var(--work-order-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
-.work-order-editor__header > div:first-child { display: grid; gap: 2px; }
-.work-order-editor__header span, .work-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
-.work-order-editor__header h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
-.work-order-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
+.work-order-editor {
+	display: flex;
+	width: 100%;
+	min-height: calc(100dvh - var(--erp-shell-header-height) - 78px);
+	flex-direction: column;
+	gap: var(--erp-space-3);
+	padding: 0 0 var(--erp-space-4);
+	border-color: color-mix(in srgb, var(--erp-border) 84%, white);
+	background: var(--erp-bg);
+}
+.work-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .work-order-editor__loading, .work-order-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .work-order-editor__recovery { display: grid; min-height: 220px; place-content: center; justify-items: center; gap: 10px; padding: var(--erp-space-6); color: var(--erp-text-muted); text-align: center; border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
-.work-order-editor__recovery > i { color: var(--erp-danger); font-size: 24px; }.work-order-editor__recovery > div { display: grid; gap: 4px; }.work-order-editor__recovery strong { color: var(--erp-text); }.work-order-editor__recovery span { max-width: 520px; font-size: var(--erp-font-size-caption); }
-.work-order-editor__section { display: grid; gap: var(--erp-space-3); padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 8px 24px rgb(28 61 45 / 4%); }
+.work-order-editor__recovery > i { color: var(--erp-danger); font-size: var(--erp-font-size-title); }.work-order-editor__recovery > div { display: grid; gap: 4px; }.work-order-editor__recovery strong { color: var(--erp-text); }.work-order-editor__recovery span { max-width: 520px; font-size: var(--erp-font-size-caption); }
+.work-order-editor__section { display: grid; gap: var(--erp-space-3); padding: clamp(14px, 1.4vw, 22px); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-card); }
 .work-order-editor__section > header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .work-order-editor__section h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .work-order-editor__section small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.work-order-editor__document-setup { border-top: 3px solid color-mix(in srgb, var(--erp-accent) 76%, white); }
 .work-order-editor__document-fields { display: grid; grid-template-columns: minmax(180px, 1.15fr) minmax(150px, .8fr) minmax(190px, 1fr) minmax(180px, .9fr); align-items: end; gap: 12px 16px; }
 .work-order-editor__card-grid { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-3); }
-.work-order-editor__entry-card { min-width: 0; align-content: start; box-shadow: 0 5px 18px rgb(28 61 45 / 3.5%); }
+.work-order-editor__entry-card { min-width: 0; align-content: start; box-shadow: var(--erp-shadow-card); }
 .work-order-editor__rework-card, .work-order-editor__dimensions-card { grid-column: 1 / -1; }
 .work-order-editor__fields, .work-order-editor__dimensions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 12px 14px; }
-.work-order-editor__control { display: grid; min-width: 0; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
-.work-order-editor__control > span, .work-order-editor__identity > span, .work-order-editor__facts span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .035em; text-transform: uppercase; }
+.work-order-editor__control { display: grid; min-width: 0; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 600; }
+.work-order-editor__control > span, .work-order-editor__identity > span, .work-order-editor__facts span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .035em; text-transform: uppercase; }
 .work-order-editor__identity { display: grid; min-height: var(--erp-control-height); align-content: center; gap: 4px; padding: 7px 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface-soft); }
 .work-order-editor__identity strong { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--erp-text); font-size: var(--erp-font-size-caption); }
-.work-order-editor__identity strong i { color: var(--erp-accent); font-size: 13px; }
-.work-order-editor__quantity strong { color: var(--erp-accent-dark); font-size: 17px; font-variant-numeric: tabular-nums; }
+.work-order-editor__identity strong i { color: var(--erp-accent); font-size: var(--erp-font-size-table); }
+.work-order-editor__quantity strong { color: var(--erp-accent-dark); font-size: var(--erp-font-size-section); font-variant-numeric: tabular-nums; }
 .work-order-editor__quantity small { line-height: 1.2; }
 .work-order-editor__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-border); }
 .work-order-editor__facts > div { display: grid; min-width: 0; gap: 5px; padding: 12px 14px; background: var(--erp-surface-soft); }
 .work-order-editor__facts strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .work-order-editor__dimensions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.work-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.work-order-editor__check { display: flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 600; }
 .work-order-editor__date-control { min-height: 42px; padding: 0 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface-soft); }
-.work-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
+.work-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 600; }
 .work-order-editor__calculated { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .work-order-editor__calculated > div { display: grid; gap: 3px; padding: 9px 11px; border-left: 3px solid color-mix(in srgb, var(--erp-accent) 58%, white); background: var(--erp-surface-soft); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-editor__calculated strong { overflow: hidden; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
@@ -355,5 +368,5 @@ watch(() => props.name, load)
 .work-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1180px) { .work-order-editor__document-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__card-grid { grid-template-columns: 1fr; } .work-order-editor__rework-card, .work-order-editor__dimensions-card { grid-column: auto; } }
 @media (max-width: 900px) { .work-order-editor__dimensions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .work-order-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .work-order-editor__header { min-height: 55px; align-items: center; flex-direction: row; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .work-order-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .work-order-editor__header > div:first-child > span { display: none; } .work-order-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__section > header small { display: none; } .work-order-editor__document-fields { grid-template-columns: 1fr 1fr; gap: 10px; } .work-order-editor__document-fields > .work-order-editor__control, .work-order-editor__document-fields > .work-order-editor__date-field { grid-column: 1 / -1; } .work-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__fields > :not(.work-order-editor__schedule-field) { grid-column: 1 / -1; } .work-order-editor__schedule-field :deep(.p-datepicker-input) { min-width: 0; padding-inline: 8px; font-size: 13px; } .work-order-editor__schedule-field :deep(.p-datepicker-dropdown) { width: 40px; min-width: 40px; } .work-order-editor__dimensions, .work-order-editor__calculated, .work-order-editor__facts { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } .work-order-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .work-order-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; flex: 0 1 auto; padding-inline: 8px; font-size: 12px; } .work-order-editor__actions :deep(.p-button-label) { white-space: nowrap; } }
+@media (max-width: 620px) { .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__section > header small { display: none; } .work-order-editor__document-fields { grid-template-columns: 1fr 1fr; gap: 10px; } .work-order-editor__document-fields > .work-order-editor__control, .work-order-editor__document-fields > .work-order-editor__date-field { grid-column: 1 / -1; } .work-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__fields > :not(.work-order-editor__schedule-field) { grid-column: 1 / -1; } .work-order-editor__schedule-field :deep(.p-datepicker-input) { min-width: 0; padding-inline: 8px; } .work-order-editor__schedule-field :deep(.p-datepicker-dropdown) { width: 40px; min-width: 40px; } .work-order-editor__dimensions, .work-order-editor__calculated, .work-order-editor__facts { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } }
 </style>

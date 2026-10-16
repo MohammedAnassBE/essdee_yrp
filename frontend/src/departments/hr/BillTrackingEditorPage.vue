@@ -11,9 +11,9 @@
 			<header class="bill-tracking-editor__header erp-editor-header">
 				<div>
 					<span>{{ currentName || "New document" }}</span>
-					<h1>{{ currentName ? "Edit Bill Tracking" : "New Bill Tracking" }}</h1>
+					<h1 class="erp-doc-title">{{ currentName ? "Edit Bill Tracking" : "New Bill Tracking" }}</h1>
 				</div>
-				<div class="bill-tracking-editor__actions erp-editor-actions">
+				<div class="erp-editor-actions">
 					<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestExit" />
 					<DocumentSaveButton
 						:show-submit="canSubmit"
@@ -147,6 +147,9 @@ const FALLBACK_SCHEMA = {
 
 const props = defineProps({
 	billTrackingId: { type: String, default: "" },
+	basePath: { type: String, default: "/hr/bill-tracking" },
+	viewRouteName: { type: String, default: "hr-bill-tracking" },
+	listRouteName: { type: String, default: "hr-bill-trackings" },
 })
 const route = useRoute()
 const router = useRouter()
@@ -170,8 +173,8 @@ let isAlive = true
 
 const currentName = computed(() => String(props.billTrackingId || route.params.billTrackingId || ""))
 const backTo = computed(() => currentName.value
-	? `/hr/bill-tracking/${encodeURIComponent(currentName.value)}`
-	: "/hr/bill-tracking")
+	? `${props.basePath}/${encodeURIComponent(currentName.value)}`
+	: props.basePath)
 const signature = computed(() => JSON.stringify(FORM_FIELDS.map((fieldname) => form[fieldname] ?? "")))
 const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 const busy = computed(() => loading.value || Boolean(saving.value) || deliveryPersonSaving.value)
@@ -282,7 +285,7 @@ async function save(submit) {
 			life: 3500,
 		})
 		await router.replace({
-			name: "hr-bill-tracking",
+			name: props.viewRouteName,
 			params: { billTrackingId: record.name },
 			state: preserveListNavigationState(record.name, record.modified),
 		})
@@ -322,13 +325,13 @@ function discardChanges() {
 function navigateBack() {
 	if (currentName.value) {
 		router.push({
-			name: "hr-bill-tracking",
+			name: props.viewRouteName,
 			params: { billTrackingId: currentName.value },
 			state: preserveListNavigationState(currentName.value, editor.value.modified),
 		})
 		return
 	}
-	router.push({ name: "hr-bill-trackings" })
+	router.push({ name: props.listRouteName })
 }
 
 function today() {
@@ -363,15 +366,8 @@ watch(currentName, load, { immediate: true })
 </script>
 
 <style scoped>
-.bill-tracking-editor { --bill-tracking-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--bill-tracking-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
-.bill-tracking-editor__header { position: sticky; z-index: var(--erp-layer-sticky); top: var(--erp-shell-header-height); display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--erp-space-4); margin: 0 calc(0px - var(--bill-tracking-editor-inline)); padding: 7px var(--bill-tracking-editor-inline); border-top: 3px solid var(--erp-accent); border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface) 96%, var(--erp-accent-soft)); box-shadow: 0 5px 16px rgb(28 61 45 / 5%); }
-.bill-tracking-editor__header > div:first-child { display: grid; gap: 2px; }
-.bill-tracking-editor__header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }
-.bill-tracking-editor__header h1 { margin: 0; color: var(--erp-text); font-size: 19px; line-height: 1.15; letter-spacing: -.018em; }
-.bill-tracking-editor__actions { display: flex; justify-content: flex-end; gap: var(--erp-space-2); flex-wrap: wrap; }
+.bill-tracking-editor { display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 0 var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
 .bill-tracking-editor__loading, .bill-tracking-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
-.bill-tracking-editor__body { width: 100%; max-width: 1380px; margin: 0 auto; }
-.bill-tracking-editor__groups :deep(.document-field-group-grid__card) { border-top: 3px solid color-mix(in srgb, var(--erp-accent) 74%, white); }
+.bill-tracking-editor__body { width: 100%; }
 .bill-tracking-editor__fields { align-items: end; }
-@media (max-width: 600px) { .bill-tracking-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } .bill-tracking-editor__header { min-height: 55px; gap: 8px; margin: 0 calc(var(--erp-space-3) * -1); padding: 4px var(--erp-space-3); } .bill-tracking-editor__header > div:first-child { min-width: 0; flex: 1 1 auto; } .bill-tracking-editor__header > div:first-child > span { display: none; } .bill-tracking-editor__header h1 { overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .bill-tracking-editor__actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; } .bill-tracking-editor__actions :deep(.p-button) { min-width: 0; min-height: 44px; padding-inline: 8px; font-size: 12px; } }
 </style>

@@ -73,20 +73,26 @@
 .finishing-table__row-total {
 	font-weight: 700;
 }
-
 .finishing-table__total-group td,
 .finishing-table tr.finishing-table__total-row > * {
-	background: color-mix(in srgb, #ffe4c4 70%, var(--erp-surface));
-	font-weight: 650;
+	background: var(--erp-attention-soft);
+	font-weight: 600;
 }
-
-.finishing-tone--positive { background: #98ebae !important; }
-.finishing-tone--negative { background: #f57f87 !important; }
-.finishing-tone--zero { background: #ebc96e !important; }
-.finishing-tone--zero-inward { background: #67b0b8 !important; }
+.finishing-tone--positive {
+	background: var(--erp-heat-positive) !important;
+}
+.finishing-tone--negative {
+	background: var(--erp-heat-negative) !important;
+}
+.finishing-tone--zero {
+	background: var(--erp-heat-zero) !important;
+}
+.finishing-tone--zero-inward {
+	background: var(--erp-heat-zero-inward) !important;
+}
 .finishing-table td.finishing-tone,
 .finishing-table th.finishing-tone {
-	color: #1f2933;
+	color: var(--erp-text);
 }
 
 .finishing-section {
@@ -135,7 +141,6 @@
 	outline-offset: 1px;
 	border-color: var(--erp-accent);
 }
-
 .finishing-report-toggle {
 	display: inline-flex;
 	align-items: center;
@@ -144,7 +149,7 @@
 	min-height: var(--erp-control-height);
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-table);
-	font-weight: 650;
+	font-weight: 600;
 }
 
 .finishing-report-date {
@@ -163,17 +168,30 @@
 .finishing-report-date strong {
 	color: var(--erp-text);
 }
-
-.finishing-type--packed { color: #1a73e8 !important; font-weight: 700; }
-.finishing-type--dispatched { color: #b45309 !important; font-weight: 700; }
-.finishing-type--diff { color: #dc2626 !important; font-weight: 700; }
-.finishing-value--negative { color: #c92a2a; font-weight: 650; }
-.finishing-value--positive { color: #2b8a3e; font-weight: 650; }
-
+.finishing-type--packed {
+	color: var(--erp-info) !important;
+	font-weight: 700;
+}
+.finishing-type--dispatched {
+	color: var(--erp-warning) !important;
+	font-weight: 700;
+}
+.finishing-type--diff {
+	color: var(--erp-danger) !important;
+	font-weight: 700;
+}
+.finishing-value--negative {
+	color: var(--erp-danger);
+	font-weight: 600;
+}
+.finishing-value--positive {
+	color: var(--erp-success);
+	font-weight: 600;
+}
 .finishing-field-label {
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
+	font-weight: 600;
 }
 
 label.common-field:has(> .finishing-field-label) {
@@ -182,12 +200,11 @@ label.common-field:has(> .finishing-field-label) {
 	gap: 6px;
 	min-width: 0;
 }
-
 .finishing-reports .async-multi .erp-field-label {
 	margin-bottom: 6px;
 	color: var(--erp-text);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
+	font-weight: 600;
 }
 
 .finishing-reports .async-multi input {

@@ -20,4 +20,4 @@ const router = useRouter()
 function saved(record) { if (record?.name) router.replace({ name: props.viewRouteName, params: { productionOrderId: record.name }, state: preserveListNavigationState(record.name) }) }
 </script>
 
-<style scoped>.ppo-editor-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }</style>
+<style scoped>.ppo-editor-page { width: 100%; min-width: 0; }</style>

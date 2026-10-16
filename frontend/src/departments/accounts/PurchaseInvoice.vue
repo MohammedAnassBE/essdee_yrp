@@ -1,8 +1,8 @@
 <template>
 	<DepartmentPage
 		title="Purchase Invoice"
-		back-to="/accounts/purchase-invoices"
-		back-label="Purchase Invoices"
+		:back-to="backTo"
+		:back-label="backLabel"
 		:show-title="false"
 		flat
 		full-width
@@ -108,6 +108,10 @@ import PurchaseInvoiceTabs from "./components/PurchaseInvoiceTabs.vue"
 
 const props = defineProps({
 	purchaseInvoiceId: { type: String, default: "" },
+	backTo: { type: String, default: "/accounts/purchase-invoices" },
+	backLabel: { type: String, default: "Purchase Invoices" },
+	listRouteName: { type: String, default: "accounts-purchase-invoices" },
+	editRouteName: { type: String, default: "accounts-purchase-invoice-edit" },
 })
 const route = useRoute()
 const router = useRouter()
@@ -286,13 +290,13 @@ async function runDocumentCommand(command, payload = {}) {
 		const result = await executePurchaseInvoiceCommand(source.name, command, payload, source.modified) || {}
 		if (!isOriginatingRecord(action)) return false
 		if (result.deleted) {
-			await router.replace({ name: "accounts-purchase-invoices" })
+			await router.replace({ name: props.listRouteName })
 			return true
 		}
 		if (command === "amend") {
 			const amendedName = result.record?.name
 			await router.push({
-				name: "accounts-purchase-invoice-edit",
+				name: props.editRouteName,
 				params: { purchaseInvoiceId: amendedName },
 				state: preserveListNavigationState(amendedName, result.record?.modified),
 			})
@@ -313,7 +317,7 @@ async function runDocumentCommand(command, payload = {}) {
 function openEditor() {
 	const record = workspace.value.record || {}
 	router.push({
-		name: "accounts-purchase-invoice-edit",
+		name: props.editRouteName,
 		params: { purchaseInvoiceId: record.name },
 		state: preserveListNavigationState(record.name, record.modified),
 	})
@@ -322,7 +326,7 @@ function openEditor() {
 function openExpenseHeadEditor() {
 	const record = workspace.value.record || {}
 	router.push({
-		name: "accounts-purchase-invoice-edit",
+		name: props.editRouteName,
 		params: { purchaseInvoiceId: record.name },
 		query: { fetchExpenseHead: "1" },
 		state: preserveListNavigationState(record.name, record.modified),
@@ -396,11 +400,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.purchase-invoice-page { width: 100%; max-width: 1840px; min-width: 0; margin: 0 auto var(--erp-space-3); padding: 0 clamp(2px, .7vw, 10px); }
+.purchase-invoice-page { width: 100%; min-width: 0; margin: 0 0 var(--erp-space-3); }
 .purchase-invoice-actions { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .purchase-invoice-metric { display: grid; min-height: 72px; align-content: center; gap: 3px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); }
 .purchase-invoice-metric:last-child { border-bottom: 0; }
-.purchase-invoice-metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .035em; text-transform: uppercase; }
-.purchase-invoice-metric strong { color: var(--erp-accent-hover); font-size: 19px; font-variant-numeric: tabular-nums; }
+.purchase-invoice-metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.purchase-invoice-metric strong { color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 @media (max-width: 620px) { .purchase-invoice-actions { width: 100%; } .purchase-invoice-actions :deep(.document-action-strip) { flex: 1; } }
 </style>

@@ -19,5 +19,5 @@ function saved(payload) {
 </script>
 
 <style scoped>
-.bulk-editor-page { width: 100%; max-width: 1800px; min-width: 0; margin: 0 auto; }
+.bulk-editor-page { width: 100%; min-width: 0; }
 </style>

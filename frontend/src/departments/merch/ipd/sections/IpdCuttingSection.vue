@@ -16,7 +16,8 @@
 					:model-value="cloths.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('cloth_detail')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateCloths"
 					@remove-row="removeCloth"
@@ -42,7 +43,8 @@
 					:model-value="cutting.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('cutting_items_json')"
-					:toolbar="['fillRight', 'fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateItems('cutting_items_json', CUTTING_CARRY, $event)"
 				/>
 			</template>
@@ -61,7 +63,8 @@
 					:model-value="clothItems.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('cutting_cloths_json')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateItems('cutting_cloths_json', CLOTH_CARRY, $event)"
 				/>
 			</template>
@@ -115,8 +118,8 @@ const choices = computed(() => choiceList(editor.context?.cutting_attribute_choi
 const clothChoices = computed(() => choiceList(editor.context?.cutting_attribute_choices || [], draft.value.cloth_attributes))
 const cloths = computed(() => tableGrid(draft.value.cloth_detail, CLOTH_FIELDS))
 const duplicates = computed(() => duplicateClothNames(draft.value.cloth_detail))
-const cutting = computed(() => itemsGrid(draft.value.cutting_items_json, CUTTING_CARRY))
-const clothItems = computed(() => itemsGrid(draft.value.cutting_cloths_json, CLOTH_CARRY, { clothOptions: clothNames(draft.value) }))
+const cutting = computed(() => itemsGrid(draft.value.cutting_items_json, CUTTING_CARRY, { attributeColumns: true, diaOptions: editor.context?.cutting?.dia_values || [] }))
+const clothItems = computed(() => itemsGrid(draft.value.cutting_cloths_json, CLOTH_CARRY, { attributeColumns: true, clothOptions: clothNames(draft.value) }))
 
 useSectionFocus(editor, props.sectionKey, {
 	cloth_detail: () => clothGrid.value,

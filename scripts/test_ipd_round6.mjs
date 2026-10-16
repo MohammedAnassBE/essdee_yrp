@@ -9,6 +9,7 @@ import * as garmentGrids from '../frontend/src/departments/merch/ipd/sections/ga
 import * as attributeValues from '../frontend/src/departments/merch/ipd/sections/attributeValues.js'
 import * as packing from '../frontend/src/departments/merch/ipd/sections/packingSection.js'
 import * as rename from '../frontend/src/departments/merch/ipd/sections/clothRename.js'
+import * as bomMapping from '../frontend/src/departments/merch/ipd/sections/bomMapping.js'
 import * as clothGrids from '../frontend/src/departments/merch/ipd/cloth/clothGrids.js'
 import * as clothTable from '../frontend/src/departments/merch/ipd/cloth/useClothTable.js'
 import { useSectionFocus } from '../frontend/src/departments/merch/ipd/sections/sectionFocus.js'
@@ -55,7 +56,7 @@ const modules = {
 		return { editor, readonly: Vue.computed(() => Boolean(props.readonly || editor.readonly)), cloth: Vue.computed(() => editor.context?.cloth || {}) }
 	} }, './sectionFocus.js': { useSectionFocus },
 	'../../../../components/common/FormField.vue': control, '../../../../components/common/LinkField.vue': control,
-	'./LinkField.vue': blank, './BomMappingDrawer.vue': blank, './IpdAttributeChips.vue': blank,
+	'./LinkField.vue': blank, './bomMapping.js': bomMapping, './BomMappingDialog.vue': blank, './IpdAttributeChips.vue': blank,
 }
 // Load the actual composable with API/router boundaries substituted, as for SFCs.
 const hookSource = readFileSync(`${base}useIpdEditor.js`, 'utf8')
@@ -161,24 +162,20 @@ async function closeErrorDialog(target, method = 'OK') {
 }
 
 try {
-	// New IPD: add and remove before saving; saved widgets remain absent.
+	// New IPD: attributes come from the Item; saved value cards remain absent.
 	const registry = focus.createFocusRegistry()
 	const draft = Vue.reactive({ item_attributes: [{ name: 'saved', attribute: 'Size', mapping: 'sizes' }] })
 	const editor = Vue.reactive({ draft, readonly: false, isNew: true, context: {}, registerFocus: registry.registerFocus,
 		setValue(field, value) { draft[field] = value },
 	})
 	let app = mount(() => Vue.h(Attributes, { sectionKey: 'attributes' }), () => Vue.provide(hook.IPD_EDITOR_KEY, editor))
-	const addField = document.getElementById('ipd-edit-new-attribute')
-	addField.props.onInput('Wrong Attribute'); await flush()
-	findNodes(root, node => node.type === 'button' && node.props.label === 'Add attribute')[0].props.onClick()
 	await flush()
-	assert.equal(draft.item_attributes.at(-1).attribute, 'Wrong Attribute')
+	assert.equal(document.getElementById('ipd-edit-new-attribute'), null)
+	assert.equal(findNodes(root, node => node.type === 'button' && node.props.label === 'Add attribute').length, 0)
 	assert.equal(findNodes(root, node => node.props.class === 'ipd-chip-cards').length, 0)
-	const remove = findNodes(root, node => node.type === 'button' && node.props['aria-label'] === 'Remove Wrong Attribute')[0]
-	assert.ok(remove, 'new rows have a Remove action in Item Attributes')
-	remove.props.onClick(); await flush()
-	assert.deepEqual(draft.item_attributes.map(row => row.attribute), ['Size'])
-	assert.equal(findNodes(root, node => node.props['aria-label'] === 'Remove Size').length, 0, 'persisted attributes cannot be removed')
+	assert.match(text(root), /Attribute values are copied from the Item when you create the IPD/)
+	assert.equal(await registry.focusProblem({ field: 'item_attributes', row_key: 'Size' }), true)
+	assert.equal(document.activeElement.props.id, 'ipd-edit-item_attributes')
 	app.unmount()
 
 	// Real sections in both editor and record modes, including a later attribute row.
@@ -199,8 +196,7 @@ try {
 			{ field: 'item_attributes', row_key: 'colour', column: 'mapping' },
 		]) {
 			assert.equal(await focus.goToProblem({ section: 'attributes', ...problem }, frame.value, recordRegistry.focusProblem), true)
-			assert.equal(document.activeElement.dataset.row, 'Colour')
-			assert.equal(document.activeElement.dataset.col, problem.column)
+			assert.equal(document.activeElement.dataset.attribute, 'Colour')
 		}
 		for (const field of ['is_set_item', 'set_item_detail']) {
 			assert.equal(await focus.goToProblem({ section: 'set_item', field, row_key: 'Red', column: 'Top' }, frame.value, recordRegistry.focusProblem), true)
@@ -211,8 +207,9 @@ try {
 		assert.equal(await focus.goToProblem({ section: 'cutting', field: 'cutting_attributes' }, frame.value, recordRegistry.focusProblem), true)
 		assert.equal(route.hash, '#cutting_tab')
 		assert.equal(document.activeElement.props.id, 'ipd-edit-cutting_attributes')
+		assert.equal(await recordRegistry.focusProblem({ field: 'item_attributes', row_key: 'Missing' }), true)
+		assert.equal(document.activeElement.props.id, 'ipd-edit-item_attributes')
 		for (const problem of [
-			{ section: 'attributes', field: 'item_attributes', row_key: 'Missing', column: 'mapping' },
 			{ section: 'cutting', field: 'cloth_detail', row_key: 'missing', column: 'required_gsm' },
 			{ section: 'cutting', field: 'cloth_detail', row_key: 'cloth-2', column: 'missing' },
 		]) {
@@ -389,6 +386,10 @@ try {
 		app = mount(() => Vue.h(Editor, { ipdId: 'QA IPD' })); await flush()
 		const grid = findNodes(root, node => node.props.role === 'grid' && node.props['aria-label'] === label)[0]
 		assert.ok(grid, `${field}: real grid is mounted`)
+		if (field.startsWith('packing_')) {
+			const section = grid.parent.parent
+			assert.equal(findNodes(section, node => node.type === 'button' && ['Fill down', 'Paste', 'Clear'].includes(node.props.label)).length, 0, `${field}: packing toolbar actions removed`)
+		}
 		paste(grid, 0, column, 'abc'); await flush()
 		assert.equal(cell(grid, 0, column).props['aria-invalid'], true, field)
 		assert.equal(currentEditor.firstInvalidCell.value?.field, field)
@@ -433,7 +434,8 @@ try {
 		const quantityColumn = isSet ? 1 : 0
 		cell(grid, 1, quantityColumn).props.onMousedown({ button: 0, preventDefault() {} })
 		grid.props.onKeydown({ key: 'd', ctrlKey: true, preventDefault() {} }); await flush()
-		assert.equal(values.stiching_item_details[1].quantity, 3, 'fill down still writes quantity')
+		assert.equal(values.stiching_item_details[1].quantity, 2, 'IPD grids have no Ctrl+D fill down')
+		assert.equal(findNodes(grid.parent, node => node.type === 'button' && ['Fill down', 'Fill right', 'Paste', 'Clear'].includes(node.props.label)).length, 0, 'stitching grid has no toolbar tools')
 		for (const [column, key] of (isSet ? ['set_item_attribute_value', 'quantity', 'category', 'is_default'] : ['quantity', 'category']).entries()) {
 			assert.equal(await registry.focusProblem({ field: 'stiching_item_details', row_key: 'back', column: key }), true)
 			await flush()
@@ -511,7 +513,6 @@ try {
 		['IpdCuttingSection', 'cloths', 'cutting', gridValues, 'SD YRP Item Production Detail Cloth Detail', ['name1', 'cloth', 'required_gsm', 'is_bom_item']],
 		['IpdAccessoriesSection', 'bom', 'accessories', { ...gridValues, dependent_attribute: 'Stage' }, 'YRP Item BOM', ['item', 'process_name', 'dependent_attribute_value', 'qty_of_product', 'qty_of_bom_item', 'uom', 'based_on_attribute_mapping', 'wastage_pct']],
 		['IpdProcessesSection', 'general', 'processes', gridValues, 'YRP IPD Process', ['process_name', 'process_item']], // Stage is intentionally merged.
-		['IpdAttributesSection', '', 'attributes', gridValues, 'YRP IPD Item Attribute', ['attribute', 'mapping']],
 		['cloth/IpdFabricProcessesSection', '', 'fabric_processes', gridValues, 'SD YRP IPD Fabric Process', ['sequence', 'fabric_process', 'input_item', 'output_item', 'quantity_ratio']],
 		['cloth/IpdFabricProcessesSection', '', 'fabric_processes', gridValues, 'SD YRP IPD Fabric Value Mapping', ['sequence', 'mapping_index', 'attribute', 'role', 'from_value', 'to_value']],
 		['cloth/IpdFabricRoutesSection', '', 'fabric_routes', gridValues, 'SD YRP IPD Fabric Route', ['finished_colour', 'finished_dia', 'knitting_output_colour', 'use_dyed_yarn', 'knitting_output_dia']],
@@ -525,14 +526,12 @@ try {
 		const expected = childFields(doctype).filter(field => fields.includes(field.fieldname)).map(field => field.label)
 		const columnLabels = grid => findNodes(grid, node => node.type === 'th' && node.props.scope === 'col').map(text)
 		const grid = findNodes(root, node => node.props.role === 'grid').find(grid => expected.every(label => columnLabels(grid).includes(label)))
-		const headers = columnLabels(doctype === 'YRP IPD Item Attribute' ? root : grid)
+		const headers = columnLabels(grid)
 		for (const field of fields) assert.ok(headers.includes(deskLabel(doctype, field, childFields(doctype).find(row => row.fieldname === field).label)), `${name}: ${field}`)
 		assert.deepEqual(headers.filter(label => expected.includes(label)), expected, `${name}: columns follow Desk field order`)
 		const tableField = childFields('YRP Item Production Detail').find(row => row.fieldtype === 'Table' && row.options === doctype)
-		if (doctype !== 'YRP IPD Item Attribute') {
-			const title = deskLabel('YRP Item Production Detail', tableField.fieldname, tableField.label)
-			assert.ok(findNodes(root, node => node.type === 'strong' && node.text === title).length, `${name}: Desk table title ${title}`)
-		}
+		const title = deskLabel('YRP Item Production Detail', tableField.fieldname, tableField.label)
+		assert.ok(findNodes(root, node => node.type === 'strong' && node.text === title).length, `${name}: Desk table title ${title}`)
 		app.unmount()
 	}
 	const Fabric = loadComponent(`${base}cloth/IpdFabricProcessesSection.vue`, modules)
@@ -549,4 +548,4 @@ try {
 	globalThis.window = previousWindow
 	globalThis.HTMLElement = previousHTMLElement
 }
-console.log('IPD Rounds 6–9: attribute removal, hidden tabs, exact focus after OK/Esc/X for client/server save errors, F2/Enter Save regression, 23 editable grids across cached tabs, Desk metadata labels/order, and reordered paste/fill/focus passed')
+console.log('IPD Rounds 6–9: Item-owned attributes and card focus, hidden tabs, exact focus after OK/Esc/X for client/server save errors, F2/Enter Save regression, 23 editable grids across cached tabs, Desk metadata labels/order, and reordered paste/fill/focus passed')

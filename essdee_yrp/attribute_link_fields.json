@@ -7,7 +7,8 @@
     "pack_in_stage": {"context": ["dependent_attribute"], "settings": ["YRP Settings", "po_dependent_attribute"]},
     "pack_out_stage": {"context": ["dependent_attribute"], "settings": ["YRP Settings", "po_dependent_attribute"]},
     "stiching_in_stage": {"context": ["dependent_attribute"], "settings": ["YRP Settings", "po_dependent_attribute"]},
-    "stiching_out_stage": {"context": ["dependent_attribute"], "settings": ["YRP Settings", "po_dependent_attribute"]}
+    "stiching_out_stage": {"context": ["dependent_attribute"], "settings": ["YRP Settings", "po_dependent_attribute"]},
+    "stiching_major_attribute_value": {"context": ["stiching_attribute"]}
   },
   "SD YRP Cutting Order Detail": {
     "major_attribute_value": {"context": ["set_item_attribute"]},

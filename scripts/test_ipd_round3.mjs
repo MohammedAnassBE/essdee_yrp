@@ -11,6 +11,7 @@ import * as entryGrid from '../frontend/src/components/common/entryGrid.js'
 import * as attributes from '../frontend/src/departments/merch/ipd/sections/attributeValues.js'
 import * as packing from '../frontend/src/departments/merch/ipd/sections/packingSection.js'
 import * as rename from '../frontend/src/departments/merch/ipd/sections/clothRename.js'
+import * as bomMapping from '../frontend/src/departments/merch/ipd/sections/bomMapping.js'
 
 const base = 'frontend/src/departments/merch/ipd/'
 const samples = JSON.parse(readFileSync('scripts/fixtures/ipd_samples.json', 'utf8'))
@@ -22,7 +23,7 @@ const modules = {
 	'../useIpdEditor.js': { IPD_EDITOR_KEY: key }, '../ipdEditor.js': ipdEditor, './ipdEditor.js': ipdEditor,
 	'./ipdTabs.js': tabs, './garmentGrids.js': grids, './attributeValues.js': attributes, './packingSection.js': packing,
 	'./clothRename.js': rename, './sectionFocus.js': { useSectionFocus }, './sections.css': {},
-	'./BomMappingDrawer.vue': blank, '../../../../components/common/FormField.vue': {
+	'./bomMapping.js': bomMapping, './BomMappingDialog.vue': blank, '../../../../components/common/FormField.vue': {
 		props: ['inputId'], render() { return Vue.h('span', { id: this.inputId, tabindex: -1 }) },
 	},
 	'../../../../components/common/LinkField.vue': blank, './LinkField.vue': blank, './entryGrid.js': entryGrid,
@@ -98,6 +99,8 @@ try {
 		view.app.unmount()
 		const ratio = mountParts([[Packing, 'details', 'packing'], [Packing, 'values', 'packing']], { ...structuredClone(samples.set_size_ratio.values), based_on_other_attribute_mapping: 1, packing_mode: 'Size Ratio Packing' }, readonly)
 		await focus(ratio, { section: 'packing', field: 'packing_size_details', row_key: null }, 'Packing Size Details')
+		assert.equal(findNodes(ratio.root, node => node.props.role === 'grid' && node.props['aria-label'] === 'Box assortment').length, 0, 'ratio packing has no assortment')
+		assert.equal(findNodes(ratio.root, node => node.type === 'button' && ['Fill down', 'Paste', 'Clear'].includes(node.props.label)).length, 0, 'packing grids have no toolbar actions')
 		ratio.app.unmount()
 		const panelDraft = { ...structuredClone(samples.panel_grouped.values), enable_panel_wise_consumption_matrix: 1 }
 		const panel = mountParts([[Cutting, 'cloths', 'cutting'], [Cutting, 'consumption', 'cutting'], [Cutting, 'mapping', 'cutting']], panelDraft, readonly)

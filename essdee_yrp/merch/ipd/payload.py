@@ -206,7 +206,6 @@ def attribute_context(doc, mappings):
 		)
 	)
 	shared = shared_mappings(doc, [row.mapping for row in rows if row.mapping])
-	can_add = bool(frappe.has_permission("Item Attribute", "write"))
 	return [
 		{
 			"attribute": row.attribute,
@@ -216,7 +215,6 @@ def attribute_context(doc, mappings):
 			"values": list((frappe.local.ipd_mapping_values or {}).get(row.mapping) or []),
 			"roles": attribute_roles(doc, row.attribute),
 			"is_shared": row.mapping in shared,
-			"can_add_values": can_add,
 		}
 		for row in rows
 	]
@@ -353,6 +351,17 @@ def context(doc, mappings):
 			"packing_modes": select_options(registry.DOCTYPE, "packing_mode"),
 		},
 		"cloth": cloth_context(doc),
+		"cutting": cutting_context(doc),
+	}
+
+
+def cutting_context(doc):
+	if doc.get("is_cloth_item"):
+		return None
+	attribute = frappe.db.get_single_value("SD YRP IPD Settings", "default_dia_attribute")
+	return {
+		"dia_attribute": attribute or None,
+		"dia_values": get_global_attribute_values(attribute) if attribute else [],
 	}
 
 

@@ -5,6 +5,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import strip_html
+from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
 from essdee_yrp.merch import ipd_workspace as workspace
 from essdee_yrp.merch.ipd.fields import DOCTYPE
@@ -188,6 +189,25 @@ class TestIpdChecks(IntegrationTestCase):
 		self.assertIn("14 Dia", cloth["dia_values"])
 		self.assertEqual(cloth["mapping_roles"], ["Change", "Introduce", "Pin", "Consume"])
 		self.assertIsNone(workspace.get_ipd_workspace(GARMENT)["context"]["cloth"])
+
+	def test_cutting_context_uses_the_settings_dia_attribute(self):
+		settings = "SD YRP IPD Settings"
+		field = "default_dia_attribute"
+		attribute = frappe.db.get_single_value(settings, field)
+		self.assertTrue(attribute)
+		self.assertEqual(
+			workspace.get_ipd_workspace(GARMENT)["context"]["cutting"],
+			{"dia_attribute": attribute, "dia_values": get_global_attribute_values(attribute)},
+		)
+		self.assertIsNone(workspace.get_ipd_workspace(SAMPLES["cloth"])["context"]["cutting"])
+		try:
+			frappe.db.set_single_value(settings, field, "")
+			self.assertEqual(
+				workspace.get_ipd_workspace(GARMENT)["context"]["cutting"],
+				{"dia_attribute": None, "dia_values": []},
+			)
+		finally:
+			frappe.db.set_single_value(settings, field, attribute)
 
 
 class TestDeskClientRules(IntegrationTestCase):

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from yrp.attribute_values import get_mapping_document
 
 from essdee_yrp import ipd_ui
 from essdee_yrp.merch import ipd_workspace as workspace
@@ -223,6 +224,20 @@ class TestIpdWorkspace(IntegrationTestCase):
 			item_mappings = set(frappe.get_all("Item Variant Attribute", {"parent": item}, pluck="mapping"))
 			self.assertTrue(doc.item_attributes)
 			self.assertFalse({row.mapping for row in doc.item_attributes} & item_mappings)
+			item_doc = frappe.get_doc("Item", item)
+			if item_doc.dependent_attribute_mapping:
+				self.assertTrue(doc.dependent_attribute_mapping)
+				self.assertNotEqual(doc.dependent_attribute_mapping, item_doc.dependent_attribute_mapping)
+			mappings_by_attribute = {row.attribute: row.mapping for row in item_doc.attributes}
+			for row in doc.item_attributes:
+				with self.subTest(attribute=row.attribute):
+					self.assertEqual(
+						[value.attribute_value for value in get_mapping_document(row.mapping).get("values")],
+						[
+							value.attribute_value
+							for value in get_mapping_document(mappings_by_attribute[row.attribute]).get("values")
+						],
+					)
 			self.assertEqual(doc.owner, WRITER)
 			with self.assertRaisesRegex(frappe.ValidationError, "Item is fixed"):
 				workspace.save_ipd({"item": item}, doc.name, str(doc.modified))
@@ -247,16 +262,19 @@ class TestIpdWorkspace(IntegrationTestCase):
 				EDITABLE, "Colour", [*entry["values"], extra.lower(), extra], entry["mapping_modified"]
 			)
 			self.assertEqual(result["values"], [*entry["values"], extra])
-		with self.assertRaisesRegex(frappe.PermissionError, "Ask an Item Manager"):
-			workspace.save_ipd_attribute_values(
-				EDITABLE, "Colour", [*entry["values"], "QA Unknown Colour"], entry["mapping_modified"]
-			)
-		self.as_user(ITEM_MANAGER)
-		with rolled_back("chip_add_new"):
-			result = workspace.save_ipd_attribute_values(
-				EDITABLE, "Colour", [*entry["values"], "QA Unknown Colour"], entry["mapping_modified"]
-			)
-			self.assertEqual(result["values"][-1], "QA Unknown Colour")
+		unknown = ["QA Unknown Colour", "QA Other Unknown Colour"]
+		self.assertTrue(set(unknown).isdisjoint(catalogue))
+		for user in (WRITER, ITEM_MANAGER):
+			self.as_user(user)
+			with self.assertRaisesRegex(
+				frappe.ValidationError,
+				"QA Unknown Colour, QA Other Unknown Colour is not a Colour value. Pick values from the Colour list.",
+			):
+				workspace.save_ipd_attribute_values(
+					EDITABLE, "Colour", [extra, *unknown], entry["mapping_modified"]
+				)
+			self.assertEqual(colour_context(EDITABLE), entry)
+			self.assertCountEqual(attribute_values.get_global_attribute_values("Colour"), catalogue)
 
 	def test_attribute_values_stale_after_lock(self):
 		entry = colour_context(EDITABLE)

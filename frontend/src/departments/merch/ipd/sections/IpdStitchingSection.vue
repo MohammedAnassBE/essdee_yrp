@@ -21,7 +21,8 @@
 					:model-value="panelGrid.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('stiching_item_details')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updatePanels"
 					@remove-row="togglePanel($event, false)"
@@ -42,7 +43,8 @@
 					:model-value="combination.model"
 					:readonly="editor.readonly || isSame"
 					:errors="editor.gridErrors('stiching_item_detail')"
-					:toolbar="['fillRight', 'fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateCombination"
 				/>
 			</template>
@@ -62,6 +64,7 @@
 						:model-value="markers.model"
 						:readonly="editor.readonly"
 						:toolbar="[]"
+						:fill-shortcuts="false"
 						:removable-rows="!editor.readonly"
 						@update:model-value="updateMarkers"
 						@remove-row="removeGroup"

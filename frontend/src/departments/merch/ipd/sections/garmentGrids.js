@@ -111,23 +111,47 @@ function itemKeys(value, carry) {
 	return uniqueKeys((value?.items || []).map((item) => columns.map((column) => String(item[column] ?? "")).join(KEY_SEPARATOR)))
 }
 
+function diaColumn(dia) {
+	return {
+		type: "link", doctype: "Item Attribute Value", options: valueOptions(dia), field: "dia", width: 140,
+		searchHandler: (text) => {
+			const query = String(text ?? "").toLowerCase()
+			const exact = [], prefixes = [], contains = []
+			for (const value of dia || []) {
+				const lower = value.toLowerCase()
+				if (!query) contains.push(value)
+				else if (lower === query) exact.push(value)
+				else if (lower.startsWith(query)) prefixes.push(value)
+				else if (lower.includes(query)) contains.push(value)
+			}
+			prefixes.sort((left, right) => left.length - right.length)
+			return [...exact, ...prefixes, ...contains].slice(0, 20).map((value) => ({ name: value, label: value }))
+		},
+	}
+}
+
 const CARRY_COLUMNS = {
-	Dia: (dia) => ({ type: "text", width: 110, options: valueOptions(dia), field: "dia" }),
+	Dia: (dia) => (dia?.length ? diaColumn(dia) : { type: "text", width: 110, field: "dia" }),
 	Weight: () => ({ label: "Weight (kg)", type: "number", precision: 4, min: 0, field: "weight" }),
 	"Required GSM": () => ({ type: "number", precision: 0, min: 0 }),
 	Cloth: (_dia, cloths) => ({ type: "select", options: valueOptions(cloths), field: "cloth" }),
 }
 
-export function itemsGrid(value, carry, { diaOptions = [], clothOptions = [] } = {}) {
+export function itemsGrid(value, carry, { diaOptions = [], clothOptions = [], attributeColumns = false } = {}) {
 	const keyColumns = itemKeyColumns(value, carry)
 	const keys = itemKeys(value, carry)
 	const items = value?.items || []
 	const editable = (value?.attributes || []).filter((attribute) => carry.includes(attribute))
+	const headers = attributeColumns ? keyColumns.slice(0, 1) : keyColumns
+	const readonly = attributeColumns ? keyColumns.slice(1) : []
 	return {
-		rowHeaderLabel: keyColumns.join(" · "),
-		rows: items.map((item, index) => ({ key: keys[index], label: keyColumns.map((column) => item[column] ?? "—").join(" · ") })),
-		columns: editable.map((attribute) => ({ key: attribute, label: attribute, ...CARRY_COLUMNS[attribute]?.(diaOptions, clothOptions) })),
-		model: Object.fromEntries(items.map((item, index) => [keys[index], Object.fromEntries(editable.map((attribute) => [attribute, item[attribute] ?? null]))])),
+		rowHeaderLabel: headers.join(" · "),
+		rows: items.map((item, index) => ({ key: keys[index], label: headers.map((column) => (isBlank(item[column]) ? "—" : item[column])).join(" · ") })),
+		columns: [
+			...readonly.map((attribute) => ({ key: attribute, label: attribute, type: "text", readonly: true })),
+			...editable.map((attribute) => ({ key: attribute, label: attribute, ...CARRY_COLUMNS[attribute]?.(diaOptions, clothOptions) })),
+		],
+		model: Object.fromEntries(items.map((item, index) => [keys[index], Object.fromEntries([...readonly, ...editable].map((attribute) => [attribute, item[attribute] ?? null]))])),
 	}
 }
 
@@ -222,7 +246,7 @@ export function panelGroupGrid(matrix, panel, { diaOptions = [] } = {}) {
 		rowHeaderLabel: matrix?.attributes?.primary || "",
 		rows: (panel?.rows || []).map((row) => ({ key: String(row.primary_value), label: String(row.primary_value) })),
 		columns: packings.flatMap((packing) => [
-			{ key: panelColumn(packing, "dia"), label: `${packing} Dia`, type: "value", options: valueOptions(diaOptions), field: "dia", width: 110 },
+			{ key: panelColumn(packing, "dia"), label: `${packing} Dia`, ...diaColumn(diaOptions) },
 			{ key: panelColumn(packing, "weight"), label: `${packing} kg`, type: "number", precision: 4, min: 0.0001, field: "weight" },
 		]),
 		model: Object.fromEntries((panel?.rows || []).map((row) => [String(row.primary_value), Object.fromEntries(packings.flatMap((packing) => [
@@ -437,67 +461,6 @@ export function bundleGroupProblems(groups, panels) {
 	}
 	if (selected.length && selected.length !== (panels || []).length) return [{ panel: "", message: "Select All the Panels" }]
 	return []
-}
-
-const bomColumn = (type, attribute) => `${type}${COLUMN_SEPARATOR}${attribute}`
-
-export function bomMappingColumns(detail, valuesFor = () => []) {
-	const sameAttributes = detail?.same_attributes || []
-	const side = (type, attributes, prefix) => (attributes || []).filter((attribute) => !sameAttributes.includes(attribute)).map((attribute) => {
-		const options = valuesFor(type, attribute)
-		return { key: bomColumn(type, attribute), label: `${prefix} ${attribute}`, type: options.length ? "value" : "text", options: valueOptions(options), field: bomColumn(type, attribute) }
-	})
-	return [
-		...side("item", detail?.item_attributes, "Item"),
-		...side("bom", detail?.bom_item_attributes, "BOM"),
-		{ key: "quantity", label: "Quantity", type: "number", precision: 4, min: 0 },
-	]
-}
-
-export function bomMappingGrid(detail) {
-	const indexes = [...new Set((detail?.rows || []).map((row) => Number(row.index)))].sort((left, right) => left - right)
-	const model = Object.fromEntries(indexes.map((index) => [String(index), {}]))
-	for (const row of detail?.rows || []) {
-		const cells = model[String(Number(row.index))]
-		cells[bomColumn(row.type, row.attribute)] = row.attribute_value ?? null
-		cells.quantity = row.quantity ?? cells.quantity ?? null
-	}
-	return { rows: indexes.map((index, position) => ({ key: String(index), label: String(position + 1) })), model }
-}
-
-export function bomMappingRows(detail, rows, model) {
-	const sameAttributes = detail?.same_attributes || []
-	const output = []
-	rows.forEach((row, position) => {
-		const cells = model?.[row.key] || {}
-		for (const [type, attributes] of [["item", detail?.item_attributes], ["bom", detail?.bom_item_attributes]]) {
-			for (const attribute of (attributes || []).filter((candidate) => !sameAttributes.includes(candidate))) {
-				output.push({ index: position, type, attribute, attribute_value: cells[bomColumn(type, attribute)] ?? null, quantity: cells.quantity ?? 0 })
-			}
-		}
-	})
-	return output
-}
-
-export function bomMappingProblems(detail, rows, model) {
-	const problems = {}
-	const columns = bomMappingColumns(detail)
-	for (const row of rows) {
-		for (const column of columns) {
-			const value = model?.[row.key]?.[column.key]
-			const missing = column.key === "quantity" ? !Number(value) && (detail?.bom_item_attributes || []).length : isBlank(value)
-			if (missing) problems[row.key] = { ...(problems[row.key] || {}), [column.key]: column.key === "quantity" ? "The BOM quantity cannot be zero." : "Choose a value." }
-		}
-	}
-	return problems
-}
-
-export function bomMappingSummary(detail) {
-	if (!detail) return ""
-	const item = (detail.item_attributes || []).join(", ")
-	const bom = (detail.bom_item_attributes || []).join(", ")
-	const lines = new Set((detail.rows || []).map((row) => row.index)).size
-	return [item ? `By ${item}` : "", bom ? `→ ${bom}` : "", `${lines} ${lines === 1 ? "line" : "lines"}`].filter(Boolean).join(" ")
 }
 
 export function choiceList(choices, selected) {

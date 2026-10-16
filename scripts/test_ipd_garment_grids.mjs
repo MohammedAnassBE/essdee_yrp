@@ -2,6 +2,7 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
+import { applyBlock, clearRange, coerceCell, displayCell, fillDown, fillRight, isCellEditable } from "../frontend/src/components/common/entryGrid.js"
 import { stableStringify } from "../frontend/src/departments/merch/ipd/ipdEditor.js"
 import { clothDetailChanges, duplicateClothNames } from "../frontend/src/departments/merch/ipd/sections/clothRename.js"
 import {
@@ -10,9 +11,6 @@ import {
 	applyDefaultRadio,
 	assortmentFromModel,
 	assortmentGrid,
-	bomMappingGrid,
-	bomMappingProblems,
-	bomMappingRows,
 	bundleGroupProblems,
 	combinationFromModel,
 	combinationGrid,
@@ -42,7 +40,7 @@ import {
 	toggleValueRow,
 	ungroupPanel,
 } from "../frontend/src/departments/merch/ipd/sections/garmentGrids.js"
-import { isComboDerived, packingChanges, packingModeOf, packingModePatch } from "../frontend/src/departments/merch/ipd/sections/packingSection.js"
+import { isComboDerived, packingChanges } from "../frontend/src/departments/merch/ipd/sections/packingSection.js"
 import { reviewSummary } from "../frontend/src/departments/merch/ipd/sections/reviewSummary.js"
 
 const samples = JSON.parse(readFileSync(new URL("./fixtures/ipd_samples.json", import.meta.url), "utf8"))
@@ -92,14 +90,7 @@ function roundTrips(name, values) {
 	}
 	const cloth = values.panel_wise_cloth_mapping_json
 	for (const panel of cloth?.panels || []) same(panelClothFromModel(cloth, panel.group_id, panelClothGrid(cloth, panel).model), cloth, `${name} cloth ${panel.group_id}`)
-	for (const [row, detail] of Object.entries(values.bom_mappings || {})) {
-		const grid = bomMappingGrid(detail)
-		const rows = bomMappingRows(detail, grid.rows, grid.model)
-		const indexes = [...new Set(detail.rows.map((entry) => entry.index))].sort((left, right) => left - right)
-		const expected = detail.rows.map((entry) => ({ ...entry, index: indexes.indexOf(entry.index) }))
-		const sortKey = (entry) => `${entry.index}|${entry.type}|${entry.attribute}`
-		same(rows.map((entry) => [sortKey(entry), entry.attribute_value, entry.quantity]).sort(), expected.map((entry) => [sortKey(entry), entry.attribute_value, entry.quantity]).sort(), `${name} bom mapping ${row}`)
-	}
+
 }
 
 for (const [name, sample] of Object.entries(samples)) roundTrips(name, { ...sample.values, bom_mappings: sample.bom_mappings })
@@ -119,6 +110,69 @@ const standard = samples.standard.values
 {
 	const blank = { attributes: ["Panel", "Dia", "Weight"], items: [{ Panel: "Front" }] }
 	same(itemsFromModel(blank, itemsGrid(blank, ["Dia", "Weight"]).model, ["Dia", "Weight"]), blank, "missing carry keys stay missing")
+}
+
+{
+	const value = {
+		attributes: ["Panel", "Size", "Dia", "Weight"],
+		items: [
+			{ Panel: "Front", Size: "80 cm", Dia: "44 Dia", Weight: 0.009 },
+			{ Panel: "Back", Size: "90 cm", Dia: "42 Dia", Weight: 0.01 },
+		],
+	}
+	const carry = ITEM_GRIDS.cutting_items_json
+	const diaOptions = ["42 Dia", "44 Dia", "44.5 Dia", ...Array.from({ length: 25 }, (_, index) => `${144 + index} Dia`)]
+	const original = itemsGrid(value, carry)
+	const grid = itemsGrid(value, carry, { attributeColumns: true, diaOptions })
+	assert.equal(grid.rowHeaderLabel, "Panel")
+	assert.equal(grid.rows[0].label, "Front")
+	assert.deepEqual(grid.columns.map((column) => column.key), ["Size", "Dia", "Weight"])
+	assert.deepEqual(grid.columns[0], { key: "Size", label: "Size", type: "text", readonly: true })
+	assert.equal(grid.model[grid.rows[0].key].Size, "80 cm")
+	assert.deepEqual(grid.rows.map((row) => row.key), original.rows.map((row) => row.key))
+	assert.equal(original.rowHeaderLabel, "Panel · Size")
+	assert.equal(original.rows[0].label, "Front · 80 cm")
+	assert.deepEqual(original.columns.map((column) => column.key), ["Dia", "Weight"])
+	const back = itemsFromModel(value, grid.model, carry)
+	same(back, value, "attribute columns round trip")
+	assert.ok(back.items.every((item, index) => item === value.items[index]))
+	const changed = structuredClone(grid.model)
+	changed[grid.rows[0].key].Size = "100 cm"
+	assert.equal(itemsFromModel(value, changed, carry).items[0], value.items[0], "readonly attributes are ignored")
+	for (const Panel of ["", null, undefined]) {
+		assert.equal(itemsGrid({ ...value, items: [{ Panel, Size: "80 cm" }] }, carry, { attributeColumns: true }).rows[0].label, "—")
+	}
+	const dia = grid.columns[1]
+	assert.equal(dia.type, "link")
+	assert.equal(dia.doctype, "Item Attribute Value")
+	assert.equal(dia.field, "dia")
+	assert.equal(dia.width, 140)
+	assert.deepEqual(dia.options, diaOptions.map((value) => ({ value, label: value })))
+	assert.deepEqual(dia.searchHandler("44"), ["44 Dia", "44.5 Dia", "144 Dia"].map((value) => ({ name: value, label: value })))
+	assert.deepEqual(dia.searchHandler("dIA"), diaOptions.slice(0, 20).map((value) => ({ name: value, label: value })))
+	assert.deepEqual(dia.searchHandler(""), diaOptions.slice(0, 20).map((value) => ({ name: value, label: value })))
+	assert.deepEqual(dia.searchHandler("zzz"), [])
+	const rankedOptions = ["15.25 Dia", "15.5 Dia", "115 Dia", "15 Dia", "150 Dia"]
+	const rankedDia = itemsGrid(value, carry, { diaOptions: rankedOptions }).columns[0]
+	assert.deepEqual(rankedDia.searchHandler("15").map(({ name }) => name), ["15 Dia", "150 Dia", "15.5 Dia", "15.25 Dia", "115 Dia"])
+	assert.deepEqual(rankedDia.searchHandler("15 dia").map(({ name }) => name), ["15 Dia", "115 Dia"])
+	assert.deepEqual(rankedDia.searchHandler("1").map(({ name }) => name), ["15 Dia", "115 Dia", "150 Dia", "15.5 Dia", "15.25 Dia"])
+	assert.deepEqual(rankedDia.searchHandler("").map(({ name }) => name), rankedOptions)
+	assert.deepEqual(coerceCell(dia, "44 dia"), { value: "44 Dia", error: "" })
+	assert.deepEqual(coerceCell(dia, "99 Foo"), { value: null, error: "99 Foo is not one of the allowed values." })
+	assert.equal(displayCell(dia, "Legacy Dia"), "Legacy Dia")
+	assert.deepEqual(original.columns[1], grid.columns[2], "Weight stays unchanged")
+	const accessoryDia = original.columns[0]
+	assert.equal(accessoryDia.type, "text", "Dia without configured values stays free text")
+	assert.deepEqual(coerceCell(accessoryDia, "Legacy Dia"), { value: "Legacy Dia", error: "" })
+	assert.equal(isCellEditable(grid.rows, grid.columns, 0, 0), false)
+	const range = { top: 0, bottom: 1, left: 0, right: 2 }
+	const pasted = applyBlock(grid.model, grid.rows, grid.columns, { row: 0, col: 0 }, [["100 cm", "44 dia", "0.0123"]])
+	assert.equal(pasted.readonly, 1)
+	assert.equal(pasted.model[grid.rows[0].key].Size, "80 cm")
+	for (const operation of [fillRight, fillDown, clearRange]) {
+		assert.equal(operation(grid.model, grid.rows, grid.columns, range).model[grid.rows[1].key].Size, "90 cm")
+	}
 }
 
 const setSample = samples.set_item.values
@@ -185,6 +239,10 @@ const setSample = samples.set_item.values
 	const panel = matrix.panels[0]
 	const grid = panelGroupGrid(matrix, panel, { diaOptions: ["32 Dia"] })
 	assert.deepEqual(grid.columns.map((column) => column.field), ["dia", "weight"])
+	assert.equal(grid.columns[0].type, "link")
+	assert.equal(grid.columns[0].doctype, "Item Attribute Value")
+	assert.deepEqual(grid.columns[0].options, [{ value: "32 Dia", label: "32 Dia" }])
+	assert.deepEqual(grid.columns[0].searchHandler("32"), [{ name: "32 Dia", label: "32 Dia" }])
 	const weightKey = `Black${COLUMN_SEPARATOR}weight`
 	const edited = panelGroupFromModel(matrix, "Front", { S: { ...grid.model.S, [weightKey]: 0.07 } })
 	assert.equal(edited.panels[0].rows[0].values.Black.weight, 0.07)
@@ -227,15 +285,6 @@ const setSample = samples.set_item.values
 }
 
 {
-	const detail = { item_attributes: ["Colour", "Size"], bom_item_attributes: ["Size"], same_attributes: ["Size"], rows: [] }
-	const rows = [{ key: "line-1" }]
-	const model = { "line-1": { [`item${COLUMN_SEPARATOR}Colour`]: "Black", quantity: 2 } }
-	assert.deepEqual(bomMappingRows(detail, rows, model), [{ index: 0, type: "item", attribute: "Colour", attribute_value: "Black", quantity: 2 }])
-	assert.deepEqual(bomMappingProblems(detail, rows, model), {})
-	assert.ok(bomMappingProblems({ ...detail, same_attributes: [] }, rows, model)["line-1"])
-}
-
-{
 	const draft = {
 		cloth_detail: [{ name: "c1", name1: "Main" }],
 		cutting_cloths_json: { attributes: ["Panel", "Cloth"], items: [{ Panel: "Front", Cloth: "Main" }], select_list: ["Main"] },
@@ -249,12 +298,9 @@ const setSample = samples.set_item.values
 }
 
 {
-	assert.equal(packingModeOf({ based_on_other_attribute_mapping: 0 }), "colour")
-	assert.equal(packingModeOf({ based_on_other_attribute_mapping: 1, packing_mode: "Size Ratio Packing" }), "ratio")
-	assert.equal(packingModeOf({ based_on_other_attribute_mapping: 1, packing_mode: "" }), "assortment")
 	const draft = { based_on_other_attribute_mapping: 0, auto_calculate: 1, packing_combo: 5, packing_attribute_no: 2, packing_attribute_details: [{ attribute_value: "A", quantity: 0 }, { attribute_value: "B", quantity: 0 }] }
 	assert.deepEqual(packingChanges(draft, { packing_attribute_details: draft.packing_attribute_details.slice(0, 1) }), { packing_attribute_details: [{ attribute_value: "A", quantity: 0 }], packing_attribute_no: 1 })
-	const wise = packingChanges(draft, packingModePatch("wise"))
+	const wise = packingChanges(draft, { based_on_other_attribute_mapping: 1, packing_mode: "Size Wise Packing" })
 	assert.equal(wise.packing_combo, 1)
 	assert.equal(wise.packing_mode, "Size Wise Packing")
 	const manual = { ...draft, auto_calculate: 0, packing_combo: 0 }

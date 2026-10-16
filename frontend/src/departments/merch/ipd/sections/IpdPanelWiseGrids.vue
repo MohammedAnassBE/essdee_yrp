@@ -35,7 +35,8 @@
 					:model-value="grid.model"
 					:readonly="editor.readonly"
 					:errors="errors"
-					:toolbar="['fillRight', 'fillDown', 'sameForAll', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="update"
 				>
 					<template #toolbar>
@@ -59,7 +60,8 @@
 					:columns="clothGrid(panel).columns"
 					:model-value="clothGrid(panel).model"
 					:readonly="editor.readonly"
-					:toolbar="['fillRight', 'fillDown', 'sameForAll', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateCloth(panel.group_id, $event)"
 				/>
 			</template>

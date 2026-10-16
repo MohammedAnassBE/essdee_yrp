@@ -21,7 +21,8 @@
 				:model-value="grid.model"
 				:readonly="editor.readonly"
 				:errors="editor.gridErrors('set_item_detail')"
-				:toolbar="['fillRight', 'fillDown', 'paste', 'clear']"
+				:toolbar="[]"
+				:fill-shortcuts="false"
 				@update:model-value="update"
 			/>
 			<p v-else-if="!draft.major_attribute_value" class="erp-help-text">Choose the set attribute and its major part to build the colour grid.</p>

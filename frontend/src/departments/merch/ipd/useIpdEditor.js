@@ -317,10 +317,10 @@ export function useIpdEditor(initialName) {
 		const result = await getAttributeValueUsage(name.value, attribute, values, patch())
 		return result?.usage || {}
 	}
-	async function saveBomMapping(bomRow, rows) {
+	async function saveBomMapping(bomRow, rows, tables = null, mappingModified = null) {
 		const current = context.value.bom_mappings?.[bomRow]
 		if (!current) throw new Error("This BOM row has no attribute mapping yet. Save the IPD to create it.")
-		const result = await saveIpdBomMapping(name.value, bomRow, rows, current.mapping_modified)
+		const result = await saveIpdBomMapping(name.value, bomRow, rows, mappingModified ?? current.mapping_modified, tables)
 		context.value = { ...context.value, bom_mappings: { ...(context.value.bom_mappings || {}), ...(result?.bom_mappings || {}) } }
 		return result
 	}

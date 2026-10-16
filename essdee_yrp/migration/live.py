@@ -4387,6 +4387,8 @@ def _apply_contextual_defaults(
 		value = document.get(fieldname)
 		if not value or str(value).startswith("IAV-"):
 			continue
+		if fieldname == "stiching_major_attribute_value":
+			continue  # resolved below with the stiching_attribute fallback
 		attribute = reference_data.get("source_attribute_value_attributes", {}).get(value)
 		if not attribute:
 			attributes = reference_data.get("attribute_value_pairs", {}).get(value, [])

@@ -6,7 +6,7 @@ from frappe import _
 from essdee_yrp import ipd_ui
 from essdee_yrp.merch.ipd import client_rules
 from essdee_yrp.merch.ipd.attribute_values import get_usage, save_values
-from essdee_yrp.merch.ipd.bom_mapping import save_bom_mapping
+from essdee_yrp.merch.ipd.bom_mapping import get_bom_mapping, save_bom_mapping
 from essdee_yrp.merch.ipd.capabilities import assert_allowed
 from essdee_yrp.merch.ipd.checks import run_checks
 from essdee_yrp.merch.ipd.copy_version import copy_ipd as copy_into_version
@@ -161,6 +161,29 @@ def save_ipd_attribute_values(name: str, attribute: str, values, mapping_modifie
 	return save_values(name, attribute, parse_list(values, _("Values")), mapping_modified)
 
 
+def bom_mapping_tables(item_attributes, bom_item_attributes):
+	return {
+		field: parse_list(rows, _(label)) if rows is not None else None
+		for field, rows, label in (
+			("item_attributes", item_attributes, "Item Attributes"),
+			("bom_item_attributes", bom_item_attributes, "BOM Item Attributes"),
+		)
+	}
+
+
+@frappe.whitelist()
+def get_ipd_bom_mapping(name: str, bom_row: str, item_attributes=None, bom_item_attributes=None) -> dict:
+	return get_bom_mapping(name, bom_row, **bom_mapping_tables(item_attributes, bom_item_attributes))
+
+
 @frappe.whitelist(methods=["POST"])
-def save_ipd_bom_mapping(name: str, bom_row: str, rows, mapping_modified: str) -> dict:
-	return save_bom_mapping(name, bom_row, parse_list(rows, _("Mapping rows")), mapping_modified)
+def save_ipd_bom_mapping(
+	name: str, bom_row: str, rows, mapping_modified: str, item_attributes=None, bom_item_attributes=None
+) -> dict:
+	return save_bom_mapping(
+		name,
+		bom_row,
+		parse_list(rows, _("Mapping rows")),
+		mapping_modified,
+		**bom_mapping_tables(item_attributes, bom_item_attributes),
+	)

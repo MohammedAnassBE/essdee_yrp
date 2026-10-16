@@ -2158,6 +2158,27 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			attribute_value_name("Part", "Top"),
 		)
 
+	def test_registered_stitching_major_value_keeps_stitching_attribute_fallback(self):
+		from yrp.attribute_value_identity import attribute_value_name
+
+		document = {
+			"doctype": "YRP Item Production Detail",
+			"name": "IPD-1",
+			"stiching_attribute": "Panel",
+			"stiching_major_attribute_value": "Front",
+		}
+		references = {
+			"attribute_value_pairs": {"Front": ["Panel", "Type"]},
+			"source_attribute_value_attributes": {},
+		}
+		registry = {"YRP Item Production Detail": ["stiching_major_attribute_value"]}
+		with patch("yrp.attribute_links.fields", return_value=registry):
+			_apply_contextual_defaults(document, {"fields": []}, references)
+		self.assertEqual(
+			document["stiching_major_attribute_value"],
+			attribute_value_name("Panel", "Front"),
+		)
+
 	def test_single_identity_is_counted_without_querying_a_physical_table(self):
 		plan = SimpleNamespace(target_schemas={"SD YRP Company Settings": {"issingle": 1, "fields": []}})
 		pending = {}

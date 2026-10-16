@@ -53,7 +53,7 @@
 							@dblclick="startEdit('edit')"
 						>
 							<template v-if="isEditing(rowIndex, colIndex)">
-								<LinkField v-if="column.type === 'link'" ref="editor" class="entry-grid__link" :model-value="editText" :doctype="column.doctype || ''" :filters="column.filters || {}" :show-open-button="false" :aria-label="cellLabel(row, column)" :invalid="Boolean(cellError(rowIndex, colIndex))" :aria-describedby="cellError(rowIndex, colIndex) ? `${gridId}-error` : undefined" :show-validation-message="false" @validation="linkValidation" @select="commitLink($event.name)" />
+								<LinkField v-if="column.type === 'link'" ref="editor" class="entry-grid__link" :model-value="editText" :doctype="column.doctype || ''" :filters="column.filters || {}" :search-handler="column.searchHandler || null" :show-open-button="false" :aria-label="cellLabel(row, column)" :invalid="Boolean(cellError(rowIndex, colIndex))" :aria-describedby="cellError(rowIndex, colIndex) ? `${gridId}-error` : undefined" :show-validation-message="false" @validation="linkValidation" @select="commitLink($event.name)" />
 								<select v-else-if="usesNativeSelect(column)" ref="editor" v-model="editText" class="entry-grid__box entry-grid__input" :aria-label="cellLabel(row, column)" @keydown="onEditorKeydown" @blur="commitEdit()">
 									<option value="" />
 									<option v-for="option in normalizedOptions(column)" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -136,6 +136,7 @@ const props = defineProps({
 	totalLabel: { type: String, default: "Total" },
 	toolbar: { type: Array, default: () => ["fillRight", "fillDown", "paste", "clear"] },
 	removableRows: { type: Boolean, default: false },
+	fillShortcuts: { type: Boolean, default: true },
 	validationField: { type: String, default: "" },
 })
 const emit = defineEmits(["update:modelValue", "change", "paste-report", "remove-row"])
@@ -361,7 +362,7 @@ function onTab(event) {
 	select(target)
 }
 function handleShortcut(event) {
-	if (!(event.ctrlKey || event.metaKey) || props.readonly) return false
+	if (!(event.ctrlKey || event.metaKey) || props.readonly || !props.fillShortcuts) return false
 	const key = event.key.toLowerCase()
 	if (key === "d") { event.preventDefault(); runTool("fillDown"); return true }
 	if (key === "r") { event.preventDefault(); runTool("fillRight"); return true }

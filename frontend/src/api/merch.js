@@ -87,9 +87,15 @@ export function saveIpdAttributeValues(name, attribute, values, mappingModified)
 	})
 }
 
-export function saveIpdBomMapping(name, bomRow, rows, mappingModified) {
+export function getIpdBomMapping(name, bomRow, tables = null) {
+	return callMethod(`${IPD_METHOD}.get_ipd_bom_mapping`, {
+		name, bom_row: bomRow, ...(tables || {}),
+	})
+}
+
+export function saveIpdBomMapping(name, bomRow, rows, mappingModified, tables = null) {
 	return callMethod(`${IPD_METHOD}.save_ipd_bom_mapping`, {
-		name, bom_row: bomRow, rows, mapping_modified: mappingModified,
+		name, bom_row: bomRow, rows, mapping_modified: mappingModified, ...(tables || {}),
 	})
 }
 

@@ -15,20 +15,24 @@
 					:model-value="bom.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('item_bom')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateBom"
 					@remove-row="removeBom"
 				/>
 				<p v-else class="erp-help-text">No BOM rows yet.</p>
-				<ul v-if="mapped.length" class="ipd-summary" aria-label="Attribute mapped BOM rows">
-					<li v-for="entry in mapped" :key="entry.key">
-						<i class="pi pi-sitemap" aria-hidden="true" />
-						<span>{{ entry.item }} Mapping <small>{{ entry.summary }}</small></span>
-						<Button v-if="entry.canEdit" :label="editor.readonly ? 'View' : 'Edit'" size="small" text @click="openMapping(entry)" />
-						<small v-else>{{ entry.note }}</small>
-					</li>
-				</ul>
+				<div v-if="mapped.length" class="ipd-chip-cards" aria-label="Attribute mapped BOM rows">
+					<article v-for="entry in mapped" :key="entry.key" class="ipd-chip-card">
+						<header>
+							<h3>{{ entry.item }} Mapping</h3>
+							<Button v-if="entry.canEdit" :label="editor.readonly ? 'View' : 'Edit'" size="small" text @click="openMapping(entry)" />
+						</header>
+						<p v-for="(line, index) in entry.lines" :key="index" class="erp-help-text bom-mapping-line">{{ line }}</p>
+						<small v-if="entry.total > entry.lines.length" class="erp-help-text">+{{ entry.total - entry.lines.length }} more</small>
+						<small v-if="entry.note" class="erp-help-text">{{ entry.note }}</small>
+					</article>
+				</div>
 			</template>
 			<template v-if="part === 'accessories'">
 				<p v-if="!accessoryNames.rows.length && !clothAccessory.rows.length" class="erp-help-text">No accessory items.</p>
@@ -42,6 +46,7 @@
 					:model-value="accessoryNames.model"
 					:readonly="editor.readonly"
 					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateAccessoryParts"
 					@remove-row="removeAccessory"
@@ -64,7 +69,8 @@
 					:model-value="clothAccessory.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('cloth_accessory_json')"
-					:toolbar="['fillRight', 'fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateClothAccessory"
 				/>
 			</template>
@@ -81,12 +87,13 @@
 					:model-value="stitchingAccessory.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('stiching_accessory_json')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateStitchingAccessory"
 				/>
 			</template>
 		</div>
-		<BomMappingDrawer v-model:visible="mappingVisible" :bom-row="mappingRow" :item-name="mappingItem" :readonly="editor.readonly" />
+		<BomMappingDialog v-model:visible="mappingVisible" :bom-row="mappingRow" :item-name="mappingItem" :readonly="editor.readonly" />
 	</IpdSection>
 </template>
 
@@ -100,9 +107,9 @@ import EntryGrid from "../../../../components/common/EntryGrid.vue"
 import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 import { attributeValues, clothNames } from "./attributeValues.js"
-import BomMappingDrawer from "./BomMappingDrawer.vue"
+import BomMappingDialog from "./BomMappingDialog.vue"
+import { mappingCardLines } from "./bomMapping.js"
 import {
-	bomMappingSummary,
 	choiceList,
 	itemsFromModel,
 	itemsGrid,
@@ -151,10 +158,10 @@ const bomColumns = computed(() => [
 	{ key: "based_on_attribute_mapping", label: "Based on Attribute Mapping", type: "check" },
 	{ key: "wastage_pct", label: "Wastage %", type: "number", min: 0 },
 ])
-const mapped = computed(() => (editor.isNew ? [] : draft.value.item_bom || []).filter((row) => Number(row.based_on_attribute_mapping)).map((row, index) => {
+const mapped = computed(() => (draft.value.item_bom || []).filter((row) => Number(row.based_on_attribute_mapping)).map((row, index) => {
 	const detail = row.name ? editor.context?.bom_mappings?.[row.name] : null
 	const note = !detail ? "Save the IPD to create this mapping" : detail.is_shared ? "Shared with another document" : ""
-	return { key: row.name || `new:${index}`, name: row.name, item: row.item || "New row", summary: bomMappingSummary(detail), canEdit: Boolean(detail) && (!detail.is_shared || editor.readonly), note }
+	return { key: row.name || `new:${index}`, name: row.name, item: row.item || "New row", ...mappingCardLines(detail), canEdit: Boolean(detail) && (!detail.is_shared || editor.readonly), note }
 }))
 const accessoryNames = computed(() => {
 	const entries = Object.entries(draft.value.accessory_clothtype_json || {})
@@ -221,3 +228,7 @@ function updateStitchingAccessory(model) {
 	editor.setValue("stiching_accessory_json", stitchingAccessoryFromModel(draft.value.stiching_accessory_json, model))
 }
 </script>
+
+<style scoped>
+.bom-mapping-line { margin: 0; overflow-wrap: anywhere; }
+</style>

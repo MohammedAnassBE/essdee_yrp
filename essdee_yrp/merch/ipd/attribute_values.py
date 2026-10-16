@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils import cint, cstr
 from yrp.attribute_links import value as attribute_value
 from yrp.attribute_values import get_mapping_document
-from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values, get_global_attribute_values
+from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
 )
@@ -256,17 +256,6 @@ def canonical_values(attribute, values):
 	return canonical, [value for value in canonical if value.casefold() not in catalogue]
 
 
-def add_to_catalogue(attribute, unknown):
-	if not unknown:
-		return
-	if not frappe.has_permission("Item Attribute", "write"):
-		frappe.throw(
-			_("{0} is not a {1} value. Ask an Item Manager to add it.").format(", ".join(unknown), attribute),
-			frappe.PermissionError,
-		)
-	ensure_global_attribute_values(attribute, unknown)
-
-
 def locked_mapping(mapping, mapping_modified):
 	doc = get_mapping_document(mapping, for_update=True)
 	if str(doc.modified) != cstr(mapping_modified):
@@ -293,7 +282,10 @@ def save_values(name, attribute, values, mapping_modified):
 		)
 	mapping = locked_mapping(row.mapping, mapping_modified)
 	values, unknown = canonical_values(attribute, clean_values(values))
-	add_to_catalogue(attribute, unknown)
+	if unknown:
+		frappe.throw(
+			_("{0} is not a {1} value. Pick values from the {1} list.").format(", ".join(unknown), attribute)
+		)
 	mapping.set("values", [{"attribute_value": value} for value in values])
 	mapping.save(ignore_permissions=True)
 	frappe.clear_document_cache(MAPPING, mapping.name)

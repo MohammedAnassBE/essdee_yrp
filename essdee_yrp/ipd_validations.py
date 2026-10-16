@@ -915,6 +915,7 @@ def is_mapping_shared(doctype, name, ipd_name):
 	if doctype == "YRP Item Item Attribute Mapping":
 		return bool(
 			frappe.db.exists("YRP Item Item Attribute", {"mapping": name})
+			or frappe.db.exists("Item Variant Attribute", {"mapping": name, "parenttype": "Item"})
 			or frappe.db.exists("YRP IPD Item Attribute", {"mapping": name, "parent": ["!=", ipd_name]})
 		)
 	if doctype == "YRP Item Dependent Attribute Mapping":

@@ -304,7 +304,7 @@ assert.deepEqual(focused, ['row-3'])
 removeEmpty()
 removeBom()
 focus.registerFocus('processes', () => true)
-assert.equal(await focus.focusProblem({ field: 'ipd_processes', section: 'processes' }), true)
+assert.equal(await focus.focusProblem({ field: 'ipd_processes', section: 'processes' }), false, 'grid problems must never fall back to another field in their section')
 
 // Compile IPD SFCs without building or running a bundle.
 const require = createRequire(new URL('../frontend/package.json', import.meta.url))
@@ -329,7 +329,7 @@ assert.equal(gridRowKey({}, 'stiching_item_details', 'Sleeve'), 'Sleeve')
 const linkField = readFileSync(new URL('../frontend/src/components/common/LinkField.vue', import.meta.url), 'utf8')
 assert.match(linkField, /auto-option-focus/)
 assert.match(linkField, /focusedOptionIndex = input.value.findFirstOptionIndex\(\)/)
-assert.match(linkField, /handleAutocompleteKey\(event, input.value, restoreCommittedValue, searching.value\)/)
+assert.match(linkField, /handleAutocompleteKey\(event, input.value, restoreCommittedValue, searching.value \|\| suggestionSequence !== requestSequence\)/)
 const { handleAutocompleteKey } = await import('../frontend/src/components/common/autocompleteKeys.js')
 const linkInput = {}
 let selectedLink = ''

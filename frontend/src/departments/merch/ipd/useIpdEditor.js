@@ -35,6 +35,7 @@ import {
 } from "./ipdEditor.js"
 
 import { createFocusRegistry } from "./ipdFocus.js"
+import { problemTab, tabLabel } from "./ipdTabs.js"
 
 export const IPD_EDITOR_KEY = Symbol("ipd-editor")
 const GRID_DEBOUNCE_MS = 400
@@ -62,7 +63,8 @@ export function useIpdEditor(initialName) {
 	const navigatingInternally = ref(false)
 	const { registerFocus, focusProblem } = createFocusRegistry()
 	const invalidGridCells = reactive(new Map())
-	const invalidCellCount = computed(() => [...invalidGridCells.values()].reduce((total, count) => total + count, 0))
+	const invalidCellCount = computed(() => [...invalidGridCells.values()].reduce((total, entry) => total + entry.count, 0))
+	const firstInvalidCell = computed(() => invalidGridCells.values().next().value?.cells[0] || null)
 	const pendingGrids = new Set()
 	let gridTimer = null
 	let checkTimer = null
@@ -220,13 +222,18 @@ export function useIpdEditor(initialName) {
 		}
 	}
 
-	function reportInvalidCells(gridId, count) {
-		if (count) invalidGridCells.set(gridId, count)
+	function reportInvalidCells(gridId, count, location = {}) {
+		if (count) invalidGridCells.set(gridId, {
+			count, cells: (location.cells || []).map((cell) => ({
+				field: location.field, tab: problemTab(location),
+				row_key: cell.rowKey, column: cell.colKey, focusCell: location.focusCell,
+			})),
+		})
 		else invalidGridCells.delete(gridId)
 	}
 	function hasInvalidCells() {
 		if (!invalidCellCount.value) return false
-		actionError.value = invalidCellMessage(invalidCellCount.value)
+		actionError.value = `${tabLabel(firstInvalidCell.value)}: ${invalidCellMessage(invalidCellCount.value)}`
 		return true
 	}
 	async function save() {
@@ -357,6 +364,6 @@ export function useIpdEditor(initialName) {
 	return {
 		api, invalidRegistry, payload, draft, record, name, isNew, capabilities, context, grids, sections, states, checks, checksRunning,
 		loading, acting, loadError, actionError, savedAt, isDirty, hasStaleError, navigatingInternally, shellWorkspace, actions,
-		load, save, createDraft, runChecks, approve, regenerate, cancel, followName, focusProblem,
+		load, save, createDraft, runChecks, approve, regenerate, cancel, followName, focusProblem, firstInvalidCell,
 	}
 }

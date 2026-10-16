@@ -51,9 +51,9 @@ const same = (left, right, message) => assert.equal(stableStringify(left), stabl
 const TABLES = {
 	packing_attribute_details: [["quantity"], "attribute_value"],
 	packing_size_details: [["quantity"], "attribute_value"],
-	stiching_item_details: [["quantity", "category", "set_item_attribute_value", "is_default"], "stiching_attribute_value"],
+	stiching_item_details: [["set_item_attribute_value", "quantity", "category", "is_default"], "stiching_attribute_value"],
 	cloth_detail: [["name1", "cloth", "required_gsm", "is_bom_item"], ""],
-	item_bom: [["item", "process_name", "qty_of_product", "qty_of_bom_item", "dependent_attribute_value", "based_on_attribute_mapping", "wastage_pct"], ""],
+	item_bom: [["item", "process_name", "dependent_attribute_value", "qty_of_product", "qty_of_bom_item", "based_on_attribute_mapping", "wastage_pct"], ""],
 	ipd_processes: [["process_name", "process_item", "in_stage", "out_stage"], ""],
 }
 const ITEM_GRIDS = { cutting_items_json: ["Dia", "Weight", "Required GSM"], cutting_cloths_json: ["Cloth"], cloth_accessory_json: ["Dia", "Weight"] }

@@ -12,10 +12,10 @@
 				/>
 				<EntryGrid
 					v-if="panelGrid.rows.length"
-					ref="panelGridRef"
+					ref="panelGridRef" validation-field="stiching_item_details"
 					title="Stiching Item Details"
 					:meta="isSet ? 'One default panel per part' : ''"
-					:row-header-label="draft.stiching_attribute || 'Panel'"
+					row-header-label="Stiching Attribute Value"
 					:rows="panelGrid.rows"
 					:columns="panelColumns"
 					:model-value="panelGrid.model"
@@ -33,7 +33,7 @@
 				<IpdGridNotice v-if="!isSame" grid-key="stitching_combination" :empty="!combination.rows.length" />
 				<EntryGrid
 					v-if="combination.rows.length"
-					ref="combinationGridRef"
+					ref="combinationGridRef" validation-field="stiching_item_detail"
 					title="Colour of each panel"
 					:meta="isSame ? (isSet ? 'Same as packing colour: each panel takes its part colour' : 'Same as packing colour: each panel takes the row colour') : 'Rows follow the packing colours'"
 					:row-header-label="draft.packing_attribute || 'Colour'"
@@ -54,7 +54,7 @@
 					</h3>
 					<EntryGrid
 						v-if="markers.rows.length"
-						ref="markerGridRef"
+						ref="markerGridRef" validation-field="marker_groups"
 						title="Panels cut together"
 						row-header-label="Group"
 						:rows="markers.rows"
@@ -98,7 +98,7 @@ import IpdGridNotice from "./IpdGridNotice.vue"
 import { useSectionFocus } from "./sectionFocus.js"
 import "./sections.css"
 
-const PANEL_FIELDS = ["quantity", "category", "set_item_attribute_value", "is_default"]
+const PANEL_FIELDS = ["set_item_attribute_value", "quantity", "category", "is_default"]
 
 const props = defineProps({
 	part: { type: String, required: true },
@@ -118,12 +118,10 @@ const fields = computed(() => [
 ])
 const panelGrid = computed(() => tableGrid(draft.value.stiching_item_details, PANEL_FIELDS, { keyField: "stiching_attribute_value" }))
 const panelColumns = computed(() => [
+	...(isSet.value ? [{ key: "set_item_attribute_value", label: "Set Item Attribute Value", type: "value", options: attributeValues(editor, draft.value.set_item_attribute) }] : []),
 	{ key: "quantity", label: "Quantity", type: "number", precision: 0, min: 0 },
 	{ key: "category", label: "Category", type: "select", options: editor.context?.options?.stitching_categories || [] },
-	...(isSet.value ? [
-		{ key: "set_item_attribute_value", label: "Set Item Attribute Value", type: "value", options: attributeValues(editor, draft.value.set_item_attribute) },
-		{ key: "is_default", label: "Is Default", type: "check" },
-	] : []),
+	...(isSet.value ? [{ key: "is_default", label: "Is Default", type: "check" }] : []),
 ])
 const isSame = computed(() => Boolean(Number(draft.value.is_same_packing_attribute)))
 const combination = computed(() => combinationGrid(isSame.value && !editor.readonly && editor.grids?.stitching_combination ? editor.grids.stitching_combination : draft.value.stiching_item_detail, {

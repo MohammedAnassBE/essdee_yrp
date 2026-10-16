@@ -66,6 +66,21 @@ const SECTION_TAB = {
 export function problemTab(problem) {
 	return FIELD_TAB[problem.field] || (problem.field === 'colour_yarn_recipes' ? 'fabric_processes_tab' : SECTION_TAB[problem.section]) || 'item_details_tab'
 }
+export function problemNavigation(problem, tabs, doc, context = {}) {
+	const key = problemTab(problem)
+	if (visibleTabs(tabs, doc, context).some((tab) => tab.fieldname === key)) return { target: problem, note: '' }
+	const label = tabs.find((tab) => tab.fieldname === key)?.label || key
+	if (key === 'set_item_tab' && !Number(doc.is_cloth_item) && !context.isNew && !doc.packing_attribute) return {
+		target: { field: 'packing_attribute', section: 'packing' },
+		note: 'Set Item is hidden until Packing Attribute is set.',
+	}
+	const clothTab = ['fabric_processes_tab', 'compacting_reference_tab'].includes(key)
+	if (clothTab !== Boolean(Number(doc.is_cloth_item))) return {
+		target: { field: 'is_cloth_item', section: 'item' },
+		note: `${label} is hidden ${clothTab ? 'unless' : 'while'} Is Cloth Item is selected.`,
+	}
+	return { target: null, note: `${label} is hidden until the IPD is saved. Save the IPD to locate this problem.` }
+}
 export function tabLabel(change) {
 	return IPD_TABS.find((tab) => tab.fieldname === problemTab(change))?.label || 'Item Details'
 }

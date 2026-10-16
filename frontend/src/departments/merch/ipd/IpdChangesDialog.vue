@@ -5,7 +5,7 @@
 		<div v-else-if="!changes.length" class="erp-empty-state erp-empty-state--compact"><i class="pi pi-check" aria-hidden="true" /><strong>No changes yet</strong><span>This version still matches its source.</span></div>
 		<div v-else class="ipd-changes__scroll">
 			<table class="erp-data-table ipd-changes__table">
-				<thead><tr><th scope="col">Section</th><th scope="col">Field</th><th scope="col">Source</th><th scope="col">This version</th></tr></thead>
+				<thead><tr><th scope="col">Tab</th><th scope="col">Field</th><th scope="col">Source</th><th scope="col">This version</th></tr></thead>
 				<tbody>
 					<tr v-for="(change, index) in changes" :key="`${change.section}-${change.field}-${index}`">
 						<td>{{ tabLabel(change) }}</td>

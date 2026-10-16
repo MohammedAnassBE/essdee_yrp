@@ -5,7 +5,7 @@
 			title="Item Production Detail"
 			:workspace="shellWorkspace"
 			:loading="loading"
-			:error="loadError || (hasStaleError ? '' : actionError)"
+			:error="loadError"
 			:dirty="isDirty && !navigatingInternally"
 			:acting="acting"
 			:show-lifecycle-actions="false"
@@ -47,12 +47,18 @@
 		<IpdCopyDialog v-model:visible="copyVisible" :source="copySource" @copied="openCopied" />
 		<IpdChangesDialog v-model:visible="changesVisible" :source="payload?.source?.name || ''" :changes="changes || []" :loading="changesLoading" :error="changesError" />
 		<DocumentConfirmationDialog v-model:visible="reloadVisible" title="Discard unsaved changes?" message="Reloading replaces your unsaved changes with the saved IPD." confirm-label="Discard and reload" cancel-label="Keep editing" severity="warn" @confirm="confirmReload" />
+		<DocumentErrorDialog
+			:message="hasStaleError || locatingSaveProblem ? '' : actionError"
+			title="Item Production Detail could not be completed"
+			@dismiss="actionError = ''"
+			@after-hide="focusSaveProblemAfterClose"
+		/>
 		<DocumentErrorDialog :message="hasStaleError ? actionError : ''" retry-label="Reload" @dismiss="actionError = ''" @retry="load(record.name)" />
 	</section>
 </template>
 
 <script setup>
-import { computed, provide, ref, watch } from "vue"
+import { computed, nextTick, provide, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 
 import { getIpdChanges } from "../../../api/merch.js"
@@ -79,7 +85,7 @@ const editor = useIpdEditor(props.ipdId)
 const {
 	payload, draft, record, isNew, checks, checksRunning, loading, acting, loadError, actionError, savedAt,
 	isDirty, hasStaleError, navigatingInternally, shellWorkspace, actions, load, save, createDraft, runChecks, approve, regenerate, cancel,
-	followName, focusProblem,
+	followName, focusProblem, firstInvalidCell,
 } = editor
 provide(IPD_EDITOR_KEY, editor.api)
 provide(ENTRY_GRID_INVALID_KEY, editor.invalidRegistry)
@@ -92,6 +98,8 @@ const changes = ref(null)
 const changesLoading = ref(false)
 const changesError = ref("")
 const reloadVisible = ref(false)
+const locatingSaveProblem = ref(false)
+let saveProblem = null
 let changesSequence = 0
 
 const handlers = {
@@ -130,10 +138,36 @@ function openChanges() {
 	if (changes.value === null) loadChanges()
 }
 async function saveAndFocus() {
-	await save()
-	if (!actionError.value || hasStaleError.value) return
-	const result = await runChecks()
-	if (result?.problems?.length) await goTo(result.problems[0])
+	saveProblem = null
+	locatingSaveProblem.value = true
+	try {
+		await save()
+		if (!actionError.value || hasStaleError.value) return
+		saveProblem = firstInvalidCell.value
+		if (!saveProblem) {
+			const result = await runChecks()
+			saveProblem = result?.problems?.[0] || null
+		}
+		if (saveProblem) await focusSaveProblem(saveProblem)
+	} finally {
+		locatingSaveProblem.value = false
+	}
+}
+async function focusSaveProblem(problem) {
+	if (problem.focusCell) {
+		await frame.value?.jumpTo(problem.tab, { focus: false })
+		if (problem.focusCell(problem.row_key, problem.column)) return
+	}
+	await goTo(problem)
+}
+async function focusSaveProblemAfterClose() {
+	const problem = saveProblem
+	saveProblem = null
+	if (!problem) return
+	// Let the shared dialog finish its deferred restoration of the opener.
+	await nextTick()
+	await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
+	if (frame.value && !actionError.value && !locatingSaveProblem.value) await focusSaveProblem(problem)
 }
 async function goTo(problem) {
 	return goToProblem(problem, frame.value, focusProblem)

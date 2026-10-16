@@ -7,7 +7,7 @@
 			<template v-if="part === 'bom'">
 				<EntryGrid
 					v-if="bom.rows.length"
-					ref="bomGrid"
+					ref="bomGrid" validation-field="item_bom"
 					title="Item BOM"
 					row-header-label="#"
 					:rows="bom.rows"
@@ -34,7 +34,7 @@
 				<p v-if="!accessoryNames.rows.length && !clothAccessory.rows.length" class="erp-help-text">No accessory items.</p>
 				<EntryGrid
 					v-if="accessoryNames.rows.length"
-					ref="accessoryNamesGrid"
+					ref="accessoryNamesGrid" validation-field="accessory_clothtype_json"
 					title="Accessory names"
 					row-header-label="Accessory"
 					:rows="accessoryNames.rows"
@@ -55,7 +55,7 @@
 				<IpdGridNotice grid-key="cloth_accessory" :empty="!clothAccessory.rows.length" section="accessories" field="cloth_accessory_json" />
 				<EntryGrid
 					v-if="clothAccessory.rows.length"
-					ref="clothAccessoryGrid"
+					ref="clothAccessoryGrid" validation-field="cloth_accessory_json"
 					title="Accessory consumption"
 					unit-hint="Dia · weight kg"
 					:row-header-label="clothAccessory.rowHeaderLabel"
@@ -73,7 +73,7 @@
 				<IpdGridNotice grid-key="stiching_accessory" :empty="!stitchingAccessory.rows.length" section="accessories" field="stiching_accessory_json" />
 				<EntryGrid
 					v-if="stitchingAccessory.rows.length"
-					ref="stitchingAccessoryRef"
+					ref="stitchingAccessoryRef" validation-field="stiching_accessory_json"
 					title="Accessory colour and cloth"
 					:row-header-label="stitchingAccessory.rowHeaderLabel"
 					:rows="stitchingAccessory.rows"

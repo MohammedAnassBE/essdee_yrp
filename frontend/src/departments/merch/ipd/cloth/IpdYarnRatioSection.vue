@@ -6,13 +6,13 @@
 		<div class="ipd-cloth-stack">
 			<EntryGrid
 				v-if="ratios.rows.value.length"
-				ref="ratioGrid"
+				ref="ratioGrid" validation-field="yarn_ratio_details"
 				:rows="ratios.keys.value"
 				:columns="RATIO_COLUMNS"
 				:model-value="ratios.model.value"
 				:readonly="readonly"
 				:errors="ratios.errors.value"
-				title="Yarns"
+				title="Yarn Ratio"
 				unit-hint="ratio %"
 				meta="Must total 100%"
 				aria-label="Yarns and ratios"
@@ -30,12 +30,12 @@
 			</p>
 			<EntryGrid
 				v-if="recipes.rows.value.length"
-				ref="recipeGrid"
+				ref="recipeGrid" validation-field="colour_yarn_recipes"
 				:rows="recipes.keys.value"
 				:columns="RECIPE_COLUMNS"
 				:model-value="recipes.model.value"
 				readonly
-				title="Colour-wise yarn recipes"
+				title="Colour-wise Yarn Recipes"
 				meta="Built by the cloth program"
 				aria-label="Colour-wise yarn recipes"
 				row-header-label="#"
@@ -61,15 +61,15 @@ const props = defineProps({
 
 const RATIO_FIELDS = ["yarn_item", "ratio"]
 const RATIO_COLUMNS = [
-	{ key: "yarn_item", label: "Yarn item", type: "link", doctype: "Item", filters: { is_cloth_item: 0 } },
-	{ key: "ratio", label: "Ratio %", type: "number", min: 0, precision: 3 },
+	{ key: "yarn_item", label: "Yarn Item", type: "link", doctype: "Item", filters: { is_cloth_item: 0 } },
+	{ key: "ratio", label: "Ratio (%)", type: "number", min: 0, precision: 3 },
 ]
 const RECIPE_FIELDS = ["colour", "yarn_item", "yarn_colour", "ratio"]
 const RECIPE_COLUMNS = [
-	{ key: "colour", label: "Fabric colour", type: "text" },
-	{ key: "yarn_item", label: "Yarn item", type: "text" },
-	{ key: "yarn_colour", label: "Yarn colour", type: "text" },
-	{ key: "ratio", label: "Ratio %", type: "number" },
+	{ key: "colour", label: "Fabric Colour", type: "text" },
+	{ key: "yarn_item", label: "Yarn Item", type: "text" },
+	{ key: "yarn_colour", label: "Yarn Colour", type: "text" },
+	{ key: "ratio", label: "Ratio (%)", type: "number" },
 ]
 
 const { editor, readonly } = useClothSection(props)

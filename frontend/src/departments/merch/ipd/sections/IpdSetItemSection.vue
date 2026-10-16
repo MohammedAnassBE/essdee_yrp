@@ -12,7 +12,7 @@
 			<IpdGridNotice grid-key="set_combination" :empty="!grid.rows.length" section="set_item" field="set_item_detail" />
 			<EntryGrid
 				v-if="grid.rows.length"
-				ref="setGrid"
+				ref="setGrid" validation-field="set_item_detail"
 				title="Colour of each part"
 				meta="Rows follow the packing colours"
 				:row-header-label="draft.packing_attribute || 'Colour'"

@@ -3,9 +3,15 @@
 		<div class="ipd-section-stack">
 			<IpdFields :fields="fields" :section="sectionKey" />
 			<div v-if="rows.length" class="ipd-table-scroll">
-				<table id="ipd-edit-item_attributes" class="ipd-simple-table" tabindex="-1" aria-label="Item Attributes">
-					<thead><tr><th scope="col">Attribute</th><th scope="col">Attribute Mapping</th></tr></thead>
-					<tbody><tr v-for="(row, index) in rows" :key="row.name || index"><th scope="row">{{ row.attribute || '—' }}</th><td>{{ row.mapping || '—' }}</td></tr></tbody>
+				<table ref="attributeTable" id="ipd-edit-item_attributes" class="ipd-simple-table" tabindex="-1" aria-label="Item Attributes">
+					<thead><tr><th scope="col">Attribute</th><th scope="col">Attribute Mapping</th><th v-if="!editor.readonly" scope="col">Remove</th></tr></thead>
+					<tbody>
+						<tr v-for="(row, index) in rows" :key="row.name || index">
+							<th scope="row" :data-row="row.attribute" data-col="attribute" tabindex="-1">{{ row.attribute || '—' }}</th>
+							<td :data-row="row.attribute" data-col="mapping" tabindex="-1">{{ row.mapping || '—' }}</td>
+							<td v-if="!editor.readonly"><Button v-if="!row.name" label="Remove" :aria-label="`Remove ${row.attribute}`" size="small" text @click="removeAttribute(row.attribute)" /></td>
+						</tr>
+					</tbody>
 				</table>
 			</div>
 			<div v-if="!editor.isNew" class="ipd-chip-cards">
@@ -48,18 +54,21 @@ import { computed, inject, ref } from "vue"
 import LinkField from "../../../../components/common/LinkField.vue"
 import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
+import { focusElement } from "../ipdFocus.js"
+import { useSectionFocus } from "./sectionFocus.js"
 import IpdAttributeChips from "./IpdAttributeChips.vue"
 import IpdFields from "./IpdFields.vue"
 import "./sections.css"
 
 const ROLE_FIELDS = [["primary", "primary_item_attribute"], ["dependent", "dependent_attribute"], ["packing", "packing_attribute"], ["stitching", "stiching_attribute"], ["set", "set_item_attribute"]]
 
-defineProps({
+const props = defineProps({
 	sectionKey: { type: String, required: true },
 	readonly: { type: Boolean, default: false },
 })
 const editor = inject(IPD_EDITOR_KEY)
 const newAttribute = ref("")
+const attributeTable = ref(null)
 const rows = computed(() => editor.draft.item_attributes || [])
 const attributeNames = computed(() => rows.value.map((row) => row.attribute).filter(Boolean))
 const contextByAttribute = computed(() => new Map((editor.context?.attributes || []).map((entry) => [entry.attribute, entry])))
@@ -81,6 +90,14 @@ const cards = computed(() => rows.value.filter((row) => row.attribute).map((row)
 	const roles = ROLE_FIELDS.filter(([, fieldname]) => editor.draft[fieldname] === row.attribute).map(([role]) => role)
 	return { attribute: row.attribute, values: entry?.values || [], roles, ...access(row, entry, roles) }
 }))
+
+useSectionFocus(editor, props.sectionKey, { item_attributes: () => ({ focusCell: focusAttribute }) })
+function focusAttribute(rowKey, column) {
+	const attribute = rowKey ?? rows.value[0]?.attribute
+	const target = [...(attributeTable.value?.querySelectorAll('[data-row][data-col]') || [])]
+		.find((cell) => cell.dataset.row === attribute && cell.dataset.col === (column || 'attribute'))
+	return focusElement(target)
+}
 
 function access(row, entry, roles) {
 	if (editor.readonly) return { editable: false, removable: false, note: "", emptyText: "No values." }

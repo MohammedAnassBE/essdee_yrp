@@ -8,7 +8,7 @@
 			<p class="erp-help-text">Colour/Dia compacting data only. Leave Colour blank for an all-colours mapping; excluded from every calculation and Work Order.</p>
 			<EntryGrid
 				v-if="compacting.rows.value.length"
-				ref="compactingGrid"
+				ref="compactingGrid" validation-field="compacting_reference_details"
 				:rows="compacting.keys.value"
 				:columns="columns"
 				:model-value="compacting.model.value"
@@ -114,9 +114,9 @@ const compactingGrid = ref(null)
 const colourOptions = computed(() => withStoredOptions(cloth.value.colour_values || [], compacting.rows.value, ["colour"]))
 const dias = computed(() => withStoredOptions(cloth.value.dia_values || [], compacting.rows.value, ["input_dia", "compacting_dia"]))
 const columns = computed(() => [
-	{ key: "colour", label: "Colour", type: "value", options: colourOptions.value },
-	{ key: "input_dia", label: "Knitting/Input dia", type: "value", options: dias.value },
-	{ key: "compacting_dia", label: "Compacting dia", type: "value", options: dias.value },
+	{ key: "colour", label: "Colour (Blank = All Colours)", type: "value", options: colourOptions.value },
+	{ key: "input_dia", label: "Knitting/Input Dia", type: "value", options: dias.value },
+	{ key: "compacting_dia", label: "Compacting Dia", type: "value", options: dias.value },
 	{ key: "notes", label: "Notes", type: "text" },
 ])
 

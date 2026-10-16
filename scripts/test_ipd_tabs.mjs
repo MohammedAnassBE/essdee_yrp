@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { IPD_TABS, preloadSectionKeys, problemTab } from '../frontend/src/departments/merch/ipd/ipdTabs.js'
 import { createFocusRegistry, goToProblem, problemFocusFallbacks } from '../frontend/src/departments/merch/ipd/ipdFocus.js'
 import { useSectionFocus } from '../frontend/src/departments/merch/ipd/sections/sectionFocus.js'
+import { markerGrid } from '../frontend/src/departments/merch/ipd/sections/garmentGrids.js'
 import { useGridFocus } from '../frontend/src/departments/merch/ipd/cloth/useClothTable.js'
 import * as entryGrid from '../frontend/src/components/common/entryGrid.js'
 import { Vue, createTestRenderer, findNodes, loadComponent } from './helpers/vue_renderer.mjs'
@@ -69,6 +70,10 @@ const previousDocument = globalThis.document
 globalThis.document = { activeElement: null, getElementById: () => null }
 const packingProblem = { section: 'packing', field: 'packing_attribute_details', row_key: null, message: 'Packing Attribute is required' }
 assert.deepEqual(problemFocusFallbacks(packingProblem).map(({ field }) => field), ['packing_values', 'packing_attribute'])
+assert.deepEqual(problemFocusFallbacks({ ...packingProblem, field: 'packing_size_details' }).map(({ field }) => field), ['packing_values', 'packing_attribute'])
+for (const field of ['packing_attribute_details', 'packing_size_details']) {
+	assert.deepEqual(problemFocusFallbacks({ ...packingProblem, field, row_key: 'row-1' }), [], 'row problems must stay with their grid')
+}
 assert.deepEqual(problemFocusFallbacks({ field: 'item' }), [])
 assert.equal(problemTab(packingProblem), 'packing_tab')
 assert.equal(problemTab({ section: 'packing', field: 'packing_attribute' }), 'advance_settings_tab')
@@ -147,6 +152,44 @@ try {
 			assert.equal(document.activeElement?.type, 'td', field)
 			assert.equal(document.activeElement.props['data-row'], 1, field)
 			assert.equal(document.activeElement.props['data-col'], 1, field)
+		}
+		app.unmount()
+	}
+	// Server bundle problems identify a panel; the grid identifies a group and panel.
+	// Both editor and record modes must focus the duplicate checkbox, past row/col 0.
+	for (const readonly of [false, true]) {
+		const registry = createFocusRegistry()
+		const grid = Vue.ref(null)
+		const draft = { marker_groups: [['Back'], ['Sleeve', 'Front'], ['Back', 'Front']] }
+		const markers = markerGrid(draft.marker_groups, ['Back', 'Sleeve', 'Front'])
+		const container = { type: 'root', children: [] }
+		const app = createTestRenderer().createApp({
+			setup() {
+				useSectionFocus({ readonly, draft, registerFocus: registry.registerFocus }, 'stitching', { marker_groups: () => grid.value }, 'bundles')
+				return () => Vue.h(EntryGrid, { ref: grid, readonly, rows: markers.rows, columns: markers.columns, modelValue: markers.model })
+			},
+		})
+		app.mount(container)
+		const table = findNodes(container, node => node.props?.role === 'grid')[0]
+		table.querySelector = selector => {
+			const [, row, col] = selector.match(/data-row="(\d+)"\]\[data-col="(\d+)"/)
+			return findNodes(table, node => node.type === 'td' && node.props['data-row'] === Number(row) && node.props['data-col'] === Number(col))[0]
+		}
+		for (const cell of findNodes(table, node => node.type === 'td')) {
+			cell.focus = () => { document.activeElement = cell }
+			cell.scrollIntoView = () => {}
+		}
+		for (const [row_key, column, expectedRow] of [['Front', null, 2], ['group-1', 'Front', 1]]) {
+			document.activeElement = null
+			const visits = []
+			assert.equal(await goToProblem({ section: 'stitching', field: 'marker_groups', row_key, column }, {
+				async jumpTo(tab) { visits.push(tab); await Promise.resolve() },
+			}, registry.focusProblem), true)
+			await Vue.nextTick()
+			assert.deepEqual(visits, ['stiching_tab'])
+			assert.equal(document.activeElement?.props.role, 'gridcell', `bundle checkbox focused in ${readonly ? 'record' : 'editor'} mode`)
+			assert.equal(document.activeElement.props['data-row'], expectedRow)
+			assert.equal(document.activeElement.props['data-col'], 2)
 		}
 		app.unmount()
 	}

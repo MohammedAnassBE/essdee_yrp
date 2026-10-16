@@ -14,10 +14,10 @@
 				/>
 				<template v-if="showQuantities">
 					<EntryGrid
-						ref="quantityGrid"
+						ref="quantityGrid" validation-field="packing_attribute_details"
 						title="Packing Attribute Details"
 						:meta="`Packing attribute: ${draft.packing_attribute || '—'}`"
-						:row-header-label="draft.packing_attribute || 'Value'"
+						row-header-label="Attribute Value"
 						:rows="quantity.rows"
 						:columns="QUANTITY_COLUMNS"
 						:model-value="quantity.model"
@@ -37,9 +37,9 @@
 				<template v-if="mode === 'ratio'">
 					<IpdGridNotice grid-key="packing_sizes" />
 					<EntryGrid
-						ref="sizeGrid"
+						ref="sizeGrid" validation-field="packing_size_details"
 						title="Packing Size Details"
-						:row-header-label="draft.primary_item_attribute || 'Size'"
+						row-header-label="Size"
 						:rows="sizes.rows"
 						:columns="SIZE_COLUMNS"
 						:model-value="sizes.model"
@@ -55,7 +55,7 @@
 					<IpdGridNotice grid-key="packing_assortment" :empty="!assortment.rows.length" />
 					<EntryGrid
 						v-if="assortment.rows.length"
-						ref="assortmentGridRef"
+						ref="assortmentGridRef" validation-field="packing_assortment_json"
 						title="Box assortment"
 						:row-header-label="assortment.rowHeaderLabel"
 						:rows="assortment.rows"
@@ -86,8 +86,8 @@ import { PACKING_MODES, isComboDerived, packingChanges, packingModeOf, packingMo
 import { useSectionFocus } from "./sectionFocus.js"
 import "./sections.css"
 
-const QUANTITY_COLUMNS = [{ key: "quantity", label: "Pieces", type: "number", min: 0 }]
-const SIZE_COLUMNS = [{ key: "quantity", label: "Pieces", type: "number", precision: 0, min: 0 }]
+const QUANTITY_COLUMNS = [{ key: "quantity", label: "Quantity", type: "number", min: 0 }]
+const SIZE_COLUMNS = [{ key: "quantity", label: "Quantity", type: "number", precision: 0, min: 0 }]
 
 const props = defineProps({
 	part: { type: String, required: true },

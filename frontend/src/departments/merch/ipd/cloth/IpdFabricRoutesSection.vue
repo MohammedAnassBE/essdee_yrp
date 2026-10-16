@@ -6,13 +6,13 @@
 		<div class="ipd-cloth-stack">
 			<EntryGrid
 				v-if="routes.rows.value.length"
-				ref="routeGrid"
+				ref="routeGrid" validation-field="fabric_routes"
 				:rows="routes.keys.value"
 				:columns="columns"
 				:model-value="routes.model.value"
 				:readonly="readonly"
 				:errors="routes.errors.value"
-				title="Fabric routes"
+				title="Fabric Routes"
 				meta="Finished colour and dia from the knitted colour and dia"
 				aria-label="Fabric routes"
 				row-header-label="#"
@@ -41,7 +41,7 @@ const props = defineProps({
 	readonly: { type: Boolean, default: false },
 })
 
-const FIELDS = ["finished_colour", "finished_dia", "knitting_output_colour", "knitting_output_dia", "use_dyed_yarn"]
+const FIELDS = ["finished_colour", "finished_dia", "knitting_output_colour", "use_dyed_yarn", "knitting_output_dia"]
 const COLOUR_FIELDS = ["finished_colour", "knitting_output_colour"]
 const DIA_FIELDS = ["finished_dia", "knitting_output_dia"]
 
@@ -50,11 +50,11 @@ const routes = useClothTable(editor, "fabric_routes", FIELDS)
 const colours = computed(() => withStoredOptions(cloth.value.colour_values || [], routes.rows.value, COLOUR_FIELDS))
 const dias = computed(() => withStoredOptions(cloth.value.dia_values || [], routes.rows.value, DIA_FIELDS))
 const columns = computed(() => [
-	{ key: "finished_colour", label: "Finished colour", type: "value", options: colours.value },
-	{ key: "finished_dia", label: "Finished dia", type: "value", options: dias.value },
-	{ key: "knitting_output_colour", label: "Knitting colour", type: "value", options: colours.value },
-	{ key: "knitting_output_dia", label: "Knitting dia", type: "value", options: dias.value },
-	{ key: "use_dyed_yarn", label: "Dyed yarn", type: "check" },
+	{ key: "finished_colour", label: "Finished Colour", type: "value", options: colours.value },
+	{ key: "finished_dia", label: "Finished Dia", type: "value", options: dias.value },
+	{ key: "knitting_output_colour", label: "Knitting Output Colour", type: "value", options: colours.value },
+	{ key: "use_dyed_yarn", label: "Use Dyed Yarn", type: "check" },
+	{ key: "knitting_output_dia", label: "Knitting Output Dia", type: "value", options: dias.value },
 ])
 const routeGrid = ref(null)
 

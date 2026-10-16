@@ -8,7 +8,7 @@
 				</h3>
 				<EntryGrid
 					v-if="cloths.rows.length"
-					ref="clothGrid"
+					ref="clothGrid" validation-field="cloth_detail"
 					title="Cloth Detail"
 					row-header-label="#"
 					:rows="cloths.rows"
@@ -27,11 +27,13 @@
 			<IpdFields v-if="part === 'consumption'" :fields="fields" :section="sectionKey" />
 			<IpdPanelWiseGrids v-if="panelWise && part !== 'cloths'" ref="panelGrids" :part="part" />
 			<template v-if="part === 'consumption' && !panelWise">
-				<IpdChoiceChips label="Cutting attributes" :choices="choices" :selected="draft.cutting_attributes || []" :readonly="editor.readonly" empty-text="Set the stitching in stage and the dependent attribute to choose cutting attributes." @toggle="(value, on) => toggleList('cutting_attributes', value, on)" />
+				<div id="ipd-edit-cutting_attributes" tabindex="-1" aria-label="Cutting attributes">
+					<IpdChoiceChips label="Cutting attributes" :choices="choices" :selected="draft.cutting_attributes || []" :readonly="editor.readonly" empty-text="Set the stitching in stage and the dependent attribute to choose cutting attributes." @toggle="(value, on) => toggleList('cutting_attributes', value, on)" />
+				</div>
 				<IpdGridNotice grid-key="cutting_items" :empty="!cutting.rows.length" section="cutting" field="cutting_items_json" />
 				<EntryGrid
 					v-if="cutting.rows.length"
-					ref="cuttingGrid"
+					ref="cuttingGrid" validation-field="cutting_items_json"
 					title="Consumption per piece"
 					unit-hint="Dia · weight kg"
 					:row-header-label="cutting.rowHeaderLabel"
@@ -45,11 +47,13 @@
 				/>
 			</template>
 			<template v-if="part === 'mapping' && !panelWise">
-				<IpdChoiceChips label="Cloth attributes" :choices="clothChoices" :selected="draft.cloth_attributes || []" :readonly="editor.readonly" @toggle="(value, on) => toggleList('cloth_attributes', value, on)" />
+				<div id="ipd-edit-cloth_attributes" tabindex="-1" aria-label="Cloth attributes">
+					<IpdChoiceChips label="Cloth attributes" :choices="clothChoices" :selected="draft.cloth_attributes || []" :readonly="editor.readonly" @toggle="(value, on) => toggleList('cloth_attributes', value, on)" />
+				</div>
 				<IpdGridNotice grid-key="cutting_cloths" :empty="!clothItems.rows.length" section="cutting" field="cutting_cloths_json" />
 				<EntryGrid
 					v-if="clothItems.rows.length"
-					ref="clothItemsGrid"
+					ref="clothItemsGrid" validation-field="cutting_cloths_json"
 					title="Cloth by combination"
 					:row-header-label="clothItems.rowHeaderLabel"
 					:rows="clothItems.rows"

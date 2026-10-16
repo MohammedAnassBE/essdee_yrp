@@ -7,6 +7,7 @@ app_license = "mit"
 required_apps = ["erpnext", "yrp"]
 
 yrp_web_reports = ["essdee_yrp.web_reports.get_reports"]
+yrp_purchase_order_lot_options = ["essdee_yrp.purchase_order_lots.purchase_order_lot_options"]
 
 # Sidebar conditions run before the asynchronous toolbar defaults request.
 boot_session = "essdee_yrp.boot.boot_session"

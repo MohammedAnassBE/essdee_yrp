@@ -276,3 +276,39 @@ class TestLotPackingBoundary(FrappeTestCase):
 
 		self.assertFalse(lot.calculated)
 		self.assertFalse(lot.saved)
+
+
+class TestPurchaseOrderLotOptions(FrappeTestCase):
+	def test_hook_contributes_linked_and_default_lots(self):
+		from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+			get_purchase_order_lot_options,
+		)
+
+		from essdee_yrp import hooks
+
+		self.assertIn(
+			"essdee_yrp.purchase_order_lots.purchase_order_lot_options",
+			hooks.yrp_purchase_order_lot_options,
+		)
+
+		po = FakePurchaseOrder(
+			lot="HEADER",
+			items=[frappe._dict(lot="ROW")],
+			default_lot="DEFAULT",
+			sd_lot=[frappe._dict(lot="Open Lot"), frappe._dict(lot="ROW")],
+		)
+		with (
+			patch(
+				"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.get_purchase_order_lot_fieldname",
+				return_value="lot",
+			),
+			patch.object(
+				frappe,
+				"get_hooks",
+				return_value=["essdee_yrp.purchase_order_lots.purchase_order_lot_options"],
+			),
+		):
+			self.assertEqual(get_purchase_order_lot_options(po), ["HEADER", "ROW", "Open Lot", "DEFAULT"])
+			po.sd_lot = []
+			po.default_lot = None
+			self.assertEqual(get_purchase_order_lot_options(po), ["HEADER", "ROW"])

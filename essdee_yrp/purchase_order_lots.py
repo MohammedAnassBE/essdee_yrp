@@ -9,6 +9,15 @@ def _has_link_fields(doc):
 	return bool(doc.meta.get_field("default_lot") and doc.meta.get_field("sd_lot"))
 
 
+def purchase_order_lot_options(purchase_order) -> list[str]:
+	"""Contribute explicitly linked lots to YRP receipt choices."""
+	values = [
+		*(row.get("lot") for row in purchase_order.get("sd_lot") or []),
+		purchase_order.get("default_lot"),
+	]
+	return [lot for lot in values if lot]
+
+
 def _lot_dimension_field(doctype=None):
 	from yrp.stock.dimensions import get_stock_dimensions
 

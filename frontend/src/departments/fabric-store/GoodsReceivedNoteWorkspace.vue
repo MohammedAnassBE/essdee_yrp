@@ -113,11 +113,12 @@
 					</header>
 					<div class="goods-received-note-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="goods-received-note-matrix__group">
-							<header><div><strong>{{ section.name || "Unspecified item" }}</strong></div></header>
+							<header><div><strong>{{ section.name || "Unspecified item" }}</strong><small v-if="section.lot && !canEditLots">{{ section.lot }}</small></div></header>
 							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
+										<th v-if="canEditLots && block.kind === 'items'">Lot</th>
 									<template v-if="hasPrimaryAttribute(section.group)">
 										<th v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity-heading">{{ value }}</th>
 									</template>
@@ -131,6 +132,11 @@
 									<tbody>
 										<tr v-for="(row, rowIndex) in section.items" :key="rowKey(row, rowIndex)">
 											<td v-for="column in identityColumns(section.group)" :key="column.key">{{ identityValue(row, column) }}</td>
+											<td v-if="canEditLots && block.kind === 'items'">
+												<Select v-model="row.dimensions[lotFieldname]" :options="workspace.lot_options" aria-label="Receipt lot" @update:model-value="markDirty" />
+												<Button v-if="unusedLots(section.group, row).length" label="Add lot" text size="small" @click="addLot(section.group, row)" />
+												<Button v-if="canRemoveLot(section.group, row)" label="Remove" text size="small" @click="removeLot(section.group, row)" />
+											</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity goods-received-note-matrix__primary-cell">
 												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Receive', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
@@ -216,6 +222,7 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
+import Select from "primevue/select"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
@@ -332,6 +339,8 @@ const canOfferSubmittedEdit = computed(() => Boolean(
 	&& !workspace.value.special_source?.read_only,
 ))
 const canEdit = computed(() => canEditDraft.value || editingSubmitted.value)
+const lotFieldname = computed(() => workspace.value.lot_fieldname || "lot")
+const canEditLots = computed(() => canEditDraft.value && form.against === "Purchase Order" && !form.is_return && (workspace.value.lot_options || []).length > 1)
 function canEditMatrixBlock(kind) {
 	if (!canEdit.value || workspace.value.special_source?.read_only) return false
 	if (!editingSubmitted.value) return true
@@ -755,14 +764,34 @@ function itemSections(groups) {
 		const sections = new Map()
 		for (const row of group.items || []) {
 			const name = row.name || row.item || row.item_variant || ""
-			const lot = row.dimensions?.lot || row.lot || ""
-			const key = `${groupIndex}-${name || "item"}-${lot}`
+			const lot = row.dimensions?.[lotFieldname.value] || row.lot || ""
+			const key = `${groupIndex}-${name || "item"}-${canEditLots.value ? '' : lot}`
 			if (!sections.has(key)) sections.set(key, { group, name, lot, key, items: [] })
 			sections.get(key).items.push(row)
 		}
 		return [...sections.values()]
 	})
 }
+function lotSiblingKey(row) {
+	return JSON.stringify([row.name, row.attributes, row.set_combination, row.dimensions?.received_type,
+		Object.entries(row.values || {}).map(([key, value]) => [key, value.ref_docname])])
+}
+function lotSiblings(group, row) { return group.items.filter((entry) => lotSiblingKey(entry) === lotSiblingKey(row)) }
+function unusedLots(group, row) {
+	const used = new Set(lotSiblings(group, row).map((entry) => entry.dimensions?.[lotFieldname.value]))
+	return (workspace.value.lot_options || []).filter((lot) => !used.has(lot))
+}
+function addLot(group, row) {
+	const entry = clone(row)
+	entry.dimensions[lotFieldname.value] = unusedLots(group, row)[0]
+	for (const value of Object.values(entry.values || {})) { value.qty = 0; value.secondary_qty = 0; value.freight_amount = 0 }
+	group.items.push(entry)
+	markDirty()
+}
+function canRemoveLot(group, row) {
+	return lotSiblings(group, row).length > 1 && Object.values(row.values || {}).every((value) => !Number(value.qty) && !Number(value.secondary_qty))
+}
+function removeLot(group, row) { group.items.splice(group.items.indexOf(row), 1); markDirty() }
 function identityColumns(group) {
 	const columns = (group.attributes || []).map((key) => ({ key, label: titleCase(key), source: "attributes" }))
 	const dimensions = []

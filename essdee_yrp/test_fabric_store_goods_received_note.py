@@ -2,6 +2,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 import frappe
+from frappe.tests.utils import FrappeTestCase
 
 from essdee_yrp.garment_grn import _allocate_calculated_receivables
 
@@ -436,6 +437,50 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		self.assertEqual(doc.correction_items[0].quantity, 1)
 		doc.save.assert_called_once_with()
 
+	def test_submitted_po_save_rejects_lot_change_without_replacing_row(self):
+		doc = self.make_document(docstatus=1)
+		doc.against = "Purchase Order"
+		doc.against_id = "PO-1"
+		for row in doc["items"]:
+			row.ref_doctype = "Purchase Order Item"
+			row.ref_docname = "PO-ROW"
+		original = [dict(row) for row in doc["items"]]
+		browser = [dict(original[0], lot="Open Lot", quantity=99)]
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note.get_allow_on_submit_fields",
+				return_value=["items"],
+			),
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note._purchase_order_lot_context",
+				return_value={
+					"lot_options": ["LOT-1", "Open Lot"],
+					"lot_fieldname": "lot",
+					"purchase_order": "PO-1",
+				},
+			),
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames",
+				return_value=("lot", "received_type"),
+			),
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note.ungroup_items_from_ui",
+				return_value=browser,
+			),
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace",
+				return_value={},
+			),
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "available item rows changed"):
+				save_goods_received_note(
+					{"item_details": [{"browser": True}]}, name=doc.name, expected_modified=doc.modified
+				)
+		self.assertEqual([dict(row) for row in doc["items"]], original)
+		doc.save.assert_not_called()
+
 	def test_submitted_save_rejects_non_allow_on_submit_header(self):
 		doc = self.make_document(docstatus=1)
 		doc.meta.fields = [
@@ -696,3 +741,264 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 
 		prepare.assert_called_once_with(grn, "YRP Goods Received Note", "sms")
 		send.assert_called_once_with(grn, "YRP Goods Received Note", "sms", payload)
+
+
+class TestPurchaseOrderLotMerge(TestCase):
+	def merge(self, browser_rows, *, extra_sources=(), source_values=None, **options):
+		source = {
+			"item_variant": "FABRIC",
+			"ref_doctype": "Purchase Order Item",
+			"ref_docname": "PO-ROW",
+			"row_index": 0,
+			"lot": "LOT-1",
+			"received_type": "Accepted",
+			"quantity": 10,
+			"rate": 25,
+			"uom": "Kg",
+			**(source_values or {}),
+		}
+		with (
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames",
+				return_value=("lot", "received_type"),
+			),
+			patch.object(frappe.db, "exists", return_value=True),
+		):
+			return _merge_authoritative_rows(
+				[source, *({**source, **row} for row in extra_sources)],
+				[{**source, **row} for row in browser_rows],
+				**options,
+			)
+
+	def test_po_existing_split_keeps_trusted_name_and_row_index(self):
+		for row_index in ("0", "0::Accepted", 0):
+			with self.subTest(row_index=row_index):
+				rows = self.merge(
+					[{"name": "FORGED", "row_index": 7, "quantity": 6}],
+					source_values={"name": "GRNI-1", "row_index": row_index},
+					lot_options=["LOT-1"],
+					lot_fieldname="lot",
+					purchase_order="PO-1",
+				)
+				self.assertEqual((rows[0]["name"], rows[0]["row_index"]), ("GRNI-1", row_index))
+
+	def test_po_new_lot_split_reuses_source_index_and_drops_name(self):
+		for row_index in ("0", "0::Accepted", 0):
+			with self.subTest(row_index=row_index):
+				rows = self.merge(
+					[{"quantity": 4}, {"lot": "Open Lot", "row_index": 7, "quantity": 6}],
+					source_values={"name": "GRNI-1", "row_index": row_index},
+					lot_options=["LOT-1", "Open Lot"],
+					lot_fieldname="lot",
+					purchase_order="PO-1",
+				)
+				self.assertEqual([row["row_index"] for row in rows], [row_index, row_index])
+				self.assertEqual(rows[0]["name"], "GRNI-1")
+				self.assertNotIn("name", rows[1])
+
+	def test_po_new_received_type_split_generates_index(self):
+		rows = self.merge(
+			[{"lot": "Open Lot", "received_type": "Rejected", "quantity": 6}],
+			source_values={"name": "GRNI-1", "row_index": "0::Accepted"},
+			lot_options=["LOT-1", "Open Lot"],
+			lot_fieldname="lot",
+			purchase_order="PO-1",
+		)
+		self.assertEqual(rows[0]["row_index"], "0::Rejected")
+		self.assertNotIn("name", rows[0])
+
+	def test_po_lot_splits_survive_group_ungroup_and_merge(self):
+		from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui
+
+		options = {"lot_options": ["LOT-1", "Open Lot"], "lot_fieldname": "lot", "purchase_order": "PO-1"}
+		rows = self.merge(
+			[{"quantity": 4}, {"lot": "Open Lot", "quantity": 6}],
+			source_values={"name": "GRNI-1", "row_index": "0"},
+			**options,
+		)
+		rows[1]["name"] = "GRNI-2"
+		config = {
+			"item_field": "item_variant",
+			"qty_field": "quantity",
+			"value_fields": ["ref_doctype", "ref_docname", "rate"],
+		}
+		with (
+			patch("yrp.stock.save_stock_items._get_entry_fields", return_value=[]),
+			patch("yrp.stock.save_stock_items._child_has_field", return_value=True),
+			patch(
+				"yrp.stock.save_stock_items.get_dimension_fieldnames", return_value=["lot", "received_type"]
+			),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_parent_item", return_value="Fabric"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details", return_value={"attributes": []}),
+			patch.object(frappe, "get_doc", return_value=frappe._dict(attributes=[])),
+			patch("yrp.stock.save_stock_items._resolve_or_create_variant", return_value="FABRIC"),
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames",
+				return_value=("lot", "received_type"),
+			),
+		):
+			for _ in range(2):
+				grouped = group_items_for_ui(rows, "YRP Goods Received Note", config=config)
+				self.assertEqual(len(grouped[0]["items"]), 2)
+				browser = ungroup_items_from_ui(grouped, "YRP Goods Received Note", config=config)
+				self.assertEqual([row["row_index"] for row in browser], [0, 1])
+				rows = _merge_authoritative_rows(rows, browser, **options)
+				self.assertEqual(
+					[(row["name"], row["lot"], row["quantity"], row["row_index"]) for row in rows],
+					[("GRNI-1", "LOT-1", 4, "0"), ("GRNI-2", "Open Lot", 6, "0")],
+				)
+
+	def test_po_empty_lot_options_are_unrestricted(self):
+		rows = self.merge(
+			[{"lot": "ANY-LOT", "quantity": 6}],
+			lot_options=[],
+			lot_fieldname="lot",
+			purchase_order="PO-1",
+		)
+		self.assertEqual([(row["lot"], row["quantity"]) for row in rows], [("ANY-LOT", 6)])
+
+	def test_po_omitted_lineage_is_kept_while_present_lineage_changes_lot(self):
+		rows = self.merge(
+			[{"lot": "Open Lot", "received_type": "Rejected", "quantity": 6}],
+			extra_sources=[{"ref_docname": "PO-ROW-2", "quantity": 7, "rate": 30}],
+			lot_options=["LOT-1", "Open Lot"],
+			lot_fieldname="lot",
+			purchase_order="PO-1",
+		)
+		self.assertCountEqual(
+			[
+				(row["ref_docname"], row["lot"], row["received_type"], row["quantity"], row["rate"])
+				for row in rows
+			],
+			[("PO-ROW", "Open Lot", "Rejected", 6, 25), ("PO-ROW-2", "LOT-1", "Accepted", 7, 30)],
+		)
+
+	def test_po_present_zero_quantity_lineage_removes_old_splits(self):
+		rows = self.merge(
+			[{"quantity": 0}],
+			extra_sources=[{"lot": "Open Lot", "quantity": 3}],
+			lot_options=["LOT-1", "Open Lot"],
+			lot_fieldname="lot",
+			purchase_order="PO-1",
+		)
+		self.assertEqual(rows, [])
+
+	def test_po_lot_change_keeps_trusted_fields(self):
+		rows = self.merge(
+			[{"lot": "Open Lot", "quantity": 6, "rate": 1, "uom": "Forged"}],
+			lot_options=["LOT-1", "Open Lot"],
+			lot_fieldname="lot",
+			purchase_order="PO-1",
+		)
+		self.assertEqual(
+			[(row["lot"], row["quantity"], row["ref_docname"]) for row in rows], [("Open Lot", 6, "PO-ROW")]
+		)
+		self.assertEqual((rows[0]["rate"], rows[0]["uom"]), (25, "Kg"))
+
+	def test_po_lot_and_received_type_splits(self):
+		rows = self.merge(
+			[
+				{"quantity": 4},
+				{"lot": "Open Lot", "quantity": 3},
+				{"lot": "Open Lot", "received_type": "Rejected", "quantity": 3},
+			],
+			lot_options=["LOT-1", "Open Lot"],
+			lot_fieldname="lot",
+			purchase_order="PO-1",
+		)
+		self.assertEqual(
+			[(row["lot"], row["received_type"], row["quantity"]) for row in rows],
+			[("LOT-1", "Accepted", 4), ("Open Lot", "Accepted", 3), ("Open Lot", "Rejected", 3)],
+		)
+
+	def test_po_invalid_lot_names_row_lot_and_order(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Row 1.*BAD.*PO-1"):
+			self.merge([{"lot": "BAD"}], lot_options=["LOT-1"], lot_fieldname="lot", purchase_order="PO-1")
+
+	def test_po_split_cannot_change_source_reference(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "available item rows changed"):
+			self.merge(
+				[{"ref_docname": "FORGED", "lot": "Open Lot"}],
+				lot_options=["LOT-1", "Open Lot"],
+				lot_fieldname="lot",
+				purchase_order="PO-1",
+			)
+
+	def test_po_duplicate_lot_and_received_type_is_rejected(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "duplicate lot"):
+			self.merge(
+				[{"quantity": 4}, {"quantity": 6}],
+				lot_options=["LOT-1"],
+				lot_fieldname="lot",
+				purchase_order="PO-1",
+			)
+
+	def test_work_order_still_rejects_lot_changes(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "available item rows changed"):
+			self.merge([{"lot": "Open Lot"}])
+
+
+class TestPurchaseOrderLotWorkspace(FrappeTestCase):
+	def receipt_values(self, quantities):
+		from yrp.stock.save_stock_items import group_items_for_ui
+		from yrp.yrp.doctype.yrp_goods_received_note.test_purchase_order_grn import (
+			TestPurchaseOrderLotSplits,
+			_address,
+		)
+		from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+			get_purchase_order_defaults,
+		)
+
+		po, fieldname, first_lot, other_lot = TestPurchaseOrderLotSplits.order_with_two_lots(self)
+		source = get_purchase_order_defaults(po.name)["items"][0]
+		lots = [first_lot, other_lot]
+		rows = [
+			{**source, fieldname: lots[index], "quantity": quantity}
+			for index, quantity in enumerate(quantities)
+		]
+		values = {
+			"purchase_order": po.name,
+			"supplier_address": _address(f"_Test Web GRN Supplier {frappe.generate_hash(length=6)}"),
+			"delivery_address": _address(f"_Test Web GRN Delivery {frappe.generate_hash(length=6)}"),
+			"item_details": group_items_for_ui(rows, "YRP Goods Received Note"),
+		}
+		return po, fieldname, first_lot, other_lot, values
+
+	def test_web_receives_whole_row_into_another_lot(self):
+		po, fieldname, _first_lot, other_lot, values = self.receipt_values([0, 6])
+		workspace = save_goods_received_note(values, submit=True)
+		grn = frappe.get_doc("YRP Goods Received Note", workspace["record"]["name"])
+		self.assertEqual(grn.docstatus, 1)
+		self.assertEqual(
+			[(row.get(fieldname), row.quantity, row.ref_docname) for row in grn.items],
+			[(other_lot, 6, po.items[0].name)],
+		)
+
+	def test_web_split_reload_and_resave_keep_lots_and_quantities(self):
+		from yrp.stock.save_stock_items import ungroup_items_from_ui
+
+		po, fieldname, first_lot, other_lot, values = self.receipt_values([4, 6])
+		created = save_goods_received_note(values)
+		workspace = get_goods_received_note_workspace(created["record"]["name"])
+		rows = ungroup_items_from_ui(workspace["matrices"]["items"], "YRP Goods Received Note")
+		self.assertEqual({row[fieldname]: row["quantity"] for row in rows}, {first_lot: 4, other_lot: 6})
+		self.assertIn(other_lot, workspace["lot_options"])
+		result = save_goods_received_note(
+			{"item_details": workspace["matrices"]["items"]},
+			name=workspace["record"]["name"],
+			expected_modified=workspace["record"]["modified"],
+			submit=True,
+		)
+		grn = frappe.get_doc("YRP Goods Received Note", result["record"]["name"])
+		self.assertEqual(
+			{row.get(fieldname): row.quantity for row in grn.items}, {first_lot: 4, other_lot: 6}
+		)
+		self.assertTrue(all(row.ref_docname == po.items[0].name for row in grn.items))
+
+	def test_web_save_rejects_unlinked_lot(self):
+		po, fieldname, _first_lot, _other_lot, values = self.receipt_values([6])
+		for group in values["item_details"]:
+			for entry in group["items"]:
+				entry["dimensions"][fieldname] = "NOT-LINKED"
+		with self.assertRaisesRegex(frappe.ValidationError, f"Row 1.*NOT-LINKED.*{po.name}"):
+			save_goods_received_note(values)

@@ -28,7 +28,7 @@ QTY_TOLERANCE = 0.000001
 
 @frappe.whitelist()
 def get_actual_dia_context(work_order):
-	"""Return the server-owned Actual Dia choices for versioned Knitting."""
+	"""Return the server-owned Actual Dia choices for Default Knitting."""
 	if not work_order or not frappe.db.exists("YRP Work Order", work_order):
 		return {"enabled": False, "dia_options": []}
 	wo = frappe.get_doc("YRP Work Order", work_order)
@@ -37,8 +37,8 @@ def get_actual_dia_context(work_order):
 		"SD YRP IPD Settings", "default_knitting_process"
 	)
 	enabled = bool(
-		cint(wo.get("cloth_execution_version")) == 1
-		and wo.get("production_detail")
+		wo.get("production_detail")
+		and wo.get("process_name")
 		and wo.get("process_name") == default_knitting
 	)
 	return {
@@ -57,33 +57,34 @@ def _configured_dia_values():
 	)
 
 
-def get_saved_actual_dia_rows(grn, work_order):
-	"""Refresh limits on saved physical-Dia rows omitted by base draft rebuild."""
-	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
-		_remaining_receivable_allowance,
-		_wo_excess_percentage,
-	)
-
+def get_saved_actual_dia_rows(grn, work_order, *, planned_rows=()):
+	"""Restore saved physical quantities and their UOM basis for draft display."""
 	receivables = {row.name: row for row in work_order.get("receivables") or []}
-	excess_pct = _wo_excess_percentage(work_order.name)
+	planned = {
+		(row.get("ref_docname"), row.get("received_type")): row for row in planned_rows
+	}
 	rows = []
 	for row in grn.get("items") or []:
 		source = receivables.get(row.get("ref_docname"))
 		if not source or row.get("item_variant") == source.item_variant:
 			continue
 		payload = row.as_dict() if callable(getattr(row, "as_dict", None)) else dict(row)
+		display = planned.get((row.get("ref_docname"), row.get("received_type")))
+		if not payload.get("secondary_uom"):
+			payload["secondary_uom"] = (display if display is not None else source).get("secondary_uom")
+		elif display is not None and not display.get("secondary_uom") and not flt(payload.get("secondary_qty")):
+			# Base draft rows omit secondary UOM. Hide an unused saved label to
+			# match them, but retain the UOM of any entered secondary quantity.
+			payload["secondary_uom"] = display.get("secondary_uom")
 		payload["pending_quantity"] = flt(source.pending_quantity)
-		payload["max_receivable_quantity"] = max(
-			flt(_remaining_receivable_allowance(source.qty, source.pending_quantity, excess_pct)),
-			0,
-		)
+		payload["max_receivable_quantity"] = None
 		payload["rate"] = flt(source.cost)
 		rows.append(payload)
 	return rows
 
 
 def validate_actual_dia_rows(grn):
-	"""Permit only Dia to vary from a versioned default-Knitting receivable."""
+	"""Permit only Dia to vary from a Default Knitting receivable."""
 	if (
 		grn.get("against") != "YRP Work Order"
 		or not grn.get("against_id")
@@ -91,18 +92,15 @@ def validate_actual_dia_rows(grn):
 	):
 		return
 	wo = frappe.get_doc("YRP Work Order", grn.against_id)
-	if cint(wo.get("cloth_execution_version")) != 1:
-		return
 	receivables = {row.name: row for row in wo.get("receivables") or []}
 	default_knitting = frappe.db.get_single_value(
 		"SD YRP IPD Settings", "default_knitting_process"
 	)
 	actual_dia_enabled = bool(
-		cint(wo.get("cloth_execution_version")) == 1
+		wo.get("production_detail")
 		and is_calculable_fabric_grn(grn)
 		and wo.get("process_name") == default_knitting
 	)
-	valid_dias = None
 	for row in grn.get("items") or []:
 		source = receivables.get(row.get("ref_docname"))
 		if not source or row.get("item_variant") == source.item_variant:
@@ -111,42 +109,50 @@ def validate_actual_dia_rows(grn):
 			frappe.throw(
 				_(
 					"Row {0}: Actual Dia variance is allowed only on a standard GRN "
-					"for the versioned Default Knitting Process."
+					"for the Default Knitting Process."
 				).format(row.idx)
 			)
-		expected_parent = get_parent_item(source.item_variant)
-		actual_parent = get_parent_item(row.item_variant)
-		if not expected_parent or actual_parent != expected_parent:
-			frappe.throw(
-				_("Row {0}: Actual Dia must remain on item template {1}.").format(
-					row.idx, expected_parent
-				)
-			)
-		expected_attrs = _variant_attrs(source.item_variant)
-		actual_attrs = _variant_attrs(row.item_variant)
-		if not actual_attrs.get(get_dia_attribute()):
-			frappe.throw(_("Row {0}: Actual Dia is required.").format(row.idx))
-		for attribute in set(expected_attrs) | set(actual_attrs):
-			if attribute == get_dia_attribute():
-				continue
-			if expected_attrs.get(attribute) != actual_attrs.get(attribute):
-				frappe.throw(
-					_(
-						"Row {0}: only Dia may differ from the Work Order receivable; {1} changed."
-					).format(row.idx, attribute)
-				)
-		if valid_dias is None:
-			valid_dias = set(_configured_dia_values())
-		if actual_attrs[get_dia_attribute()] not in valid_dias:
-			frappe.throw(
-				_("Row {0}: {1} is not a valid Dia value.").format(
-					row.idx, actual_attrs[get_dia_attribute()]
-				)
-			)
-		if not expected_attrs.get(get_dia_attribute()):
-			frappe.throw(_("Row {0}: planned Item has no Dia.").format(row.idx))
+		validate_actual_dia_variant(source.item_variant, row.item_variant, row.idx)
 	if actual_dia_enabled:
 		_normalize_actual_dia_row_indexes(grn, receivables)
+
+
+def validate_actual_dia_variant(planned_item, actual_item, row_index):
+	"""Keep the template and every non-Dia attribute fixed."""
+	expected_parent = get_parent_item(planned_item)
+	actual_parent = get_parent_item(actual_item)
+	if not expected_parent or actual_parent != expected_parent:
+		frappe.throw(
+			_("Row {0}: Actual Dia must remain on item template {1}.").format(
+				row_index, expected_parent
+			)
+		)
+	expected_attrs = _variant_attrs(planned_item)
+	actual_attrs = _variant_attrs(actual_item)
+	if not actual_attrs.get(get_dia_attribute()):
+		frappe.throw(_("Row {0}: Actual Dia is required.").format(row_index))
+	_validate_non_dia_attributes(expected_attrs, actual_attrs, row_index)
+	valid_dias = set(_configured_dia_values())
+	if actual_attrs[get_dia_attribute()] not in valid_dias:
+		frappe.throw(
+			_("Row {0}: {1} is not a valid Dia value.").format(
+				row_index, actual_attrs[get_dia_attribute()]
+			)
+		)
+	if not expected_attrs.get(get_dia_attribute()):
+		frappe.throw(_("Row {0}: planned Item has no Dia.").format(row_index))
+
+
+def _validate_non_dia_attributes(expected_attrs, actual_attrs, row_index):
+	for attribute in set(expected_attrs) | set(actual_attrs):
+		if attribute == get_dia_attribute():
+			continue
+		if expected_attrs.get(attribute) != actual_attrs.get(attribute):
+			frappe.throw(
+				_(
+					"Row {0}: only Dia may differ from the Work Order receivable; {1} changed."
+				).format(row_index, attribute)
+			)
 
 
 def _normalize_actual_dia_row_indexes(grn, receivables):

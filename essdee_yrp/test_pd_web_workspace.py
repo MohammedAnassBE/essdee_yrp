@@ -121,6 +121,33 @@ class TestPdProductWorkspace(IntegrationTestCase):
 		payload = web_workspace.get_new_product_defaults()
 		self.assertEqual(payload["size_labels"], {})
 
+	def test_set_colour_links_save_with_fetched_codes_and_trim_options(self):
+		colours = []
+		for code in ["#123456", "#654321"]:
+			colour = frappe.get_doc({
+				"doctype": "SD YRP Product Colour Code",
+				"colour": f"Set colour {frappe.generate_hash(length=10)}", "colour_code": code,
+			}).insert()
+			colour.submit()
+			colours.append(colour)
+		payload = web_workspace.save_product(
+			{"is_set_item": 1, "product_set_colours": [{
+				"top_colour": colours[0].name, "bottom_colour": colours[1].name,
+			}]}, name=self.product.name, expected_modified=str(self.product.modified),
+		)
+		row = payload["record"]["product_set_colours"][0]
+		self.assertEqual(row["top_colour"], colours[0].name)
+		self.assertEqual(row["bottom_colour"], colours[1].name)
+		self.assertEqual(row["top_colour_code"], "#123456")
+		self.assertEqual(row["bottom_colour_code"], "#654321")
+		self.product.reload()
+		self.assertEqual(self.product.product_set_colours[0].top_colour_code, "#123456")
+		self.assertEqual(self.product.product_set_colours[0].bottom_colour_code, "#654321")
+		self.assertEqual(payload["colours"]["top"][0]["colour"], colours[0].name)
+		self.assertEqual(payload["colours"]["bottom"][0]["colour"], colours[1].name)
+		self.assertEqual(payload["link_filters"]["product_set_colours.top_colour"], {"docstatus": 1})
+		self.assertEqual(payload["link_filters"]["product_set_colours.bottom_colour"], {"docstatus": 1})
+
 	def test_save_updates_fields_and_ignores_unlisted_fields(self):
 		payload = web_workspace.save_product(
 			{"item_name": "Renamed", "tech_pack_no": 99},

@@ -1,25 +1,243 @@
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 import frappe
+from frappe.model.base_document import BaseDocument
 from frappe.tests.utils import FrappeTestCase
-
-from essdee_yrp.garment_grn import _allocate_calculated_receivables
 
 from essdee_yrp.fabric_store.documents.goods_received_note import (
 	_merge_authoritative_rows,
 	_merge_inspection_sources,
+	_source_defaults,
 	calculate_goods_received_note,
 	execute_goods_received_note_command,
+	get_delivery_address,
 	get_goods_received_note_calculation,
 	get_goods_received_note_workspace,
+	get_supplier_address,
 	preview_goods_received_note_source,
 	save_goods_received_note,
 	save_goods_received_note_inspection,
 )
+from essdee_yrp.garment_grn import _allocate_calculated_receivables
 
 
 class TestFabricStoreGoodsReceivedNote(TestCase):
+	def setUp(self):
+		self.actual_dia_context = self.enterContext(patch(
+			"essdee_yrp.fabric_store.documents.goods_received_note._actual_dia_context",
+			return_value={"enabled": False, "dia_options": []},
+		))
+
+	def test_web_delivery_address_search_and_default_contract(self):
+		source = (Path(__file__).parent.parent / "frontend/src/departments/fabric-store/GoodsReceivedNoteWorkspace.vue").read_text()
+		self.assertIn('searchLink("Address", text, { disabled: 0 })', source)
+		self.assertNotIn('searchLinkedDocument("Address", "Supplier", form.delivery_location', source)
+		self.assertIn('searchLinkedDocument("Address", "Supplier", form.supplier, text)', source)
+		self.assertIn('searchLinkedDocument("Contact", "Supplier", form.supplier, text)', source)
+		self.assertIn('if (fieldname === "delivery_location") await defaultAddress("delivery_address", value)', source)
+		self.assertIn('if (fieldname === "supplier") await defaultAddress("supplier_address", value)', source)
+		self.assertIn('if (fieldname in addressDefaults) invalidateAddress(fieldname)', source)
+		self.assertIn("isCurrent() && !form[fieldname]", source)
+		self.assertIn("function applyWorkspace(nextWorkspace) {\n\tinvalidateAddresses()", source)
+
+	def test_po_delivery_address_uses_shipping_party_then_po_fallback(self):
+		po = MagicMock()
+		po.get.return_value = "PO-SHIPPING"
+		for party_address, expected in (("PARTY-SHIPPING", "PARTY-SHIPPING"), (None, "PO-SHIPPING")):
+			with (
+				self.subTest(party_address=party_address),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults", return_value={"to_warehouse": "WH"}),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.db.get_value", return_value="S-0070"),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=party_address) as party,
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc", return_value=po),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_supplier_address", return_value="BILLING"),
+			):
+				defaults = _source_defaults("Purchase Order", "PO-1")
+				self.assertEqual(defaults["delivery_location"], "S-0070")
+				self.assertEqual(defaults["delivery_address"], expected)
+				party.assert_called_once_with("S-0070", preferred_type="Shipping")
+		po.check_permission.assert_called_once_with("read")
+
+	def test_delivery_location_change_has_no_po_fallback(self):
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=None),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc") as get_doc,
+		):
+			self.assertEqual(get_delivery_address("NO-ADDRESS"), "")
+		get_doc.assert_not_called()
+
+	def test_work_order_delivery_address_uses_shipping_party_without_po_fallback(self):
+		for empty in (None, ""):
+			for party_address in ("Essdee Knitting Mills Private Limited-Billing-4", None):
+				defaults = {"delivery_location": "S-0171", "delivery_address": empty, "supplier_address": "WO-BILLING"}
+				with (
+					self.subTest(empty=empty, party_address=party_address),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_work_order_defaults", return_value=dict(defaults)),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=party_address) as party,
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc") as get_doc,
+				):
+					self.assertEqual(_source_defaults("YRP Work Order", "WO-2627-01298"), {**defaults, "delivery_address": party_address or ""})
+					party.assert_called_once_with("S-0171", preferred_type="Shipping")
+					get_doc.assert_not_called()
+
+	def test_source_address_defaults_preserve_work_order_and_existing_po_values(self):
+		defaults = {"delivery_address": "PICKED", "delivery_location": "UNIT", "supplier_address": "PICKED-BILLING"}
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults", return_value=dict(defaults)),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_work_order_defaults", return_value=dict(defaults)),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_delivery_address") as address,
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_supplier_address") as supplier_address,
+		):
+			self.assertEqual(_source_defaults("YRP Work Order", "WO-1"), defaults)
+			self.assertEqual(_source_defaults("Purchase Order", "PO-1"), defaults)
+		address.assert_not_called()
+		supplier_address.assert_not_called()
+
+	def test_new_po_grn_previews_and_saves_with_default_or_operator_picked_addresses(self):
+		for picked in (None, "PICKED"):
+			with self.subTest(picked=picked):
+				doc = self.make_document()
+				doc.meta.istable = False
+				doc.meta.get.return_value = [
+					frappe._dict(fieldname=fieldname, fieldtype="Link", reqd=1)
+					for fieldname in ("supplier_address", "delivery_address")
+				]
+				values = {"against": "Purchase Order", "against_id": "PO-1"}
+				if picked:
+					values["delivery_address"] = picked
+					values["supplier_address"] = picked
+				po = frappe._dict(shipping_address="PO-SHIPPING", supplier_address="Usha Quality Stickerz-Billing")
+				po.check_permission = MagicMock()
+				# Exercise the actual source default path through both preview and save.
+				# Insert must see both mandatory address fields already populated.
+				doc.insert.side_effect = lambda: (
+					self.assertEqual(BaseDocument._get_missing_mandatory_fields(doc), []),
+					self.assertEqual(doc.delivery_address, picked or "PO-SHIPPING"),
+					self.assertEqual(doc.supplier_address, picked or "Usha Quality Stickerz-Billing"),
+				)
+				with (
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.new_doc", return_value=doc),
+					patch("essdee_yrp.fabric_store.documents.common.get_permitted_fields", return_value=["supplier_address", "delivery_address"]),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults", side_effect=lambda name: {"supplier": "Usha Quality Stickerz", "delivery_location": "S-0070", "items": []}),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", side_effect=lambda party, preferred_type: "Usha Quality Stickerz-Billing" if preferred_type == "Billing" else None),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc", return_value=po),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_stock_dimensions_for_ui", return_value=[]),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
+				):
+					preview = preview_goods_received_note_source(values)
+					self.assertEqual(preview["values"]["supplier_address"], picked or "Usha Quality Stickerz-Billing")
+					self.assertEqual(preview["values"]["delivery_address"], picked or "PO-SHIPPING")
+					save_goods_received_note(values)
+				doc.insert.assert_called_once()
+
+	def test_new_work_order_grn_previews_and_saves_with_delivery_address(self):
+		address = "Essdee Knitting Mills Private Limited-Billing-4"
+		for picked in (None, "PICKED"):
+			with self.subTest(picked=picked):
+				doc = self.make_document()
+				doc.meta.istable = False
+				doc.meta.get.return_value = [
+					frappe._dict(fieldname=fieldname, fieldtype="Link", reqd=1)
+					for fieldname in ("supplier_address", "delivery_address")
+				]
+				values = {"against": "YRP Work Order", "against_id": "WO-2627-01298"}
+				if picked:
+					values["delivery_address"] = picked
+				doc.insert.side_effect = lambda: (
+					self.assertEqual(BaseDocument._get_missing_mandatory_fields(doc), []),
+					self.assertEqual(doc.delivery_address, picked or address),
+				)
+				with (
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.new_doc", return_value=doc),
+					patch("essdee_yrp.fabric_store.documents.common.get_permitted_fields", return_value=["supplier_address", "delivery_address"]),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_work_order_defaults", side_effect=lambda *args: {"delivery_location": "S-0171", "delivery_address": None, "supplier_address": address, "items": []}),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=address),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_stock_dimensions_for_ui", return_value=[]),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
+				):
+					preview = preview_goods_received_note_source(values)
+					self.assertEqual(preview["values"]["delivery_address"], picked or address)
+					self.assertEqual(preview["values"]["supplier_address"], address)
+					save_goods_received_note(values)
+				doc.insert.assert_called_once()
+
+	def test_saved_grn_workspace_keeps_stored_addresses(self):
+		for docstatus in (0, 1):
+			with self.subTest(docstatus=docstatus):
+				doc = self.make_document(docstatus=docstatus)
+				doc.delivery_address = "STORED"
+				doc.supplier_address = "STORED-BILLING"
+				with (
+					patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_workspace_base", side_effect=self.workspace_base),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note._related_documents", return_value={}),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note._inspection_context", return_value={}),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_supplier_notification_capabilities", return_value={"sms": False, "whatsapp": False}),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_stock_dimensions_for_ui", return_value=[]),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_delivery_address") as address,
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_supplier_address") as supplier_address,
+				):
+					values = get_goods_received_note_workspace(doc.name)["values"]
+					self.assertEqual(values["delivery_address"], "STORED")
+					self.assertEqual(values["supplier_address"], "STORED-BILLING")
+				address.assert_not_called()
+				supplier_address.assert_not_called()
+
+	def test_po_supplier_address_uses_billing_party_then_po_fallback(self):
+		po = frappe._dict(supplier_address="PO-BILLING")
+		po.check_permission = MagicMock()
+		for party_address, expected in (("PARTY-BILLING", "PARTY-BILLING"), (None, "PO-BILLING")):
+			with (
+				self.subTest(party_address=party_address),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults", return_value={"supplier": "SUPPLIER", "delivery_address": "SHIPPING"}),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=party_address) as party,
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc", return_value=po) as get_doc,
+			):
+				self.assertEqual(_source_defaults("Purchase Order", "PO-1")["supplier_address"], expected)
+				party.assert_called_once_with("SUPPLIER", preferred_type="Billing")
+				if party_address:
+					get_doc.assert_not_called()
+				else:
+					get_doc.assert_called_once_with("Purchase Order", "PO-1")
+		po.check_permission.assert_called_once_with("read")
+
+	def test_supplier_change_has_no_po_fallback(self):
+		for supplier, party_address in (("SUPPLIER", "BILLING"), ("NO-ADDRESS", None), (None, None)):
+			with (
+				self.subTest(supplier=supplier),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=party_address) as party,
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc") as get_doc,
+			):
+				self.assertEqual(get_supplier_address(supplier), party_address or "")
+				party.assert_called_once_with(supplier, preferred_type="Billing")
+				get_doc.assert_not_called()
+
+	def test_work_order_only_adds_empty_supplier_address_default(self):
+		for party_address in ("BILLING", None):
+			defaults = {"supplier": "WO-SUPPLIER", "delivery_address": "WO-SHIPPING", "items": [{"quantity": 5}], "item_details": [{"kind": "wo"}]}
+			with (
+				self.subTest(party_address=party_address),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_work_order_defaults", return_value=dict(defaults)) as loader,
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=party_address) as party,
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_delivery_address") as delivery,
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc") as get_doc,
+			):
+				self.assertEqual(_source_defaults("YRP Work Order", "WO-1", "DC-1"), {**defaults, "supplier_address": party_address or ""})
+				loader.assert_called_once_with("WO-1", "DC-1")
+				party.assert_called_once_with("WO-SUPPLIER", preferred_type="Billing")
+				delivery.assert_not_called()
+				get_doc.assert_not_called()
+
 	def test_padded_zero_quantity_cell_does_not_create_a_forged_row(self):
 		with patch(
 			"essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames",
@@ -252,6 +470,7 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		}
 
 	def test_workspace_exposes_calculate_matrices_dimensions_and_special_context(self):
+		self.actual_dia_context.return_value = {"enabled": True, "attribute": "Dia", "dia_options": ["14", "14.5"]}
 		doc = self.make_document()
 		with (
 			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
@@ -268,6 +487,8 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		self.assertEqual(workspace["dimensions"][0]["fieldtype"], "Link")
 		self.assertTrue(workspace["dimensions"][0]["locked"])
 
+		self.assertEqual(workspace["actual_dia"], self.actual_dia_context.return_value)
+
 	def test_workspace_hides_calculate_for_new_or_special_modes(self):
 		doc = self.make_document(additional_grn=1)
 		with (
@@ -282,6 +503,7 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 	def test_work_order_preview_uses_essdee_defaults(self):
 		defaults = {
 			"supplier": "SUPPLIER-1",
+			"supplier_address": "WO-BILLING",
 			"items": [{"item_variant": "STYLE-S", "quantity": 5}],
 			"item_details": [{"kind": "wo"}],
 			"correction_items": [],
@@ -301,18 +523,20 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 	def test_purchase_order_preview_uses_base_defaults(self):
 		defaults = {
 			"supplier": "SUPPLIER-PO",
+			"supplier_address": "PO-BILLING",
 			"items": [{"item_variant": "FABRIC-1", "quantity": 2}],
 			"item_details": [{"kind": "po"}],
 		}
-		with patch(
-			"essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults",
-			return_value=defaults,
-		) as loader:
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults", return_value=defaults) as loader,
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_delivery_address", return_value="PO-SHIPPING"),
+		):
 			workspace = preview_goods_received_note_source(
 				{"purchase_order": "PO-1", "comments": "Kept"}
 			)
 		self.assertEqual(workspace["record"]["against"], "Purchase Order")
 		self.assertEqual(workspace["values"]["comments"], "Kept")
+		self.assertEqual(workspace["values"]["delivery_address"], "PO-SHIPPING")
 		loader.assert_called_once_with("PO-1")
 
 	def test_existing_save_uses_saved_rows_and_preserves_other_types_corrections_and_special_rows(self):
@@ -402,6 +626,32 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 			self.assertRaises(frappe.ValidationError),
 		):
 			save_goods_received_note({"item_details": [{}]}, name=doc.name)
+
+	def test_saved_draft_accepts_added_dia_and_preserves_source_fields(self):
+		doc = self.make_document()
+		self.actual_dia_context.return_value = {"enabled": True, "attribute": "Dia", "dia_options": ["14", "14.5"]}
+		source = dict(doc["items"][0], item_variant="Greige-14")
+		doc["items"] = [frappe._dict(source)]
+		browser_rows = [dict(source, quantity=10), dict(source, item_variant="Greige-14.5", quantity=20, rate=999)]
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.assert_expected_modified"),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.ungroup_items_from_ui", return_value=browser_rows),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
+			patch("essdee_yrp.fabric_grn.get_parent_item", return_value="Greige"),
+			patch("essdee_yrp.fabric_grn.get_dia_attribute", return_value="Dia"),
+			patch("essdee_yrp.fabric_grn._configured_dia_values", return_value=["14", "14.5"]),
+			patch("essdee_yrp.fabric_grn._variant_attrs", side_effect=[{"Colour": "Greige", "Dia": "14"}, {"Colour": "Greige", "Dia": "14.5"}]),
+		):
+			save_goods_received_note({"item_details": [{}]}, name=doc.name)
+		self.assertEqual([(row.item_variant, row.quantity) for row in doc["items"]], [("Greige-14", 10), ("Greige-14.5", 20)])
+		added = doc["items"][1]
+		self.assertEqual(added.ref_docname, source["ref_docname"])
+		self.assertEqual(added.ref_doctype, source["ref_doctype"])
+		self.assertEqual(added.rate, source["rate"])
+		self.assertNotIn("name", added)
+		self.assertNotEqual(added.row_index, source["row_index"])
+		doc.save.assert_called_once()
 
 	def test_submitted_save_updates_allow_on_submit_item_tables_only(self):
 		doc = self.make_document(docstatus=1)
@@ -509,6 +759,7 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		defaults = {
 			"supplier": "SUPPLIER-1",
 			"from_warehouse": "Supplier - E",
+			"supplier_address": "WO-BILLING",
 			"to_warehouse": "Stores - E",
 			"items": [dict(self.make_document()["items"][0])],
 			"correction_items": [],
@@ -1002,3 +1253,31 @@ class TestPurchaseOrderLotWorkspace(FrappeTestCase):
 				entry["dimensions"][fieldname] = "NOT-LINKED"
 		with self.assertRaisesRegex(frappe.ValidationError, f"Row 1.*NOT-LINKED.*{po.name}"):
 			save_goods_received_note(values)
+
+
+class TestActualDiaWorkspaceMerge(TestCase):
+	def test_context_is_only_exposed_on_standard_work_order_drafts(self):
+		from essdee_yrp.fabric_store.documents.goods_received_note import _actual_dia_context
+
+		context = {"enabled": True, "attribute": "Dia", "dia_options": ["14"]}
+		document = frappe._dict(docstatus=0, against="YRP Work Order", against_id="WO-1")
+		with patch("essdee_yrp.fabric_grn.get_actual_dia_context", return_value=context) as get_context:
+			self.assertEqual(_actual_dia_context(document), context)
+			get_context.assert_called_once_with("WO-1")
+			for field in ("is_return", "is_rework", "additional_grn", "includes_packing", "docstatus"):
+				self.assertFalse(_actual_dia_context(frappe._dict(document, **{field: 1}))["enabled"])
+			self.assertFalse(_actual_dia_context(frappe._dict(document, against="Purchase Order"))["enabled"])
+
+	def test_added_variant_with_colour_change_is_rejected(self):
+		from essdee_yrp.fabric_store.documents.goods_received_note import _actual_dia_additions
+
+		source = {"item_variant": "Greige-14", "ref_doctype": "YRP Work Order Receivables", "ref_docname": "REC-1", "quantity": 10}
+		browser = {**source, "item_variant": "Blue-14.5", "quantity": 20}
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames", return_value=()),
+			patch("essdee_yrp.fabric_grn.get_parent_item", return_value="Fabric"),
+			patch("essdee_yrp.fabric_grn.get_dia_attribute", return_value="Dia"),
+			patch("essdee_yrp.fabric_grn._variant_attrs", side_effect=[{"Colour": "Greige", "Dia": "14"}, {"Colour": "Blue", "Dia": "14.5"}]),
+			self.assertRaisesRegex(frappe.ValidationError, "only Dia may differ"),
+		):
+			_actual_dia_additions([source], [browser], {"enabled": True})

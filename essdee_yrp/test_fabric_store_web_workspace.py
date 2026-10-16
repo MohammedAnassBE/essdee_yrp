@@ -39,6 +39,47 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(item_groups, groups)
 		self.assertEqual(row_count, 1)
 		doc.run_method.assert_called_once_with("onload")
+		doc.has_permlevel_access_to.assert_called_once_with("items", permission_type="read")
+
+	def test_item_table_permissions_cover_all_stock_and_source_doctypes(self):
+		from frappe.model.document import Document
+
+		for doctype, table_field in workspace.ITEM_TABLE_FIELDS.items():
+			for allowed in (True, False):
+				with self.subTest(doctype=doctype, allowed=allowed):
+					doc = MagicMock(doctype=doctype)
+					doc.meta.get_field.return_value = frappe._dict(permlevel=1)
+					doc.get_permlevel_access.return_value = [0, 1] if allowed else [0]
+					doc.has_permlevel_access_to.side_effect = lambda fieldname, **kwargs: Document.has_permlevel_access_to(doc, fieldname, **kwargs)
+					groups = [{"items": [{"name": "ITEM"}]}]
+					doc.get.side_effect = lambda key: {table_field: [{"item": "ITEM"}], "__onload": {"item_details": groups}}.get(key)
+					with patch("essdee_yrp.fabric_store.web_workspace.get_permitted_fields", return_value=[]):
+						self.assertEqual(workspace._document_item_groups(doc), (groups, 1) if allowed else ([], 0))
+					self.assertEqual(doc.run_method.call_count, int(allowed))
+
+	def test_readable_item_rows_that_cannot_be_grouped_fail_loudly(self):
+		doc = MagicMock(doctype="YRP Stock Entry")
+		doc.get.side_effect = lambda key: {"items": [{"item": "MISSING"}], "__onload": {}}.get(key)
+		with (
+			patch("essdee_yrp.fabric_store.web_workspace.group_items_for_ui", return_value=[]),
+			self.assertRaisesRegex(frappe.ValidationError, "Unable to load item rows"),
+		):
+			workspace._document_item_groups(doc)
+
+	def test_lot_transfer_editor_projects_desk_entry_fields_as_composer_dimensions(self):
+		entry = {"name": "STYLE", "from_lot": "FROM", "to_lot": "TO", "warehouse": "WH", "received_type": "Accepted", "set_combination": '{"Colour":"Blue"}', "table_index": 3, "row_index": 9, "values": {"S": {"qty": 5}}}
+		doc = frappe._dict(doctype="SD YRP Lot Transfer", name="LT-DRAFT", docstatus=0)
+		with (
+			patch("essdee_yrp.fabric_store.web_workspace._get_supported_document", return_value=doc),
+			patch("essdee_yrp.fabric_store.web_workspace.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.web_workspace._permission_flags", return_value={"can_write": True}),
+			patch("essdee_yrp.fabric_store.web_workspace._document_item_groups", return_value=([{"items": [entry]}], 1)),
+		):
+			payload = workspace.get_stock_operation_editor("lot_transfer", name=doc.name)
+		groups = payload["item_groups"]
+		self.assertEqual(groups[0]["items"][0]["dimensions"], {key: entry[key] for key in ("from_lot", "to_lot", "warehouse", "received_type")})
+		self.assertEqual(workspace._normalize_lot_transfer_groups(groups), groups)
+		self.assertEqual({key: value for key, value in groups[0]["items"][0].items() if key != "dimensions"}, entry)
 
 	def test_supported_documents_match_the_fabric_store_contract(self):
 		self.assertEqual(
@@ -1020,7 +1061,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 			self.assertEqual([row["fieldname"] for row in editors[operation]["dimensions"]], ["lot", "received_type"])
 			self.assertEqual(editors[operation]["locked_dimensions"], [])
 			self.assertEqual(editors[operation]["default_dimensions"], {})
-		self.assertEqual(editors["stock_entry"]["purpose_options"], ["Material Issue", "Material Consumed", "Send to Warehouse"])
+		self.assertEqual(editors["stock_entry"]["purpose_options"], ["Material Issue", "Material Receipt", "Material Consumed", "Send to Warehouse"])
 		self.assertEqual(editors["stock_update"]["update_type_options"], ["Add", "Reduce"])
 		self.assertEqual(
 			[row["fieldname"] for row in editors["lot_transfer"]["dimensions"]],

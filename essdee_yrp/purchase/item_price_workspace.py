@@ -11,12 +11,13 @@ from frappe.model.workflow import (
 	has_approval_access,
 	is_transition_condition_satisfied,
 )
-from frappe.utils import add_days, cint, format_date, nowdate
+from frappe.utils import add_days, cint, flt, format_date, nowdate
 from yrp.attribute_links import value as actual_attribute_value
 from yrp.attribute_value_identity import attribute_value_name
 from yrp.attribute_values import get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
+from essdee_yrp.fabric_store.documents.common import get_effective_fields
 from essdee_yrp.web_common import assert_expected_modified, parse_mapping, permission_flags
 
 DOCTYPE = "YRP Item Price"
@@ -30,6 +31,19 @@ EDITOR_FIELDS = (
 	"tax",
 )
 TIER_FIELDS = ("moq", "price", "lead_time", "attribute_value")
+VIEW_FIELDS = (
+	"item_name",
+	"supplier",
+	"supplier_name",
+	"uom",
+	"from_date",
+	"to_date",
+	"depends_on_attribute",
+	"attribute",
+	"tax",
+	"approved_by",
+)
+READ_ONLY_EDITOR_FIELDS = ("uom", "supplier_name", "approved_by")
 PERMISSION_TYPES = ("read", "create", "write", "submit", "delete")
 MAX_ACTION_ATTEMPTS = 2
 
@@ -108,6 +122,51 @@ def _tiers(doc) -> list[dict]:
 	]
 
 
+def get_price_tiers(names) -> dict[str, list[dict]]:
+	"""Price Values rows per YRP Item Price, in row order; callers check read access."""
+	tiers = {name: [] for name in names}
+	if not tiers:
+		return tiers
+	for row in frappe.get_all(
+		"YRP Item Price Value",
+		filters={"parent": ["in", list(tiers)], "parenttype": DOCTYPE},
+		fields=["parent", *TIER_FIELDS],
+		order_by="parent asc, idx asc",
+	):
+		tiers[row.parent].append(
+			{
+				"moq": row.moq,
+				"price": row.price,
+				"lead_time": row.lead_time,
+				"attribute_value": row.attribute_value,
+				"attribute_value_label": actual_attribute_value(row.attribute_value),
+			}
+		)
+	return tiers
+
+
+@frappe.whitelist()
+def get_item_price_summaries(names) -> dict[str, dict]:
+	requested = list(dict.fromkeys(str(name or "").strip() for name in _parse_list(names, _("Item Prices"))))
+	requested = [name for name in requested if name]
+	if len(requested) > 100:
+		frappe.throw(_("Prices can be loaded for at most 100 Item Prices at a time."))
+	if not requested:
+		return {}
+	frappe.has_permission(DOCTYPE, ptype="read", throw=True)
+	visible = frappe.get_list(DOCTYPE, filters={"name": ["in", requested]}, pluck="name", limit=0)
+	return {name: price_summary(tiers) for name, tiers in get_price_tiers(visible).items()}
+
+
+def price_summary(tiers: list[dict]) -> dict:
+	prices = [flt(tier["price"]) for tier in tiers]
+	return {
+		"min_price": min(prices) if prices else None,
+		"max_price": max(prices) if prices else None,
+		"slab_count": len(prices),
+	}
+
+
 def _history(doc) -> list[dict]:
 	supplier_filter = doc.supplier if doc.supplier else ["is", "not set"]
 	return frappe.get_list(
@@ -155,6 +214,7 @@ def _timeline(doc) -> list[dict]:
 		}
 		for row in comments
 	]
+	entries.extend(_document_events(doc))
 	if doc.approved_by and cint(doc.docstatus) in (1, 2):
 		approved_comment = next(
 			(
@@ -174,8 +234,40 @@ def _timeline(doc) -> list[dict]:
 				"creation": approved_comment["creation"] if approved_comment else doc.modified,
 			}
 		)
-		entries.sort(key=lambda entry: str(entry["creation"] or ""), reverse=True)
+	entries.sort(key=lambda entry: str(entry["creation"] or ""), reverse=True)
 	return entries
+
+
+def _document_events(doc) -> list[dict]:
+	"""Desk Activity parity: who created the price and each saved edit."""
+	events = [
+		{
+			"name": f"{doc.name}-created",
+			"kind": "created",
+			"label": _("Created"),
+			"content": _("{0} created this").format(doc.owner),
+			"by": doc.owner,
+			"creation": doc.creation,
+		}
+	]
+	versions = frappe.get_all(
+		"Version",
+		filters={"ref_doctype": DOCTYPE, "docname": doc.name},
+		fields=["name", "owner", "creation"],
+		order_by="creation asc",
+	)
+	events.extend(
+		{
+			"name": version.name,
+			"kind": "edited",
+			"label": _("Edited"),
+			"content": _("{0} edited this").format(version.owner),
+			"by": version.owner,
+			"creation": version.creation,
+		}
+		for version in versions
+	)
+	return events
 
 
 def _approval_predecessor(doc):
@@ -262,6 +354,8 @@ def get_item_price_workspace(name: str) -> dict:
 	frappe.has_permission(DOCTYPE, ptype="read", doc=doc, throw=True)
 	return {
 		"record": _record(doc),
+		"fields": get_effective_fields(doc, VIEW_FIELDS),
+		"tier_fields": _tier_fields(),
 		"tiers": _tiers(doc),
 		"actions": _actions(doc),
 		"can_edit": is_editable_by_user(doc),
@@ -307,6 +401,8 @@ def _editor_values(doc, item, *, existing: bool) -> dict:
 	values["uom"] = doc.uom if existing else (item.stock_uom if item else None)
 	values["from_date"] = values["from_date"] or nowdate()
 	values["item_price_values"] = _tiers(doc)
+	values["supplier_name"] = doc.supplier_name
+	values["approved_by"] = doc.approved_by if cint(doc.docstatus) in (1, 2) else None
 	return values
 
 
@@ -315,7 +411,7 @@ def _field_schema(fieldname: str) -> dict:
 	return {
 		"label": field.label if field and field.label else fieldname.replace("_", " ").title(),
 		"required": fieldname in {"item_name", "supplier", "uom", "from_date", "tax"},
-		"read_only": fieldname == "uom",
+		"read_only": fieldname in READ_ONLY_EDITOR_FIELDS,
 	}
 
 
@@ -329,14 +425,19 @@ def _tier_field_schema(fieldname: str) -> dict:
 	}
 
 
+def _tier_fields() -> dict:
+	return {fieldname: _tier_field_schema(fieldname) for fieldname in TIER_FIELDS}
+
+
 def _editor_payload(doc, *, existing: bool, item=None) -> dict:
 	unit_mismatch = bool(existing and item and doc.uom != item.stock_uom)
 	return {
 		"values": _editor_values(doc, item, existing=existing),
 		"fields": {
-			fieldname: _field_schema(fieldname) for fieldname in (*EDITOR_FIELDS, "uom")
+			fieldname: _field_schema(fieldname)
+			for fieldname in (*EDITOR_FIELDS, *READ_ONLY_EDITOR_FIELDS)
 		},
-		"tier_fields": {fieldname: _tier_field_schema(fieldname) for fieldname in TIER_FIELDS},
+		"tier_fields": _tier_fields(),
 		"attributes": _attribute_options(item),
 		"options": {
 			"tax_slabs": frappe.get_all(

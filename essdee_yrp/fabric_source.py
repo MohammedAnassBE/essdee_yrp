@@ -6,11 +6,11 @@ calculated deliverables of other live Work Orders.  Nothing in this module
 writes receipt totals back to the Lot.
 """
 
-from collections import Counter, defaultdict
-from copy import deepcopy
-from decimal import Decimal, ROUND_DOWN
 import hashlib
 import json
+from collections import Counter, defaultdict
+from copy import deepcopy
+from decimal import ROUND_DOWN, Decimal
 
 import frappe
 from frappe import _
@@ -94,7 +94,9 @@ def _require_immediate_source(ipd, current_process, selected):
 	return selected
 
 
-def fill_from_source_grns(qty_rows, *, lot, ipd, current_process, current_work_order, source_process):
+def fill_from_source_grns(
+	qty_rows, *, lot, ipd, current_process, current_work_order, source_process, allow_empty=False
+):
 	"""Mutate popup rows with fillable output quantities from source GRNs.
 
 	One physical source variant can feed several output rules (Greige -> Red and
@@ -134,6 +136,29 @@ def fill_from_source_grns(qty_rows, *, lot, ipd, current_process, current_work_o
 		if qty > QTY_TOLERANCE
 	}
 	if not positive and not legacy_positive:
+		if allow_empty:
+			for qty_row in qty_rows:
+				qty_row["prefill"] = 0
+				qty_row["source_available"] = 0
+			return {
+				"value": selected["value"],
+				"process_name": selected["process_name"],
+				"label": selected["label"],
+				"received": flt(
+					sum(availability["received"].values())
+					+ sum((legacy_availability or {}).get("received", {}).values()),
+					3,
+				),
+				"reserved": flt(
+					sum(availability["reserved"].values())
+					+ sum((legacy_availability or {}).get("reserved", {}).values()),
+					3,
+				),
+				"available": 0,
+				"unavailable": True,
+				"unmatched": [],
+				"sources": [],
+			}
 		frappe.throw(
 			_("No unallocated submitted GRN quantity is available from process {0}.").format(
 				selected["process_name"]

@@ -16,6 +16,10 @@ ITEM_EDITOR_CONFIG = {
 	"value_fields": ["rate"],
 	"entry_fields": ["from_lot", "to_lot", "warehouse", "received_type", "set_combination"],
 }
+SAVED_ITEM_EDITOR_CONFIG = {
+	**ITEM_EDITOR_CONFIG,
+	"entry_fields": [*ITEM_EDITOR_CONFIG["entry_fields"], "table_index", "row_index"],
+}
 
 
 class SDYRPLotTransfer(Document):
@@ -28,7 +32,11 @@ class SDYRPLotTransfer(Document):
 			values = row.as_dict()
 			values["row_index"] = index
 			rows.append(values)
-		self.set_onload("item_details", group_items_for_ui(rows, self.doctype, config=ITEM_EDITOR_CONFIG))
+		groups = group_items_for_ui(rows, self.doctype, config=SAVED_ITEM_EDITOR_CONFIG)
+		for group in groups:
+			for entry in group["items"]:
+				entry["row_index"] = self.items[entry["row_index"]].row_index
+		self.set_onload("item_details", groups)
 
 	def before_validate(self):
 		from yrp.stock.utils import apply_posting_datetime
@@ -37,7 +45,7 @@ class SDYRPLotTransfer(Document):
 			from yrp.stock.save_stock_items import ungroup_items_from_ui
 
 			self.set(
-				"items", ungroup_items_from_ui(self.item_details, self.doctype, config=ITEM_EDITOR_CONFIG)
+				"items", ungroup_items_from_ui(self.item_details, self.doctype, config=SAVED_ITEM_EDITOR_CONFIG)
 			)
 		apply_posting_datetime(self)
 		apply_dimension_defaults(self.items)

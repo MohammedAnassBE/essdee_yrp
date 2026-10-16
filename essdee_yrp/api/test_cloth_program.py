@@ -40,6 +40,7 @@ from essdee_yrp.fabric_program import (
 	get_knitting_output_colour,
 	get_knitting_output_colour_map,
 )
+from essdee_yrp.ipd_validations import allow_generated_cloth_ipd_insert
 
 
 def _ensure_item_group(name="_Test CPD Group"):
@@ -1339,7 +1340,8 @@ class TestClothProgram(IntegrationTestCase):
 					"to_value": dia,
 				},
 			)
-		cpd.insert(ignore_permissions=True)
+		with allow_generated_cloth_ipd_insert():
+			cpd.insert(ignore_permissions=True)
 		cpd.reload()
 
 		self.assertEqual(cpd.get("knitting_dia_details"), [])
@@ -1498,7 +1500,8 @@ class TestClothProgram(IntegrationTestCase):
 				"to_value": amel,
 			},
 		)
-		cpd.insert(ignore_permissions=True)
+		with allow_generated_cloth_ipd_insert():
+			cpd.insert(ignore_permissions=True)
 		cpd.reload()
 
 		knit_references = {
@@ -2143,6 +2146,7 @@ class TestClothProgram(IntegrationTestCase):
 		demand = {(self.cloth, _attribute_value(self.dia), self.red): 50.9}
 		with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
 			build_cloth_programs(lot.name, [self.selection], excess_percentage=10)
+		frappe.db.set_value("SD YRP Lot", lot.name, "cloth_excess_percentage", 10)
 		lot.reload()
 		ipd_name = lot.lot_fabric_details[0].production_detail
 		before = frappe.get_doc("YRP Item Production Detail", ipd_name).as_dict()
@@ -2358,7 +2362,7 @@ class TestClothProgram(IntegrationTestCase):
 		)
 		self.assertEqual(res["excess_percentage"], 5)
 		lot.reload()
-		self.assertEqual(flt(lot.cloth_excess_percentage), 5)
+		self.assertEqual(flt(lot.cloth_excess_percentage), 0)
 		requirement = next(r for r in lot.lot_fabric_requirements if r.cloth_item == self.cloth)
 		program = next(r for r in lot.lot_fabric_programs if r.cloth_item == self.cloth)
 		planned = sum(
@@ -2757,7 +2761,8 @@ class TestClothProgram(IntegrationTestCase):
 		source_name = _find_or_create_cpd(self.cloth, self.selection, self.tuples)
 		source = frappe.get_doc("YRP Item Production Detail", source_name)
 
-		duplicate_name = duplicate_ipd(source_name, self.cloth)
+		with allow_generated_cloth_ipd_insert():
+			duplicate_name = duplicate_ipd(source_name, self.cloth)
 		duplicate = frappe.get_doc("YRP Item Production Detail", duplicate_name)
 
 		self.assertEqual(duplicate.approval_status, "Not Approved")

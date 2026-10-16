@@ -214,9 +214,29 @@ def _address_display_for_party(address: str, party: str, field_label: str) -> st
 	return get_address_display(address) or ""
 
 
+def missing_location_address_message(party: str) -> str:
+	name = frappe.db.get_value("Supplier", party, "supplier_name") or party
+	location = f"{name} ({party})" if name != party else party
+	return _("No address is linked to {0}. Create an address for this location first.").format(location)
+
+
+def location_has_address(party: str) -> bool:
+	return bool(frappe.db.exists("Dynamic Link", {
+		"parenttype": "Address", "link_doctype": "Supplier", "link_name": party,
+	}))
+
+
+def validate_location_addresses(doc, method=None) -> None:
+	for party_field, address_field in (("from_location", "from_address"), ("supplier", "supplier_address")):
+		party = doc.get(party_field)
+		if party and not doc.get(address_field) and not location_has_address(party):
+			frappe.throw(missing_location_address_message(party))
+
+
 def _validate_and_sync_party_dependencies(doc) -> None:
 	"""Keep web-edited warehouse and address values owned by their selected parties."""
 
+	validate_location_addresses(doc)
 	dependencies = (
 		(
 			"from_location", "from_warehouse", "from_address", "from_address_details",

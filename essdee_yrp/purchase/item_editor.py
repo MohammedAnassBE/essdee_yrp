@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 import frappe
 from frappe import _
-from frappe.utils import cint, cstr, nowdate
+from frappe.utils import cint, cstr, getdate, nowdate
 from yrp.attribute_links import value as actual_attribute_value
 from yrp.attribute_value_identity import attribute_value_name
 from yrp.attribute_values import ensure_value_master, get_mapping_values
@@ -15,6 +15,28 @@ from yrp.yrp.doctype.yrp_item.yrp_item import (
 )
 from yrp.yrp_retail.pricing import lock_pricing_policy
 
+from essdee_yrp.item_validations import validate as validate_cloth_item
+from essdee_yrp.purchase.item_dependent_attribute import (
+	apply_dependent_attribute,
+	assert_dependent_mapping_unchanged,
+	dependent_details_payload,
+	dependent_mapping_modified,
+	parse_dependent_attribute,
+	release_dependent_attribute,
+	validate_stage_variant_names,
+)
+from essdee_yrp.purchase.item_price_workspace import get_price_tiers
+from essdee_yrp.purchase.item_tables import (
+	SCALAR_FIELDS,
+	apply_item_tables,
+	final_dependent_details,
+	finished_goods_packing,
+	parse_item_tables,
+	table_field_schemas,
+	table_values,
+	validate_stage_conversions,
+)
+from essdee_yrp.purchase.item_usage import has_item_transactions
 from essdee_yrp.web_common import assert_expected_modified, parse_mapping, permission_flags
 
 ITEM_DOCTYPE = "Item"
@@ -29,6 +51,10 @@ EDITOR_FIELDS = (
 	"description",
 	"disabled",
 	"primary_attribute",
+	"dependent_attribute",
+	*SCALAR_FIELDS,
+	"categories",
+	"yrp_details_section",
 )
 
 
@@ -193,21 +219,33 @@ def _editor_options() -> dict:
 			order_by="name asc",
 			limit=0,
 		),
+		"numeric_attributes": frappe.get_all(
+			"Item Attribute", filters={"numeric_values": 1}, pluck="name", limit=0
+		),
+		"categories": frappe.get_all("YRP Item Category", pluck="name", order_by="name", limit=0),
 	}
 
 
-def _active_prices(item: str) -> list[dict]:
+PRICE_STATE_ORDER = {"Approval Pending": 2, "Draft": 3}
+
+
+def _price_rank(price) -> tuple:
+	"""Current approved prices first, then pending, then the rest."""
+	today = getdate(nowdate())
+	if price.workflow_state == "Approved" and price.docstatus == 1:
+		if price.from_date and getdate(price.from_date) > today:
+			return (1,)
+		if not price.to_date or getdate(price.to_date) >= today:
+			return (0,)
+	return (PRICE_STATE_ORDER.get(price.workflow_state, 4),)
+
+
+def _item_prices(item: str) -> list[dict]:
 	if not frappe.has_permission("YRP Item Price", ptype="read"):
 		return []
 	prices = frappe.get_list(
 		"YRP Item Price",
-		filters={
-			"item_name": item,
-			"docstatus": 1,
-			"workflow_state": "Approved",
-			"from_date": ["<=", nowdate()],
-		},
-		or_filters=[["to_date", "is", "not set"], ["to_date", ">=", nowdate()]],
+		filters={"item_name": item},
 		fields=[
 			"name",
 			"supplier",
@@ -226,41 +264,32 @@ def _active_prices(item: str) -> list[dict]:
 	)
 	if not prices:
 		return []
-	tiers_by_price = {price.name: [] for price in prices}
-	for row in frappe.get_all(
-		"YRP Item Price Value",
-		filters={"parent": ["in", list(tiers_by_price)]},
-		fields=["parent", "moq", "price", "lead_time", "attribute_value"],
-		order_by="parent asc, idx asc",
-	):
-		tiers_by_price[row.parent].append(
-			{
-				"moq": row.moq,
-				"price": row.price,
-				"lead_time": row.lead_time,
-				"attribute_value": row.attribute_value,
-				"attribute_value_label": actual_attribute_value(row.attribute_value),
-			}
-		)
+	tiers_by_price = get_price_tiers([price.name for price in prices])
 	for price in prices:
 		price["tiers"] = tiers_by_price[price.name]
-	return prices
+		price["is_current"] = _price_rank(price) == (0,)
+	return sorted(prices, key=_price_rank)
 
 
 def _editor_payload(doc=None) -> dict:
 	is_existing = bool(doc and not doc.is_new())
 	variant_count = frappe.db.count("Item", {"variant_of": doc.name}) if is_existing else 0
 	fields = {fieldname: _field_schema(fieldname) for fieldname in EDITOR_FIELDS}
+	fields.update(table_field_schemas())
 	fields["stock_uom"]["read_only"] = is_existing
 	values = {
+		**table_values(doc),
 		"name": doc.item_name if doc else None,
 		"brand": doc.brand if doc else None,
 		"item_group": doc.item_group if doc else None,
-		"stock_uom": doc.stock_uom if doc else None,
+		"stock_uom": doc.stock_uom if is_existing else None,
 		"gst_hsn_code": doc.get("gst_hsn_code") if doc else None,
 		"description": doc.description if doc else None,
 		"disabled": cint(doc.disabled) if doc else 0,
 		"primary_attribute": doc.primary_attribute if doc else None,
+		"dependent_attribute": doc.get("dependent_attribute") if doc else None,
+		"dependent_details": dependent_details_payload(doc) if is_existing else [],
+		"dependent_mapping_modified": dependent_mapping_modified(doc) if is_existing else None,
 		"attributes": [_mapping_payload(row) for row in doc.get("attributes") or []]
 		if doc
 		else [],
@@ -280,7 +309,9 @@ def _editor_payload(doc=None) -> dict:
 		"variant_count": variant_count,
 		"attributes_locked": bool(variant_count),
 		"attribute_lock_message": _("Locked: variants exist") if variant_count else "",
-		"active_prices": _active_prices(doc.name) if is_existing else [],
+		"has_item_transactions": bool(is_existing and has_item_transactions(doc.name)),
+		"fg_pcs_per_box": finished_goods_packing(doc.name) if is_existing else None,
+		"item_prices": _item_prices(doc.name) if is_existing else [],
 		"modified": doc.modified if is_existing else None,
 		"permissions": permissions,
 	}
@@ -304,6 +335,8 @@ def get_item_editor(name: str | None = None) -> dict:
 
 @frappe.whitelist()
 def search_attribute_values(attribute: str, txt: str = "", item: str | None = None) -> list[dict]:
+	if item:
+		frappe.has_permission(ITEM_DOCTYPE, ptype="read", doc=item, throw=True)
 	labels = search_item_attribute_values(txt=txt, attribute=attribute, item=item)
 	if not labels and frappe.db.get_value("Item Attribute", attribute, "numeric_values"):
 		mapping_values = (
@@ -382,11 +415,14 @@ def _fill_mapping(mapping_name: str, attribute: str, labels: list[str]) -> None:
 	_ensure_requested_values(attribute, labels)
 	mapping = frappe.get_doc(MAPPING_DOCTYPE, mapping_name)
 	frappe.has_permission(MAPPING_DOCTYPE, ptype="write", doc=mapping, throw=True)
-	mapping.set(
-		"values",
-		[{"attribute_value": ensure_value_master(attribute, label)} for label in labels],
-	)
-	mapping.save()
+	_write_mapping_values(mapping, attribute, labels)
+
+
+def _parse_attribute_rules(values, attributes: list[dict]) -> tuple[str | None, str | None]:
+	primary_attribute = cstr(values.get("primary_attribute")).strip() or None
+	if primary_attribute and primary_attribute not in {row["attribute"] for row in attributes}:
+		frappe.throw(_("Primary Attribute must be one of the selected Attributes."))
+	return primary_attribute, parse_dependent_attribute(values, attributes, primary_attribute)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -397,9 +433,11 @@ def create_item(values) -> dict:
 	_validate_item_basics(values)
 	attributes = _parse_attributes(values.get("attributes") or [])
 	_require_mapping_create_permissions(attributes)
-	primary_attribute = cstr(values.get("primary_attribute")).strip() or None
-	if primary_attribute and primary_attribute not in {row["attribute"] for row in attributes}:
-		frappe.throw(_("Primary Attribute must be one of the selected Attributes."))
+	primary_attribute, dependent_attribute = _parse_attribute_rules(values, attributes)
+	tables = parse_item_tables(values, values.get("stock_uom"))
+	details = final_dependent_details(values, attributes, dependent_attribute, values.get("stock_uom"))
+	validate_stage_conversions(details, tables["uoms"], values.get("stock_uom"))
+	validate_stage_variant_names(details)
 
 	item_code = _legacy_item_code(values.get("name"), values.get("brand"))
 	if frappe.db.exists(ITEM_DOCTYPE, item_code):
@@ -415,6 +453,7 @@ def create_item(values) -> dict:
 			"gst_hsn_code": values.get("gst_hsn_code") or None,
 			"description": values.get("description") or None,
 			"disabled": cint(values.get("disabled")),
+			"country_of_origin": frappe.db.get_default("country"),
 			"is_stock_item": 1,
 			"is_purchase_item": 1,
 			"is_sales_item": 0,
@@ -424,10 +463,14 @@ def create_item(values) -> dict:
 			"attributes": [{"attribute": row["attribute"]} for row in attributes],
 		}
 	)
+	doc.name = item_code
+	apply_item_tables(doc, tables)
+	validate_cloth_item(doc)
 	doc.insert()
 	doc.reload()
 	for requested, attribute_row in zip(attributes, doc.get("attributes") or [], strict=True):
 		_fill_mapping(attribute_row.mapping, requested["attribute"], requested["values"])
+	apply_dependent_attribute(doc, dependent_attribute, details)
 	return {"name": doc.name}
 
 
@@ -440,6 +483,14 @@ def _load_locked_item(name: str, expected_modified):
 	_reject_variant(doc)
 	assert_expected_modified(doc, expected_modified)
 	return doc
+
+
+@frappe.whitelist(methods=["POST"])
+def set_item_disabled(name: str, disabled, expected_modified) -> dict:
+	doc = _load_locked_item(name, expected_modified)
+	doc.disabled = cint(disabled)
+	doc.save()
+	return get_item_editor(doc.name)
 
 
 def _stored_attributes(doc) -> dict[str, dict]:
@@ -462,6 +513,8 @@ def _attributes_changed(doc, requested, stored) -> bool:
 	if bool(doc.has_variants) != bool(requested.rows):
 		return True
 	if (doc.primary_attribute or None) != (cstr(requested.primary_attribute).strip() or None):
+		return True
+	if (doc.get("dependent_attribute") or None) != requested.dependent_attribute:
 		return True
 	return any(
 		stored[row["attribute"]]["stored_values"] != row["values"] for row in requested.rows
@@ -514,14 +567,21 @@ def update_item(name: str, values, expected_modified) -> dict:
 	values = parse_mapping(values, _("Item values"))
 	lock_pricing_policy()
 	doc = _load_locked_item(name, expected_modified)
+	assert_dependent_mapping_unchanged(doc, values.get("dependent_mapping_modified"))
 	validated_values = {**values, "stock_uom": doc.stock_uom}
 	_validate_item_basics(validated_values)
 	attributes = _parse_attributes(values.get("attributes") or [])
-	primary_attribute = cstr(values.get("primary_attribute")).strip() or None
-	if primary_attribute and primary_attribute not in {row["attribute"] for row in attributes}:
-		frappe.throw(_("Primary Attribute must be one of the selected Attributes."))
+	primary_attribute, dependent_attribute = _parse_attribute_rules(values, attributes)
+	tables = parse_item_tables(values, doc.stock_uom, doc)
+	details = final_dependent_details(values, attributes, dependent_attribute, doc.stock_uom, doc)
+	validate_stage_conversions(details, tables["uoms"], doc.stock_uom)
+	validate_stage_variant_names(details)
 	stored = _stored_attributes(doc)
-	request = frappe._dict(rows=attributes, primary_attribute=primary_attribute)
+	request = frappe._dict(
+		rows=attributes,
+		primary_attribute=primary_attribute,
+		dependent_attribute=dependent_attribute,
+	)
 	attribute_changes = _attributes_changed(doc, request, stored)
 	if attribute_changes and template_has_variants(doc.name):
 		frappe.throw(_("Locked: variants exist. Item attributes cannot be changed."))
@@ -551,9 +611,46 @@ def update_item(name: str, values, expected_modified) -> dict:
 				stored_row["mapping"], row.get("mapping_modified")
 			)
 
+	apply_item_tables(doc, tables)
+	validate_cloth_item(doc)
 	for row in attributes:
 		_ensure_requested_values(row["attribute"], row["values"])
+	for attribute, mapping in locked_mappings.items():
+		_write_mapping_values(mapping, attribute, _requested_values(attributes, attribute))
 
+	_set_item_values(doc, values, attributes, stored)
+	doc.primary_attribute = primary_attribute
+	if (doc.get("dependent_attribute") or None) != dependent_attribute:
+		release_dependent_attribute(doc)
+	doc.save()
+	doc.reload()
+
+	for requested, attribute_row in zip(attributes, doc.get("attributes") or [], strict=True):
+		stored_row = stored.get(requested["attribute"])
+		if requested["attribute"] in locked_mappings or (
+			stored_row and stored_row["stored_values"] == requested["values"]
+		):
+			continue
+		mapping = frappe.get_doc(MAPPING_DOCTYPE, attribute_row.mapping)
+		frappe.has_permission(MAPPING_DOCTYPE, ptype="write", doc=mapping, throw=True)
+		_write_mapping_values(mapping, requested["attribute"], requested["values"])
+	apply_dependent_attribute(doc, dependent_attribute, details)
+	return get_item_editor(doc.name)
+
+
+def _requested_values(attributes: list[dict], attribute: str) -> list[str]:
+	return next(row["values"] for row in attributes if row["attribute"] == attribute)
+
+
+def _write_mapping_values(mapping, attribute: str, labels: list[str]) -> None:
+	mapping.set(
+		"values",
+		[{"attribute_value": ensure_value_master(attribute, label)} for label in labels],
+	)
+	mapping.save()
+
+
+def _set_item_values(doc, values, attributes: list[dict], stored: dict) -> None:
 	doc.item_name = cstr(values.get("name")).strip()
 	doc.brand = values.get("brand") or None
 	doc.item_group = values.get("item_group")
@@ -561,8 +658,8 @@ def update_item(name: str, values, expected_modified) -> dict:
 	doc.description = values.get("description") or None
 	doc.disabled = cint(values.get("disabled"))
 	doc.has_variants = int(bool(attributes))
-	doc.variant_based_on = "Item Attribute" if attributes else None
-	doc.primary_attribute = primary_attribute
+	if bool(attributes) != bool(stored):
+		doc.variant_based_on = "Item Attribute" if attributes else None
 	existing_attribute_rows = {row.attribute: row for row in doc.get("attributes") or []}
 	attribute_rows = []
 	for index, row in enumerate(attributes, start=1):
@@ -576,24 +673,3 @@ def update_item(name: str, values, expected_modified) -> dict:
 			attribute_row.idx = index
 		attribute_rows.append(attribute_row)
 	doc.set("attributes", attribute_rows)
-	doc.save()
-	doc.reload()
-
-	for requested, attribute_row in zip(attributes, doc.get("attributes") or [], strict=True):
-		stored_row = stored.get(requested["attribute"])
-		if stored_row and stored_row["stored_values"] == requested["values"]:
-			continue
-		mapping = locked_mappings.get(requested["attribute"])
-		if mapping is None:
-			mapping = frappe.get_doc(MAPPING_DOCTYPE, attribute_row.mapping)
-			frappe.has_permission(MAPPING_DOCTYPE, ptype="write", doc=mapping, throw=True)
-		mapping.set(
-			"values",
-			[
-				{"attribute_value": ensure_value_master(requested["attribute"], label)}
-				for label in requested["values"]
-			],
-		)
-		mapping.save()
-	return get_item_editor(doc.name)
-

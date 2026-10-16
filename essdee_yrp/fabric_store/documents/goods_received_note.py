@@ -17,6 +17,7 @@ from collections.abc import Mapping
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp.party_addresses import get_party_address
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import (
 	group_correction_items_for_ui,
@@ -478,6 +479,7 @@ def get_goods_received_note_workspace(name: str | None = None, source=None) -> d
 			},
 			"dimensions": _dimension_projection(doc),
 			**_purchase_order_lot_context(doc),
+			"actual_dia": _actual_dia_context(doc),
 			"special_source": _special_source_context(doc),
 			"inspection": inspection,
 			"related": related,
@@ -488,6 +490,16 @@ def get_goods_received_note_workspace(name: str | None = None, source=None) -> d
 		}
 	)
 	return workspace
+
+
+def _actual_dia_context(doc):
+	from essdee_yrp.fabric_grn import get_actual_dia_context
+
+	if cint(doc.get("docstatus")) or doc.get("against") != "YRP Work Order":
+		return {"enabled": False, "dia_options": []}
+	if _special_source_context(doc)["active"]:
+		return {"enabled": False, "dia_options": []}
+	return get_actual_dia_context(doc.get("against_id"))
 
 
 def _resolve_source(source) -> tuple[dict, str, str, str | None]:
@@ -506,8 +518,42 @@ def _resolve_source(source) -> tuple[dict, str, str, str | None]:
 
 def _source_defaults(against: str, against_id: str, delivery_challan: str | None = None) -> dict:
 	if against == "YRP Work Order":
-		return get_work_order_defaults(against_id, delivery_challan)
-	return get_purchase_order_defaults(against_id)
+		defaults = get_work_order_defaults(against_id, delivery_challan)
+	else:
+		defaults = get_purchase_order_defaults(against_id)
+		if not defaults.get("delivery_location") and defaults.get("to_warehouse"):
+			defaults["delivery_location"] = frappe.db.get_value("Warehouse", defaults["to_warehouse"], "supplier")
+	if not defaults.get("delivery_address"):
+		defaults["delivery_address"] = get_delivery_address(
+			defaults.get("delivery_location"), against_id if against == "Purchase Order" else None
+		)
+	if not defaults.get("supplier_address"):
+		defaults["supplier_address"] = get_supplier_address(
+			defaults.get("supplier"), against_id if against == "Purchase Order" else None
+		)
+	return defaults
+
+
+@frappe.whitelist()
+def get_delivery_address(delivery_location=None, purchase_order=None) -> str:
+	frappe.has_permission("YRP Goods Received Note", ptype="read", throw=True)
+	address = get_party_address(delivery_location, preferred_type="Shipping")
+	if address or not purchase_order:
+		return address or ""
+	po = frappe.get_doc("Purchase Order", purchase_order)
+	po.check_permission("read")
+	return po.get("shipping_address") or ""
+
+
+@frappe.whitelist()
+def get_supplier_address(supplier=None, purchase_order=None) -> str:
+	frappe.has_permission("YRP Goods Received Note", ptype="read", throw=True)
+	address = get_party_address(supplier, preferred_type="Billing")
+	if address or not purchase_order:
+		return address or ""
+	po = frappe.get_doc("Purchase Order", purchase_order)
+	po.check_permission("read")
+	return po.get("supplier_address") or ""
 
 
 def _source_values(defaults: Mapping, browser_values: Mapping | None = None) -> dict:
@@ -583,6 +629,7 @@ def _new_workspace(doc, defaults: Mapping, can_submit: bool) -> dict:
 		"dimensions": _dimension_projection(doc),
 		"lot_options": defaults.get("lot_options") or [],
 		"lot_fieldname": defaults.get("lot_fieldname"),
+		"actual_dia": _actual_dia_context(doc),
 		"special_source": _special_source_context(doc),
 		"inspection": {"initial_payload": [], "entries": [], "reason": "", "can_create": False},
 		"related": {},
@@ -857,6 +904,41 @@ def _merge_received_type_rows(authoritative, browser_rows):
 	return merged
 
 
+def _actual_dia_additions(authoritative, browser_rows, context):
+	"""Seed new Dia lineages from trusted receivables."""
+	if not context.get("enabled"):
+		return authoritative
+	from essdee_yrp.fabric_grn import validate_actual_dia_variant
+
+	dimensions = _dimension_fieldnames()
+	rows = [_row_dict(row) for row in authoritative]
+	known = {_business_key(row, dimensions, include_received_type=False) for row in rows}
+	positive_rows = [row for row in browser_rows if flt(row.get("quantity")) > 0]
+	for index, browser in enumerate(positive_rows, 1):
+		key = _business_key(browser, dimensions, include_received_type=False)
+		if key in known:
+			continue
+		source = next((row for row in rows if _is_actual_dia_lineage(row, browser, dimensions)), None)
+		if source is None:
+			continue
+		validate_actual_dia_variant(source["item_variant"], browser["item_variant"], index)
+		row_index = max((cint(row.get("row_index")) for row in rows), default=-1) + 1
+		clone = {**source, "item_variant": browser["item_variant"], "quantity": 0, "row_index": row_index}
+		clone.pop("name", None)
+		rows.append(clone)
+		known.add(key)
+	return rows
+
+
+def _is_actual_dia_lineage(source, browser, dimensions):
+	if not browser.get("ref_docname"):
+		return False
+	candidate = {**browser, "item_variant": source.get("item_variant")}
+	return _business_key(source, dimensions, include_received_type=False) == _business_key(
+		candidate, dimensions, include_received_type=False
+	)
+
+
 def _browser_rows(values: Mapping, *, corrections: bool, fallback_rows) -> tuple[list, bool]:
 	keys = (
 		("correction_item_details", "correction_item_groups")
@@ -980,6 +1062,9 @@ def save_goods_received_note(
 		)
 		browser_corrections, has_correction_matrix = _browser_rows(
 			values, corrections=True, fallback_rows=authoritative_corrections
+		)
+		authoritative_items = _actual_dia_additions(
+			authoritative_items, browser_items, _actual_dia_context(doc)
 		)
 		items = (
 			_merge_authoritative_rows(

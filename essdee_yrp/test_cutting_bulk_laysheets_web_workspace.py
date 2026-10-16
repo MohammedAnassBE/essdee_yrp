@@ -1,8 +1,10 @@
 from copy import deepcopy
+from datetime import date
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 import frappe
+from frappe.model.base_document import BaseDocument
 
 from essdee_yrp.cutting.bulk_laysheets_workspace import (
 	_assert_source_permissions,
@@ -22,15 +24,19 @@ from essdee_yrp.cutting.bulk_laysheets_workspace import (
 	save_active_editor,
 	set_active_laysheet,
 	submit_bulk_lot_transfer,
-	submit_lot_transfer,
 	submit_delivery_challan,
+	submit_lot_transfer,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets import (
 	sd_yrp_cutting_bulk_lay_sheets as native_bulk,
 )
 
-
 DOCTYPE = "SD YRP Cutting Bulk Lay Sheets"
+
+
+class SetupChildRow(BaseDocument):
+	def __init__(self, values):
+		super().__init__({**dict.fromkeys(("name", "cutting_laysheet", "lot_transfer", "delivery_challan", "status")), **values})
 
 
 def bulk_row(name="ROW-1", status="Create Lay Sheet", **values):
@@ -74,6 +80,151 @@ def bulk_doc(rows=None, **values):
 
 
 class TestCuttingBulkLaySheetsWebWorkspace(TestCase):
+	def _save_setup(self, previous, values, name="CBLS-001"):
+		doc = object.__new__(native_bulk.SDYRPCuttingBulkLaySheets)
+		doc.__dict__.update(previous)
+		doc.__dict__.pop("get", None)
+		doc.flags = frappe._dict()
+		doc._table_fieldnames = {"lot_details": "SD YRP Cutting Bulk Lay Sheet Detail"}
+		doc.save = MagicMock(side_effect=doc._validate_lot_rows)
+		doc.insert = MagicMock(side_effect=doc._validate_lot_rows)
+		plans = {row["cutting_plan"]: row["lot"] for row in values["lot_details"]}
+		markers = {row["cutting_marker"]: row["cutting_plan"] for row in values["lot_details"]}
+
+		def get_value(doctype, document_name, fields, **kwargs):
+			if doctype == DOCTYPE:
+				return previous
+			if doctype == "SD YRP Cutting Plan":
+				return frappe._dict(lot=plans[document_name], work_order=document_name.replace("CP-", "WO-"), docstatus=1, cp_status="Ready to Cut")
+			return frappe._dict(cutting_plan=markers[document_name], docstatus=1)
+
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "new_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(frappe.db, "get_value", side_effect=get_value),
+			patch.object(frappe, "get_all", return_value=previous.lot_details),
+			patch("frappe.model.base_document.get_controller", return_value=SetupChildRow),
+			patch("essdee_yrp.cutting.bulk_laysheets_workspace._assert_source_permissions"),
+			patch("essdee_yrp.cutting.bulk_laysheets_workspace.get_workspace", return_value=doc),
+		):
+			return save(values, name=name, expected_modified=previous.modified)
+
+	def _setup_values(self, doc):
+		fields = ("main_lot", "from_location", "posting_date", "cutting_spreader", "cutter")
+		values = {field: doc[field] for field in fields}
+		values["lot_details"] = [{field: row[field] for field in ("name", "lot", "cutting_plan", "cutting_marker")} for row in doc.lot_details]
+		return values
+
+	def test_edit_setup_saves_headers_without_dropping_persisted_child_fields(self):
+		for field, value in (("cutter", "CUTTER-2"), ("cutting_spreader", "SPREADER-2"), ("posting_date", "2026-10-04")):
+			with self.subTest(field=field):
+				previous = bulk_doc([bulk_row(lot_transfer="LT-1", delivery_challan="DC-1")])
+				values = self._setup_values(previous)
+				values[field] = value
+				doc = self._save_setup(previous, values)
+				self.assertEqual(doc.get(field), value)
+				self.assertEqual({key: doc.lot_details[0].get(key) for key in previous.lot_details[0]}, dict(previous.lot_details[0]))
+				doc.save.assert_called_once_with()
+
+	def test_existing_laysheet_row_retains_all_workflow_links_and_status(self):
+		previous = bulk_doc([bulk_row(cutting_laysheet="CLS-1", lot_transfer="LT-1", delivery_challan="DC-1", status="Ready to Print")])
+		doc = self._save_setup(previous, self._setup_values(previous))
+		for field in ("work_order", "cutting_laysheet", "lot_transfer", "delivery_challan", "status"):
+			self.assertEqual(doc.lot_details[0].get(field), previous.lot_details[0][field])
+		with (
+			patch.object(frappe, "get_doc", return_value=previous),
+			patch.object(frappe, "has_permission", return_value=True),
+		):
+			self.assertTrue(get_editor(previous.name)["setup_locked"])
+
+	def test_unlocked_rows_can_be_added_removed_and_change_plan_and_marker(self):
+		previous = bulk_doc([bulk_row(), bulk_row(name="ROW-2", lot="LOT-SPLIT-2", cutting_plan="CP-002", cutting_marker="CM-002")])
+		values = self._setup_values(previous)
+		values["lot_details"] = [
+			{"name": "ROW-1", "lot": "LOT-SPLIT-1", "cutting_plan": "CP-003", "cutting_marker": "CM-003"},
+			{"lot": "LOT-SPLIT-3", "cutting_plan": "CP-004", "cutting_marker": "CM-004"},
+		]
+		doc = self._save_setup(previous, values)
+		self.assertEqual([(row.lot, row.cutting_plan, row.cutting_marker, row.work_order) for row in doc.lot_details], [
+			("LOT-SPLIT-1", "CP-003", "CM-003", "WO-003"),
+			("LOT-SPLIT-3", "CP-004", "CM-004", "WO-004"),
+		])
+		self.assertEqual(doc.lot_details[0].name, "ROW-1")
+
+	def test_laysheet_rows_and_headers_remain_locked_on_server(self):
+		previous = bulk_doc([bulk_row(cutting_laysheet="CLS-1")])
+		for field in ("main_lot", "from_location", "posting_date", "cutting_spreader", "cutter"):
+			values = self._setup_values(previous)
+			values[field] = "CHANGED"
+			with self.subTest(header=field), self.assertRaises(frappe.ValidationError):
+				self._save_setup(previous, values)
+		for field in ("lot", "cutting_plan", "cutting_marker"):
+			values = self._setup_values(previous)
+			values["lot_details"][0][field] = "CHANGED"
+			with self.subTest(row=field), self.assertRaises(frappe.ValidationError):
+				self._save_setup(previous, values)
+		values = self._setup_values(previous)
+		values["lot_details"] = [{"lot": "OTHER", "cutting_plan": "CP-002", "cutting_marker": "CM-002"}]
+		with self.assertRaises(frappe.ValidationError):
+			self._save_setup(previous, values)
+
+	def test_locked_posting_date_accepts_equivalent_string_and_rejects_changed_date(self):
+		previous = bulk_doc([bulk_row(cutting_laysheet="CLS-1")], posting_date=date(2026, 10, 15))
+		values = self._setup_values(previous)
+		values["posting_date"] = "2026-10-15"
+		doc = self._save_setup(previous, values)
+		self.assertEqual(doc.posting_date, "2026-10-15")
+		values["posting_date"] = "2026-10-16"
+		with self.assertRaisesRegex(frappe.ValidationError, "Posting Date cannot change"):
+			self._save_setup(previous, values)
+
+	def test_locked_bulk_accepts_new_split_lot_with_equivalent_string_date(self):
+		previous = bulk_doc([bulk_row(cutting_laysheet="CLS-1")], posting_date=date(2026, 10, 15))
+		values = self._setup_values(previous)
+		values["posting_date"] = "2026-10-15"
+		values["lot_details"].append({"lot": "LOT-SPLIT-2", "cutting_plan": "CP-002", "cutting_marker": "CM-002"})
+		doc = self._save_setup(previous, values)
+		self.assertEqual(doc.lot_details[0].cutting_laysheet, "CLS-1")
+		self.assertEqual(doc.lot_details[1].lot, "LOT-SPLIT-2")
+
+	def test_desk_setup_validation_normalizes_locked_posting_date(self):
+		old_setup = bulk_doc([bulk_row(cutting_laysheet="CLS-1")], posting_date=date(2026, 10, 15))
+		doc = object.__new__(native_bulk.SDYRPCuttingBulkLaySheets)
+		doc.__dict__.update(old_setup)
+		doc.__dict__.pop("get", None)
+		with (
+			patch.object(frappe.db, "get_value", return_value=old_setup),
+			patch.object(frappe, "get_all", return_value=old_setup.lot_details),
+			patch.object(doc, "_validated_row_plan", return_value=frappe._dict(work_order="WO-001")),
+			patch.object(doc, "_validate_row_marker"),
+			patch.object(doc, "_restore_existing_row"),
+		):
+			doc.posting_date = "2026-10-15"
+			doc._validate_lot_rows()
+			doc.posting_date = "2026-10-16"
+			with self.assertRaisesRegex(frappe.ValidationError, "Posting Date cannot change"):
+				doc._validate_lot_rows()
+
+	def test_new_setup_saves_and_rejects_split_lot_equal_to_main_lot(self):
+		previous = bulk_doc(name=None, lot_details=[], __islocal=1)
+		values = self._setup_values(previous)
+		values["lot_details"] = [{"lot": "LOT-SPLIT-1", "cutting_plan": "CP-001", "cutting_marker": "CM-001"}]
+		doc = self._save_setup(previous, values, name=None)
+		doc.insert.assert_called_once_with()
+		self.assertEqual(doc.lot_details[0].work_order, "WO-001")
+		values["lot_details"][0]["lot"] = values["main_lot"]
+		with self.assertRaisesRegex(frappe.ValidationError, "Split Lot must be different"):
+			self._save_setup(previous, values, name=None)
+
+	def test_setup_rejects_crafted_read_only_child_fields(self):
+		previous = bulk_doc()
+		for field in ("work_order", "cutting_laysheet", "lot_transfer", "delivery_challan", "status", "idx", "unknown"):
+			values = self._setup_values(previous)
+			values["lot_details"][0][field] = "INJECTED"
+			with self.subTest(field=field), self.assertRaisesRegex(frappe.ValidationError, "cannot be changed here"):
+				_normalise_values(values, previous)
+
 	def test_setup_requires_read_permission_for_every_source_record(self):
 		values = {
 			"main_lot": "LOT-MAIN",

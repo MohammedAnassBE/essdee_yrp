@@ -79,6 +79,7 @@ def _validate_yarn_rows(rows, cloth_item=None):
 			frappe.throw(
 				_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(row_number, yarn_item)
 			)
+		_validate_yarn_template(yarn_item, row_number)
 		attributes = set(
 			frappe.get_all(
 				"Item Variant Attribute",
@@ -99,3 +100,11 @@ def _validate_yarn_rows(rows, cloth_item=None):
 
 	if abs(total - 100.0) > 0.001:
 		frappe.throw(_("Yarn Ratio total must be exactly 100%. Current total is {0}%.").format(flt(total, 3)))
+
+
+def _validate_yarn_template(yarn_item, row_number):
+	template = frappe.db.get_value("Item", yarn_item, "variant_of")
+	if template and frappe.db.get_value("Item", template, "is_cloth_item"):
+		frappe.throw(
+			_("Row {0}: Cloth Item {1} cannot be selected as yarn.").format(row_number, yarn_item)
+		)

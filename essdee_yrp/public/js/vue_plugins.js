@@ -900,5 +900,6 @@ import LotTransferEditor from "./LotTransfer.vue";
 frappe.provide("essdee_yrp");
 essdee_yrp.mount_lot_transfer = (wrapper, frm) => {
  const app = createApp(LotTransferEditor, {frm});
+ if (typeof SetVueGlobals === "function") SetVueGlobals(app);
  return {app, editor: app.mount(wrapper)};
 };

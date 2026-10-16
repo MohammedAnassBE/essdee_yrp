@@ -23,6 +23,7 @@ from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail impor
 )
 from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import get_item_group_index
 
+from essdee_yrp.cloth_program_access import has_cloth_program_role
 from essdee_yrp.fabric_program import (
 	fetch_fabric_program_details,
 	rebuild_plans_after_save,
@@ -193,6 +194,7 @@ class SDYRPLot(Document):
 		rebuild_plans_after_save(self)
 
 	def onload(self):
+		self.set_onload("can_manage_cloth_program", has_cloth_program_role())
 		if self.get("lot_fabric_details"):
 			self.set_onload("fabric_program_details", fetch_fabric_program_details(self))
 		if self.production_detail:

@@ -310,6 +310,7 @@ def _get_dispatch_row_source(doc, row, sources):
 
 
 def before_submit(doc, method=None):
+	validate_transit_receipt(doc)
 	if doc.against not in ("SD YRP Finishing Plan", "SD YRP Finishing Plan Dispatch"):
 		return
 	if doc.against == "SD YRP Finishing Plan Dispatch" and doc.purpose != "Material Issue":
@@ -320,6 +321,48 @@ def before_submit(doc, method=None):
 	add_goods_value = frappe.db.get_single_value("YRP Stock Settings", "add_finishing_plan_goods_value")
 	if doc.purpose == "Material Issue" and not add_goods_value:
 		doc.total_amount = doc.additional_amount or 0
+
+
+def validate_transit_receipt(doc):
+	if doc.get("purpose") != "Receive at Warehouse" or not doc.get("outgoing_stock_entry"):
+		return
+
+	source = frappe.get_doc("YRP Stock Entry", doc.outgoing_stock_entry, for_update=True)
+	if source.docstatus != 1 or source.purpose != "Send to Warehouse" or source.skip_transit:
+		frappe.throw(_("The outgoing Stock Entry must be a submitted Send to Warehouse with transit enabled."))
+
+	source_rows = {row.name: row for row in source.items}
+	quantities = {}
+	receiving_rows = {}
+	for row in doc.get("items") or []:
+		source_row = source_rows.get(row.get("ste_detail"))
+		if (
+			not source_row
+			or row.get("against_stock_entry") != source.name
+			or row.item != source_row.item
+		):
+			frappe.throw(_("Row #{0}: Item {1}: must come from the outgoing Stock Entry.").format(row.idx, row.item))
+		quantities[row.ste_detail] = quantities.get(row.ste_detail, 0) + flt(row.qty)
+		receiving_rows.setdefault(row.ste_detail, row)
+
+	for detail, quantity in quantities.items():
+		received = frappe.db.sql(
+			"""SELECT IFNULL(SUM(qty), 0)
+			FROM `tabYRP Stock Entry Detail`
+			WHERE against_stock_entry = %s
+			AND ste_detail = %s
+			AND docstatus = 1
+			AND parent != %s""",
+			(source.name, detail, doc.name),
+		)[0][0]
+		pending = flt(source_rows[detail].qty) - flt(received)
+		if quantity > pending + 0.000001:
+			row = receiving_rows[detail]
+			frappe.throw(
+				_("Row #{0}: Item {1}: receiving quantity {2} exceeds the quantity still in transit {3}.").format(
+					row.idx, row.item, quantity, pending
+				)
+			)
 
 
 def on_submit(doc, method=None):

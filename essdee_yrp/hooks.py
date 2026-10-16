@@ -199,6 +199,7 @@ yrp_registered_experiences = {
 	"pd": ["workspaces"],
 	"accounts": ["workspaces"],
 	"hr": ["workspaces"],
+	"merch": ["workspaces"],
 }
 
 # Post-login landing: ordinary users land on the custom /web work hub;
@@ -217,6 +218,7 @@ before_request = ["essdee_yrp.auth.block_desk_for_non_managers"]
 # app_include_css = "/assets/essdee_yrp/css/essdee_yrp.css"
 app_include_js = [
 	"essdee_yrp.bundle.js",
+	"/assets/essdee_yrp/js/address_creation.js",
 	"assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.js",
 ]
 app_include_css = ["assets/essdee_yrp/node_modules/frappe-gantt/dist/frappe-gantt.min.css"]
@@ -476,7 +478,10 @@ doc_events = {
 		"before_print": "essdee_yrp.print_helpers.prepare_print_document",
 		"after_insert": "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.record_delivery_challan",
 		"onload": "essdee_yrp.delivery_challan_hooks.onload",
-		"before_validate": "essdee_yrp.delivery_challan_hooks.before_validate",
+		"before_validate": [
+			"essdee_yrp.delivery_challan_hooks.before_validate",
+			"essdee_yrp.fabric_store.documents.delivery_challan.validate_location_addresses",
+		],
 		"before_cancel": "essdee_yrp.cutting.movement.before_cancel",
 		"on_submit": [
 			"essdee_yrp.cutting.movement.on_submit",

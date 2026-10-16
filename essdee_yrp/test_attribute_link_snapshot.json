@@ -51,7 +51,7 @@
   "SD YRP Item Production Detail Packing Attribute Detail|attribute_value": [null, "ctx-packing_attribute"],
   "SD YRP Item Production Detail Packing Size Detail|attribute_value": [null, "ctx-primary_attribute"],
   "SD YRP Item Production Detail Set Item Combination|attribute_value": [null, "ctx-packing_attribute"],
-  "SD YRP Item Production Detail Set Item Combination|major_attribute_value": [null, "ctx-set_item_attribute"],
+  "SD YRP Item Production Detail Set Item Combination|major_attribute_value": [null, "ctx-packing_attribute"],
   "SD YRP Item Production Detail Set Item Combination|set_item_attribute_value": [null, "ctx-set_item_attribute"],
   "SD YRP Lot Fabric Colour Program|colour": ["Colour", "Colour"],
   "SD YRP Lot Fabric Colour Program|dia": ["Dia", "Dia"],

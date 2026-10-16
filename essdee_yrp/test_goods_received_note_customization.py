@@ -1,4 +1,5 @@
-from unittest.mock import patch
+import unittest
+from unittest.mock import Mock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -660,3 +661,286 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		self.assertEqual(consumed.goods_received_note_item, grn.items[0].name)
 		self.assertEqual(consumed.received_item_variant, variant)
 		self.assertEqual(consumed.set_combination, combination)
+
+
+class TestDefaultKnittingActualDia(unittest.TestCase):
+	def setUp(self):
+		self.enterContext(patch("essdee_yrp.fabric_grn.get_dia_attribute", return_value="Dia"))
+		self.enterContext(patch("essdee_yrp.fabric_grn._configured_dia_values", return_value=["14", "14.5"]))
+		self.enterContext(patch("essdee_yrp.fabric_grn.get_parent_item", return_value="Greige"))
+		self.enterContext(patch.object(frappe.db, "exists", return_value=True))
+		self.enterContext(patch.object(frappe.db, "get_single_value", return_value="Knitting"))
+		self.work_order = frappe._dict(
+			name="WO-1", process_name="Knitting", production_detail="IPD-1",
+			cloth_execution_version=0, check_permission=Mock(),
+			receivables=[frappe._dict(name="REC-1", item_variant="Greige-14")],
+		)
+		self.enterContext(patch.object(frappe, "get_doc", return_value=self.work_order))
+
+	def test_actual_dia_context_uses_default_knitting_and_production_detail(self):
+		from essdee_yrp.fabric_grn import get_actual_dia_context
+
+		self.assertEqual(get_actual_dia_context("WO-1"), {"enabled": True, "attribute": "Dia", "dia_options": ["14", "14.5"]})
+		self.work_order.process_name = "Dyeing"
+		self.assertFalse(get_actual_dia_context("WO-1")["enabled"])
+		self.work_order.process_name = "Knitting"
+		self.work_order.production_detail = None
+		self.assertFalse(get_actual_dia_context("WO-1")["enabled"])
+
+	def test_actual_dia_validation_rejects_colour_and_unconfigured_dia(self):
+		from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+		for attributes, message in (({"Colour": "Blue", "Dia": "14.5"}, "only Dia may differ"), ({"Colour": "Greige", "Dia": "99"}, "not a valid Dia value")):
+			with (
+				self.subTest(attributes=attributes),
+				patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+				patch("essdee_yrp.fabric_grn._variant_attrs", side_effect=[{"Colour": "Greige", "Dia": "14"}, attributes]),
+			):
+				row = frappe._dict(idx=1, ref_docname="REC-1", item_variant="ACTUAL")
+				with self.assertRaisesRegex(frappe.ValidationError, message):
+					validate_actual_dia_rows(frappe._dict(against="YRP Work Order", against_id="WO-1", items=[row]))
+
+	def test_unversioned_actual_dia_split_gets_distinct_row_indexes(self):
+		from essdee_yrp.fabric_grn import validate_actual_dia_rows
+
+		rows = [
+			frappe._dict(idx=1, ref_docname="REC-1", item_variant="Greige-14", row_index="0"),
+			frappe._dict(idx=2, ref_docname="REC-1", item_variant="Greige-14.5", row_index="0"),
+		]
+		with (
+			patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+			patch("essdee_yrp.fabric_grn._variant_attrs", side_effect=[{"Colour": "Greige", "Dia": "14"}, {"Colour": "Greige", "Dia": "14.5"}]),
+		):
+			validate_actual_dia_rows(frappe._dict(against="YRP Work Order", against_id="WO-1", items=rows))
+		self.assertNotEqual(rows[0].row_index, rows[1].row_index)
+
+	def test_saved_actual_rows_have_pending_without_receipt_cap(self):
+		from essdee_yrp.fabric_grn import get_saved_actual_dia_rows
+
+		self.work_order.receivables[0].update(pending_quantity=50, cost=10)
+		rows = get_saved_actual_dia_rows(frappe._dict(items=[frappe._dict(item_variant="Greige-14.5", ref_docname="REC-1", quantity=60)]), self.work_order)
+		self.assertEqual(rows[0]["pending_quantity"], 50)
+		self.assertIsNone(rows[0]["max_receivable_quantity"])
+
+	def test_saved_actual_rows_preserve_operator_quantities_and_quantity_basis(self):
+		from essdee_yrp.fabric_grn import get_saved_actual_dia_rows
+
+		self.work_order.receivables[0].update(pending_quantity=50, cost=20, uom="Kg")
+		for secondary_qty in (0, 3):
+			with self.subTest(secondary_qty=secondary_qty):
+				saved = frappe._dict(
+					name="ACTUAL", item_variant="Greige-14.5", ref_docname="REC-1",
+					received_type="Accepted", quantity=20, secondary_uom="Roll", secondary_qty=secondary_qty,
+					uom="Pound", stock_uom="Gram", conversion_factor=453.592, stock_qty=9071.84,
+				)
+				# Base _pending_receivable_rows emits no secondary UOM or quantity.
+				planned = frappe._dict(
+					ref_docname="REC-1", received_type="Accepted", quantity=30,
+					uom="Kg", stock_uom="Kg", conversion_factor=1,
+				)
+				actual = get_saved_actual_dia_rows(
+					frappe._dict(items=[saved]), self.work_order, planned_rows=[planned]
+				)[0]
+				for field in ("quantity", "secondary_qty", "uom", "stock_uom", "conversion_factor", "stock_qty"):
+					self.assertEqual(actual[field], saved[field], field)
+				self.assertEqual(actual.get("secondary_uom"), "Roll" if secondary_qty else None)
+				self.assertEqual(actual["item_variant"], "Greige-14.5")
+				self.assertEqual(actual["rate"], 20)
+				self.assertEqual(saved.secondary_uom, "Roll", "display rebuild must not mutate saved rows")
+
+	def test_saved_actual_rows_backfill_only_missing_secondary_uom(self):
+		from essdee_yrp.fabric_grn import get_saved_actual_dia_rows
+
+		self.work_order.receivables[0].update(pending_quantity=50, cost=20, secondary_uom="Roll")
+		for saved_uom, planned_rows, expected in (
+			(None, [frappe._dict(ref_docname="REC-1", received_type="Accepted", secondary_uom="Bundle", secondary_qty=2)], "Bundle"),
+			("Roll", [frappe._dict(ref_docname="REC-1", received_type="Accepted", secondary_uom="Bundle", secondary_qty=2)], "Roll"),
+			(None, [], "Roll"),
+			("Roll", [], "Roll"),
+		):
+			with self.subTest(saved_uom=saved_uom, planned_rows=planned_rows):
+				saved = frappe._dict(item_variant="Greige-14.5", ref_docname="REC-1",
+					received_type="Accepted", quantity=20, secondary_uom=saved_uom, secondary_qty=3)
+				actual = get_saved_actual_dia_rows(
+					frappe._dict(items=[saved]), self.work_order, planned_rows=planned_rows
+				)[0]
+				self.assertEqual(actual["secondary_uom"], expected)
+				self.assertEqual(actual["secondary_qty"], 3)
+
+	def test_reopened_draft_orders_receivables_before_actual_dia_splits(self):
+		from itertools import product
+
+		from yrp.stock.save_stock_items import ungroup_items_from_ui
+
+		from essdee_yrp.fabric_store.documents.goods_received_note import _merge_authoritative_rows
+		from essdee_yrp.overrides.goods_received_note import EssdeeGoodsReceivedNote
+
+		self.work_order.receivables = [
+			frappe._dict(name="A", item_variant="Greige-19", pending_quantity=30, cost=20),
+			frappe._dict(name="B", item_variant="Greige-14", pending_quantity=50, cost=20),
+		]
+		for planned_quantity, secondary_qty in product((30, 0), (0, 3)):
+			with self.subTest(planned_quantity=planned_quantity, secondary_qty=secondary_qty):
+				saved = [
+					frappe._dict(item_variant=variant, row_index=index, ref_docname=ref,
+						quantity=quantity, received_type="Accepted", secondary_uom="Roll", secondary_qty=0)
+					for index, (variant, ref, quantity) in enumerate([
+						("Greige-19", "A", 40), ("Greige-14", "B", planned_quantity), ("Greige-14.5", "B", 20),
+					])
+				]
+				saved[-1].update(secondary_qty=secondary_qty, uom="Pound", stock_uom="Gram", conversion_factor=453.592)
+				# No planned row is persisted if only the actual Dia has quantity.
+				if not planned_quantity:
+					saved.pop(1)
+				document = object.__new__(EssdeeGoodsReceivedNote)
+				document.__dict__.update(
+					docstatus=0, against="YRP Work Order", against_id="WO-1",
+					items=saved, delivery_challan=None,
+					__onload=frappe._dict(),
+				)
+				planned = [
+					frappe._dict(item_variant=variant, row_index=f"{index}::Accepted", ref_docname=ref,
+						quantity=quantity, received_type="Accepted", uom="Kg")
+					for index, (variant, ref, quantity) in enumerate([
+						("Greige-19", "A", 40), ("Greige-14", "B", planned_quantity),
+					])
+				]
+				def get_doc(doctype, name):
+					if doctype == "YRP Work Order":
+						return self.work_order
+					return frappe._dict(attributes=[
+						frappe._dict(attribute="Colour", attribute_value="Greige"),
+						frappe._dict(attribute="Dia", attribute_value=name.split("-")[-1]),
+					])
+
+				config = {
+					"item_field": "item_variant", "qty_field": "quantity",
+					"value_fields": ["ref_docname", "received_type", "secondary_uom", "secondary_qty"],
+				}
+				with (
+					patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.GoodsReceivedNote.onload"),
+					patch.object(frappe, "get_doc", side_effect=get_doc),
+					patch("essdee_yrp.overrides.goods_received_note._default_received_type", return_value="Accepted"),
+					patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note._pending_receivable_rows", return_value=planned),
+					patch("yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_production_group_dimensions", return_value={}),
+					patch("yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._apply_dimension_values_to_rows"),
+					patch("yrp.stock.dimensions.apply_dimension_defaults"),
+					patch("yrp.stock.save_stock_items._get_map_config", return_value=config),
+					patch("yrp.stock.save_stock_items._get_entry_fields", return_value=["stock_uom", "conversion_factor"]),
+					patch("yrp.stock.save_stock_items.get_dimension_fieldnames", return_value=[]),
+					patch("yrp.stock.save_stock_items._resolve_or_create_variant", side_effect=lambda parent, attrs: f"{parent}-{attrs['Dia']}"),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames", return_value=()),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note._", side_effect=lambda text: text),
+					patch("yrp.yrp.doctype.yrp_item.yrp_item.get_parent_item", return_value="Greige"),
+					patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details", return_value={
+						"attributes": ["Colour"], "primary_attribute": "Dia",
+						"primary_attribute_values": ["14", "14.5", "19"],
+					}),
+				):
+					document.onload()
+					matrix = document.get_onload("item_details")
+					browser_rows = ungroup_items_from_ui(matrix, "YRP Goods Received Note")
+					merged = _merge_authoritative_rows(saved, browser_rows)
+				matrix = document.get_onload("item_details")
+				order = [
+					(dia, value["ref_docname"], value["qty"])
+					for group in matrix for row in group["items"] for dia, value in row["values"].items()
+					if value.get("ref_docname")
+				]
+				self.assertEqual(order, [("19", "A", 40), ("14", "B", planned_quantity), ("14.5", "B", 20)])
+				self.assertEqual([row.row_index for row in saved], [0, 1, 2] if planned_quantity else [0, 2])
+				actual_entry = next(row for group in matrix for row in group["items"] if row["values"].get("14.5", {}).get("ref_docname"))
+				self.assertEqual(actual_entry["values"]["14.5"]["secondary_qty"], secondary_qty)
+				self.assertEqual(actual_entry["values"]["14.5"].get("secondary_uom"), "Roll" if secondary_qty else None)
+				self.assertEqual(actual_entry["default_uom"], "Pound")
+				self.assertEqual(actual_entry["stock_uom"], "Gram")
+				self.assertEqual(actual_entry["conversion_factor"], 453.592)
+				actual = next(row for row in merged if row["item_variant"] == "Greige-14.5")
+				for field in ("quantity", "secondary_qty", "secondary_uom", "uom", "stock_uom", "conversion_factor"):
+					self.assertEqual(actual[field], saved[-1][field], field)
+
+
+class TestFabricReceiptExcess(unittest.TestCase):
+	def test_standard_receipt_excess_links_and_updates_negative_pending(self):
+		from essdee_yrp.overrides.goods_received_note import (
+			EssdeeGoodsReceivedNote,
+			_update_versioned_cloth_receivables,
+		)
+
+		for version in (0, 1):
+			with self.subTest(version=version):
+				target = frappe._dict(name="REC-1", item_variant="Greige-14", qty=50, pending_quantity=50, db_set=Mock())
+				work_order = frappe._dict(name="WO-1", production_detail="CLOTH-IPD", cloth_execution_version=version, receivables=[target])
+				row = frappe._dict(idx=1, item_variant="Greige-14.5", quantity=60, ref_doctype="YRP Work Order Receivables", ref_docname="REC-1")
+				document = Mock(against_id="WO-1")
+				document.get.side_effect = {"items": [row]}.get
+				with (
+					patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+					patch.object(frappe, "get_doc", return_value=work_order),
+					patch.object(frappe.db, "get_value", return_value=1),
+					patch("essdee_yrp.overrides.goods_received_note._wo_excess_percentage", return_value=0),
+					patch("essdee_yrp.overrides.goods_received_note._update_work_order_status"),
+				):
+					EssdeeGoodsReceivedNote.validate_against_work_order_pending(document)
+					self.assertEqual(row.ref_docname, "REC-1")
+					self.assertEqual(row.pending_quantity, 50)
+					self.assertIsNone(row.max_receivable_quantity)
+					document.validate_against_correction_pending.assert_called_once_with(0)
+					_update_versioned_cloth_receivables(document, work_order)
+				self.assertEqual(target.pending_quantity, -10)
+				target.db_set.assert_called_once_with("pending_quantity", -10, update_modified=False)
+
+	def test_only_cloth_ipd_receipts_skip_process_allowance(self):
+		from essdee_yrp.overrides.goods_received_note import EssdeeGoodsReceivedNote
+
+		for cloth, process, excess_pct in (
+			(0, "Printing", 20), (0, "Embroidery", 10), (0, "Cutting", 300),
+			(1, "Knitting", 0), (1, "Dyeing", 0),
+		):
+			with self.subTest(cloth=cloth, process=process):
+				target = frappe._dict(name="REC-1", item_variant="ITEM", qty=50, pending_quantity=50)
+				work_order = frappe._dict(name="WO-1", production_detail="IPD-1", process_name=process, receivables=[target])
+				document = object.__new__(EssdeeGoodsReceivedNote)
+				row = frappe._dict(idx=1, item_variant="ITEM", quantity=50 * (1 + excess_pct / 100) + 10,
+					ref_doctype="YRP Work Order Receivables", ref_docname="REC-1")
+				document.__dict__.update(against_id="WO-1", items=[row], correction_items=[])
+				with (
+					patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=True),
+					patch.object(frappe, "get_doc", return_value=work_order),
+					patch.object(frappe.db, "get_value", return_value=cloth) as get_value,
+					patch("essdee_yrp.overrides.goods_received_note._wo_excess_percentage", return_value=excess_pct),
+					patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note._wo_excess_percentage", return_value=excess_pct),
+				):
+					if cloth:
+						document.validate_against_work_order_pending()
+						self.assertIsNone(row.max_receivable_quantity)
+					else:
+						with self.assertRaisesRegex(frappe.ValidationError, "exceeds allowance"):
+							document.validate_against_work_order_pending()
+					get_value.assert_called_once_with("YRP Item Production Detail", "IPD-1", "is_cloth_item")
+
+	def test_return_and_rework_keep_base_pending_checks(self):
+		from essdee_yrp.overrides.goods_received_note import EssdeeGoodsReceivedNote
+
+		for field in ("is_return", "is_rework"):
+			with self.subTest(field=field):
+				document = object.__new__(EssdeeGoodsReceivedNote)
+				document.__dict__.update({field: 1, "flags": frappe._dict()})
+				with (
+					patch("essdee_yrp.fabric_grn.is_calculable_fabric_grn", return_value=False),
+					patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.GoodsReceivedNote.validate_against_work_order_pending", side_effect=frappe.ValidationError("pending cap")) as validate,
+					self.assertRaisesRegex(frappe.ValidationError, "pending cap"),
+				):
+					document.validate_against_work_order_pending()
+				validate.assert_called_once()
+
+	def test_correction_still_rejects_excess(self):
+		from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import GoodsReceivedNote
+
+		target = frappe._dict(name="CORR-REC", item_variant="Greige-14", qty=50, pending_quantity=50)
+		correction = frappe._dict(work_order="WO-1", receivables=[target])
+		row = frappe._dict(idx=1, item_variant="Greige-14", quantity=60, work_order_correction="CORR-1")
+		document = Mock(against_id="WO-1")
+		document.get.return_value = [row]
+		with patch.object(frappe, "get_doc", return_value=correction), self.assertRaisesRegex(frappe.ValidationError, "exceeds allowance"):
+			GoodsReceivedNote.validate_against_correction_pending(document, 0)

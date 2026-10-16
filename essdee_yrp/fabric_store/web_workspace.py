@@ -12,7 +12,7 @@ import sys
 import frappe
 from frappe import _
 from frappe.model import get_permitted_fields
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, nowdate, nowtime
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import (
 	group_items_for_ui,
@@ -179,13 +179,15 @@ PURCHASE_ORDER_EDITOR_FIELDS = {
 	"comments",
 }
 
-FABRIC_STOCK_ENTRY_PURPOSES = ("Material Issue", "Material Consumed", "Send to Warehouse")
+FABRIC_STOCK_ENTRY_PURPOSES = ("Material Issue", "Material Receipt", "Material Consumed", "Send to Warehouse")
 FABRIC_STOCK_COMPLETION_PURPOSES = ("DC Completion", "GRN Completion")
 FABRIC_STOCK_RECONCILIATION_PURPOSES = ("Stock Reconciliation", "Opening Stock")
 FABRIC_STOCK_UPDATE_TYPES = ("Add", "Reduce")
 
 STOCK_OPERATION_FIELDS = {
 	"stock_entry": {
+		"outgoing_stock_entry",
+		"skip_transit",
 		"purpose",
 		"against",
 		"against_id",
@@ -309,18 +311,26 @@ def _document_details(doc) -> list[dict]:
 
 def _document_item_groups(doc) -> tuple[list, int]:
 	table_field = ITEM_TABLE_FIELDS.get(doc.doctype)
-	permitted = set(get_permitted_fields(doc.doctype, permission_type="read"))
-	if not table_field or not ({table_field, "item_details"} & permitted):
+	if not table_field or not doc.has_permlevel_access_to(table_field, permission_type="read"):
 		return [], 0
 	rows = doc.get(table_field) or []
 	doc.run_method("onload")
+	return _loaded_item_groups(doc, rows), len(rows)
+
+
+def _loaded_item_groups(doc, rows) -> list:
 	onload = doc.get("__onload") or {}
-	item_groups = onload.get("item_details") or []
+	item_groups = onload.get("item_details")
 	if isinstance(item_groups, str):
 		item_groups = frappe.parse_json(item_groups)
-	if not item_groups and rows:
-		item_groups = group_items_for_ui(rows, doc.doctype)
-	return item_groups or [], len(rows)
+	if item_groups:
+		return item_groups
+	if not rows:
+		return []
+	item_groups = group_items_for_ui(rows, doc.doctype)
+	if not item_groups:
+		frappe.throw(_("Unable to load item rows for {0}.").format(doc.doctype))
+	return item_groups
 
 
 def _purchase_order_grn_capability(doc) -> dict:
@@ -658,7 +668,7 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 		if cint(doc.docstatus) != 0:
 			frappe.throw(_("Only Draft documents can be edited."))
 		defaults = {key: doc.get(key) for key in STOCK_OPERATION_FIELDS[operation]}
-		item_groups, _row_count = _document_item_groups(doc)
+		item_groups = _stock_operation_item_groups(doc, operation)
 		permissions = {
 			**_permission_flags(doctype, doc),
 			"can_delete": bool(frappe.has_permission(doctype, ptype="delete", doc=doc)),
@@ -668,6 +678,9 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 		defaults = {
 			"purpose": "Stock Reconciliation" if operation == "stock_reconciliation" else "",
 			"update_type": "",
+			"posting_date": nowdate(),
+			"posting_time": nowtime(),
+			"edit_posting_date_and_time": 0,
 		}
 		source_context = source_context if isinstance(source_context, dict) else frappe.parse_json(source_context or "{}")
 		defaults.update(
@@ -686,6 +699,8 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 	purpose_options = list(FABRIC_STOCK_ENTRY_PURPOSES)
 	if name and operation == "stock_entry" and defaults.get("purpose") in FABRIC_STOCK_COMPLETION_PURPOSES:
 		purpose_options.insert(0, defaults["purpose"])
+	if operation == "stock_entry" and defaults.get("purpose") == "Receive at Warehouse":
+		purpose_options.insert(0, "Receive at Warehouse")
 	return {
 		"operation": operation,
 		"doctype": doctype,
@@ -705,10 +720,15 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 		),
 		"update_type_options": list(FABRIC_STOCK_UPDATE_TYPES) if operation == "stock_update" else [],
 		"item_filters": {"is_stock_item": 1, "disabled": 0},
+		"posting_fields": [
+			{"fieldname": fieldname, "label": field.label, "reqd": bool(field.reqd)}
+			for fieldname in ("posting_date", "posting_time")
+			if (field := frappe.get_meta(doctype).get_field(fieldname))
+		],
 		"purpose_locked": bool(
 			name
 			and operation == "stock_entry"
-			and defaults.get("purpose") in FABRIC_STOCK_COMPLETION_PURPOSES
+			and defaults.get("purpose") in (*FABRIC_STOCK_COMPLETION_PURPOSES, "Receive at Warehouse")
 		),
 		"protected_completion": bool(
 			name
@@ -721,15 +741,25 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 
 def _normalize_lot_transfer_groups(item_details) -> list:
 	groups = frappe.parse_json(frappe.as_json(item_details or []))
-	required = ("from_lot", "to_lot", "warehouse", "received_type")
 	for group in groups:
 		for entry in group.get("items") or []:
-			dimensions = entry.get("dimensions") or {}
-			for fieldname in required:
-				entry[fieldname] = entry.get(fieldname) or dimensions.get(fieldname)
-				if not entry[fieldname]:
-					frappe.throw(_("{0} is required for every Lot Transfer item.").format(fieldname.replace("_", " ").title()))
+			entry["dimensions"] = _lot_transfer_entry_dimensions(entry)
 	return groups
+
+
+def _lot_transfer_entry_dimensions(entry) -> dict:
+	dimensions = entry.get("dimensions") or {}
+	required = ("from_lot", "to_lot", "warehouse", "received_type")
+	for fieldname in required:
+		entry[fieldname] = entry.get(fieldname) or dimensions.get(fieldname)
+		if not entry[fieldname]:
+			frappe.throw(_("{0} is required for every Lot Transfer item.").format(fieldname.replace("_", " ").title()))
+	return {**dimensions, **{fieldname: entry[fieldname] for fieldname in required}}
+
+
+def _stock_operation_item_groups(doc, operation) -> list:
+	groups, _row_count = _document_item_groups(doc)
+	return _normalize_lot_transfer_groups(groups) if operation == "lot_transfer" else groups
 
 
 @frappe.whitelist()
@@ -746,12 +776,96 @@ def get_stock_item_schema(operation: str, item: str) -> dict:
 	return _get_stock_item_schema_data(item)
 
 
+def _is_pending_transit(doc) -> bool:
+	return bool(
+		cint(doc.docstatus) == 1
+		and doc.get("purpose") == "Send to Warehouse"
+		and not cint(doc.get("skip_transit"))
+		and flt(doc.get("per_transferred")) < 100
+	)
+
+
+def _transit_source(name):
+	if not name:
+		frappe.throw(_("Select an outgoing Stock Entry through End Transit."))
+	source = _get_supported_document("YRP Stock Entry", name)
+	if not _is_pending_transit(source):
+		frappe.throw(_("This Stock Entry has no pending stock in transit."))
+	return source
+
+
+def _mapped_transit_receipt(source_name):
+	from yrp.yrp_stock.doctype.yrp_stock_entry.yrp_stock_entry import make_stock_in_entry
+
+	return make_stock_in_entry(source_name)
+
+
+@frappe.whitelist()
+def end_stock_entry_transit(name: str) -> dict:
+	frappe.has_permission("YRP Stock Entry", ptype="create", throw=True)
+	source = _transit_source(name)
+	mapped = _mapped_transit_receipt(source.name)
+	editor = get_stock_operation_editor("stock_entry")
+	editor.update({
+		"defaults": {key: mapped.get(key) for key in STOCK_OPERATION_FIELDS["stock_entry"]},
+		"item_groups": mapped.get_onload("item_details"),
+		"purpose_options": ["Receive at Warehouse"],
+		"purpose_locked": True,
+	})
+	return editor
+
+
+def _set_transit_receipt_items(doc, item_details, source_name, mapped=None):
+	from yrp.stock.dimensions import get_dimension_fieldnames
+
+	mapped = mapped or _mapped_transit_receipt(source_name)
+	dimensions = get_dimension_fieldnames()
+	pending = {}
+	for row in mapped.items:
+		key = (row.item, *(row.get(fieldname) or "" for fieldname in dimensions))
+		pending.setdefault(key, []).append(row)
+	items = []
+	for requested in ungroup_items_from_ui(item_details, "YRP Stock Entry"):
+		key = (requested.get("item"), *(requested.get(fieldname) or "" for fieldname in dimensions))
+		candidates = pending.get(key) or []
+		if not candidates:
+			frappe.throw(_("The receiving items must belong to the outgoing Stock Entry."))
+		row = candidates.pop(0)
+		quantity = flt(requested.get("qty"))
+		if quantity <= 0 or quantity > flt(row.qty) + 0.000001:
+			frappe.throw(_("Receiving quantity must be positive and cannot exceed the pending quantity."))
+		row.qty = quantity
+		if "secondary_qty" in requested:
+			row.secondary_qty = requested["secondary_qty"]
+		items.append(row.as_dict())
+	if not items:
+		frappe.throw(_("Add at least one receiving Item."))
+	doc.set("items", [])
+	for row in items:
+		for fieldname in ("name", "parent", "parenttype", "parentfield"):
+			row.pop(fieldname, None)
+		doc.append("items", row)
+	doc.item_details = frappe.as_json(item_details)
+	for fieldname in ("from_warehouse", "to_warehouse", "skip_transit", "outgoing_stock_entry"):
+		doc.set(fieldname, mapped.get(fieldname))
+
+
 def _validate_stock_operation_options(operation: str, values: dict, existing_doc=None) -> None:
 	if operation == "stock_entry":
 		allowed_purposes = set(FABRIC_STOCK_ENTRY_PURPOSES)
 		existing_purpose = existing_doc.get("purpose") if existing_doc else None
 		if existing_purpose in FABRIC_STOCK_COMPLETION_PURPOSES:
 			allowed_purposes.add(existing_purpose)
+		if existing_purpose == "Receive at Warehouse" and (
+			values.get("purpose") != existing_purpose
+			or values.get("outgoing_stock_entry") != existing_doc.get("outgoing_stock_entry")
+		):
+			frappe.throw(_("The receiving purpose and outgoing Stock Entry cannot be changed."))
+		if values.get("purpose") == "Receive at Warehouse":
+			_transit_source(values.get("outgoing_stock_entry"))
+			allowed_purposes.add("Receive at Warehouse")
+		elif values.get("outgoing_stock_entry"):
+			frappe.throw(_("Outgoing Stock Entry is only allowed for Receive at Warehouse."))
 		if values.get("purpose") not in allowed_purposes:
 			frappe.throw(_("Select a supported Stock Entry purpose."))
 	if operation == "stock_reconciliation" and values.get("purpose", "Stock Reconciliation") not in FABRIC_STOCK_RECONCILIATION_PURPOSES:
@@ -792,7 +906,11 @@ def save_stock_operation(
 	else:
 		_validate_stock_operation_options(operation, values)
 		frappe.has_permission(doctype, ptype="create", throw=True)
-		doc = frappe.new_doc(doctype)
+		doc = (
+			_mapped_transit_receipt(values["outgoing_stock_entry"])
+			if operation == "stock_entry" and values.get("purpose") == "Receive at Warehouse"
+			else frappe.new_doc(doctype)
+		)
 
 	header = {
 		key: values.get(key)
@@ -801,8 +919,13 @@ def save_stock_operation(
 	}
 	if operation == "stock_reconciliation" and not header.get("purpose"):
 		header["purpose"] = "Stock Reconciliation"
+	if operation == "stock_entry" and values.get("purpose") == "Receive at Warehouse":
+		for fieldname in ("from_warehouse", "to_warehouse", "skip_transit"):
+			header.pop(fieldname, None)
 	doc.update(header)
-	if operation == "stock_reconciliation":
+	if operation == "stock_entry" and doc.get("purpose") == "Receive at Warehouse":
+		_set_transit_receipt_items(doc, item_details, doc.outgoing_stock_entry, mapped=doc if not name else None)
+	elif operation == "stock_reconciliation":
 		rows = ungroup_items_from_ui(
 			item_details,
 			"YRP Stock Reconciliation",
@@ -894,6 +1017,8 @@ def _related_work_order_documents(work_order: str, key: str) -> list[dict]:
 def _document_actions(doc) -> dict[str, bool]:
 	if cint(doc.docstatus) != 1:
 		return {}
+	if doc.doctype == "YRP Stock Entry":
+		return {"can_end_transit": _is_pending_transit(doc) and bool(frappe.has_permission(doc.doctype, ptype="create"))}
 	if doc.doctype == "YRP Delivery Challan":
 		return {
 			"can_return": bool(frappe.has_permission("YRP Goods Received Note", ptype="create")),
@@ -945,6 +1070,28 @@ def _document_context(doc) -> dict:
 	}
 
 
+def _stock_transit_details(doc) -> dict:
+	if doc.doctype != "YRP Stock Entry" or doc.get("purpose") != "Send to Warehouse" or cint(doc.docstatus) != 1:
+		return {}
+	percentage = flt(doc.get("per_transferred"))
+	status = (
+		_("Transit skipped") if cint(doc.get("skip_transit"))
+		else _("Received") if percentage >= 100
+		else _("Partly received · {0}%").format(f"{percentage:g}") if percentage > 0
+		else _("In transit · 0% received")
+	)
+	return {
+		"status": status,
+		"received_entries": frappe.get_list(
+			"YRP Stock Entry",
+			filters={"outgoing_stock_entry": doc.name, "docstatus": ["!=", 2]},
+			fields=["name", "docstatus"],
+			order_by="creation desc",
+			limit_page_length=500,
+		),
+	}
+
+
 @frappe.whitelist()
 def get_document(doctype: str, name: str) -> dict:
 	"""Return one supported document through a permission-filtered projection."""
@@ -964,6 +1111,20 @@ def get_document(doctype: str, name: str) -> dict:
 		"permissions": record["permissions"],
 		"print_formats": get_document_print_formats(doc),
 		"actions": _document_actions(doc),
+		"transit": _stock_transit_details(doc),
+	}
+
+
+@frappe.whitelist()
+def get_location_address_status(party: str) -> dict:
+	supplier = frappe.get_doc("Supplier", party)
+	supplier.check_permission("read")
+	has_address = delivery_challan_service.location_has_address(party)
+	return {
+		"party": party,
+		"supplier_name": supplier.supplier_name,
+		"has_address": has_address,
+		"message": "" if has_address else delivery_challan_service.missing_location_address_message(party),
 	}
 
 

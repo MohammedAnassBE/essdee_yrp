@@ -52,7 +52,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Draft\nSubmitted\nCutting In Progress\nPartially Completed\nCompleted",
+   "options": "Draft\nSubmitted\nCutting In Progress\nPartially Completed\nCompleted\nCancelled",
    "read_only": 1
   },
   {

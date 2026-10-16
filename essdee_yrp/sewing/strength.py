@@ -74,12 +74,17 @@ def get_worker_strength_report(report_date, from_time, to_time):
 	settings = frappe.get_single("SD YRP MRP Settings")
 	hr_site_url = (settings.get("hr_site_url") or "").strip().rstrip("/")
 	api_key = (settings.get("hr_api_key") or "").strip()
-	api_secret = settings.get_password("hr_api_secret") if settings.get("hr_api_secret") else None
+	api_secret = settings.get_password("hr_api_secret", raise_exception=False)
 	if not hr_site_url:
 		frappe.throw("Configure the HR Site URL in MRP Settings", title="HR configuration required")
-	if not api_key or not api_secret:
+	if not api_key:
 		frappe.throw(
 			"Configure the HR API Key and HR API Secret Key in MRP Settings",
+			title="HR configuration required",
+		)
+	if not api_secret:
+		frappe.throw(
+			"HR API secret is not configured in SD YRP MRP Settings",
 			title="HR configuration required",
 		)
 

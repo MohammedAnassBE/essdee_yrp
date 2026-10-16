@@ -34,6 +34,7 @@ from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.api.work_order import _guard_not_modified
+from essdee_yrp.cloth_program_access import require_cloth_program_role
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import (
 	get_colour_attribute,
 	get_dia_attribute,
@@ -969,9 +970,12 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
 
 def _save_generated_cpd(cpd):
 	"""Save a builder-owned cloth IPD without weakening Approved-IPD locking."""
-	from essdee_yrp.ipd_validations import allow_generated_cloth_ipd_update
+	from essdee_yrp.ipd_validations import (
+		allow_generated_cloth_ipd_insert,
+		allow_generated_cloth_ipd_update,
+	)
 
-	with allow_generated_cloth_ipd_update(cpd):
+	with allow_generated_cloth_ipd_insert(), allow_generated_cloth_ipd_update(cpd):
 		cpd.save(ignore_permissions=True)
 
 
@@ -1202,6 +1206,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 	selections = frappe.parse_json(selections) if isinstance(selections, str) else selections
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("write")
+	require_cloth_program_role()
 	_guard_not_modified(lot_doc, modified)
 	excess_percentage = flt(excess_percentage)
 	if excess_percentage < 0:
@@ -1383,6 +1388,7 @@ def recalculate_cloth_program(lot, modified=None):
 	attribute_db.get_value("SD YRP Lot", lot, "name", for_update=True)
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("write")
+	require_cloth_program_role()
 	_guard_not_modified(lot_doc, modified)
 	if lot_doc.is_transferred or lot_doc.docstatus == 2:
 		frappe.throw(_("Cannot recalculate a transferred or cancelled Lot."))
@@ -1431,7 +1437,6 @@ def _update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_
 	for row in lot_doc.get("lot_fabric_programs") or []:
 		if row.cloth_item in payload:
 			row.weight = 0
-	lot_doc.cloth_excess_percentage = excess_percentage
 	lot_doc.flags.force_fabric_plan_rebuild = True
 	lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
 	lot_doc.save(ignore_permissions=True)
@@ -1448,8 +1453,14 @@ def _update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_
 		],
 	):
 		if row.cloth_item in payload:
-			base_weight = _exact_program_base_weight(row, payload)
 			route_key = _program_final_route(row)
+			if (
+				row.reference_item_variant
+				and _attribute_value(row.dia) != _attribute_value(route_key[1])
+				and not flt(row.weight)
+			):
+				continue
+			base_weight = _exact_program_base_weight(row, payload)
 			attribute_db.set_value(
 				"SD YRP Lot Fabric Program",
 				row.name,

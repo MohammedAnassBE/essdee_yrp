@@ -918,6 +918,15 @@ function render_fabric_dialog(frm, ctx) {
 	// one record per qty input: drives collection, yarn total, overshoot check
 	const manifest = [];
 	let d = null;
+	if (ctx.source_process?.unavailable) {
+		fields.push({
+			fieldtype: "HTML",
+			options: `<div class="alert alert-warning small">`
+				+ `<b>${__("No predecessor stock available")}</b><br>`
+				+ `${__("Submit an unallocated {0} GRN, then reopen Calculate.", [ctx.source_process.label || ctx.source_process.process_name])}`
+				+ `</div>`,
+		});
+	}
 
 	const recompute_yarn = (i) => {
 		const row = ctx.rows[i];
@@ -1154,6 +1163,10 @@ function render_fabric_dialog(frm, ctx) {
 		fields,
 		primary_action_label: __("Calculate"),
 		primary_action(values) {
+			if (ctx.source_process?.unavailable) {
+				frappe.msgprint(__("No submitted predecessor GRN stock is available."));
+				return;
+			}
 			const rows = [];
 			let missing_colour = null;
 			let missing_output = null;
@@ -1269,6 +1282,7 @@ function render_fabric_dialog(frm, ctx) {
 	}
 	d = new frappe.ui.Dialog(dialog_options);
 	d.show();
+	if (ctx.source_process?.unavailable) d.get_primary_btn().prop("disabled", true);
 	// Pre-filled balances must reflect in the auto yarn figure immediately,
 	// not only after the first manual edit.
 	ctx.rows.forEach((row, i) => {

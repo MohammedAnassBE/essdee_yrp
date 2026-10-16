@@ -276,6 +276,28 @@ def ensure_cloth_item_attributes(doc, method=None):
 	both manual and Lot-built cloth IPDs use the same preparation path."""
 	if not is_cloth_ipd(doc):
 		return
+	needed = missing_cloth_item_attribute_rows(doc)
+	if not doc.get("item") or not needed:
+		return
+	item = frappe.get_doc("Item", doc.item)
+	item_have = {row.attribute for row in item.get("attributes") or []}
+	changed = False
+	for attribute in needed:
+		if attribute not in item_have:
+			item.append("attributes", {"attribute": attribute})
+			item_have.add(attribute)
+			changed = True
+	if changed:
+		# This save only mirrors process attributes onto the cloth Item. Existing
+		# cloth masters may still use the legacy per-program yarn recipe while
+		# they are being migrated to Item-level recipes, so do not make this
+		# internal housekeeping save responsible for validating that recipe.
+		item.flags.skip_cloth_yarn_ratio_validation = True
+		item.save(ignore_permissions=True)
+
+
+def missing_cloth_item_attribute_rows(doc):
+	"""Append the attributes the fabric tabs use to `item_attributes`; return them all."""
 	needed = []
 	if doc.get("knitting_process") or doc.get("compacting_process"):
 		needed.append(get_dia_attribute())
@@ -301,28 +323,12 @@ def ensure_cloth_item_attributes(doc, method=None):
 	if doc.get("fabric_routes"):
 		needed.extend((get_dia_attribute(), get_colour_attribute()))
 	have = {row.attribute for row in doc.get("item_attributes") or []}
-	for attribute in dict.fromkeys(needed):
+	needed = list(dict.fromkeys(needed))
+	for attribute in needed:
 		if attribute not in have:
 			doc.append("item_attributes", {"attribute": attribute})
 			have.add(attribute)
-
-	if not doc.get("item") or not needed:
-		return
-	item = frappe.get_doc("Item", doc.item)
-	item_have = {row.attribute for row in item.get("attributes") or []}
-	changed = False
-	for attribute in dict.fromkeys(needed):
-		if attribute not in item_have:
-			item.append("attributes", {"attribute": attribute})
-			item_have.add(attribute)
-			changed = True
-	if changed:
-		# This save only mirrors process attributes onto the cloth Item. Existing
-		# cloth masters may still use the legacy per-program yarn recipe while
-		# they are being migrated to Item-level recipes, so do not make this
-		# internal housekeeping save responsible for validating that recipe.
-		item.flags.skip_cloth_yarn_ratio_validation = True
-		item.save(ignore_permissions=True)
+	return needed
 
 
 # ---------------------------------------------------------------------------

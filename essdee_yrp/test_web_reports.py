@@ -62,7 +62,7 @@ class TestEssdeeWebReportParity(IntegrationTestCase):
 			"show_stock_ageing_data": 0,
 			"show_inward_date_split": 0,
 		}
-		expected = self._assert_query_report_parity("stock-balance", "YRP Stock Balance", filters)
+		expected = self._assert_query_report_parity("stock-balance--test-never", "YRP Stock Balance", filters)
 		self.assertIn(self.item, {row["item"] for row in expected["result"]})
 
 	def test_purchase_order_itemwise_matches_query_report(self):

@@ -3,6 +3,9 @@
 
 frappe.ui.form.on("YRP Production Order", {
   setup(frm) {
+    frm.set_query("item", () => ({
+      filters: { has_variants: 1, variant_of: ["is", "not set"], disabled: 0 },
+    }));
     frm.set_query("production_term", (doc) => {
       return {
         filters: {

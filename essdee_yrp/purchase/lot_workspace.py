@@ -49,6 +49,8 @@ FABRIC_ENTRY_KEYS = (
 	"steps",
 )
 CONVERSION_FIELDS = (
+	"production_detail",
+	"process_stage_index",
 	"process_name",
 	"planned_item",
 	"actual_item",

@@ -92,7 +92,8 @@ frappe.ui.form.on("SD YRP Lot", {
 				d.show()
 			})
 		}
-		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred) {
+		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred
+			&& frm.has_perm("write") && frm.doc.__onload?.can_manage_cloth_program) {
 			frm.add_custom_button("Build Cloth Programs", () => {
 				frappe.call({
 					method: "essdee_yrp.api.cloth_program.get_cloth_program_context",
@@ -113,6 +114,7 @@ frappe.ui.form.on("SD YRP Lot", {
 		}
 		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred
 			&& frm.doc.docstatus !== 2 && frm.has_perm("write")
+			&& frm.doc.__onload?.can_manage_cloth_program
 			&& (frm.doc.lot_fabric_details || []).length) {
 			frm.add_custom_button(__("Recalculate Cloth Program"), () => {
 				if (frm.is_dirty()) {
@@ -133,7 +135,7 @@ frappe.ui.form.on("SD YRP Lot", {
 		if (!frm.is_new() && (frm.doc.lot_fabric_programs || []).length) {
 			frm.add_custom_button(__("Cloth Program"), () => {
 				const url = frappe.urllib.get_full_url(
-					`/printview?doctype=Lot&name=${encodeURIComponent(frm.doc.name)}` +
+					`/printview?doctype=${encodeURIComponent(frm.doc.doctype)}&name=${encodeURIComponent(frm.doc.name)}` +
 					`&trigger_print=1&format=${encodeURIComponent("Essdee Lot Cloth Program")}` +
 					"&no_letterhead=1"
 				);

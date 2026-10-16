@@ -31,6 +31,7 @@ from essdee_yrp.api.work_order import (
 	_guard_untransacted_fabric_calculation,
 	_hydrate_knitting_execution_defaults,
 	_lock_calculation_target,
+	_merge_source_context,
 	_normalize_generated_uom_rows,
 	_resolve_variant,
 	_selected_lot_fabrics,
@@ -38,12 +39,14 @@ from essdee_yrp.api.work_order import (
 	get_fabric_deliverable_context,
 	get_work_order_selection_context,
 )
+from essdee_yrp.cloth_execution import get_row_execution_parameters
 from essdee_yrp.fabric_reference import (
 	get_reference_allocations,
 	scale_reference_allocations,
 )
-from essdee_yrp.cloth_execution import get_row_execution_parameters
+from essdee_yrp.fabric_source import fill_from_source_grns
 from essdee_yrp.hooks import override_whitelisted_methods
+from essdee_yrp.ipd_validations import allow_generated_cloth_ipd_insert
 from essdee_yrp.overrides.delivery_challan import EssdeeDeliveryChallan
 from essdee_yrp.work_order_actions import get_delivery_challan_defaults
 from essdee_yrp.work_order_hooks import validate_fabric_execution_immutable
@@ -401,6 +404,61 @@ class TestFabricRowConsolidation(TestCase):
 		self.assertEqual(first_parameters, second_parameters)
 
 
+class TestFabricSourceContext(TestCase):
+	def setUp(self):
+		self.enterContext(patch("frappe.get_system_settings", return_value="Banker's Rounding"))
+
+	def test_empty_source_is_unavailable_only_when_allowed(self):
+		selected = {"value": "1::Dyeing", "process_name": "Dyeing", "label": "Dyeing"}
+		availability = {
+			"net": {"cloth": 0},
+			"received": {"cloth": 20},
+			"reserved": {"cloth": 20},
+			"source_mode": "none",
+		}
+		for versioned in (False, True):
+			with (
+				self.subTest(versioned=versioned),
+				patch("essdee_yrp.fabric_source.resolve_source_process", return_value=selected),
+				patch("essdee_yrp.fabric_source._uses_exact_source_pool", return_value=versioned),
+				patch("essdee_yrp.fabric_source.get_source_availability", return_value=availability),
+				patch("essdee_yrp.fabric_source._", side_effect=lambda message: message),
+			):
+				rows = [{"prefill": 30}, {"prefill": 10}]
+				arguments = {
+					"lot": "LOT-1",
+					"ipd": frappe._dict(name="IPD-1", item="cloth"),
+					"current_process": "Washing",
+					"current_work_order": "WO-1",
+					"source_process": selected["value"],
+				}
+				context = fill_from_source_grns(rows, **arguments, allow_empty=True)
+				self.assertEqual(
+					context,
+					{
+						**selected,
+						"received": 20,
+						"reserved": 20,
+						"available": 0,
+						"unavailable": True,
+						"unmatched": [],
+						"sources": [],
+					},
+				)
+				self.assertEqual(rows, [{"prefill": 0, "source_available": 0}] * 2)
+				with self.assertRaisesRegex(frappe.ValidationError, "No unallocated submitted GRN"):
+					fill_from_source_grns(rows, **arguments)
+
+	def test_any_unavailable_fabric_blocks_the_merged_context(self):
+		available = {"value": "1::Dyeing", "available": 20}
+		unavailable = {"value": "1::Dyeing", "available": 0, "unavailable": True}
+		for contexts in ((available, unavailable), (unavailable, available)):
+			with self.subTest(contexts=contexts):
+				merged = _merge_source_context(*contexts)
+				self.assertTrue(merged["unavailable"])
+				self.assertEqual(merged["available"], 20)
+
+
 class TestFabricExecutionContract(TestCase):
 	def test_saved_manual_yarn_quantities_survive_reopen(self):
 		qty_rows = [
@@ -630,6 +688,64 @@ class TestFabricExecutionContract(TestCase):
 			validate_fabric_execution_immutable(current)
 
 
+def _insert_submitted_receipt(work_order, receivable, qty, suffix, *, item_variant=None):
+	frappe.db.set_value("YRP Work Order", work_order.name, "docstatus", 1, update_modified=False)
+	grn = frappe.new_doc("YRP Goods Received Note")
+	grn.name = f"_Test Exact GRN {suffix}"
+	grn.docstatus = 1
+	grn.against = "YRP Work Order"
+	grn.against_id = work_order.name
+	grn.db_insert()
+
+	item = frappe.new_doc("YRP Goods Received Note Item")
+	item.name = f"_Test Exact GRNI {suffix}"
+	item.parent = grn.name
+	item.parenttype = "YRP Goods Received Note"
+	item.parentfield = "items"
+	item.item_variant = item_variant or receivable.item_variant
+	item.quantity = qty
+	item.stock_qty = qty
+	item.uom = receivable.uom
+	item.stock_uom = receivable.uom
+	item.conversion_factor = 1
+	item.received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
+	if item.meta.get_field("lot"):
+		item.lot = work_order.lot
+	item.ref_doctype = "YRP Work Order Receivables"
+	item.ref_docname = receivable.name
+	item.db_insert()
+	return grn, item
+
+
+def _insert_predecessor_stock(work_order, context, qty=30):
+	source = frappe.copy_doc(work_order)
+	source.process_name = context["source_process"]["process_name"]
+	source.set("deliverables", [])
+	source.set("receivables", [])
+	source.deliverable_details = ""
+	source.receivable_details = ""
+	for fabric in context["rows"]:
+		for row in fabric["qty_rows"]:
+			principal = row["input_specs"][0]
+			source.append(
+				"receivables",
+				{
+					"item_variant": _resolve_variant(principal["item"], principal["attrs"]),
+					"qty": qty,
+					"pending_quantity": qty,
+					"uom": principal.get("uom") or "Kg",
+					"received_type": frappe.db.get_single_value(
+						"YRP Stock Settings", "default_received_type"
+					),
+					"fabric_reference_variant": row.get("reference_item_variant"),
+				},
+			)
+	source.insert(ignore_permissions=True)
+	source.db_set("cloth_execution_version", 0, update_modified=False)
+	for row in source.receivables:
+		_insert_submitted_receipt(source, row, qty, frappe.generate_hash(length=8))
+
+
 class TestCalculateFabricDeliverables(IntegrationTestCase):
 	def setUp(self):
 		self.dia = _ensure_iav("Dia", "_Test 60 Dia CPD")
@@ -753,6 +869,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 		wash_context = get_fabric_deliverable_context(wash_wo.name)
+		_insert_predecessor_stock(wash_wo, wash_context)
+		wash_context = get_fabric_deliverable_context(wash_wo.name)
 		self.assertEqual(wash_context["kind"], "identity")
 		wash_row = wash_context["rows"][0]
 		qty_row = next(
@@ -780,6 +898,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 					],
 				}
 			],
+			source_process=wash_context["source_process"]["value"],
 		)
 		self.assertEqual(result, {"deliverables": 1, "receivables": 1})
 		wash_wo.reload()
@@ -1100,6 +1219,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 				)
 				ipd.save()
 				context = get_fabric_deliverable_context(wo.name)
+				_insert_predecessor_stock(wo, context)
+				context = get_fabric_deliverable_context(wo.name)
 				row = context["rows"][0]
 				self.assertEqual(len(row["qty_rows"]), 6)
 				for qty_row in row["qty_rows"]:
@@ -1127,6 +1248,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 							],
 						}
 					],
+					source_process=context["source_process"]["value"],
 				)
 				self.assertEqual(result, {"deliverables": 6, "receivables": 6})
 				wo.reload()
@@ -1365,6 +1487,8 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 		compact_context = get_fabric_deliverable_context(compact_work_order.name)
+		_insert_predecessor_stock(compact_work_order, compact_context)
+		compact_context = get_fabric_deliverable_context(compact_work_order.name)
 		compact_rows = compact_context["rows"][0]["qty_rows"]
 		self.assertEqual(len(compact_rows), 1)
 		compact_row = compact_rows[0]
@@ -1390,6 +1514,7 @@ class TestCalculateFabricDeliverables(IntegrationTestCase):
 					"entries": [{"key": compact_row["key"], "qty": 20}],
 				}
 			],
+			source_process=compact_context["source_process"]["value"],
 		)
 		self.assertEqual(compact_result, {"deliverables": 1, "receivables": 1})
 		compact_work_order.reload()
@@ -1473,7 +1598,8 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 				"process_item": cloth,
 			},
 		)
-		ipd.insert(ignore_permissions=True)
+		with allow_generated_cloth_ipd_insert():
+			ipd.insert(ignore_permissions=True)
 		return frappe.get_doc("YRP Item Production Detail", ipd.name), {
 			"dia": dia,
 			"greige": greige,
@@ -1523,39 +1649,56 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 
-	def _insert_submitted_receipt(
-		self, work_order, receivable, qty, suffix, *, item_variant=None
-	):
-		frappe.db.set_value(
-			"YRP Work Order", work_order.name, "docstatus", 1, update_modified=False
-		)
-		grn = frappe.new_doc("YRP Goods Received Note")
-		grn.name = f"_Test Exact GRN {suffix}"
-		grn.docstatus = 1
-		grn.against = "YRP Work Order"
-		grn.against_id = work_order.name
-		grn.db_insert()
-
-		item = frappe.new_doc("YRP Goods Received Note Item")
-		item.name = f"_Test Exact GRNI {suffix}"
-		item.parent = grn.name
-		item.parenttype = "YRP Goods Received Note"
-		item.parentfield = "items"
-		item.item_variant = item_variant or receivable.item_variant
-		item.quantity = qty
-		item.stock_qty = qty
-		item.uom = receivable.uom
-		item.stock_uom = receivable.uom
-		item.conversion_factor = 1
-		item.received_type = frappe.db.get_single_value(
-			"YRP Stock Settings", "default_received_type"
-		)
-		if item.meta.get_field("lot"):
-			item.lot = work_order.lot
-		item.ref_doctype = "YRP Work Order Receivables"
-		item.ref_docname = receivable.name
-		item.db_insert()
-		return grn, item
+	def test_non_versioned_default_knitting_accepts_manual_route_inputs(self):
+		ipd, v = self._make_ipd()
+		settings = frappe.get_single("SD YRP IPD Settings")
+		old_knitting = settings.get("default_knitting_process")
+		frappe.db.set_single_value("SD YRP IPD Settings", "default_knitting_process", v["knitting"])
+		frappe.clear_cache(doctype="SD YRP IPD Settings")
+		try:
+			wo = self._make_work_order(ipd, v, v["knitting"])
+			wo.db_set("cloth_execution_version", 0, update_modified=False)
+			self.assertEqual(wo.production_detail, ipd.name)
+			context = get_fabric_deliverable_context(wo.name)
+			fabric = context["rows"][0]
+			self.assertTrue(fabric["manual_io"])
+			qty_row = fabric["qty_rows"][0]
+			inputs = [
+				{"key": option["key"], "qty": qty}
+				for option, qty in zip(qty_row["knitting_inputs"], (9, 5), strict=True)
+			]
+			result = calculate_fabric_deliverables(
+				wo.name,
+				[
+					{
+						"fabric_row": fabric["fabric_row"],
+						"colour": v["greige"],
+						"entries": [{"key": qty_row["key"], "qty": 30, "inputs": inputs}],
+					}
+				],
+			)
+			self.assertEqual(result, {"deliverables": 2, "receivables": 1})
+			wo.reload()
+			self.assertEqual(wo.cloth_execution_version, 0)
+			self.assertEqual(
+				{row.item_variant: flt(row.qty) for row in wo.deliverables},
+				{v["yarn_a"]: 9, v["yarn_b"]: 5},
+			)
+			self.assertEqual(flt(wo.receivables[0].qty), 30)
+			for row in [*wo.deliverables, *wo.receivables]:
+				self.assertFalse(get_row_execution_parameters(row).get("fabric_execution_key"))
+			self.assertEqual(
+				frappe.parse_json(wo.receivables[0].fabric_reference_allocations),
+				{wo.receivables[0].item_variant: 30},
+			)
+			reopened = get_fabric_deliverable_context(wo.name)
+			self.assertTrue(reopened["rows"][0]["manual_io"])
+			wo.deliverables[0].db_set("stock_update", 1, update_modified=False)
+			with self.assertRaisesRegex(frappe.ValidationError, "already moved"):
+				calculate_fabric_deliverables(wo.name, [])
+		finally:
+			frappe.db.set_single_value("SD YRP IPD Settings", "default_knitting_process", old_knitting)
+			frappe.clear_cache(doctype="SD YRP IPD Settings")
 
 	def test_versioned_dyeing_and_washing_keep_exact_grn_row_lineage(self):
 		from essdee_yrp.cloth_execution import (
@@ -1700,7 +1843,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 			self.assertTrue(
 				get_row_execution_parameters(knit_receivable).get("fabric_execution_key")
 			)
-			knit_grn, knit_grn_item = self._insert_submitted_receipt(
+			knit_grn, knit_grn_item = _insert_submitted_receipt(
 				knit_wo,
 				knit_receivable,
 				30,
@@ -1804,7 +1947,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 				),
 			)
 
-			dye_grn, dye_grn_item = self._insert_submitted_receipt(
+			dye_grn, dye_grn_item = _insert_submitted_receipt(
 				dye_wo, dye_output, 20, frappe.generate_hash(length=8)
 			)
 			wash_wo = self._make_work_order(ipd, v, v["washing"])
@@ -1826,7 +1969,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 								"matrix_key": wash_qty_row["matrix_key"],
 								"source_bucket_key": wash_qty_row["source_bucket_key"],
 								"out_attrs": wash_qty_row["out_attrs"],
-								"qty": 12,
+								"qty": 20,
 							}
 						],
 					}
@@ -1842,6 +1985,45 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 			self.assertEqual(wash_output.item_variant, dye_output.item_variant)
 			self.assertEqual(wash_input.fabric_reference_variant, final_reference)
 			self.assertEqual(wash_output.fabric_reference_variant, final_reference)
+			wash_wo.db_set("docstatus", 1, update_modified=False)
+			wash_input.db_set("docstatus", 1, update_modified=False)
+			wash_input.db_set("pending_quantity", 0, update_modified=False)
+			second_wash = self._make_work_order(ipd, v, v["washing"])
+			self.assertEqual(second_wash.cloth_execution_version, 1)
+			unavailable = get_fabric_deliverable_context(second_wash.name)
+			self.assertTrue(unavailable["source_process"]["unavailable"])
+			self.assertEqual(unavailable["source_process"]["available"], 0)
+			self.assertEqual(unavailable["source_process"]["unmatched"], [])
+			self.assertEqual(unavailable["source_process"]["sources"], [])
+			self.assertTrue(unavailable["rows"][0]["qty_rows"])
+			for row in unavailable["rows"][0]["qty_rows"]:
+				self.assertEqual(row["prefill"], 0)
+				self.assertEqual(row["source_available"], 0)
+			source_process = unavailable["source_process"]["value"]
+			with self.assertRaisesRegex(frappe.ValidationError, "No unallocated submitted GRN"):
+				get_fabric_deliverable_context(second_wash.name, source_process=source_process)
+			with self.assertRaisesRegex(frappe.ValidationError, "no longer available|only 0"):
+				calculate_fabric_deliverables(
+					second_wash.name,
+					[
+						{
+							"fabric_row": unavailable["rows"][0]["fabric_row"],
+							"entries": [
+								{
+									"key": wash_qty_row["key"],
+									"matrix_key": wash_qty_row["matrix_key"],
+									"source_bucket_key": wash_qty_row["source_bucket_key"],
+									"out_attrs": wash_qty_row["out_attrs"],
+									"qty": 1,
+								}
+							],
+						}
+					],
+					source_process=source_process,
+				)
+			second_wash.reload()
+			self.assertFalse(second_wash.deliverables)
+			self.assertFalse(second_wash.receivables)
 		finally:
 			frappe.db.set_single_value(
 				"SD YRP IPD Settings", "default_knitting_process", old_knitting
@@ -1926,12 +2108,25 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 		self.assertEqual(set(delivered), {v["yarn_a"], v["yarn_b"]})
 		self.assertAlmostEqual(delivered[v["yarn_a"]], 6.0, places=3)
 		self.assertAlmostEqual(delivered[v["yarn_b"]], 4.0, places=3)
+		_insert_submitted_receipt(knit_wo, knit_wo.receivables[0], 30, frappe.generate_hash(length=8))
 
 		dye_wo = self._make_work_order(ipd, v, v["dyeing"])
+		dye_wo.db_set("cloth_execution_version", 0, update_modified=False)
 		dye_ctx = get_fabric_deliverable_context(dye_wo.name)
+		self.assertEqual(dye_ctx["source_process"]["process_name"], v["knitting"])
+		self.assertFalse(dye_ctx["source_process"].get("unavailable"))
 		dye_row = dye_ctx["rows"][0]
 		self.assertEqual(dye_ctx["kind"], "dyeing")
 		target = next(row for row in dye_row["qty_rows"] if row["out_attrs"].get("Colour") == v["red"])
+		self.assertEqual(target["prefill"], 30)
+		with self.assertRaisesRegex(frappe.ValidationError, "must use submitted stock"):
+			calculate_fabric_deliverables(
+				dye_wo.name,
+				[{"fabric_row": dye_row["fabric_row"], "entries": [{"key": target["key"], "qty": 25}]}],
+			)
+		dye_wo.reload()
+		self.assertFalse(dye_wo.deliverables)
+		self.assertFalse(dye_wo.receivables)
 		dye_result = calculate_fabric_deliverables(
 			dye_wo.name,
 			[
@@ -1940,8 +2135,12 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 					"entries": [{"key": target["key"], "qty": 25}],
 				}
 			],
+			source_process=dye_ctx["source_process"]["value"],
 		)
 		self.assertEqual(dye_result, {"deliverables": 1, "receivables": 1})
+		dye_wo.reload()
+		self.assertEqual(dye_wo.cloth_execution_version, 0)
+		_insert_submitted_receipt(dye_wo, dye_wo.receivables[0], 25, frappe.generate_hash(length=8))
 
 		wash_wo = self._make_work_order(ipd, v, v["washing"])
 		wash_ctx = get_fabric_deliverable_context(wash_wo.name)
@@ -1964,6 +2163,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 					],
 				}
 			],
+			source_process=(wash_ctx["source_process"] or {}).get("value"),
 		)
 		self.assertEqual(wash_result, {"deliverables": 1, "receivables": 1})
 		wash_wo.reload()
@@ -2116,6 +2316,9 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 
 		work_order = self._make_work_order(ipd, v, v["washing"])
 		context = get_fabric_deliverable_context(work_order.name)
+		if context["source_process"]:
+			_insert_predecessor_stock(work_order, context)
+			context = get_fabric_deliverable_context(work_order.name)
 		fabric = context["rows"][0]
 		red = next(
 			row for row in fabric["qty_rows"] if row["out_attrs"] == {"Dia": v["dia"], "Colour": v["red"]}
@@ -2134,6 +2337,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 					],
 				}
 			],
+			source_process=(context["source_process"] or {}).get("value"),
 		)
 		self.assertEqual(result, {"deliverables": 2, "receivables": 1})
 		work_order.reload()

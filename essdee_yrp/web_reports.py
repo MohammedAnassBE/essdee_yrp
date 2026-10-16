@@ -22,6 +22,16 @@ from essdee_yrp.essdee_yrp.report.sd_yrp_work_order_report.sd_yrp_work_order_rep
 def get_reports() -> list[WebReport]:
 	return [
 		WebReport(
+			key="merch-work-in-progress", kind="callable",
+			runner="essdee_yrp.merch.reports.run_work_in_progress",
+			access="essdee_yrp.merch.reports.require_work_in_progress_access",
+			filters={"category": ("Link", "SD YRP Product Category"), "product_season": ("Link", "SD YRP Product Season"),
+				"lot_status": "Select", "lot": "JSON", "item": "JSON", "from_date": "Date", "to_date": "Date", "process_list": "JSON"},
+			link_sources={"lot": "SD YRP Lot", "item": "Item", "production_order": "YRP Production Order"},
+			permission_doctypes=("SD YRP Lot", "YRP Work Order"),
+			dependency_doctypes="essdee_yrp.merch.reports.work_in_progress_dependency_doctypes", background="never",
+		),
+		WebReport(
 			key="planning-colour-wise-diff", kind="callable",
 			runner="essdee_yrp.planning.reports.colour_wise_diff.run",
 			access="essdee_yrp.planning.reports.colour_wise_diff.require_access",

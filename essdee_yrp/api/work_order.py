@@ -9,8 +9,8 @@ Entered rows become `output_demand` for the base engine (`get_process_io`):
 deliverables are the engine's scaled inputs; receivables are the entered rows
 themselves (1:1 v1 — the Process master's waste/excess applies later)."""
 
-import json
 import hashlib
+import json
 import re
 from itertools import groupby
 
@@ -571,12 +571,7 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 	"""
 	wo = frappe.get_doc("YRP Work Order", work_order)
 	wo.check_permission("read")
-	from essdee_yrp.cloth_execution import is_versioned_cloth_work_order
-
-	versioned_execution = is_versioned_cloth_work_order(wo)
-	manual_knitting_process = versioned_execution and _is_default_knitting_process(
-		wo.process_name
-	)
+	manual_knitting_process = _is_default_knitting_process(wo.process_name)
 	lot = _get_lot(wo)
 
 	rows = []
@@ -620,7 +615,8 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 			if not source_options:
 				source_options = row_source_options
 			selected_source_step = source_process
-			if versioned_execution and not selected_source_step and row_source_options:
+			auto_selected_source = not selected_source_step
+			if not selected_source_step and row_source_options:
 				saved_step = wo.get("fabric_source_process_step")
 				selected_source_step = (
 					saved_step
@@ -628,19 +624,21 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 					else row_source_options[0]["value"]
 				)
 			if selected_source_step:
-				selected_source = fill_from_source_grns(
+				filled_source = fill_from_source_grns(
 					qty_rows,
 					lot=lot.name,
 					ipd=ipd,
 					current_process=wo.process_name,
 					current_work_order=wo.name,
 					source_process=selected_source_step,
+					allow_empty=auto_selected_source,
 				)
-				if selected_source.get("unmatched"):
+				selected_source = _merge_source_context(selected_source, filled_source)
+				if filled_source.get("unmatched"):
 					warnings.append(
 						_("{0} GRN receipt(s) do not enter this process and were ignored: {1}").format(
-							selected_source["process_name"],
-							", ".join(selected_source["unmatched"]),
+							filled_source["process_name"],
+							", ".join(filled_source["unmatched"]),
 						)
 					)
 		reference_routed = row_kind == "knitting" and any(
@@ -706,6 +704,29 @@ def get_fabric_deliverable_context(work_order, source_process=None):
 		"source_process_options": source_options,
 		"source_process": selected_source,
 	}
+
+
+def _merge_source_context(current, incoming):
+	if not current:
+		return incoming
+	if not incoming:
+		return current
+	if current.get("value") != incoming.get("value"):
+		frappe.throw(
+			_(
+				"The selected Lot fabrics resolve to different source-process steps. "
+				"Create separate Work Orders for those fabrics."
+			)
+		)
+	merged = dict(current)
+	merged["unavailable"] = bool(current.get("unavailable") or incoming.get("unavailable"))
+	for fieldname in ("received", "reserved", "available"):
+		merged[fieldname] = flt(flt(current.get(fieldname)) + flt(incoming.get(fieldname)), 3)
+	merged["sources"] = [*(current.get("sources") or []), *(incoming.get("sources") or [])]
+	merged["unmatched"] = list(
+		dict.fromkeys([*(current.get("unmatched") or []), *(incoming.get("unmatched") or [])])
+	)
+	return merged
 
 
 def _add_planning_data(qty_rows, kind, lot, wo, fabric, ipd, step):
@@ -1584,17 +1605,22 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 	_guard_not_modified(wo, modified)
 	if wo.docstatus != 0:
 		frappe.throw(_("Calculate can only update a draft Work Order."))
+	if wo.get("is_rework"):
+		frappe.throw(
+			_(
+				"Rework Work Orders keep the source receipt and return contract created "
+				"by Rework. Calculate Fabric Deliverables is not available for rework."
+			)
+		)
 	first_calculation = not any(
 		row.get("is_calculated") for row in wo.get("deliverables") or []
 	) and not bool(wo.get("receivables"))
 	from essdee_yrp.cloth_execution import is_versioned_cloth_work_order
 
 	versioned_execution = is_versioned_cloth_work_order(wo)
-	if versioned_execution:
+	manual_knitting_process = _is_default_knitting_process(wo.process_name)
+	if versioned_execution or manual_knitting_process:
 		_guard_untransacted_fabric_calculation(wo)
-	manual_knitting_process = versioned_execution and _is_default_knitting_process(
-		wo.process_name
-	)
 
 	lot = _get_lot(wo)
 	fabric_rows = {f.name: f for f in _selected_lot_fabrics(wo, lot)}
@@ -1639,11 +1665,11 @@ def calculate_fabric_deliverables(work_order, rows, modified=None, source_proces
 		from essdee_yrp.fabric_source import get_source_process_options
 
 		source_options = get_source_process_options(ipd, wo.process_name)
-		if versioned_execution and source_options and not source_process:
+		if source_options and not source_process:
 			frappe.throw(
 				_(
-					"Process {0} must use submitted stock from its immediate predecessor. "
-					"Reopen Calculate to refresh the exact source rows."
+					"Process {0} must use submitted stock from an earlier fabric process. "
+					"Reopen Calculate to refresh its source GRNs."
 				).format(wo.process_name)
 			)
 		if source_process:

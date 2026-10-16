@@ -30,6 +30,7 @@ def is_cloth_ipd(doc):
 def before_validate(doc, method=None):
 	from essdee_yrp.ipd_attribute_links import normalize_major_value
 
+	validate_cloth_ipd_insert(doc)
 	normalize_major_value(doc)
 	validate_approved_immutability(doc)
 	apply_ipd_settings_defaults(doc)
@@ -65,6 +66,32 @@ def before_validate(doc, method=None):
 	)
 
 	stage_compacting_details_from_ipd(doc)
+
+
+def validate_cloth_ipd_insert(doc):
+	if not doc.is_new() or not is_cloth_ipd(doc):
+		return
+	if any(frappe.flags.get(flag) for flag in ("in_patch", "in_migrate", "in_install")):
+		return
+	if not frappe.flags.get("generated_cloth_ipd_insert"):
+		frappe.throw(
+			_("Cloth IPDs are created by Lot → Build Cloth Program."), frappe.PermissionError
+		)
+
+
+@contextmanager
+def allow_generated_cloth_ipd_insert():
+	"""Permit builder inserts within this server-only scope."""
+	flag_name = "generated_cloth_ipd_insert"
+	previous = frappe.flags.get(flag_name)
+	frappe.flags[flag_name] = True
+	try:
+		yield
+	finally:
+		if previous is None:
+			frappe.flags.pop(flag_name, None)
+		else:
+			frappe.flags[flag_name] = previous
 
 
 def validate_approved_immutability(doc):
@@ -744,7 +771,7 @@ def save_combination_detail_fields(doc):
 	if doc.get("stiching_item_detail"):
 		doc.set(
 			"stiching_item_combination_details",
-			save_item_details(doc.stiching_item_detail, ipd_doc=doc),
+			save_item_details(doc.stiching_item_detail, ipd_doc=doc, column_attribute=doc.stiching_attribute),
 		)
 
 
@@ -1212,7 +1239,8 @@ def check_assortment_data(data, separator_attribute, item_attr_names):
 	return errors
 
 
-def save_item_details(combination_item_detail, ipd_doc=None):
+def save_item_details(combination_item_detail, ipd_doc=None, column_attribute=None):
+	"""Combination rows; `column_attribute` resolves column values that are not set parts."""
 	combination_item_detail = update_if_string_instance(combination_item_detail)
 	item_detail = []
 	set_item_stitching_attrs = {}
@@ -1234,6 +1262,8 @@ def save_item_details(combination_item_detail, ipd_doc=None):
 				"set_item_attribute_value": value,
 				"attribute_value": item["val"][value],
 			}
+			if column_attribute:
+				row["combination_attribute"] = column_attribute
 			if ipd_doc and ipd_doc.is_set_item and set_item_stitching_attrs.get(value):
 				part = set_item_stitching_attrs[value]
 				row["major_attribute_value"] = set_item_packing_combination[item["major_attribute"]][part]

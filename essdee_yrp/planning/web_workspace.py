@@ -47,6 +47,10 @@ def _reports_section(sewing_sections, finishing_sections):
 	):
 		if report.can_view():
 			production[key] = {"label": _(label), "can_read": True}
+	if cutting_reports.get_report_permissions()["multi-ccr"]:
+		production["multi_ccr"] = {"label": _("Multi CCR"), "can_read": True}
+	if frappe.has_permission("YRP Production Order", "report"):
+		production["ppo_report"] = {"label": _("PPO Report"), "can_read": True, "can_export": True}
 	if frappe.has_permission("YRP Work Order", "read"):
 		production["work_order_bulk_close"] = {
 			"label": _("Work Order Bulk Close"), "can_read": True,

@@ -3,7 +3,7 @@
 		<div class="conversion-heading">
 			<div>
 				<h5>{{ __("Actual Dia Conversions") }}</h5>
-				<p>{{ __("Built automatically from submitted versioned Knitting GRNs.") }}</p>
+				<p>{{ __("Built automatically from submitted Default Knitting GRNs.") }}</p>
 			</div>
 			<div class="conversion-counts">
 				<span class="changed-count">{{ changedCount }} {{ __("changed") }}</span>
@@ -26,7 +26,7 @@
 
 		<div v-if="!rows.length" class="conversion-empty">
 			<strong>{{ __("No knitting receipts yet") }}</strong>
-			<span>{{ __("Submit a versioned Knitting GRN to build this table.") }}</span>
+			<span>{{ __("Submit a Default Knitting GRN to build this table.") }}</span>
 		</div>
 		<div v-else-if="!filteredRows.length" class="conversion-empty">
 			<strong>{{ !includeUnchanged && !search && !process

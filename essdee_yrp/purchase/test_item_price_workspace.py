@@ -402,6 +402,67 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		self.assertIn(f"Approved by {self.fixture_users['purchase_manager']}", contents)
 		self.assertTrue(all(entry["name"] for entry in payload["timeline"]))
 
+	def test_workspace_sends_desk_field_labels_for_sections_and_price_values(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
+
+		name = self._save()["record"]["name"]
+		frappe.set_user(self.fixture_users["purchase_user"])
+		payload = get_item_price_workspace(name)
+		fields = {field["fieldname"]: field for field in payload["fields"]}
+
+		self.assertEqual(fields["from_date"]["label"], "From Date")
+		self.assertEqual(fields["from_date"]["fieldtype"], "Date")
+		self.assertEqual(fields["uom"]["label"], "UOM")
+		self.assertEqual(fields["uom"]["value"], self.uom)
+		self.assertEqual(fields["tax"]["label"], "Tax Slab")
+		self.assertEqual(fields["depends_on_attribute"]["label"], "Depends On Attribute")
+		self.assertEqual(fields["supplier_name"]["label"], "Supplier Name")
+		self.assertIn("approved_by", fields)
+		self.assertEqual(payload["tier_fields"]["moq"]["label"], "MOQ")
+		self.assertEqual(payload["tier_fields"]["lead_time"]["label"], "Lead Time")
+		self.assertEqual(payload["tier_fields"]["attribute_value"]["label"], "Attribute Value")
+
+	def test_workspace_timeline_starts_with_the_creation_entry(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
+
+		name = self._save()["record"]["name"]
+		frappe.set_user(self.fixture_users["purchase_user"])
+		timeline = get_item_price_workspace(name)["timeline"]
+
+		created = next(entry for entry in timeline if entry["kind"] == "created")
+		self.assertEqual(created["by"], self.fixture_users["purchase_user"])
+		self.assertEqual(created["content"], f"{self.fixture_users['purchase_user']} created this")
+
+	def test_workspace_timeline_lists_every_saved_version(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
+
+		name = self._save()["record"]["name"]
+		self._transition(name, "Submit", "purchase_user")
+		self._transition(name, "Approve", "purchase_manager")
+		versions = frappe.get_all("Version", filters={"ref_doctype": "YRP Item Price", "docname": name}, pluck="name")
+
+		frappe.set_user(self.fixture_users["purchase_user"])
+		timeline = get_item_price_workspace(name)["timeline"]
+
+		edited = [entry["name"] for entry in timeline if entry["kind"] == "edited"]
+		self.assertGreaterEqual(len(versions), 2)
+		self.assertCountEqual(edited, versions)
+
+	def test_editor_sends_read_only_supplier_name_and_hides_unapproved_approver(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor
+
+		name = self._save()["record"]["name"]
+		frappe.db.set_value("YRP Item Price", name, "approved_by", "Administrator", update_modified=False)
+		frappe.set_user(self.fixture_users["purchase_user"])
+		payload = get_item_price_editor(name)
+
+		self.assertEqual(payload["fields"]["supplier_name"]["label"], "Supplier Name")
+		self.assertTrue(payload["fields"]["supplier_name"]["read_only"])
+		self.assertTrue(payload["fields"]["approved_by"]["read_only"])
+		self.assertEqual(payload["fields"]["from_date"]["label"], "From Date")
+		self.assertEqual(payload["values"]["supplier_name"], frappe.db.get_value("Supplier", self.suppliers[0], "supplier_name"))
+		self.assertIsNone(payload["values"]["approved_by"])
+
 	def test_draft_edit_requires_workflow_allow_edit_role(self):
 		from essdee_yrp.purchase.item_price_workspace import get_item_price_workspace
 
@@ -785,6 +846,22 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 			delete_item_price(name, "2000-01-01 00:00:00")
 		self.assertEqual(delete_item_price(name, doc.modified), {"deleted": True, "name": name})
 		self.assertFalse(frappe.db.exists("YRP Item Price", name))
+
+	def test_price_summaries_report_slab_range_for_readable_prices(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_summaries
+
+		single = self._save()["record"]["name"]
+		slabs = [{"moq": 0, "price": 12.5, "lead_time": 2}, {"moq": 100, "price": 9, "lead_time": 3}]
+		ranged = self._save(supplier=self.suppliers[1], item_price_values=slabs)["record"]["name"]
+
+		summaries = get_item_price_summaries([single, ranged, single, "ITP-MISSING"])
+
+		self.assertEqual(summaries[single], {"min_price": 10, "max_price": 10, "slab_count": 1})
+		self.assertEqual(summaries[ranged], {"min_price": 9, "max_price": 12.5, "slab_count": 2})
+		self.assertNotIn("ITP-MISSING", summaries)
+		frappe.set_user("Guest")
+		with self.assertRaises(frappe.PermissionError):
+			get_item_price_summaries([single])
 
 	def test_price_endpoints_follow_doctype_permissions(self):
 		from essdee_yrp.purchase.item_price_workspace import (

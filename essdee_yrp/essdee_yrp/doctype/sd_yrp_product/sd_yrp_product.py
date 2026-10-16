@@ -373,9 +373,9 @@ def get_grouped_files(files) -> dict:
 
 @frappe.whitelist()
 def get_product_colour_codes(doctype: str, docname: str) -> dict:
-	if doctype != "SD YRP Product":
-		frappe.throw(_("Colour codes are available only for Product."))
-	doc = frappe.get_doc("SD YRP Product", docname)
+	if doctype not in {"SD YRP Product", "SD YRP Product Release"}:
+		frappe.throw(_("Colour codes are available only for Product or Product Release."))
+	doc = frappe.get_doc(doctype, docname)
 	doc.check_permission("read")
 	if doc.is_set_item:
 		return {

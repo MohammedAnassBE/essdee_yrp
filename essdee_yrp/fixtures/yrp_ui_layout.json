@@ -250,5 +250,16 @@
   "modified": "2026-10-15 10:10:21.289904",
   "name": "HR",
   "render_mode": "Registered Experience"
+ },
+ {
+  "config": "{\"schema_version\":1,\"experience_props\":{\"workspaces\":[\"lots\",\"item_production_details\",\"production_orders\",\"work_orders\",\"process_costs\",\"bill_tracking\",\"purchase_invoices\",\"reports\"]}}",
+  "description": "/web Merch department workspace only",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "YRP UI Layout",
+  "experience_key": "merch",
+  "layout_name": "Merch",
+  "name": "Merch",
+  "render_mode": "Registered Experience"
  }
 ]

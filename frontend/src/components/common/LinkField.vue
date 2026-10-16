@@ -1,6 +1,6 @@
 <template>
-	<div class="common-field" :class="{ 'common-field--invalid': invalid }">
-		<label v-if="label" class="common-field__label" :for="resolvedInputId">{{ label }}</label>
+	<div class="common-field" :class="{ 'common-field--invalid': invalid || validationError }" @keydown.capture="onKeydown">
+		<label v-if="label" class="common-field__label erp-field-label" :for="resolvedInputId">{{ labelParts.text }}<span v-if="labelParts.required" class="erp-required-mark" aria-hidden="true">*</span></label>
 		<span class="link-field__control">
 			<AutoComplete
 				ref="input"
@@ -10,19 +10,21 @@
 				:option-label="optionLabel"
 				:placeholder="placeholder || `Search ${doctype || 'record'}…`"
 				:disabled="disabled"
-				:invalid="invalid"
+				:invalid="invalid || Boolean(validationError)"
 				:dropdown="dropdown"
 				:delay="delay"
 				:show-clear="showClear"
 				:aria-label="ariaLabel || label || undefined"
 				:pt="autocompletePt"
-				force-selection
+				auto-option-focus
+				focus-on-hover
 				fluid
 				@complete="complete"
 				@item-select="select"
-				@clear="clear"
-				@blur="restoreCommittedValue"
-				@update:model-value="inputValue = $event"
+				@clear="clearFromControl"
+				@before-show="focusFirstOption"
+				@blur="onBlur"
+				@update:model-value="updateInput"
 			>
 				<template #option="{ option }">
 					<span class="link-field__option">
@@ -48,19 +50,24 @@
 				@click.prevent="openRecord"
 			/>
 		</span>
+		<small v-if="validationError && showValidationMessage" :id="`${resolvedInputId}-link-error`" class="link-field__error" role="alert">{{ validationError }}</small>
 		<small v-if="helpText" class="common-field__help">{{ helpText }}</small>
 	</div>
 </template>
 
 <script setup>
-import AutoComplete from "primevue/autocomplete"
+import PrimeAutoComplete from "primevue/autocomplete"
 import Button from "primevue/button"
-import { computed, ref, useId, watch } from "vue"
+import { computed, nextTick, ref, useId, watch } from "vue"
 
 import { searchLink } from "../../api/frappe.js"
 import { webDocumentPath } from "../../router/webDocumentRoutes.js"
+import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "./autocompleteKeys.js"
+
+const AutoComplete = withAutocompleteCompositionGuard(PrimeAutoComplete)
 
 const props = defineProps({
+	resetVersion: { type: Number, default: 0 },
 	modelValue: { type: [String, Number], default: "" },
 	doctype: { type: String, required: true },
 	label: { type: String, default: "" },
@@ -70,6 +77,7 @@ const props = defineProps({
 	filters: { type: Object, default: () => ({}) },
 	disabled: { type: Boolean, default: false },
 	invalid: { type: Boolean, default: false },
+	showValidationMessage: { type: Boolean, default: true },
 	dropdown: { type: Boolean, default: true },
 	delay: { type: Number, default: 300 },
 	pageLength: { type: Number, default: 20 },
@@ -85,7 +93,12 @@ const props = defineProps({
 	openHandler: { type: Function, default: null },
 })
 
-const emit = defineEmits(["update:modelValue", "select", "clear"])
+const labelParts = computed(() => {
+	const match = /^(.*?)\s*\*$/.exec(props.label || "")
+	return match ? { text: match[1], required: true } : { text: props.label, required: props.required }
+})
+
+const emit = defineEmits(["update:modelValue", "select", "clear", "validation"])
 
 const input = ref(null)
 const componentId = useId()
@@ -93,9 +106,14 @@ const inputValue = ref(null)
 const suggestions = ref([])
 const searching = ref(false)
 const searchError = ref("")
+const validationError = ref("")
+const committedName = ref("")
 const committedLabel = ref("")
 let requestSequence = 0
 
+const modelLabel = computed(() => committedName.value === props.modelValue
+	? committedLabel.value || String(props.modelValue || "")
+	: String(props.modelValue || ""))
 const optionLabel = computed(() => "label")
 const resolvedInputId = computed(() => props.inputId || `link-field-${componentId}`)
 const hasIncompleteFilters = computed(() => Object.keys(props.filters || {}).length > 0
@@ -108,34 +126,24 @@ const emptyStateMessage = computed(() => {
 	return `No ${props.doctype || "records"} found`
 })
 const autocompletePt = computed(() => ({
+	option: { onMousedown: (event) => event.preventDefault() },
 	dropdown: {
 		"aria-label": `Show ${props.ariaLabel || props.label || props.doctype || "record"} options`,
 		title: `Show ${props.ariaLabel || props.label || props.doctype || "record"} options`,
 	},
 	pcInputText: {
 		root: {
-			title: committedLabel.value || String(props.modelValue || "") || undefined,
+			title: modelLabel.value || undefined,
 			required: props.required || undefined,
 			"aria-required": props.required ? "true" : undefined,
-			"aria-describedby": props.ariaDescribedby || undefined,
+			"aria-describedby": [props.ariaDescribedby, validationError.value && props.showValidationMessage ? `${resolvedInputId.value}-link-error` : ""].filter(Boolean).join(" ") || undefined,
 		},
 	},
 }))
 
 watch(
-	() => props.modelValue,
-	(value) => {
-		if (!value) {
-			committedLabel.value = ""
-			inputValue.value = null
-			return
-		}
-		const currentName = typeof inputValue.value === "object" ? inputValue.value?.name : ""
-		if (currentName !== value) {
-			committedLabel.value = String(value)
-			inputValue.value = { name: value, label: String(value) }
-		}
-	},
+	() => [props.modelValue, props.resetVersion],
+	() => { setValidation(); syncModelValue() },
 	{ immediate: true },
 )
 
@@ -169,24 +177,84 @@ async function complete(event) {
 }
 
 function select(event) {
-	const selected = event.value || {}
-	const name = selected.name || selected
+	setValidation()
+	const selected = event.value
+	const name = typeof selected === "object" ? selected?.name : selected
+	if (name === undefined || name === null || name === "") return
+	committedName.value = name
 	committedLabel.value = selected.label || String(name)
 	inputValue.value = { name, label: committedLabel.value }
 	emit("update:modelValue", name)
 	emit("select", { name, label: committedLabel.value, row: selected })
 }
 
+function updateInput(value) {
+	setValidation()
+	inputValue.value = value
+	if (value === "" || value === null) clear()
+}
+
+function onKeydown(event) {
+	if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229
+		&& event.target === input.value?.$el?.querySelector("input")
+		&& !(input.value?.overlayVisible && suggestions.value.length && !searching.value)) rejectUnselected()
+	handleAutocompleteKey(event, input.value, restoreCommittedValue, searching.value)
+}
+async function focusFirstOption() {
+	await nextTick()
+	if (input.value?.overlayVisible) input.value.focusedOptionIndex = input.value.findFirstOptionIndex()
+}
+function onBlur() {
+	rejectUnselected()
+	restoreCommittedValue()
+	input.value?.hide()
+}
+
+function clearFromControl() {
+	if (inputValue.value !== null || committedLabel.value) clear()
+}
+
 function clear() {
+	setValidation()
+	cancelSearch()
+	committedName.value = ""
 	committedLabel.value = ""
 	inputValue.value = null
 	emit("update:modelValue", "")
 	emit("clear")
 }
 
+function cancelSearch() {
+	requestSequence += 1
+	searching.value = false
+	if (input.value) {
+		clearTimeout(input.value.searchTimeout)
+		input.value.searching = false
+	}
+}
+
+function setValidation(message = "", query = "") {
+	validationError.value = message
+	emit("validation", { message, query })
+}
+function rejectUnselected() {
+	const query = typeof inputValue.value === "string" ? inputValue.value.trim() : ""
+	if (!query || query === modelLabel.value) return
+	const message = searchError.value || (hasIncompleteFilters.value ? props.dependencyMessage
+		: !searching.value && !suggestions.value.length
+			? `No ${props.doctype} matches "${query}". Pick one from the list.`
+			: `Pick a ${props.doctype} from the list for "${query}".`)
+	setValidation(message, query)
+}
+
 function restoreCommittedValue() {
+	cancelSearch()
+	syncModelValue()
+}
+
+function syncModelValue() {
 	inputValue.value = props.modelValue
-		? { name: props.modelValue, label: committedLabel.value || String(props.modelValue) }
+		? { name: props.modelValue, label: modelLabel.value }
 		: null
 }
 
@@ -213,20 +281,14 @@ defineExpose({ focus })
 	width: 100%;
 }
 
-.common-field__label {
-	color: var(--erp-text);
+.link-field__error {
+	color: var(--erp-danger);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
-	transition: color var(--erp-transition-fast);
-}
-
-.common-field:focus-within .common-field__label {
-	color: var(--erp-accent-hover);
 }
 
 .common-field__help,
 .link-field__empty {
-	font-size: 0.75rem;
+	font-size: var(--erp-font-size-caption);
 	color: var(--erp-text-muted);
 }
 
@@ -246,23 +308,6 @@ defineExpose({ focus })
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	background: var(--erp-surface);
-	border-color: var(--erp-border-strong);
-	box-shadow: var(--erp-shadow-xs);
-}
-
-.link-field__control :deep(.p-autocomplete:not(.p-disabled):hover .p-autocomplete-input) {
-	border-color: color-mix(in srgb, var(--erp-accent) 32%, var(--erp-border-strong));
-}
-
-.link-field__control :deep(.p-autocomplete:focus-within .p-autocomplete-input) {
-	border-color: var(--erp-accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
-}
-
-.link-field__control :deep(.p-button:focus-visible) {
-	outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent);
-	outline-offset: 1px;
 }
 
 .link-field__empty {
@@ -279,8 +324,8 @@ defineExpose({ focus })
 
 .link-field__option strong {
 	color: var(--erp-text);
-	font-size: 0.78rem;
-	font-weight: 650;
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .link-field__option small {

@@ -108,19 +108,20 @@ async function move(action) {
 }
 
 .inline-page-navigation__back:hover {
-	color: var(--erp-accent-dark);
-	border-color: color-mix(in srgb, var(--erp-accent) 36%, var(--erp-border));
-	background: var(--erp-accent-soft);
+	color: var(--erp-text);
+	border-color: var(--erp-accent-border);
+	background: var(--erp-surface-hover);
 }
 
-.inline-page-navigation__back:focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--erp-accent) 24%, transparent);
-	outline-offset: 2px;
+
+
+.inline-page-navigation__documents:has(.inline-page-navigation__document:not(:disabled):hover) {
+	border-color: var(--erp-accent-border);
 }
 
 .inline-page-navigation__documents {
 	display: inline-flex;
-	overflow: hidden;
+	overflow: visible;
 	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface);
@@ -128,7 +129,7 @@ async function move(action) {
 
 .inline-page-navigation__document {
 	display: inline-grid;
-	width: 34px;
+	width: 38px;
 	height: 36px;
 	padding: 0;
 	color: var(--erp-text-muted);
@@ -136,13 +137,26 @@ async function move(action) {
 	background: transparent;
 	place-items: center;
 	cursor: pointer;
+	transition: color var(--erp-transition-fast), background var(--erp-transition-fast);
 }
 
 .inline-page-navigation__document + .inline-page-navigation__document { border-left: 1px solid var(--erp-border); }
-.inline-page-navigation__document:not(:disabled):hover { color: var(--erp-accent-dark); background: var(--erp-accent-soft); }
-.inline-page-navigation__document:disabled { color: color-mix(in srgb, var(--erp-text-muted) 45%, transparent); cursor: not-allowed; }
-.inline-page-navigation__document:focus-visible { position: relative; z-index: 1; outline: 3px solid color-mix(in srgb, var(--erp-accent) 24%, transparent); outline-offset: -3px; }
-.inline-page-navigation__status { max-width: 190px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 650; line-height: 1.2; }
+.inline-page-navigation__document:not(:disabled):hover {
+	color: var(--erp-text);
+	background: var(--erp-surface-hover);
+}
+.inline-page-navigation__document:disabled {
+	opacity: .5;
+	cursor: not-allowed;
+}
+
+.inline-page-navigation__status {
+	max-width: 190px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+	font-weight: var(--erp-font-weight-medium);
+	line-height: 1.2;
+}
 
 @media (max-width: 620px), (pointer: coarse) {
 	.inline-page-navigation__back { width: 44px; height: 44px; }

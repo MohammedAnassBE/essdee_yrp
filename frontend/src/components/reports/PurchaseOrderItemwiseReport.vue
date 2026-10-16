@@ -44,7 +44,7 @@
 			<div class="report-metric"><i class="pi pi-clock" /><div><span>Pending quantity</span><strong>{{ number(totals.pending, 3) }}</strong></div></div>
 		</template>
 
-		<div class="erp-table-wrap purchase-order-itemwise-report__table-wrap" role="region" aria-label="Purchase Order Itemwise results" tabindex="0">
+		<div class="erp-table-wrap report-table-frame purchase-order-itemwise-report__table-wrap" role="region" aria-label="Purchase Order Itemwise results" tabindex="0">
 			<table class="erp-data-table purchase-order-itemwise-report__table">
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr></thead>
@@ -204,6 +204,18 @@ onMounted(loadLayout)
 
 .purchase-order-itemwise-report__table {
 	min-width: 2050px;
+}
+
+.purchase-order-itemwise-report__table td > a {
+	color: var(--erp-accent-strong);
+	font-weight: var(--erp-font-weight-semibold);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.purchase-order-itemwise-report__table td > a:hover,
+.purchase-order-itemwise-report__table td > a:focus-visible {
+	text-decoration: underline;
 }
 
 .purchase-order-itemwise-report__table td > span {

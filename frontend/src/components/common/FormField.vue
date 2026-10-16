@@ -1,23 +1,27 @@
 <template>
 	<div class="form-field" :class="{ 'form-field--wide': isWide }">
-		<label v-if="showLabel" :id="labelId" class="form-field__label" :for="inputId">
+		<label v-if="showLabel" :id="labelId" class="form-field__label erp-field-label" :for="inputId">
 			{{ field.label || field.fieldname }}
-			<span v-if="required" class="form-field__required" aria-hidden="true">*</span>
+			<span v-if="required" class="form-field__required erp-required-mark" aria-hidden="true">*</span>
 		</label>
 
 		<LinkField
 			v-if="isLink"
 			:input-id="inputId"
 			:model-value="modelValue"
+			:reset-version="resetVersion"
 			:doctype="linkDoctype"
 			:filters="linkFilters"
 			:search-handler="searchHandler"
 			:disabled="isDisabled"
-			:invalid="invalid"
+			:invalid="invalid || Boolean(linkError)"
 			:required="required"
 			:aria-label="accessibleLabel"
 			:aria-describedby="describedBy"
 			:show-open-button="showOpenButton"
+			:show-clear="showClear"
+			:show-validation-message="false"
+			@validation="linkError = $event.message"
 			@update:model-value="updateValue"
 		/>
 		<ToggleSwitch
@@ -132,7 +136,7 @@
 		<small v-if="field.description" :id="descriptionId" class="form-field__description">
 			{{ field.description }}
 		</small>
-		<small v-if="error" :id="errorId" class="form-field__error" role="alert">{{ error }}</small>
+		<small v-if="displayError" :id="errorId" class="form-field__error" role="alert">{{ displayError }}</small>
 	</div>
 </template>
 
@@ -142,7 +146,7 @@ import InputText from "primevue/inputtext"
 import Select from "primevue/select"
 import Textarea from "primevue/textarea"
 import ToggleSwitch from "primevue/toggleswitch"
-import { computed } from "vue"
+import { computed, ref } from "vue"
 
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 
@@ -154,6 +158,7 @@ import TimeField from "./TimeField.vue"
 const props = defineProps({
 	field: { type: Object, required: true },
 	modelValue: { default: null },
+	resetVersion: { type: Number, default: 0 },
 	form: { type: Object, default: () => ({}) },
 	disabled: { type: Boolean, default: false },
 	invalid: { type: Boolean, default: false },
@@ -161,6 +166,7 @@ const props = defineProps({
 	error: { type: String, default: "" },
 	showLabel: { type: Boolean, default: true },
 	showOpenButton: { type: Boolean, default: true },
+	showClear: { type: Boolean, default: false },
 	inputId: { type: String, default: "" },
 	ariaLabel: { type: String, default: "" },
 	compact: { type: Boolean, default: false },
@@ -169,12 +175,14 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue", "change"])
 
+const linkError = ref("")
+const displayError = computed(() => linkError.value || props.error)
 const inputId = computed(() => props.inputId || `field-${props.field.fieldname}-${props.field.idx || "value"}`)
 const labelId = computed(() => `${inputId.value}-label`)
 const accessibleLabel = computed(() => props.ariaLabel || props.field.label || props.field.fieldname)
 const descriptionId = computed(() => `${inputId.value}-description`)
 const errorId = computed(() => `${inputId.value}-error`)
-const describedBy = computed(() => [props.field.description ? descriptionId.value : "", props.error ? errorId.value : ""].filter(Boolean).join(" ") || undefined)
+const describedBy = computed(() => [props.field.description ? descriptionId.value : "", displayError.value ? errorId.value : ""].filter(Boolean).join(" ") || undefined)
 const focusableControlAria = computed(() => ({
 	"aria-required": props.required ? "true" : undefined,
 	"aria-describedby": describedBy.value,
@@ -261,26 +269,13 @@ function parseLinkFilters(value) {
 	min-width: 0;
 }
 
-.form-field__label {
-	color: var(--erp-text);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
-	line-height: 1.25;
-	transition: color var(--erp-transition-fast);
-}
-
-.form-field:focus-within .form-field__label {
-	color: var(--erp-accent-hover);
-}
-
-.form-field__required,
 .form-field__error {
 	color: var(--erp-danger);
 }
 
 .form-field__description,
 .form-field__error {
-	font-size: var(--erp-font-size-min);
+	font-size: var(--erp-font-size-caption);
 	line-height: 1.35;
 }
 
@@ -293,27 +288,4 @@ function parseLinkFilters(value) {
 	border-left: 2px solid var(--erp-danger);
 }
 
-.form-field :deep(.p-inputtext),
-.form-field :deep(.p-select),
-.form-field :deep(.p-inputnumber-input),
-.form-field :deep(.p-textarea) {
-	background: var(--erp-surface);
-	border-color: var(--erp-border-strong);
-	box-shadow: var(--erp-shadow-xs);
-}
-
-.form-field :deep(.p-inputtext:enabled:hover),
-.form-field :deep(.p-select:not(.p-disabled):hover),
-.form-field :deep(.p-inputnumber:not(.p-disabled):hover .p-inputnumber-input),
-.form-field :deep(.p-textarea:enabled:hover) {
-	border-color: color-mix(in srgb, var(--erp-accent) 32%, var(--erp-border-strong));
-}
-
-.form-field :deep(.p-inputtext:focus),
-.form-field :deep(.p-select.p-focus),
-.form-field :deep(.p-inputnumber:focus-within .p-inputnumber-input),
-.form-field :deep(.p-textarea:focus) {
-	border-color: var(--erp-accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
-}
 </style>

@@ -644,9 +644,9 @@ defineExpose({ save, reload: load, doc: form, mode })
 .form-toolbar h2 {
 	margin: 0;
 	color: var(--erp-text);
-	font-size: 1.12rem;
-	font-weight: 760;
-	letter-spacing: -0.018em;
+	font-size: var(--erp-font-size-hero);
+	font-weight: var(--erp-font-weight-bold);
+	letter-spacing: -.01em;
 }
 
 .form-toolbar__identity {
@@ -714,9 +714,9 @@ defineExpose({ save, reload: load, doc: form, mode })
 .form-tab-title {
 	margin: 8px 0 0;
 	padding: 0 2px 8px;
-	color: var(--erp-accent-hover);
-	font-size: 0.9rem;
-	font-weight: 780;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
 	letter-spacing: -0.01em;
 	border-bottom: 1px solid var(--erp-border-strong);
 }
@@ -733,21 +733,21 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .form-section__header h3 {
 	margin: 0;
-	color: var(--erp-text);
-	font-size: 0.9rem;
-	font-weight: 740;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .form-section__columns {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-	gap: 18px 24px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px 28px;
 }
 
 .form-section__column {
 	display: grid;
 	align-content: start;
-	gap: 13px;
+	gap: 16px;
 	min-width: 0;
 }
 
@@ -763,15 +763,11 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .common-form-view--compact .form-section__columns {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 28px;
+	gap: 16px 28px;
 }
 
 .common-form-view--compact .form-section__column {
-	gap: 12px;
-}
-
-.common-form-view--compact :deep(.form-field) {
-	gap: 4px;
+	gap: 16px;
 }
 
 .common-form-view--compact :deep(.p-inputtext),
@@ -783,58 +779,53 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .view-field-grid {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	grid-auto-flow: dense;
-	gap: 1px;
-	overflow: hidden;
-	background: var(--erp-border);
-	border: 1px solid var(--erp-border);
-	border-radius: var(--erp-panel-radius);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px 28px;
+	background: transparent;
 }
 
 .view-field {
 	display: flex;
-	min-height: 54px;
-	padding: 9px 12px;
-	background: var(--erp-surface);
+	min-width: 0;
 	flex-direction: column;
-	justify-content: center;
+	gap: 2px;
+	padding: 9px 0;
+	background: transparent;
+	border-bottom: 1px solid var(--erp-border-subtle);
 }
 
 .view-field--wide {
-	grid-column: span 2;
+	grid-column: 1 / -1;
 }
 
 .view-field__value {
 	color: var(--erp-text);
-	font-size: var(--erp-font-size-table);
-	font-weight: 650;
+	font-size: var(--erp-font-size-md);
+	font-weight: var(--erp-font-weight-semibold);
 	overflow-wrap: anywhere;
 	white-space: pre-line;
+	order: 1;
+	line-height: 1.35;
 }
 
 .view-field__link {
-	color: var(--erp-accent-hover);
-	text-decoration: none;
+	color: var(--erp-accent-ink);
+	text-decoration: underline dotted;
+	text-underline-offset: 2px;
 }
 
-.view-field__link:hover,
-.view-field__link:focus-visible {
-	text-decoration: underline;
-}
-
-.view-field__link:focus-visible {
-	border-radius: 3px;
-	outline: 2px solid var(--erp-accent-dark);
-	outline-offset: 2px;
+.view-field__link::after {
+	content: " ↗";
+	color: var(--erp-accent);
 }
 
 .view-field__label {
-	margin-bottom: 3px;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 650;
-	letter-spacing: 0.015em;
+	font-weight: var(--erp-font-weight-semibold);
+	letter-spacing: .03em;
+	order: 2;
+	text-transform: uppercase;
 }
 
 .view-table {
@@ -850,24 +841,19 @@ defineExpose({ save, reload: load, doc: form, mode })
 
 .view-table h4 {
 	margin: 0;
-	font-size: 0.9rem;
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .view-table header span {
 	color: var(--erp-text-muted);
-	font-size: 0.72rem;
+	font-size: var(--erp-font-size-min);
 }
 
 .view-table__empty {
 	padding: 22px;
 	color: var(--erp-text-muted);
 	text-align: center;
-}
-
-@media (max-width: 1100px) {
-	.view-field-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
 }
 
 @media (max-width: 700px) {

@@ -36,6 +36,7 @@ async function request(url, options = {}) {
 		throw requestError(
 			extractServerMessage(payload, "The server could not complete this action. Please try again. If the problem continues, contact your administrator."),
 			response.status,
+			payload,
 		)
 	}
 	return payload
@@ -50,8 +51,8 @@ export async function callMethod(method, args = {}, requestOptions = {}) {
 	return payload.message
 }
 
-function requestError(message, status) {
-	return Object.assign(new Error(message), { status })
+function requestError(message, status, payload = {}) {
+	return Object.assign(new Error(message), { status, exc_type: payload.exc_type, serverMessages: payload._server_messages })
 }
 
 export function uploadFile(file, options = {}) {

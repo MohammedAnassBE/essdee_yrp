@@ -17,7 +17,7 @@
 		<div class="filter-rows">
 			<div v-for="(row, index) in rows" :key="row.id" class="filter-row">
 				<label class="filter-control">
-					<span class="filter-control__mobile-label">Field</span>
+					<span class="filter-control__mobile-label erp-field-label">Field</span>
 					<Select
 						:model-value="row.fieldKey"
 						:options="fieldOptions"
@@ -32,7 +32,7 @@
 				</label>
 
 				<label class="filter-control">
-					<span class="filter-control__mobile-label">Condition</span>
+					<span class="filter-control__mobile-label erp-field-label">Condition</span>
 					<Select
 						v-model="row.operator"
 						:options="operatorsFor(row)"
@@ -45,7 +45,7 @@
 				</label>
 
 				<label class="filter-control filter-row__value">
-					<span class="filter-control__mobile-label">Value</span>
+					<span class="filter-control__mobile-label erp-field-label">Value</span>
 					<Select
 						v-if="row.operator === 'is'"
 						v-model="row.value"
@@ -658,11 +658,28 @@ function apply() {
 	gap: 10px;
 }
 
-.filter-column-headings { padding: 0 10px 7px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 780; letter-spacing: 0.04em; text-transform: uppercase; }
+.filter-column-headings {
+	padding: 0 10px 7px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+}
 .filter-rows { display: grid; gap: 8px; max-height: min(54vh, 470px); margin-bottom: 8px; overflow-y: auto; scrollbar-width: thin; }
-.filter-row { align-items: start; padding: 10px; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: var(--erp-shadow-xs); }
-.filter-row:hover { border-color: color-mix(in srgb, var(--erp-accent) 22%, var(--erp-border)); }
-.filter-row:focus-within { background: var(--erp-surface); border-color: color-mix(in srgb, var(--erp-accent) 55%, white); box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 9%, transparent); }
+.filter-row {
+	align-items: start;
+	padding: 8px;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border-subtle);
+	border-radius: var(--erp-control-radius);
+}
+.filter-row:hover {
+	border-color: var(--erp-border);
+}
+.filter-row:focus-within {
+	border-color: var(--erp-accent-border);
+}
 .filter-control { display: grid; gap: 4px; min-width: 0; }
 .filter-control__mobile-label { display: none; }
 .filter-row__value { min-width: 0; }
@@ -672,23 +689,82 @@ function apply() {
 .filter-row :deep(.p-select),
 .filter-row :deep(.p-autocomplete-input),
 .filter-row :deep(.p-inputnumber-input),
-.filter-row :deep(.p-multiselect) { min-height: var(--erp-control-height); border-color: var(--erp-border-strong); border-radius: var(--erp-control-radius); }
+.filter-row :deep(.p-multiselect) {
+	min-height: var(--erp-control-height);
+	border-radius: var(--erp-control-radius);
+}
 
 .filter-row :deep(.p-datepicker-input) { min-width: 0; }
 .filter-row :deep(.common-field) { gap: 0; }
-.filter-row > :deep(.p-button) { width: 34px; height: 34px; margin-top: 2px; }
-.filter-empty { display: grid; place-items: center; gap: 6px; min-height: 128px; color: var(--erp-text-muted); background: var(--erp-surface); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); font-size: 0.8rem; }
-.filter-empty i { color: var(--erp-accent); font-size: 1.12rem; }
+.filter-row > :deep(.p-button) {
+	width: 36px;
+	height: 36px;
+	min-height: 36px;
+	padding: 0;
+	margin-top: 1px;
+}
+.filter-empty {
+	display: grid;
+	place-items: center;
+	gap: 6px;
+	color: var(--erp-text-muted);
+	background: var(--erp-surface);
+	border: 1px dashed var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	font-size: var(--erp-font-size-table);
+	padding: 34px 18px;
+}
+.filter-empty i {
+	color: var(--erp-accent);
+	font-size: var(--erp-font-size-hero);
+}
 .add-filter-button { margin-top: 2px; }
-
-.add-filter-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent); outline-offset: 1px; }
 
 @media (max-width: 760px) {
 	.filter-column-headings { display: none; }
 	.filter-rows { max-height: 58vh; }
-	.filter-row { grid-template-columns: 1fr auto; }
-	.filter-control { grid-column: 1 / -1; }
-	.filter-row > :deep(.p-button) { grid-column: 2; grid-row: 1; }
-	.filter-control__mobile-label { display: inline; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
+	.filter-row {
+		grid-template-columns: minmax(0, 1fr) 44px;
+	}
+	.filter-control:first-child {
+		grid-column: 1;
+		grid-row: 1;
+	}
+	.filter-control:nth-child(2) {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+	.filter-control:nth-child(3) {
+		grid-column: 1 / -1;
+		grid-row: 3;
+	}
+	.filter-row > :deep(.p-button) {
+		grid-column: 2;
+		grid-row: 1;
+		align-self: end;
+		justify-self: end;
+		margin-top: 0;
+	}
+	.filter-control__mobile-label {
+		display: block;
+	}
+}
+@media (pointer: coarse) {
+	.filter-column-headings,
+	.filter-row {
+		grid-template-columns: minmax(190px, 1.08fr) minmax(180px, .92fr) minmax(260px, 1.45fr) 44px;
+	}
+	.filter-row > :deep(.p-button) {
+		width: 44px;
+		height: 44px;
+		min-height: 44px;
+		margin-top: 0;
+	}
+}
+
+@media (pointer: coarse) and (max-width: 760px) {
+	.filter-row {
+		grid-template-columns: minmax(0, 1fr) 44px;
+	}
 }
 </style>

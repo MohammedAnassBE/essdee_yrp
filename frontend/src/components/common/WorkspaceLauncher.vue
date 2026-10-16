@@ -18,7 +18,9 @@
 
 		<div v-if="loading" class="workspace-launcher__grid" aria-label="Loading workspaces">
 			<span class="workspace-launcher__loading-status" role="status">Loading workspaces</span>
-			<Skeleton v-for="index in skeletonCount" :key="index" height="124px" border-radius="14px" />
+			<div v-for="index in skeletonCount" :key="index" class="workspace-launcher__skeleton">
+				<Skeleton height="124px" border-radius="14px" />
+			</div>
 		</div>
 		<div v-else-if="items.length" class="workspace-launcher__grid">
 			<RouterLink
@@ -62,31 +64,34 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 </script>
 
 <style scoped>
-.workspace-launcher {
-	max-width: 1320px;
-	margin: 0 auto;
-	padding: clamp(24px, 4vw, 48px) 8px;
+.workspace-launcher.erp-workspace.erp-workspace-entry {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: calc(var(--erp-workspace-max-width) + 2 * var(--erp-page-gutter));
+	margin-inline: auto;
+	padding: 22px var(--erp-page-gutter) 60px;
 }
 
-.workspace-launcher__header { display: flex; align-items: center; justify-content: flex-start; flex-direction: row; gap: 10px; margin-bottom: var(--erp-space-6); }
-.workspace-launcher__title { min-width: 0; }
-.workspace-launcher__context { width: min(380px, 100%); margin-left: auto; }
-.workspace-launcher--compact { width: 100%; max-width: none; margin: 0; padding: 8px 0 var(--erp-space-5); }
-.workspace-launcher--compact .workspace-launcher__header { align-items: center; margin-bottom: var(--erp-space-4); }
+.workspace-launcher__title {
+	min-width: 0;
+}
 
-.workspace-launcher__header h1 {
-	margin: 0;
-	color: var(--erp-text);
-	font-size: clamp(1.8rem, 3vw, 2.5rem);
-	font-weight: var(--erp-font-weight-bold);
-	letter-spacing: -0.04em;
+.workspace-launcher__context {
+	width: min(380px, 40%);
+	margin-left: auto;
 }
 
 .workspace-launcher__grid {
 	position: relative;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: var(--erp-space-4);
+	gap: var(--erp-density-gap);
+}
+
+.workspace-launcher__skeleton {
+	overflow: hidden;
+	border-radius: var(--erp-panel-radius);
+	background: var(--erp-surface-muted);
 }
 
 .workspace-launcher__loading-status {
@@ -103,77 +108,70 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 .workspace-launcher__card {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
-	min-height: 124px;
-	padding: 20px;
+	min-width: 0;
+	min-height: 110px;
+	padding: 16px 18px;
 	align-items: center;
-	box-shadow: var(--erp-shadow-xs);
-	transition: border-color var(--erp-transition-base), box-shadow var(--erp-transition-base), transform var(--erp-transition-base);
+	transition: box-shadow var(--erp-transition-card), transform var(--erp-transition-card);
 }
 
 .workspace-launcher__card:focus-visible {
-	border-color: color-mix(in srgb, var(--erp-accent) 38%, var(--erp-border));
-	box-shadow: var(--erp-shadow-md);
-	outline: 3px solid color-mix(in srgb, var(--erp-accent) 24%, transparent);
+	outline: 2px solid var(--erp-accent);
 	outline-offset: 2px;
 }
 
-.workspace-launcher__card:active { transform: translateY(-1px) scale(0.995); }
-
 .workspace-launcher__icon {
 	display: grid;
-	width: 44px;
-	height: 44px;
-	margin-right: 15px;
-	color: var(--erp-accent);
-	font-size: 1.2rem;
+	width: 36px;
+	height: 36px;
+	margin-right: var(--erp-space-3);
+	color: var(--erp-accent-ink);
+	font-size: var(--erp-font-size-section);
 	background: var(--erp-accent-soft);
-	border: 1px solid color-mix(in srgb, var(--erp-accent) 16%, var(--erp-border));
-	border-radius: var(--erp-panel-radius);
+	border-radius: 8px;
 	place-items: center;
 }
 
 .workspace-launcher__body {
 	display: flex;
-	min-height: 69px;
 	min-width: 0;
 	flex-direction: column;
 	justify-content: center;
+	overflow-wrap: anywhere;
 }
 
 .workspace-launcher__body strong {
 	color: var(--erp-text);
-	font-size: 1.15rem;
+	font-size: var(--erp-font-size-body);
 	font-weight: var(--erp-font-weight-semibold);
 }
 
 .workspace-launcher__body small {
-	max-width: 370px;
-	margin-top: 7px;
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	margin-top: var(--erp-space-1);
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-caption);
-	line-height: 1.5;
+	line-height: var(--erp-line-height-body);
 }
 
 .workspace-launcher__arrow {
-	margin-left: 14px;
-	color: var(--erp-accent);
-	font-size: 1rem;
-	transition: transform var(--erp-transition-fast);
+	margin-left: var(--erp-space-2);
+	color: var(--erp-text-subtle);
+	font-size: var(--erp-font-size-body);
+	transition: color var(--erp-transition-fast), transform var(--erp-transition-fast);
 }
 
-.workspace-launcher__card:focus-visible .workspace-launcher__arrow {
-	transform: translateX(3px);
-}
-
-@media (hover: hover) {
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
 	.workspace-launcher__card:hover {
-		border-color: color-mix(in srgb, var(--erp-accent) 38%, var(--erp-border));
-		box-shadow: var(--erp-shadow-md);
-		transform: translateY(-2px);
+		box-shadow: var(--erp-shadow-pop);
+		transform: translateY(-1px);
 	}
-
 	.workspace-launcher__card:hover .workspace-launcher__arrow {
-		transform: translateX(3px);
+		color: var(--erp-accent);
+		transform: translateX(2px);
 	}
 }
 
@@ -183,66 +181,52 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 	color: var(--erp-text-muted);
 	place-items: center;
 	align-content: center;
-	gap: 9px;
+	gap: var(--erp-space-2);
 }
 
-.workspace-launcher__empty i { color: var(--erp-accent); font-size: 1.2rem; }
-.workspace-launcher__empty strong { color: var(--erp-text); font-size: var(--erp-font-size-body); }
+.workspace-launcher__empty i {
+	color: var(--erp-accent-ink);
+	font-size: var(--erp-font-size-hero);
+}
+
+.workspace-launcher__empty strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-body);
+}
 
 @media (max-width: 760px) {
-	.workspace-launcher { padding: 24px 2px; }
-	.workspace-launcher--compact { padding: 6px 0 var(--erp-space-4); }
-	.workspace-launcher__header { align-items: center; flex-direction: row; }
-	.workspace-launcher--compact .workspace-launcher__header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--erp-space-2) var(--erp-space-3); }
-	.workspace-launcher--compact .workspace-launcher__context { grid-column: 2; width: 100%; margin: 0; }
-	.workspace-launcher__grid { grid-template-columns: 1fr; }
-	.workspace-launcher__card { min-height: 108px; padding: 14px; }
-	.workspace-launcher__body small {
-		display: -webkit-box;
-		overflow: hidden;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
+	.workspace-launcher--compact .workspace-launcher__header {
+		flex-wrap: wrap;
+	}
+	.workspace-launcher--compact .workspace-launcher__context {
+		width: 100%;
+		padding-left: 46px;
 	}
 }
 
-@media (max-width: 600px) {
-	.workspace-launcher__header { margin-bottom: var(--erp-space-4); }
+@media (max-width: 1024px) {
 	.workspace-launcher__grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 10px;
-	}
-	.workspace-launcher__card {
-		grid-template-columns: minmax(0, 1fr) auto;
-		grid-template-rows: auto 1fr;
-		min-height: 104px;
-		padding: 12px;
-		align-items: start;
-		row-gap: 8px;
-	}
-	.workspace-launcher__icon {
-		margin-right: 0;
-	}
-	.workspace-launcher__body {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		min-height: 0;
-		align-self: end;
-		justify-content: flex-end;
-	}
-	.workspace-launcher__body strong {
-		font-size: 14px;
-		line-height: 1.25;
-	}
-	.workspace-launcher__body small { display: none; }
-	.workspace-launcher__arrow {
-		grid-column: 2;
-		grid-row: 1;
-		align-self: center;
-		margin-left: 0;
 	}
 }
 
-@media (min-width: 761px) and (max-width: 1040px) {
-	.workspace-launcher__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 820px) {
+	.workspace-launcher__card {
+		padding: var(--erp-space-3);
+	}
+}
+
+@media (max-width: 540px) {
+	.workspace-launcher__grid {
+		grid-template-columns: 1fr;
+	}
+	.workspace-launcher__card {
+		min-height: 0;
+		padding: 12px 14px;
+	}
+	.workspace-launcher__icon {
+		width: 32px;
+		height: 32px;
+	}
 }
 </style>

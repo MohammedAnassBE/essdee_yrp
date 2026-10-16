@@ -12,6 +12,7 @@ import {
 	isTerminalReportState,
 	normalizeReportFilters,
 	pollingDelay,
+	reportErrorMessage,
 	resumeStorageKey,
 	sameReportFilters,
 	shouldRemoveStoredTracking,
@@ -54,7 +55,7 @@ export function useWebReport({ reportKey }) {
 		} catch (reason) {
 			if (requestGeneration !== generation) return
 			state.value = "error"
-			error.value = friendlyError(reason)
+			error.value = reportErrorMessage(reason)
 		}
 	}
 
@@ -79,7 +80,7 @@ export function useWebReport({ reportKey }) {
 		generatedAt.value = envelope.generated_at || envelope.job?.finished_at || null
 		reused.value = Boolean(envelope.reused)
 		state.value = envelopeState(envelope)
-		if (state.value === "error") error.value = friendlyError(envelope.message || envelope.error_message)
+		if (state.value === "error") error.value = reportErrorMessage(envelope.message || envelope.error_message)
 		if (["queued", "running"].includes(state.value)) persistTracking()
 		else removeStoredTracking()
 	}
@@ -130,7 +131,7 @@ export function useWebReport({ reportKey }) {
 			if (requestGeneration !== generation) return
 			if (isDefinitiveReportError(reason)) {
 				state.value = "error"
-				error.value = friendlyError(reason)
+				error.value = reportErrorMessage(reason)
 				stopTracking()
 				return
 			}
@@ -250,7 +251,7 @@ export function useWebReport({ reportKey }) {
 		document.addEventListener("visibilitychange", handleVisibility)
 		resumeStoredJob().catch((reason) => {
 			state.value = "error"
-			error.value = friendlyError(reason)
+			error.value = reportErrorMessage(reason)
 		})
 	})
 	onBeforeUnmount(() => {
@@ -301,13 +302,5 @@ function safeSessionStorage() {
 	} catch {
 		return null
 	}
-}
-
-function friendlyError(reason) {
-	const message = String(reason?.message || reason || "Unable to generate this report.")
-	if (/background worker unavailable/i.test(message)) {
-		return "Background processing is temporarily unavailable. Please ask an administrator to start a long-queue worker, then try again."
-	}
-	return message
 }
 

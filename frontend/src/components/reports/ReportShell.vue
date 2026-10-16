@@ -1,6 +1,6 @@
 <template>
 	<section ref="reportRoot" class="report-shell erp-card" :aria-label="title" :aria-busy="loading">
-		<header v-if="showInlineHeading" class="report-shell__heading">
+		<header v-if="showInlineHeading" class="report-shell__heading erp-page-header">
 			<InlinePageNavigation :title-target="headingId" />
 			<h1 :id="headingId">{{ title }}</h1>
 		</header>
@@ -160,18 +160,11 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 	border-bottom: 1px solid var(--erp-border);
 }
 
-.report-shell__heading h1 {
-	margin: 0;
-	color: var(--erp-text);
-	font-size: 18px;
-	letter-spacing: -.018em;
-}
-
 .report-shell__filters {
 	display: flex;
 	align-items: flex-end;
 	gap: var(--erp-space-3);
-	padding: var(--erp-space-3) var(--erp-space-4);
+	padding: 14px 18px;
 	background: var(--erp-surface-soft);
 	border-bottom: 1px solid var(--erp-border);
 }
@@ -179,28 +172,20 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 .report-filter-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
-	gap: var(--erp-space-2) var(--erp-space-3);
+	gap: 16px 20px;
 	min-width: 0;
 	flex: 1;
+	align-items: end;
 }
 
 .report-filter-grid :deep(label) {
 	min-width: 0;
 }
 
-.report-filter-grid :deep(select),
 .report-filter-grid :deep(.p-inputtext) {
 	width: 100%;
 	min-height: var(--erp-control-height);
-	font-size: 13px;
-}
-
-.report-filter-grid :deep(select) {
-	padding: 0 10px;
-	color: var(--erp-text);
-	background: var(--erp-surface);
-	border: 1px solid var(--erp-border-strong);
-	border-radius: var(--erp-control-radius);
+	font-size: var(--erp-font-size-table);
 }
 
 .report-shell__commands {
@@ -217,17 +202,17 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 	align-items: center;
 	gap: 6px;
 	padding: var(--erp-space-2) var(--erp-space-4);
-	color: #087654;
+	color: var(--erp-success-text);
 	font-size: var(--erp-font-size-caption);
-	font-weight: 750;
-	background: #edf9f3;
-	border-bottom: 1px solid #d1ebde;
+	font-weight: var(--erp-font-weight-semibold);
+	background: var(--erp-success-soft);
+	border-bottom: 1px solid var(--erp-success-soft);
 }
 
 .report-shell__copy-notice--error {
-	color: #a92f3b;
-	background: #fff3f4;
-	border-bottom-color: #f2d3d7;
+	color: var(--erp-danger);
+	background: var(--erp-danger-soft);
+	border-bottom-color: var(--erp-danger-soft);
 }
 
 .report-shell__message {
@@ -257,26 +242,13 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 
 .report-shell__empty {
 	min-height: 260px;
+	margin: var(--erp-space-4);
 }
 
 .report-shell__empty div {
 	display: grid;
 	justify-items: center;
 	gap: 7px;
-}
-
-.report-shell__empty i {
-	color: #8ca39a;
-	font-size: 26px;
-}
-
-.report-shell__empty strong {
-	color: #3c5148;
-	font-size: 14px;
-}
-
-.report-shell__empty span {
-	font-size: var(--erp-font-size-caption);
 }
 
 .report-shell__results {
@@ -288,7 +260,11 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 .report-metrics {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-	gap: var(--erp-space-2);
+	gap: 1px;
+	background: var(--erp-border);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	overflow: hidden;
 }
 
 .report-metrics :deep(.report-metric) {
@@ -297,35 +273,43 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 	gap: var(--erp-space-2);
 	min-height: 54px;
 	padding: 9px 11px;
-	background: var(--erp-surface-soft);
-	border: 1px solid var(--erp-border);
-	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface);
+	border: 0;
+	border-radius: 0;
 }
 
 .report-metrics :deep(.report-metric i) {
 	color: var(--erp-accent);
-	font-size: 15px;
+	font-size: var(--erp-font-size-md);
 }
 
 .report-metrics :deep(.report-metric span) {
 	display: block;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 750;
-	letter-spacing: 0.025em;
+	font-weight: var(--erp-font-weight-bold);
+	letter-spacing: .07em;
 	text-transform: uppercase;
 }
 
 .report-metrics :deep(.report-metric strong) {
 	display: block;
 	margin-top: 2px;
-	font-size: 15px;
+	font-size: var(--erp-font-size-section);
+	letter-spacing: -.01em;
 	font-variant-numeric: tabular-nums;
+	font-weight: var(--erp-font-weight-bold);
+	color: var(--erp-text);
 }
 
 .report-shell :deep(.erp-table-wrap),
 .report-shell :deep(.production-table-wrap) {
 	scrollbar-gutter: stable;
+}
+
+.report-shell :deep(.report-table-frame) {
+	max-height: max(320px, calc(100dvh - var(--erp-shell-header-height) - 128px));
+	overscroll-behavior: contain;
 }
 
 @media (max-width: 800px) {
@@ -374,8 +358,16 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 
 @media (min-width: 361px) and (max-width: 430px) {
 	.report-shell__commands { gap: 6px; }
-	.report-shell__commands :deep(.p-button) { padding-inline: 8px; font-size: 12px; }
+	.report-shell__commands :deep(.p-button) {
+		padding-inline: 8px;
+		font-size: var(--erp-font-size-caption);
+	}
 	.report-shell__commands :deep(.p-button-label) { white-space: nowrap; }
 	.report-shell__copy-button { min-width: 0; }
+}
+@media (pointer: coarse) {
+	.report-filter-grid :deep(.p-inputtext) {
+		font-size: var(--erp-font-size-section);
+	}
 }
 </style>

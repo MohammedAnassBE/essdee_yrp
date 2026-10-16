@@ -8,9 +8,6 @@
 					Choose a department workspace to manage the day’s production, stock, and commercial flow.
 				</p>
 			</div>
-			<p class="administrator-page__summary">
-				<strong>{{ departments.length }}</strong> connected workspaces
-			</p>
 		</header>
 
 		<section aria-labelledby="department-workspaces-title">

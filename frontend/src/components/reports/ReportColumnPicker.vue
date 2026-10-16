@@ -307,16 +307,47 @@ function matchesSearch(field, search) {
 .report-column-option small,
 .report-column-order__identity small {
 	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+}
+
+.report-column-picker header strong,
+.report-column-order header strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
+}
+
+.report-column-option strong,
+.report-column-order__identity strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-medium);
+}
+
+.report-column-order__identity small {
+	justify-self: start;
+	padding: 1px 6px;
+	border-radius: 6px;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
+	font-weight: var(--erp-font-weight-semibold);
+	letter-spacing: .03em;
+	text-transform: uppercase;
 }
 
 .report-column-picker > header > span {
-	padding: 4px 8px;
+	padding: 1px 7px;
 	border-radius: var(--erp-pill-radius);
-	background: var(--erp-accent-soft);
-	color: var(--erp-accent-dark);
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 750;
+	font-weight: var(--erp-font-weight-semibold);
+	border: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 23px;
 }
 
 .report-column-search {
@@ -342,7 +373,7 @@ function matchesSearch(field, search) {
 	overflow: auto;
 	height: 29rem;
 	border: 1px solid var(--erp-border);
-	border-radius: var(--erp-control-radius);
+	border-radius: var(--erp-panel-radius);
 }
 
 .report-column-group {
@@ -359,8 +390,8 @@ function matchesSearch(field, search) {
 	margin: 0;
 	padding: 6px 5px;
 	color: var(--erp-text);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 800;
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .report-column-group summary {
@@ -373,7 +404,7 @@ function matchesSearch(field, search) {
 
 .report-column-group summary small {
 	color: var(--erp-text-muted);
-	font-weight: 650;
+	font-weight: var(--erp-font-weight-semibold);
 }
 
 .report-column-group[open] summary i {
@@ -384,13 +415,14 @@ function matchesSearch(field, search) {
 	display: flex;
 	align-items: center;
 	gap: 9px;
-	min-height: 42px;
+	min-height: 40px;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: var(--erp-control-radius);
+	border: 1px solid transparent;
 }
 
 .report-column-option:hover {
-	background: var(--erp-surface-soft);
+	background: var(--erp-surface-hover);
 }
 
 .report-column-option > span,
@@ -432,9 +464,13 @@ function matchesSearch(field, search) {
 	gap: 6px 7px;
 	min-height: 58px;
 	padding: 6px 7px;
-	border: 1px solid var(--erp-border);
-	border-radius: 10px;
+	border: 1px solid var(--erp-border-subtle);
+	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface);
+}
+
+.report-column-order__row:hover {
+	background: var(--erp-surface-hover);
 }
 
 .report-column-order__row.is-dragging {
@@ -447,16 +483,17 @@ function matchesSearch(field, search) {
 	right: 4px;
 	left: 4px;
 	height: 3px;
-	border-radius: 99px;
+	border-radius: var(--erp-pill-radius);
 	background: var(--erp-accent);
 	content: "";
 }
 
 .report-column-position {
 	color: var(--erp-text-muted);
-	font-family: ui-monospace, monospace;
+	font-family: var(--erp-font-family-mono);
 	font-size: var(--erp-font-size-min);
 	text-align: center;
+	font-variant-numeric: tabular-nums;
 }
 
 .report-column-handle {
@@ -464,11 +501,15 @@ function matchesSearch(field, search) {
 	width: 30px;
 	height: 34px;
 	border: 1px solid var(--erp-border);
-	border-radius: 7px;
+	border-radius: var(--erp-control-radius);
 	background: var(--erp-surface-muted);
-	color: var(--erp-text-muted);
+	color: var(--erp-text-subtle);
 	cursor: grab;
 	place-items: center;
+}
+
+.report-column-handle:hover {
+	color: var(--erp-text);
 }
 
 .report-column-order__row :deep(.p-selectbutton .p-togglebutton) {
@@ -479,7 +520,6 @@ function matchesSearch(field, search) {
 
 .report-column-order__row :deep(.p-inputnumber-input) {
 	width: 76px;
-	font-size: var(--erp-font-size-min);
 }
 
 @media (max-width: 1040px) {
@@ -490,6 +530,11 @@ function matchesSearch(field, search) {
 	.report-column-picker__list,
 	.report-column-order__list {
 		height: 22rem;
+	}
+}
+@media (pointer: coarse) {
+	.report-column-option {
+		min-height: 44px;
 	}
 }
 </style>

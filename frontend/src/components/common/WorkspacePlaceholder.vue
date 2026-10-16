@@ -4,17 +4,10 @@
 		<p class="workspace-placeholder__eyebrow">Department workspace</p>
 		<h1>{{ title }}</h1>
 		<p class="workspace-placeholder__message">{{ description }}</p>
-		<div class="workspace-placeholder__status"><span></span>Connected to Essdee YRP</div>
-		<RouterLink v-slot="{ navigate }" custom to="/">
-			<Button label="All workspaces" icon="pi pi-th-large" severity="secondary" outlined @click="navigate" />
-		</RouterLink>
 	</section>
 </template>
 
 <script setup>
-import Button from "primevue/button"
-import { RouterLink } from "vue-router"
-
 defineProps({
 	title: { type: String, required: true },
 	description: {
@@ -40,30 +33,29 @@ defineProps({
 }
 .workspace-placeholder__icon {
 	display: grid;
-	width: 52px;
-	height: 52px;
+	width: 46px;
+	height: 46px;
 	margin-bottom: 3px;
 	place-items: center;
-	color: var(--erp-accent);
-	font-size: 1.2rem;
+	color: var(--erp-accent-ink);
+	font-size: var(--erp-font-size-hero);
 	background: var(--erp-accent-soft);
-	border: 1px solid var(--erp-accent-border);
-	border-radius: 14px;
+	border-radius: 50%;
 }
 .workspace-placeholder__eyebrow {
 	margin: 0;
 	color: var(--erp-accent-strong);
 	font-size: var(--erp-font-size-min);
-	font-weight: 780;
-	letter-spacing: .09em;
+	font-weight: var(--erp-font-weight-semibold);
+	letter-spacing: .06em;
 	text-transform: uppercase;
 }
 .workspace-placeholder h1 {
 	margin: 0;
 	color: var(--erp-text);
-	font-size: clamp(1.6rem, 3vw, 2.15rem);
-	font-weight: 780;
-	letter-spacing: -.035em;
+	font-size: var(--erp-font-size-title);
+	font-weight: var(--erp-font-weight-semibold);
+	letter-spacing: -.01em;
 }
 .workspace-placeholder__message {
 	max-width: 470px;
@@ -72,29 +64,10 @@ defineProps({
 	font-size: var(--erp-font-size-body);
 	line-height: 1.55;
 }
-.workspace-placeholder__status {
-	display: inline-flex;
-	min-height: 30px;
-	margin: 5px 0 7px;
-	padding: 5px 10px;
-	align-items: center;
-	gap: 7px;
-	color: var(--erp-text-subtle);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 650;
-	background: var(--erp-surface);
-	border: 1px solid var(--erp-border);
-	border-radius: 999px;
-}
-.workspace-placeholder__status span {
-	width: 7px;
-	height: 7px;
-	background: var(--erp-accent);
-	border-radius: 50%;
-	box-shadow: 0 0 0 3px var(--erp-accent-soft);
+@media (max-width: 820px) {
+	.workspace-placeholder { padding-inline: 0; }
 }
 @media (max-width: 520px) {
-	.workspace-placeholder { min-height: 360px; padding: 28px 16px; }
-	.workspace-placeholder :deep(.p-button) { min-height: 44px; }
+	.workspace-placeholder { min-height: 360px; padding: 28px 0; }
 }
 </style>

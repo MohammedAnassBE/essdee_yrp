@@ -84,6 +84,7 @@
 							<strong>{{ value }}</strong>
 							<span>{{ quantityLabel }}</span>
 							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched[value] = true" />
+							<template v-if="operation === 'stock_entry' && purpose === 'Material Receipt'"><span>Rate</span><input v-model.number="receiptRates[value]" type="number" min="0" step="0.0001" :disabled="disabled" /></template>
 							<template v-if="itemSchema.secondary_uom && operation === 'stock_entry'">
 								<span>{{ itemSchema.secondary_uom }}</span>
 								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" :disabled="disabled" />
@@ -92,6 +93,7 @@
 					</div>
 					<div v-else class="stock-composer__single-quantity">
 						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched.default = true" /></label>
+						<label v-if="operation === 'stock_entry' && purpose === 'Material Receipt'"><span>Rate</span><input v-model.number="receiptRates.default" type="number" min="0" step="0.0001" :disabled="disabled" /></label>
 						<label v-if="itemSchema.secondary_uom && operation === 'stock_entry'"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :disabled="disabled" /></label>
 					</div>
 				</div>
@@ -165,6 +167,7 @@ const attributeValues = reactive({})
 const entryValues = reactive({})
 const quantities = reactive({ default: 0 })
 const quantityTouched = reactive({ default: false })
+const receiptRates = reactive({ default: 0 })
 const secondaryQuantities = reactive({ default: 0 })
 const allowZeroValuation = ref(false)
 const editing = ref(null)
@@ -263,6 +266,7 @@ function prepareQuantities(existing = null) {
 	clearReactive(quantities)
 	clearReactive(quantityTouched)
 	clearReactive(secondaryQuantities)
+	clearReactive(receiptRates)
 	const values = activePrimaryValues.value.length ? activePrimaryValues.value : ["default"]
 	for (const value of values) {
 		const hasExistingValue = Boolean(existing && Object.prototype.hasOwnProperty.call(existing, value))
@@ -271,6 +275,7 @@ function prepareQuantities(existing = null) {
 			: props.operation === "stock_reconciliation" ? null : 0
 		quantityTouched[value] = hasExistingValue
 		secondaryQuantities[value] = Number(existing?.[value]?.secondary_qty || 0)
+		receiptRates[value] = Number(existing?.[value]?.rate || 0)
 	}
 }
 
@@ -309,6 +314,7 @@ async function stageItem() {
 		total += qty
 		values[value] = { qty }
 		if (!editing.value?.row?.values?.[value]) values[value].rate = 0
+		if (props.operation === "stock_entry" && props.purpose === "Material Receipt") values[value].rate = Number(receiptRates[value] || 0)
 		if (itemSchema.value.secondary_uom && props.operation === "stock_entry") {
 			values[value].secondary_qty = Number(secondaryQuantities[value] || 0)
 			values[value].secondary_uom = itemSchema.value.secondary_uom

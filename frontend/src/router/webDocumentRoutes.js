@@ -13,10 +13,26 @@ const recordRoutes = {
 	"YRP Purchase Invoice": (name) => `/web/accounts/purchase-invoices/${encodeURIComponent(name)}`,
 	"YRP Bill Tracking": (name) => `/web/hr/bill-tracking/${encodeURIComponent(name)}`,
 	"YRP Item Price": (name) => `/web/purchase/item-prices/${encodeURIComponent(name)}`,
+	"YRP Item Production Detail": (name) => `/web/merch/item-production-details/${encodeURIComponent(name)}`,
+	"YRP Process Cost": (name) => `/web/merch/process-costs/${encodeURIComponent(name)}`,
 }
 
-export function webDocumentPath(doctype, name) {
+export const DEPARTMENT_RECORD_ROUTES = {
+	"/merch": {
+		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
+		"YRP Work Order": (name) => `/web/merch/work-orders/${encodeURIComponent(name)}`,
+		"YRP Production Order": (name) => `/web/merch/production-orders/${encodeURIComponent(name)}`,
+		"YRP Process Cost": (name) => `/web/merch/process-costs/${encodeURIComponent(name)}`,
+		"YRP Bill Tracking": (name) => `/web/merch/bill-tracking/${encodeURIComponent(name)}`,
+		"YRP Purchase Invoice": (name) => `/web/merch/purchase-invoices/${encodeURIComponent(name)}`,
+		"YRP Item Production Detail": (name) => `/web/merch/item-production-details/${encodeURIComponent(name)}`,
+	},
+}
+
+export function webDocumentPath(doctype, name, currentPath = globalThis.location?.pathname) {
 	if (!doctype || !name) return "/web/document-unavailable"
+	const departmentRoutes = /^\/web\/merch(?:\/|$)/.test(currentPath || "") ? DEPARTMENT_RECORD_ROUTES["/merch"] : null
+	if (departmentRoutes?.[doctype]) return departmentRoutes[doctype](String(name))
 	if (recordRoutes[doctype]) return recordRoutes[doctype](String(name))
 	const query = new URLSearchParams({ doctype: String(doctype), name: String(name) })
 	return `/web/document-unavailable?${query.toString()}`

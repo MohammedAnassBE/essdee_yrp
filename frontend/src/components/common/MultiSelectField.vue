@@ -1,6 +1,6 @@
 <template>
 	<label class="common-field">
-		<span v-if="label" class="common-field__label">{{ label }}</span>
+		<span v-if="label" class="common-field__label erp-field-label">{{ label }}</span>
 		<MultiSelect
 			v-bind="$attrs"
 			:model-value="modelValue"
@@ -52,34 +52,8 @@ defineEmits(["update:modelValue", "change", "filter"])
 	width: 100%;
 }
 
-.common-field__label {
-	color: var(--erp-text);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
-	transition: color var(--erp-transition-fast);
-}
-
-.common-field:focus-within .common-field__label {
-	color: var(--erp-accent-hover);
-}
-
-.common-field :deep(.p-multiselect) {
-	background: var(--erp-surface);
-	border-color: var(--erp-border-strong);
-	box-shadow: var(--erp-shadow-xs);
-}
-
-.common-field :deep(.p-multiselect:not(.p-disabled):hover) {
-	border-color: color-mix(in srgb, var(--erp-accent) 32%, var(--erp-border-strong));
-}
-
-.common-field :deep(.p-multiselect.p-focus) {
-	border-color: var(--erp-accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
-}
-
 .common-field__help {
 	color: var(--erp-text-muted);
-	font-size: var(--erp-font-size-min);
+	font-size: var(--erp-font-size-caption);
 }
 </style>

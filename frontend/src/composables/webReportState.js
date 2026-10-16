@@ -107,3 +107,14 @@ function normalizeFilterValue(value) {
 function ignoredStatusRequest() {
 	return { ignored: true, terminal: false }
 }
+
+export function reportErrorMessage(reason) {
+	const message = String(reason?.message || reason || "Unable to generate this report.")
+	if (/background worker unavailable/i.test(message)) {
+		return "Background processing is temporarily unavailable. Please ask an administrator to start a long-queue worker, then try again."
+	}
+	if (reason instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(message)) {
+		return "The report server did not respond. Narrow the filters or try again."
+	}
+	return message
+}

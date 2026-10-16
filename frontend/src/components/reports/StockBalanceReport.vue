@@ -45,7 +45,7 @@
 			<div class="report-metric"><i class="pi pi-arrow-up-right" /><div><span>Out quantity</span><strong>{{ number(totals.outQty, 3) }}</strong></div></div>
 		</template>
 
-		<div class="erp-table-wrap stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
+		<div class="erp-table-wrap report-table-frame stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
 			<table class="erp-data-table stock-table">
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr></thead>

@@ -6,9 +6,9 @@
 			'erp-date-time-field--disabled': disabled,
 		}"
 	>
-		<label v-if="label" :id="labelId" class="erp-date-time-field__label" :for="resolvedInputId">
-			{{ label }}
-			<b v-if="required" aria-hidden="true">*</b>
+		<label v-if="label" :id="labelId" class="erp-date-time-field__label erp-field-label" :for="resolvedInputId">
+			{{ labelParts.text }}
+			<span v-if="required || labelParts.required" class="erp-required-mark" aria-hidden="true">*</span>
 		</label>
 		<DatePicker
 			:input-id="resolvedInputId"
@@ -86,6 +86,11 @@ const props = defineProps({
 	fluid: { type: Boolean, default: true },
 	minDate: { type: Date, default: undefined },
 	maxDate: { type: Date, default: undefined },
+})
+
+const labelParts = computed(() => {
+	const match = /^(.*?)\s*\*$/.exec(props.label || "")
+	return match ? { text: match[1], required: true } : { text: props.label, required: false }
 })
 
 const emit = defineEmits(["update:modelValue", "change", "blur"])
@@ -197,25 +202,13 @@ function pad(value) {
 	width: 100%;
 }
 
-.erp-date-time-field__label {
-	color: var(--erp-text);
-	font-size: var(--erp-font-size-caption);
-	font-weight: 680;
-	line-height: 1.25;
-}
-
-.erp-date-time-field:focus-within .erp-date-time-field__label {
-	color: var(--erp-accent-hover);
-}
-
-.erp-date-time-field__label b,
 .erp-date-time-field__error {
 	color: var(--erp-danger);
 }
 
 .erp-date-time-field__help,
 .erp-date-time-field__error {
-	font-size: var(--erp-font-size-min);
+	font-size: var(--erp-font-size-caption);
 	line-height: 1.35;
 }
 
@@ -230,35 +223,27 @@ function pad(value) {
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-input) {
 	min-width: 0;
-	background: var(--erp-surface);
-	border-color: var(--erp-border-strong);
-	box-shadow: var(--erp-shadow-xs);
 	font-variant-numeric: tabular-nums;
-}
-
-.erp-date-time-field :deep(.erp-date-time-picker:focus-within .p-datepicker-input) {
-	border-color: var(--erp-accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-accent) 11%, transparent);
-	outline: 2px solid var(--erp-accent-dark);
-	outline-offset: -2px;
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown) {
 	width: var(--erp-control-height);
 	min-width: var(--erp-control-height);
-	color: var(--erp-accent);
-	background: var(--erp-accent-soft);
+	color: var(--erp-text-muted);
+	background: var(--erp-surface);
 	border-color: var(--erp-border-strong);
 	border-left: 0;
 }
 
 .erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown:hover) {
-	color: var(--erp-accent-hover);
-	background: color-mix(in srgb, var(--erp-accent-soft) 72%, var(--erp-accent-border));
+	color: var(--erp-accent);
+	background: var(--erp-surface-hover);
 }
 
-.erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown:active) {
-	transform: translateY(1px);
+@media (prefers-reduced-motion: no-preference) {
+	.erp-date-time-field :deep(.erp-date-time-picker .p-datepicker-dropdown:active) {
+		transform: translateY(1px);
+	}
 }
 
 .erp-date-time-field--invalid :deep(.p-datepicker-input),

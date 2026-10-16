@@ -7,19 +7,18 @@
 			'common-list-view--filters-open': mobileQuickFiltersOpen,
 		}"
 	>
-		<header class="list-page-head">
+		<header class="list-page-head erp-page-header">
 			<div class="list-title-block">
-				<span v-if="eyebrow" class="list-eyebrow">{{ eyebrow }}</span>
+				<span v-if="eyebrow" class="list-eyebrow erp-page-header__eyebrow">{{ eyebrow }}</span>
 				<div class="list-title-line">
 					<InlinePageNavigation v-if="navigationEnabled" :title-target="headingId" />
 					<div>
 						<h1 :id="headingId">{{ title || doctype }}</h1>
-						<p v-if="subtitle">{{ subtitle }}</p>
+						<p v-if="subtitle" class="erp-page-header__description">{{ subtitle }}</p>
 					</div>
 				</div>
 			</div>
-			<div class="list-toolbar__actions">
-				<div class="list-toolbar__primary"><slot name="toolbar-actions"></slot></div>
+			<div class="list-toolbar__actions erp-page-header__actions">
 				<span class="list-search">
 					<i class="pi pi-search" aria-hidden="true"></i>
 					<InputText
@@ -50,10 +49,9 @@
 					/>
 					<Button
 						icon="pi pi-refresh"
-						label="Refresh"
 						severity="secondary"
-						text
-						rounded
+						outlined
+						title="Refresh"
 						aria-label="Refresh"
 						:loading="loading"
 						@click="refresh"
@@ -64,11 +62,12 @@
 						icon="pi pi-filter-slash"
 						label="Clear Filters"
 						severity="secondary"
-						outlined
+						text
 						:disabled="!hasActiveQuery"
 						@click="clearFilters"
 					/>
 				</div>
+				<div class="list-toolbar__primary"><slot name="toolbar-actions"></slot></div>
 			</div>
 		</header>
 
@@ -203,8 +202,13 @@
 		</div>
 
 		<div v-if="!error" class="list-table-frame">
-			<div v-if="loading && !rows.length" class="list-loading" aria-label="Loading records">
-				<Skeleton v-for="index in 6" :key="index" class="list-loading-skeleton" height="42px" />
+			<div v-if="loading && !rows.length" class="list-loading" :class="['erp-skeleton-table', 'erp-skeleton-table--responsive']" aria-label="Loading records">
+				<div class="erp-skeleton-table__header">
+					<span v-for="column in 4" :key="column" class="erp-skeleton erp-skeleton--line" />
+				</div>
+				<div v-for="index in 8" :key="index" class="erp-skeleton-table__row">
+					<span v-for="column in 4" :key="column" class="erp-skeleton erp-skeleton--line" />
+				</div>
 			</div>
 			<DataTable
 				v-else
@@ -237,7 +241,7 @@
 					:header="columnLabel(column)"
 					:header-class="isNumericColumn(column) ? 'list-number-column' : ''"
 					:body-class="isNumericColumn(column) ? 'list-number-column' : ''"
-					sortable
+					:sortable="!unsortableColumns.includes(column.fieldname)"
 				>
 					<template #body="{ data }">
 						<slot :name="`cell-${column.fieldname}`" :row="data" :value="data[column.fieldname]">
@@ -289,8 +293,8 @@
 					</template>
 				</Column>
 				<template #empty>
-					<div class="list-empty">
-						<span class="list-empty__icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
+					<div class="list-empty erp-empty-state">
+						<span class="list-empty__icon erp-empty-state__icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
 						<strong>No records found</strong>
 						<span>{{ hasActiveQuery ? 'Try changing the search or filters.' : `No ${title || doctype} records are available yet.` }}</span>
 					</div>
@@ -301,7 +305,9 @@
 					v-for="row in rows"
 					:key="row.name"
 					class="mobile-list-record"
+					:class="{ 'mobile-list-record--clickable': clickable }"
 					role="listitem"
+					@click="clickable && openRow(row)"
 				>
 					<header :class="{ 'mobile-list-record__header--without-selection': !showBulkSelection }">
 						<label v-if="showBulkSelection" class="mobile-list-record__select" @click.stop>
@@ -313,7 +319,7 @@
 								<strong>{{ displayValue(row[mobileColumns[0]?.fieldname], mobileColumns[0], row) }}</strong>
 							</slot>
 						</div>
-						<button v-if="clickable" type="button" class="mobile-list-record__open" :aria-label="`Open ${row.name || 'record'}`" @click="openRow(row)">
+						<button v-if="clickable" type="button" class="mobile-list-record__open" :aria-label="`Open ${row.name || 'record'}`" @click.stop="openRow(row)">
 							<i class="pi pi-chevron-right" aria-hidden="true"></i>
 						</button>
 					</header>
@@ -342,14 +348,15 @@
 					</div>
 				</article>
 			</div>
-			<div v-else-if="!loading" class="mobile-list-empty">
-				<span class="list-empty__icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
+			<div v-else-if="!loading" class="mobile-list-empty erp-empty-state">
+				<span class="list-empty__icon erp-empty-state__icon"><i class="pi pi-inbox" aria-hidden="true"></i></span>
 				<strong>No records found</strong>
 				<span>{{ hasActiveQuery ? 'Try changing the search or filters.' : `No ${title || doctype} records are available yet.` }}</span>
 			</div>
 		</div>
 
 		<Paginator
+			class="list-paginator"
 			v-if="!error && total > pageSize"
 			:first="first"
 			:rows="pageSize"
@@ -456,7 +463,6 @@ import InputText from "primevue/inputtext"
 import Message from "primevue/message"
 import Paginator from "primevue/paginator"
 import Select from "primevue/select"
-import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 
@@ -489,6 +495,8 @@ import {
 	navigationStorageKey,
 	readNavigationState,
 } from "../../utils/listNavigation.js"
+import { listStatusTone } from "../../utils/statusTone.js"
+import { listStatusFilters } from "./listStatusFilters.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -505,6 +513,7 @@ const props = defineProps({
 	excludedFilterFields: { type: Array, default: () => [] },
 	defaultOrderBy: { type: String, default: "modified desc" },
 	defaultColumns: { type: Array, default: () => [] },
+	unsortableColumns: { type: Array, default: () => [] },
 	initialPageSize: { type: Number, default: 20 },
 	minTableWidth: { type: String, default: "900px" },
 	clickable: { type: Boolean, default: true },
@@ -866,18 +875,27 @@ function quickFilterTuples({ excludeStatus = false } = {}) {
 	return standardFilterFields.value.flatMap((field) => {
 		if (excludeStatus && field.fieldname === effectiveStatusField.value) return []
 		const value = appliedQuickFilters.value[field.fieldname]
+		if (field.fieldname === effectiveStatusField.value && hasFilterValue(value)) {
+			return listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)
+		}
 		return hasFilterValue(value) ? [[field.fieldname, "=", value]] : []
 	})
 }
 
+function initialStatusQuickFilters() {
+	return props.statusField && hasFilterValue(props.initialStatus) ? { [props.statusField]: props.initialStatus } : {}
+}
+
 function allFilters() {
-	const filters = [...baseFilters(), ...advancedFilters.value, ...quickFilterTuples()]
+	const option = effectiveStatusOptions.value.find((candidate) => String(candidate?.value) === String(activeStatus.value))
+	const usesOptionFilters = Array.isArray(option?.filters)
+	const filters = [...baseFilters(), ...advancedFilters.value, ...quickFilterTuples({ excludeStatus: usesOptionFilters })]
 	if (
 		effectiveStatusField.value &&
 		hasFilterValue(activeStatus.value) &&
-		!standardFilterFields.value.some((field) => field.fieldname === effectiveStatusField.value)
+		(usesOptionFilters || !standardFilterFields.value.some((field) => field.fieldname === effectiveStatusField.value))
 	) {
-		filters.push([effectiveStatusField.value, "=", activeStatus.value])
+		filters.push(...listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, activeStatus.value))
 	}
 	if (appliedSearch.value.trim()) {
 		filters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
@@ -898,8 +916,8 @@ async function initialise() {
 	metadataReady.value = false
 	first.value = 0
 	advancedFilters.value = cloneFilters(props.initialAdvancedFilters)
-	quickFilters.value = {}
-	appliedQuickFilters.value = {}
+	quickFilters.value = initialStatusQuickFilters()
+	appliedQuickFilters.value = initialStatusQuickFilters()
 	activeStatus.value = props.initialStatus
 	restoreNavigationState()
 	clearSelection()
@@ -956,7 +974,7 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 		const counts = await Promise.all([
 			getCount(props.doctype, filters),
 			...values.map((value) =>
-				getCount(props.doctype, [...filters, [effectiveStatusField.value, "=", value]]),
+				getCount(props.doctype, [...filters, ...listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)]),
 			),
 		])
 		if (existingSequence !== loadSequence) return
@@ -1361,12 +1379,7 @@ function isImageColumn(column) {
 }
 
 function statusTone(status) {
-	const value = String(status || "").toLowerCase()
-	if (["completed", "fully", "closed"].some((token) => value.includes(token)) && !value.includes("partially")) return "success"
-	if (value.includes("pending") || value.includes("cancel") || value.includes("reject") || value.includes("overdue")) return "danger"
-	if (value.includes("partial") || value.includes("draft") || value.startsWith("to ") || value.includes("close request")) return "warning"
-	if (value.includes("submitted") || value.includes("progress") || value.includes("ready") || value.includes("planned")) return "info"
-	return "neutral"
+	return listStatusTone(status)
 }
 
 function displayValue(value, column, row = {}) {
@@ -1422,7 +1435,7 @@ defineExpose({ refresh: reload })
 .common-list-view {
 	--list-accent: var(--erp-accent);
 	--list-accent-dark: var(--erp-accent-hover);
-	--list-accent-soft: color-mix(in srgb, var(--list-accent) 9%, white);
+	--list-accent-soft: var(--erp-accent-soft);
 	--list-ink: var(--erp-text);
 	--list-muted: var(--erp-text-muted);
 	--list-line: var(--erp-border);
@@ -1431,7 +1444,6 @@ defineExpose({ refresh: reload })
 	display: grid;
 	gap: 12px;
 	width: 100%;
-	padding: 10px;
 	background: transparent;
 	border: 0;
 	border-radius: 0;
@@ -1440,7 +1452,7 @@ defineExpose({ refresh: reload })
 
 .common-list-view--viewport-bounded {
 	display: flex;
-	height: calc(100dvh - var(--erp-shell-header-height) - 94px);
+	height: calc(100dvh - var(--erp-shell-header-height) - 42px);
 	min-height: 0;
 	overflow: hidden;
 	flex-direction: column;
@@ -1506,34 +1518,16 @@ defineExpose({ refresh: reload })
 
 .list-title-block::before { content: none; }
 
-.list-eyebrow {
-	color: var(--list-accent-dark);
-	font-size: var(--erp-font-size-min);
-	font-weight: 800;
-	letter-spacing: 0.13em;
-	text-transform: uppercase;
-}
-
 .list-title-block h1 {
-	margin: 0;
-	color: var(--list-ink);
-	font-size: 1.45rem;
-	font-weight: 740;
-	letter-spacing: -0.025em;
 	line-height: var(--erp-line-height-tight);
-}
-
-.list-title-block p {
-	margin: 3px 0 0;
-	color: var(--list-muted);
-	font-size: 0.86rem;
 }
 
 .list-toolbar__actions {
 	display: flex;
+	min-width: 0;
 	align-items: center;
-	gap: 6px;
-	flex-wrap: wrap;
+	gap: 8px;
+	flex-wrap: nowrap;
 	justify-content: flex-end;
 	padding: 0;
 }
@@ -1558,12 +1552,13 @@ defineExpose({ refresh: reload })
 	position: absolute;
 	left: 11px;
 	z-index: 1;
-	color: color-mix(in srgb, var(--list-accent) 55%, var(--erp-text-muted));
+	color: var(--erp-text-muted);
 	transition: color var(--erp-transition-fast);
 }
 
 .list-search :deep(input) {
-	width: min(278px, 27vw);
+	width: min(240px, 20vw);
+	min-width: 0;
 	height: var(--erp-control-height);
 	padding-left: 34px;
 	background: var(--list-surface);
@@ -1571,8 +1566,8 @@ defineExpose({ refresh: reload })
 	border-radius: var(--erp-control-radius);
 	box-shadow: none;
 	transition:
-		border-color 160ms ease,
-		box-shadow 160ms ease;
+		border-color var(--erp-transition-fast),
+		box-shadow var(--erp-transition-base);
 }
 
 .list-search:focus-within > i {
@@ -1580,57 +1575,86 @@ defineExpose({ refresh: reload })
 }
 
 .list-search :deep(input:focus) {
-	border-color: color-mix(in srgb, var(--list-accent) 50%, white);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--list-accent) 12%, transparent);
+	border-color: var(--erp-accent);
+	box-shadow: var(--erp-focus-ring);
 }
 
 .list-toolbar__actions :deep(.p-button) {
 	height: var(--erp-control-height);
 	min-height: var(--erp-control-height);
+	color: var(--erp-text-secondary);
 	background: var(--erp-surface);
-	border-color: var(--list-line);
+	border: 1px solid var(--erp-border);
 	border-radius: var(--erp-control-radius);
-	font-weight: 650;
+	font-size: var(--erp-font-size-table);
+	font-weight: 600;
+	white-space: nowrap;
 	box-shadow: none;
 	transition:
-		transform 150ms ease,
-		border-color 150ms ease,
-		box-shadow 150ms ease,
-		background 150ms ease;
+		color var(--erp-transition-fast),
+		border-color var(--erp-transition-fast),
+		box-shadow var(--erp-transition-base),
+		background var(--erp-transition-fast);
 }
 
 .list-toolbar__actions :deep(.p-button:not(:disabled):hover) {
-	background: var(--list-accent-soft);
-	border-color: color-mix(in srgb, var(--list-accent) 34%, white);
-	box-shadow: var(--erp-shadow-xs);
+	background: var(--erp-surface-hover);
+	border-color: var(--erp-accent-border);
+	box-shadow: none;
 }
 
-.list-toolbar__actions :deep(.p-button.list-filter-action--active) {
-	color: var(--list-accent-dark);
-	background: var(--list-accent-soft);
-	border-color: color-mix(in srgb, var(--list-accent) 38%, white);
+.list-toolbar__actions :deep(.p-button.list-filter-action--active),
+.list-toolbar__actions :deep(.p-button.list-filter-action--active:not(:disabled):hover) {
+	color: var(--erp-accent-ink);
+	background: var(--erp-accent-soft);
+	border-color: var(--erp-accent-border);
 }
 
-.list-toolbar__actions :deep(.p-button.list-clear-filter-action--active) {
-	color: var(--erp-danger);
-	background: var(--erp-danger-soft);
-	border-color: color-mix(in srgb, var(--erp-danger) 28%, white);
+.list-toolbar__secondary :deep(.p-button[aria-label="Refresh"]) {
+	width: var(--erp-control-height);
+	padding: 0;
+	flex: 0 0 auto;
+}
+
+.list-toolbar__actions :deep(.p-button.list-clear-filter-action) {
+	color: var(--erp-text-muted);
+	background: transparent;
+	border-color: transparent;
+}
+
+.list-toolbar__actions :deep(.p-button.list-clear-filter-action:not(:disabled):hover) {
+	color: var(--erp-text-secondary);
+	background: var(--erp-surface-hover);
+	border-color: transparent;
+}
+
+.list-filter-action :deep(.p-badge) {
+	min-width: 23px;
+	min-height: 0;
+	height: auto;
+	padding: 1px 7px;
+	color: var(--erp-accent-ink);
+	font-size: var(--erp-font-size-min);
+	font-weight: 600;
+	line-height: var(--erp-line-height-body);
+	background: var(--erp-surface);
+	border-radius: var(--erp-pill-radius);
 }
 
 .list-toolbar__actions :deep(.p-button.list-primary-action),
 .list-toolbar__primary :deep(.p-button) {
-	color: #fff;
-	background: var(--list-accent);
-	border-color: var(--list-accent);
-	box-shadow: none;
+	color: var(--erp-on-accent);
+	background: var(--erp-accent);
+	border-color: var(--erp-accent);
+	box-shadow: var(--erp-shadow-button);
 }
 
 .list-toolbar__actions :deep(.p-button.list-primary-action:not(:disabled):hover),
 .list-toolbar__primary :deep(.p-button:not(:disabled):hover) {
-	color: #fff;
-	background: var(--list-accent-dark);
-	border-color: var(--list-accent-dark);
-	box-shadow: var(--erp-shadow-xs);
+	color: var(--erp-on-accent);
+	background: var(--erp-accent-hover);
+	border-color: var(--erp-accent-hover);
+	box-shadow: var(--erp-shadow-button);
 }
 
 .bulk-message {
@@ -1665,7 +1689,7 @@ defineExpose({ refresh: reload })
 .list-load-error > div > span { overflow-wrap: anywhere; font-size: var(--erp-font-size-caption); }
 
 .bulk-message span {
-	font-size: 0.78rem;
+	font-size: var(--erp-font-size-caption);
 }
 
 .bulk-bar {
@@ -1689,7 +1713,7 @@ defineExpose({ refresh: reload })
 
 .bulk-bar__summary strong {
 	color: var(--list-accent-dark);
-	font-size: 0.8rem;
+	font-size: var(--erp-font-size-caption);
 }
 
 .bulk-bar__summary span {
@@ -1711,8 +1735,8 @@ defineExpose({ refresh: reload })
 	width: fit-content;
 	padding: 5px 9px;
 	color: var(--list-accent-dark);
-	font-size: 0.74rem;
-	font-weight: 750;
+	font-size: var(--erp-font-size-min);
+	font-weight: 700;
 	background: var(--list-accent-soft);
 	border-radius: 999px;
 }
@@ -1721,55 +1745,54 @@ defineExpose({ refresh: reload })
 	display: grid;
 	gap: 6px;
 	color: var(--erp-text-secondary);
-	font-size: 0.8rem;
-	font-weight: 650;
+	font-size: var(--erp-font-size-caption);
+	font-weight: 600;
 }
 
 .bulk-edit-help {
 	margin-top: -8px;
 	color: var(--list-muted);
-	font-size: 0.72rem;
+	font-size: var(--erp-font-size-min);
 }
 
 .bulk-confirm-copy {
 	margin: 0;
 	color: var(--erp-text-secondary);
-	font-size: 0.88rem;
+	font-size: var(--erp-font-size-body);
 	line-height: 1.55;
 }
 
 .list-status-tabs {
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	flex-wrap: wrap;
+	gap: 2px;
 	overflow-x: auto;
-	padding: 6px;
-	background: var(--erp-surface-soft);
-	border: 1px solid var(--list-line);
-	border-radius: var(--erp-control-radius);
-	-webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-	mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-	scrollbar-width: none;
+	padding: 0 2px;
+	background: transparent;
+	border: 0;
+	border-bottom: 1px solid var(--erp-border);
+	border-radius: 0;
+	scroll-padding-inline: 12px;
 	flex-shrink: 0;
 }
 
-.list-status-tabs::-webkit-scrollbar {
-	display: none;
-}
-
 .list-status-tabs:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--erp-accent) 34%, transparent);
-	outline-offset: 2px;
+	outline: 2px solid var(--erp-accent);
+	outline-offset: -2px;
 }
 
 .list-status-select {
 	display: none;
 	width: min(100%, 320px);
 	gap: 5px;
+}
+
+.list-status-select > span {
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 700;
-	letter-spacing: .04em;
+	font-weight: 600;
+	letter-spacing: .03em;
 	text-transform: uppercase;
 }
 
@@ -1777,52 +1800,45 @@ defineExpose({ refresh: reload })
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	min-height: 37px;
-	padding: 7px 12px;
+	min-height: 38px;
+	padding: 8px 12px;
 	white-space: nowrap;
-	color: var(--list-muted);
+	color: var(--erp-text-muted);
 	font: inherit;
-	font-size: 0.75rem;
-	font-weight: 660;
+	font-size: var(--erp-font-size-table);
+	font-weight: 500;
 	background: transparent;
-	border: 1px solid transparent;
-	border-radius: 7px;
+	border: 0;
+	border-radius: var(--erp-control-radius) var(--erp-control-radius) 0 0;
+	box-shadow: none;
 	cursor: pointer;
 	transition:
-		color 150ms ease,
-		background 150ms ease,
-		border-color 150ms ease,
-		box-shadow 150ms ease,
-		transform 150ms ease;
+		color var(--erp-transition-fast),
+		background var(--erp-transition-fast),
+		box-shadow var(--erp-transition-base);
 }
 
 .list-status-tab:hover {
-	color: var(--list-ink);
-	background: var(--erp-surface);
-	border-color: var(--erp-border);
-	box-shadow: var(--erp-shadow-sm);
+	color: var(--erp-text);
+	background: var(--erp-surface-hover);
 }
 
 .list-status-tab:focus-visible {
-	color: var(--list-accent-dark);
-	outline: 2px solid var(--erp-accent-dark);
-	outline-offset: 1px;
-}
-
-.list-status-tab:active {
-	transform: translateY(0);
+	outline: 2px solid var(--erp-accent);
+	outline-offset: -2px;
 }
 
 .list-status-tab--active {
-	color: var(--list-accent-dark);
-	background: var(--erp-surface);
-	border-color: color-mix(in srgb, var(--list-accent) 34%, white);
-	box-shadow: 0 2px 8px color-mix(in srgb, var(--list-accent) 8%, transparent);
+	color: var(--erp-text);
+	font-weight: 600;
+	background: transparent;
+	box-shadow: inset 0 -2px 0 var(--erp-accent);
 }
 
 .list-status-tab__dot {
-	width: 7px;
-	height: 7px;
+	width: 6px;
+	height: 6px;
+	flex: 0 0 auto;
 	background: var(--erp-text-muted);
 	border-radius: 50%;
 }
@@ -1844,19 +1860,19 @@ defineExpose({ refresh: reload })
 }
 
 .list-status-tab__count {
-	min-width: 22px;
-	padding: 1px 6px;
+	min-width: 23px;
+	padding: 1px 7px;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 750;
+	font-weight: 600;
 	text-align: center;
 	background: var(--erp-surface-muted);
 	border-radius: var(--erp-pill-radius);
 }
 
 .list-status-tab--active .list-status-tab__count {
-	color: var(--list-accent-dark);
-	background: var(--erp-surface);
+	color: var(--erp-accent-ink);
+	background: var(--erp-accent-soft);
 }
 
 .list-table-frame {
@@ -1884,13 +1900,8 @@ defineExpose({ refresh: reload })
 
 .list-loading {
 	display: grid;
-	gap: 1px;
-	padding: 1px;
-	background: var(--erp-border);
-}
-
-.list-loading-skeleton {
-	border-radius: 0;
+	min-width: 0;
+	background: var(--erp-surface);
 }
 
 .mobile-list-records,
@@ -1910,62 +1921,64 @@ defineExpose({ refresh: reload })
 	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
-	font-weight: 820;
-	letter-spacing: 0.075em;
+	font-weight: 600;
+	letter-spacing: .06em;
 	text-transform: uppercase;
 	background: var(--erp-surface-muted);
 	border: 0;
 	border-bottom: 1px solid var(--erp-border);
 }
 
+:deep(.premium-list-table .p-datatable-column-title) {
+	font-size: inherit;
+	font-weight: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+}
+
 :deep(.premium-list-table .p-datatable-tbody > tr) {
 	background: var(--erp-surface);
-	transition:
-		background 140ms ease,
-		box-shadow 140ms ease;
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr > td) {
+	height: var(--erp-table-row-height);
 	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
 	color: var(--erp-text-secondary);
-	font-size: 13px;
+	font-size: var(--erp-font-size-table);
+	font-weight: 400;
+	font-variant-numeric: tabular-nums;
 	border: 0;
 	border-bottom: 1px solid var(--erp-border-subtle);
+	transition:
+		background var(--erp-transition-fast),
+		box-shadow var(--erp-transition-base);
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr:last-child > td) {
 	border-bottom: 0;
 }
 
-:deep(.premium-list-table .p-datatable-tbody > tr:hover) {
-	background: color-mix(in srgb, var(--list-accent) 4%, white);
-	box-shadow: inset 0 1px color-mix(in srgb, var(--list-accent) 8%, transparent), inset 0 -1px color-mix(in srgb, var(--list-accent) 8%, transparent);
+:deep(.premium-list-table .p-datatable-tbody > tr > td:has(.list-row-open)),
+:deep(.premium-list-table .p-datatable-tbody > tr > td:has(.p-checkbox)) {
+	padding-block: 6px;
 }
 
-:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-empty-message),
-:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-empty-message:hover) {
+:deep(.premium-list-table .p-datatable-tbody > tr:not(.p-datatable-empty-message):hover > td) {
+	background: var(--erp-accent-soft);
+}
+
+:deep(.premium-list-table .p-datatable-tbody > tr:not(.p-datatable-empty-message):hover > td:first-child) {
+	box-shadow: inset 3px 0 0 var(--erp-accent);
+}
+
+:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-row-selected:not(.p-datatable-empty-message) > td) {
+	background: var(--erp-accent-100);
+}
+
+:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-empty-message > td) {
+	padding: 0;
 	background: var(--erp-surface);
 	box-shadow: none;
-}
-
-:deep(.premium-list-table .p-datatable-tbody > tr.p-datatable-row-selected) {
-	background: color-mix(in srgb, var(--list-accent) 9%, white);
-}
-
-:deep(.premium-list-row--success > td:first-child) {
-	box-shadow: inset 4px 0 var(--erp-success);
-}
-
-:deep(.premium-list-row--danger > td:first-child) {
-	box-shadow: inset 4px 0 var(--erp-danger);
-}
-
-:deep(.premium-list-row--warning > td:first-child) {
-	box-shadow: inset 4px 0 var(--erp-attention);
-}
-
-:deep(.premium-list-row--info > td:first-child) {
-	box-shadow: inset 4px 0 var(--erp-info);
 }
 
 .list-document-cell {
@@ -1977,10 +1990,10 @@ defineExpose({ refresh: reload })
 	display: block;
 	overflow: hidden;
 	max-width: min(26vw, 280px);
-	color: var(--list-ink);
-	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 13px;
-	font-weight: 740;
+	color: var(--erp-accent-ink);
+	font-family: var(--erp-font-family-mono);
+	font-size: var(--erp-font-size-table);
+	font-weight: 600;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -1996,19 +2009,16 @@ defineExpose({ refresh: reload })
 
 .list-link-value {
 	color: var(--erp-text-secondary);
-	font-weight: 680;
+	font-weight: 500;
 }
 
 .list-link-value--lot {
-	color: var(--list-accent-dark);
-}
-
-:deep(.premium-list-table .p-datatable-tbody > tr:hover) .list-link-value {
-	color: var(--list-accent-dark);
+	color: var(--erp-accent-ink);
 }
 
 .list-plain-value {
 	color: var(--erp-text-secondary);
+	font-weight: 400;
 }
 
 .list-image-value {
@@ -2026,28 +2036,35 @@ defineExpose({ refresh: reload })
 	text-align: right !important;
 }
 
+:deep(th.list-number-column .p-datatable-column-header-content) {
+	justify-content: flex-end;
+}
+
 .list-chevron-column {
 	width: 44px;
 }
 
 .list-row-open {
 	display: grid;
-	width: 36px;
-	height: 36px;
+	width: 32px;
+	height: 32px;
 	padding: 0;
-	color: var(--erp-text-muted);
+	color: var(--erp-text-subtle);
 	background: transparent;
 	border: 1px solid transparent;
 	border-radius: var(--erp-control-radius);
 	cursor: pointer;
 	place-items: center;
-	transition: 140ms ease;
+	transition:
+		color var(--erp-transition-fast),
+		background var(--erp-transition-fast),
+		border-color var(--erp-transition-fast);
 }
 
 :deep(.premium-list-table .p-checkbox) {
 	display: grid;
-	width: 36px;
-	height: 36px;
+	width: 32px;
+	height: 32px;
 	place-items: center;
 }
 
@@ -2057,27 +2074,25 @@ defineExpose({ refresh: reload })
 }
 
 .list-row-open:hover {
-	color: var(--list-accent-dark);
-	background: var(--list-accent-soft);
-	border-color: color-mix(in srgb, var(--list-accent) 22%, white);
+	color: var(--erp-accent);
+	background: var(--erp-accent-soft);
+	border-color: var(--erp-accent-border);
 }
 
 .list-row-open:focus-visible {
-	color: var(--list-accent-dark);
-	background: var(--erp-surface);
-	border-color: var(--list-accent);
-	outline: 3px solid color-mix(in srgb, var(--list-accent) 16%, transparent);
-	outline-offset: 1px;
-}
-
-.list-row-open:active {
-	transform: translateY(1px);
+	color: var(--erp-accent);
+	background: var(--erp-accent-soft);
+	border-color: var(--erp-accent);
+	outline: 2px solid var(--erp-accent);
+	outline-offset: 2px;
 }
 
 .list-row-chevron {
-	color: var(--erp-text-muted);
-	font-size: 0.72rem;
-	transition: 130ms ease;
+	color: var(--erp-text-subtle);
+	font-size: var(--erp-font-size-min);
+	transition:
+		color var(--erp-transition-fast),
+		transform var(--erp-transition-transform);
 }
 
 :deep(.premium-list-row--clickable) {
@@ -2088,14 +2103,18 @@ defineExpose({ refresh: reload })
 	color: var(--list-accent);
 }
 
-@media (hover: hover) {
-	.list-status-tab:hover { transform: translateY(-1px); }
-	:deep(.premium-list-row--clickable:hover) .list-row-chevron { transform: translateX(2px); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	:deep(.premium-list-row--clickable:hover) .list-row-chevron {
+		transform: translateX(2px);
+	}
 }
 
-:deep(.premium-list-row--clickable:has(.list-row-open:focus-visible)) {
-	background: color-mix(in srgb, var(--list-accent) 6%, white);
-	box-shadow: inset 3px 0 var(--list-accent);
+:deep(.premium-list-table .p-datatable-tbody > tr.premium-list-row--clickable:has(.list-row-open:focus-visible) > td) {
+	background: var(--erp-accent-soft);
+}
+
+:deep(.premium-list-table .p-datatable-tbody > tr.premium-list-row--clickable:has(.list-row-open:focus-visible) > td:first-child) {
+	box-shadow: inset 3px 0 0 var(--erp-accent);
 }
 
 :deep(.premium-list-table .p-datatable-table-container) {
@@ -2105,46 +2124,38 @@ defineExpose({ refresh: reload })
 .list-empty {
 	position: sticky;
 	left: 0;
-	display: flex;
-	align-items: center;
-	flex-direction: column;
-	gap: 6px;
 	box-sizing: border-box;
-	width: 100cqi;
-	padding: 58px 16px;
-	color: var(--list-muted);
-	text-align: center;
+	width: calc(100cqi - 24px);
+	max-width: 100%;
+	margin: 12px;
 }
 
-.list-empty__icon {
-	display: grid;
-	width: 46px;
-	height: 46px;
-	margin-bottom: 4px;
-	color: var(--list-accent-dark);
-	font-size: 1.2rem;
-	background: var(--list-accent-soft);
-	border-radius: 13px;
-	place-items: center;
+.list-table-frame:has(+ .list-paginator) {
+	border-bottom: 0;
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
 }
 
-.list-empty strong {
-	color: var(--list-ink);
-	font-size: 0.9rem;
-}
-
-.list-empty > span:last-child {
-	font-size: 0.78rem;
+.list-paginator {
+	width: 100%;
+	margin-top: -12px;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
+	border-top-color: var(--erp-border-subtle);
+	border-radius: 0 0 var(--erp-panel-radius) var(--erp-panel-radius);
 }
 
 :deep(.p-paginator) {
-	width: fit-content;
-	max-width: 100%;
-	margin: 0 auto;
-	padding: 6px;
-	background: var(--erp-surface);
-	border: 1px solid var(--list-line);
-	border-radius: var(--erp-control-radius);
+	justify-content: flex-end;
+	width: 100%;
+	margin: 0;
+	padding: 6px 10px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 :deep(.p-paginator-page),
@@ -2152,18 +2163,34 @@ defineExpose({ refresh: reload })
 :deep(.p-paginator-prev),
 :deep(.p-paginator-first),
 :deep(.p-paginator-last) {
-	min-width: 34px;
-	height: 34px;
-	border-radius: 9px;
+	min-width: 32px;
+	height: 32px;
+	color: var(--erp-text-muted);
+	border-radius: var(--erp-control-radius);
 }
 
-:deep(.premium-list-table .p-tag) {
-	padding: 0.3rem 0.62rem;
-	font-size: 0.76rem;
-	font-weight: 760;
-	letter-spacing: 0.005em;
-	border: 1px solid rgb(255 255 255 / 64%);
-	box-shadow: inset 0 -1px rgb(15 23 42 / 4%);
+:deep(.p-paginator-page.p-paginator-page-selected) {
+	color: var(--erp-accent-ink);
+	font-weight: 600;
+	background: var(--erp-accent-soft);
+}
+
+@media (pointer: coarse) {
+	.list-status-tab {
+		min-height: 44px;
+	}
+
+	.list-row-open,
+	:deep(.premium-list-table .p-checkbox) {
+		width: 44px;
+		height: 44px;
+	}
+
+	:deep(.p-paginator button),
+	:deep(.p-paginator .p-select) {
+		min-width: 44px;
+		min-height: 44px;
+	}
 }
 
 :deep(.premium-list-table .p-checkbox-box) {
@@ -2199,8 +2226,10 @@ defineExpose({ refresh: reload })
 }
 
 @media (max-width: 1024px) {
-	.common-list-view {
-		padding: 8px;
+	:deep(.p-paginator button),
+	:deep(.p-paginator .p-select) {
+		min-width: 44px;
+		min-height: 44px;
 	}
 
 	.common-list-view--viewport-bounded {
@@ -2270,6 +2299,10 @@ defineExpose({ refresh: reload })
 		min-height: 44px;
 	}
 
+	.mobile-list-record--clickable {
+		cursor: pointer;
+	}
+
 	.mobile-list-record:last-child {
 		border-bottom: 0;
 	}
@@ -2294,7 +2327,7 @@ defineExpose({ refresh: reload })
 		border-radius: var(--erp-control-radius);
 		background: transparent;
 		color: var(--erp-text-muted);
-		font-size: 12px;
+		font-size: var(--erp-font-size-caption);
 		cursor: pointer;
 		place-items: center;
 	}
@@ -2325,12 +2358,12 @@ defineExpose({ refresh: reload })
 		gap: 2px;
 	}
 
-	.mobile-list-record__identity span,
-	.mobile-list-record__facts span {
+	.mobile-list-record__identity > span:first-child,
+	.mobile-list-record__facts > div > span:first-child {
 		color: var(--erp-text-muted);
 		font-size: var(--erp-font-size-min);
-		font-weight: 700;
-		letter-spacing: .025em;
+		font-weight: 600;
+		letter-spacing: .03em;
 		text-transform: uppercase;
 	}
 
@@ -2339,14 +2372,15 @@ defineExpose({ refresh: reload })
 		overflow: hidden;
 		color: var(--erp-text);
 		font-size: var(--erp-font-size-table);
-		font-weight: 650;
+		font-weight: 600;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.mobile-list-record__identity strong {
-		color: var(--erp-accent-dark);
-		font-size: 14px;
+		color: var(--erp-accent-ink);
+		font-family: var(--erp-font-family);
+		font-size: var(--erp-font-size-body);
 	}
 
 	.mobile-list-record__facts {
@@ -2368,15 +2402,7 @@ defineExpose({ refresh: reload })
 	}
 
 	.mobile-list-empty {
-		justify-items: center;
-		gap: 6px;
-		padding: 44px 16px;
-		color: var(--erp-text-muted);
-		text-align: center;
-	}
-
-	.mobile-list-empty strong {
-		color: var(--erp-text);
+		margin: 12px;
 	}
 
 	.list-page-head {
@@ -2386,7 +2412,7 @@ defineExpose({ refresh: reload })
 
 	.list-toolbar__actions {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 8px;
 		justify-content: stretch;
 		padding: 0;
@@ -2394,8 +2420,10 @@ defineExpose({ refresh: reload })
 
 	.list-toolbar__primary {
 		display: flex;
-		grid-column: 2;
-		grid-row: 1;
+		grid-column: 1 / -1;
+		grid-row: 2;
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 
 	.list-toolbar__primary:empty {
@@ -2405,13 +2433,38 @@ defineExpose({ refresh: reload })
 	.list-toolbar__secondary {
 		display: grid;
 		grid-column: 1 / -1;
-		grid-row: 2;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-row: 3;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px 44px;
 		gap: 6px;
 	}
 
 	.list-search :deep(input) {
 		width: 100%;
+		min-height: 44px;
+	}
+
+	.list-toolbar__secondary :deep(.p-button) {
+		min-width: 0;
+		padding-inline: 8px;
+		gap: 5px;
+	}
+
+	.list-toolbar__secondary :deep(.p-button[aria-label="Refresh"]),
+	.list-toolbar__secondary :deep(.list-clear-filter-action) {
+		width: 44px;
+		padding-inline: 0;
+	}
+
+	.list-toolbar__secondary :deep(.list-clear-filter-action .p-button-label) {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.list-search {
@@ -2428,8 +2481,9 @@ defineExpose({ refresh: reload })
 	}
 
 	.list-toolbar__primary :deep(.p-button) {
-		width: auto;
-		min-width: max-content;
+		width: 100%;
+		min-width: 0;
+		flex: 1 1 auto;
 		padding-inline: 14px;
 	}
 
@@ -2445,8 +2499,8 @@ defineExpose({ refresh: reload })
 		border: 1px solid var(--list-line);
 		border-radius: var(--erp-control-radius);
 		font: inherit;
-		font-size: 0.78rem;
-		font-weight: 650;
+		font-size: var(--erp-font-size-caption);
+		font-weight: 600;
 		text-align: left;
 	}
 
@@ -2457,17 +2511,21 @@ defineExpose({ refresh: reload })
 	}
 
 	.mobile-quick-filter-toggle__count {
+		min-width: 23px;
 		margin-left: auto;
 		padding: 1px 7px;
-		color: var(--list-accent-dark);
-		background: var(--list-accent-soft);
-		border-radius: 999px;
+		color: var(--erp-accent-ink);
+		font-size: var(--erp-font-size-min);
+		font-weight: 600;
+		text-align: center;
+		background: var(--erp-accent-soft);
+		border-radius: var(--erp-pill-radius);
 	}
 
 	.mobile-quick-filter-toggle--active {
 		color: var(--list-accent-dark);
 		background: var(--list-accent-soft);
-		border-color: color-mix(in srgb, var(--list-accent) 38%, white);
+		border-color: var(--erp-accent-border);
 	}
 
 	.list-quick-filters {
@@ -2499,41 +2557,6 @@ defineExpose({ refresh: reload })
 	.mobile-list-record__facts {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
-	.list-toolbar__secondary :deep(.p-button-label) {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
-	}
-
-	.list-toolbar__secondary :deep(.p-button) {
-		min-width: 44px;
-		padding-inline: 0;
-	}
 }
 
-@media (max-width: 420px) {
-	.list-toolbar__actions {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.list-search,
-	.list-toolbar__primary,
-	.list-toolbar__secondary {
-		grid-column: 1;
-	}
-
-	.list-search { grid-row: 1; }
-	.list-toolbar__primary { grid-row: 2; }
-	.list-toolbar__secondary { grid-row: 3; }
-
-	.list-toolbar__primary :deep(.p-button) {
-		width: 100%;
-	}
-}
 </style>

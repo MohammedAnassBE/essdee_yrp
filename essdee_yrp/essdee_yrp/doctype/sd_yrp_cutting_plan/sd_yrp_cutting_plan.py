@@ -601,7 +601,7 @@ def _build_cloth_requirement_rows(cutting_plan_doc):
 def _generate_cloth_requirements(cutting_plan_doc, preserve_operational_values=True):
 	required_cloth_details, required_accessory_details = _build_cloth_requirement_rows(cutting_plan_doc)
 	changed = 0
-	if cutting_plan_doc.get("lot"):
+	if cutting_plan_doc.lot:
 		required_cloth_details, changed = expand_cutting_rows(
 			required_cloth_details, substitution_index(cutting_plan_doc.lot)
 		)

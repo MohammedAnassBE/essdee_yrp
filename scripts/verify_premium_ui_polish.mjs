@@ -382,6 +382,7 @@ assert(cutBundleDialog.includes(':aria-label="`Select bundle'), "Cut Bundle sour
 assert(cutBundleDialog.includes('"aria-label": `Remove output bundle ${index + 1}`'), "Cut Bundle remove controls have no row-specific accessible label")
 assert(cutBundleDialog.includes("min-width:44px;height:44px"), "Cut Bundle row controls do not meet the shared touch target")
 assert(boxStickerDialog.includes(".box-sticker-preview__canvas{min-height:180px") && boxStickerDialog.includes(".box-sticker-empty{min-height:160px"), "Box Sticker mobile preview still consumes excessive vertical space")
+assert(!boxStickerDialog.includes("box-sticker-workspace") && boxStickerDialog.includes("min-width:900px") && boxStickerDialog.includes("text-align:center;text-transform:uppercase"), "Box Sticker preview still squeezes the size table or headers are not centred")
 assert(excelStickerDialog.includes(".excel-sticker-preview__canvas{min-height:180px") && excelStickerDialog.includes(".excel-sticker-empty{min-height:160px"), "Excel Sticker mobile preview still consumes excessive vertical space")
 assert(cutPanelMovementEditor.includes("erp-check-target"), "Cut Panel Movement native checkboxes do not have usable touch targets")
 assert(cutPanelMovementEditor.includes("width:18px;height:18px"), "Cut Panel Movement checkboxes remain too small")

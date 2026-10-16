@@ -20,6 +20,17 @@ assert.equal(getLockedDepartment({}), null)
 assert.equal(getLockedDepartment(boot({ render_mode: "Configurable Layout", experience_key: "cutting" })), null)
 assert.equal(getLockedDepartment(registered("cutting")).path, "/cutting")
 assert.equal(getLockedDepartment(registered("hr")).path, "/hr")
+const merch = getLockedDepartment(registered("merch"))
+assert.equal(merch.path, "/merch")
+assert.equal(getHomePath(merch), "/merch")
+assert.equal(isLockedExit("/", merch), true)
+assert.equal(isLockedExit("/merch", merch), false)
+for (const path of ["/", "/hr", "/sales/", "/ACCOUNTS"]) {
+	assert.deepEqual(getLockedRedirect(path, merch), { path: "/merch", replace: true })
+}
+for (const path of ["/merch", "/merch/production-orders", "/merch/work-orders/WO-1"]) {
+	assert.equal(getLockedRedirect(path, merch), undefined)
+}
 
 const warnings = []
 const originalWarn = console.warn

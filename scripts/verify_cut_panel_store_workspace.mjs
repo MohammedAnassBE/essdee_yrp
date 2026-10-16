@@ -637,12 +637,42 @@ async function enterPrimeNumber(page, input, value) {
 	await input.press("Tab")
 }
 
+async function assertBoxStickerLayout(dialog) {
+	const layout = await dialog.evaluate((element) => {
+		const wrap = element.querySelector(".box-sticker-table-wrap")
+		const rows = element.querySelector(".box-sticker-rows").getBoundingClientRect()
+		const preview = element.querySelector(".box-sticker-preview").getBoundingClientRect()
+		const cells = [...element.querySelectorAll(".box-sticker-table-wrap th, .box-sticker-table-wrap td")]
+		const inputs = [...element.querySelectorAll(".box-sticker-table-wrap input.p-inputnumber-input")]
+		return {
+			overflow: wrap.scrollWidth - wrap.clientWidth,
+			previewBelow: preview.top >= rows.bottom - 1,
+			sameWidth: Math.abs(preview.width - rows.width) <= 1,
+			uncentred: [...cells, ...inputs].filter((cell) => getComputedStyle(cell).textAlign !== "center").map((cell) => cell.textContent.trim()),
+		}
+	})
+	assert(layout.overflow <= 1, `Box Sticker table scrolls sideways at desktop width: ${JSON.stringify(layout)}`)
+	assert(layout.previewBelow && layout.sameWidth, `Box Sticker preview is not below the full-width table: ${JSON.stringify(layout)}`)
+	assert(layout.uncentred.length === 0, `Box Sticker cells are not centred: ${JSON.stringify(layout.uncentred)}`)
+}
+
+async function assertZeroQuantityPrintHint(page, dialog) {
+	const printButton = dialog.getByRole("button", { name: "Print Labels", exact: true })
+	assert(await printButton.isEnabled(), "Print Labels is disabled on a printable document")
+	await printButton.click()
+	await dialog.getByText("Enter Print Quantity for at least one size", { exact: true }).waitFor()
+	assert(await page.locator(".cut-panel-printer-dialog:visible").count() === 0, "Zero print quantity opened the printer dialog")
+	const focused = await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || "")
+	assert(focused.startsWith("Print quantity for"), `Zero print quantity did not focus Print Quantity: ${focused}`)
+}
+
 async function boxStickerSuite(page) {
 	await page.setViewportSize({ width: 1440, height: 900 })
 	const calls = await mockBoxStickerWorkspace(page)
 	await page.goto(`${SITE}/web/cut-panel-store/box-sticker-prints`, { waitUntil: "domcontentloaded" })
 	const list = page.locator(".box-sticker-prints .common-list-view")
 	await list.waitFor({ timeout: 20_000 })
+	await list.getByRole("columnheader", { name: "Lot", exact: true }).waitFor({ timeout: 20_000 })
 	const headers = (await list.getByRole("columnheader").allTextContents()).map((label) => label.trim())
 	for (const label of ["Lot", "Item", "Print Format", "Status"]) assert(headers.includes(label), `Box Sticker list omits ${label}; headers=${JSON.stringify(headers)}`)
 	assert(await page.getByRole("button", { name: "Create Box Sticker Print", exact: true }).count() === 1, "Box Sticker create action is missing")
@@ -657,10 +687,11 @@ async function boxStickerSuite(page) {
 	const dialog = page.locator(".box-sticker-print-dialog:visible")
 	await dialog.waitFor({ timeout: 20_000 })
 	assert(await dialog.locator(".p-dialog-maximize-button").count() === 1, "Box Sticker popup is not maximizable")
-	for (const label of ["Lot", "FG Item", "Size", "Print Format", "Use Item Name", "Display Name"]) assert(await dialog.getByText(label, { exact: true }).count() >= 1, `Box Sticker editor omits ${label}`)
+	for (const label of ["Lot", "Item", "Size", "Print Format", "Use Item Name", "Display Name"]) assert(await dialog.getByText(label, { exact: true }).count() >= 1, `Box Sticker editor omits ${label}`)
 	assert(await dialog.getByRole("region", { name: "Box Sticker quantities" }).count() === 1, "Box Sticker size table is missing")
 	assert(await dialog.getByRole("img", { name: /Label preview/ }).count() === 1, "Box Sticker preview image is missing")
-	assert(await dialog.getByRole("button", { name: "Print Labels", exact: true }).isDisabled(), "Zero print quantity must keep Print Labels disabled")
+	await assertBoxStickerLayout(dialog)
+	await assertZeroQuantityPrintHint(page, dialog)
 	await dialog.locator(".p-dialog-footer").getByRole("button", { name: "Close", exact: true }).click()
 	await dialog.waitFor({ state: "hidden" })
 
@@ -677,7 +708,15 @@ async function boxStickerSuite(page) {
 	await confirmation.getByRole("button", { name: "Keep Document", exact: true }).click()
 	await confirmation.waitFor({ state: "hidden" })
 
-	await dialog.getByRole("button", { name: "Show FG Item options", exact: true }).click()
+	await dialog.getByRole("button", { name: "Show Item options", exact: true }).click()
+	await page.locator(".p-autocomplete-option").filter({ hasText: "New Shirt" }).click()
+	confirmation = page.locator(".document-confirmation-shell:visible")
+	await confirmation.getByText("Replace size rows?", { exact: true }).waitFor()
+	await confirmation.getByRole("button", { name: "Keep Document", exact: true }).click()
+	await confirmation.waitFor({ state: "hidden" })
+	await page.waitForFunction(() => document.querySelector('.box-sticker-print-dialog input[aria-label="Item"]')?.value !== "New Shirt")
+	assert(calls.sourcePreviewCount() === 0, "Keep Document still reloaded size rows")
+	await dialog.getByRole("button", { name: "Show Item options", exact: true }).click()
 	await page.locator(".p-autocomplete-option").filter({ hasText: "New Shirt" }).click()
 	confirmation = page.locator(".document-confirmation-shell:visible")
 	await confirmation.getByText("Replace size rows?", { exact: true }).waitFor()
@@ -713,7 +752,7 @@ async function boxStickerSuite(page) {
 	await dialog.getByText("Submitted", { exact: true }).waitFor()
 	assert(calls.submitCount() === 1, `Submit command ran ${calls.submitCount()} times`)
 	const printButton = dialog.getByRole("button", { name: "Print Labels", exact: true })
-	assert(await printButton.isDisabled(), "Zero print quantity enabled Print Labels after submit")
+	await assertZeroQuantityPrintHint(page, dialog)
 
 	await page.setViewportSize({ width: 390, height: 844 })
 	const geometry = await dialog.evaluate((element) => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 
 import {
 	PLANNING_ROUTES, PLANNING_WORKSPACES, activeReportGroup, isCurrentRecordRequest,
@@ -45,8 +45,12 @@ assert.equal(PLANNING_ROUTES.reports, "planning-reports")
 for (const file of readdirSync("frontend/src/departments/planning", { recursive: true, withFileTypes: true })) {
 	if (!file.isFile()) continue
 	const parent = file.parentPath || file.path
-	assert.doesNotMatch(read(`${parent}/${file.name}`), /departments\/purchase|purchase\/lot|api\/purchase\.js|PURCHASE_ROUTES/)
+	const source = read(`${parent}/${file.name}`)
+	// Planning shares the conversion view; its API and routes remain Planning owned.
+	assert.doesNotMatch(source.replace('import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"', ''), /departments\/purchase|purchase\/lot|api\/purchase\.js|PURCHASE_ROUTES/)
 }
+assert.match(department("planning/lot/LotPage.vue"), /import LotFabricTab from "\.\.\/\.\.\/purchase\/lot\/LotFabricTab.vue"/)
+assert.equal(existsSync("frontend/src/departments/planning/lot/LotFabricTab.vue"), false, "one owner for the Lot fabric view")
 
 const list = department("planning/lot/LotsList.vue")
 assert.doesNotMatch(list, /New Lot|lotNew/)

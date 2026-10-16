@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { addLotOrderRow, boxOrderView, clearedLotContext, editTabFor, fabricColumnFilters, IPD_DERIVED_FIELDS, lotEditorCleanSignature, lotEditorTabs, lotLinkFilters, lotOrderEntry, lotSavePayload, orderQuantityTotal, orderDetailsView } from "../frontend/src/departments/purchase/lot/lotEditor.js"
 import { orderItemRows } from "../frontend/src/departments/purchase/lot/lotViews.js"
+import { childTableColumnField } from "../frontend/src/components/common/childTableFields.js"
 const details = { item: "Shirt", default_uom: "Box", primary_attribute: "Size", primary_attribute_values: ["S", "L"], final_state_attr: ["Colour"], items: [{ attributes: { Colour: "Blue" }, primary_attribute: "Size", values: { S: { qty: 2, ratio: 1, mrp: 50 }, L: { qty: 1, ratio: 2, mrp: 60 } } }] }
 const before = structuredClone(details)
 const entry = { attributes: { Colour: "Blue" }, values: { S: { qty: 3, ratio: 4, mrp: 100 }, L: { qty: 0, ratio: 1, mrp: 80 } } }
@@ -60,7 +61,6 @@ assert.equal(orderDetailsView(groups, "V1", "Colour").groups[0].totals.quantity,
 const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8")
 const child = source("frontend/src/components/common/ChildTableField.vue")
 assert.match(child, /columnFilters: \{ type: Function, default: null \}/)
-assert.match(child, /columnFilters\(column, data\) \?\? column.link_filters/)
 const editor = source("frontend/src/departments/purchase/lot/LotEditor.vue")
 assert.match(editor, /:dirty="isDirty"/)
 assert.doesNotMatch(editor, /<Dialog|<DataTable/)
@@ -72,13 +72,11 @@ assert.match(editorDetails, /return \{ \.\.\.field, description, link_filters:/)
 const wrapper = source("frontend/src/departments/purchase/lot/LotEditorPage.vue")
 assert.match(wrapper, /:key="lotId \|\| 'new'"/)
 
-const fieldExpression = child.match(/:field="([^"\n]+)"/)[1]
-const mapColumn = new Function("columnFilters", "column", "data", `return (${fieldExpression})`)
 const productionDetailColumn = { fieldname: "production_detail", link_filters: { enabled: 1 } }
 const firstRow = { cloth_item: "First cloth" }
-assert.deepEqual(mapColumn(fabricColumnFilters, productionDetailColumn, firstRow).link_filters, { item: "First cloth" })
-assert.deepEqual(mapColumn(fabricColumnFilters, productionDetailColumn, { cloth_item: "Second cloth" }).link_filters, { item: "Second cloth" })
-assert.equal(mapColumn(null, productionDetailColumn, firstRow), productionDetailColumn)
-assert.deepEqual(mapColumn(() => null, productionDetailColumn, firstRow).link_filters, { enabled: 1 })
+assert.deepEqual(childTableColumnField(productionDetailColumn, fabricColumnFilters, firstRow).link_filters, { item: "First cloth" })
+assert.deepEqual(childTableColumnField(productionDetailColumn, fabricColumnFilters, { cloth_item: "Second cloth" }).link_filters, { item: "Second cloth" })
+assert.equal(childTableColumnField(productionDetailColumn, null, firstRow), productionDetailColumn)
+assert.deepEqual(childTableColumnField(productionDetailColumn, () => null, firstRow).link_filters, { enabled: 1 })
 assert.deepEqual(productionDetailColumn.link_filters, { enabled: 1 })
 console.log("Lot editor tests passed")

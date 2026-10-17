@@ -324,6 +324,7 @@ for (const mode of ["record", "approved"]) {
 	const view = mount()
 	await flush()
 	assert.equal(labelled(view, "Include row").length, 1)
+	assert.equal(text(view, "No attributes").length, 1, "an empty attribute table shows a one-line hint")
 	button(view, "Save mapping").props.onClick()
 	await flush()
 	assert.equal(text(view, "Add Items to continue").length, 1)

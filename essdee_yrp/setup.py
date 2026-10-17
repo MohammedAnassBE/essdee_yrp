@@ -81,6 +81,9 @@ ESSDEE_REQUIRED_STOCK_DIMENSIONS = (
 )
 
 
+VARIANT_FLAG_FIELDS = ("disabled", "custom_deprecated")
+
+
 def after_install():
 	ensure_process_billing_items()
 	ensure_yrp_valuation_contract()
@@ -89,6 +92,7 @@ def after_install():
 	ensure_stock_transaction_indexes()
 	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
+	ensure_variant_flag_fields()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
 	ensure_production_planner_read_permissions()
@@ -121,6 +125,7 @@ def after_migrate():
 	ensure_stock_transaction_indexes()
 	ensure_finishing_plan_dispatch_naming_series()
 	ensure_default_address_template()
+	ensure_variant_flag_fields()
 	ensure_mrp_schema_roles()
 	ensure_mrp_cancel_permissions()
 	ensure_production_planner_read_permissions()
@@ -429,6 +434,18 @@ def ensure_sd_yrp_consumer_config():
 	from essdee_yrp.sd_yrp_sync import ensure_consumer_config
 
 	ensure_consumer_config()
+
+
+def ensure_variant_flag_fields():
+	"""Templates copy their disabled and deprecated flags to variants."""
+	settings = frappe.get_single("Item Variant Settings")
+	existing = {row.field_name for row in settings.fields}
+	missing = [field for field in VARIANT_FLAG_FIELDS if field not in existing]
+	if not missing:
+		return
+	for field in missing:
+		settings.append("fields", {"field_name": field})
+	settings.save(ignore_permissions=True)
 
 
 def ensure_default_address_template():

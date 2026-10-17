@@ -7,7 +7,7 @@ from yrp import attribute_links as attribute_db
 IPD_SETTINGS = 'SD YRP IPD Settings'
 PIECE_UOM = 'Pieces'
 PACKAGING_UOMS = (('Box', 'custom_pieces_per_box'), ('Carton', 'custom_pieces_per_carton'))
-SIZE_SLOTS = tuple(f'size{index}' for index in range(1, 11))
+SIZE_SLOTS = tuple(f'size {index}' for index in range(1, 11))
 
 
 def get_pack_out_settings():
@@ -41,7 +41,7 @@ def sales_definition(template, size_range, size_type, values, settings):
         if not key and not link:
             continue
         if key not in SIZE_SLOTS or key in keys or (link and link in used):
-            raise ValueError('Size Type must have distinct size1 to size10 slots and distinct values.')
+            raise ValueError('Size Type must have distinct size 1 to size 10 slots and distinct values.')
         keys.add(key)
         if not link:
             continue
@@ -174,7 +174,7 @@ def validate_slot_rows(rows, domains):
         if not key and not value:
             continue
         if key not in SIZE_SLOTS:
-            raise ValueError(f'Size Type slot {key!r} is not valid. Use one of size1 to size10.')
+            raise ValueError(f'Size Type slot {key!r} is not valid. Use one of size 1 to size 10.')
         if key in keys or (value and value in values):
             raise ValueError('Size Type requires distinct slots and distinct values.')
         if value and domains.get(value) != 'Size':

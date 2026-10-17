@@ -13,13 +13,13 @@ class TestSalesDefinition(unittest.TestCase):
         template = frappe._dict(primary_attribute='Size', dependent_attribute='Finish', name='Synthetic', custom_size_range='Range')
         template.update(changes)
         sizes = frappe._dict(size_type='Type', sizes=[frappe._dict(attribute_value='IAV-small'), frappe._dict(attribute_value='IAV-large')])
-        slots = frappe._dict(fg_item_size_type_details=[frappe._dict(size='size2', size_type_value='IAV-large'),
-            frappe._dict(size='size1', size_type_value='IAV-small')])
+        slots = frappe._dict(fg_item_size_type_details=[frappe._dict(size='size 2', size_type_value='IAV-large'),
+            frappe._dict(size='size 1', size_type_value='IAV-small')])
         return sales_definition(template, sizes, slots, {'IAV-small': 'S', 'IAV-large': 'L'}, SETTINGS)
 
     def test_dynamic_slots_follow_type_order(self):
         cells = self.definition()['cells']
-        self.assertEqual([(c['key'], c['value'], c['link']) for c in cells], [('size2', 'L', 'IAV-large'), ('size1', 'S', 'IAV-small')])
+        self.assertEqual([(c['key'], c['value'], c['link']) for c in cells], [('size 2', 'L', 'IAV-large'), ('size 1', 'S', 'IAV-small')])
 
     def test_no_size_range_is_unchanged(self):
         self.assertIsNone(self.definition(custom_size_range=None))
@@ -52,8 +52,8 @@ class TestProductSalesSite(unittest.TestCase):
         size.save()
         self.size_links = [ensure_value_master('Size', value) for value in self.size_values]
         self.size_type = frappe.get_doc({'doctype': 'SD YRP FG Item Size Type', 'size_type': label('Slots'),
-            'fg_item_size_type_details': [{'size': 'size2', 'size_type_value': self.size_links[1]},
-                {'size': 'size1', 'size_type_value': self.size_links[0]}]}).insert()
+            'fg_item_size_type_details': [{'size': 'size 2', 'size_type_value': self.size_links[1]},
+                {'size': 'size 1', 'size_type_value': self.size_links[0]}]}).insert()
         self.size_range = frappe.get_doc({'doctype': 'SD YRP FG Item Size Range', 'name1': label('Range'),
             'uid': secrets.randbelow(1_000_000_000), 'size_type': self.size_type.name,
             'sizes': [{'attribute_value': link} for link in self.size_links]}).insert()
@@ -161,7 +161,7 @@ class TestProductSalesSite(unittest.TestCase):
         size.append('item_attribute_values', {'attribute_value': value, 'abbr': 'G' + frappe.generate_hash(length=6)})
         size.save()
         link = ensure_value_master('Size', value)
-        self.size_type.append('fg_item_size_type_details', {'size': 'size3', 'size_type_value': link})
+        self.size_type.append('fg_item_size_type_details', {'size': 'size 3', 'size_type_value': link})
         self.size_type.save()
         self.size_range.append('sizes', {'attribute_value': link})
         self.size_range.save()
@@ -188,7 +188,7 @@ class TestProductSalesSite(unittest.TestCase):
 
     def test_native_size_master_rejects_duplicate_and_uncovered_values(self):
         link = self.size_type.fg_item_size_type_details[0].size_type_value
-        self.size_type.append('fg_item_size_type_details', {'size': 'size3', 'size_type_value': link})
+        self.size_type.append('fg_item_size_type_details', {'size': 'size 3', 'size_type_value': link})
         with self.assertRaises(frappe.ValidationError):
             self.size_type.save()
         self.size_range.append('sizes', {'attribute_value': self.size_range.sizes[0].attribute_value})
@@ -212,32 +212,32 @@ def make_sales_fixture():
 class TestSizeContracts(unittest.TestCase):
     def test_empty_duplicate_keys_and_non_size_values_rejected(self):
         from essdee_yrp.product_sales import validate_slot_rows
-        valid = [{'size': 'size1', 'size_type_value': 's'}, {'size': 'size10', 'size_type_value': 'l'}]
+        valid = [{'size': 'size 1', 'size_type_value': 's'}, {'size': 'size 10', 'size_type_value': 'l'}]
         validate_slot_rows(valid, {'s': 'Size', 'l': 'Size'})
         for rows in ([], [{'size': '', 'size_type_value': 's'}], [*valid, valid[0]],
-                [{'size': 'size2', 'size_type_value': 'colour'}]):
+                [{'size': 'size 2', 'size_type_value': 'colour'}]):
             with self.assertRaises(ValueError):
                 validate_slot_rows(rows, {'s': 'Size', 'l': 'Size', 'colour': 'Colour'})
 
     def test_empty_slot_values_and_blank_rows_are_allowed(self):
         from essdee_yrp.product_sales import validate_slot_rows
-        validate_slot_rows([{'size': 'size1', 'size_type_value': 's'}, {'size': 'size2', 'size_type_value': None},
-            {'size': 'size3', 'size_type_value': ''}, {'size': '', 'size_type_value': ''}], {'s': 'Size'})
+        validate_slot_rows([{'size': 'size 1', 'size_type_value': 's'}, {'size': 'size 2', 'size_type_value': None},
+            {'size': 'size 3', 'size_type_value': ''}, {'size': '', 'size_type_value': ''}], {'s': 'Size'})
         with self.assertRaises(ValueError):
-            validate_slot_rows([{'size': 'size1', 'size_type_value': None}, {'size': 'size1', 'size_type_value': 's'}], {'s': 'Size'})
+            validate_slot_rows([{'size': 'size 1', 'size_type_value': None}, {'size': 'size 1', 'size_type_value': 's'}], {'s': 'Size'})
 
     def test_sales_definition_skips_empty_slot_values(self):
         size_range = frappe._dict(size_type='Type', sizes=[frappe._dict(attribute_value='s')])
-        size_type = frappe._dict(fg_item_size_type_details=[frappe._dict(size='size1', size_type_value=None),
-            frappe._dict(size='size2', size_type_value='s'), frappe._dict(size=None, size_type_value=None)])
+        size_type = frappe._dict(fg_item_size_type_details=[frappe._dict(size='size 1', size_type_value=None),
+            frappe._dict(size='size 2', size_type_value='s'), frappe._dict(size=None, size_type_value=None)])
         template = frappe._dict(primary_attribute='Size', dependent_attribute='Finish', custom_size_range='Range')
         cells = sales_definition(template, size_range, size_type, {'s': 'S'}, SETTINGS)['cells']
-        self.assertEqual([(c['key'], c['link']) for c in cells], [('size2', 's')])
+        self.assertEqual([(c['key'], c['link']) for c in cells], [('size 2', 's')])
 
-    def test_only_size1_to_size10_slot_keys_are_accepted(self):
+    def test_only_size_1_to_size_10_slot_keys_are_accepted(self):
         from essdee_yrp.product_sales import validate_slot_rows
-        for key in ('size 1', 'Size1', 'size0', 'size11', 'adult-small', None):
-            with self.assertRaisesRegex(ValueError, 'size1 to size10'):
+        for key in ('size1', 'Size 1', 'size 0', 'size 11', 'adult-small', None):
+            with self.assertRaisesRegex(ValueError, 'size 1 to size 10'):
                 validate_slot_rows([{'size': key, 'size_type_value': 's'}], {'s': 'Size'})
 
     def test_only_the_pack_out_stage_sells(self):

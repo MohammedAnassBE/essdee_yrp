@@ -354,7 +354,9 @@ function applyFill(col) {
 function fillValue(column) {
 	const text = fillTexts.value[column.key] ?? ""
 	if (!isChoiceColumn(column)) return text
-	const value = fillEditors[column.key]?.finishEdit({ validate: true })
+	const fillEditor = fillEditors[column.key]
+	if (!fillEditor) return text
+	const value = fillEditor.finishEdit({ validate: true })
 	return value === undefined ? undefined : value ?? text
 }
 function toggleCheck() {

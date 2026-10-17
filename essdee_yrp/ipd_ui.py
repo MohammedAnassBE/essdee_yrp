@@ -980,8 +980,6 @@ def duplicate_ipd(ipd, item=None):
 			]
 		)
 	copy_tables(ipd_doc, doc, table_fields)
-	for row in doc.get("stiching_item_combination_details") or []:
-		row.combination_attribute = doc.stiching_attribute
 
 	if ipd_doc.is_set_item:
 		doc.is_set_item = ipd_doc.is_set_item

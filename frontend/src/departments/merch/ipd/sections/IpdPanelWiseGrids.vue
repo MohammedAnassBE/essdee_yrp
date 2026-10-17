@@ -26,7 +26,7 @@
 				</div>
 				<EntryGrid
 					v-if="current"
-					ref="consumptionGrid"
+					ref="consumptionGrid" validation-field="panel_wise_consumption_matrix_json"
 					:title="current.panel_value"
 					:unit-hint="grid.unitHint"
 					:row-header-label="grid.rowHeaderLabel"
@@ -35,7 +35,8 @@
 					:model-value="grid.model"
 					:readonly="editor.readonly"
 					:errors="errors"
-					:toolbar="['fillRight', 'fillDown', 'sameForAll', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="update"
 				>
 					<template #toolbar>
@@ -52,14 +53,15 @@
 				<EntryGrid
 					v-for="panel in clothPanels"
 					:key="panel.group_id || 'all'"
-					:ref="(grid) => setClothGrid(panel, grid)"
+					:ref="(grid) => setClothGrid(panel, grid)" validation-field="panel_wise_cloth_mapping_json"
 					:title="panel.panel_value || 'All panels'"
 					:row-header-label="clothGrid(panel).rowHeaderLabel"
 					:rows="clothGrid(panel).rows"
 					:columns="clothGrid(panel).columns"
 					:model-value="clothGrid(panel).model"
 					:readonly="editor.readonly"
-					:toolbar="['fillRight', 'fillDown', 'sameForAll', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateCloth(panel.group_id, $event)"
 				/>
 			</template>

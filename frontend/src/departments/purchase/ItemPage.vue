@@ -33,7 +33,7 @@
 				</section>
 				<ItemUomConversions :values="values" :field="workspace.fields?.uoms" />
 				<ItemAdditionalParameters :values="values" :field="workspace.fields?.additional_parameters" :problems="parameterProblems" />
-				<ItemMasterFields :values="values" :fields="workspace.fields" />
+				<ItemMasterFields part="details" :values="values" :fields="workspace.fields" />
 				<ItemYarnRatio v-if="Number(values.is_cloth_item)" :values="values" :field="workspace.fields?.yarn_ratio_details" />
 
 				<section class="purchase-record-card">
@@ -51,6 +51,7 @@
 					</DataTable>
 					<div v-else class="purchase-record-empty">No Item Prices for this item.</div>
 				</section>
+				<ItemMasterFields part="description" :values="values" :fields="workspace.fields" />
 			</div>
 		</section>
 

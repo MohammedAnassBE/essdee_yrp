@@ -52,6 +52,30 @@ export function isCellEditable(rows, columns, row, col) {
 	return Boolean(rows[row] && columns[col] && !rows[row].readonly && !columns[col].readonly)
 }
 
+export function isChoiceColumn(column) {
+	return ["select", "value", "link"].includes(column?.type)
+}
+
+export function searchOptions(options, query = "") {
+	const text = String(query ?? "").toLowerCase()
+	return options.map((option) => ({ option, rank: optionRank(option, text) }))
+		.filter(({ rank }) => rank < 3)
+		.sort((left, right) => left.rank - right.rank || prefixLength(left) - prefixLength(right))
+		.map(({ option }) => option)
+}
+
+function optionRank(option, query) {
+	if (!query) return 2
+	const texts = [option.name, option.label].map((value) => String(value ?? "").toLowerCase())
+	if (texts.includes(query)) return 0
+	if (texts.some((text) => text.startsWith(query))) return 1
+	return texts.some((text) => text.includes(query)) ? 2 : 3
+}
+
+function prefixLength({ option, rank }) {
+	return rank === 1 ? String(option.label ?? option.name).length : 0
+}
+
 const STEPS = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] }
 
 export function moveCell(position, direction, bounds, isEditable = () => true) {
@@ -133,6 +157,16 @@ export function setCells(model, changes) {
 		next[rowKey] = { ...(next[rowKey] || {}), [colKey]: value }
 	}
 	return next
+}
+
+export function fillColumn(model, rows, columns, col, value) {
+	const changes = []
+	let skipped = 0
+	rows.forEach((row, index) => {
+		if (!isCellEditable(rows, columns, index, col)) { skipped += 1; return }
+		changes.push({ rowKey: row.key, colKey: columns[col].key, value })
+	})
+	return { model: setCells(model, changes), changes, skipped }
 }
 
 export function applyBlock(model, rows, columns, start, block) {

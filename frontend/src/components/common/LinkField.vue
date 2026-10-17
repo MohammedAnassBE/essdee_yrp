@@ -78,6 +78,7 @@ const props = defineProps({
 	disabled: { type: Boolean, default: false },
 	invalid: { type: Boolean, default: false },
 	showValidationMessage: { type: Boolean, default: true },
+	cellEditor: { type: Boolean, default: false },
 	dropdown: { type: Boolean, default: true },
 	delay: { type: Number, default: 300 },
 	pageLength: { type: Number, default: 20 },
@@ -98,7 +99,7 @@ const labelParts = computed(() => {
 	return match ? { text: match[1], required: true } : { text: props.label, required: props.required }
 })
 
-const emit = defineEmits(["update:modelValue", "select", "clear", "validation"])
+const emit = defineEmits(["update:modelValue", "select", "clear", "validation", "finish", "cancel"])
 
 const input = ref(null)
 const componentId = useId()
@@ -110,6 +111,8 @@ const validationError = ref("")
 const committedName = ref("")
 const committedLabel = ref("")
 let requestSequence = 0
+let suggestionSequence = null
+let blurredOption = null
 
 const modelLabel = computed(() => committedName.value === props.modelValue
 	? committedLabel.value || String(props.modelValue || "")
@@ -143,12 +146,14 @@ const autocompletePt = computed(() => ({
 
 watch(
 	() => [props.modelValue, props.resetVersion],
-	() => { setValidation(); syncModelValue() },
+	() => { blurredOption = null; cancelSearch(); setValidation(); syncModelValue() },
 	{ immediate: true },
 )
 
 async function complete(event) {
 	const sequence = ++requestSequence
+	suggestionSequence = null
+	suggestions.value = []
 	searching.value = true
 	searchError.value = ""
 	try {
@@ -162,6 +167,9 @@ async function complete(event) {
 				props.matchVisibleOnly,
 			)
 		if (sequence !== requestSequence) return
+		suggestionSequence = sequence
+		// Re-arm PrimeVue's suggestions watcher after clearing the previous results.
+		if (input.value) input.value.searching = true
 		suggestions.value = (rows || []).map((row) =>
 			typeof row === "string"
 				? { name: row, label: row }
@@ -169,6 +177,7 @@ async function complete(event) {
 		)
 	} catch (error) {
 		if (sequence !== requestSequence) return
+		if (input.value) input.value.searching = true
 		suggestions.value = []
 		searchError.value = error.message || "Search failed"
 	} finally {
@@ -177,8 +186,12 @@ async function complete(event) {
 }
 
 function select(event) {
-	setValidation()
 	const selected = event.value
+	if (suggestionSequence !== requestSequence || !suggestions.value.includes(selected)) {
+		restoreCommittedValue()
+		return
+	}
+	setValidation()
 	const name = typeof selected === "object" ? selected?.name : selected
 	if (name === undefined || name === null || name === "") return
 	committedName.value = name
@@ -189,24 +202,42 @@ function select(event) {
 }
 
 function updateInput(value) {
+	blurredOption = null
+	if (typeof value === "string") {
+		cancelSearch()
+		searchError.value = ""
+	}
 	setValidation()
 	inputValue.value = value
 	if (value === "" || value === null) clear()
 }
 
 function onKeydown(event) {
-	if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229
-		&& event.target === input.value?.$el?.querySelector("input")
-		&& !(input.value?.overlayVisible && suggestions.value.length && !searching.value)) rejectUnselected()
-	handleAutocompleteKey(event, input.value, restoreCommittedValue, searching.value)
+	if (event.isComposing || event.keyCode === 229) return
+	if (event.target !== input.value?.$el?.querySelector("input")) return
+	if (handleCellKey(event)) return
+	if (event.key === "Enter" && !canPickSuggestion()) rejectUnselected()
+	handleAutocompleteKey(event, input.value, restoreCommittedValue, searching.value || suggestionSequence !== requestSequence)
+}
+function canPickSuggestion() {
+	return input.value?.overlayVisible && suggestions.value.length && suggestionSequence === requestSequence && !searching.value
+}
+function handleCellKey(event) {
+	if (!props.cellEditor || !["Escape", "Tab"].includes(event.key)) return false
+	event.stopPropagation()
+	if (event.key === "Escape") { event.preventDefault(); emit("cancel") }
+	else emit("finish", event)
+	return true
 }
 async function focusFirstOption() {
 	await nextTick()
 	if (input.value?.overlayVisible) input.value.focusedOptionIndex = input.value.findFirstOptionIndex()
 }
 function onBlur() {
+	// A tab click blurs the input before its before-change handler runs.
+	blurredOption = exactOption()
 	rejectUnselected()
-	restoreCommittedValue()
+	restoreCommittedValue({ keepBlurredOption: true })
 	input.value?.hide()
 }
 
@@ -226,10 +257,13 @@ function clear() {
 
 function cancelSearch() {
 	requestSequence += 1
+	suggestionSequence = null
+	suggestions.value = []
 	searching.value = false
 	if (input.value) {
 		clearTimeout(input.value.searchTimeout)
 		input.value.searching = false
+		input.value.focusedOptionIndex = -1
 	}
 }
 
@@ -242,12 +276,32 @@ function rejectUnselected() {
 	if (!query || query === modelLabel.value) return
 	const message = searchError.value || (hasIncompleteFilters.value ? props.dependencyMessage
 		: !searching.value && !suggestions.value.length
-			? `No ${props.doctype} matches "${query}". Pick one from the list.`
-			: `Pick a ${props.doctype} from the list for "${query}".`)
+			? `No ${props.doctype || "option"} matches "${query}". Pick one from the list.`
+			: `Pick a value from the list for "${query}".`)
 	setValidation(message, query)
 }
 
-function restoreCommittedValue() {
+function exactOption() {
+	if (typeof inputValue.value !== "string" || suggestionSequence !== requestSequence) return null
+	const query = inputValue.value.trim()
+	return suggestions.value.find((option) => String(option.name) === query || String(option.label) === query) || null
+}
+
+function finishEdit({ validate = false } = {}) {
+	const option = typeof inputValue.value === "string" ? exactOption() : blurredOption
+	if (validate && !option) {
+		rejectUnselected()
+		if (validationError.value) return undefined
+	}
+	blurredOption = null
+	setValidation()
+	restoreCommittedValue()
+	input.value?.hide()
+	return option?.name ?? null
+}
+
+function restoreCommittedValue({ keepBlurredOption = false } = {}) {
+	if (!keepBlurredOption) blurredOption = null
 	cancelSearch()
 	syncModelValue()
 }
@@ -271,7 +325,18 @@ function focus() {
 	input.value?.$el?.querySelector("input")?.focus()
 }
 
-defineExpose({ focus })
+async function open(query = "") {
+	if (props.disabled) return
+	blurredOption = null
+	setValidation()
+	focus()
+	if (query) inputValue.value = query
+	else input.value?.$el?.querySelector("input")?.select?.()
+	await complete({ query })
+	await focusFirstOption()
+}
+
+defineExpose({ focus, open, finishEdit })
 </script>
 
 <style scoped>

@@ -18,6 +18,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 	get_colour_attribute,
 	get_dia_attribute,
 )
+from essdee_yrp.fabric_chain import get_fabric_steps
 
 QTY_TOLERANCE = 0.000001
 
@@ -805,12 +806,17 @@ def build_lot_fabric_substitutions(
 	}
 
 
-def _terminal_conversion_rows(rows):
-	"""Select the latest recorded stage per IPD before filtering receipt eligibility."""
+def _terminal_conversion_rows(rows, *, final_fabric_step=False):
+	"""Select each IPD's recorded or final fabric stage before receipt eligibility."""
 	terminal = {}
 	for row in rows:
 		ipd = row.get("production_detail")
-		terminal[ipd] = max(terminal.get(ipd, -1), row.get("process_stage_index") or 0)
+		if final_fabric_step:
+			if ipd not in terminal:
+				steps = get_fabric_steps(frappe.get_cached_doc("YRP Item Production Detail", ipd))
+				terminal[ipd] = steps[-1]["position"] if steps else 0
+		else:
+			terminal[ipd] = max(terminal.get(ipd, -1), row.get("process_stage_index") or 0)
 	return [
 		row for row in rows
 		if (row.get("process_stage_index") or 0) == terminal[row.get("production_detail")]
@@ -839,7 +845,7 @@ def substitution_index(lot):
 	)
 	quantities = defaultdict(lambda: defaultdict(float))
 	received_type = _default_received_type()
-	for row in _terminal_conversion_rows(rows):
+	for row in _terminal_conversion_rows(rows, final_fabric_step=True):
 		if (row["received_type"] != received_type
 			or flt(row["actual_quantity"]) <= QTY_TOLERANCE):
 			continue

@@ -7,7 +7,7 @@
 			<template v-if="part === 'bom'">
 				<EntryGrid
 					v-if="bom.rows.length"
-					ref="bomGrid"
+					ref="bomGrid" validation-field="item_bom"
 					title="Item BOM"
 					row-header-label="#"
 					:rows="bom.rows"
@@ -15,26 +15,30 @@
 					:model-value="bom.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('item_bom')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateBom"
 					@remove-row="removeBom"
 				/>
 				<p v-else class="erp-help-text">No BOM rows yet.</p>
-				<ul v-if="mapped.length" class="ipd-summary" aria-label="Attribute mapped BOM rows">
-					<li v-for="entry in mapped" :key="entry.key">
-						<i class="pi pi-sitemap" aria-hidden="true" />
-						<span>{{ entry.item }} Mapping <small>{{ entry.summary }}</small></span>
-						<Button v-if="entry.canEdit" :label="editor.readonly ? 'View' : 'Edit'" size="small" text @click="openMapping(entry)" />
-						<small v-else>{{ entry.note }}</small>
-					</li>
-				</ul>
+				<div v-if="mapped.length" class="ipd-chip-cards" aria-label="Attribute mapped BOM rows">
+					<article v-for="entry in mapped" :key="entry.key" class="ipd-chip-card">
+						<header>
+							<h3>{{ entry.item }} Mapping</h3>
+							<Button v-if="entry.canEdit" :label="editor.readonly ? 'View' : 'Edit'" size="small" text @click="openMapping(entry)" />
+						</header>
+						<p v-for="(line, index) in entry.lines" :key="index" class="erp-help-text bom-mapping-line">{{ line }}</p>
+						<small v-if="entry.total > entry.lines.length" class="erp-help-text">+{{ entry.total - entry.lines.length }} more</small>
+						<small v-if="entry.note" class="erp-help-text">{{ entry.note }}</small>
+					</article>
+				</div>
 			</template>
 			<template v-if="part === 'accessories'">
 				<p v-if="!accessoryNames.rows.length && !clothAccessory.rows.length" class="erp-help-text">No accessory items.</p>
 				<EntryGrid
 					v-if="accessoryNames.rows.length"
-					ref="accessoryNamesGrid"
+					ref="accessoryNamesGrid" validation-field="accessory_clothtype_json"
 					title="Accessory names"
 					row-header-label="Accessory"
 					:rows="accessoryNames.rows"
@@ -42,6 +46,7 @@
 					:model-value="accessoryNames.model"
 					:readonly="editor.readonly"
 					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateAccessoryParts"
 					@remove-row="removeAccessory"
@@ -52,41 +57,42 @@
 					<Button label="Add accessory" icon="pi pi-plus" size="small" outlined :disabled="!canAddAccessory" @click="addAccessory" />
 				</div>
 				<IpdChoiceChips v-if="accessoryNames.rows.length" label="Accessory attributes" :choices="accessoryChoices" :selected="draft.accessory_attributes || []" :readonly="editor.readonly" @toggle="toggleAccessoryAttribute" />
-				<IpdGridNotice grid-key="cloth_accessory" :empty="!clothAccessory.rows.length" section="accessories" field="cloth_accessory_json" />
+				<IpdGridNotice grid-key="cloth_accessory" :empty="!clothAccessory.rows.length" section="accessories" field="cloth_accessory_json" :detail="clothAccessoryValidation.summary" />
 				<EntryGrid
 					v-if="clothAccessory.rows.length"
-					ref="clothAccessoryGrid"
+					ref="clothAccessoryGrid" validation-field="cloth_accessory_json"
 					title="Accessory consumption"
-					unit-hint="Dia · weight kg"
 					:row-header-label="clothAccessory.rowHeaderLabel"
 					:rows="clothAccessory.rows"
 					:columns="clothAccessory.columns"
 					:model-value="clothAccessory.model"
 					:readonly="editor.readonly"
-					:errors="editor.gridErrors('cloth_accessory_json')"
-					:toolbar="['fillRight', 'fillDown', 'paste', 'clear']"
+					:errors="clothAccessoryValidation.errors"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateClothAccessory"
 				/>
 			</template>
 			<template v-if="part === 'stitching'">
 				<p v-if="!stitchingAccessory.rows.length" class="erp-help-text">Accessory colours appear after accessory items are added.</p>
-				<IpdGridNotice grid-key="stiching_accessory" :empty="!stitchingAccessory.rows.length" section="accessories" field="stiching_accessory_json" />
+				<IpdGridNotice grid-key="stiching_accessory" :empty="!stitchingAccessory.rows.length" section="accessories" field="stiching_accessory_json" :detail="stitchingAccessoryValidation.summary" />
 				<EntryGrid
 					v-if="stitchingAccessory.rows.length"
-					ref="stitchingAccessoryRef"
+					ref="stitchingAccessoryRef" validation-field="stiching_accessory_json"
 					title="Accessory colour and cloth"
 					:row-header-label="stitchingAccessory.rowHeaderLabel"
 					:rows="stitchingAccessory.rows"
 					:columns="stitchingAccessory.columns"
 					:model-value="stitchingAccessory.model"
 					:readonly="editor.readonly"
-					:errors="editor.gridErrors('stiching_accessory_json')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:errors="stitchingAccessoryValidation.errors"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					@update:model-value="updateStitchingAccessory"
 				/>
 			</template>
 		</div>
-		<BomMappingDrawer v-model:visible="mappingVisible" :bom-row="mappingRow" :item-name="mappingItem" :readonly="editor.readonly" />
+		<BomMappingDialog v-model:visible="mappingVisible" :bom-row="mappingRow" :item-name="mappingItem" :readonly="editor.readonly" />
 	</IpdSection>
 </template>
 
@@ -100,12 +106,13 @@ import EntryGrid from "../../../../components/common/EntryGrid.vue"
 import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 import { attributeValues, clothNames } from "./attributeValues.js"
-import BomMappingDrawer from "./BomMappingDrawer.vue"
+import BomMappingDialog from "./BomMappingDialog.vue"
+import { mappingCardLines } from "./bomMapping.js"
 import {
-	bomMappingSummary,
 	choiceList,
 	itemsFromModel,
 	itemsGrid,
+	missingCellErrors,
 	removeTableRow,
 	stitchingAccessoryFromModel,
 	stitchingAccessoryGrid,
@@ -151,10 +158,10 @@ const bomColumns = computed(() => [
 	{ key: "based_on_attribute_mapping", label: "Based on Attribute Mapping", type: "check" },
 	{ key: "wastage_pct", label: "Wastage %", type: "number", min: 0 },
 ])
-const mapped = computed(() => (editor.isNew ? [] : draft.value.item_bom || []).filter((row) => Number(row.based_on_attribute_mapping)).map((row, index) => {
+const mapped = computed(() => (draft.value.item_bom || []).filter((row) => Number(row.based_on_attribute_mapping)).map((row, index) => {
 	const detail = row.name ? editor.context?.bom_mappings?.[row.name] : null
 	const note = !detail ? "Save the IPD to create this mapping" : detail.is_shared ? "Shared with another document" : ""
-	return { key: row.name || `new:${index}`, name: row.name, item: row.item || "New row", summary: bomMappingSummary(detail), canEdit: Boolean(detail) && (!detail.is_shared || editor.readonly), note }
+	return { key: row.name || `new:${index}`, name: row.name, item: row.item || "New row", ...mappingCardLines(detail), canEdit: Boolean(detail) && (!detail.is_shared || editor.readonly), note }
 }))
 const accessoryNames = computed(() => {
 	const entries = Object.entries(draft.value.accessory_clothtype_json || {})
@@ -166,10 +173,14 @@ const accessoryNames = computed(() => {
 })
 const canAddAccessory = computed(() => Boolean(newAccessory.value) && !(newAccessory.value in (draft.value.accessory_clothtype_json || {})) && (!isSet.value || Boolean(newPart.value)))
 const accessoryChoices = computed(() => choiceList(editor.context?.cutting_attribute_choices || [], draft.value.accessory_attributes))
-const clothAccessory = computed(() => itemsGrid(draft.value.cloth_accessory_json, ACCESSORY_CARRY))
+const clothAccessory = computed(() => itemsGrid(draft.value.cloth_accessory_json, ACCESSORY_CARRY, { attributeColumns: true, diaOptions: editor.context?.cutting?.dia_values || [] }))
+const clothAccessoryValidation = computed(() => missingCellErrors(clothAccessory.value, editor.gridErrors("cloth_accessory_json")))
 const stitchingAccessory = computed(() => stitchingAccessoryGrid(draft.value.stiching_accessory_json, {
 	colourOptions: attributeValues(editor, draft.value.packing_attribute), clothOptions: clothNames(draft.value),
 }))
+const stitchingAccessoryValidation = computed(() => missingCellErrors(stitchingAccessory.value, editor.gridErrors("stiching_accessory_json"), (value, column) => (
+	column.key === "cloth_type" && !clothNames(draft.value).includes(value) ? "Choose a cloth from Cloth Details" : false
+)))
 
 useSectionFocus(editor, props.sectionKey, {
 	item_bom: () => bomGrid.value,
@@ -221,3 +232,7 @@ function updateStitchingAccessory(model) {
 	editor.setValue("stiching_accessory_json", stitchingAccessoryFromModel(draft.value.stiching_accessory_json, model))
 }
 </script>
+
+<style scoped>
+.bom-mapping-line { margin: 0; overflow-wrap: anywhere; }
+</style>

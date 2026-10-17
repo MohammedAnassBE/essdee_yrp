@@ -12,7 +12,7 @@
 			<IpdGridNotice grid-key="set_combination" :empty="!grid.rows.length" section="set_item" field="set_item_detail" />
 			<EntryGrid
 				v-if="grid.rows.length"
-				ref="setGrid"
+				ref="setGrid" validation-field="set_item_detail"
 				title="Colour of each part"
 				meta="Rows follow the packing colours"
 				:row-header-label="draft.packing_attribute || 'Colour'"
@@ -21,7 +21,8 @@
 				:model-value="grid.model"
 				:readonly="editor.readonly"
 				:errors="editor.gridErrors('set_item_detail')"
-				:toolbar="['fillRight', 'fillDown', 'paste', 'clear']"
+				:toolbar="[]"
+				:fill-shortcuts="false"
 				@update:model-value="update"
 			/>
 			<p v-else-if="!draft.major_attribute_value" class="erp-help-text">Choose the set attribute and its major part to build the colour grid.</p>

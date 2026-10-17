@@ -34,7 +34,10 @@ import {
 	stableStringify,
 } from "./ipdEditor.js"
 
+import { applyBomFetch, bomFetchPlan, getBomItemValues, withoutBomFetch } from "./ipdBomFetch.js"
 import { createFocusRegistry } from "./ipdFocus.js"
+import { toggleRememberedRow } from "./sections/garmentGrids.js"
+import { problemTab, tabLabel } from "./ipdTabs.js"
 
 export const IPD_EDITOR_KEY = Symbol("ipd-editor")
 const GRID_DEBOUNCE_MS = 400
@@ -62,8 +65,10 @@ export function useIpdEditor(initialName) {
 	const navigatingInternally = ref(false)
 	const { registerFocus, focusProblem } = createFocusRegistry()
 	const invalidGridCells = reactive(new Map())
-	const invalidCellCount = computed(() => [...invalidGridCells.values()].reduce((total, count) => total + count, 0))
+	const invalidCellCount = computed(() => [...invalidGridCells.values()].reduce((total, entry) => total + entry.count, 0))
+	const firstInvalidCell = computed(() => invalidGridCells.values().next().value?.cells[0] || null)
 	const pendingGrids = new Set()
+	const removedRows = new Map()
 	let gridTimer = null
 	let checkTimer = null
 	let gridSequence = 0
@@ -84,7 +89,7 @@ export function useIpdEditor(initialName) {
 	const shellWorkspace = computed(() => payload.value ? { ...payload.value, record: { ...record.value, doctype: "YRP Item Production Detail" } } : {})
 
 	function isCurrent(sequence, current) { return !isUnmounted && sequence === current }
-	function patch() { return dirtyPatch(draft, cleanValues.value, { isNew: isNew.value }) }
+	function patch() { return withoutBomFetch(dirtyPatch(draft, cleanValues.value, { isNew: isNew.value })) }
 
 	function resetDraft(values) {
 		for (const key of Object.keys(draft)) delete draft[key]
@@ -117,6 +122,7 @@ export function useIpdEditor(initialName) {
 
 	async function load(target = initialName) {
 		const sequence = ++loadSequence
+		removedRows.clear()
 		loading.value = true
 		loadError.value = ""
 		actionError.value = ""
@@ -141,11 +147,30 @@ export function useIpdEditor(initialName) {
 	}
 
 	function setValue(fieldname, value, { skipGrids = null } = {}) {
+		if (fieldname === "item_bom") value = planBomFetch(value)
 		draft[fieldname] = clone(value)
 		markDirty(fieldname)
 		const grids = gridsForChange([fieldname]).filter((grid) => !skipGrids?.has(grid))
 		if (grids.length) queueGrids(grids)
 		scheduleChecks()
+	}
+	function planBomFetch(rows) {
+		const plan = bomFetchPlan(draft.item_bom, rows)
+		if (plan.items.length) fetchBomItems(plan.items)
+		return plan.rows
+	}
+	async function fetchBomItems(items) {
+		try {
+			const itemValues = await getBomItemValues(items)
+			const rows = applyBomFetch(draft.item_bom, itemValues)
+			if (rows !== draft.item_bom) setValue("item_bom", rows)
+		} catch (reason) {
+			actionError.value = reason?.message || "Unable to read the BOM Item details."
+		}
+	}
+	function toggledRows(fieldname, keyField, value, on, makeRow) {
+		if (!removedRows.has(fieldname)) removedRows.set(fieldname, new Map())
+		return toggleRememberedRow(draft[fieldname], keyField, value, on, makeRow, { memory: removedRows.get(fieldname), savedRows: cleanValues.value[fieldname] || [] })
 	}
 	function setValues(values) {
 		for (const [fieldname, value] of Object.entries(values || {})) setValue(fieldname, value)
@@ -220,13 +245,18 @@ export function useIpdEditor(initialName) {
 		}
 	}
 
-	function reportInvalidCells(gridId, count) {
-		if (count) invalidGridCells.set(gridId, count)
+	function reportInvalidCells(gridId, count, location = {}) {
+		if (count) invalidGridCells.set(gridId, {
+			count, cells: (location.cells || []).map((cell) => ({
+				field: location.field, tab: problemTab(location),
+				row_key: cell.rowKey, column: cell.colKey, focusCell: location.focusCell,
+			})),
+		})
 		else invalidGridCells.delete(gridId)
 	}
 	function hasInvalidCells() {
 		if (!invalidCellCount.value) return false
-		actionError.value = invalidCellMessage(invalidCellCount.value)
+		actionError.value = `${tabLabel(firstInvalidCell.value)}: ${invalidCellMessage(invalidCellCount.value)}`
 		return true
 	}
 	async function save() {
@@ -310,10 +340,10 @@ export function useIpdEditor(initialName) {
 		const result = await getAttributeValueUsage(name.value, attribute, values, patch())
 		return result?.usage || {}
 	}
-	async function saveBomMapping(bomRow, rows) {
+	async function saveBomMapping(bomRow, rows, tables = null, mappingModified = null) {
 		const current = context.value.bom_mappings?.[bomRow]
 		if (!current) throw new Error("This BOM row has no attribute mapping yet. Save the IPD to create it.")
-		const result = await saveIpdBomMapping(name.value, bomRow, rows, current.mapping_modified)
+		const result = await saveIpdBomMapping(name.value, bomRow, rows, mappingModified ?? current.mapping_modified, tables)
 		context.value = { ...context.value, bom_mappings: { ...(context.value.bom_mappings || {}), ...(result?.bom_mappings || {}) } }
 		return result
 	}
@@ -332,7 +362,7 @@ export function useIpdEditor(initialName) {
 		problemsFor: (sectionKey) => problemsFor(checks.value, sectionKey),
 		cellError: (field, rowKey, column) => gridErrors(checks.value, field)?.[rowKey]?.[column ?? ""] || "",
 		gridErrors: (field) => gridErrors(checks.value, field),
-		setValue, setRows: setValue, setJson: setValue, setValues,
+		setValue, setRows: setValue, setJson: setValue, setValues, toggledRows,
 		refreshGrids, applyGrid, saveAttributeValues, valueUsage, saveBomMapping, registerFocus, fieldSchema,
 	})
 	const invalidRegistry = { report: reportInvalidCells }
@@ -357,6 +387,6 @@ export function useIpdEditor(initialName) {
 	return {
 		api, invalidRegistry, payload, draft, record, name, isNew, capabilities, context, grids, sections, states, checks, checksRunning,
 		loading, acting, loadError, actionError, savedAt, isDirty, hasStaleError, navigatingInternally, shellWorkspace, actions,
-		load, save, createDraft, runChecks, approve, regenerate, cancel, followName, focusProblem,
+		load, save, createDraft, runChecks, approve, regenerate, cancel, followName, focusProblem, firstInvalidCell,
 	}
 }

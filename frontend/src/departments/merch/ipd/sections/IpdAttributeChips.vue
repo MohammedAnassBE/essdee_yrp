@@ -11,19 +11,19 @@
 				<Button v-if="editable" icon="pi pi-times" text rounded severity="secondary" size="small" :aria-label="`Remove ${value}`" :disabled="busy" @click="remove(value)" />
 			</li>
 			<li v-for="value in pending" :key="`new-${value}`" class="ipd-chip is-new">{{ value }}<small>Saving</small></li>
-			<li v-if="editable">
-				<input
+			<li v-if="editable" class="ipd-chip-add" @keydown="onKeydown" @paste.capture="onPaste">
+				<LinkField
+					ref="input"
 					v-model="text"
-					class="ipd-chip-input"
-					:list="listId"
-					:placeholder="values.length ? '+ add or paste a list' : '+ add values'"
+					doctype="Item Attribute Value"
+					:search-handler="searchValues"
+					:reset-version="resetVersion"
+					:show-open-button="false"
+					:placeholder="`+ add ${attribute}`"
 					:aria-label="`Add ${attribute} values`"
 					:disabled="busy"
-					@keydown="onKeydown"
-					@paste="onPaste"
-					@input="suggest"
-				>
-				<datalist :id="listId"><option v-for="option in suggestions" :key="option" :value="option" /></datalist>
+					@select="addSelected"
+				/>
 			</li>
 		</ul>
 		<p v-if="!values.length && !pending.length && !editable" class="erp-help-text">{{ emptyText }}</p>
@@ -46,15 +46,15 @@
 
 <script setup>
 import Button from "primevue/button"
-import { computed, inject, onBeforeUnmount, ref } from "vue"
+import { computed, inject, nextTick, ref } from "vue"
 
 import { searchItemAttributeValues } from "../../../../api/purchase.js"
+import LinkField from "../../../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../../../components/documents/DocumentConfirmationDialog.vue"
 import { parseValueList, usageMessage, valueListMessage } from "../ipdEditor.js"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 
 const ROLE_LABELS = { primary: "Primary", dependent: "Dependent", packing: "Packing", stitching: "Stitching", set: "Set" }
-let chipSequence = 0
 
 const props = defineProps({
 	attribute: { type: String, required: true },
@@ -67,24 +67,23 @@ const props = defineProps({
 })
 const emit = defineEmits(["remove"])
 const editor = inject(IPD_EDITOR_KEY)
-const listId = `ipd-chip-options-${++chipSequence}`
+const input = ref(null)
 const text = ref("")
+const resetVersion = ref(0)
 const pending = ref([])
 const busy = ref(false)
 const meta = ref("")
 const error = ref("")
-const suggestions = ref([])
 const selectedIndex = ref(-1)
 const confirmVisible = ref(false)
 const confirmValue = ref("")
 const confirmMessage = ref("")
-let suggestTimer = null
-let suggestSequence = 0
 
 const known = computed(() => [...props.values, ...pending.value])
 
 async function save(values) {
 	busy.value = true
+	meta.value = ""
 	error.value = ""
 	try {
 		await editor.saveAttributeValues(props.attribute, values)
@@ -97,18 +96,29 @@ async function save(values) {
 		pending.value = []
 	}
 }
-async function commit(source) {
-	const parsed = parseValueList(source, known.value)
+async function addSelected({ label }) {
+	if (busy.value || !label || known.value.some((value) => value.toLowerCase() === label.toLowerCase())) return
+	pending.value = [label]
+	await save([...props.values, label])
+	await resetInput()
+}
+async function resetInput() {
 	text.value = ""
-	meta.value = valueListMessage(parsed)
-	if (!parsed.values.length) return
-	pending.value = parsed.values
-	await save([...props.values, ...parsed.values])
+	resetVersion.value += 1
+	selectedIndex.value = -1
+	await nextTick()
+	input.value?.focus()
+}
+async function searchValues(query) {
+	const rows = await searchItemAttributeValues(props.attribute, query)
+	const present = new Set(known.value.map((value) => value.toLowerCase()))
+	return (rows || []).map((row) => ({ name: row.label || row.name, label: row.label || row.name }))
+		.filter((row) => !present.has(row.label.toLowerCase()))
 }
 async function remove(value) {
 	selectedIndex.value = -1
-	error.value = ""
 	meta.value = ""
+	error.value = ""
 	try {
 		const usage = (await editor.valueUsage(props.attribute, [value]))?.[value] || []
 		if (!usage.length) { await save(props.values.filter((candidate) => candidate !== value)); return }
@@ -125,36 +135,25 @@ async function confirmRemove() {
 }
 
 function onKeydown(event) {
-	if (event.key === "Enter" || event.key === ",") {
-		event.preventDefault()
-		if (text.value.trim()) commit(text.value)
-		return
-	}
-	if (event.key !== "Backspace" || text.value || !props.values.length) { selectedIndex.value = -1; return }
+	if (busy.value || event.isComposing || event.keyCode === 229 || event.target?.tagName !== "INPUT") return
+	if (event.key !== "Backspace" || event.target.value || !props.values.length) { selectedIndex.value = -1; return }
 	event.preventDefault()
 	const last = props.values.length - 1
 	if (selectedIndex.value === last) remove(props.values[last])
 	else selectedIndex.value = last
 }
-function onPaste(event) {
+async function onPaste(event) {
 	const pasted = event.clipboardData?.getData("text") || ""
-	if (!/[,\n\t]/.test(pasted)) return
+	if (!/[,\n\r\t]/.test(pasted)) return
 	event.preventDefault()
-	commit(`${text.value}${pasted}`)
+	if (busy.value) return
+	const parsed = parseValueList(pasted, known.value)
+	error.value = ""
+	meta.value = ""
+	if (parsed.values.length) {
+		pending.value = parsed.values
+		if (await save([...props.values, ...parsed.values])) meta.value = valueListMessage(parsed)
+	} else meta.value = valueListMessage(parsed)
+	await resetInput()
 }
-function suggest() {
-	clearTimeout(suggestTimer)
-	const query = text.value.trim()
-	if (!query) { suggestions.value = []; return }
-	suggestTimer = setTimeout(async () => {
-		const sequence = ++suggestSequence
-		try {
-			const rows = await searchItemAttributeValues(props.attribute, query)
-			if (sequence === suggestSequence) suggestions.value = (rows || []).map((row) => row.label || row.name).filter((label) => !known.value.includes(label))
-		} catch {
-			suggestions.value = []
-		}
-	}, 250)
-}
-onBeforeUnmount(() => clearTimeout(suggestTimer))
 </script>

@@ -63,6 +63,20 @@ export function toggleValueRow(rows, field, value, on, makeRow) {
 	return list
 }
 
+export function toggleRememberedRow(rows, field, value, on, makeRow, { memory, savedRows = [] }) {
+	const list = rows || []
+	const current = list.find((row) => row[field] === value)
+	if (!on && current) memory.set(value, current)
+	if (on && !current) return [...list, restoredRow(memory.get(value), savedRows) ?? makeRow(value)]
+	return toggleValueRow(list, field, value, on, makeRow)
+}
+
+function restoredRow(row, savedRows) {
+	if (!row?.name || savedRows.some((saved) => saved.name === row.name)) return row
+	const { name: _name, ...values } = row
+	return values
+}
+
 export function packingRow(value) {
 	return { attribute_value: value, quantity: 0 }
 }
@@ -111,23 +125,47 @@ function itemKeys(value, carry) {
 	return uniqueKeys((value?.items || []).map((item) => columns.map((column) => String(item[column] ?? "")).join(KEY_SEPARATOR)))
 }
 
-const CARRY_COLUMNS = {
-	Dia: (dia) => ({ type: "text", width: 110, options: valueOptions(dia), field: "dia" }),
-	Weight: () => ({ label: "Weight (kg)", type: "number", precision: 4, min: 0, field: "weight" }),
-	"Required GSM": () => ({ type: "number", precision: 0, min: 0 }),
-	Cloth: (_dia, cloths) => ({ type: "select", options: valueOptions(cloths), field: "cloth" }),
+function diaColumn(dia) {
+	return {
+		type: "link", doctype: "Item Attribute Value", options: valueOptions(dia), field: "dia", width: 140,
+		searchHandler: (text) => {
+			const query = String(text ?? "").toLowerCase()
+			const exact = [], prefixes = [], contains = []
+			for (const value of dia || []) {
+				const lower = value.toLowerCase()
+				if (!query) contains.push(value)
+				else if (lower === query) exact.push(value)
+				else if (lower.startsWith(query)) prefixes.push(value)
+				else if (lower.includes(query)) contains.push(value)
+			}
+			prefixes.sort((left, right) => left.length - right.length)
+			return [...exact, ...prefixes, ...contains].slice(0, 20).map((value) => ({ name: value, label: value }))
+		},
+	}
 }
 
-export function itemsGrid(value, carry, { diaOptions = [], clothOptions = [] } = {}) {
+const CARRY_COLUMNS = {
+	Dia: (dia) => ({ ...(dia?.length ? diaColumn(dia) : { type: "text", width: 110, field: "dia" }), fill: true }),
+	Weight: () => ({ label: "Weight (kg)", type: "number", precision: 4, min: 0, field: "weight", fill: true }),
+	"Required GSM": () => ({ type: "number", precision: 0, min: 0, fill: true }),
+	Cloth: (_dia, cloths) => ({ type: "select", options: valueOptions(cloths), field: "cloth", fill: true }),
+}
+
+export function itemsGrid(value, carry, { diaOptions = [], clothOptions = [], attributeColumns = false } = {}) {
 	const keyColumns = itemKeyColumns(value, carry)
 	const keys = itemKeys(value, carry)
 	const items = value?.items || []
 	const editable = (value?.attributes || []).filter((attribute) => carry.includes(attribute))
+	const headers = attributeColumns ? keyColumns.slice(0, 1) : keyColumns
+	const readonly = attributeColumns ? keyColumns.slice(1) : []
 	return {
-		rowHeaderLabel: keyColumns.join(" · "),
-		rows: items.map((item, index) => ({ key: keys[index], label: keyColumns.map((column) => item[column] ?? "—").join(" · ") })),
-		columns: editable.map((attribute) => ({ key: attribute, label: attribute, ...CARRY_COLUMNS[attribute]?.(diaOptions, clothOptions) })),
-		model: Object.fromEntries(items.map((item, index) => [keys[index], Object.fromEntries(editable.map((attribute) => [attribute, item[attribute] ?? null]))])),
+		rowHeaderLabel: headers.join(" · "),
+		rows: items.map((item, index) => ({ key: keys[index], label: headers.map((column) => (isBlank(item[column]) ? "—" : item[column])).join(" · ") })),
+		columns: [
+			...readonly.map((attribute) => ({ key: attribute, label: attribute, type: "text", readonly: true })),
+			...editable.map((attribute) => ({ key: attribute, label: attribute, ...CARRY_COLUMNS[attribute]?.(diaOptions, clothOptions) })),
+		],
+		model: Object.fromEntries(items.map((item, index) => [keys[index], Object.fromEntries([...readonly, ...editable].map((attribute) => [attribute, item[attribute] ?? null]))])),
 	}
 }
 
@@ -152,13 +190,20 @@ export function stitchingAccessoryGrid(value, { colourOptions = [], clothOptions
 	const items = value?.items || []
 	const keys = uniqueKeys(items.map((row) => stitchingAccessoryKey(row, setAttribute)))
 	return {
-		rowHeaderLabel: ["Accessory", setAttribute, "Major colour"].filter(Boolean).join(" · "),
-		rows: items.map((row, index) => ({ key: keys[index], label: [row.accessory, setAttribute ? row[setAttribute] : "", row.major_colour].filter((part) => !isBlank(part)).join(" · ") })),
+		rowHeaderLabel: "Accessory",
+		rows: items.map((row, index) => ({ key: keys[index], label: row.accessory })),
 		columns: [
-			{ key: "accessory_colour", label: "Accessory colour", type: "value", options: valueOptions(colourOptions), field: "colour" },
-			{ key: "cloth_type", label: "Cloth", type: "select", options: valueOptions(clothOptions), field: "cloth" },
+			...(setAttribute ? [{ key: "set_part", label: setAttribute, type: "text", readonly: true }] : []),
+			{ key: "major_colour", label: "Major colour", type: "text", readonly: true },
+			{ key: "accessory_colour", label: "Accessory colour", type: "value", options: valueOptions(colourOptions), field: "colour", fill: true },
+			{ key: "cloth_type", label: "Cloth", type: "select", options: valueOptions(clothOptions), field: "cloth", fill: true },
 		],
-		model: Object.fromEntries(items.map((row, index) => [keys[index], { accessory_colour: row.accessory_colour ?? null, cloth_type: row.cloth_type ?? null }])),
+		model: Object.fromEntries(items.map((row, index) => [keys[index], {
+			...(setAttribute ? { set_part: row[setAttribute] ?? null } : {}),
+			major_colour: row.major_colour ?? null,
+			accessory_colour: row.accessory_colour ?? null,
+			cloth_type: row.cloth_type ?? null,
+		}])),
 	}
 }
 
@@ -173,6 +218,42 @@ export function stitchingAccessoryFromModel(value, model) {
 			return changed.length ? { ...row, ...Object.fromEntries(changed.map((field) => [field, cells[field]])) } : row
 		}),
 	}
+}
+
+function missingRowErrors(grid, row, serverErrors, isMissing) {
+	const errors = {}
+	for (const column of grid.columns.filter((column) => !column.readonly)) {
+		const value = grid.model[row.key]?.[column.key]
+		const invalid = value == null || String(value).trim() === "" || isMissing(value, column, row)
+		if (!invalid) continue
+		const message = serverErrors[row.key]?.[column.key]
+		const required = typeof invalid === "string" ? invalid : `${column.label} is required`
+		errors[column.key] = message && message !== "Fill all the combinations" ? message : required
+	}
+	return errors
+}
+
+function missingRowsSummary(grid, errors) {
+	const rows = grid.rows.filter((row) => errors[row.key])
+	if (!rows.length) return ""
+	const details = rows.slice(0, 4).map((row) => {
+		const attributes = grid.columns.filter((column) => column.readonly).map((column) => grid.model[row.key]?.[column.key])
+		const label = [row.label, ...attributes].filter((value) => value != null && String(value).trim() !== "").join(" · ")
+		const columns = grid.columns.filter((column) => errors[row.key][column.key]).map((column) => column.label)
+		return `${label} (${columns.join(", ")})`
+	})
+	if (rows.length > 4) details.push(`+${rows.length - 4} more`)
+	return `${rows.length} ${rows.length === 1 ? "row has" : "rows have"} empty or invalid cells: ${details.join("; ")}`
+}
+
+export function missingCellErrors(grid, serverErrors, isMissing = () => false) {
+	if (!Object.keys(serverErrors || {}).length) return { errors: serverErrors, summary: "" }
+	const errors = {}
+	for (const row of grid.rows.filter((row) => !row.readonly)) {
+		const cells = missingRowErrors(grid, row, serverErrors, isMissing)
+		if (Object.keys(cells).length) errors[row.key] = cells
+	}
+	return { errors, summary: missingRowsSummary(grid, errors) }
 }
 
 function assortmentRowKey(box, row, attributes) {
@@ -222,8 +303,8 @@ export function panelGroupGrid(matrix, panel, { diaOptions = [] } = {}) {
 		rowHeaderLabel: matrix?.attributes?.primary || "",
 		rows: (panel?.rows || []).map((row) => ({ key: String(row.primary_value), label: String(row.primary_value) })),
 		columns: packings.flatMap((packing) => [
-			{ key: panelColumn(packing, "dia"), label: `${packing} Dia`, type: "value", options: valueOptions(diaOptions), field: "dia", width: 110 },
-			{ key: panelColumn(packing, "weight"), label: `${packing} kg`, type: "number", precision: 4, min: 0.0001, field: "weight" },
+			{ key: panelColumn(packing, "dia"), label: `${packing} Dia`, ...diaColumn(diaOptions), fill: true },
+			{ key: panelColumn(packing, "weight"), label: `${packing} kg`, type: "number", precision: 4, min: 0.0001, field: "weight", fill: true },
 		]),
 		model: Object.fromEntries((panel?.rows || []).map((row) => [String(row.primary_value), Object.fromEntries(packings.flatMap((packing) => [
 			[panelColumn(packing, "dia"), row.values?.[packing]?.dia ?? null],
@@ -355,7 +436,7 @@ export function panelClothGrid(matrix, panel) {
 	return {
 		rowHeaderLabel: others.join(" / ") || "Mapping",
 		rows: (panel?.rows || []).map((row) => ({ key: clothRowKey(matrix, row), label: others.map((attribute) => row.attribute_values?.[attribute] || "—").join(" / ") || "Cloth" })),
-		columns: (panel?.packing_values || []).map((packing) => ({ key: packing, label: packing === SINGLE_CLOTH_KEY ? "Cloth" : packing, type: "select", options: valueOptions(matrix?.cloth_options), field: "cloth" })),
+		columns: (panel?.packing_values || []).map((packing) => ({ key: packing, label: packing === SINGLE_CLOTH_KEY ? "Cloth" : packing, type: "select", options: valueOptions(matrix?.cloth_options), field: "cloth", fill: true })),
 		model: Object.fromEntries((panel?.rows || []).map((row) => [clothRowKey(matrix, row), Object.fromEntries((panel.packing_values || []).map((packing) => [packing, row.values?.[packing]?.cloth ?? null]))])),
 	}
 }
@@ -437,67 +518,6 @@ export function bundleGroupProblems(groups, panels) {
 	}
 	if (selected.length && selected.length !== (panels || []).length) return [{ panel: "", message: "Select All the Panels" }]
 	return []
-}
-
-const bomColumn = (type, attribute) => `${type}${COLUMN_SEPARATOR}${attribute}`
-
-export function bomMappingColumns(detail, valuesFor = () => []) {
-	const sameAttributes = detail?.same_attributes || []
-	const side = (type, attributes, prefix) => (attributes || []).filter((attribute) => !sameAttributes.includes(attribute)).map((attribute) => {
-		const options = valuesFor(type, attribute)
-		return { key: bomColumn(type, attribute), label: `${prefix} ${attribute}`, type: options.length ? "value" : "text", options: valueOptions(options), field: bomColumn(type, attribute) }
-	})
-	return [
-		...side("item", detail?.item_attributes, "Item"),
-		...side("bom", detail?.bom_item_attributes, "BOM"),
-		{ key: "quantity", label: "Quantity", type: "number", precision: 4, min: 0 },
-	]
-}
-
-export function bomMappingGrid(detail) {
-	const indexes = [...new Set((detail?.rows || []).map((row) => Number(row.index)))].sort((left, right) => left - right)
-	const model = Object.fromEntries(indexes.map((index) => [String(index), {}]))
-	for (const row of detail?.rows || []) {
-		const cells = model[String(Number(row.index))]
-		cells[bomColumn(row.type, row.attribute)] = row.attribute_value ?? null
-		cells.quantity = row.quantity ?? cells.quantity ?? null
-	}
-	return { rows: indexes.map((index, position) => ({ key: String(index), label: String(position + 1) })), model }
-}
-
-export function bomMappingRows(detail, rows, model) {
-	const sameAttributes = detail?.same_attributes || []
-	const output = []
-	rows.forEach((row, position) => {
-		const cells = model?.[row.key] || {}
-		for (const [type, attributes] of [["item", detail?.item_attributes], ["bom", detail?.bom_item_attributes]]) {
-			for (const attribute of (attributes || []).filter((candidate) => !sameAttributes.includes(candidate))) {
-				output.push({ index: position, type, attribute, attribute_value: cells[bomColumn(type, attribute)] ?? null, quantity: cells.quantity ?? 0 })
-			}
-		}
-	})
-	return output
-}
-
-export function bomMappingProblems(detail, rows, model) {
-	const problems = {}
-	const columns = bomMappingColumns(detail)
-	for (const row of rows) {
-		for (const column of columns) {
-			const value = model?.[row.key]?.[column.key]
-			const missing = column.key === "quantity" ? !Number(value) && (detail?.bom_item_attributes || []).length : isBlank(value)
-			if (missing) problems[row.key] = { ...(problems[row.key] || {}), [column.key]: column.key === "quantity" ? "The BOM quantity cannot be zero." : "Choose a value." }
-		}
-	}
-	return problems
-}
-
-export function bomMappingSummary(detail) {
-	if (!detail) return ""
-	const item = (detail.item_attributes || []).join(", ")
-	const bom = (detail.bom_item_attributes || []).join(", ")
-	const lines = new Set((detail.rows || []).map((row) => row.index)).size
-	return [item ? `By ${item}` : "", bom ? `→ ${bom}` : "", `${lines} ${lines === 1 ? "line" : "lines"}`].filter(Boolean).join(" ")
 }
 
 export function choiceList(choices, selected) {

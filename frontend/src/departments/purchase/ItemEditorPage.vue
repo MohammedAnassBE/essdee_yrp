@@ -60,8 +60,9 @@
 					</section>
 					<ItemUomConversions :values="form" :field="editor.fields?.uoms" editable :disabled="formDisabled" :problems="problemsFor('uoms')" />
 					<ItemAdditionalParameters :values="form" :field="editor.fields?.additional_parameters" editable :disabled="formDisabled" :problems="problemsFor('additional_parameters')" />
-					<ItemMasterFields :values="form" :fields="editor.fields" :categories="editor.options?.categories" editable :disabled="formDisabled" :problems="problemsFor('po_excess_allowed_percentage')" />
+					<ItemMasterFields part="details" :values="form" :fields="editor.fields" :categories="editor.options?.categories" editable :disabled="formDisabled" :problems="problemsFor('po_excess_allowed_percentage')" />
 					<ItemYarnRatio v-if="Number(form.is_cloth_item)" :values="form" :item-name="currentName || savedAs" :field="editor.fields?.yarn_ratio_details" editable :disabled="formDisabled" :problems="problemsFor('yarn_ratio_details')" />
+					<ItemMasterFields part="description" :values="form" :fields="editor.fields" editable :disabled="formDisabled" />
 				</form>
 
 			</section>
@@ -203,7 +204,6 @@ function changeAttribute(row, attribute) {
 	if (form.dependent_attribute === row.attribute) form.dependent_attribute = ""
 	Object.assign(row, resetAttributeRow(storedMappings.value, attribute || ""))
 	attributesChanged.value = true
-	if (!form.primary_attribute && selectedNames.value.size === 1) form.primary_attribute = [...selectedNames.value][0]
 }
 
 function openValues(attribute) {

@@ -5,7 +5,7 @@
 				<h2 v-if="section.heading" :id="`${panelId}-${index}`" class="ipd-tab-heading">{{ section.heading }}</h2>
 				<div v-nonempty-section>
 					<div><slot :section="section" :readonly="readonly" /></div>
-					<p hidden class="erp-help-text">No details to display.</p>
+					<p hidden style="display: none" class="erp-help-text">No details to display.</p>
 				</div>
 			</section>
 		</template>
@@ -23,6 +23,8 @@ const vNonemptySection = {
 			const empty = element.lastElementChild
 			const hasContent = Boolean((content.innerText ?? content.textContent).trim() || content.querySelector('input, button, select, textarea, table'))
 			empty.hidden = hasContent
+			// The shared help-text class sets display:block, overriding native hidden.
+			empty.style.display = hasContent ? 'none' : ''
 		}
 		refresh()
 		const observer = new MutationObserver(refresh)

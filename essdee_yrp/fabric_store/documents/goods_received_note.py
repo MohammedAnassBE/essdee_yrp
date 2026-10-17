@@ -47,7 +47,10 @@ from essdee_yrp.garment_grn import (
 	calculate_grn_receivables,
 	get_grn_calculation_context,
 )
-from essdee_yrp.overrides.goods_received_note import get_work_order_defaults
+from essdee_yrp.overrides.goods_received_note import (
+	_lock_versioned_cloth_lot,
+	get_work_order_defaults,
+)
 from essdee_yrp.overrides.inspection_entry import (
 	get_initial_payload as get_inspection_initial_payload,
 )
@@ -284,7 +287,55 @@ def _onload_matrices(doc) -> tuple[list, list]:
 		corrections = group_correction_items_for_ui(
 			doc.get("correction_items") or [], "YRP Goods Received Note"
 		)
+	if _actual_dia_context(doc).get("enabled"):
+		_add_actual_dia_row_identity(items, doc.get("items") or [])
 	return items or [], corrections or []
+
+
+def _matrix_cells(groups):
+	for group in groups or []:
+		for entry in group.get("items") or []:
+			values = entry.get("values") or {}
+			primary = entry.get("primary_attribute") if "default" not in values else None
+			cells = values.items() if primary and values else [("default", values.get("default") or {})]
+			for key, value in cells:
+				attributes = dict(entry.get("attributes") or {})
+				if primary:
+					attributes[primary] = key
+				yield entry, value, attributes
+
+
+def _add_actual_dia_row_identity(groups, saved_rows):
+	"""Attach saved child identity to cells, independent of display row indexes."""
+	from essdee_yrp.fabric_grn import _variant_attrs
+
+	dimensions = _dimension_fieldnames()
+	attrs = {}
+	planned = {}
+	for entry, value, attributes in _matrix_cells(groups):
+		browser = {**entry, **(entry.get("dimensions") or {}), **value}
+		matches = []
+		for saved in saved_rows:
+			candidate = {**browser, "item_variant": saved.get("item_variant")}
+			if _business_key(saved, dimensions, include_received_type=True) != _business_key(
+				candidate, dimensions, include_received_type=True
+			):
+				continue
+			variant = saved.get("item_variant")
+			if variant not in attrs:
+				attrs[variant] = _variant_attrs(variant)
+			if all(attrs[variant].get(key, "") == (val or "") for key, val in attributes.items()):
+				matches.append(saved)
+		if len(matches) == 1:
+			saved = matches[0]
+			value["grn_item_name"] = saved.get("name")
+			value["original_item_variant"] = saved.get("item_variant")
+			reference = saved.get("ref_docname")
+			if reference not in planned:
+				planned[reference] = frappe.db.get_value("YRP Work Order Receivables", reference, "item_variant")
+			value["is_saved_actual_dia"] = bool(
+				planned[reference] and saved.get("item_variant") != planned[reference]
+			)
 
 
 def _dimension_projection(doc) -> list[dict]:
@@ -828,10 +879,18 @@ def _clone_purchase_order_split(siblings, browser, fieldname):
 
 
 def _merge_authoritative_rows(
-	authoritative, browser_rows, *, lot_options=None, lot_fieldname=None, purchase_order=None
+	authoritative,
+	browser_rows,
+	*,
+	lot_options=None,
+	lot_fieldname=None,
+	purchase_order=None,
+	actual_dia_context=None,
 ) -> list[dict]:
 	"""Merge operator values onto trusted receipt rows."""
 
+	if actual_dia_context and actual_dia_context.get("enabled"):
+		return _merge_actual_dia_rows(authoritative, browser_rows)
 	if lot_options is not None:
 		return _merge_purchase_order_rows(
 			authoritative, browser_rows, lot_options, lot_fieldname, purchase_order
@@ -907,30 +966,74 @@ def _merge_received_type_rows(authoritative, browser_rows):
 	return merged
 
 
-def _actual_dia_additions(authoritative, browser_rows, context):
-	"""Seed new Dia lineages from trusted receivables."""
-	if not context.get("enabled"):
-		return authoritative
+def _merge_actual_dia_rows(authoritative, browser_rows):
+	"""Replace identified saved rows; omitted and zero-quantity rows are deleted."""
 	from essdee_yrp.fabric_grn import validate_actual_dia_variant
 
 	dimensions = _dimension_fieldnames()
-	rows = [_row_dict(row) for row in authoritative]
-	known = {_business_key(row, dimensions, include_received_type=False) for row in rows}
-	positive_rows = [row for row in browser_rows if flt(row.get("quantity")) > 0]
-	for index, browser in enumerate(positive_rows, 1):
-		key = _business_key(browser, dimensions, include_received_type=False)
-		if key in known:
-			continue
-		source = next((row for row in rows if _is_actual_dia_lineage(row, browser, dimensions)), None)
+	rows = [_row_dict(row) for row in authoritative or []]
+	by_name = {row["name"]: row for row in rows if row.get("name")}
+	# Reserve saved identities before fallback matching, regardless of browser order.
+	identified_names = {
+		browser.get("grn_item_name") or browser.get("name")
+		for browser in browser_rows or []
+		if browser.get("grn_item_name") or browser.get("name")
+	}
+	used = set()
+	merged = []
+	next_index = max((cint(row.get("row_index")) for row in rows), default=-1) + 1
+	for index, browser in enumerate(browser_rows or [], 1):
+		identity = browser.get("grn_item_name") or browser.get("name")
+		matches = []
+		if identity:
+			source = by_name.get(identity)
+			if source is None or not _is_actual_dia_lineage(source, browser, dimensions):
+				frappe.throw(_("The saved item row changed. Refresh the editor and try again."))
+		else:
+			original = browser.get("original_item_variant") or browser.get("item_variant")
+			candidate = {**browser, "item_variant": original}
+			key = _business_key(candidate, dimensions, include_received_type=True)
+			matches = [
+				row for row in rows
+				if row.get("name") not in identified_names
+				and _business_key(row, dimensions, include_received_type=True) == key
+			]
+			if len(matches) > 1:
+				frappe.throw(_("The item matrix matches more than one source row."))
+			source = matches[0] if matches else None
+		if source is not None:
+			identity_key = id(source)
+			if identity_key in used:
+				frappe.throw(_("The item matrix contains a duplicate source row."))
+			used.add(identity_key)
+		else:
+			if browser.get("grn_item_name") or browser.get("original_item_variant"):
+				frappe.throw(_("The saved item row changed. Refresh the editor and try again."))
+			source = next((row for row in rows if _is_actual_dia_lineage(row, browser, dimensions)), None)
 		if source is None:
+			if flt(browser.get("quantity")) <= 0 and flt(browser.get("secondary_qty")) <= 0:
+				continue
+			frappe.throw(_("The available item rows changed. Refresh the editor and enter the quantities again."))
+		# Validate edits even on zero rows, before merging can discard their attributes.
+		if source.get("item_variant") != browser.get("item_variant"):
+			validate_actual_dia_variant(source["item_variant"], browser["item_variant"], index)
+		clone = _copy_operator_values(source, browser)
+		clone["item_variant"] = browser["item_variant"]
+		received_type = browser.get("received_type") or ""
+		if received_type != (source.get("received_type") or ""):
+			if not received_type or not frappe.db.exists("YRP Received Type", received_type):
+				frappe.throw(_("Select a valid Received Type."))
+			clone["received_type"] = received_type
+			clone["row_index"] = _row_index_for_received_type(source, received_type)
+			clone.pop("name", None)
+		if not identity and not matches:
+			clone.pop("name", None)
+			clone["row_index"] = next_index
+			next_index += 1
+		if flt(clone.get("quantity")) <= 0:
 			continue
-		validate_actual_dia_variant(source["item_variant"], browser["item_variant"], index)
-		row_index = max((cint(row.get("row_index")) for row in rows), default=-1) + 1
-		clone = {**source, "item_variant": browser["item_variant"], "quantity": 0, "row_index": row_index}
-		clone.pop("name", None)
-		rows.append(clone)
-		known.add(key)
-	return rows
+		merged.append(clone)
+	return merged
 
 
 def _is_actual_dia_lineage(source, browser, dimensions):
@@ -960,14 +1063,15 @@ def _browser_rows(values: Mapping, *, corrections: bool, fallback_rows) -> tuple
 			),
 			True,
 		)
-	return (
-		ungroup_items_from_ui(
-			values.get(matrix_key) or [],
-			"YRP Goods Received Note",
-			keep_zero=True,
-		),
-		True,
-	)
+	groups = _as_list(values.get(matrix_key))
+	rows = ungroup_items_from_ui(groups, "YRP Goods Received Note", keep_zero=True)
+	# The shared ungroup helper intentionally copies only DocType fields. Keep
+	# workspace-only identity beside its cells using the same traversal order.
+	for row, (_entry, cell, _attributes) in zip(rows, _matrix_cells(groups), strict=False):
+		for field in ("grn_item_name", "original_item_variant"):
+			if cell.get(field):
+				row[field] = cell[field]
+	return rows, True
 
 
 def _editable_headers(doc, values: Mapping) -> dict:
@@ -1066,13 +1170,11 @@ def save_goods_received_note(
 		browser_corrections, has_correction_matrix = _browser_rows(
 			values, corrections=True, fallback_rows=authoritative_corrections
 		)
-		authoritative_items = _actual_dia_additions(
-			authoritative_items, browser_items, _actual_dia_context(doc)
-		)
 		items = (
 			_merge_authoritative_rows(
 				authoritative_items,
 				browser_items,
+				actual_dia_context=_actual_dia_context(doc),
 				**(_purchase_order_lot_context(doc) if cint(doc.docstatus) == 0 else {}),
 			)
 			if has_item_matrix
@@ -1091,6 +1193,10 @@ def save_goods_received_note(
 	doc.set("item_details", None)
 	doc.set("correction_item_details", None)
 
+	if cint(submit):
+		# Frappe save locks the GRN parent. Enter the same Lot-first order as
+		# Desk submit now; submit() reuses the lock recorded on doc.flags.
+		_lock_versioned_cloth_lot(doc)
 	if name:
 		doc.save()
 	else:

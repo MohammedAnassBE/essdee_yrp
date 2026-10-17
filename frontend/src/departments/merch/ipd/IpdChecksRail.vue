@@ -51,7 +51,7 @@
 
 		<section v-if="showKeys" class="ipd-rail__card ipd-rail__keys" aria-labelledby="ipd-rail-keys">
 			<header><h2 id="ipd-rail-keys">Keys</h2></header>
-			<p class="ipd-rail__body">Tab / Enter move · Ctrl+V pastes a block · Ctrl+D fills down · Ctrl+R fills right · ← / → / Home / End focus tabs · Enter / Space opens tab</p>
+			<p class="ipd-rail__body">Tab / Enter move · Ctrl+V pastes a block · ← / → / Home / End focus tabs · Enter / Space opens tab</p>
 		</section>
 	</div>
 </template>

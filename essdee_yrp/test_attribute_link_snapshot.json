@@ -79,6 +79,7 @@
   "YRP Item Production Detail|pack_in_stage": ["Stage", "ctx-dependent_attribute"],
   "YRP Item Production Detail|pack_out_stage": ["Stage", "ctx-dependent_attribute"],
   "YRP Item Production Detail|stiching_in_stage": ["Stage", "ctx-dependent_attribute"],
+  "YRP Item Production Detail|stiching_major_attribute_value": [null, "ctx-stiching_attribute"],
   "YRP Item Production Detail|stiching_out_stage": ["Stage", "ctx-dependent_attribute"],
   "YRP Process Cost Value|attribute_value": [null, "ctx-attribute"],
   "YRP Production Order|dia": ["Dia", "Dia"],

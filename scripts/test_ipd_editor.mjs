@@ -303,6 +303,8 @@ assert.equal(await focus.focusProblem({ field: 'item_bom', section: 'accessories
 assert.deepEqual(focused, ['row-3'])
 removeEmpty()
 removeBom()
+focus.registerFocus('processes', () => true)
+assert.equal(await focus.focusProblem({ field: 'ipd_processes', section: 'processes' }), false, 'grid problems must never fall back to another field in their section')
 focus.registerFocus('ipd_processes', () => true)
 assert.equal(await focus.focusProblem({ field: 'ipd_processes', section: 'processes' }), true)
 
@@ -310,6 +312,24 @@ assert.equal(await focus.focusProblem({ field: 'ipd_processes', section: 'proces
 const require = createRequire(new URL('../frontend/package.json', import.meta.url))
 const { parse, compileScript, compileTemplate } = require('@vue/compiler-sfc')
 const componentRoot = new URL('../frontend/src/departments/merch/ipd/', import.meta.url)
+const editorSource = readFileSync(new URL('useIpdEditor.js', componentRoot), 'utf8')
+const saveBomMappingSource = editorSource.match(/async function saveBomMapping\([^]*?\n\t}/)?.[0]
+assert.ok(saveBomMappingSource, 'editor exposes the BOM mapping save operation')
+const mappingContext = { value: { bom_mappings: { 'bom-1': { mapping_modified: 'page-token' }, 'bom-2': { mapping_modified: 'other-token' } } } }
+const mappingCalls = []
+const savedMapping = { bom_mappings: { 'bom-1': { mapping_modified: 'saved-token' } } }
+const saveBomMapping = new Function('context', 'name', 'saveIpdBomMapping', `return (${saveBomMappingSource})`)(
+	mappingContext, { value: 'IPD-1' }, async (...args) => { mappingCalls.push(args); return savedMapping },
+)
+const mappingRows = [{ attrs: { Colour: 'Navy' }, quantity: 2 }]
+const mappingTables = [{ attributes: ['Colour'] }]
+assert.equal(await saveBomMapping('bom-1', mappingRows, mappingTables, 'dialog-token'), savedMapping)
+assert.deepEqual(mappingCalls[0], ['IPD-1', 'bom-1', mappingRows, 'dialog-token', mappingTables], 'use the token loaded by the dialog over the stale page token')
+assert.equal(mappingContext.value.bom_mappings['bom-1'].mapping_modified, 'saved-token')
+assert.equal(mappingContext.value.bom_mappings['bom-2'].mapping_modified, 'other-token')
+await saveBomMapping('bom-1', mappingRows)
+assert.deepEqual(mappingCalls[1], ['IPD-1', 'bom-1', mappingRows, 'saved-token', null], 'older callers fall back to the current context token')
+await assert.rejects(() => saveBomMapping('missing-row', mappingRows, mappingTables, 'dialog-token'), /Save the IPD to create it/)
 for (const folder of ['', 'sections/', 'cloth/']) {
 	for (const filename of readdirSync(new URL(folder, componentRoot)).filter((name) => name.endsWith('.vue'))) {
 		const source = readFileSync(new URL(folder + filename, componentRoot), 'utf8')
@@ -329,7 +349,7 @@ assert.equal(gridRowKey({}, 'stiching_item_details', 'Sleeve'), 'Sleeve')
 const linkField = readFileSync(new URL('../frontend/src/components/common/LinkField.vue', import.meta.url), 'utf8')
 assert.match(linkField, /auto-option-focus/)
 assert.match(linkField, /focusedOptionIndex = input.value.findFirstOptionIndex\(\)/)
-assert.match(linkField, /handleAutocompleteKey\(event, input.value, restoreCommittedValue, searching.value\)/)
+assert.match(linkField, /handleAutocompleteKey\(event, input.value, restoreCommittedValue, searching.value \|\| suggestionSequence !== requestSequence\)/)
 const { handleAutocompleteKey } = await import('../frontend/src/components/common/autocompleteKeys.js')
 const linkInput = {}
 let selectedLink = ''

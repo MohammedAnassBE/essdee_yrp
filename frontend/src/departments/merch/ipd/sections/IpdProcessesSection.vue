@@ -7,7 +7,7 @@
 			<template v-if="part === 'general'">
 				<EntryGrid
 					v-if="processes.rows.length"
-					ref="processGrid"
+					ref="processGrid" validation-field="ipd_processes"
 					title="IPD Processes"
 					row-header-label="#"
 					:rows="processes.rows"
@@ -15,7 +15,8 @@
 					:model-value="processes.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('ipd_processes')"
-					:toolbar="['fillDown', 'paste', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateProcesses"
 					@remove-row="removeProcess"
@@ -30,14 +31,15 @@
 			<template v-if="part === 'embellishment'">
 				<EntryGrid
 					v-if="embellishment.rows.length"
-					ref="embellishmentGridRef"
+					ref="embellishmentGridRef" validation-field="emblishment_details_json"
 					title="Embellishment"
 					row-header-label="Process"
 					:rows="embellishment.rows"
 					:columns="embellishment.columns"
 					:model-value="embellishment.model"
 					:readonly="editor.readonly"
-					:toolbar="['fillRight', 'fillDown', 'clear']"
+					:toolbar="[]"
+					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateEmbellishment"
 					@remove-row="removeEmbellishmentProcess"

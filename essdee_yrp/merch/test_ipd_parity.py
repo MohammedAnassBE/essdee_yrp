@@ -34,6 +34,9 @@ def web_save(name, patch):
 	return workspace.save_ipd(wire(patch(payload["values"])), name, payload["record"]["modified"])
 
 
+INCOMPLETE_SET = "Fill the Set Item combination"
+
+
 def outcome(save):
 	try:
 		save()
@@ -84,7 +87,7 @@ class TestIpdParity(IntegrationTestCase):
 				with rolled_back("web_noop"):
 					web_result = outcome(lambda name=name: web_save(name, lambda _values: {}))
 					web = snapshot(name)
-				if desk_result[0] == "crash":
+				if desk_result[0] == "crash" or INCOMPLETE_SET in (desk_result[1] or ""):
 					# Desk cannot save this stored IPD at all; the web no-op save must still work.
 					self.assertEqual(web_result, ("saved", None))
 					continue

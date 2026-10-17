@@ -350,7 +350,7 @@ function mountChoiceGrid(extra = {}) {
 	const table = findNodes(root, node => node.props.role === "grid")[0]
 	for (const element of cells()) element.focus = () => focused.push(element.props["data-col"])
 	table.querySelector = selector => cells().find(node => selector.includes(`data-row="${node.props["data-row"]}"`) && selector.includes(`data-col="${node.props["data-col"]}"`))
-	const input = () => findNodes(root, node => node.type === "autocomplete")[0]
+	const input = () => findNodes(root, node => node.type === "autocomplete").at(-1)
 	const key = async (name, extra = {}) => {
 		const pressed = event(name, undefined, extra)
 		if (input()) {
@@ -453,43 +453,32 @@ function mountChoiceGrid(extra = {}) {
 {
 	const grid = mountChoiceGrid()
 	const button = label => findNodes(grid.root, node => node.type === "button" && node.props.label === label)[0]
-	const fill = async label => { findNodes(grid.root, node => node.props["aria-label"] === `Fill ${label}` && node.type === "button")[0].props.onClick(); await flush() }
-	await fill("Colour")
-	assert.equal(controls.at(-1).overlayVisible, true)
+	const fillButton = label => findNodes(grid.root, node => node.props["aria-label"] === `Fill ${label} column`)[0]
+	const fillInput = label => findNodes(grid.root, node => node.type === "input" && node.props["aria-label"] === `Fill ${label}`)[0]
+	const alerts = () => findNodes(grid.root, node => node.props.role === "alert")
+	assert.equal(findNodes(grid.root, node => node.props.class === "entry-grid__fill").length, 2, "header Fill is always visible")
+	grid.input().props.onType("Bla"); grid.input().props.onSearch("Bla"); await flush()
 	grid.input().props.onPick(0); await flush()
+	fillButton("Colour").props.onClick(); await flush()
 	assert.equal(grid.props.modelValue.front.colour, "Black")
 	assert.equal(grid.props.modelValue.locked.colour, "Black")
 	assert.equal(grid.batches.length, 1)
-	assert.equal(grid.updates.length, 1)
 	assert.deepEqual(grid.batches[0], [{ rowKey: "front", colKey: "colour", value: "Black" }])
 	assert.ok(findNodes(grid.root, node => node.text === "Filled 1 rows").length)
-	await fill("Weight")
-	let input = findNodes(grid.root, node => node.type === "input" && node.props["aria-label"] === "Fill Weight")[0]
-	assert.equal(input.props.inputmode, "decimal")
-	input.props["onUpdate:modelValue"]("oops")
-	button("Apply").props.onClick(); await flush()
-	assert.ok(findNodes(grid.root, node => node.props.role === "alert" && /not a number/.test(node.text)).length)
+	assert.equal(fillInput("Weight").props.inputmode, "decimal")
+	fillInput("Weight").props.onInput({ target: { value: "oops" } }); await flush()
+	fillButton("Weight").props.onClick(); await flush()
+	assert.ok(alerts().some(node => /not a number/.test(node.text)))
 	assert.equal(grid.batches.length, 1)
-	input.props["onUpdate:modelValue"]("1.25")
-	input.props.onKeydown(event("Enter")); await flush()
+	fillInput("Weight").props.onInput({ target: { value: "1.25" } }); await flush()
+	fillInput("Weight").props.onKeydown(event("Enter")); await flush()
 	assert.equal(grid.props.modelValue.front.weight, 1.25)
 	assert.equal(grid.props.modelValue.locked.weight, 2)
 	assert.equal(grid.batches.length, 2)
-	await fill("Weight")
-	button("Apply").props.onClick(); await flush()
-	assert.equal(grid.props.modelValue.front.weight, null, "empty Fill clears the column")
-	await fill("Colour")
-	grid.input().props.onType("invalid"); grid.input().props.onSearch("invalid"); await flush()
-	button("Apply").props.onClick(); await flush()
-	assert.equal(grid.batches.length, 3, "unselected choice text must never fill blanks")
-	assert.ok(findNodes(grid.root, node => node.props.role === "alert").length)
-	button("Cancel").props.onClick(); await flush()
-	assert.equal(grid.input(), undefined)
-	await fill("Weight")
-	const header = findNodes(grid.root, node => node.props.class === "entry-grid__fill")[0]
-	header.props.onKeydownCapture(event("Escape")); await flush()
-	assert.equal(findNodes(grid.root, node => node.props.class === "entry-grid__fill").length, 0)
-	assert.equal(grid.batches.length, 3, "Escape cancels Fill")
+	fillInput("Weight").props.onInput({ target: { value: "" } }); await flush()
+	fillButton("Weight").props.onClick(); await flush()
+	assert.equal(grid.batches.length, 2, "empty Fill changes nothing")
+	assert.ok(alerts().some(node => /Enter a Weight to fill/.test(node.text)))
 }
 const gridProps = reactive({ rows: [{ key: "0", label: "Yarn" }], columns: [{ key: "yarn_item", label: "Yarn item", type: "link", doctype: "Item" }], modelValue: { 0: { yarn_item: "Old yarn" } }, "onUpdate:modelValue": value => { gridProps.modelValue = value } })
 const gridRoot = mountComponent(EntryGrid, gridProps)

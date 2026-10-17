@@ -49,3 +49,4 @@ essdee_yrp.patches.add_ipd_copied_from
 essdee_yrp.patches.grant_purchase_dependent_mapping_permissions
 essdee_yrp.patches.grant_purchase_item_master_permissions
 essdee_yrp.patches.backfill_cancelled_cutting_statuses
+essdee_yrp.patches.space_size_type_slots

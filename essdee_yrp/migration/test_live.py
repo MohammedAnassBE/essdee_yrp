@@ -52,6 +52,7 @@ from essdee_yrp.migration.live import (
 	_prepare_approved_frappe_document,
 	_prepare_item_migration_documents,
 	_prepare_purchase_invoice_migration_documents,
+	_rebuild_item_category_tree,
 	_reconcile_approved_default_values,
 	_reconcile_approved_user_unique_values,
 	_require_previous_snapshot,
@@ -2873,6 +2874,38 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			preserved = _validate_required_target_values(document, schema, audit)
 		self.assertEqual(preserved, 0)
 		self.assertEqual(audit, {"Cutting Laysheet Planner.description": 1})
+
+	def test_legacy_blank_attribute_mappings_are_audited(self):
+		cases = (
+			("YRP Item Item Attribute Mapping", "attribute_name", "Item Item Attribute Mapping"),
+			("YRP Item Item Attribute Mapping Value", "attribute_value", "Item Item Attribute Mapping Value"),
+		)
+		for doctype, fieldname, source_doctype in cases:
+			with self.subTest(doctype=doctype):
+				schema = {
+					"name": doctype,
+					"fields": [
+						{"fieldname": fieldname, "fieldtype": "Link", "reqd": 1},
+						{"fieldname": "other", "fieldtype": "Data", "reqd": 1},
+					],
+				}
+				audit = {}
+				with patch("essdee_yrp.migration.live.frappe.db.get_value", return_value=None):
+					blank = {"doctype": doctype, "name": "ROW-1", fieldname: None, "other": "X"}
+					self.assertEqual(_validate_required_target_values(blank, schema, audit), 0)
+					filled = {"doctype": doctype, "name": "ROW-2", fieldname: "Size", "other": "X"}
+					self.assertEqual(_validate_required_target_values(filled, schema, audit), 0)
+					missing_other = {"doctype": doctype, "name": "ROW-3", fieldname: "Size", "other": None}
+					with self.assertRaisesRegex(MigrationError, "has no required other"):
+						_validate_required_target_values(missing_other, schema, audit)
+				self.assertIsNone(blank[fieldname])
+				self.assertEqual(filled[fieldname], "Size")
+				self.assertEqual(audit, {f"{source_doctype}.{fieldname}": 1})
+
+	def test_item_category_tree_is_rebuilt_after_load(self):
+		with patch("frappe.utils.nestedset.rebuild_tree") as rebuild_tree:
+			_rebuild_item_category_tree()
+		rebuild_tree.assert_called_once_with("YRP Item Category")
 
 	def test_cut_panel_warehouse_is_recovered_from_source_references(self):
 		schema = {

@@ -204,6 +204,9 @@ PRESERVE_SOURCE_BLANK_FIELDS = {
 	("Goods Received Note", "lot"),
 	("Cut Panel Movement", "from_warehouse"),
 	("Cutting Laysheet Planner", "description"),
+	# MRP saved these mapping rows blank; they migrate unchanged, as in MRP.
+	("Item Item Attribute Mapping", "attribute_name"),
+	("Item Item Attribute Mapping Value", "attribute_value"),
 }
 SOURCE_DOCTYPES_BY_TARGET: dict[str, set[str]] = {}
 for _source_doctype, _target_doctype in DOCTYPE_RENAMES.items():
@@ -1695,6 +1698,7 @@ def run_job(
 
 			result["valuation_lineage"] = backfill_deterministic_valuation_lineage()
 			result["setup_state"] = _finalize_target_setup_state()
+			_rebuild_item_category_tree()
 		result["schema"] = {
 			"source_doctypes": schema_payload["source_doctypes"],
 			"target_doctypes": schema_payload["target_doctypes"],
@@ -4647,6 +4651,14 @@ def _derive_required_value(
 def _is_valid_historical_required_blank(document: Mapping[str, Any], fieldname: str) -> bool:
 	source_doctype = _source_doctype_for_target(str(document.get("doctype") or ""))
 	return (source_doctype, fieldname) in PRESERVE_SOURCE_BLANK_FIELDS
+
+
+def _rebuild_item_category_tree() -> None:
+	"""Index the bulk-loaded category roots, which arrive without lft/rgt."""
+
+	from frappe.utils.nestedset import rebuild_tree
+
+	rebuild_tree("YRP Item Category")
 
 
 def _source_doctype_for_target(target_doctype: str) -> str:

@@ -576,6 +576,18 @@ def default_legacy_lot_costing_type(
 	return _default_first_select_option(output, spec, "lot_costing_type")
 
 
+def item_category_to_root_item_type(
+	output: Mapping[str, Any],
+	source: Mapping[str, Any],
+	spec: MigrationSpec,
+	plan: MigrationPlan,
+	parent: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+	"""Make each flat source category a root Item Type; the load rebuilds lft/rgt."""
+
+	return {**output, "node_type": "Item Type", "parent_yrp_item_category": None, "is_group": 1}
+
+
 def _default_first_select_option(
 	output: Mapping[str, Any], spec: MigrationSpec, fieldname: str
 ) -> Mapping[str, Any]:
@@ -712,5 +724,6 @@ POST_TRANSFORMERS = {
 	"derive_workstation_fields": derive_workstation_fields,
 	"default_legacy_stitching_category": default_legacy_stitching_category,
 	"default_legacy_lot_costing_type": default_legacy_lot_costing_type,
+	"item_category_to_root_item_type": item_category_to_root_item_type,
 	"derive_grn_deliverable_dimensions": derive_grn_deliverable_dimensions,
 }

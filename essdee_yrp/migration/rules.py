@@ -162,6 +162,7 @@ RULES = {
 			"dependent_attribute_values": "Retired unused Process Cost field",
 		}
 	),
+	"Item Category": DocTypeRule(post_transformer="item_category_to_root_item_type"),
 	"Item Conversion": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Lot Transfer Item": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Lotwise Item Profit": DocTypeRule(post_transformer="default_legacy_lot_costing_type"),

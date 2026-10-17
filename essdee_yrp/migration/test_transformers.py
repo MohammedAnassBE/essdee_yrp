@@ -698,6 +698,18 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual(row["lot_costing_type"], "Costing")
 
+	def test_flat_item_category_becomes_root_item_type(self):
+		row = transform_document(
+			{"doctype": "Item Category", "name": "Yarn", "category_name": "Yarn", "disabled": 1},
+			self.plan,
+		)
+		self.assertEqual(row["doctype"], "YRP Item Category")
+		self.assertEqual((row["name"], row["category_name"], row["disabled"]), ("Yarn", "Yarn", 1))
+		self.assertEqual(row["node_type"], "Item Type")
+		self.assertIsNone(row["parent_yrp_item_category"])
+		self.assertEqual(row["is_group"], 1)
+		self.assertFalse({"lft", "rgt"} & row.keys())
+
 	def test_fg_item_master_links_migrate_unchanged(self):
 		for doctype, fieldname in (("Box Sticker Print", "fg_item"), ("Lotwise Item Profit", "item")):
 			with self.subTest(doctype=doctype):

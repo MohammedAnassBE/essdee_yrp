@@ -74,6 +74,7 @@ RULES = {
 	"Bin": DocTypeRule(
 		value_transformers={"warehouse": "supplier_to_warehouse"},
 	),
+	"Box Sticker Print": DocTypeRule(value_transformers={"fg_item": "fg_item_master_to_item"}),
 	"Delivery Challan": DocTypeRule(
 		post_transformer="derive_delivery_challan_fields",
 	),
@@ -93,6 +94,7 @@ RULES = {
 		field_map={"raw_print_format_details": "zpl_raw_print_format_details"},
 	),
 	"Essdee Raw Print Format Detail": DocTypeRule(target="YRP ZPL Raw Print Format Detail"),
+	"FG Item Size Type Detail": DocTypeRule(value_transformers={"size": "size_type_slot"}),
 	"FG Stock Entry": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Finishing Plan": DocTypeRule(
 		post_transformer="derive_finishing_plan_audit_fields",
@@ -164,7 +166,10 @@ RULES = {
 	),
 	"Item Conversion": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Lot Transfer Item": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
-	"Lotwise Item Profit": DocTypeRule(post_transformer="default_legacy_lot_costing_type"),
+	"Lotwise Item Profit": DocTypeRule(
+		value_transformers={"item": "fg_item_master_to_item"},
+		post_transformer="default_legacy_lot_costing_type",
+	),
 	"MRP Settings": DocTypeRule(),
 	"Purchase Invoice": DocTypeRule(
 		extra_dependencies=frozenset({"Goods Received Note", "Work Order"}),

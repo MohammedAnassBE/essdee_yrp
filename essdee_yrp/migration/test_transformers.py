@@ -698,6 +698,25 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual(row["lot_costing_type"], "Costing")
 
+	def test_fg_item_master_links_are_resolved_to_item_by_the_live_runner(self):
+		for doctype, fieldname in (("Box Sticker Print", "fg_item"), ("Lotwise Item Profit", "item")):
+			with self.subTest(doctype=doctype):
+				spec = self.plan.specs[doctype]
+				self.assertEqual(spec.issues, ())
+				self.assertEqual(spec.value_transformers[fieldname], "fg_item_master_to_item")
+				target = {row["fieldname"]: row for row in spec.target_schema["fields"]}
+				self.assertEqual(target[fieldname]["options"], "Item")
+
+	def test_size_type_slot_drops_the_legacy_space(self):
+		row = {"doctype": "FG Item Size Type Detail", "name": "ROW-1"}
+		for value, expected in (("size 1", "size1"), ("size 10", "size10"), (None, None)):
+			with self.subTest(value=value):
+				result = transform_document({**row, "size": value}, self.plan)
+				self.assertEqual(result["size"], expected)
+		for value in ("size1", "size 11", "Size 1", "size 0", "size  2"):
+			with self.subTest(value=value), self.assertRaises(MigrationError):
+				transform_document({**row, "size": value}, self.plan)
+
 	def test_ipd_item_attribute_uses_contextual_child_doctype(self):
 		row = transform_document(
 			{

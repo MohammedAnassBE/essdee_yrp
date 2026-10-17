@@ -3282,5 +3282,87 @@ class ItemMigrationRolesTest(unittest.TestCase):
 		self.assertEqual(_classify_target_only_identities("Item", -1), (0, -1))
 
 
+class FGItemMasterMigrationTest(unittest.TestCase):
+	REFERENCES = {
+		"item_defaults": {"TEE": "Pieces", "POLO": "Pieces"},
+		"fg_item_master_items": {"TEE FG": "TEE", "POLO": "POLO", "ORPHAN FG": None, "GONE FG": "GONE"},
+	}
+
+	def resolve(self, document):
+		with patch("yrp.attribute_links.fields", return_value={}):
+			_apply_contextual_defaults(document, {"fields": []}, self.REFERENCES)
+		return document
+
+	def test_fg_item_master_links_become_their_item(self):
+		sticker = self.resolve({"doctype": "SD YRP Box Sticker Print", "name": "BSP-1", "fg_item": "TEE FG"})
+		profit = self.resolve({"doctype": "SD YRP Lotwise Item Profit", "name": "LIP-1", "item": "POLO"})
+		blank = self.resolve({"doctype": "SD YRP Lotwise Item Profit", "name": "LIP-2", "item": None})
+		self.assertEqual(sticker["fg_item"], "TEE")
+		self.assertEqual(profit["item"], "POLO")
+		self.assertIsNone(blank["item"])
+
+	def test_unresolvable_fg_item_master_link_fails_loudly(self):
+		for value in ("MISSING FG", "ORPHAN FG", "GONE FG"):
+			document = {"doctype": "SD YRP Box Sticker Print", "name": "BSP-1", "fg_item": value}
+			with self.subTest(value=value), self.assertRaises(MigrationError):
+				self.resolve(document)
+
+	def test_item_gets_packaging_from_its_fg_item_master(self):
+		schema = {
+			"fields": [
+				{"fieldname": fieldname, "fieldtype": "Int"}
+				for fieldname in (
+					"custom_pieces_per_box",
+					"custom_box_per_carton",
+					"custom_pieces_per_carton",
+				)
+			]
+			+ [{"fieldname": "custom_display_name", "fieldtype": "Data"}]
+		}
+		rows = [
+			{"name": "TEE FG", "is_scheme": 0, "pcs_per_box": 6, "box_per_carton": 10, "display_name": "Tee"},
+			{
+				"name": "TEE SCHEME",
+				"is_scheme": 1,
+				"pcs_per_box": 1,
+				"box_per_carton": 1,
+				"display_name": "X",
+			},
+		]
+		references = {
+			"item_fg_item_masters": {
+				"TEE": rows,
+				"POLO": [rows[0], {**rows[0], "name": "POLO 2", "pcs_per_box": 4}],
+			}
+		}
+		item = {"doctype": "Item", "name": "TEE"}
+		plain = {"doctype": "Item", "name": "PLAIN"}
+		with patch("yrp.attribute_links.fields", return_value={}):
+			_apply_contextual_defaults(item, schema, references)
+			_apply_contextual_defaults(plain, schema, references)
+			with self.assertRaises(MigrationError):
+				_apply_contextual_defaults({"doctype": "Item", "name": "POLO"}, schema, references)
+		self.assertEqual(
+			item,
+			{
+				"doctype": "Item",
+				"name": "TEE",
+				"custom_pieces_per_box": 6,
+				"custom_box_per_carton": 10,
+				"custom_pieces_per_carton": 60,
+				"custom_display_name": "Tee",
+			},
+		)
+		self.assertEqual(plain, {"doctype": "Item", "name": "PLAIN"})
+
+	def test_bridge_reference_data_indexes_fg_item_masters(self):
+		bridge = F15SourceBridge(configured_settings())
+		row = {"kind": "fg_item_master", "name": "TEE FG", "item": "TEE", "is_scheme": 0, "pcs_per_box": 6}
+		with patch.object(bridge, "_run", return_value=iter([row])):
+			data = bridge.reference_data()
+		self.assertEqual(data["fg_item_master_items"], {"TEE FG": "TEE"})
+		self.assertEqual(data["item_fg_item_masters"], {"TEE": [row]})
+
+
 if __name__ == "__main__":
 	unittest.main()

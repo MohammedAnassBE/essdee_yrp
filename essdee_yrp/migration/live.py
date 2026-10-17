@@ -264,6 +264,17 @@ PURCHASE_INVOICE_ITEM_NUMERIC_DEFAULT_FIELDS = (
 	"actual_qty",
 	"essdee_rate_weight",
 )
+# Box Sticker Print and Lotwise Item Profit now link the Item that owned the FG Item Master.
+FG_ITEM_MASTER_ITEM_LINKS = {
+	"SD YRP Box Sticker Print": ("fg_item",),
+	"SD YRP Lotwise Item Profit": ("item",),
+}
+FG_ITEM_MASTER_PACKAGING_FIELDS = (
+	"custom_pieces_per_box",
+	"custom_box_per_carton",
+	"custom_pieces_per_carton",
+	"custom_display_name",
+)
 
 
 class F15SourceBridge:
@@ -358,6 +369,8 @@ class F15SourceBridge:
 			"source_attribute_value_attributes": {},
 			"cut_panel_from_warehouse": {},
 			"supplier_aliases": {},
+			"fg_item_master_items": {},
+			"item_fg_item_masters": {},
 			"migration_defaults": dict(self.settings.required_defaults),
 		}
 		conflicts = []
@@ -372,6 +385,9 @@ class F15SourceBridge:
 				data["item_dependent_attributes"][name] = row.get("dependent_attribute")
 			elif kind == "item_variant":
 				data["variant_to_item"][name] = row.get("item")
+			elif kind == "fg_item_master":
+				data["fg_item_master_items"][name] = row.get("item")
+				data["item_fg_item_masters"].setdefault(row.get("item"), []).append(row)
 			elif kind == "mapping_attribute_value":
 				mapping_pairs.append(row)
 			elif kind == "item_attribute_value":
@@ -4140,6 +4156,7 @@ def _item_structure_fields(source_doctype):
 			"dependent_attribute",
 			"dependent_attribute_mapping",
 			"item_hash_value",
+			*FG_ITEM_MASTER_PACKAGING_FIELDS,
 		}
 	return fields | {"item_tuple_attribute", "dependent_attribute_value", "sync_with_erp"}
 
@@ -4465,10 +4482,55 @@ def _apply_contextual_defaults(
 		document["dependent_attribute_value"] = get_dependent_attribute_value(
 			document.get("attributes"), dependent_attribute
 		)
+	_resolve_fg_item_master_links(document, reference_data)
+	if document.get("doctype") == "Item" and "custom_pieces_per_box" in fieldnames:
+		_apply_fg_item_master_packaging(document, reference_data)
 	if "received_type" in fieldnames and not document.get("received_type"):
 		default_received_type = defaults.get("default_received_type")
 		if default_received_type:
 			document["received_type"] = default_received_type
+
+
+def _resolve_fg_item_master_links(document: dict[str, Any], reference_data: Mapping[str, Any]) -> None:
+	"""Replace a legacy FG Item Master link with that master's own Item."""
+
+	items = reference_data.get("fg_item_master_items", {})
+	for fieldname in FG_ITEM_MASTER_ITEM_LINKS.get(document.get("doctype"), ()):
+		value = document.get(fieldname)
+		if not value:
+			continue
+		item = items.get(value)
+		if not item or item not in reference_data.get("item_defaults", {}):
+			raise MigrationError(
+				f"Cannot resolve FG Item Master {value!r} to a source Item: "
+				f"{document.get('doctype')} {document.get('name')}.{fieldname}"
+			)
+		document[fieldname] = item
+
+
+def _apply_fg_item_master_packaging(document: dict[str, Any], reference_data: Mapping[str, Any]) -> None:
+	"""Copy FG Item Master packaging onto its template Item, which now owns it."""
+
+	if document.get("variant_of"):
+		return
+	rows = reference_data.get("item_fg_item_masters", {}).get(document.get("name")) or []
+	rows = [row for row in rows if not cint(row.get("is_scheme"))] or rows
+	values = {
+		(cint(row.get("pcs_per_box")), cint(row.get("box_per_carton")), row.get("display_name") or None)
+		for row in rows
+	}
+	if len(values) > 1:
+		raise MigrationError(
+			f"Item {document.get('name')} has conflicting FG Item Master packaging: "
+			+ ", ".join(sorted(str(row.get("name")) for row in rows))
+		)
+	if not values:
+		return
+	pieces_per_box, box_per_carton, display_name = values.pop()
+	document["custom_pieces_per_box"] = pieces_per_box
+	document["custom_box_per_carton"] = box_per_carton
+	document["custom_pieces_per_carton"] = pieces_per_box * box_per_carton
+	document["custom_display_name"] = display_name
 
 
 def _validate_required_target_values(

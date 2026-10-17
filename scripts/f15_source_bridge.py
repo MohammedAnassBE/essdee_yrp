@@ -1099,6 +1099,12 @@ def emit_reference_data(frappe):
 				"attribute_value": row.attribute_value,
 			}
 		)
+	for row in frappe.get_all(
+		"FG Item Master",
+		fields=["name", "item", "is_scheme", "pcs_per_box", "box_per_carton", "display_name"],
+		limit_page_length=0,
+	):
+		_write({"kind": "fg_item_master", **row})
 	for row in frappe.get_all("Supplier", fields=["name", "supplier_name"], limit_page_length=0):
 		_write(
 			{

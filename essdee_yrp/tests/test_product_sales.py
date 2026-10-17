@@ -170,21 +170,34 @@ class TestProductSalesSite(unittest.TestCase):
         for name, attributes in old.items():
             self.assertEqual([r.attribute_value for r in frappe.get_doc('Item', name).attributes], attributes)
 
-    def test_box_sticker_and_lotwise_read_the_template(self):
+    def fg_item_master(self, **changes):
+        values = {'doctype': 'SD YRP FG Item Master', 'name1': self.label('FG'), 'size_range': self.size_range.name,
+            'mrp': '100,101', 'pcs_per_box': 6, 'display_name': 'Tee'}
+        values.update(changes)
+        return frappe.get_doc(values).insert()
+
+    def test_box_sticker_reads_the_fg_item_master(self):
         from essdee_yrp.essdee_yrp.doctype.sd_yrp_box_sticker_print.sd_yrp_box_sticker_print import (
             get_fg_details,
         )
-        from essdee_yrp.essdee_yrp.doctype.sd_yrp_lotwise_item_profit.sd_yrp_lotwise_item_profit import (
-            get_item_size_rates,
+
+        master = self.fg_item_master()
+        self.assertEqual(get_fg_details(master.name), [{'size': self.size_values[0], 'mrp': '100'},
+            {'size': self.size_values[1], 'mrp': '101'}])
+
+    def test_item_resolves_to_its_fg_item_master(self):
+        from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_item_master.sd_yrp_fg_item_master import (
+            get_fg_item_master,
         )
 
-        template = self.template().insert()
-        for index, name in enumerate(self.variants(template.name)):
-            frappe.db.set_value('Item', name, 'custom_mrp', 100 + index)
-        rows = get_fg_details(template.name)
-        self.assertEqual([row['size'] for row in rows], self.size_values)
-        self.assertTrue(all(row['mrp'] for row in rows))
-        self.assertEqual([row['size'] for row in get_item_size_rates(template.name)], self.size_values)
+        item, same_name, orphan = (self.fixture.item().insert() for _ in range(3))
+        linked = self.fg_item_master(item=item.name)
+        self.fg_item_master(name1=item.name)
+        named = self.fg_item_master(name1=same_name.name)
+        self.assertEqual(get_fg_item_master(item.name), linked.name)
+        self.assertEqual(get_fg_item_master(same_name.name), named.name)
+        self.assertIsNone(get_fg_item_master(orphan.name))
+        self.assertIsNone(get_fg_item_master(None))
 
     def test_native_size_master_rejects_duplicate_and_uncovered_values(self):
         link = self.size_type.fg_item_size_type_details[0].size_type_value

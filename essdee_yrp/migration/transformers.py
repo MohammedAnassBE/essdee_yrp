@@ -69,17 +69,6 @@ def attribute_value_link_to_data(
 	return value
 
 
-def fg_item_master_to_item(
-	value: Any,
-	document: Mapping[str, Any],
-	spec: MigrationSpec,
-	fieldname: str,
-) -> Any:
-	"""Keep the FG Item Master name; the live runner resolves it to its Item."""
-
-	return value
-
-
 def item_attribute_value_to_standard_child(
 	document: Mapping[str, Any],
 	spec: MigrationSpec,
@@ -702,7 +691,6 @@ TRANSFORMERS = {
 
 VALUE_TRANSFORMERS = {
 	"attribute_value_link_to_data": attribute_value_link_to_data,
-	"fg_item_master_to_item": fg_item_master_to_item,
 	"supplier_to_warehouse": supplier_to_warehouse,
 	"purchase_order_status": purchase_order_status,
 	"purchase_order_open_status": purchase_order_open_status,

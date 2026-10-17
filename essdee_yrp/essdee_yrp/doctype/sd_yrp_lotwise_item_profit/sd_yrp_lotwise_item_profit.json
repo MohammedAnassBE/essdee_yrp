@@ -85,7 +85,7 @@
    "in_standard_filter": 1,
    "label": "Item",
    "mandatory_depends_on": "eval:(doc.product == null || doc.product == undefined || doc.product == \"\")",
-   "options": "Item"
+   "options": "SD YRP FG Item Master"
   },
   {
    "fieldname": "lot",
@@ -476,7 +476,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-07 15:23:01.709638",
+ "modified": "2026-10-18 12:00:00.000001",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Lotwise Item Profit",

@@ -4,9 +4,6 @@
 
 frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 	setup: function(frm) {
-		frm.set_query('item', () => ({
-			filters: { has_variants: 1, disabled: 0, custom_size_range: ["is", "set"] },
-		}));
 		frm.set_query('trade_discounts_template', function(doc) {
 			return{
 				filters: {
@@ -62,15 +59,23 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 
 	item: function(frm) {
 		if (frm.doc.item) {
-			frappe.xcall("essdee_yrp.essdee_yrp.doctype.sd_yrp_lotwise_item_profit.sd_yrp_lotwise_item_profit.get_item_size_rates", {
-				item: frm.doc.item,
-			}).then(rows => {
+			frappe.db.get_doc("SD YRP FG Item Master", frm.doc.item).then(result => {
+				let sizes = result.available_sizes.split(',');
+				let prices_str = result.prices;
+				let prices = []
+				if (prices_str) {
+					prices = prices_str.split(',');
+				}
 				frm.doc.qty_rate_chart = []
-				for (const row of rows) {
+				for (var i = 0;i < sizes.length;i++) {
+					var price = 0
+					if (sizes.length == prices.length) {
+						price = prices[i];
+					}
 					frm.add_child('qty_rate_chart', {
-						'size': row.size,
+						'size': sizes[i],
 						'qty': 0,
-						'rate': row.rate,
+						'rate': price,
 					});
 				}
 				frm.refresh_field('qty_rate_chart')

@@ -60,6 +60,22 @@ class SDYRPFGItemMaster(Document):
 		return create_or_update_item(self)
 
 
+def get_fg_item_master(item):
+	"""FG Item Master whose Item is `item`, else the FG Item Master named `item`."""
+	if not item:
+		return None
+	linked = frappe.get_all(
+		"SD YRP FG Item Master",
+		filters={"item": item},
+		order_by="is_scheme asc, disabled asc, creation asc",
+		pluck="name",
+		limit=1,
+	)
+	if linked:
+		return linked[0]
+	return item if frappe.db.exists("SD YRP FG Item Master", item) else None
+
+
 @frappe.whitelist()
 def sync_fg_item(name, rename=False):
 	doc = frappe.get_doc("SD YRP FG Item Master", name)

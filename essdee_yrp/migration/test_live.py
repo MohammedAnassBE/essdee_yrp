@@ -3283,29 +3283,20 @@ class ItemMigrationRolesTest(unittest.TestCase):
 
 
 class FGItemMasterMigrationTest(unittest.TestCase):
-	REFERENCES = {
-		"item_defaults": {"TEE": "Pieces", "POLO": "Pieces"},
-		"fg_item_master_items": {"TEE FG": "TEE", "POLO": "POLO", "ORPHAN FG": None, "GONE FG": "GONE"},
-	}
-
-	def resolve(self, document):
-		with patch("yrp.attribute_links.fields", return_value={}):
-			_apply_contextual_defaults(document, {"fields": []}, self.REFERENCES)
-		return document
-
-	def test_fg_item_master_links_become_their_item(self):
-		sticker = self.resolve({"doctype": "SD YRP Box Sticker Print", "name": "BSP-1", "fg_item": "TEE FG"})
-		profit = self.resolve({"doctype": "SD YRP Lotwise Item Profit", "name": "LIP-1", "item": "POLO"})
-		blank = self.resolve({"doctype": "SD YRP Lotwise Item Profit", "name": "LIP-2", "item": None})
-		self.assertEqual(sticker["fg_item"], "TEE")
-		self.assertEqual(profit["item"], "POLO")
-		self.assertIsNone(blank["item"])
-
-	def test_unresolvable_fg_item_master_link_fails_loudly(self):
-		for value in ("MISSING FG", "ORPHAN FG", "GONE FG"):
-			document = {"doctype": "SD YRP Box Sticker Print", "name": "BSP-1", "fg_item": value}
-			with self.subTest(value=value), self.assertRaises(MigrationError):
-				self.resolve(document)
+	def test_fg_item_master_links_are_kept(self):
+		references = {"item_fg_item_masters": {"TEE FG": [{"name": "TEE FG", "item": "TEE FG"}]}}
+		documents = (
+			{"doctype": "SD YRP Box Sticker Print", "name": "BSP-1", "fg_item": "ORPHAN FG"},
+			{"doctype": "SD YRP Lotwise Item Profit", "name": "LIP-1", "item": "TEE FG"},
+		)
+		for document in documents:
+			expected = dict(document)
+			with (
+				self.subTest(document=document["name"]),
+				patch("yrp.attribute_links.fields", return_value={}),
+			):
+				_apply_contextual_defaults(document, {"fields": []}, references)
+				self.assertEqual(document, expected)
 
 	def test_item_gets_packaging_from_its_fg_item_master(self):
 		schema = {
@@ -3360,7 +3351,7 @@ class FGItemMasterMigrationTest(unittest.TestCase):
 		row = {"kind": "fg_item_master", "name": "TEE FG", "item": "TEE", "is_scheme": 0, "pcs_per_box": 6}
 		with patch.object(bridge, "_run", return_value=iter([row])):
 			data = bridge.reference_data()
-		self.assertEqual(data["fg_item_master_items"], {"TEE FG": "TEE"})
+		self.assertNotIn("fg_item_master_items", data)
 		self.assertEqual(data["item_fg_item_masters"], {"TEE": [row]})
 
 

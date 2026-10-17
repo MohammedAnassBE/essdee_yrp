@@ -9,6 +9,7 @@ from frappe.utils import flt
 from yrp import attribute_links as attribute_db
 from yrp.utils import get_variant_attr_details
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_item_master.sd_yrp_fg_item_master import get_fg_item_master
 from essdee_yrp.lot_pricing import (
 	get_effective_lot_price_map,
 	get_explicit_lot_price_map,
@@ -74,10 +75,16 @@ def auto_create_box_sticker_print(work_order):
 		return []
 
 	_lock_production_orders(production_order)
-	primary_attribute, size_range, item_pieces_per_box = frappe.db.get_value(
-		"Item", work_order.item, ["primary_attribute", "custom_size_range", "custom_pieces_per_box"]
-	) or (None, None, 0)
-	if not primary_attribute or not size_range:
+	primary_attribute = frappe.db.get_value("Item", work_order.item, "primary_attribute")
+	if not primary_attribute:
+		return []
+	fg_item = get_fg_item_master(work_order.item)
+	if not fg_item:
+		frappe.msgprint(
+			_("Box Sticker Print skipped: Item {0} has no SD YRP FG Item Master.").format(work_order.item),
+			indicator="orange",
+			alert=True,
+		)
 		return []
 	if frappe.db.exists(
 		"SD YRP Box Sticker Print",
@@ -144,8 +151,8 @@ def auto_create_box_sticker_print(work_order):
 		box_sticker.update(
 			{
 				"lot": work_order.lot,
-				"fg_item": work_order.item,
-				"piece_per_box": item_pieces_per_box,
+				"fg_item": fg_item,
+				"piece_per_box": frappe.db.get_value("SD YRP FG Item Master", fg_item, "pcs_per_box"),
 				"print_format": print_format,
 				"against": "YRP Work Order",
 				"against_id": work_order.name,

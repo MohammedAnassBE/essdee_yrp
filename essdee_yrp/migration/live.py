@@ -264,11 +264,6 @@ PURCHASE_INVOICE_ITEM_NUMERIC_DEFAULT_FIELDS = (
 	"actual_qty",
 	"essdee_rate_weight",
 )
-# Box Sticker Print and Lotwise Item Profit now link the Item that owned the FG Item Master.
-FG_ITEM_MASTER_ITEM_LINKS = {
-	"SD YRP Box Sticker Print": ("fg_item",),
-	"SD YRP Lotwise Item Profit": ("item",),
-}
 FG_ITEM_MASTER_PACKAGING_FIELDS = (
 	"custom_pieces_per_box",
 	"custom_box_per_carton",
@@ -369,7 +364,6 @@ class F15SourceBridge:
 			"source_attribute_value_attributes": {},
 			"cut_panel_from_warehouse": {},
 			"supplier_aliases": {},
-			"fg_item_master_items": {},
 			"item_fg_item_masters": {},
 			"migration_defaults": dict(self.settings.required_defaults),
 		}
@@ -386,7 +380,6 @@ class F15SourceBridge:
 			elif kind == "item_variant":
 				data["variant_to_item"][name] = row.get("item")
 			elif kind == "fg_item_master":
-				data["fg_item_master_items"][name] = row.get("item")
 				data["item_fg_item_masters"].setdefault(row.get("item"), []).append(row)
 			elif kind == "mapping_attribute_value":
 				mapping_pairs.append(row)
@@ -4482,30 +4475,12 @@ def _apply_contextual_defaults(
 		document["dependent_attribute_value"] = get_dependent_attribute_value(
 			document.get("attributes"), dependent_attribute
 		)
-	_resolve_fg_item_master_links(document, reference_data)
 	if document.get("doctype") == "Item" and "custom_pieces_per_box" in fieldnames:
 		_apply_fg_item_master_packaging(document, reference_data)
 	if "received_type" in fieldnames and not document.get("received_type"):
 		default_received_type = defaults.get("default_received_type")
 		if default_received_type:
 			document["received_type"] = default_received_type
-
-
-def _resolve_fg_item_master_links(document: dict[str, Any], reference_data: Mapping[str, Any]) -> None:
-	"""Replace a legacy FG Item Master link with that master's own Item."""
-
-	items = reference_data.get("fg_item_master_items", {})
-	for fieldname in FG_ITEM_MASTER_ITEM_LINKS.get(document.get("doctype"), ()):
-		value = document.get(fieldname)
-		if not value:
-			continue
-		item = items.get(value)
-		if not item or item not in reference_data.get("item_defaults", {}):
-			raise MigrationError(
-				f"Cannot resolve FG Item Master {value!r} to a source Item: "
-				f"{document.get('doctype')} {document.get('name')}.{fieldname}"
-			)
-		document[fieldname] = item
 
 
 def _apply_fg_item_master_packaging(document: dict[str, Any], reference_data: Mapping[str, Any]) -> None:

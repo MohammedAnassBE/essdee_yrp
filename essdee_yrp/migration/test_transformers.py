@@ -698,14 +698,18 @@ class ReviewedTransformerTest(unittest.TestCase):
 		)
 		self.assertEqual(row["lot_costing_type"], "Costing")
 
-	def test_fg_item_master_links_are_resolved_to_item_by_the_live_runner(self):
+	def test_fg_item_master_links_migrate_unchanged(self):
 		for doctype, fieldname in (("Box Sticker Print", "fg_item"), ("Lotwise Item Profit", "item")):
 			with self.subTest(doctype=doctype):
 				spec = self.plan.specs[doctype]
 				self.assertEqual(spec.issues, ())
-				self.assertEqual(spec.value_transformers[fieldname], "fg_item_master_to_item")
+				self.assertNotIn(fieldname, spec.value_transformers)
 				target = {row["fieldname"]: row for row in spec.target_schema["fields"]}
-				self.assertEqual(target[fieldname]["options"], "Item")
+				self.assertEqual(target[fieldname]["options"], "SD YRP FG Item Master")
+				row = transform_document(
+					{"doctype": doctype, "name": "ROW-1", fieldname: "TEE FG"}, self.plan
+				)
+				self.assertEqual(row[fieldname], "TEE FG")
 
 	def test_size_type_slot_keeps_the_legacy_value(self):
 		row = {"doctype": "FG Item Size Type Detail", "name": "ROW-1", "size": "size 1"}

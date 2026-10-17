@@ -1,4 +1,5 @@
 import unittest
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -11,9 +12,39 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_box_sticker_print import (
 	sd_yrp_box_sticker_print as box_sticker_print,
 )
 from essdee_yrp.finishing.box_sticker import (
+	auto_create_box_sticker_print,
 	build_box_sticker_details,
 	get_missing_box_sticker_prices,
 )
+
+BOX_STICKER = "essdee_yrp.finishing.box_sticker"
+
+
+@contextmanager
+def _auto_create_patches(fg_item):
+	"""Patch auto_create_box_sticker_print collaborators around the FG Item Master lookup."""
+	settings = _dict(non_set_box_sticker="BOX", non_set_piece_sticker=None)
+	values = {
+		("SD YRP FG Item Master", "FG-1", "pcs_per_box"): 6,
+		("Item", "ITEM-1", "primary_attribute"): "Size",
+	}
+	new_doc = MagicMock()
+	new_doc.return_value.name = "BSP-1"
+	with ExitStack() as stack:
+		enter = stack.enter_context
+		enter(patch(f"{BOX_STICKER}.attribute_db.get_value", side_effect=["PPO-1", 0, None]))
+		enter(patch(f"{BOX_STICKER}._lock_production_orders"))
+		enter(patch(f"{BOX_STICKER}.frappe.db.get_value", side_effect=lambda *args: values.get(args)))
+		enter(patch(f"{BOX_STICKER}.frappe.db.exists", return_value=False))
+		enter(patch(f"{BOX_STICKER}.get_missing_box_sticker_prices", return_value=[]))
+		enter(patch(f"{BOX_STICKER}.frappe.get_doc", return_value=_dict(production_order_details=[])))
+		enter(patch(f"{BOX_STICKER}._quantity_by_size", return_value={"S": 10}))
+		enter(patch(f"{BOX_STICKER}.get_effective_lot_price_map", return_value={"S": 125}))
+		enter(patch(f"{BOX_STICKER}.frappe.get_cached_doc", return_value=settings))
+		yield {
+			"new_doc": enter(patch(f"{BOX_STICKER}.frappe.new_doc", new_doc)),
+			"fg_lookup": enter(patch(f"{BOX_STICKER}.get_fg_item_master", return_value=fg_item)),
+		}
 
 
 class TestBoxStickerPrint(unittest.TestCase):
@@ -128,6 +159,23 @@ class TestBoxStickerPrint(unittest.TestCase):
 				},
 			],
 		)
+
+	def test_work_order_without_fg_item_master_skips_with_message(self):
+		with (
+			_auto_create_patches(fg_item=None) as mocks,
+			patch(f"{BOX_STICKER}.frappe.msgprint") as msgprint,
+		):
+			self.assertEqual(auto_create_box_sticker_print(_dict(lot="LOT-1", item="ITEM-1")), [])
+		self.assertIn("ITEM-1", msgprint.call_args.args[0])
+		mocks["new_doc"].assert_not_called()
+
+	def test_work_order_box_sticker_links_the_resolved_fg_item_master(self):
+		with _auto_create_patches(fg_item="FG-1") as mocks:
+			created = auto_create_box_sticker_print(_dict(lot="LOT-1", item="ITEM-1", name="WO-1"))
+		self.assertEqual(created, ["BSP-1"])
+		values = mocks["new_doc"].return_value.update.call_args.args[0]
+		self.assertEqual((values["fg_item"], values["piece_per_box"]), ("FG-1", 6))
+		mocks["fg_lookup"].assert_called_once_with("ITEM-1")
 
 	def test_migrated_packing_work_order_has_complete_price_scope(self):
 		work_order = "WO-2627-00839"

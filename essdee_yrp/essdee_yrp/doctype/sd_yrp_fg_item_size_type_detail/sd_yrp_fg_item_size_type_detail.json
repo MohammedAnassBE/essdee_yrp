@@ -18,18 +18,20 @@
    "options": "YRP Item Attribute Value"
   },
   {
-   "description": "Size column slot: one of size1 to size10, unique in the Size Type.",
+   "description": "Size column slot, unique in the Size Type.",
    "fieldname": "size",
-   "fieldtype": "Data",
+   "fieldtype": "Select",
    "in_list_view": 1,
-   "label": "Size"
+   "label": "Size",
+   "options": "size1\nsize2\nsize3\nsize4\nsize5\nsize6\nsize7\nsize8\nsize9\nsize10",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-10-15 10:00:00.000000",
+ "modified": "2026-10-18 01:30:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP FG Item Size Type Detail",

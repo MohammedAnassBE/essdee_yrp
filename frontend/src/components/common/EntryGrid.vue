@@ -1,5 +1,5 @@
 <template>
-	<section ref="gridRoot" tabindex="-1" class="entry-grid" :class="{ 'entry-grid--readonly': readonly }" :aria-label="ariaLabel || title">
+	<section ref="gridRoot" tabindex="-1" class="entry-grid" :class="{ 'entry-grid--readonly': readonly, 'entry-grid--header-fill': hasAnyHeaderFill }" :aria-label="ariaLabel || title">
 		<header v-if="hasToolbar" class="entry-grid__toolbar">
 			<strong v-if="title">{{ title }}</strong>
 			<span v-if="unitHint" class="entry-grid__unit">{{ unitHint }}</span>
@@ -30,15 +30,14 @@
 						<th scope="col" class="entry-grid__corner" role="columnheader">{{ rowHeaderLabel }}</th>
 						<template v-for="(column, colIndex) in columns" :key="column.key">
 							<th v-if="readonly || !column.fill" scope="col" role="columnheader" :class="alignClass(column)" :style="{ minWidth: `${columnMinWidth(column)}px` }">{{ column.label }}</th>
-							<th v-else scope="col" role="columnheader" :class="alignClass(column)" :style="{ minWidth: `${columnMinWidth(column)}px` }">
-								<span class="entry-grid__heading">{{ column.label }}<Button label="Fill" text size="small" :aria-label="`Fill ${column.label}`" @click="startFill(colIndex)" /></span>
-								<div v-if="fillIndex === colIndex" class="entry-grid__fill" @keydown.stop @keydown.capture="onFillKeydown" @copy.stop @paste.stop>
-									<LinkField v-if="isChoiceColumn(column)" ref="fillEditor" class="entry-grid__link" :model-value="fillText" :doctype="column.doctype || ''" :filters="column.filters || {}" :search-handler="choiceSearch(column)" :show-open-button="false" :show-validation-message="false" :aria-label="`Fill ${column.label}`" :invalid="Boolean(fillError)" @update:model-value="fillText = $event" @validation="fillError = $event.message" @select="applyFill($event.name)" />
-									<input v-else ref="fillEditor" v-model="fillText" class="entry-grid__box entry-grid__input" :inputmode="column.type === 'number' ? 'decimal' : undefined" :aria-label="`Fill ${column.label}`" @input="fillError = ''" @keydown.enter.prevent="applyFill()">
-									<Button label="Apply" size="small" @click="applyFill()" />
-									<Button label="Cancel" text size="small" @click="closeFill" />
-									<small v-if="fillError" class="entry-grid__fill-error" role="alert">{{ fillError }}</small>
+							<th v-else scope="col" role="columnheader" class="entry-grid__fill-header" :class="alignClass(column)" :style="{ minWidth: `${headerMinWidth(column)}px` }">
+								<span class="entry-grid__heading">{{ column.label }}</span>
+								<div class="entry-grid__fill" @keydown.stop @copy.stop @paste.stop>
+									<LinkField v-if="isChoiceColumn(column)" :ref="(element) => setFillEditor(column.key, element)" class="entry-grid__link" :model-value="fillTexts[column.key] || ''" :doctype="column.doctype || ''" :filters="column.filters || {}" :search-handler="choiceSearch(column)" :show-open-button="false" :show-validation-message="false" placeholder="Select" :aria-label="`Fill ${column.label}`" :invalid="Boolean(fillErrors[column.key])" @update:model-value="setFillText(column.key, $event)" @validation="fillErrors[column.key] = $event.message" />
+									<input v-else :value="fillTexts[column.key] || ''" class="entry-grid__box entry-grid__fill-input" :inputmode="column.type === 'number' ? 'decimal' : undefined" :placeholder="column.type === 'number' ? 'Value' : 'Text'" :aria-label="`Fill ${column.label}`" @input="setFillText(column.key, $event.target.value)" @keydown.enter.prevent="applyFill(colIndex)">
+									<Button label="Fill" outlined :aria-label="`Fill ${column.label} column`" @click="applyFill(colIndex)" />
 								</div>
+								<small v-if="fillErrors[column.key]" class="entry-grid__fill-error" role="alert">{{ fillErrors[column.key] }}</small>
 							</th>
 						</template>
 						<th v-if="hasRowTotals" scope="col" class="entry-grid__number">{{ totalLabel }}</th>
@@ -128,6 +127,7 @@ const TOOL_LABELS = { fillRight: "Fill right", fillDown: "Fill down", sameForAll
 const TOOL_ICONS = { fillRight: "pi pi-arrow-right", fillDown: "pi pi-arrow-down", sameForAll: "pi pi-clone", paste: "pi pi-clipboard", clear: "pi pi-eraser" }
 const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }
 const ROW_HEADER_WIDTH = 140
+const FILL_MIN_WIDTH = 220
 
 const props = defineProps({
 	rows: { type: Array, default: () => [] },
@@ -155,10 +155,9 @@ const gridRoot = ref(null)
 const table = ref(null)
 const scroller = ref(null)
 const editor = ref(null)
-const fillEditor = ref(null)
-const fillIndex = ref(-1)
-const fillText = ref("")
-const fillError = ref("")
+const fillEditors = {}
+const fillTexts = ref({})
+const fillErrors = ref({})
 const active = ref({ row: 0, col: 0 })
 const anchor = ref({ row: 0, col: 0 })
 const editing = ref("")
@@ -178,7 +177,8 @@ const hasRowTotals = computed(() => ["column", "both"].includes(props.totals))
 const hasColumnTotals = computed(() => ["row", "both"].includes(props.totals))
 const totals_ = computed(() => columnTotals(props.modelValue, props.rows, props.columns))
 const grandTotal = computed(() => Object.values(totals_.value).reduce((sum, value) => sum + value, 0))
-const tableMinWidth = computed(() => `max(100%, ${ROW_HEADER_WIDTH + props.columns.reduce((sum, column) => sum + columnMinWidth(column), 0)}px)`)
+const hasAnyHeaderFill = computed(() => props.columns.some(hasHeaderFill))
+const tableMinWidth = computed(() => `max(100%, ${ROW_HEADER_WIDTH + props.columns.reduce((sum, column) => sum + headerMinWidth(column), 0)}px)`)
 
 watch(() => [props.rows.length, props.columns.length], clampActive)
 
@@ -272,7 +272,6 @@ function markInvalid(cells) {
 function startEdit(mode, initial = null) {
 	const { row, col } = active.value
 	if (editing.value || !isEditable(row, col)) return
-	closeFill()
 	const column = props.columns[col]
 	if (column.type === "check") { toggleCheck(); return }
 	editing.value = mode
@@ -330,47 +329,33 @@ function commitLink(value) {
 	commitEdit(null, { picked: true })
 }
 
-function startFill(col) {
-	if (props.readonly || !props.columns[col]?.fill) return
-	finishCellEdit()
-	fillIndex.value = col
-	fillText.value = ""
-	fillError.value = ""
-	nextTick(() => {
-		const element = editorElement(fillEditor.value)
-		if (isChoiceColumn(props.columns[col])) element?.open()
-		else element?.focus?.()
-	})
+function hasHeaderFill(column) { return !props.readonly && Boolean(column.fill) }
+function headerMinWidth(column) { return hasHeaderFill(column) ? Math.max(columnMinWidth(column), FILL_MIN_WIDTH) : columnMinWidth(column) }
+function setFillEditor(key, element) {
+	if (element) fillEditors[key] = element
+	else delete fillEditors[key]
 }
-function closeFill() { fillIndex.value = -1 }
-function onFillKeydown(event) {
-	if (event.key !== "Escape") return
-	event.preventDefault()
-	event.stopPropagation()
-	closeFill()
-	focusActive()
+function setFillText(key, value) {
+	fillTexts.value[key] = value
+	fillErrors.value[key] = ""
 }
-function applyFill(picked) {
-	const col = fillIndex.value
+function applyFill(col) {
 	const column = props.columns[col]
-	if (props.readonly || !column) return
-	const raw = fillValue(column, picked)
+	if (!column || !hasHeaderFill(column)) return
+	const raw = fillValue(column)
 	if (raw === undefined) return
-	const { value, error } = coerceCell(column, raw)
-	fillError.value = error
+	const { value, error } = String(raw ?? "").trim() ? coerceCell(column, raw) : { error: `Enter a ${column.label} to fill.` }
+	fillErrors.value[column.key] = error || ""
 	if (error) return
 	const result = fillColumn(props.modelValue, props.rows, props.columns, col, value)
 	emitChanges(result.model, result.changes)
 	report.value = `Filled ${result.changes.length} rows`
-	anchor.value = active.value
-	closeFill()
-	focusActive()
 }
-function fillValue(column, picked) {
-	if (picked !== undefined) return picked
-	if (!isChoiceColumn(column)) return fillText.value
-	const value = editorElement(fillEditor.value)?.finishEdit({ validate: true })
-	return value === undefined ? undefined : value ?? fillText.value
+function fillValue(column) {
+	const text = fillTexts.value[column.key] ?? ""
+	if (!isChoiceColumn(column)) return text
+	const value = fillEditors[column.key]?.finishEdit({ validate: true })
+	return value === undefined ? undefined : value ?? text
 }
 function toggleCheck() {
 	const { row, col } = active.value
@@ -414,7 +399,6 @@ function onChoiceTab(event) {
 }
 
 function onKeydown(event) {
-	if (fillIndex.value >= 0) return
 	if (editing.value) { cancelEditKey(event); return }
 	if (!canHandleGridKey(event)) return
 	if (handleShortcut(event) || handleNavigation(event)) return
@@ -477,12 +461,12 @@ function pasteText(text) {
 	focusActive()
 }
 function onPaste(event) {
-	if (editing.value || props.readonly || fillIndex.value >= 0) return
+	if (editing.value || props.readonly) return
 	event.preventDefault()
 	pasteText(event.clipboardData?.getData("text/plain") || "")
 }
 function onCopy(event) {
-	if (editing.value || fillIndex.value >= 0) return
+	if (editing.value) return
 	event.preventDefault()
 	event.clipboardData?.setData("text/plain", toTsv(rangeMatrix(props.modelValue, props.rows, props.columns, range.value)))
 }
@@ -550,10 +534,16 @@ defineExpose({ focusCell })
 .entry-grid__number { text-align: right; }
 .entry-grid tfoot td, .entry-grid tfoot th { height: 34px; border-top: 1px solid var(--erp-border-strong); background: var(--erp-surface-muted); }
 .entry-grid__remove { width: 40px; text-align: center; }
-.entry-grid__heading { display: inline-flex; align-items: center; gap: var(--erp-space-2); }
-.entry-grid__fill { display: flex; flex-wrap: wrap; align-items: center; gap: var(--erp-space-2); margin-top: var(--erp-space-2); white-space: normal; text-transform: none; letter-spacing: normal; }
-.entry-grid__fill > .entry-grid__input, .entry-grid__fill > .entry-grid__link { flex: 1 1 120px; }
-.entry-grid__fill-error { flex-basis: 100%; color: var(--erp-danger); font-size: var(--erp-font-size-caption); }
+.entry-grid--header-fill .entry-grid__table thead th { color: var(--erp-text); font-size: var(--erp-font-size-label); letter-spacing: .02em; vertical-align: top; }
+.entry-grid__table thead th.entry-grid__fill-header { padding-block: 8px; }
+.entry-grid__heading { display: block; }
+.entry-grid__fill { display: flex; align-items: center; gap: 4px; margin-top: 6px; color: var(--erp-text); font-size: var(--erp-font-size-table); font-weight: 400; text-align: left; text-transform: none; letter-spacing: normal; }
+.entry-grid__fill > .entry-grid__fill-input, .entry-grid__fill > .entry-grid__link { flex: 1 1 auto; }
+.entry-grid__fill-input:focus { outline: none; border-color: var(--erp-accent); box-shadow: var(--erp-focus-ring); }
+.entry-grid__fill > .entry-grid__fill-input { height: var(--erp-control-height); padding: 0 10px; }
+.entry-grid__fill > .p-button { flex: none; height: var(--erp-control-height); }
+.entry-grid__fill > .entry-grid__link :deep(.p-autocomplete), .entry-grid__fill > .entry-grid__link :deep(.p-autocomplete-input), .entry-grid__fill > .entry-grid__link :deep(.p-autocomplete-dropdown) { height: var(--erp-control-height); }
+.entry-grid__fill-error { display: block; max-width: 260px; margin-top: 4px; color: var(--erp-danger); font-size: var(--erp-font-size-caption); font-weight: 400; white-space: normal; text-transform: none; letter-spacing: normal; }
 .entry-grid__link { min-width: 0; gap: 0; }
 .entry-grid__link :deep(.link-field__control) { gap: 0; }
 .entry-grid__link :deep(.p-autocomplete), .entry-grid__link :deep(.p-autocomplete-input), .entry-grid__link :deep(.p-autocomplete-dropdown) { height: var(--erp-control-height-compact); }

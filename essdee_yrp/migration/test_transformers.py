@@ -707,15 +707,9 @@ class ReviewedTransformerTest(unittest.TestCase):
 				target = {row["fieldname"]: row for row in spec.target_schema["fields"]}
 				self.assertEqual(target[fieldname]["options"], "Item")
 
-	def test_size_type_slot_drops_the_legacy_space(self):
-		row = {"doctype": "FG Item Size Type Detail", "name": "ROW-1"}
-		for value, expected in (("size 1", "size1"), ("size 10", "size10"), (None, None)):
-			with self.subTest(value=value):
-				result = transform_document({**row, "size": value}, self.plan)
-				self.assertEqual(result["size"], expected)
-		for value in ("size1", "size 11", "Size 1", "size 0", "size  2"):
-			with self.subTest(value=value), self.assertRaises(MigrationError):
-				transform_document({**row, "size": value}, self.plan)
+	def test_size_type_slot_keeps_the_legacy_value(self):
+		row = {"doctype": "FG Item Size Type Detail", "name": "ROW-1", "size": "size 1"}
+		self.assertEqual(transform_document(row, self.plan)["size"], "size 1")
 
 	def test_ipd_item_attribute_uses_contextual_child_doctype(self):
 		row = transform_document(

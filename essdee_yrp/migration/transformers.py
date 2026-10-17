@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import replace
@@ -79,22 +78,6 @@ def fg_item_master_to_item(
 	"""Keep the FG Item Master name; the live runner resolves it to its Item."""
 
 	return value
-
-
-def size_type_slot(
-	value: Any,
-	document: Mapping[str, Any],
-	spec: MigrationSpec,
-	fieldname: str,
-) -> Any:
-	"""Map the legacy ``size N`` slot to the target ``sizeN`` Select option."""
-
-	if value in (None, ""):
-		return value
-	match = re.fullmatch(r"size ([1-9]|10)", str(value))
-	if not match:
-		raise MigrationError(f"{spec.source}.{fieldname} has an unknown size slot {value!r}")
-	return f"size{match.group(1)}"
 
 
 def item_attribute_value_to_standard_child(
@@ -720,7 +703,6 @@ TRANSFORMERS = {
 VALUE_TRANSFORMERS = {
 	"attribute_value_link_to_data": attribute_value_link_to_data,
 	"fg_item_master_to_item": fg_item_master_to_item,
-	"size_type_slot": size_type_slot,
 	"supplier_to_warehouse": supplier_to_warehouse,
 	"purchase_order_status": purchase_order_status,
 	"purchase_order_open_status": purchase_order_open_status,

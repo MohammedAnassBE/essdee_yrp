@@ -94,7 +94,6 @@ RULES = {
 		field_map={"raw_print_format_details": "zpl_raw_print_format_details"},
 	),
 	"Essdee Raw Print Format Detail": DocTypeRule(target="YRP ZPL Raw Print Format Detail"),
-	"FG Item Size Type Detail": DocTypeRule(value_transformers={"size": "size_type_slot"}),
 	"FG Stock Entry": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
 	"Finishing Plan": DocTypeRule(
 		post_transformer="derive_finishing_plan_audit_fields",

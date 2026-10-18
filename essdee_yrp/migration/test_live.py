@@ -782,6 +782,44 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			],
 		)
 
+	def test_empty_draft_work_order_invoice_migrates_without_projection(self):
+		document = {
+			"doctype": "YRP Purchase Invoice",
+			"name": "_Test Empty Draft Invoice",
+			"docstatus": 0,
+			"against": "YRP Work Order",
+			"essdee_rate_table_source": "migrated_v1",
+			"total": 0,
+			"items": [],
+			"essdee_items": [],
+			"grn": [],
+		}
+		with patch("essdee_yrp.migration.live.frappe.get_doc", return_value=frappe._dict(document)):
+			prepared = _prepare_purchase_invoice_migration_documents([document])
+
+		self.assertEqual(prepared, [document])
+		self.assertEqual(prepared[0]["items"], [])
+
+	def test_empty_submitted_or_cancelled_work_order_invoice_still_raises(self):
+		for docstatus in (1, 2):
+			with self.subTest(docstatus=docstatus):
+				document = {
+					"doctype": "YRP Purchase Invoice",
+					"name": "_Test Empty Final Invoice",
+					"docstatus": docstatus,
+					"against": "YRP Work Order",
+					"essdee_rate_table_source": "migrated_v1",
+					"total": 0,
+					"items": [],
+					"essdee_items": [],
+					"grn": [],
+				}
+				with (
+					patch("essdee_yrp.migration.live.frappe.get_doc", return_value=frappe._dict(document)),
+					self.assertRaisesRegex(frappe.ValidationError, "has no Process Items"),
+				):
+					_prepare_purchase_invoice_migration_documents([document])
+
 	def test_purchase_order_item_numeric_defaults_survive_mixed_child_batches(self):
 		document = {
 			"doctype": "YRP Purchase Invoice",

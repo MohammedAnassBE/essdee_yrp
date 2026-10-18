@@ -4235,6 +4235,7 @@ def _prepare_purchase_invoice_migration_documents(
 		if (
 			prepared.get("against") == "YRP Work Order"
 			and prepared.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE
+			and (int(prepared.get("docstatus") or 0) != 0 or prepared.get("essdee_items"))
 		):
 			invoice = frappe.get_doc(prepared)
 			payload = build_legacy_work_order_invoice_payload(invoice)

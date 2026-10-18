@@ -4,6 +4,7 @@ from itertools import groupby
 from operator import itemgetter
 
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, nowdate
 from yrp import attribute_links as attribute_db
@@ -374,6 +375,11 @@ def _get_dispatch_snapshot_context(fp_name):
 
 @frappe.whitelist()
 def fetch_fp_items():
+	with attribute_read_scope():
+		return _read_fetch_fp_items()
+
+
+def _read_fetch_fp_items():
 	finishing_plans = frappe.db.sql(
 		"""
 			SELECT DISTINCT fp.name
@@ -389,7 +395,7 @@ def fetch_fp_items():
 	for fp_name in finishing_plans:
 		if not frappe.has_permission("SD YRP Finishing Plan", "read", doc=fp_name):
 			continue
-		fp_doc = frappe.get_doc("SD YRP Finishing Plan", fp_name)
+		fp_doc = frappe.get_lazy_doc("SD YRP Finishing Plan", fp_name)
 		packing_summary = get_finishing_packing_summary(fp_doc)
 		box_uom, piece_uom = attribute_db.get_value("SD YRP Lot", fp_doc.lot, ["uom", "packing_uom"])
 		packing_config = get_ipd_packing_config(fp_doc.lot)

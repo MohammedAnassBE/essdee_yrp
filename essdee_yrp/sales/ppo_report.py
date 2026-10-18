@@ -11,6 +11,7 @@ from collections import OrderedDict, defaultdict
 from collections.abc import Mapping
 
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe import _
 from frappe.utils import flt, now_datetime
 from frappe.utils.xlsxutils import make_xlsx
@@ -366,6 +367,11 @@ def build_report(
 
 @frappe.whitelist()
 def get_ppo_report(filters=None) -> dict:
+	with attribute_read_scope():
+		return _read_get_ppo_report(filters)
+
+
+def _read_get_ppo_report(filters=None) -> dict:
 	_report_permission()
 	filters = _mapping(filters, _("Report filters"))
 	query_filters = _order_filters(filters)

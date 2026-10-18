@@ -6,6 +6,7 @@ import json
 from collections import defaultdict
 
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe import _
 from frappe.utils import cint, cstr, flt, get_time, getdate, nowdate, nowtime
 from yrp import attribute_links as attribute_db
@@ -20,6 +21,11 @@ from essdee_yrp.sewing.config import get_sewing_input_configuration
 
 @frappe.whitelist()
 def get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
+	with attribute_read_scope():
+		return _read_get_data_entry_data(supplier, lot)
+
+
+def _read_get_data_entry_data(supplier: str, lot: str | None = None) -> dict:
 	"""Return the data-entry grid and configured predecessor for every stage."""
 
 	supplier = cstr(supplier).strip()

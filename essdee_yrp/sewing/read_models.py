@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe import _
 from frappe.utils import cint, cstr, flt, getdate, today
 from yrp import attribute_links as attribute_db
@@ -303,6 +304,11 @@ def _natural_name_key(value):
 
 @frappe.whitelist()
 def get_sewing_plan_entries(supplier, input_type=None, work_station=None, lot_name=None):
+	with attribute_read_scope():
+		return _read_get_sewing_plan_entries(supplier, input_type, work_station, lot_name)
+
+
+def _read_get_sewing_plan_entries(supplier, input_type=None, work_station=None, lot_name=None):
 	plans = _plans(supplier, lots=[lot_name] if lot_name else None)
 	entries = _entries(plans, work_station=work_station, input_type=input_type)
 	detail_rows = _details(entries)

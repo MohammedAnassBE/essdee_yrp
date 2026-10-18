@@ -60,7 +60,7 @@ import PrimeAutoComplete from "primevue/autocomplete"
 import Button from "primevue/button"
 import { computed, nextTick, ref, useId, watch } from "vue"
 
-import { searchLink } from "../../api/frappe.js"
+import { invalidatePendingReads, searchLink } from "../../api/frappe.js"
 import { webDocumentPath } from "../../router/webDocumentRoutes.js"
 import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "./autocompleteKeys.js"
 
@@ -256,6 +256,7 @@ function clear() {
 }
 
 function cancelSearch() {
+	invalidatePendingReads()
 	requestSequence += 1
 	suggestionSequence = null
 	suggestions.value = []

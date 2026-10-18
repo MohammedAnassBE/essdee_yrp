@@ -145,7 +145,7 @@ def _linked_names(lot, doctype):
 		_require_lot_field(doctype, fieldname)
 	names = set(
 		frappe.get_all(
-			doctype, or_filters={field: lot for field in fields}, pluck="name", limit_page_length=0
+			doctype, or_filters={field: lot for field in fields}, pluck="name", limit_page_length=0, order_by=None
 		)
 	)
 	for child_doctype, parentfield in CHILD_LINKS[doctype]:
@@ -155,7 +155,7 @@ def _linked_names(lot, doctype):
 				child_doctype,
 				filters={"lot": lot, "parenttype": doctype, "parentfield": parentfield},
 				pluck="parent",
-				limit_page_length=0,
+				limit_page_length=0, order_by=None,
 			)
 		)
 	return sorted(names)

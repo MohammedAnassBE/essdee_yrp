@@ -1,11 +1,12 @@
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.attribute_links import value as _attribute_value
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
-	build_order_item_details,
+	build_order_item_stages,
 	fetch_item_details,
 	get_ocr_details,
 )
@@ -62,6 +63,11 @@ CONVERSION_FIELDS = (
 
 @frappe.whitelist()
 def get_lot_workspace(name: str) -> dict:
+	with attribute_read_scope():
+		return _build_lot_workspace(name)
+
+
+def _build_lot_workspace(name: str) -> dict:
 	doc = frappe.get_doc("SD YRP Lot", name)
 	doc.check_permission("read")
 	return {
@@ -118,9 +124,9 @@ def get_order_details(doc):
 	if not doc.production_detail or not doc.get("lot_order_details"):
 		return None
 	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)
-	stage_groups = {
-		key: build_order_item_details(doc.lot_order_details, ipd_doc, key) for key, _label in ORDER_STAGES
-	}
+	stage_groups = build_order_item_stages(
+		doc.lot_order_details, ipd_doc, tuple(key for key, _label in ORDER_STAGES)
+	)
 	stages = [
 		{"key": key, "label": label}
 		for key, label in ORDER_STAGES

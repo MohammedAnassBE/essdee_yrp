@@ -38,7 +38,7 @@ class TestLotWorkspace(TestCase):
 			stack.enter_context(patch.object(workspace, method))
 			for method in (
 				"fetch_item_details",
-				"build_order_item_details",
+				"build_order_item_stages",
 				"get_ocr_details",
 				"fetch_fabric_program_details",
 			)
@@ -145,14 +145,14 @@ class TestLotWorkspace(TestCase):
 		]
 		with (
 			patch.object(frappe, "get_cached_doc", return_value=frappe._dict(name="IPD-1")),
-			patch.object(workspace, "build_order_item_details", side_effect=fixtures) as builder,
+			patch.object(workspace, "build_order_item_stages", return_value=dict(zip(("quantity", "cut_qty", "stich_qty", "pack_qty"), fixtures))) as builder,
 			patch.object(workspace, "get_colour_attribute", return_value="Colour"),
 		):
 			payload = workspace.get_order_details(doc)
 		self.assertEqual([stage["label"] for stage in payload["stages"]], ["Order", "Cut", "Stitched"])
 		self.assertEqual(
-			[call.args[2] for call in builder.call_args_list],
-			["quantity", "cut_qty", "stich_qty", "pack_qty"],
+			builder.call_args.args[2],
+			("quantity", "cut_qty", "stich_qty", "pack_qty"),
 		)
 		group = payload["groups"][0]
 		self.assertEqual(group["items"][0]["values"]["L"], {"quantity": 3, "cut_qty": 2, "stich_qty": 1})
@@ -262,6 +262,14 @@ class TestLotWorkspace(TestCase):
 		)
 		self.assertEqual(bom["additional"], [])
 		self.assertNotIn("facts", bom)
+
+	def test_scoped_workspace_keeps_positional_argument_validation(self):
+		from essdee_yrp.purchase.lot_workspace import get_lot_workspace
+
+		with patch.object(frappe, "get_doc", side_effect=AssertionError("Unexpected document read")):
+			with self.assertRaises(frappe.FrappeTypeError):
+				get_lot_workspace([])
+
 
 
 class TestLiveLotWorkspace(TestCase):

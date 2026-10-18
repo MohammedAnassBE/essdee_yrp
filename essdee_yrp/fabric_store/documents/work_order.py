@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+
 from collections.abc import Mapping
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
 from yrp import attribute_links as attribute_db
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.stock.api import get_stock_dimensions_for_ui
 from yrp.stock.save_stock_items import group_items_for_ui
 from yrp.yrp.doctype.yrp_debit.yrp_debit import (
@@ -466,7 +468,11 @@ def _legacy_workspace_base(doc, capabilities: Mapping, adapter) -> dict:
 
 def get_work_order_workspace(name: str, *, _adapter=None) -> dict:
 	"""Return the complete permission-filtered Work Order workspace."""
+	with attribute_read_scope():
+		return _build_work_order_workspace(name, _adapter=_adapter)
 
+
+def _build_work_order_workspace(name: str, *, _adapter=None) -> dict:
 	get_doc = _dependency(
 		_adapter,
 		"_get_supported_document",

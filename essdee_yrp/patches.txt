@@ -50,3 +50,6 @@ essdee_yrp.patches.grant_purchase_dependent_mapping_permissions
 essdee_yrp.patches.grant_purchase_item_master_permissions
 essdee_yrp.patches.backfill_cancelled_cutting_statuses
 essdee_yrp.patches.space_size_type_slots
+
+essdee_yrp.patches.add_web_read_indexes
+essdee_yrp.patches.restore_web_read_indexes

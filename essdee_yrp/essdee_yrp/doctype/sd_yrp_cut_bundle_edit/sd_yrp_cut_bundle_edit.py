@@ -311,7 +311,7 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 	posting_datetime = get_combine_datetime(posting_date, posting_time)
 	cb_list = frappe.db.sql(
 		"""
-		SELECT cbml.name FROM `tabSD YRP Cut Bundle Movement Ledger` cbml
+		SELECT cbml.name, cbml.size, cbml.colour, cbml.panel, cbml.set_combination FROM `tabSD YRP Cut Bundle Movement Ledger` cbml
 			INNER JOIN (
 				SELECT cbm_key, MAX(posting_datetime) AS max_posting_datetime, lay_no FROM `tabSD YRP Cut Bundle Movement Ledger`
 				WHERE posting_datetime <= %(datetime_value)s AND is_cancelled = 0 AND supplier = %(from_location)s
@@ -340,7 +340,7 @@ def get_major_colours(posting_date, posting_time, from_location, lot):
 		frappe.throw("No Cut Bundle Movement Ledger Found for the warehouse")
 
 	for cb in cb_list:
-		cb_doc = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", cb["name"])
+		cb_doc = cb
 		if _attribute_value(cb_doc.size) not in sizes:
 			sizes.append(_attribute_value(cb_doc.size))
 

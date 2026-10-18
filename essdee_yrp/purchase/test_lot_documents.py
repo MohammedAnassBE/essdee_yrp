@@ -38,6 +38,7 @@ class TestLotDocuments(FrappeTestCase):
 		self.assertEqual(query.call_args_list[1].args[0], "SD YRP Lot MultiSelect")
 		self.assertEqual(query.call_args_list[1].kwargs["filters"]["parentfield"], "sd_lot")
 		self.assertEqual(query.call_args_list[2].args[0], "Purchase Order Item")
+		self.assertTrue(all(call.kwargs.get("order_by", "modified desc") is None for call in query.call_args_list))
 
 	def test_visible_query_excludes_cancelled_and_keeps_total_count(self):
 		with ExitStack() as stack:

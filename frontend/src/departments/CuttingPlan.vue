@@ -154,6 +154,7 @@ const formView = ref(null)
 let loadSequence = 0
 let probeSequence = 0
 let suppressNextLoaded = false
+let pendingView = null
 const showSidebar = computed(() => Boolean(
 	workspaceLoading.value
 	|| workspaceData.value.permissions?.can_read_marker
@@ -174,6 +175,13 @@ const detailFields = [
 	"no_of_colours_completed",
 ]
 
+function loadView(name) {
+	return callMethod(
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data",
+		{ cutting_plan: name },
+	)
+}
+
 async function documentLoaded(payload, force = false) {
 	const document = payload?.doc || payload
 	if (!document?.name) return
@@ -188,10 +196,9 @@ async function documentLoaded(payload, force = false) {
 	workspaceLoading.value = true
 	if (workspaceReady.value) workspaceError.value = ""
 	try {
-		const data = await callMethod(
-			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.get_web_view_data",
-			{ cutting_plan: document.name },
-		)
+		const pending = !force && pendingView?.name === document.name ? pendingView.promise : null
+		pendingView = null
+		const data = await (pending || loadView(document.name))
 		if (sequence === loadSequence) {
 			workspaceData.value = data || {}
 			workspaceReady.value = true
@@ -228,10 +235,16 @@ async function probeEditor() {
 	workspaceReady.value = false
 	currentDocument.value = null
 	suppressNextLoaded = false
+	pendingView = null
 	try {
 		const data = await getCuttingPlanEditor(requestedId)
 		if (sequence !== probeSequence || requestedId !== cuttingPlanId.value) return
 		editorProbe.value = data
+		if (data?.record?.docstatus === 1) {
+			const promise = loadView(requestedId)
+			promise.catch(() => {}) // The form load consumes and displays this error.
+			pendingView = { name: requestedId, promise }
+		}
 	} catch {
 		// FormView remains the read-only fallback and will expose its own load error.
 	} finally {
@@ -240,6 +253,9 @@ async function probeEditor() {
 }
 
 function editorSaved(record) {
+	pendingView = null
+	loadSequence += 1
+	suppressNextLoaded = false
 	editorProbe.value = {
 		...editorProbe.value,
 		record: { ...(editorProbe.value?.record || {}), ...record },

@@ -1,10 +1,12 @@
 import json
 import math
 from itertools import groupby
+from copy import deepcopy
 
 # Copyright (c) 2024, Essdee and contributors
 # For license information, please see license.txt
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe.model.document import Document
 from frappe.model.naming import make_autoname
 from frappe.utils import cint, flt, now_datetime
@@ -571,6 +573,11 @@ def fetch_order_item_details(items, production_detail, process=None, includes_pa
 
 def build_order_item_details(items, ipd_doc, field="quantity"):
 	"""Group order rows into the CutPlanItems matrix using `field` as the quantity."""
+	return build_order_item_stages(items, ipd_doc, (field,))[field]
+
+
+def build_order_item_stages(items, ipd_doc, fields):
+	"""Share the matrix structure while keeping each stage's quantities separate."""
 	from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 	items = [item.as_dict() for item in items]
@@ -599,7 +606,7 @@ def build_order_item_details(items, ipd_doc, field="quantity"):
 		current_item_attribute_details["primary_attribute_values"] = primary_values
 		if item["primary_attribute"]:
 			for attr in current_item_attribute_details["primary_attribute_values"]:
-				item["values"][attr] = {"qty": 0}
+				item["values"][attr] = {"qty": dict.fromkeys(fields, 0)}
 			for variant in variants:
 				set_combination = update_if_string_instance(variant.set_combination)
 				if set_combination:
@@ -613,12 +620,12 @@ def build_order_item_details(items, ipd_doc, field="quantity"):
 				for attr in current_variant.attributes:
 					if attr.attribute == item.get("primary_attribute"):
 						item["values"][_attribute_value(attr.attribute_value)] = {
-							"qty": getattr(variant, field, 0),
+							"qty": {field: getattr(variant, field, 0) for field in fields},
 						}
 						break
 		else:
 			item["values"]["default"] = {
-				"qty": getattr(variants[0], field, 0),
+				"qty": {field: getattr(variants[0], field, 0) for field in fields},
 			}
 
 		index = get_item_group_index(item_details, current_item_attribute_details)
@@ -639,22 +646,26 @@ def build_order_item_details(items, ipd_doc, field="quantity"):
 			)
 		else:
 			item_details[index]["items"].append(item)
-	for item in item_details:
-		size_wise_total = {}
-		total_sum = 0
-		for row in item["items"]:
-			sum = 0
-			for val in row["values"]:
-				size_wise_total.setdefault(val, 0)
-				size_wise_total[val] += row["values"][val]["qty"]
-				sum += row["values"][val]["qty"]
-			row["total_qty"] = sum
-			total_sum += sum
-		item["size_wise_total"] = size_wise_total
-		item["total_sum"] = total_sum
+	stages = {}
+	for field in fields:
+		stage = deepcopy(item_details)
+		for item in stage:
+			size_wise_total = {}
+			total_sum = 0
+			for row in item["items"]:
+				sum = 0
+				for val in row["values"]:
+					row["values"][val]["qty"] = row["values"][val]["qty"][field]
+					size_wise_total.setdefault(val, 0)
+					size_wise_total[val] += row["values"][val]["qty"]
+					sum += row["values"][val]["qty"]
+				row["total_qty"] = sum
+				total_sum += sum
+			item["size_wise_total"] = size_wise_total
+			item["total_sum"] = total_sum
 
-	return item_details
-
+		stages[field] = stage
+	return stages
 
 def get_quantity(attr, packing_attribute_details):
 	for item in packing_attribute_details:
@@ -1008,6 +1019,11 @@ def get_ironing_mistake_pf_items(lot):
 
 @frappe.whitelist()
 def get_ocr_details(lot):
+	with attribute_read_scope():
+		return _read_get_ocr_details(lot)
+
+
+def _read_get_ocr_details(lot):
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
 	lot_dict = {}
@@ -1033,15 +1049,25 @@ def get_ocr_details(lot):
 		"YRP Item Production Detail", ipd, ["stiching_process", "primary_item_attribute", "packing_combo"]
 	)
 	includes_packing_process = None
+	work_orders = {}
+	restricted = False
 	for wo in wo_list:
-		wo_doc = frappe.get_doc("YRP Work Order", wo)
+		wo_doc = frappe.get_lazy_doc("YRP Work Order", wo)
+		work_orders[wo] = wo_doc
 		if wo_doc.includes_packing:
 			includes_packing_process = wo_doc.process_name
+		if not _ocr_can_read(wo_doc):
+			restricted = True
+			continue
 		cutting_plans = frappe.get_all(
 			"SD YRP Cutting Plan",
 			filters={"work_order": wo},
 			pluck="name",
 		)
+		cutting_plans = [
+			name for name in cutting_plans
+			if frappe.session.user == "Administrator" or _ocr_can_read(frappe.get_doc("SD YRP Cutting Plan", name))
+		]
 		lot_dict["processes"].setdefault(
 			wo_doc.process_name,
 			{
@@ -1091,7 +1117,20 @@ def get_ocr_details(lot):
 
 	grn_item_dict = {}
 	for grn in grn_list:
-		grn_doc = frappe.get_doc("YRP Goods Received Note", grn)
+		grn_doc = frappe.get_lazy_doc("YRP Goods Received Note", grn)
+		if frappe.session.user != "Administrator":
+			source = grn_doc.against_id
+			if not source:
+				restricted = True
+				continue
+			if source not in work_orders:
+				try:
+					work_orders[source] = frappe.get_lazy_doc("YRP Work Order", source)
+				except frappe.DoesNotExistError:
+					work_orders[source] = None
+			if not work_orders[source] or not _ocr_can_read(work_orders[source]):
+				restricted = True
+				continue
 		dynamic_packing = cint(grn_doc.get("packing_calculation_version")) >= 2
 		for row in grn_doc.items:
 			grn_item_dict.setdefault(row.item_variant, 0)
@@ -1100,8 +1139,12 @@ def get_ocr_details(lot):
 			)
 
 	for variant in grn_item_dict:
+		if restricted and includes_packing_process not in lot_dict["processes"]:
+			continue
 		attr_details = get_variant_attr_details(variant)
 		size = attr_details[primary]
+		if restricted and size not in lot_dict["processes"].get(includes_packing_process, {}).get("data", {}):
+			continue
 		lot_dict["processes"][includes_packing_process]["total_received"] += grn_item_dict[variant]
 		lot_dict["processes"][includes_packing_process]["data"][size]["received"] += grn_item_dict[
 			variant
@@ -1113,8 +1156,10 @@ def get_ocr_details(lot):
 		pluck="name",
 	)
 	for finishing_plan in finishing_plan_list:
+		finishing_doc = frappe.get_lazy_doc("SD YRP Finishing Plan", finishing_plan)
+		if not _ocr_can_read(finishing_doc):
+			continue
 		lot_dict["finishing_plan_list"].append(finishing_plan)
-		finishing_doc = frappe.get_doc("SD YRP Finishing Plan", finishing_plan)
 		batch_tracked_packing = bool(
 			finishing_doc.work_order
 			and frappe.db.exists(
@@ -1140,6 +1185,10 @@ def get_ocr_details(lot):
 			lot_dict["total_dispatch"] += dispatched
 
 	return lot_dict
+
+
+def _ocr_can_read(doc):
+	return frappe.session.user == "Administrator" or frappe.has_permission(doc.doctype, "read", doc=doc)
 
 
 # @frappe.whitelist()

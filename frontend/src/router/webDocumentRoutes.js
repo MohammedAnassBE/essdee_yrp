@@ -38,3 +38,7 @@ export function webDocumentPath(doctype, name, currentPath = globalThis.location
 	const query = new URLSearchParams({ doctype: String(doctype), name: String(name) })
 	return `/web/document-unavailable?${query.toString()}`
 }
+
+export function webDocumentRoute(doctype, name, currentPath) {
+	return webDocumentPath(doctype, name, currentPath).replace(/^\/web(?=\/|$)/, "") || "/"
+}

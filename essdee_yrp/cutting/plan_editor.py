@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+
 from copy import deepcopy
 
+from yrp.attribute_read_context import attribute_read_scope
 import frappe
 from frappe import _
 from frappe.model import get_permitted_fields
@@ -301,6 +303,11 @@ def load_lot_items(lot: str) -> dict:
 
 @frappe.whitelist()
 def get_editor(cutting_plan: str | None = None, lot: str | None = None) -> dict:
+	with attribute_read_scope():
+		return _build_editor(cutting_plan, lot)
+
+
+def _build_editor(cutting_plan: str | None = None, lot: str | None = None) -> dict:
 	if cutting_plan:
 		doc = frappe.get_doc(DOCTYPE, cutting_plan)
 		frappe.has_permission(DOCTYPE, ptype="read", doc=doc, throw=True)

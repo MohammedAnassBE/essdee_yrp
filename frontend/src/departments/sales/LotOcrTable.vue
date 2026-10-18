@@ -10,8 +10,8 @@
 						<td rowspan="3" class="ppo-lot-ocr__serial">{{ processIndex + 1 }}</td>
 						<th rowspan="3" class="ppo-lot-ocr__process">{{ process.name }}</th>
 						<td rowspan="3" class="ppo-lot-ocr__documents">
-							<div v-if="process.wo_list.length"><span>Work Orders</span><template v-for="document in process.wo_list" :key="document"><a v-if="linked" :href="webDocumentPath('YRP Work Order', document)">{{ document }}</a><strong v-else>{{ document }}</strong></template></div>
-							<div v-if="process.cp_list.length"><span>Cutting Plans</span><template v-for="document in process.cp_list" :key="document"><a v-if="linked" :href="webDocumentPath('SD YRP Cutting Plan', document)">{{ document }}</a><strong v-else>{{ document }}</strong></template></div>
+							<div v-if="process.wo_list.length"><span>Work Orders</span><template v-for="document in process.wo_list" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('YRP Work Order', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div>
+							<div v-if="process.cp_list.length"><span>Cutting Plans</span><template v-for="document in process.cp_list" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('SD YRP Cutting Plan', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div>
 							<em v-if="!process.wo_list.length && !process.cp_list.length">—</em>
 						</td>
 						<th>Sent</th>
@@ -32,7 +32,7 @@
 				<tr v-if="!processRows.length" class="ppo-lot-ocr__empty"><td :colspan="sizes.length + 5">No submitted Work Order movement is available for this Lot.</td></tr>
 				<tr class="ppo-lot-ocr__dispatch">
 					<td>—</td><th>Dispatch</th>
-					<td class="ppo-lot-ocr__documents"><div v-if="finishingPlans.length"><span>Finishing Plans</span><template v-for="document in finishingPlans" :key="document"><a v-if="linked" :href="webDocumentPath('SD YRP Finishing Plan', document)">{{ document }}</a><strong v-else>{{ document }}</strong></template></div><em v-else>—</em></td>
+					<td class="ppo-lot-ocr__documents"><div v-if="finishingPlans.length"><span>Finishing Plans</span><template v-for="document in finishingPlans" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('SD YRP Finishing Plan', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div><em v-else>—</em></td>
 					<th>Dispatched</th>
 					<td v-for="size in sizes" :key="`dispatch-${size}`">{{ formatNumber(dispatchDetail[size]) }}</td>
 					<td class="ppo-lot-ocr__total">{{ formatNumber(payload.total_dispatch) }}</td>
@@ -44,8 +44,9 @@
 
 <script setup>
 import { computed } from "vue"
+import { RouterLink } from "vue-router"
 
-import { webDocumentPath } from "../../router/webDocumentRoutes.js"
+import { webDocumentRoute } from "../../router/webDocumentRoutes.js"
 
 const props = defineProps({
 	payload: { type: Object, default: () => ({}) },

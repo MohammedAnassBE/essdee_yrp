@@ -5,6 +5,7 @@ import json
 import frappe
 from frappe.utils import cint, date_diff, flt, get_datetime, getdate, now_datetime
 from yrp import attribute_links as attribute_db
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import (
@@ -439,6 +440,11 @@ def get_box_sticker_mrp_map(production_order, item=None):
 
 @frappe.whitelist()
 def get_order_editor_context(item, production_order=None):
+	with attribute_read_scope():
+		return _build_order_editor_context(item, production_order)
+
+
+def _build_order_editor_context(item, production_order=None):
 	item_doc = frappe.get_cached_doc("Item", item)
 	item_doc.check_permission("read")
 	attribute_details = get_attribute_details(item)
@@ -533,6 +539,11 @@ def get_primary_values(item):
 
 @frappe.whitelist()
 def get_order_qty(items):
+	with attribute_read_scope():
+		return _build_order_qty(items)
+
+
+def _build_order_qty(items):
 	items = [item.as_dict() for item in items]
 	order_qty = {}
 	for row in items:
@@ -557,6 +568,11 @@ def get_order_qty(items):
 
 
 def get_ordered_details(items):
+	with attribute_read_scope():
+		return _build_ordered_details(items)
+
+
+def _build_ordered_details(items):
 	items = [item.as_dict() for item in items]
 	lot_wise_detail = {}
 	for row in items:

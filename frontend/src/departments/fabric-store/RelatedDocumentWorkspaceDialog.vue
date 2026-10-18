@@ -30,10 +30,22 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"
-import { computed, ref, watch } from "vue"
+import { computed, defineAsyncComponent, h, ref, watch } from "vue"
 
-import FabricDeliveryChallan from "../FabricDeliveryChallan.vue"
-import FabricGoodsReceivedNote from "../FabricGoodsReceivedNote.vue"
+function workspaceModule(loader) {
+	const state = (message, severity) => ({
+		render: () => h("div", { class: "related-document-workspace-dialog__unsupported" }, [
+			h(Message, { severity, closable: false }, () => message),
+			h(Button, { label: "Close", severity: "secondary", onClick: close }),
+		]),
+	})
+	return defineAsyncComponent({
+		loader,
+		delay: 0,
+		loadingComponent: state("Loading workspace…", "secondary"),
+		errorComponent: state("Unable to load the workspace. Close and reopen to retry.", "error"),
+	})
+}
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -43,8 +55,8 @@ const props = defineProps({
 })
 const emit = defineEmits(["update:visible", "changed", "closed"])
 const components = {
-	"YRP Delivery Challan": FabricDeliveryChallan,
-	"YRP Goods Received Note": FabricGoodsReceivedNote,
+	"YRP Delivery Challan": workspaceModule(() => import("../FabricDeliveryChallan.vue")),
+	"YRP Goods Received Note": workspaceModule(() => import("../FabricGoodsReceivedNote.vue")),
 }
 const documentLabels = {
 	"YRP Delivery Challan": "Delivery Challan",

@@ -8,6 +8,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, now, sbool
 from yrp import attribute_links as attribute_db
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant
@@ -456,7 +457,9 @@ def fetch_cloth_details(items):
 	item_details = []
 	for item in items:
 		variant = item.cloth_item_variant
-		variant_doc = frappe.get_doc("Item", variant)
+		variant_doc = (
+			frappe.db.get_value("Item", variant, ["name", "variant_of"], as_dict=True) if variant else None
+		) or frappe.get_doc("Item", variant)
 		item_details.append(
 			{
 				"accessory": item.accessory,
@@ -1247,11 +1250,16 @@ def create_recut_print_panel(cutting_plan, type, item_details):
 
 @frappe.whitelist()
 def get_recut_print_panel_details(cutting_plan, type):
-	frappe.get_doc("SD YRP Cutting Plan", cutting_plan).check_permission("read")
+	doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
+	doc.check_permission("read")
+	return _get_recut_print_panel_details(doc, type)
+
+
+def _get_recut_print_panel_details(cutting_plan_doc, type):
 	frappe.has_permission("SD YRP Recut and Print Panel", "read", throw=True)
 	doc_list = frappe.get_all(
 		"SD YRP Recut and Print Panel",
-		filters={"cutting_plan": cutting_plan, "docstatus": 1, "type": type},
+		filters={"cutting_plan": cutting_plan_doc.name, "docstatus": 1, "type": type},
 		pluck="name",
 	)
 	items = {}
@@ -1287,6 +1295,11 @@ def get_recut_print_panel_details(cutting_plan, type):
 @frappe.whitelist()
 def get_web_view_data(cutting_plan):
 	"""Return the permission-checked data rendered by the Cutting Plan web tabs."""
+	with attribute_read_scope():
+		return _build_web_view_data(cutting_plan)
+
+
+def _build_web_view_data(cutting_plan):
 	cutting_plan_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 	cutting_plan_doc.check_permission("read")
 
@@ -1315,8 +1328,8 @@ def get_web_view_data(cutting_plan):
 		"grammage_change_logs": [row.as_dict() for row in cutting_plan_doc.grammage_change_logs],
 		"completed_items": update_if_string_instance(cutting_plan_doc.completed_items_json),
 		"incomplete_items": update_if_string_instance(cutting_plan_doc.incomplete_items_json),
-		"recut_details": get_recut_print_panel_details(cutting_plan, "Recut") if can_read_recut else {},
-		"print_panel_details": get_recut_print_panel_details(cutting_plan, "Print Panel") if can_read_recut else {},
+		"recut_details": _get_recut_print_panel_details(cutting_plan_doc, "Recut") if can_read_recut else {},
+		"print_panel_details": _get_recut_print_panel_details(cutting_plan_doc, "Print Panel") if can_read_recut else {},
 		"planned_detail": planned_detail,
 		"markers": _get_web_cutting_markers(cutting_plan_doc),
 		"laysheets": _get_web_cutting_laysheets(cutting_plan_doc),

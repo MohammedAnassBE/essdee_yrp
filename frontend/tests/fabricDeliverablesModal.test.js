@@ -7,6 +7,8 @@ import { renderToString } from "@vue/server-renderer"
 import * as Vue from "vue"
 import { collectManualKnittingContract, createFabricEntries } from "../src/composables/useFabricDeliverableContext.js"
 
+import { fabricColourError, fabricEntryError, fabricEntryLabel, fabricPlanningHint, fabricUnavailableMessage, fabricWarnings, fabricYarnTotals, hydrateFabricRows } from "../src/departments/fabric-store/fabricCalculate.js"
+
 const source = fs.readFileSync(new URL("../src/departments/fabric-store/WorkOrderActionPanel.vue", import.meta.url), "utf8")
 const template = parse(source).descriptor.template.content
 const render = new Function("Vue", compile(template, { mode: "function" }).code)(Vue)
@@ -19,9 +21,14 @@ async function renderPanel(row, sourceProcess = {}) {
 			busy: false, canSubmit: true, submitLabel: "Apply", visible: true, title: "Calculate Fabric Deliverables", largePanel: true,
 			mode: "calculate_fabric", loading: false, acting: "", error: "", draft: {},
 			fabricContext: { source_process: sourceProcess, warnings: [], source_process_options: [] },
-			fabricRows: [row], isCloseMode: false, canApply: true, discardVisible: false,
+			fabricRows: hydrateFabricRows({ rows: [row] }), isCloseMode: false, canApply: true, discardVisible: false,
 		}),
+		computed: {
+			fabricUnavailable() { return fabricUnavailableMessage(this.fabricContext) },
+			fabricQuantityWarnings() { return fabricWarnings(this.fabricRows) },
+		},
 		methods: {
+			fabricColourError, fabricEntryError, fabricEntryLabel, fabricPlanningHint, fabricYarnTotals,
 			discardAction() {}, submit() {}, requestVisibility() {}, refreshFabricSource() {}, apply() {}, discardAndClose() {},
 			attributeText: (attrs) => Object.values(attrs || {}).join(" · "),
 			number: (value) => String(value || 0), sourcePreview: () => "",
@@ -42,15 +49,15 @@ test("current fabric panel edits physical knitting inputs and outputs with exact
 	row.manualEntry = createFabricEntries({ rows: [row] })[0]
 	row.manualEntry.manualDeliverables[0].qty = 8
 	const html = await renderPanel(row)
-	assert.match(html, /Yarn to deliver/)
-	assert.match(html, /Cloth to receive/)
+	assert.match(html, /Enter the yarn quantities to deliver/)
+	assert.match(html, /Cloth quantity expected back/)
 	const contract = collectManualKnittingContract(row, row.manualEntry)
 	assert.equal(contract.routes[0].qr.key, "opaque-route:1")
 	assert.deepEqual(contract.routes[0].manualInputs, [{ key: "opaque-yarn:1", qty: 8 }])
 })
 
 test("unavailable predecessor stock keeps the blocking explanation", async () => {
-	const html = await renderPanel({ fabric_row: "FABRIC-1", entries: [] }, { unavailable: true })
+	const html = await renderPanel({ fabric_row: "FABRIC-1", entries: [] }, { unavailable: true, label: "Knitting" })
 	assert.match(html, /No predecessor stock available/)
-	assert.match(html, /Submit the predecessor GRN/)
+	assert.match(html, /Submit an unallocated Knitting GRN/)
 })

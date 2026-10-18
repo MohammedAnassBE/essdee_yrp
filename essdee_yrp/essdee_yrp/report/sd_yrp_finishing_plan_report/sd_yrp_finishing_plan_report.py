@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe.utils import flt
 from yrp import attribute_links as attribute_db
 from yrp.utils import get_variant_attr_details
@@ -136,7 +137,44 @@ def get_columns():
 	]
 
 
+def _report_plans(names):
+	plans = {}
+	fields = ("finishing_old_lot_given_items", "finishing_plan_details", "finishing_plan_reworked_details", "finishing_plan_grn_details")
+	meta = frappe.get_meta("SD YRP Finishing Plan")
+	for offset in range(0, len(names), 500):
+		chunk = names[offset:offset + 500]
+		for row in frappe.get_all("SD YRP Finishing Plan", filters={"name": ["in", chunk]}, fields=["*"], limit_page_length=0):
+			plans[row.name] = row
+		tied = set()
+		for field in fields:
+			parents = [name for name in chunk if name in plans and (field == "finishing_old_lot_given_items" or plans[name].is_set_item)]
+			for name in parents:
+				plans[name][field] = []
+			if not parents:
+				continue
+			seen = set()
+			for row in frappe.get_all(
+				meta.get_field(field).options,
+				filters={"parent": ["in", parents], "parenttype": "SD YRP Finishing Plan", "parentfield": field},
+				fields=["*"], order_by="idx asc", limit_page_length=0,
+			):
+				key = (row.parent, row.idx)
+				if key in seen:
+					tied.add(row.parent)
+				seen.add(key)
+				plans[row.parent][field].append(row)
+		# A tied idx has no defined secondary order; retain the original per-plan read.
+		for name in tied:
+			plans[name] = frappe.get_lazy_doc("SD YRP Finishing Plan", name)
+	return plans
+
+
 def get_data(filters):
+	with attribute_read_scope():
+		return _read_get_data(filters)
+
+
+def _read_get_data(filters):
 	data = []
 	fil = {}
 	if filters.get("lot"):
@@ -164,8 +202,9 @@ def get_data(filters):
 			fil["item"] = ["in", item_list]
 
 	fp_list = frappe.get_all("SD YRP Finishing Plan", filters=fil, pluck="name")
+	plans = _report_plans(fp_list)
 	for fp_name in fp_list:
-		fp_doc = frappe.get_doc("SD YRP Finishing Plan", fp_name)
+		fp_doc = plans.get(fp_name) or frappe.get_lazy_doc("SD YRP Finishing Plan", fp_name)
 		packing_summary = get_finishing_packing_summary(fp_doc)
 		report_pieces_per_box = fp_doc.pieces_per_box
 		if packing_summary.dynamic_ratio_packing:

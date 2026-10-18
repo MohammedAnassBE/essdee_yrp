@@ -15,6 +15,7 @@ from frappe.contacts.doctype.address_template.address_template import (
 from frappe.permissions import add_permission
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.patches.restore_web_read_indexes import execute as ensure_web_read_indexes
 from essdee_yrp.web_build import build_web_spa
 
 # Roles referenced by the migrated MRP DocType permissions but not provided by
@@ -110,6 +111,8 @@ def after_install():
 	from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
 
 	ensure_purchase_order_approval_route()
+	# Schema synchronization above can remove non-metadata single-column indexes.
+	ensure_web_read_indexes()
 
 
 def after_migrate():
@@ -142,6 +145,8 @@ def after_migrate():
 	from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
 
 	ensure_purchase_order_approval_route()
+	# Schema synchronization above can remove non-metadata single-column indexes.
+	ensure_web_read_indexes()
 	build_web_spa()
 
 

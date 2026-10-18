@@ -1049,6 +1049,19 @@ def get_cut_sheet_report(date, location):
 	return report
 
 
+def _lots_in_category(rows, category):
+	names = list(dict.fromkeys(row.get("item") for row in rows if row.get("item")))
+	categories = {}
+	for offset in range(0, len(names), 500):
+		categories.update({row.name: row.product_category for row in frappe.get_all(
+			"Item", filters={"name": ["in", names[offset:offset + 500]]},
+			fields=["name", "product_category"], limit_page_length=0,
+		)})
+	return [row for row in rows if (
+		categories.get(row.get("item")) if row.get("item") else frappe.db.get_value("Item", row.get("item"), "product_category")
+	) == category]
+
+
 @frappe.whitelist()
 def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None):
 	require_cutting_report_access()
@@ -1073,11 +1086,7 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 		limit_page_length=0,
 	)
 	if category:
-		lot_rows = [
-			row
-			for row in lot_rows
-			if frappe.db.get_value("Item", row.get("item"), "product_category") == category
-		]
+		lot_rows = _lots_in_category(lot_rows, category)
 	lot_data = {}
 	output_lots = []
 	output_items = []

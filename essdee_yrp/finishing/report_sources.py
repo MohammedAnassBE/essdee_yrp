@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import frappe
+from yrp.attribute_read_context import attribute_read_scope
 from frappe import _
 from frappe.utils import cint, flt, getdate
 from yrp import attribute_links as attribute_db
@@ -100,6 +101,11 @@ def add_rejected_row(data, detail, row, ipd):
 
 
 def get_rejection_items(start_date=None, end_date=None, lot=None, item=None, colour=None):
+	with attribute_read_scope():
+		return _read_get_rejection_items(start_date, end_date, lot, item, colour)
+
+
+def _read_get_rejection_items(start_date=None, end_date=None, lot=None, item=None, colour=None):
 	require_read(REWORK_DOCTYPE)
 	conditions, values = [], {}
 	if start_date:
@@ -180,6 +186,11 @@ def build_rework_completion(rows, ipd, primary_values, default_received_type):
 
 
 def get_rework_completion(lot, process):
+	with attribute_read_scope():
+		return _read_get_rework_completion(lot, process)
+
+
+def _read_get_rework_completion(lot, process):
 	require_read(REWORK_DOCTYPE)
 	if not lot or not process:
 		frappe.throw(_("Select a Lot and a Process."))
@@ -393,6 +404,11 @@ def ironing_processes():
 
 
 def get_ironing_dpr(date=None, lot=None, item=None, dc_name=None, from_date=None, to_date=None, summary=0):
+	with attribute_read_scope():
+		return _read_get_ironing_dpr(date, lot, item, dc_name, from_date, to_date, summary)
+
+
+def _read_get_ironing_dpr(date=None, lot=None, item=None, dc_name=None, from_date=None, to_date=None, summary=0):
 	require_read("YRP Delivery Challan")
 	rows = frappe.get_list(
 		"YRP Delivery Challan",
@@ -403,10 +419,10 @@ def get_ironing_dpr(date=None, lot=None, item=None, dc_name=None, from_date=None
 	items = {}
 	for row in frappe.get_all(
 		"YRP Delivery Challan Item",
-		filters={"parent": ["in", [row.name for row in rows] or [""]], "parenttype": "YRP Delivery Challan"},
+		filters={"parent": ["in", [row.name for row in rows]], "parenttype": "YRP Delivery Challan"},
 		fields=["parent", "item_variant", "delivered_quantity"],
 		order_by="parent asc, idx asc",
-	):
+	) if rows else []:
 		items.setdefault(row.parent, []).append(row)
 	ipds, challans = {}, []
 	for row in rows:

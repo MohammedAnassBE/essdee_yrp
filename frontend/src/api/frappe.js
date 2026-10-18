@@ -1,5 +1,15 @@
 import { extractServerMessage } from "./errorMessages.js"
 
+const pendingReads = new Map()
+const pendingMetadata = new Map()
+let readGeneration = 0
+
+export function invalidatePendingReads() {
+	readGeneration += 1
+	pendingReads.clear()
+	pendingMetadata.clear()
+}
+
 function csrfToken() {
 	return window.csrf_token || window.frappe?.csrf_token || ""
 }
@@ -25,6 +35,16 @@ function redirectToLogin() {
 }
 
 async function request(url, options = {}) {
+	const writing = url.startsWith("/api/resource/") && !["GET", "HEAD"].includes(options.method || "GET")
+	if (writing) invalidatePendingReads()
+	try {
+		return await sendRequest(url, options)
+	} finally {
+		if (writing) invalidatePendingReads()
+	}
+}
+
+async function sendRequest(url, options = {}) {
 	const response = await fetch(url, {
 		credentials: "include",
 		...options,
@@ -53,6 +73,16 @@ async function request(url, options = {}) {
 }
 
 export async function callMethod(method, args = {}, requestOptions = {}) {
+	// Generic methods may write. Keep only the explicitly shared readers in one generation.
+	invalidatePendingReads()
+	try {
+		return await invokeMethod(method, args, requestOptions)
+	} finally {
+		invalidatePendingReads()
+	}
+}
+
+async function invokeMethod(method, args = {}, requestOptions = {}) {
 	const payload = await request(`/api/method/${method}`, {
 		...requestOptions,
 		method: "POST",
@@ -136,16 +166,43 @@ export function uploadFile(file, options = {}) {
 	})
 }
 
-export function getActiveWorkflow(doctype) {
-	return callMethod("essdee_yrp.api.workflow.get_active_workflow", { doctype })
+
+function orderedArguments(value) {
+	if (Array.isArray(value)) return value.map(orderedArguments)
+	if (value && typeof value === "object") {
+		return Object.fromEntries(Object.keys(value).sort().map((key) => [key, orderedArguments(value[key])]))
+	}
+	return value
 }
 
+async function sharedRead(method, args) {
+	const identity = [window.location?.host, window.frappe?.session?.user, window.frappe?.boot?.user?.name, csrfToken()]
+	const key = JSON.stringify([...identity, readGeneration, method, orderedArguments(args)])
+	let pending = pendingReads.get(key)
+	if (!pending) {
+		pending = invokeMethod(method, args).finally(() => pendingReads.delete(key))
+		pendingReads.set(key, pending)
+	}
+	return structuredClone(await pending)
+}
+
+export function getActiveWorkflow(doctype) {
+	return sharedRead("essdee_yrp.api.workflow.get_active_workflow", { doctype })
+}
+
+
 export async function getMeta(doctype) {
-	const payload = await request(
-		`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`,
-		{ method: "GET" },
-	)
-	return payload.docs || []
+	const identity = [window.location?.host, window.frappe?.session?.user, window.frappe?.boot?.user?.name, csrfToken()]
+	const key = JSON.stringify([...identity, readGeneration, doctype])
+	let pending = pendingMetadata.get(key)
+	if (!pending) {
+		pending = request(
+			`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`,
+			{ method: "GET" },
+		).then((payload) => payload.docs || []).finally(() => pendingMetadata.delete(key))
+		pendingMetadata.set(key, pending)
+	}
+	return structuredClone(await pending)
 }
 
 export async function getDoc(doctype, name) {
@@ -202,7 +259,7 @@ export async function getList(
 }
 
 export async function getCount(doctype, filters = []) {
-	const value = await callMethod("frappe.desk.reportview.get_count", { doctype, filters })
+	const value = await sharedRead("frappe.desk.reportview.get_count", { doctype, filters })
 	return Number(value || 0)
 }
 
@@ -214,7 +271,7 @@ export async function searchLink(
 	matchVisibleOnly = false,
 ) {
 	if (!doctype) return []
-	const rows = await callMethod("essdee_yrp.api.link_search.link_search", {
+	const rows = await sharedRead("essdee_yrp.api.link_search.link_search", {
 		doctype,
 		txt: text,
 		filters,
@@ -232,7 +289,7 @@ export async function searchLinkedDocument(
 	pageLength = 20,
 ) {
 	if (!doctype || !linkDoctype || !linkName) return []
-	const rows = await callMethod("essdee_yrp.api.link_search.linked_document_search", {
+	const rows = await sharedRead("essdee_yrp.api.link_search.linked_document_search", {
 		doctype,
 		link_doctype: linkDoctype,
 		link_name: linkName,

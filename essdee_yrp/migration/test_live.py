@@ -5,6 +5,7 @@ import hashlib
 import json
 import unittest
 from contextlib import ExitStack
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration.sd_yrp_mrp_data_mig
 	MRPDataMigration,
 	_migration_action_reservation,
 )
-from essdee_yrp.migration.config import MigrationSettings, is_target_reset_enabled
+from essdee_yrp.migration.config import MigrationSettings, get_migration_settings, is_target_reset_enabled
 from essdee_yrp.migration.engine import MigrationError
 from essdee_yrp.migration.live import (
 	F15SourceBridge,
@@ -71,6 +72,7 @@ from essdee_yrp.migration.live import (
 	_validate_target_migration_prerequisites,
 	_verified_attachment_url_relocations,
 	_verify_approved_frappe_data,
+	_verify_files,
 	_verify_source_values,
 	_verify_target_setup_state,
 	_verify_transformed_value_batch,
@@ -3428,3 +3430,223 @@ class FGItemMasterMigrationTest(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class MetadataOnlyFilesTest(unittest.TestCase):
+	def setUp(self):
+		self.row = {
+			"name": "FILE-221",
+			"file_name": "image.png",
+			"file_url": "/files/image.png",
+			"file_size": 123,
+			"content_hash": "source-hash",
+			"is_private": 0,
+			"attached_to_doctype": "Example",
+			"attached_to_name": "DOC-1",
+			"attached_to_field": "image",
+		}
+		self.row["source_file_metadata"] = dict(self.row)
+		self.row["app_references"] = [
+			{"doctype": "Example", "name": "DOC-1", "fieldname": "image", "fieldtype": "Attach Image"}
+		]
+		self.source = SimpleNamespace(
+			settings=replace(configured_settings(), copy_file_contents=False),
+			file_status=Mock(
+				return_value={
+					"site": "source.test",
+					"file_count": 1,
+					"unique_content_count": 50,
+					"unique_content_bytes": 99999,
+				}
+			),
+			iter_files=Mock(side_effect=lambda **kwargs: iter([self.row])),
+		)
+		self.plan = SimpleNamespace(
+			specs={
+				"Example": SimpleNamespace(
+					target="Example",
+					field_map={},
+					source_schema={"fields": [{"fieldname": "image", "fieldtype": "Attach Image"}]},
+				)
+			}
+		)
+		self.stack = ExitStack()
+		self.addCleanup(self.stack.close)
+		self.stack.enter_context(
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_table_columns",
+				return_value=list(self.row["source_file_metadata"]),
+			)
+		)
+		self.decode = self.stack.enter_context(
+			patch(
+				"essdee_yrp.migration.live._decode_and_validate_file_payload",
+				side_effect=AssertionError("Must not read bytes"),
+			)
+		)
+
+	def test_config_boolean_and_public_snapshot(self):
+		for value in (True, False, "false", 0, 1, None):
+			with (
+				self.subTest(value=value),
+				patch(
+					"essdee_yrp.migration.config.frappe.conf",
+					{
+						"essdee_yrp_migration": {
+							"source_bench": "/source",
+							"source_site": "source.test",
+							"copy_file_contents": value,
+						}
+					},
+				),
+				patch(
+					"essdee_yrp.migration.config.frappe.get_installed_apps",
+					return_value=["yrp", "essdee_yrp", "frappe_tools", "spine"],
+				),
+				patch("essdee_yrp.migration.config._validate_local_source"),
+				patch("essdee_yrp.migration.config.frappe.local", SimpleNamespace(site="target.test")),
+			):
+				if isinstance(value, bool):
+					self.assertIs(get_migration_settings().public_dict()["copy_file_contents"], value)
+				else:
+					with self.assertRaisesRegex(MigrationError, "must be a boolean"):
+						get_migration_settings()
+		self.assertTrue(configured_settings().copy_file_contents)
+
+	def test_default_config_copies_contents(self):
+		with (
+			patch(
+				"essdee_yrp.migration.config.frappe.conf",
+				{"essdee_yrp_migration": {"source_bench": "/source", "source_site": "source.test"}},
+			),
+			patch(
+				"essdee_yrp.migration.config.frappe.get_installed_apps",
+				return_value=["yrp", "essdee_yrp", "frappe_tools", "spine"],
+			),
+			patch("essdee_yrp.migration.config._validate_local_source"),
+			patch("essdee_yrp.migration.config.frappe.local", SimpleNamespace(site="target.test")),
+		):
+			self.assertTrue(get_migration_settings().copy_file_contents)
+
+	def test_dry_run_ignores_content_totals_but_checks_file_count(self):
+		result = _run_files("RUN", self.plan, self.source, dry_run=True)
+		self.assertEqual(result["content_skipped"], 1)
+		self.assertEqual(result["missing_source_blob_count"], 0)
+		self.assertEqual(result["file_content_policy"], "Owner-managed file content (metadata only)")
+		self.source.iter_files.assert_called_once_with(
+			start_after=None, allow_missing=False, metadata_only=True
+		)
+		self.source.file_status.return_value["file_count"] = 2
+		with self.assertRaisesRegex(MigrationError, "count mismatch"):
+			_run_files("RUN", self.plan, self.source, dry_run=True)
+
+	def test_resume_restores_settings_and_preserves_metadata_and_references(self):
+		checkpoint = {
+			"version": 2,
+			"doctypes": {},
+			"files": {"last_name": "FILE-220", "processed": 220},
+			"file_settings": {"restored": False, "original_max_file_size": 10, "original_strip_exif": 1},
+		}
+		self.row["orphan_attachment"] = True
+		with (
+			patch("essdee_yrp.migration.live._load_checkpoint", return_value=checkpoint),
+			patch.object(FrappeBulkTarget, "_bulk_upsert") as upsert,
+			patch.object(FrappeBulkTarget, "upsert_file") as blob,
+			patch("essdee_yrp.migration.live._prepare_file_settings") as prepare,
+			patch("essdee_yrp.migration.live._clear_system_settings_cache"),
+			patch("essdee_yrp.migration.live.frappe.db.set_single_value") as settings,
+			patch("essdee_yrp.migration.live.frappe.db.set_value"),
+			patch("essdee_yrp.migration.live.frappe.db.commit") as commit,
+			patch("essdee_yrp.migration.live._update_direct_attachment_field") as attachment,
+		):
+			result = _run_files("RUN", self.plan, self.source, dry_run=False)
+		self.source.iter_files.assert_called_once_with(
+			start_after="FILE-220", allow_missing=False, metadata_only=True
+		)
+		upsert.assert_called_once_with("File", [self.row["source_file_metadata"]])
+		attachment.assert_called_once_with(
+			"Example", "DOC-1", "image", "/files/image.png", source_url="/files/image.png"
+		)
+		blob.assert_not_called()
+		prepare.assert_not_called()
+		settings.assert_has_calls(
+			[
+				call("System Settings", "max_file_size", 10),
+				call("System Settings", "strip_exif_metadata_from_uploaded_images", 1),
+			]
+		)
+		self.assertTrue(checkpoint["file_settings"]["restored"])
+		self.assertEqual(checkpoint["files"]["last_name"], "FILE-221")
+		self.assertEqual(checkpoint["files"]["orphan_attachment_names"], ["FILE-221"])
+		self.assertNotIn("missing_blob_names", checkpoint["files"])
+		self.assertEqual(result["processed"], 221)
+		self.assertEqual(commit.call_count, 2)
+
+	def test_verify_checks_metadata_without_touching_blobs(self):
+		with (
+			patch(
+				"essdee_yrp.migration.live.frappe.db.get_value",
+				return_value=frappe._dict(self.row["source_file_metadata"]),
+			) as get,
+			patch("essdee_yrp.migration.live.frappe.get_doc", side_effect=AssertionError("No blob checks")),
+		):
+			result = _verify_files(self.plan, self.source, allowed_missing_blob_names={"FILE-221"})
+			self.assertEqual(result["status"], "Pass")
+			self.assertEqual(result["audited_missing_blob_count"], 0)
+			get.return_value = None
+			self.assertEqual(_verify_files(self.plan, self.source)["status"], "Failed")
+
+	def test_reviewed_metadata_gate_keeps_file_resume_and_restoration(self):
+		checkpoint = {
+			"version": 2,
+			"doctypes": {"Example": {}},
+			"files": {"last_name": "FILE-220", "processed": 220},
+			"file_settings": {"restored": False, "original_max_file_size": 10},
+		}
+		bound = _bind_checkpoint_to_source_snapshot(checkpoint, {"copy_file_contents": False})
+		self.assertEqual(bound["files"], checkpoint["files"])
+		self.assertEqual(bound["file_settings"], checkpoint["file_settings"])
+		self.assertEqual(bound["doctypes"], {})
+
+	def test_content_policy_change_requires_review(self):
+		before = configured_settings().public_dict()
+		after = self.source.settings.public_dict()
+		migration = SimpleNamespace(report_json=json.dumps({"source_snapshot": before}))
+		with self.assertRaisesRegex(MigrationError, "copy_file_contents"):
+			_require_previous_snapshot(migration, "migrate", after)
+
+	def test_archive_bridge_and_status_request_metadata_only(self):
+		bridge = F15SourceBridge(self.source.settings)
+		for method, command in (
+			(bridge.iter_retired_rows, "retired-rows"),
+			(bridge.iter_framework_rows, "framework-rows"),
+		):
+			with patch.object(bridge, "_run", return_value=iter([])) as run:
+				list(method())
+				run.assert_called_once_with([command, "--metadata-only"])
+
+	def test_interrupted_settings_are_restored_before_inventory_in_both_modes(self):
+		for copy_contents in (True, False):
+			self.source.settings = replace(configured_settings(), copy_file_contents=copy_contents)
+			checkpoint = {"version": 2, "doctypes": {}, "file_settings": {"restored": False}}
+			self.source.file_status.side_effect = MigrationError("Inventory unavailable")
+			with (
+				self.subTest(copy_contents=copy_contents),
+				patch("essdee_yrp.migration.live._load_checkpoint", return_value=checkpoint),
+				patch("essdee_yrp.migration.live._restore_file_settings") as restore,
+			):
+				with self.assertRaisesRegex(MigrationError, "Inventory unavailable"):
+					_run_files("RUN", self.plan, self.source, dry_run=False)
+				restore.assert_called_once_with("RUN", checkpoint)
+
+	def test_verify_file_count_mismatch_is_a_failure(self):
+		self.source.iter_files.side_effect = lambda **kwargs: iter([])
+		result = _verify_files(self.plan, self.source)
+		self.assertEqual(result["status"], "Failed")
+		self.assertEqual(result["failures"], ["File count mismatch: 0 != 1"])
+
+	def test_copy_mode_still_rejects_missing_source_blob(self):
+		self.source.settings = configured_settings()
+		self.row["missing_blob"] = 1
+		with self.assertRaisesRegex(MigrationError, "has no source blob"):
+			_run_files("RUN", self.plan, self.source, dry_run=True)

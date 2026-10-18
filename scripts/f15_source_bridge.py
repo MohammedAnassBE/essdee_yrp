@@ -826,7 +826,7 @@ def audit_physical_field_coverage(frappe, schemas):
 	return {"checked_doctypes": len(schemas), "undefined_empty_fields": undefined}
 
 
-def retired_source_rows(frappe):
+def retired_source_rows(frappe, *, metadata_only=False):
 	for doctype in RETIRED_SOURCE_TABLES:
 		if not frappe.db.table_exists(doctype):
 			continue
@@ -850,12 +850,12 @@ def retired_source_rows(frappe):
 		(RETIRED_SOURCE_TABLES,),
 		as_dict=True,
 	):
-		yield archive_file_row(frappe, row)
+		yield archive_file_row(frappe, row, metadata_only=metadata_only)
 
 
-def archive_file_row(frappe, row):
+def archive_file_row(frappe, row, *, metadata_only=False):
 	record = {"source_doctype": "File", "row": dict(row)}
-	if row.get("is_folder"):
+	if metadata_only or row.get("is_folder"):
 		return record
 	_file_doc, path = _resolve_physical_file(frappe, row)
 	if not path:
@@ -895,17 +895,19 @@ def framework_scope(frappe, schemas, related_names=None):
 	return helper, scope
 
 
-def emit_framework_rows(frappe, schemas):
+def emit_framework_rows(frappe, schemas, *, metadata_only=False):
 	helper, scope = framework_scope(frappe, schemas)
 	for doctype, row in helper["iter_rows"](frappe, scope):
 		_write(
-			archive_file_row(frappe, row) if doctype == "File" else {"source_doctype": doctype, "row": row}
+			archive_file_row(frappe, row, metadata_only=metadata_only)
+			if doctype == "File"
+			else {"source_doctype": doctype, "row": row}
 		)
 	for record in iter_approved_frappe_exact_archive_records(frappe):
 		_write(record)
 
 
-def emit_status(frappe, schemas, source_site):
+def emit_status(frappe, schemas, source_site, *, metadata_only=False):
 	physical_coverage = audit_physical_field_coverage(frappe, schemas)
 	approved_frappe_data = approved_frappe_census(frappe)
 	approved_frappe_exact_archive = approved_frappe_exact_archive_census(frappe)
@@ -936,7 +938,7 @@ def emit_status(frappe, schemas, source_site):
 			)
 	retired_digest = hashlib.sha256()
 	retired_counts = {}
-	for record in retired_source_rows(frappe):
+	for record in retired_source_rows(frappe, metadata_only=metadata_only):
 		retired_counts[record["source_doctype"]] = retired_counts.get(record["source_doctype"], 0) + 1
 		retired_digest.update(json.dumps(record, sort_keys=True, default=_json_default).encode())
 	parent_counts = {}
@@ -2113,16 +2115,16 @@ def main():
 	parser.add_argument("--source-site", required=True)
 	parser.add_argument("--source-app", default="production_api")
 	subparsers = parser.add_subparsers(dest="command", required=True)
-	subparsers.add_parser("status")
+	subparsers.add_parser("status").add_argument("--metadata-only", action="store_true")
 	subparsers.add_parser("schemas")
 	subparsers.add_parser("orphan-children")
 	subparsers.add_parser("auth-rows")
-	subparsers.add_parser("retired-rows")
+	subparsers.add_parser("retired-rows").add_argument("--metadata-only", action="store_true")
 	subparsers.add_parser("reference-data")
 	subparsers.add_parser("related-business-masters")
 	subparsers.add_parser("approved-frappe-data")
 	subparsers.add_parser("approved-frappe-census")
-	subparsers.add_parser("framework-rows")
+	subparsers.add_parser("framework-rows").add_argument("--metadata-only", action="store_true")
 	subparsers.add_parser("framework-census")
 	file_status = subparsers.add_parser("file-status")
 	file_status.add_argument("--names-json")
@@ -2248,7 +2250,7 @@ def main():
 		else:
 			schemas = declared_schemas
 		if args.command == "status":
-			emit_status(frappe, schemas, args.source_site)
+			emit_status(frappe, schemas, args.source_site, metadata_only=args.metadata_only)
 		elif args.command == "schemas":
 			emit_schemas(schemas)
 		elif args.command == "orphan-children":
@@ -2256,7 +2258,7 @@ def main():
 		elif args.command == "auth-rows":
 			emit_auth_rows(frappe, schemas)
 		elif args.command == "retired-rows":
-			for record in retired_source_rows(frappe):
+			for record in retired_source_rows(frappe, metadata_only=args.metadata_only):
 				_write(record)
 		elif args.command == "reference-data":
 			emit_reference_data(frappe)
@@ -2292,7 +2294,7 @@ def main():
 		elif args.command == "approved-frappe-census":
 			_write(approved_frappe_census(frappe))
 		elif args.command == "framework-rows":
-			emit_framework_rows(frappe, schemas)
+			emit_framework_rows(frappe, schemas, metadata_only=args.metadata_only)
 		elif args.command == "framework-census":
 			helper, scope = framework_scope(frappe, schemas)
 			census = helper["census"](frappe, scope)

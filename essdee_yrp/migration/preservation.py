@@ -128,7 +128,9 @@ def run_retired_archive(migration_name, source, *, dry_run=False, verify=False, 
 	for record in source.iter_retired_rows():
 		records.append(record)
 		counts[record["source_doctype"]] += 1
-		if record.get("blob_issue"):
+		if getattr(getattr(source, "settings", None), "copy_file_contents", True) and record.get(
+			"blob_issue"
+		):
 			missing_blobs.append({"name": record["row"]["name"], "issue": record["blob_issue"]})
 		if len(records) > 10000:
 			raise MigrationError(

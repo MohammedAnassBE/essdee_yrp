@@ -315,7 +315,9 @@ def run_framework_history(
 		native = []
 		for record, _encoded in chunk:
 			counts[record["source_doctype"]] += 1
-			if record.get("blob_issue"):
+			if getattr(getattr(source, "settings", None), "copy_file_contents", True) and record.get(
+				"blob_issue"
+			):
 				missing_files.append({"name": record["row"]["name"], "issue": record["blob_issue"]})
 				if not (allow_missing_files or verify):
 					raise MigrationError("A supporting/history source attachment blob is unavailable")

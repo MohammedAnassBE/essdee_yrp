@@ -271,3 +271,40 @@ class FrameworkHistoryTest(unittest.TestCase):
 			with self.assertRaisesRegex(MigrationError, "independently changed"):
 				history.write_timeline([row], target)
 		target.upsert_batch.assert_not_called()
+
+
+class MetadataOnlyHistoryTest(unittest.TestCase):
+	def test_source_history_exports_metadata_without_resolving_bytes(self):
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
+		export = bridge["emit_framework_rows"]
+		row = {"name": "FILE-1", "file_url": "/files/history.png", "file_size": 100}
+		written = []
+		with patch.dict(
+			export.__globals__,
+			{
+				"framework_scope": lambda *args: ({"iter_rows": lambda *args: iter([("File", row)])}, {}),
+				"_resolve_physical_file": Mock(side_effect=AssertionError("Must not read attachment bytes")),
+				"iter_approved_frappe_exact_archive_records": lambda *args: iter([]),
+				"_write": written.append,
+			},
+		):
+			export(SimpleNamespace(), {}, metadata_only=True)
+		self.assertEqual(written, [{"source_doctype": "File", "row": row}])
+
+	def test_metadata_mode_still_writes_encrypted_archive_chunks(self):
+		record = {"source_doctype": "File", "row": {"name": "FILE-1", "file_url": "/files/history.png"}}
+		source = SimpleNamespace(
+			settings=SimpleNamespace(copy_file_contents=False), iter_framework_rows=lambda: iter([record])
+		)
+		with (
+			patch.object(history.frappe.db, "get_value", return_value=None),
+			patch.object(history.frappe.db, "set_value"),
+			patch.object(history.frappe.db, "commit"),
+			patch.object(history, "write_timeline"),
+			patch.object(history, "save_archive_chunk", return_value={}) as save,
+		):
+			result = history.run_framework_history(SimpleNamespace(specs={}), source, "RUN")
+		self.assertEqual(result["missing_blob_count"], 0)
+		self.assertTrue(result["archive_encrypted"])
+		save.assert_called_once()
+		self.assertEqual(json.loads(save.call_args.args[0]), record)

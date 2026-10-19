@@ -14,7 +14,7 @@ from six import string_types
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document
-from yrp.utils import get_panel_colour_combination, get_variant_attr_details, update_if_string_instance
+from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_holiday_list.yrp_holiday_list import get_next_date
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant, get_parent_item
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
@@ -35,6 +35,25 @@ from essdee_yrp.fabric_program import (
 	validate_unique_fabric_cloths,
 )
 from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
+
+
+def get_panel_colour_combination(ipd_doc):
+	indexes = {}
+	comb_details = {}
+	for row in ipd_doc.stiching_item_combination_details:
+		if indexes.get(row.index):
+			major_colour = indexes[row.index]
+			comb_details[major_colour][_attribute_value(row.set_item_attribute_value)] = _attribute_value(
+				row.attribute_value
+			)
+		else:
+			indexes[row.index] = _attribute_value(row.major_attribute_value)
+			comb_details[_attribute_value(row.major_attribute_value)] = {}
+			comb_details[_attribute_value(row.major_attribute_value)][
+				_attribute_value(row.set_item_attribute_value)
+			] = _attribute_value(row.attribute_value)
+
+	return comb_details
 
 
 class SDYRPLot(Document):

@@ -41,6 +41,7 @@ class MigrationSettings:
 	target_site: str
 	target_apps: tuple[str, ...]
 	required_defaults: Mapping[str, Any]
+	copy_file_contents: bool = True
 
 	@property
 	def source_python(self) -> Path:
@@ -64,6 +65,7 @@ class MigrationSettings:
 			"source_app": self.source_app,
 			"target_site": self.target_site,
 			"target_apps": list(self.target_apps),
+			"copy_file_contents": self.copy_file_contents,
 		}
 
 
@@ -114,6 +116,7 @@ def get_migration_settings() -> MigrationSettings:
 		target_site=target_site,
 		target_apps=TARGET_APPS,
 		required_defaults=dict(required_defaults),
+		copy_file_contents=_copy_file_contents(raw),
 	)
 	missing_target_apps = sorted(set(settings.target_apps) - set(frappe.get_installed_apps()))
 	if missing_target_apps:
@@ -139,3 +142,10 @@ def _validate_local_source(settings: MigrationSettings) -> None:
 	missing = [label for label, path in required_paths.items() if not path.exists()]
 	if missing:
 		raise MigrationError("Configured migration source is incomplete: " + ", ".join(missing))
+
+
+def _copy_file_contents(raw: Mapping[str, Any]) -> bool:
+	value = raw.get("copy_file_contents", True)
+	if not isinstance(value, bool):
+		raise MigrationError(f"{CONFIG_KEY}.copy_file_contents must be a boolean")
+	return value

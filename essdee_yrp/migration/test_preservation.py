@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import runpy
 import unittest
 from pathlib import Path
@@ -420,3 +421,23 @@ class PreservationTest(unittest.TestCase):
 			with self.assertRaisesRegex(MigrationError, "Refusing numeric rounding"):
 				FrappeBulkTarget()._bulk_upsert("Example", [{"name": "E-1", "qty": "1.234567891"}])
 		self.assertEqual(sql.call_count, 1)  # only the storage-definition read
+
+
+class MetadataOnlyRetiredTest(unittest.TestCase):
+	def test_source_archive_never_resolves_attachment_bytes(self):
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts" / "f15_source_bridge.py"))
+		export = bridge["retired_source_rows"]
+		database = Mock()
+		database.table_exists.return_value = False
+		database.sql.return_value = [{"name": "FILE-1", "file_size": 100, "file_url": "/files/old.png"}]
+		resolve = Mock(side_effect=AssertionError("Must not resolve source bytes"))
+		with patch.dict(export.__globals__, {"_resolve_physical_file": resolve}):
+			records = list(export(SimpleNamespace(db=database), metadata_only=True))
+		self.assertEqual(records, [{"source_doctype": "File", "row": database.sql.return_value[0]}])
+		source = SimpleNamespace(
+			settings=SimpleNamespace(copy_file_contents=False), iter_retired_rows=lambda: iter(records)
+		)
+		with patch("essdee_yrp.migration.preservation.frappe.db.set_value") as write:
+			result = run_retired_archive("RUN", source)
+		self.assertEqual(result["missing_blob_count"], 0)
+		self.assertEqual(json.loads(write.call_args.args[3]), records)

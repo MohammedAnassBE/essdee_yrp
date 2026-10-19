@@ -294,7 +294,9 @@ class F15SourceBridge:
 		return schemas
 
 	def status(self) -> dict[str, Any]:
-		lines = list(self._run(["status"]))
+		lines = list(
+			self._run(["status"] + ([] if self.settings.copy_file_contents else ["--metadata-only"]))
+		)
 		if len(lines) != 1:
 			raise MigrationError("F15 source bridge returned an invalid status payload")
 		return lines[0]
@@ -527,7 +529,9 @@ class F15SourceBridge:
 		yield from self._run(["auth-rows"])
 
 	def iter_retired_rows(self) -> Iterable[dict[str, Any]]:
-		yield from self._run(["retired-rows"])
+		yield from self._run(
+			["retired-rows"] + ([] if self.settings.copy_file_contents else ["--metadata-only"])
+		)
 
 	def iter_external_references(self) -> Iterable[dict[str, Any]]:
 		yield from self._run(["external-references"])
@@ -543,7 +547,9 @@ class F15SourceBridge:
 	def iter_framework_rows(self) -> Iterable[dict[str, Any]]:
 		# Contains private history and inert access/configuration evidence. Never
 		# log the raw payload; the archive phase encrypts it with the target key.
-		yield from self._run(["framework-rows"])
+		yield from self._run(
+			["framework-rows"] + ([] if self.settings.copy_file_contents else ["--metadata-only"])
+		)
 
 	def iter_supporting_documents(self, doctype: str, names: Iterable[str]) -> Iterable[dict[str, Any]]:
 		names = list(names)
@@ -1464,6 +1470,7 @@ def _migration_contract_fingerprint(settings: MigrationSettings, plan: Migration
 			)
 		},
 		"required_defaults": dict(settings.required_defaults),
+		"copy_file_contents": settings.copy_file_contents,
 		"target_schemas": plan.target_schemas,
 		"specs": {
 			source_doctype: {
@@ -3465,10 +3472,13 @@ def _run_files(
 	dry_run: bool,
 	allow_missing_files: bool = False,
 ) -> dict[str, Any]:
+	copy_contents = source.settings.copy_file_contents
+	checkpoint = _load_checkpoint(migration_name) if not dry_run else {"version": 2, "doctypes": {}}
+	if (checkpoint.get("file_settings") or {}).get("restored") is False:
+		_restore_file_settings(migration_name, checkpoint)
 	status = source.file_status()
 	if status.get("site") != source.settings.source_site:
 		raise MigrationError("F15 file inventory came from an unexpected site")
-	checkpoint = _load_checkpoint(migration_name) if not dry_run else {"version": 2, "doctypes": {}}
 	file_state = checkpoint.get("files") or {}
 	start_after = file_state.get("last_name") if not dry_run else None
 	previously_processed = int(file_state.get("processed") or 0) if not dry_run else 0
@@ -3486,12 +3496,13 @@ def _run_files(
 
 	settings_changed = False
 	try:
-		if not dry_run:
+		if not dry_run and copy_contents:
 			_prepare_file_settings(migration_name, checkpoint, status)
 			settings_changed = True
 		for row in source.iter_files(
 			start_after=start_after,
 			allow_missing=allow_missing_files,
+			metadata_only=not copy_contents,
 		):
 			_validate_file_metadata(row, plan)
 			_file_metadata_values(
@@ -3501,7 +3512,7 @@ def _run_files(
 			if is_orphan:
 				orphan_attachment_count += 1
 				orphan_attachment_bytes += int(row.get("file_size") or 0)
-			if row.get("missing_blob"):
+			if copy_contents and row.get("missing_blob"):
 				if not allow_missing_files:
 					raise MigrationError(f"File {row.get('name')} has no source blob")
 				missing_file_count += 1
@@ -3533,12 +3544,16 @@ def _run_files(
 					frappe.db.commit()
 				processed += 1
 				continue
-			content = _decode_and_validate_file_payload(row)
+			content = _decode_and_validate_file_payload(row) if copy_contents else None
 			if content is not None:
 				content_rows += 1
 				content_bytes += len(content)
 			if not dry_run:
-				outcome = target.upsert_file(row, plan)
+				outcome = (
+					target.upsert_file(row, plan)
+					if copy_contents
+					else {"status": "content_skipped", "file_url": row.get("file_url")}
+				)
 				for reference in row.get("app_references") or []:
 					ref_spec = plan.specs[reference["doctype"]]
 					ref_name = (
@@ -3554,7 +3569,7 @@ def _run_files(
 				target._bulk_upsert("File", [_file_metadata_values(row, plan, file_url=outcome["file_url"])])
 				if outcome["status"] in {"created", "repaired"}:
 					created += 1
-				else:
+				elif copy_contents:
 					existing += 1
 				file_state = checkpoint.setdefault("files", {})
 				file_state["last_name"] = row["name"]
@@ -3579,12 +3594,12 @@ def _run_files(
 				)
 			observed_content_count = content_rows + len(missing_content)
 			observed_content_bytes = content_bytes + sum(missing_content.values())
-			if observed_content_count != int(status.get("unique_content_count") or 0):
+			if copy_contents and observed_content_count != int(status.get("unique_content_count") or 0):
 				raise MigrationError(
 					"File dry-run unique-content count mismatch: "
 					f"{observed_content_count} != {status.get('unique_content_count')}"
 				)
-			if observed_content_bytes != int(status.get("unique_content_bytes") or 0):
+			if copy_contents and observed_content_bytes != int(status.get("unique_content_bytes") or 0):
 				raise MigrationError(
 					"File dry-run byte mismatch: "
 					f"{observed_content_bytes} != {status.get('unique_content_bytes')}"
@@ -3595,6 +3610,10 @@ def _run_files(
 
 	return {
 		"processed": processed + previously_processed,
+		"content_skipped": processed if not copy_contents else 0,
+		"file_content_policy": (
+			"Copy file contents" if copy_contents else "Owner-managed file content (metadata only)"
+		),
 		"created": created,
 		"existing": existing,
 		"source_file_count": int(status.get("file_count") or 0),
@@ -4235,6 +4254,7 @@ def _prepare_purchase_invoice_migration_documents(
 		if (
 			prepared.get("against") == "YRP Work Order"
 			and prepared.get("essdee_rate_table_source") == MIGRATED_RATE_SOURCE
+			and (int(prepared.get("docstatus") or 0) != 0 or prepared.get("essdee_items"))
 		):
 			invoice = frappe.get_doc(prepared)
 			payload = build_legacy_work_order_invoice_payload(invoice)
@@ -5745,7 +5765,8 @@ def _verify_files(
 	allowed_missing_blob_names: set[str] | None = None,
 ) -> dict[str, Any]:
 	status = source.file_status()
-	allowed_missing_blob_names = allowed_missing_blob_names or set()
+	copy_contents = source.settings.copy_file_contents
+	allowed_missing_blob_names = (allowed_missing_blob_names or set()) if copy_contents else set()
 	failures = []
 	verified = 0
 	verified_blobs = 0
@@ -5773,6 +5794,8 @@ def _verify_files(
 			for field, value in expected_metadata.items()
 		):
 			failures.append(f"Full File metadata mismatch {row['name']}")
+		elif not copy_contents:
+			pass
 		elif not frappe.get_doc("File", row["name"]).exists_on_disk():
 			if row["name"] in allowed_missing_blob_names:
 				audited_missing_blobs += 1
@@ -5789,7 +5812,13 @@ def _verify_files(
 		verified += 1
 		if len(failures) >= 100:
 			break
+	if verified != int(status.get("file_count") or 0):
+		failures.append(f"File count mismatch: {verified} != {status.get('file_count')}")
 	return {
+		"content_skipped": verified if not copy_contents else 0,
+		"file_content_policy": (
+			"Copy file contents" if copy_contents else "Owner-managed file content (metadata only)"
+		),
 		"source_file_count": int(status.get("file_count") or 0),
 		"verified_file_count": verified,
 		"verified_blob_count": verified_blobs,
@@ -6194,11 +6223,17 @@ def _bind_checkpoint_to_source_snapshot(
 	snapshot_fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 	if checkpoint.get("source_snapshot_fingerprint") == snapshot_fingerprint:
 		return dict(checkpoint)
-	return {
+	result = {
 		"version": 2,
 		"source_snapshot_fingerprint": snapshot_fingerprint,
 		"doctypes": {},
 	}
+	# Never lose an interrupted temporary-settings restoration on a new gate.
+	if "file_settings" in checkpoint:
+		result["file_settings"] = checkpoint["file_settings"]
+	if source_snapshot.get("copy_file_contents") is False and "files" in checkpoint:
+		result["files"] = checkpoint["files"]
+	return result
 
 
 def _mark_started(migration_name: str, mode: str, source_status: Mapping[str, Any]) -> None:

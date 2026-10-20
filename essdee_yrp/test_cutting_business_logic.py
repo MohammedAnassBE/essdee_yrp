@@ -472,6 +472,25 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 		self.assertEqual(len(doc.cut_panel_movement_json["collapsed_details"]), 1)
 		self.assertEqual(doc.cut_panel_movement_json["collapsed_details"][0]["move_qty"], 3)
 
+	def test_cpm_submit_rejects_exact_bundles_mixed_with_collapsed_quantity(self):
+		doc = frappe._dict(
+			cut_panel_movement_json=json.dumps(
+				{
+					"panels": ["Neck Self Rib"],
+					"data": {
+						"Liver": {
+							"part": None,
+							"data": [{"bundle_no": 5, "Neck Self Rib": 20, "Neck Self Rib_moved": True}],
+						}
+					},
+					"accessory_data": [],
+					"collapsed_details": [{"moved": 1, "move_qty": 5, "quantity": 5, "panel": "Top Front"}],
+				}
+			)
+		)
+		with self.assertRaisesRegex(frappe.ValidationError, "cannot be mixed"):
+			CutPanelMovement.before_submit(doc)
+
 	def test_overlay_keeps_only_nonzero_cpm_matches(self):
 		source_rows = [
 			frappe._dict(item_variant="VAR-LEFT", set_combination=self.combination),

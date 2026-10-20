@@ -110,6 +110,13 @@ class SDYRPCutPanelMovement(Document):
 			row["move_qty"] = move_qty
 			collapsed_details.append(row)
 		json_data["collapsed_details"] = collapsed_details
+		if json_data["data"] and collapsed_details:
+			frappe.throw(
+				_(
+					"Exact bundles and collapsed quantities cannot be mixed in one Cut Panel Movement. "
+					"Create separate movements for the two stock types."
+				)
+			)
 		if not json_data["data"] and not json_data["accessory_data"] and not json_data["collapsed_details"]:
 			frappe.throw(_("Select at least one panel or accessory quantity."))
 		self.cut_panel_movement_json = json_data

@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import now
 
 from essdee_yrp.finishing.status import AUTO_FP_STATUSES, compute_received_status
 
@@ -27,8 +28,7 @@ def execute():
 		frappe.db.set_value(
 			"SD YRP Finishing Plan",
 			candidate.name,
-			"fp_status",
-			new_status,
+			{"fp_status": new_status, "fp_status_since": now()},
 			update_modified=False,
 		)
 		result["updated"] += 1

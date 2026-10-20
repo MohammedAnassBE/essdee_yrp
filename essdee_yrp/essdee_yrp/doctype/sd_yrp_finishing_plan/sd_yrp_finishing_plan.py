@@ -62,6 +62,7 @@ from essdee_yrp.finishing.status import (
 	get_finishing_plan_total_cutting,
 	get_set_item_parts_count,
 	record_finishing_dispatch_log,
+	track_fp_status_since,
 )
 from essdee_yrp.finishing.transactions import (
 	cancel_document,
@@ -152,6 +153,7 @@ class SDYRPFinishingPlan(Document):
 
 	def before_save(self):
 		prepare_detail_state(self)
+		track_fp_status_since(self)
 
 	def get_finishing_plans(self):
 		return build_plan_views(self)

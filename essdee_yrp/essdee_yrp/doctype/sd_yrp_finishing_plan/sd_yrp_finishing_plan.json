@@ -21,6 +21,7 @@
   "naming_series",
   "finishing_process",
   "fp_status",
+  "fp_status_since",
   "section_break_umng",
   "finishing_item_html",
   "finishing_plan_details",
@@ -96,6 +97,12 @@
    "in_standard_filter": 1,
    "label": "FP Status",
    "options": "Planned\nPartially Received\nReady to Pack\nPartially Dispatched\nDispatched\nFully Dispatched\nReady for Audit\nAudit Completed\nAuto Closed\nOCR Completed\nP&L Submitted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fp_status_since",
+   "fieldtype": "Datetime",
+   "label": "FP Status Since",
    "read_only": 1
   },
   {

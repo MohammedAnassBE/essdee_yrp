@@ -361,6 +361,7 @@ class TestFinishingServices(IntegrationTestCase):
 			_reverse_split_history(transfer)
 		self.assertEqual(source.finishing_old_lot_given_items, [])
 
+	@patch("essdee_yrp.finishing.status.now", lambda: "2026-09-28 10:00:00")
 	@patch("essdee_yrp.finishing.closure.frappe.get_doc")
 	def test_complete_ocr_requires_completed_audit(self, get_doc):
 		plan = _doc(name="FP-1", fp_status="Audit Completed", lot="LOT-1")
@@ -377,8 +378,10 @@ class TestFinishingServices(IntegrationTestCase):
 
 		self.assertEqual(result, {"fp_status": "OCR Completed"})
 		self.assertEqual(plan.fp_status, "OCR Completed")
+		self.assertEqual(plan.fp_status_since, "2026-09-28 10:00:00")
 		close_order.assert_called_once_with("LOT-1")
 
+	@patch("essdee_yrp.finishing.status.now", lambda: "2026-09-28 10:00:00")
 	@patch("essdee_yrp.finishing.closure.frappe.get_doc")
 	def test_complete_ocr_accepts_auto_closed_plan(self, get_doc):
 		plan = _doc(name="FP-1", fp_status="Auto Closed", lot="LOT-1")
@@ -395,8 +398,10 @@ class TestFinishingServices(IntegrationTestCase):
 
 		self.assertEqual(result, {"fp_status": "OCR Completed"})
 		self.assertEqual(plan.fp_status, "OCR Completed")
+		self.assertEqual(plan.fp_status_since, "2026-09-28 10:00:00")
 		close_order.assert_called_once_with("LOT-1")
 
+	@patch("essdee_yrp.finishing.status.now", lambda: "2026-09-28 10:00:00")
 	def test_audit_request_and_completion_capture_dates(self):
 		plan = _doc(
 			name="FP-1",
@@ -411,6 +416,7 @@ class TestFinishingServices(IntegrationTestCase):
 		):
 			request_audit("FP-1")
 		self.assertEqual(plan.fp_status, "Ready for Audit")
+		self.assertEqual(plan.fp_status_since, "2026-09-28 10:00:00")
 		self.assertEqual(plan.audit_requested_date, "2026-09-28")
 
 		with (
@@ -424,9 +430,11 @@ class TestFinishingServices(IntegrationTestCase):
 		):
 			complete_audit("FP-1")
 		self.assertEqual(plan.fp_status, "Audit Completed")
+		self.assertEqual(plan.fp_status_since, "2026-09-28 10:00:00")
 		self.assertEqual(plan.audit_completed_date, "2026-09-29")
 		close_order.assert_called_once_with("LOT-1")
 
+	@patch("essdee_yrp.finishing.closure.now", lambda: "2026-09-28 10:00:00")
 	def test_daily_job_auto_closes_audits_older_than_30_days(self):
 		with (
 			patch.object(closure, "today", return_value="2026-09-28"),
@@ -449,12 +457,9 @@ class TestFinishingServices(IntegrationTestCase):
 			},
 			pluck="name",
 		)
-		set_value.assert_called_once_with(
-			"SD YRP Finishing Plan",
-			"FP-OLD",
-			"fp_status",
-			"Auto Closed",
-		)
+		self.assertEqual(set_value.call_args.args[:2], ("SD YRP Finishing Plan", "FP-OLD"))
+		self.assertEqual(set_value.call_args.args[2]["fp_status"], "Auto Closed")
+		self.assertEqual(set_value.call_args.args[2]["fp_status_since"], "2026-09-28 10:00:00")
 
 	def test_destination_receipts_are_derived_from_source_history(self):
 		destination = _doc(

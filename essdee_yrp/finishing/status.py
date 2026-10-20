@@ -1,7 +1,7 @@
 """Finishing Plan dispatch totals, audit trail, and automatic status rules."""
 
 import frappe
-from frappe.utils import flt
+from frappe.utils import flt, now
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details
 
@@ -188,7 +188,21 @@ def compute_received_status(finishing_doc):
 def apply_auto_fp_status(finishing_doc):
 	new_status = compute_received_status(finishing_doc)
 	if new_status and (finishing_doc.fp_status or "") in AUTO_FP_STATUSES:
+		set_fp_status(finishing_doc, new_status)
+
+
+def set_fp_status(finishing_doc, new_status):
+	"""Apply an actual status transition without aging it again on later saves."""
+	if finishing_doc.fp_status != new_status:
 		finishing_doc.fp_status = new_status
+		finishing_doc.fp_status_since = now()
+
+
+def track_fp_status_since(finishing_doc):
+	"""Also cover direct Desk/API document saves outside the workflow helpers."""
+	previous = finishing_doc.get_doc_before_save()
+	if not previous or previous.fp_status != finishing_doc.fp_status:
+		finishing_doc.fp_status_since = now()
 
 
 def get_unaccountable_quantity(finishing_doc):

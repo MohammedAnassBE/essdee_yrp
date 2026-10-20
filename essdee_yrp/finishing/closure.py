@@ -2,8 +2,9 @@
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, today
+from frappe.utils import add_days, now, today
 
+from essdee_yrp.finishing.status import set_fp_status
 from essdee_yrp.production_order_workflow import (
 	close_production_order_if_all_lots_audited,
 )
@@ -94,8 +95,7 @@ def auto_close_audited_finishing_plans_after_30_days():
 		frappe.db.set_value(
 			"SD YRP Finishing Plan",
 			finishing_plan,
-			"fp_status",
-			"Auto Closed",
+			{"fp_status": "Auto Closed", "fp_status_since": now()},
 		)
 	return len(finishing_plans)
 
@@ -116,7 +116,7 @@ def request_audit(doc_name):
 				"Finishing Plan (current: {0})."
 			).format(plan.fp_status)
 		)
-	plan.fp_status = "Ready for Audit"
+	set_fp_status(plan, "Ready for Audit")
 	plan.audit_requested_date = today()
 	plan.audit_completed_date = None
 	plan.save(ignore_permissions=True)
@@ -132,7 +132,7 @@ def complete_audit(doc_name):
 	plan = frappe.get_doc("SD YRP Finishing Plan", doc_name, for_update=True)
 	if plan.fp_status != "Ready for Audit":
 		frappe.throw(_("Finishing Plan is not Ready for Audit (current: {0}).").format(plan.fp_status))
-	plan.fp_status = "Audit Completed"
+	set_fp_status(plan, "Audit Completed")
 	plan.audit_completed_date = today()
 	plan.save(ignore_permissions=True)
 	close_linked_production_order_if_all_lots_audited(plan.lot)
@@ -154,7 +154,7 @@ def complete_ocr(doc_name):
 				"(current: {0})."
 			).format(plan.fp_status)
 		)
-	plan.fp_status = "OCR Completed"
+	set_fp_status(plan, "OCR Completed")
 	plan.save(ignore_permissions=True)
 	close_linked_production_order_if_all_lots_audited(plan.lot)
 	return {"fp_status": plan.fp_status}

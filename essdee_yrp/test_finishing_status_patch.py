@@ -17,6 +17,7 @@ class TestFinishingStatusPatch(unittest.TestCase):
 		]
 		with (
 			patch.object(status_patch, "frappe", frappe),
+			patch.object(status_patch, "now", return_value="2026-10-20 12:30:00"),
 			patch.object(status_patch, "get_candidate_plans", return_value=candidates),
 			patch.object(status_patch, "compute_received_status", return_value="Fully Dispatched"),
 		):
@@ -25,8 +26,7 @@ class TestFinishingStatusPatch(unittest.TestCase):
 		frappe.db.set_value.assert_called_once_with(
 			"SD YRP Finishing Plan",
 			"FP-AUTO",
-			"fp_status",
-			"Fully Dispatched",
+			{"fp_status": "Fully Dispatched", "fp_status_since": "2026-10-20 12:30:00"},
 			update_modified=False,
 		)
 		self.assertEqual(result, {"total": 2, "updated": 1, "unchanged": 0, "skipped": 1})

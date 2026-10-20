@@ -56,7 +56,7 @@
 				<span>{{ hasSelection ? selectionSummaryText : "Generate current stock, then select what is moving." }}</span>
 				<div>
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="emit('update:visible', false)" />
-					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
+					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" document-label="Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
 					<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !hasSelection" @click="requestCommand('submit')" />
@@ -343,9 +343,10 @@ async function confirmCommand() {
 		const changed = await executeCutPanelMovementCommand(requestedRecord, command, expectedModified)
 		if (actionIsStale(sequence, requestedMovement, requestedLoadSequence) || requestedRecord !== record.value?.name) return
 		editor.record = changed; replaceMovement(changed.movement_data || movementData); confirmationVisible.value = false; emit("changed", changed)
-		if (command === "cancel" || command === "submit") emit("update:visible", false)
+		if (command === "cancel") emit("update:visible", false)
+		else await loadLinked()
 	} catch (reason) {
-		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) error.value = reason.message || `Unable to ${command} the Cut Panel Movement.`
+		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) { confirmationVisible.value = false; error.value = reason.message || `Unable to ${command} the Cut Panel Movement.` }
 	} finally {
 		if (!actionIsStale(sequence, requestedMovement, requestedLoadSequence)) { acting.value = ""; pendingCommand.value = "" }
 	}

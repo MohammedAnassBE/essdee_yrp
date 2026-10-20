@@ -36,9 +36,10 @@ function workspace(path, isWorkOrder) {
 	return { ...api, calls }
 }
 
-for (const [label, path, isWorkOrder, name, cancelMessage] of [
+for (const [label, path, isWorkOrder, name, cancelMessage, cancelLabel] of [
 	["Work Order", "departments/FabricWorkOrder.vue", true, "WO-1", "Cancel WO-1? This keeps the document for audit but stops further processing."],
 	["Delivery Challan", "departments/fabric-store/DeliveryChallanWorkspace.vue", false, "DC-1", "Cancel DC-1? This keeps the document for audit and reverses its submitted effect."],
+	["Goods Received Note", "departments/fabric-store/GoodsReceivedNoteWorkspace.vue", false, "DC-1", "Cancel DC-1? This keeps the receipt for audit and reverses its submitted effect.", "Cancel GRN"],
 ]) {
 	test(`${label} Submit waits for lifecycle confirmation; Cancel and Amend keep their wording`, async () => {
 		const state = workspace(path, isWorkOrder)
@@ -58,7 +59,7 @@ for (const [label, path, isWorkOrder, name, cancelMessage] of [
 		assert.equal(state.calls.length, 1)
 		await state.runWorkspaceAction("cancel")
 		assert.equal(state.lifecycleConfirmTitle.value, `Cancel ${label}?`)
-		assert.equal(state.lifecycleConfirmLabel.value, `Cancel ${label}`)
+		assert.equal(state.lifecycleConfirmLabel.value, cancelLabel || `Cancel ${label}`)
 		assert.equal(state.lifecycleConfirmMessage.value, cancelMessage)
 		await state.runWorkspaceAction("amend")
 		assert.equal(state.lifecycleConfirmTitle.value, `Amend ${label}?`)

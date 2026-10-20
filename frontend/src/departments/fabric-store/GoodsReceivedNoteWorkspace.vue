@@ -417,7 +417,7 @@ const overviewDefinitions = [
 	{ key: "identity", label: "Receipt identity", description: "Source and production references", icon: "pi pi-id-card", fields: ["naming_series", "against", "against_id", "delivery_challan", "production_detail", "is_return", "is_rework"] },
 	{ key: "movement", label: "Movement", description: "Supplier and stock destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "delivery_location", "delivery_location_name", "from_warehouse", "to_warehouse", "billing_address", "delivery_address"] },
 	{ key: "schedule", label: "Supplier reference", description: "Posting and transport information", icon: "pi pi-calendar", fields: ["posting_date", "posting_time", "actual_date", "supplier_document_no", "supplier_document_date", "dc_no", "vehicle_no"] },
-	{ key: "status", label: "Status & notes", description: "Receipt controls, charges and comments", icon: "pi pi-clipboard", fields: ["status", "freight_charges", "purchase_invoice_name", "includes_packing", "is_internal_unit", "transfer_complete", "letter_head", "comments"] },
+	{ key: "status", label: "Status & notes", description: "Receipt controls, charges and comments", icon: "pi pi-clipboard", fields: ["status", "freight_charges", "purchase_invoice_name", "includes_packing", "allow_non_bundle", "is_internal_unit", "transfer_complete", "letter_head", "comments"] },
 ]
 const overviewAdditionalDefinition = { key: "additional", label: "Additional details", description: "Other receipt information", icon: "pi pi-ellipsis-h", wide: true }
 const overviewFields = computed(() => {
@@ -573,8 +573,7 @@ async function defaultAddress(fieldname, party) {
 
 async function runWorkspaceAction(action) {
 	if (action === "save") return save(false)
-	if (action === "submit") return save(true)
-	if (["cancel", "amend"].includes(action)) return requestLifecycleAction(action)
+	if (["submit", "cancel", "amend"].includes(action)) return requestLifecycleAction(action)
 }
 
 function startSubmittedEdit() {
@@ -672,11 +671,11 @@ async function runCommand(command, payload = {}, destructive = false) {
 		return null
 	} finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
-const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Goods Received Note?" : "Amend Goods Received Note?")
-const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel GRN" : "Create Amendment")
-const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${currentName.value}? This keeps the receipt for audit and reverses its submitted effect.` : `Create a new draft amendment from ${currentName.value}?`)
+const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit Goods Received Note?" : pendingLifecycleCommand.value === "cancel" ? "Cancel Goods Received Note?" : "Amend Goods Received Note?")
+const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit" : pendingLifecycleCommand.value === "cancel" ? "Cancel GRN" : "Create Amendment")
+const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "submit" ? `Permanently submit ${currentName.value}?` : pendingLifecycleCommand.value === "cancel" ? `Cancel ${currentName.value}? This keeps the receipt for audit and reverses its submitted effect.` : `Create a new draft amendment from ${currentName.value}?`)
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
-async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command) await runCommand(command) }
+async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "submit") await save(true); else if (command) await runCommand(command) }
 
 async function openCalculation() {
 	if (!currentName.value || !capabilities.value.calculate || dirty.value) return

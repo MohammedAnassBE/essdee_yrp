@@ -53,7 +53,7 @@ const active = computed({
 	get: () => tabs.some(tab => tab.value === route.query.tab) ? route.query.tab : "dashboard",
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
 })
-const entryFilters = reactive({ lot: "", plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
+const entryFilters = reactive({ lot: typeof route.query.lot === "string" ? route.query.lot : "", plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
 const entryState = reactive({ response: {}, loaded: false, entryDrafts: {}, inspectionDrafts: {}, attempted: false, success: "", error: "", loadError: "", busy: false, refreshRequired: false, operationVersion: 0, operation: null })
 // The Supplier-keyed shell retains local filters and consumption drafts without
 // mounting inactive tabs. Mutation locks and recovery survive a tab switch too.

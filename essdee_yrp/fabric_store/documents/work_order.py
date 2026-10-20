@@ -429,6 +429,7 @@ def _capability_candidates(
 				action_context.get("can_create_sewing_plan") and action_context.get("sewing_plan")
 			),
 			"name": action_context.get("sewing_plan"),
+			"source_context": {"supplier": doc.get("supplier"), "lot": doc.get("lot")},
 		},
 	}
 

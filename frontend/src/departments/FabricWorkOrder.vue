@@ -84,7 +84,6 @@ import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
-import { webDocumentPath } from "../router/webDocumentRoutes.js"
 import { hasDocumentDisplayValue } from "../utils/documentValues.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./fabric-store/FabricStockOperationDialog.vue"
@@ -334,7 +333,10 @@ function openGoodsReceivedNote() {
 	grnSourceVisible.value = false
 	openRelated("YRP Goods Received Note", "", source)
 }
-function openSewingPlan() { const name = capabilities.value.open_sewing_plan?.name; if (name) router.push(webDocumentPath("SD YRP Sewing Plan", name).replace(/^\/web(?=\/)/, "")) }
+function openSewingPlan() {
+	const capability = capabilities.value.open_sewing_plan || {}
+	if (capability.name) router.push({ path: "/sewing/plans", query: { ...(capability.source_context || {}), tab: "data-entry" } })
+}
 
 watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: true })
 </script>

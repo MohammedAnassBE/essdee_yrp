@@ -42,3 +42,14 @@ export function mergeStockItemDraft(existingRow, draftRow) {
 	}
 	return { ...existing, ...draft, values }
 }
+
+export function matchAttributeValues(values, text) {
+	const needle = String(text || "").trim().toLowerCase()
+	const rank = (value) => {
+		const label = String(value).toLowerCase()
+		return label === needle ? 0 : label.startsWith(needle) ? 1 : 2
+	}
+	return (values || [])
+		.filter((value) => !needle || String(value).toLowerCase().includes(needle))
+		.sort((left, right) => rank(left) - rank(right))
+}

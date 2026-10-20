@@ -137,7 +137,7 @@ import Message from "primevue/message"
 import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
-import { mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
+import { matchAttributeValues, mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -290,10 +290,7 @@ function setAttribute(attribute, value) {
 }
 
 function searchAttribute(attribute, text) {
-	const needle = String(text || "").toLowerCase()
-	return (itemSchema.value?.attribute_values?.[attribute] || [])
-		.filter((value) => !needle || String(value).toLowerCase().includes(needle))
-		.map((value) => ({ name: value, label: value }))
+	return matchAttributeValues(itemSchema.value?.attribute_values?.[attribute], text).map((value) => ({ name: value, label: value }))
 }
 
 async function stageItem() {

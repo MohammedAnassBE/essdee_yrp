@@ -31,6 +31,39 @@ class TestDeskWebReports(IntegrationTestCase):
 				self.assertEqual(web["columns"], desk["columns"])
 				self.assertEqual(web["result"], desk["result"])
 
+	def test_grn_summary_status_restricts_mixed_document_states(self):
+		from essdee_yrp.essdee_yrp.report.sd_yrp_grn_summary.sd_yrp_grn_summary import get_data
+
+		names = {}
+		for status in (0, 1, 2):
+			name = f"_Test GRN Summary {status}-{frappe.generate_hash(length=8)}"
+			# Isolate report rows without invoking stock transactions or submit/cancel hooks.
+			frappe.get_doc({
+				"doctype": "YRP Goods Received Note", "name": name, "docstatus": status,
+				"against": "Purchase Order", "grn_date": "2099-01-15",
+			}).db_insert()
+			frappe.get_doc({
+				"doctype": "YRP Goods Received Note Item", "name": frappe.generate_hash(),
+				"parent": name, "parenttype": "YRP Goods Received Note", "parentfield": "items",
+				"docstatus": status, "quantity": 10,
+			}).db_insert()
+			names[status] = name
+		filters = {"from_date": "2099-01-15", "to_date": "2099-01-15"}
+		fixture_names = set(names.values())
+		for selection in (None, "", "0", "1", "2", 0):
+			request = {**filters, "status": selection}
+			expected = fixture_names if selection in (None, "") else {names[int(selection)]}
+			for client, rows in (
+				("backend", get_data(request)),
+				("desk", run_desk_report("SD YRP GRN Summary", filters=request, ignore_prepared_report=True, are_default_filters=True)["result"]),
+				("web", run_web_report("grn-summary", request)["result"]),
+			):
+				with self.subTest(client=client, status=selection):
+					actual = {row["name"] for row in rows if row.get("name") in fixture_names}
+					self.assertEqual(actual, expected)
+					if selection not in (None, ""):
+						self.assertTrue(all(int(row["status"]) == int(selection) for row in rows if row.get("name")))
+
 	def test_finishing_inward_updates_is_registered(self):
 		self.assertIn("finishing-inward-updates", get_web_reports())
 

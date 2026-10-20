@@ -95,3 +95,41 @@ test("report capability alone cannot open an otherwise unavailable department re
 	const tabs = departmentDeskReports("purchase", { purchase_order_log: { can_read: true } })
 	assert.deepEqual(tabs[0].componentProps, { reportKey: "purchase-order-log" })
 })
+
+
+test("GRN Summary sends each selected status including Draft as a string", async () => {
+	const requests = []
+	const empty = () => Vue.ref([])
+	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"primevue/button": () => null, "primevue/checkbox": () => null,
+		"primevue/select": props => Vue.h("status-select", props),
+		"../common/DateField.vue": () => null, "../common/LinkField.vue": () => null,
+		"./ReportShell.vue": Vue.defineComponent({
+			emits: ["generate"],
+			setup: (_props, { slots, emit }) => () => Vue.h("report-shell", { onGenerate: () => emit("generate") }, slots.filters?.()),
+		}),
+		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
+		"./deskReportConfig.js": await config(),
+		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useWebReport.js": { useWebReport: () => ({
+			sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null), filtersChanged() {},
+			generate: async request => requests.push(request),
+		}) },
+		"../../composables/useReportColumns.js": { useReportColumns: () => ({
+			columns: empty(), displayColumns: empty(), rows: empty(), loadLayout() {},
+		}) },
+	})
+	const root = mountComponent(component, { reportKey: "grn-summary" })
+	try {
+		for (const value of ["0", "1", "2", ""]) {
+			const select = findNodes(root, node => node.type === "status-select")[0]
+			assert.equal(select.props["option-value"], "value")
+			select.props["onUpdate:modelValue"](value)
+			await Vue.nextTick()
+			findNodes(root, node => node.type === "report-shell")[0].props.onGenerate()
+			await Vue.nextTick()
+		}
+		assert.deepEqual(requests.map(request => request.status), ["0", "1", "2", ""])
+		assert.ok(requests.every(request => !("grn_status" in request)))
+	} finally { root.__vue_app__.unmount() }
+})

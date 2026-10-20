@@ -151,8 +151,8 @@ def get_data(filters):
 		)
 	if filters.get("lot"):
 		q = q.where(grn_item.lot == filters.get("lot"))
-	if filters.get("grn_status"):
-		q = q.where(grn.docstatus == filters.get("grn_status"))
+	if filters.get("status") not in (None, ""):
+		q = q.where(grn.docstatus == filters["status"])
 	if filters.get("delivery_location"):
 		q = q.where(grn.delivery_location == filters.get("delivery_location"))
 

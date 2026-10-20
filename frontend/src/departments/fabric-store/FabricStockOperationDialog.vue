@@ -43,6 +43,7 @@ import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
+import { getCount } from "../../api/frappe.js"
 import { discardCompletionDraft, getFabricStockItemSchema, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -50,6 +51,7 @@ import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vu
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { mapFieldError, requiredFieldErrors } from "../../utils/fieldErrors.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { buildStockHeaderFields, createWarehouseCheck } from "./stockHeaderFields.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -80,45 +82,16 @@ const canSave = computed(() => {
 	return Boolean(canMutate)
 })
 
-const headerFields = computed(() => {
-	const fields = []
-	const protectedFields = Boolean(editor.value.protected_completion)
-	const receipt = form.purpose === "Receive at Warehouse"
-	const link = (fieldname, label, options, required = false, readOnly = false) => fields.push({ fieldname, label, options, fieldtype: "Link", reqd: required, read_only: readOnly })
-	if (["stock_entry", "stock_reconciliation"].includes(props.operation)) fields.push({ fieldname: "purpose", label: "Purpose", fieldtype: "Select", options: (editor.value.purpose_options || []).join("\n"), reqd: true, read_only: editor.value.purpose_locked })
-	if (props.operation === "stock_entry") {
-		link("from_supplier", "From Location", "Supplier", false, protectedFields || receipt)
-		link("to_supplier", "To Location", "Supplier", false, protectedFields || receipt)
-		if (receipt) link("outgoing_stock_entry", "Outgoing Stock Entry", "YRP Stock Entry", true, true)
-		link("from_warehouse", "From Warehouse", "Warehouse", form.purpose !== "Material Receipt", protectedFields || receipt || form.purpose === "Material Receipt")
-		if (["Send to Warehouse", "Material Receipt", "Receive at Warehouse"].includes(form.purpose) || protectedFields) link("to_warehouse", "To Warehouse", "Warehouse", true, protectedFields || receipt)
-		if (form.purpose === "Send to Warehouse") fields.push({ fieldname: "skip_transit", label: "Skip Transit", fieldtype: "Check" })
-	}
-	if (props.operation === "stock_reconciliation") {
-		link("default_warehouse", "Warehouse", "Warehouse", true)
-		link("default_supplier", "Supplier", "Supplier")
-	}
-	if (props.operation === "stock_update") {
-		fields.push({ fieldname: "update_type", label: "Update Type", fieldtype: "Select", options: (editor.value.update_type_options || []).join("\n"), reqd: true })
-		link("warehouse", "Warehouse", "Warehouse", true)
-		link("supplier", "Supplier", "Supplier")
-	}
-	if (editor.value.posting_fields?.length) fields.push({ fieldname: "edit_posting_date_and_time", label: "Edit Posting Date and Time", fieldtype: "Check", read_only: protectedFields })
-	for (const field of editor.value.posting_fields || []) fields.push({ ...field, fieldtype: field.fieldname === "posting_date" ? "Date" : "Time", reqd: field.reqd || Boolean(form.edit_posting_date_and_time), read_only: protectedFields || !form.edit_posting_date_and_time })
-	for (const field of fields) {
-		if (field.options === "Supplier") field.link_filters = { disabled: 0 }
-		if (field.options === "Warehouse") {
-			const supplier = field.fieldname === "from_warehouse" ? form.from_supplier : field.fieldname === "to_warehouse" ? form.to_supplier : ""
-			field.link_filters = { disabled: 0, ...(supplier ? { supplier } : {}) }
-		}
-	}
-	return fields
-})
+const headerFields = computed(() => buildStockHeaderFields(props.operation, form, editor.value))
+const warehouseCheck = createWarehouseCheck(
+	form,
+	async (warehouse, supplier) => Boolean(await getCount("Warehouse", [["name", "=", warehouse], ["supplier", "=", supplier]])),
+	(reason) => { error.value = reason?.message || "Unable to check the Warehouse for this Supplier." },
+)
 function updateField(fieldname, value) {
 	form[fieldname] = value
 	delete fieldErrors.value[fieldname]
-	if (fieldname === "from_supplier") form.from_warehouse = ""
-	if (fieldname === "to_supplier") form.to_warehouse = ""
+	warehouseCheck.supplierChanged(fieldname)
 	if (fieldname === "purpose" && value === "Material Receipt") form.from_warehouse = ""
 	markDirty()
 }
@@ -146,6 +119,7 @@ function loadSchema(operation, item) { return getFabricStockItemSchema(operation
 function markDirty() { if (!loading.value) dirty.value = true }
 async function save(submit) {
 	if (!canSave.value) return
+	await warehouseCheck.settled()
 	fieldErrors.value = requiredFieldErrors(headerFields.value, form)
 	if (Object.keys(fieldErrors.value).length) return
 	if (!itemDetails.value.some((group) => group.items?.length)) { error.value = "Add at least one Item."; return }

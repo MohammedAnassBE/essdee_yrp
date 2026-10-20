@@ -372,7 +372,8 @@ async function stageItem() {
 		setPreparing(false)
 	}
 	commit()
-	resetEditor()
+	if (editing.value) resetEditor()
+	else prepareQuantities()
 }
 
 async function editItem(groupIndex, itemIndex) {

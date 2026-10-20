@@ -10,7 +10,7 @@ const { parse, compileScript } = require("@vue/compiler-sfc")
 export function loadComponent(filename, modules) {
 	const path = resolve(filename)
 	const { descriptor } = parse(readFileSync(path, "utf8"), { filename: path })
-	const compiled = compileScript(descriptor, { id: path, inlineTemplate: true })
+	const compiled = compileScript(descriptor, { id: path, inlineTemplate: true, templateOptions: { compilerOptions: { hoistStatic: false } } })
 	const dependencies = { vue: Vue, ...modules }
 	const source = compiled.content.replace(/^import\s+["'][^"']+\.css["'];?$/gm, "").replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];?/g, (_, names, specifier) => {
 		if (!(specifier in dependencies)) {
@@ -24,7 +24,19 @@ export function loadComponent(filename, modules) {
 }
 
 function node(type, text = "") {
-	return { type, text, props: {}, children: [], parent: null }
+	const listeners = {}
+	return {
+		type, text, props: {}, children: [], parent: null, listeners,
+		getRootNode() { return this.parent ? this.parent.getRootNode() : this },
+		addEventListener: (event, handler) => { (listeners[event] ||= []).push(handler) },
+		removeEventListener: (event, handler) => { listeners[event] = (listeners[event] || []).filter(item => item !== handler) },
+	}
+}
+
+export function typeInto(element, value) {
+	element.value = String(value)
+	for (const handler of element.listeners.input || []) handler({ target: element })
+	element.props.onInput?.({ target: element })
 }
 
 export function createTestRenderer() {

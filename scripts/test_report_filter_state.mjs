@@ -25,14 +25,13 @@ assert.deepEqual(stockBalanceFormFilters({
 	show_variant_attributes: 1,
 	show_stock_ageing_data: 0,
 	show_inward_date_split: 1,
-}), {
+}, [{ fieldname: "lot" }, { fieldname: "received_type" }]), {
 	fromDate: "2026-09-01",
 	toDate: "2026-10-13",
-	item: "ITEM-1",
-	parentItem: "STYLE-1",
+	item: ["ITEM-1"],
+	parentItem: ["STYLE-1"],
 	warehouse: "Stores",
-	lot: "LOT-1",
-	receivedType: "Purchase",
+	dimensions: { lot: ["LOT-1"], received_type: ["Purchase"] },
 	removeZero: false,
 	showAttributes: true,
 	showAgeing: false,

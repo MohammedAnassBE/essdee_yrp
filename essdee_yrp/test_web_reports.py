@@ -19,13 +19,17 @@ class TestEssdeeWebReportParity(IntegrationTestCase):
 		if not cls.item:
 			raise unittest.SkipTest("needs one physical stock Item")
 		company = frappe.db.get_value("Company", {}, "name")
-		cls.warehouse = frappe.get_doc(
-			{
-				"doctype": "Warehouse",
-				"warehouse_name": f"Web Report Parity {frappe.generate_hash(length=8)}",
-				"company": company,
-			}
-		).insert(ignore_permissions=True).name
+		cls.warehouse = (
+			frappe.get_doc(
+				{
+					"doctype": "Warehouse",
+					"warehouse_name": f"Web Report Parity {frappe.generate_hash(length=8)}",
+					"company": company,
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
 		cls.stock_ledger = _insert_stock_ledger(cls.item, cls.warehouse)
 		cls.purchase_order = _insert_purchase_order(cls.fixture_key, cls.item, company)
 		cls.finishing_plan, cls.fixture_lot = _insert_finishing_plan(cls.fixture_key, cls.item)
@@ -65,6 +69,72 @@ class TestEssdeeWebReportParity(IntegrationTestCase):
 		expected = self._assert_query_report_parity("stock-balance--test-never", "YRP Stock Balance", filters)
 		self.assertIn(self.item, {row["item"] for row in expected["result"]})
 
+	def test_stock_balance_dimension_arrays_match_query_report_with_fifo(self):
+		from yrp.stock.dimensions import get_stock_dimensions
+
+		filters = {
+			"from_date": frappe.utils.today(),
+			"to_date": frappe.utils.today(),
+			"warehouse": self.warehouse,
+			"remove_zero_balance_item": 1,
+			"show_stock_ageing_data": 1,
+			"show_inward_date_split": 1,
+		}
+		for dimension in get_stock_dimensions():
+			fieldname = dimension["fieldname"]
+			value = frappe.db.get_value("YRP Stock Ledger Entry", self.stock_ledger, fieldname)
+			if value:
+				options = frappe.get_all(dimension["dimension_doctype"], pluck="name", limit=2)
+				filters[fieldname] = list(dict.fromkeys([value, *options]))
+		for as_json in (False, True):
+			with self.subTest(as_json=as_json):
+				payload = dict(filters)
+				for dimension in get_stock_dimensions():
+					fieldname = dimension["fieldname"]
+					if fieldname in payload:
+						values = [*payload[fieldname], None, ""]
+						payload[fieldname] = frappe.as_json(values) if as_json else values
+				expected = self._assert_query_report_parity(
+					"stock-balance--test-never", "YRP Stock Balance", payload
+				)
+				rows = [row for row in expected["result"] if row.get("item")]
+				self.assertEqual(len(rows), 1)
+				self.assertEqual(rows[0]["item"], self.item)
+				self.assertEqual(rows[0]["inward_date_breakdown"][0]["qty"], rows[0]["bal_qty"])
+
+	def test_stock_balance_item_arrays_and_empty_matches_agree_in_desk_and_web(self):
+		parent = frappe.db.get_value("Item", self.item, "variant_of") or self.item
+		for extra, expected_items in (
+			({"parent_item": [parent]}, {self.item}),
+			({"item": [self.item]}, {self.item}),
+			({"parent_item": [parent], "item": [self.item]}, {self.item}),
+			({"parent_item": "NO-SUCH-STOCK-BALANCE-ITEM"}, set()),
+			({"parent_item": [parent], "item": ["NO-SUCH-STOCK-BALANCE-VARIANT"]}, set()),
+		):
+			with self.subTest(extra=extra):
+				filters = {
+					"from_date": frappe.utils.today(),
+					"to_date": frappe.utils.today(),
+					"warehouse": self.warehouse,
+					"remove_zero_balance_item": 1,
+					**extra,
+				}
+				desk = run_query_report(
+					"YRP Stock Balance",
+					filters=dict(filters),
+					ignore_prepared_report=True,
+					are_default_filters=True,
+				)
+				web = run_web_report("stock-balance--test-never", dict(filters))
+				self.assertEqual(web["result"], desk["result"])
+				self.assertEqual(web["columns"], desk["columns"])
+				rows = [row for row in web["result"] if row.get("item")]
+				self.assertEqual({row["item"] for row in rows}, expected_items)
+				for row in rows:
+					self.assertEqual(row["parent_item"], parent)
+					self.assertEqual(row["warehouse"], self.warehouse)
+					self.assertTrue(row["warehouse_name"])
+
 	def test_purchase_order_itemwise_matches_query_report(self):
 		filters = {
 			"item": "",
@@ -93,7 +163,9 @@ class TestEssdeeWebReportParity(IntegrationTestCase):
 			"SD YRP Finishing Plan Report",
 			filters,
 		)
-		self.assertEqual([(row["item"], row["lot"]) for row in expected["result"]], [(self.item, self.fixture_lot)])
+		self.assertEqual(
+			[(row["item"], row["lot"]) for row in expected["result"]], [(self.item, self.fixture_lot)]
+		)
 
 	def test_cut_bundle_balance_matches_existing_endpoint(self):
 		filters = {"lot": self.fixture_lot, "supplier": ""}

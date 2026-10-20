@@ -1,17 +1,24 @@
-export function stockBalanceFormFilters(request = {}) {
+export function stockBalanceFormFilters(request = {}, dimensions = []) {
 	return {
 		fromDate: request.from_date || "",
 		toDate: request.to_date || "",
-		item: request.item || "",
-		parentItem: request.parent_item || "",
+		item: dimensionFilterValues(request.item),
+		parentItem: dimensionFilterValues(request.parent_item),
 		warehouse: request.warehouse || "",
-		lot: request.lot || "",
-		receivedType: request.received_type || "",
+		dimensions: Object.fromEntries(dimensions.map((dimension) => [dimension.fieldname, dimensionFilterValues(request[dimension.fieldname])])),
 		removeZero: booleanFilter(request.remove_zero_balance_item, true),
 		showAttributes: booleanFilter(request.show_variant_attributes),
 		showAgeing: booleanFilter(request.show_stock_ageing_data),
 		showInwardSplit: booleanFilter(request.show_inward_date_split),
 	}
+}
+
+function dimensionFilterValues(value) {
+	if (!value) return []
+	if (typeof value === "string" && value.trimStart().startsWith("[")) {
+		try { value = JSON.parse(value) } catch { /* A document name may start with a bracket. */ }
+	}
+	return (Array.isArray(value) ? value : [value]).filter(Boolean)
 }
 
 export function purchaseOrderFormFilters(request = {}) {

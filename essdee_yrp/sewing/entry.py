@@ -511,7 +511,7 @@ def _validate_input_sequence(plan, configuration, rows) -> None:
 				frappe.bold(identity[0]),
 				frappe.bold(frappe.format_value(remaining, {"fieldtype": "Float"})),
 				frappe.bold(configuration.difference_from),
-				frappe.format_value(configuration.allowance, {"fieldtype": "Percent"}),
+				"%g" % flt(configuration.allowance),
 			),
 			title=_("Sewing Input Sequence Blocked"),
 		)

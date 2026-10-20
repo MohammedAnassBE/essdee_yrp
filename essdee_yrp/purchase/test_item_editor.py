@@ -948,7 +948,7 @@ class TestPurchaseItemEditor(TestCase):
 
 	def _make_colour_price(self, item, value):
 		frappe.set_user("Administrator")
-		frappe.get_doc(
+		return frappe.get_doc(
 			{
 				"doctype": "YRP Item Price",
 				"item_name": item,
@@ -993,17 +993,20 @@ class TestPurchaseItemEditor(TestCase):
 			doc.modified,
 		)
 
-	def test_price_referenced_value_cannot_be_dropped_but_mapping_can_allow_all(self):
+	def test_price_referenced_value_can_be_dropped_and_price_still_saves(self):
 		created = self._create_as(
 			"item_manager",
 			self._values(attributes=[self._attribute_row(self.colour, "Red", "Blue")]),
 		)
 		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
 		get_or_create_variant(created["name"], {self.colour: "Red"})
-		self._make_colour_price(created["name"], "Blue")
+		price = self._make_colour_price(created["name"], "Blue")
 
-		with self.assertRaisesRegex(frappe.ValidationError, "price tier"):
-			self._update_colour_values(created["name"], ["Red"])
+		self._update_colour_values(created["name"], ["Red"])
+		self.assertEqual(get_mapping_values(mapping), ["Red"])
+		frappe.set_user("Administrator")
+		price.reload()
+		price.save(ignore_permissions=True)
 		payload = self._update_colour_values(created["name"], [])
 
 		self.assertTrue(payload["values"]["attributes"][0]["all_values_allowed"])
@@ -1028,7 +1031,7 @@ class TestPurchaseItemEditor(TestCase):
 		self._update_colour_values(created["name"], ["Green"])
 		self.assertEqual(get_mapping_values(mapping), ["Green"])
 
-	def test_narrowing_an_empty_mapping_checks_prices_and_mapping_token(self):
+	def test_narrowing_an_empty_mapping_ignores_prices_and_checks_mapping_token(self):
 		created = self._create_as(
 			"item_manager",
 			self._values(attributes=[{"attribute": self.colour, "values": []}]),
@@ -1038,9 +1041,8 @@ class TestPurchaseItemEditor(TestCase):
 		with self.assertRaises(frappe.TimestampMismatchError):
 			self._update_colour_values(created["name"], ["Red"], "2000-01-01 00:00:00")
 		self._make_colour_price(created["name"], "Blue")
-		with self.assertRaisesRegex(frappe.ValidationError, "price tier"):
-			self._update_colour_values(created["name"], ["Red"])
-		self.assertEqual(get_mapping_values(mapping), [])
+		self._update_colour_values(created["name"], ["Red"])
+		self.assertEqual(get_mapping_values(mapping), ["Red"])
 
 	def test_unreferenced_attribute_can_be_added_to_an_existing_template_with_a_price(self):
 		from essdee_yrp.purchase.item_editor import update_item

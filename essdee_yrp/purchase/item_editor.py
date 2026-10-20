@@ -3,7 +3,6 @@ from collections.abc import Mapping
 import frappe
 from frappe import _
 from frappe.utils import cint, cstr, getdate, nowdate
-from yrp.attribute_links import value as actual_attribute_value
 from yrp.attribute_value_identity import attribute_value_name
 from yrp.attribute_values import ensure_value_master, get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import (
@@ -513,7 +512,6 @@ def _stored_attributes(doc) -> dict[str, dict]:
 		stored[row.attribute] = {
 			"mapping": row.get("mapping"),
 			"stored_values": mapping_values,
-			"effective_values": mapping_values or _global_value_labels(row.attribute),
 		}
 	return stored
 
@@ -531,24 +529,6 @@ def _validate_attribute_rule_stock_lock(doc, primary_attribute, dependent_attrib
 		frappe.throw(
 			_("Cannot change {0} after YRP stock exists for Item {1}.").format(", ".join(changed), doc.name)
 		)
-
-
-def _price_references_value(item: str, attribute: str, removed_values: set[str]) -> bool:
-	if not removed_values:
-		return False
-	parents = frappe.get_all(
-		"YRP Item Price",
-		filters={"item_name": item, "depends_on_attribute": 1, "attribute": attribute},
-		pluck="name",
-	)
-	if not parents:
-		return False
-	links = frappe.get_all(
-		"YRP Item Price Value",
-		filters={"parent": ["in", parents]},
-		pluck="attribute_value",
-	)
-	return any(actual_attribute_value(link) in removed_values for link in links)
 
 
 def _price_references_attribute(item: str, attributes: set[str]) -> bool:
@@ -612,10 +592,6 @@ def update_item(name: str, values, expected_modified) -> dict:
 		stored_row = stored.get(row["attribute"])
 		if not stored_row or stored_row["stored_values"] == row["values"]:
 			continue
-		requested_values = row["values"] or _global_value_labels(row["attribute"])
-		removed = set(stored_row["effective_values"]) - set(requested_values)
-		if _price_references_value(doc.name, row["attribute"], removed):
-			frappe.throw(_("A price tier still references a value being removed."))
 		if stored_row["mapping"]:
 			locked_mappings[row["attribute"]] = _lock_changed_mapping(
 				stored_row["mapping"], row.get("mapping_modified")

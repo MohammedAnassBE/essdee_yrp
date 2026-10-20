@@ -14,7 +14,7 @@ from frappe.model.workflow import (
 from frappe.utils import add_days, cint, flt, format_date, nowdate
 from yrp.attribute_links import value as actual_attribute_value
 from yrp.attribute_value_identity import attribute_value_name
-from yrp.attribute_values import get_mapping_values
+from yrp.attribute_values import MASTER, get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
 from essdee_yrp.fabric_store.documents.common import get_effective_fields
@@ -384,14 +384,21 @@ def _item_for_editor(item_name: str | None):
 	return item
 
 
+def _global_labels(attribute: str) -> list[str]:
+	if frappe.get_cached_value("Item Attribute", attribute, "numeric_values"):
+		return frappe.get_all(
+			MASTER, filters={"attribute_name": attribute}, pluck="attribute_value", order_by="creation asc", limit=0
+		)
+	return get_global_attribute_values(attribute)
+
+
 def _attribute_options(item) -> list[dict]:
 	if not item:
 		return []
 	result = []
 	for row in item.get("attributes") or []:
-		labels = get_mapping_values(row.mapping) if row.get("mapping") else []
-		if not labels:
-			labels = get_global_attribute_values(row.attribute)
+		picklist = get_mapping_values(row.mapping) if row.get("mapping") else []
+		labels = list(dict.fromkeys([*picklist, *_global_labels(row.attribute)]))
 		result.append(
 			{
 				"attribute": row.attribute,

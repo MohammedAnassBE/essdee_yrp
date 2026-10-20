@@ -259,6 +259,58 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		self.assertEqual(payload["tier_fields"]["price"]["precision"], 3)
 		self.assertEqual(payload["tier_fields"]["lead_time"]["precision"], 0)
 
+	def test_editor_offers_item_picklist_first_then_other_global_values(self):
+		from yrp.stock.test_uom import _attribute
+		from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
+
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor
+
+		attribute = f"_Test Web Price Colour {self.suffix}"
+		mapping = _attribute(attribute, "Red")
+		ensure_global_attribute_values(attribute, ["Blue"], check_permission=False)
+		item = frappe.get_doc("Item", self._make_item("Picklist"))
+		item.has_variants = 1
+		item.append("attributes", {"attribute": attribute, "mapping": mapping})
+		item.save(ignore_permissions=True)
+		frappe.set_user(self.fixture_users["purchase_user"])
+		payload = get_item_price_editor(item=item.name)
+
+		options = next(row for row in payload["attributes"] if row["attribute"] == attribute)
+		self.assertEqual([value["label"] for value in options["values"]], ["Red", "Blue"])
+
+	def test_editor_offers_numeric_values_outside_the_item_picklist(self):
+		from yrp.attribute_values import ensure_value_master
+
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor
+
+		attribute = frappe.get_doc(
+			{
+				"doctype": "Item Attribute",
+				"attribute_name": f"_Test Web Price Gauge {self.suffix}",
+				"numeric_values": 1,
+				"from_range": 0,
+				"to_range": 100,
+				"increment": 1,
+			}
+		).insert(ignore_permissions=True)
+		mapping = frappe.get_doc(
+			{
+				"doctype": "YRP Item Item Attribute Mapping",
+				"attribute_name": attribute.name,
+				"values": [{"attribute_value": ensure_value_master(attribute.name, "10")}],
+			}
+		).insert(ignore_permissions=True)
+		ensure_value_master(attribute.name, "20")
+		item = frappe.get_doc("Item", self._make_item("Gauge"))
+		item.has_variants = 1
+		item.append("attributes", {"attribute": attribute.name, "mapping": mapping.name})
+		item.save(ignore_permissions=True)
+		frappe.set_user(self.fixture_users["purchase_user"])
+		payload = get_item_price_editor(item=item.name)
+
+		options = next(row for row in payload["attributes"] if row["attribute"] == attribute.name)
+		self.assertEqual([value["label"] for value in options["values"]], ["10", "20"])
+
 	def test_migrated_draft_keeps_stored_uom_and_rejects_relabelled_prices(self):
 		from essdee_yrp.purchase.item_price_workspace import (
 			get_item_price_editor,

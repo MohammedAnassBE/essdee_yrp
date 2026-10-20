@@ -21,7 +21,7 @@
 					<DocumentDeleteButton v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :docstatus="record.docstatus" :disabled="busy || loading" redirect-to="/finishing/dispatches" />
 					<template v-if="draft">
 						<Button label="Fetch Items" icon="pi pi-refresh" severity="secondary" outlined :disabled="busy" @click="confirmFetch" />
-						<DocumentSaveButton v-if="permissions.can_write" :show-submit="Boolean(permissions.can_submit)" :loading="busy" @save="save(false)" @submit="save(true)" />
+						<DocumentSaveButton :saved="Boolean(record.name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Finishing Plan Dispatch ${record.name || ''}`.trim()" v-if="permissions.can_write" :show-submit="Boolean(permissions.can_submit)" :loading="busy" @save="save(false)" @submit="save(true)" />
 					</template>
 					<template v-else>
 						<Button v-if="permissions.can_dispatch_stock" label="Dispatch Stock" icon="pi pi-truck" :disabled="busy" @click="dispatchOpen = true" />
@@ -76,7 +76,7 @@ import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Skeleton from "primevue/skeleton"
 import { useToast } from "primevue/usetoast"
-import { computed, reactive, ref, watch } from "vue"
+import { computed, nextTick, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { executeDispatchCommand, fetchDispatchItems, getDispatchWorkspace, saveDispatch } from "../../api/finishing.js"
@@ -112,7 +112,10 @@ const dispatchOpen = ref(false)
 const stockEntryOpen = ref(false)
 const stockEntryName = ref("")
 const stock = reactive({ from_supplier: "", from_warehouse: "", to_supplier: "", to_warehouse: "", goods_value: null, vehicle_no: "" })
-const entries = new Map()
+const entries = reactive(new Map())
+const cleanSignature = ref("")
+const signature = computed(() => JSON.stringify(collectItems()))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 const rowsVersion = ref(0)
 const record = computed(() => workspace.value.record || {})
 const permissions = computed(() => workspace.value.permissions || {})
@@ -134,6 +137,7 @@ function applyWorkspace(data) {
 	rows.value = data?.items || []
 	rowsVersion.value += 1
 	ready.value = true
+	nextTick(() => { cleanSignature.value = signature.value })
 }
 
 async function load() {

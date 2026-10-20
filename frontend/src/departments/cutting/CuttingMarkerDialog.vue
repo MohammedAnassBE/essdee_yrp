@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record?.name ? `Cutting Marker · ${record.name}` : 'Create New Marker'" class="marker-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record?.name ? `Edit Cutting Marker · ${record.name}` : 'Create New Marker'" class="marker-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="marker-loading"><Skeleton v-for="index in 6" :key="index" height="3.2rem" /></div>
 		<div v-else class="marker-content">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -75,7 +75,7 @@
 					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cutting Marker" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 			<Button v-if="record?.permissions?.can_cancel" label="Cancel Marker" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="cancelMarker" />
 			<Button v-if="canStartEdit" label="Edit Marker" icon="pi pi-pencil" severity="secondary" outlined :disabled="saving" @click="editingExisting = true" />
-			<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :loading="saving" @save="save(false)" @submit="save(true)" />
+			<DocumentSaveButton :saved="Boolean(record?.name)" :dirty="dirty" :docstatus="Number(record?.docstatus || 0)" :document-label="`Cutting Marker ${record?.name || ''}`.trim()" :show-save="canWrite" :show-submit="canSubmit" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="actionError" title="Cutting Marker action failed" @dismiss="actionError = ''" />
@@ -121,6 +121,9 @@ const record = ref(null)
 const editingExisting = ref(false)
 const context = ref({ panels: [], sizes: [] })
 const form = reactive(emptyForm())
+const cleanSignature = ref("")
+const signature = computed(() => JSON.stringify(form))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
 const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan")
 const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
@@ -128,7 +131,7 @@ const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParent
 const canWrite = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(context.value.can_create))
 const canEdit = computed(() => canWrite.value && (!record.value || editingExisting.value))
 const canStartEdit = computed(() => Boolean(record.value) && Number(record.value.docstatus) === 0 && canWrite.value && !editingExisting.value)
-const canSubmit = computed(() => canEdit.value && Boolean(record.value ? record.value.permissions?.can_submit : context.value.can_submit))
+const canSubmit = computed(() => canWrite.value && Boolean(record.value ? record.value.permissions?.can_submit : context.value.can_submit))
 const statusLabel = computed(() => ["Draft", "Submitted", "Cancelled"][Number(record.value?.docstatus || 0)] || "Draft")
 const markerOverviewDefinitions = [
 	{ key: "identity", label: "Marker identity", description: "Marker type and panel coverage", icon: "pi pi-id-card", fields: ["marker_name", "selected_type", "panel_count", "group_count"] },
@@ -165,6 +168,7 @@ async function load() {
 		record.value = data?.marker || null
 		context.value = data?.context || { panels: [], sizes: [] }
 		replaceForm(record.value ? recordForm(record.value) : emptyForm())
+		cleanSignature.value = signature.value
 	} catch (reason) {
 		error.value = reason.message || "Unable to load the Cutting Marker."
 	} finally {
@@ -222,6 +226,7 @@ async function save(submit) {
 		})
 		record.value = saved
 		replaceForm(recordForm(saved))
+		cleanSignature.value = signature.value
 		if (!submit) editingExisting.value = false
 		success.value = submit ? "Marker submitted." : "Draft marker saved."
 		emit("changed", saved)

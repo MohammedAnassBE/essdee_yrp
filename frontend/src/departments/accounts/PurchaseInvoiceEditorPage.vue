@@ -10,6 +10,9 @@
 		<section class="purchase-invoice-editor erp-card erp-editor-shell" aria-label="Purchase Invoice editor" :aria-busy="loading">
 			<PurchaseInvoiceEditorHeader
 				:current-name="currentName"
+				:saved="Boolean(currentName)"
+				:dirty="dirty"
+				:docstatus="docstatus"
 				:bill-tracking="form.bill_tracking"
 				:busy="busy"
 				:can-submit="canSubmit"

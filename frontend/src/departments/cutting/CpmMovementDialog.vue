@@ -6,7 +6,7 @@
 		maximizable
 		:closable="!busy"
 		:close-on-escape="!busy"
-		:header="record?.name ? `Cut Panel Movement · ${record.name}` : 'Create Cut Panel Movement'"
+		:header="record?.name ? `Edit Cut Panel Movement · ${record.name}` : 'Create Cut Panel Movement'"
 		class="erp-cpm-dialog erp-entity-dialog erp-dialog--xl"
 		@update:visible="emit('update:visible', $event)"
 	>
@@ -42,7 +42,7 @@
 					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cut Panel Movement" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel Movement" icon="pi pi-ban" severity="danger" outlined :loading="saving && saveMode === 'cancel'" @click="cancelMovement" />
-					<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :save-disabled="!generated" :submit-disabled="!hasSelection" :loading="saving" @save="save(false)" @submit="save(true)" />
+					<DocumentSaveButton :saved="Boolean(record?.name)" :dirty="dirty" :docstatus="Number(record?.docstatus || 0)" :document-label="`Cut Panel Movement ${record?.name || ''}`.trim()" :show-save="canEdit" :show-submit="canSubmit" :save-disabled="!generated" :submit-disabled="!hasSelection" :loading="saving" @save="save(false)" @submit="save(true)" />
 				</div>
 			</div>
 		</template>
@@ -79,6 +79,9 @@ const error = ref("")
 const success = ref("")
 const editor = reactive({ context: {}, defaults: {}, permissions: {}, record: null })
 const movementData = reactive(emptyMovement())
+const cleanSignature = ref("")
+const signature = computed(() => JSON.stringify({ defaults: editor.defaults, movementData }))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 let loadSequence = 0
 let actionSequence = 0
 const record = computed(() => editor.record)
@@ -116,6 +119,7 @@ async function load() {
 		Object.assign(editor, data || {})
 		replaceMovement(data?.movement_data || data?.record?.movement_data || {})
 		hasGenerated.value = Boolean(data?.record)
+		cleanSignature.value = signature.value
 	} catch (reason) {
 		if (!loadIsStale(sequence, requestedMovement, requestedCuttingPlan)) error.value = reason.message || "Unable to load the Cut Panel Movement."
 	} finally {
@@ -163,7 +167,7 @@ async function save(submit) {
 	try {
 		const saved = await saveMovement(requestedCuttingPlan, request, requestedRecord, submit, expectedModified)
 		if (actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) return
-		editor.record = saved; replaceMovement(saved.movement_data || {}); success.value = submit ? "Cut Panel Movement submitted." : "Draft movement saved."; emit("changed", saved)
+		editor.record = saved; replaceMovement(saved.movement_data || {}); cleanSignature.value = signature.value; success.value = submit ? "Cut Panel Movement submitted." : "Draft movement saved."; emit("changed", saved)
 		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) error.value = reason.message || "Unable to save the Cut Panel Movement."

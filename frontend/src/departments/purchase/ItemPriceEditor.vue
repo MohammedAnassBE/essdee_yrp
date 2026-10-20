@@ -9,7 +9,7 @@
 					</div>
 					<div class="erp-editor-actions">
 						<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="cancel" />
-						<DocumentSaveButton v-if="!loading && !loadError" :show-submit="Boolean(saveAction)" :submit-label="`Save & ${saveAction?.label || ''}`" :loading="Boolean(saving)" :disabled="!canSave" @save="save(false)" @submit="save(true)" />
+						<DocumentSaveButton :saved="Boolean(effectiveName)" :dirty="dirty" :docstatus="Number(editor.docstatus || editor.record?.docstatus || 0)" :document-label="`Item Price ${effectiveName}`.trim()" v-if="!loading && !loadError" :show-submit="Boolean(saveAction)" :submit-label="saveAction?.label || 'Submit'" :loading="Boolean(saving)" :disabled="!canSave" @save="save(false)" @submit="save(true)" />
 					</div>
 				</header>
 

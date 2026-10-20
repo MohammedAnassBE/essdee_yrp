@@ -1,6 +1,6 @@
 <template>
 	<section class="ppo-editor erp-card erp-editor-shell" aria-label="Production Order editor">
-		<header class="erp-editor-header ppo-editor__header"><div><span>{{ name || "New document" }}</span><h1 class="erp-doc-title">{{ name ? "Edit Production Order" : "New Production Order" }}</h1></div><div class="erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" /><DocumentSaveButton :loading="Boolean(saving)" :disabled="busy || !canSave" show-submit submit-label="Save & Request Approval" @save="save(false)" @submit="save(true)" /></div></header>
+		<header class="erp-editor-header ppo-editor__header"><div><span>{{ name || "New document" }}</span><h1 class="erp-doc-title">{{ name ? "Edit Production Order" : "New Production Order" }}</h1></div><div class="erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" /><DocumentSaveButton :saved="Boolean(record.name || name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Production Order ${record.name || name}`.trim()" :loading="Boolean(saving)" :disabled="busy || !canSave" show-submit submit-label="Request Approval" @save="save(false)" @submit="save(true)" /></div></header>
 		<DocumentErrorDialog :message="loadFailed ? '' : error" title="Production Order could not be saved" @dismiss="error = ''" />
 		<div v-if="loading" class="ppo-editor__loading"><Skeleton height="180px" /><Skeleton height="300px" /></div>
 		<WorkspaceLoadError v-else-if="loadFailed" title="Production Order editor unavailable" :message="error" @retry="load" />
@@ -49,6 +49,10 @@ const saving = ref("")
 const error = ref("")
 const loaded = ref(false)
 const modified = ref("")
+const record = ref({})
+const cleanSignature = ref("")
+const signature = computed(() => JSON.stringify({ form, matrix: matrix.value }))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 const busy = computed(() => loading.value || loadingMatrix.value || Boolean(saving.value))
 const loadFailed = computed(() => Boolean(error.value && !loaded.value))
 const matrixRows = computed(() => (matrix.value.primary_values || []).map((size) => ({ size, quantity: number(matrix.value.items?.[size]?.qty), ratio: number(matrix.value.items?.[size]?.ratio), prices: { mrp: number(matrix.value.items?.[size]?.mrp), wholesale_price: number(matrix.value.items?.[size]?.wholesale), retail_price: number(matrix.value.items?.[size]?.retail) } })))
@@ -57,17 +61,19 @@ const canSave = computed(() => Boolean(form.item && form.production_term && form
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 function selectOptions(fieldname) { return String(schemas.value.find((field) => field.fieldname === fieldname)?.options || "").split("\n").filter(Boolean) }
 function apply(payload) {
+	record.value = payload?.record || {}
 	for (const field of payload?.fields || []) if (field.fieldname in form) form[field.fieldname] = field.fieldtype === "Check" ? Boolean(Number(field.value)) : field.value ?? ""
 	schemas.value = payload?.fields || []
 	matrix.value = JSON.parse(JSON.stringify(payload?.matrix || {}))
 	modified.value = payload?.modified || ""
 	loaded.value = true
+	cleanSignature.value = signature.value
 }
 async function load() { loading.value = true; error.value = ""; try { apply(await getProductionOrderEditor(props.name || null) || {}) } catch (reason) { error.value = reason?.message || "Unable to load the Production Order editor." } finally { loading.value = false } }
 async function itemSelected() { if (props.name || !form.item) return; loadingMatrix.value = true; error.value = ""; try { const payload = await getProductionOrderEditor(null, { item: form.item }); const retained = { ...form }; apply(payload || {}); Object.assign(form, retained, { item: retained.item }) } catch (reason) { error.value = reason?.message || "Unable to load the Item size matrix." } finally { loadingMatrix.value = false } }
 function updateMatrix({ size, field, value }) { if (!matrix.value.items?.[size]) return; matrix.value.items[size][field === "quantity" ? "qty" : "ratio"] = value }
 function itemDetails() { return [{ item: form.item, entries: matrixRows.value.map((row) => ({ attributes: { [matrix.value.primary_attribute || "Size"]: row.size }, qty: row.quantity, ratio: row.ratio, mrp: row.prices.mrp, wholesale: row.prices.wholesale_price, retail: row.prices.retail_price })) }] }
-async function save(submit) { saving.value = submit ? "submit" : "save"; error.value = ""; try { const payload = await saveProductionOrder({ ...form, item_details: itemDetails() }, { name: props.name || null, submit, expectedModified: modified.value }); emit("saved", payload?.record || {}) } catch (reason) { error.value = reason?.message || "Unable to save this Production Order." } finally { saving.value = "" } }
+async function save(submit) { saving.value = submit ? "submit" : "save"; error.value = ""; try { const payload = await saveProductionOrder({ ...form, item_details: itemDetails() }, { name: record.value.name || props.name || null, submit, expectedModified: modified.value }); record.value = payload?.record || {}; modified.value = record.value.modified || modified.value; cleanSignature.value = signature.value; emit("saved", payload?.record || {}) } catch (reason) { error.value = reason?.message || "Unable to save this Production Order." } finally { saving.value = "" } }
 onMounted(load)
 watch(() => props.name, load)
 </script>

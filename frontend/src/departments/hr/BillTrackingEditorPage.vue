@@ -15,7 +15,7 @@
 				</div>
 				<div class="erp-editor-actions">
 					<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestExit" />
-					<DocumentSaveButton
+					<DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(editor.docstatus || editor.record?.docstatus || 0)" :document-label="`Bill Tracking ${currentName}`.trim()"
 						:show-submit="canSubmit"
 						:loading="Boolean(saving)"
 						:disabled="busy || !canSave"

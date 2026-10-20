@@ -13,6 +13,10 @@
 		<div class="erp-editor-actions">
 			<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 			<DocumentSaveButton
+				:saved="saved"
+				:dirty="dirty"
+				:docstatus="docstatus"
+				:document-label="`Purchase Invoice ${currentName}`.trim()"
 				:show-submit="canSubmit"
 				:loading="saving"
 				:disabled="busy || !canSave"
@@ -30,6 +34,9 @@ import Button from "primevue/button"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
 
 defineProps({
+	saved: { type: Boolean, default: false },
+	dirty: { type: Boolean, default: true },
+	docstatus: { type: Number, default: 0 },
 	currentName: { type: String, default: "" },
 	billTracking: { type: String, default: "" },
 	busy: { type: Boolean, default: false },

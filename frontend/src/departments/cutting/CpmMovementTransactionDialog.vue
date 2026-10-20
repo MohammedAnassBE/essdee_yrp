@@ -1,7 +1,7 @@
 <template>
 	<Dialog :visible="visible" modal dismissable-mask :header="title" class="erp-movement-transaction-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<div class="erp-movement-transaction">
-			<label v-if="movements.length" class="erp-movement-field"><span>Cut Panel Movement *</span><Select v-model="selectedMovementName" :options="movements" option-label="name" option-value="name" placeholder="Select a submitted movement" fluid /></label>
+			<label v-if="movements.length" class="erp-movement-field"><span>Cut Panel Movement *</span><Select v-model="selectedMovementName" :disabled="Boolean(currentName)" :options="movements" option-label="name" option-value="name" placeholder="Select a submitted movement" fluid /></label>
 			<div v-if="chosenMovement" class="erp-transaction-source"><i class="pi pi-box"></i><div><span>Cut Panel Movement</span><strong>{{ chosenMovement.name }}</strong><small>{{ chosenMovement.totals?.exact_bundles || 0 }} bundles · {{ chosenMovement.totals?.selected_panels || 0 }} panels · {{ chosenMovement.totals?.collapsed_rows || 0 }} collapsed rows · {{ chosenMovement.totals?.accessory_rows || 0 }} accessories</small></div></div>
 			<template v-if="operation === 'stock_entry'">
 				<LinkField v-model="form.to_warehouse" label="To Warehouse *" doctype="Warehouse" help-text="The source Warehouse and selected bundle quantities come from the movement." :show-open-button="false" />
@@ -13,7 +13,7 @@
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<DocumentSaveButton :show-save="permissions.can_create" :show-submit="permissions.can_create && permissions.can_submit" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
+			<DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`${operation === 'delivery_challan' ? 'Delivery Challan' : 'Stock Entry'} ${currentName}`.trim()" :show-save="canWrite" :show-submit="canWrite && Boolean(activePermissions.can_submit)" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" />
@@ -28,6 +28,7 @@ import { computed, reactive, ref, watch } from "vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
+import { getDeliveryChallanWorkspace, saveDeliveryChallan, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
 import { createMovementTransaction } from "./cpmApi.js"
 
 const props = defineProps({
@@ -45,15 +46,30 @@ const error = ref("")
 const saving = ref(false)
 const saveMode = ref("")
 const selectedMovementName = ref("")
-const title = computed(() => props.operation === "delivery_challan" ? "Create Delivery Challan" : "Create Stock Entry from Movement")
-const chosenMovement = computed(() => props.movements.find((row) => row.name === selectedMovementName.value) || (props.movement?.name === selectedMovementName.value ? props.movement : null))
-const canSave = computed(() => Boolean(props.permissions.can_create && chosenMovement.value?.name && (props.operation !== "stock_entry" || form.to_warehouse)))
+const currentName = ref("")
+const record = ref({})
+const savedEditor = ref({})
+const loading = ref(false)
+const cleanSignature = ref("")
+const signature = computed(() => JSON.stringify({ form, movement: selectedMovementName.value }))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
+const title = computed(() => currentName.value ? `Edit ${props.operation === "delivery_challan" ? "Delivery Challan" : "Stock Entry"} · ${currentName.value}` : props.operation === "delivery_challan" ? "Create Delivery Challan" : "Create Stock Entry from Movement")
+const savedMovement = ref(null)
+const chosenMovement = computed(() => props.movements.find((row) => row.name === selectedMovementName.value) || [props.movement, savedMovement.value].find((row) => row?.name === selectedMovementName.value) || null)
+const activePermissions = computed(() => currentName.value ? savedEditor.value.permissions || {} : props.permissions)
+const canWrite = computed(() => Boolean(currentName.value ? activePermissions.value.can_write : activePermissions.value.can_create))
+const canSave = computed(() => Boolean(canWrite.value && chosenMovement.value?.name && (props.operation !== "stock_entry" || form.to_warehouse)))
 
 watch(() => [props.visible, props.operation, props.movement?.name], ([visible]) => {
 	if (!visible) return
+	currentName.value = ""
+	record.value = {}
+	savedEditor.value = {}
+	savedMovement.value = null
 	Object.assign(form, emptyForm())
 	selectedMovementName.value = props.movement?.name || ""
 	error.value = ""
+	cleanSignature.value = signature.value
 })
 
 async function save(submit) {
@@ -62,9 +78,17 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
-		const saved = await createMovementTransaction(props.cuttingPlan, chosenMovement.value.name, props.operation, form, submit)
+		const saved = currentName.value
+			? props.operation === "delivery_challan"
+				? await saveDeliveryChallan({ ...savedEditor.value.values, ...form, item_details: savedEditor.value.matrices?.items || [], correction_item_details: savedEditor.value.matrices?.correction_items || [] }, { name: currentName.value, submit, expectedModified: record.value.modified })
+				: await saveFabricStockOperation(props.operation, { ...savedEditor.value.defaults, to_warehouse: form.to_warehouse, item_details: savedEditor.value.item_groups || [] }, { name: currentName.value, submit, expectedModified: savedEditor.value.modified })
+			: await createMovementTransaction(props.cuttingPlan, chosenMovement.value.name, props.operation, form, submit)
+		savedMovement.value = chosenMovement.value
+		record.value = saved.record || saved
+		currentName.value = record.value.name
+		if (!submit) await loadSaved()
 		emit("changed", saved)
-		emit("update:visible", false)
+		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		error.value = reason.message || "Unable to create the movement transaction."
 	} finally {
@@ -73,6 +97,18 @@ async function save(submit) {
 	}
 }
 
+async function loadSaved() {
+	loading.value = true
+	try {
+		savedEditor.value = props.operation === "delivery_challan"
+			? await getDeliveryChallanWorkspace(currentName.value)
+			: await getFabricStockOperationEditor(props.operation, { name: currentName.value })
+		if (savedEditor.value.record) record.value = savedEditor.value.record
+		const values = savedEditor.value.values || savedEditor.value.defaults || {}
+		for (const key of Object.keys(form)) if (key in values) form[key] = values[key]
+		cleanSignature.value = signature.value
+	} finally { loading.value = false }
+}
 function emptyForm() { return { to_warehouse: "", vehicle_no: "NA", supplier_document_no: "NA" } }
 </script>
 

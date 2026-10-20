@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable header="Create Delivery Challan from Work Order" class="erp-work-order-dc-dialog erp-entity-dialog erp-dialog--xl" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="currentName ? `Edit Delivery Challan · ${currentName}` : 'Create Delivery Challan from Work Order'" class="erp-work-order-dc-dialog erp-entity-dialog erp-dialog--xl" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="erp-work-order-dc__loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 		<div v-else class="erp-work-order-dc">
 			<div class="erp-work-order-dc__context">
@@ -12,7 +12,7 @@
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<DocumentSaveButton :show-save="permissions.can_create" :show-submit="permissions.can_create && permissions.can_submit" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
+			<DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(savedEditor.record?.docstatus || 0)" :document-label="`Delivery Challan ${currentName}`.trim()" :show-save="canWrite" :show-submit="canWrite && Boolean(activePermissions.can_submit)" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" title="Delivery Challan could not be created" />
@@ -24,6 +24,7 @@ import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
+import { getDeliveryChallanWorkspace, saveDeliveryChallan } from "../../api/fabricStore.js"
 import { createWorkOrderDeliveryChallan, getWorkOrderDeliveryEditor } from "./cpmApi.js"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
@@ -42,9 +43,16 @@ const loading = ref(false)
 const saving = ref(false)
 const saveMode = ref("")
 const error = ref("")
-const canSave = computed(() => Boolean(props.permissions.can_create && [...Object.values(quantities), ...Object.values(correctionQuantities)].some((value) => Number(value) > 0)))
+const currentName = ref("")
+const savedEditor = ref({})
+const cleanSignature = ref("")
+const signature = computed(() => JSON.stringify({ quantities, correctionQuantities }))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
+const activePermissions = computed(() => currentName.value ? savedEditor.value.permissions || {} : props.permissions)
+const canWrite = computed(() => Boolean(currentName.value ? activePermissions.value.can_write : activePermissions.value.can_create))
+const canSave = computed(() => Boolean(canWrite.value && [...Object.values(quantities), ...Object.values(correctionQuantities)].some((value) => Number(value) > 0)))
 
-watch(() => [props.visible, props.cuttingPlan], ([visible]) => { if (visible) load() })
+watch(() => [props.visible, props.cuttingPlan], ([visible]) => { if (visible) { currentName.value = ""; savedEditor.value = {}; load() } })
 
 async function load() {
 	loading.value = true
@@ -53,6 +61,14 @@ async function load() {
 	clear(correctionQuantities)
 	try {
 		Object.assign(editor, await getWorkOrderDeliveryEditor(props.cuttingPlan))
+		if (currentName.value) {
+			savedEditor.value = await getDeliveryChallanWorkspace(currentName.value)
+			editor.item_details = savedEditor.value.matrices?.items || []
+			editor.correction_item_details = savedEditor.value.matrices?.correction_items || []
+			readQuantities(editor.item_details, quantities)
+			for (const block of editor.correction_item_details) readQuantities(block.item_details, correctionQuantities)
+		}
+		cleanSignature.value = signature.value
 	} catch (reason) {
 		error.value = reason.message || "Unable to load Work Order deliverables."
 	} finally {
@@ -69,12 +85,20 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
-		const saved = await createWorkOrderDeliveryChallan(props.cuttingPlan, {
+		const saved = currentName.value
+			? await saveDeliveryChallan({
+				...savedEditor.value.values,
+				item_details: applyQuantities(editor.item_details, quantities),
+				correction_item_details: editor.correction_item_details.map(block => ({ ...block, item_details: applyQuantities(block.item_details, correctionQuantities) })),
+			}, { name: currentName.value, submit, expectedModified: savedEditor.value.record?.modified })
+			: await createWorkOrderDeliveryChallan(props.cuttingPlan, {
 			quantities: { ...quantities },
 			correction_quantities: { ...correctionQuantities },
 		}, submit)
+		currentName.value = saved.record?.name || saved.name
+		if (!submit) await load()
 		emit("changed", saved)
-		emit("update:visible", false)
+		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		error.value = reason.message || "Unable to create the Delivery Challan."
 	} finally {
@@ -83,6 +107,18 @@ async function save(submit) {
 	}
 }
 
+function readQuantities(groups, target) {
+	for (const group of groups || []) for (const row of group.items || []) for (const cell of Object.values(row.values || {})) {
+		if (cell?.ref_docname) target[cell.ref_docname] = Number(cell.qty || 0)
+	}
+}
+function applyQuantities(groups, quantities) {
+	const result = JSON.parse(JSON.stringify(groups || []))
+	for (const group of result) for (const row of group.items || []) for (const cell of Object.values(row.values || {})) {
+		if (cell?.ref_docname) cell.qty = cell.delivered_quantity = Number(quantities[cell.ref_docname] || 0)
+	}
+	return result
+}
 function clear(value) { for (const key of Object.keys(value)) delete value[key] }
 </script>
 

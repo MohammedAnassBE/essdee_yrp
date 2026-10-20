@@ -21,7 +21,7 @@
 
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<DocumentSaveButton :show-save="permissions.can_create" :show-submit="permissions.can_create && permissions.can_submit" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
+			<DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`${operationMeta.title.replace('Create ', '')} ${currentName}`.trim()" :show-save="canWrite" :show-submit="canWrite && Boolean(activePermissions.can_submit)" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" />
@@ -38,6 +38,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import StockItemComposer from "./StockItemComposer.vue"
+import { getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
 import { getStockOperationEditor, saveStockOperation } from "./cpmApi.js"
 
 const props = defineProps({
@@ -61,13 +62,21 @@ const saving = ref(false)
 const saveMode = ref("")
 const error = ref("")
 const itemDetails = ref([])
+const currentName = ref("")
+const record = ref({})
+const savedEditor = ref({})
+const cleanSignature = ref("")
 const stock = reactive({ context: {}, dimensions: [], update_type_options: [] })
 const form = reactive(emptyForm())
 
 const operationMeta = computed(() => operationMap[props.operation] || operationMap.stock_entry)
-const title = computed(() => operationMeta.value.title)
+const title = computed(() => currentName.value ? `Edit ${operationMeta.value.title.replace("Create ", "")} · ${currentName.value}` : operationMeta.value.title)
+const signature = computed(() => JSON.stringify({ form, itemDetails: itemDetails.value }))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
+const activePermissions = computed(() => currentName.value ? savedEditor.value.permissions || {} : props.permissions)
+const canWrite = computed(() => Boolean(currentName.value ? activePermissions.value.can_write : activePermissions.value.can_create))
 const canSave = computed(() => {
-	if (!props.permissions.can_create) return false
+	if (!canWrite.value) return false
 	if (!itemDetails.value.some((group) => group.items?.length)) return false
 	if (props.operation === "stock_entry" && !form.purpose) return false
 	if (props.operation === "stock_entry" && form.purpose === "Send to Warehouse" && !form.to_warehouse) return false
@@ -75,7 +84,7 @@ const canSave = computed(() => {
 	return true
 })
 
-watch(() => [props.visible, props.operation, props.cuttingPlan], ([visible]) => { if (visible) load() })
+watch(() => [props.visible, props.operation, props.cuttingPlan], ([visible]) => { if (visible) { currentName.value = ""; record.value = {}; savedEditor.value = {}; load() } })
 
 async function load() {
 	loading.value = true
@@ -86,6 +95,12 @@ async function load() {
 		const data = await getStockOperationEditor(props.cuttingPlan, props.operation)
 		Object.assign(stock, data || { context: {}, dimensions: [] })
 		form.update_type = data?.defaults?.update_type || ""
+		if (currentName.value) {
+			savedEditor.value = await getFabricStockOperationEditor(props.operation, { name: currentName.value })
+			Object.assign(form, savedEditor.value.defaults || {})
+			itemDetails.value = savedEditor.value.item_groups || []
+		}
+		cleanSignature.value = signature.value
 	} catch (reason) {
 		error.value = reason.message || "Unable to load plan stock."
 	} finally {
@@ -99,14 +114,20 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
-		const saved = await saveStockOperation(props.cuttingPlan, props.operation, {
+		const values = {
 			item_details: itemDetails.value,
 			purpose: form.purpose,
 			to_warehouse: form.to_warehouse,
 			update_type: form.update_type,
-		}, submit)
+		}
+		const saved = currentName.value
+			? await saveFabricStockOperation(props.operation, { ...savedEditor.value.defaults, ...form, ...values }, { name: currentName.value, submit, expectedModified: savedEditor.value.modified })
+			: await saveStockOperation(props.cuttingPlan, props.operation, values, submit)
+		record.value = saved.record || saved
+		currentName.value = record.value.name
+		if (!submit) await load()
 		emit("changed", saved)
-		emit("update:visible", false)
+		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		error.value = reason.message || "Unable to create the stock document."
 	} finally {

@@ -1,53 +1,56 @@
 <template>
-	<SplitButton
-		v-if="showSave && showSubmit"
+	<Button
+		v-if="action !== 'none'"
 		class="document-save-button"
-		:label="saveLabel"
-		:icon="loading ? 'pi pi-spinner pi-spin' : 'pi pi-save'"
-		:model="submitItems"
+		:label="action === 'submit' ? submitLabel : saveLabel"
+		:icon="action === 'submit' ? 'pi pi-check' : 'pi pi-save'"
+		:loading="loading"
 		:aria-busy="loading"
-		:disabled="loading || disabled || (saveDisabled && submitDisabled)"
-		:button-props="{ disabled: loading || disabled || saveDisabled }"
-		:menu-button-props="{ 'aria-label': `${saveLabel} options`, disabled: loading || disabled || submitDisabled }"
-		@click="emit('save')"
-	/>
-	<Button
-		v-else-if="showSubmit"
-		class="document-save-button"
-		:label="submitLabel"
-		icon="pi pi-check"
-		:loading="loading"
-		:disabled="loading || disabled || submitDisabled"
-		@click="emit('submit')"
-	/>
-	<Button
-		v-else-if="showSave"
-		class="document-save-button"
-		:label="saveLabel"
-		icon="pi pi-save"
-		:loading="loading"
-		:disabled="loading || disabled || saveDisabled"
-		@click="emit('save')"
+		:disabled="actionDisabled"
+		@click="performAction"
 	/>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import SplitButton from "primevue/splitbutton"
 import { computed } from "vue"
+import { getDocumentPrimaryAction } from "./documentPrimaryAction.js"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 
 const props = defineProps({
+	saved: { type: Boolean, default: false },
+	dirty: { type: Boolean, default: true },
+	docstatus: { type: Number, default: 0 },
+	allowUpdateAfterSubmit: { type: Boolean, default: false },
+	documentLabel: { type: String, default: "" },
+	confirmSubmit: { type: Boolean, default: true },
 	showSave: { type: Boolean, default: true },
 	showSubmit: { type: Boolean, default: false },
 	saveLabel: { type: String, default: "Save" },
-	submitLabel: { type: String, default: "Save & Submit" },
+	submitLabel: { type: String, default: "Submit" },
 	loading: { type: Boolean, default: false },
 	disabled: { type: Boolean, default: false },
 	saveDisabled: { type: Boolean, default: false },
 	submitDisabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(["save", "submit"])
-const submitItems = computed(() => [{ label: props.submitLabel, icon: "pi pi-check", disabled: props.loading || props.disabled || props.submitDisabled, command: () => emit("submit") }])
+const confirmAction = useActionConfirmation()
+const action = computed(() => getDocumentPrimaryAction(props))
+const actionDisabled = computed(() => props.loading || props.disabled || action.value === "save-disabled" || (action.value === "submit" ? props.submitDisabled : props.saveDisabled))
+function performAction() {
+	if (actionDisabled.value || action.value === "none") return
+	if (action.value !== "submit") return emit("save")
+	if (!props.confirmSubmit) return emit("submit")
+	confirmAction({
+		header: "Confirm",
+		message: `Permanently Submit ${props.documentLabel || "this document"}?`,
+		acceptLabel: "Submit",
+		acceptSeverity: "primary",
+		acceptIcon: "pi pi-check",
+		rejectLabel: "Cancel",
+		accept: () => emit("submit"),
+	})
+}
 </script>
 
 <style scoped>

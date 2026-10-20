@@ -5,7 +5,7 @@
 			<div class="order-editor-actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 				<slot name="document-actions" :busy="busy" :dirty="dirty" />
-				<DocumentSaveButton :show-submit="permissions.can_submit" :loading="Boolean(saving)" :disabled="busy || !canSave" @save="save(false)" @submit="save(true)" />
+				<DocumentSaveButton :saved="Boolean(savedName)" :dirty="dirty" :docstatus="docstatus" :document-label="`Cutting Order ${savedName}`.trim()" :show-submit="permissions.can_submit" :loading="Boolean(saving)" :disabled="busy || !canSave" @save="save(false)" @submit="save(true)" />
 			</div>
 		</header>
 
@@ -70,6 +70,8 @@ const permissions = reactive({ can_create: false, can_write: false, can_submit: 
 const detailPermissions = reactive({ can_create: false, can_write: false })
 const options = reactive({ cutting_locations: [] })
 const modified = ref("")
+const savedName = ref(props.name)
+const docstatus = ref(0)
 const loading = ref(true)
 const loadingDetail = ref(false)
 const saving = ref("")
@@ -94,6 +96,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value ?? null)) }
 function applyPayload(payload, { preserveQuantities = false } = {}) {
 	const previous = preserveQuantities ? quantityMap(groups.value) : new Map()
 	const record = payload?.record || {}
+	savedName.value = record.name || props.name
+	docstatus.value = Number(record.docstatus || 0)
 	for (const key of Object.keys(form)) form[key] = record[key] ?? ""
 	groups.value = clone(payload?.matrix?.groups || [])
 	if (preserveQuantities) restoreQuantities(groups.value, previous)
@@ -194,7 +198,7 @@ async function save(submit) {
 			maximum_no_of_plys: form.maximum_no_of_plys,
 			maximum_allow_percent: form.maximum_allow_percent,
 			item_details: clone(groups.value),
-		}, { name: props.name, submit, expectedModified: modified.value })
+		}, { name: savedName.value, submit, expectedModified: modified.value })
 		applyPayload(payload)
 		cleanSignature.value = signature.value
 		emit("saved", payload?.record || {})

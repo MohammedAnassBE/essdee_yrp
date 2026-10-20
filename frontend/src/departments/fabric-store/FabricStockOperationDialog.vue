@@ -22,14 +22,13 @@
 				:editor="editor"
 				:read-only="editor.protected_completion"
 				:schema-loader="loadSchema"
-				@dirty="markDirty"
 			/>
 		</div>
 
 		<template #footer>
 			<div class="fabric-stock-footer">
 				<Button label="Close" severity="secondary" text :disabled="saving" @click="requestVisibility(false)" />
-				<div><Button v-if="canDiscard" label="Discard Draft" icon="pi pi-trash" severity="danger" outlined :disabled="saving" @click="requestDiscard" /><DocumentSaveButton :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Save & Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
+				<div><Button v-if="canDiscard" label="Discard Draft" icon="pi pi-trash" severity="danger" outlined :disabled="saving" @click="requestDiscard" /><DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(editor.docstatus || editor.record?.docstatus || 0)" :document-label="`${labels[operation]} ${currentName}`.trim()" :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
 			</div>
 		</template>
 	</Dialog>
@@ -70,11 +69,14 @@ const saving = ref(false)
 const saveMode = ref("")
 const error = ref("")
 const fieldErrors = ref({})
-const dirty = ref(false)
+const currentName = ref(props.name)
+const cleanSignature = ref("")
 const editor = ref({ dimensions: [], permissions: {} })
 const itemDetails = ref([])
 const form = reactive(emptyForm())
-const title = computed(() => `${props.name ? "Edit" : "Create"} ${labels[props.operation] || "Stock Document"}${props.name ? ` · ${props.name}` : ""}`)
+const signature = computed(() => JSON.stringify({ form, itemDetails: itemDetails.value }))
+const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
+const title = computed(() => `${currentName.value ? "Edit" : "Create"} ${labels[props.operation] || "Stock Document"}${currentName.value ? ` · ${currentName.value}` : ""}`)
 const canSave = computed(() => {
 	const canMutate = editor.value.protected_completion
 		? editor.value.permissions?.can_submit
@@ -93,30 +95,28 @@ function updateField(fieldname, value) {
 	delete fieldErrors.value[fieldname]
 	warehouseCheck.supplierChanged(fieldname)
 	if (fieldname === "purpose" && value === "Material Receipt") form.from_warehouse = ""
-	markDirty()
 }
 
-const canDiscard = computed(() => Boolean(props.name && editor.value.protected_completion && editor.value.permissions?.can_delete))
+const canDiscard = computed(() => Boolean(currentName.value && editor.value.protected_completion && editor.value.permissions?.can_delete))
 
-watch(() => [props.visible, props.operation, props.name, JSON.stringify(props.sourceContext || {}), props.initialEditor], ([visible]) => { if (visible) load() }, { immediate: true })
+watch(() => [props.visible, props.operation, props.name, JSON.stringify(props.sourceContext || {}), props.initialEditor], ([visible]) => { if (visible) { currentName.value = props.name; load() } }, { immediate: true })
 
-async function load() {
+async function load(reload = false) {
 	loading.value = true
 	error.value = ""
 	fieldErrors.value = {}
 	itemDetails.value = []
 	Object.assign(form, emptyForm())
 	try {
-		editor.value = props.initialEditor || await getFabricStockOperationEditor(props.operation, { name: props.name, sourceContext: props.sourceContext }) || { dimensions: [], permissions: {} }
+		editor.value = (!reload && props.initialEditor) || await getFabricStockOperationEditor(props.operation, { name: currentName.value, sourceContext: props.sourceContext }) || { dimensions: [], permissions: {} }
 		Object.assign(form, editor.value.defaults || {})
 		itemDetails.value = clone(editor.value.item_groups || [])
-		dirty.value = false
+		cleanSignature.value = signature.value
 	} catch (reason) { error.value = reason?.message || "Unable to prepare this stock document." }
 	finally { loading.value = false }
 }
 
 function loadSchema(operation, item) { return getFabricStockItemSchema(operation, item) }
-function markDirty() { if (!loading.value) dirty.value = true }
 async function save(submit) {
 	if (!canSave.value) return
 	await warehouseCheck.settled()
@@ -127,10 +127,12 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
-		const saved = await saveFabricStockOperation(props.operation, { ...form, item_details: itemDetails.value }, { name: props.name, expectedModified: props.expectedModified || editor.value.modified, submit })
-		dirty.value = false
+		const saved = await saveFabricStockOperation(props.operation, { ...form, item_details: itemDetails.value }, { name: currentName.value, expectedModified: editor.value.modified || props.expectedModified, submit })
+		cleanSignature.value = signature.value
+		currentName.value = saved.record?.name || saved.name
+		if (!submit) await load(true)
 		emit("changed", saved)
-		emit("update:visible", false)
+		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		const mapped = mapFieldError(reason, headerFields.value, "Unable to save this stock document.")
 		fieldErrors.value = mapped.fields
@@ -141,7 +143,7 @@ async function save(submit) {
 function requestDiscard() {
 	confirmAction({
 		header: "Discard completion draft?",
-		message: `Delete draft ${props.name}? Complete Transfer will prepare a fresh entry from the pending quantities.`,
+		message: `Delete draft ${currentName.value}? Complete Transfer will prepare a fresh entry from the pending quantities.`,
 		acceptLabel: "Discard Draft",
 		rejectLabel: "Keep Draft",
 		acceptIcon: "pi pi-trash",
@@ -152,8 +154,8 @@ async function discard() {
 	saving.value = true
 	error.value = ""
 	try {
-		const discarded = await discardCompletionDraft(props.name, props.expectedModified || editor.value.modified)
-		dirty.value = false
+		const discarded = await discardCompletionDraft(currentName.value, editor.value.modified || props.expectedModified)
+		cleanSignature.value = signature.value
 		emit("changed", discarded)
 		emit("update:visible", false)
 	} catch (reason) { error.value = reason?.message || "Unable to discard this draft." }

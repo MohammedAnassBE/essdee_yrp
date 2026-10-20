@@ -8,9 +8,11 @@
 			<div class="cutting-plan-editor__actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
 				<slot name="document-actions" :busy="busy" :dirty="dirty" />
-				<DocumentSaveButton
-					:show-save="!name || dirty"
-					:show-submit="Boolean(name) && permissions.can_submit && !dirty"
+				<DocumentSaveButton :saved="Boolean(savedName)" :dirty="dirty" :docstatus="docstatus" :document-label="`Cutting Plan ${savedName}`.trim()"
+					:show-save="Boolean(name ? permissions.can_write : permissions.can_create)"
+					:show-submit="Boolean(permissions.can_submit)"
+					:allow-update-after-submit="Boolean(permissions.can_update_after_submit)"
+					:save-label="submittedEditor ? 'Update' : 'Save'"
 					submit-label="Submit"
 					:loading="Boolean(saving)"
 					:disabled="busy || !canSave"
@@ -116,6 +118,8 @@ const permissions = reactive({ can_create: false, can_write: false, can_update_a
 const fields = reactive({ show_work_order: false, can_edit_work_order: false, allow_on_submit_fields: [] })
 const options = reactive({ cutting_locations: [] })
 const modified = ref("")
+const savedName = ref(props.name)
+const docstatus = ref(0)
 const loading = ref(true)
 const loadingLot = ref(false)
 const saving = ref("")
@@ -157,6 +161,8 @@ function clone(value) {
 
 function applyPayload(payload) {
 	const record = payload?.record || {}
+	savedName.value = record.name || props.name
+	docstatus.value = Number(record.docstatus || 0)
 	for (const key of Object.keys(form)) form[key] = record[key] ?? (key === "is_manual_entry" ? 0 : "")
 	groups.value = clone(payload?.matrix?.groups || [])
 	Object.assign(permissions, payload?.permissions || {})
@@ -241,7 +247,7 @@ async function save(submit) {
 		if (!submittedEditor.value && fields.can_edit_work_order) values.work_order = form.work_order || null
 		const payload = await saveCuttingPlan(
 			values,
-			{ name: props.name, submit, expectedModified: modified.value },
+			{ name: savedName.value, submit, expectedModified: modified.value },
 		)
 		applyPayload(payload)
 		cleanSignature.value = signature.value

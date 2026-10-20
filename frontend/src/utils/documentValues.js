@@ -31,7 +31,7 @@ export function plainTextFromHtml(value) {
 }
 
 export function normaliseFrappeTime(value) {
-	const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/)
+	const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{1,2}))?(?:\.\d+)?$/)
 	if (!match) return ""
 	const hours = Number(match[1])
 	const minutes = Number(match[2])

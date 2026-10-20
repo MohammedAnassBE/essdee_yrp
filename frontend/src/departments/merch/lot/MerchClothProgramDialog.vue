@@ -153,6 +153,13 @@
 			</section>
 		</div>
 		<template #footer>
+			<small
+				v-if="blockedMessage"
+				class="merch-field-error"
+				role="alert"
+			>
+				{{ blockedMessage }}
+			</small>
 			<Button
 				label="Cancel"
 				severity="secondary"
@@ -176,7 +183,7 @@ import InputNumber from "primevue/inputnumber"
 import { computed, ref, watch } from "vue"
 import { getMerchClothProgramContext, getMerchYarnProfile } from "../../../api/merch.js"
 import LinkField from "../../../components/common/LinkField.vue"
-import { buildSelection, clothErrors, clothSelection } from "./clothProgram.js"
+import { buildBlockMessage, buildSelection, clothErrors, clothSelection } from "./clothProgram.js"
 const props = defineProps({
 	visible: Boolean,
 	lotId: { type: String, required: true },
@@ -186,6 +193,7 @@ const props = defineProps({
 const emit = defineEmits(["update:visible", "build", "error"])
 const loading = ref(false)
 const attempted = ref(false)
+const blockedMessage = ref("")
 const excess = ref(0)
 const selections = ref([])
 const errors = computed(() =>
@@ -223,6 +231,7 @@ watch(
 		if (!visible) return
 		loading.value = true
 		attempted.value = false
+		blockedMessage.value = ""
 		selections.value = []
 		excess.value = props.excessPercentage
 		try {
@@ -249,7 +258,8 @@ function setDyed(selection, colour, checked) {
 }
 function build() {
 	attempted.value = true
-	if (excess.value < 0 || errors.value.some((error) => Object.keys(error).length)) return
+	blockedMessage.value = buildBlockMessage(selections.value, excess.value)
+	if (blockedMessage.value) return
 	emit("build", {
 		selections: selections.value.map(buildSelection),
 		excess_percentage: excess.value || 0,

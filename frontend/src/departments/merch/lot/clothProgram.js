@@ -99,3 +99,11 @@ function routeErrors(selection) {
 		errors.routes = "Set Default Dia-change Process in SD YRP IPD Settings."
 	return errors
 }
+
+export function buildBlockMessage(selections, excess) {
+	if (excess < 0) return "Cloth Excess Percentage cannot be negative."
+	const blocked = selections.find((selection) => Object.keys(clothErrors(selection)).length)
+	if (!blocked) return ""
+	const [first] = Object.values(clothErrors(blocked))
+	return `Fix ${blocked.cloth_item || "the cloth"} before building: ${first}`
+}

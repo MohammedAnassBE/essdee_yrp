@@ -1,14 +1,17 @@
 <template>
 	<DepartmentPage title="Production Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="ppo-page-frame">
-			<FabricDocumentWorkspace doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
+			<FabricDocumentWorkspace print-label="Print Format" :show-delete="false" doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
 				<template #header="{ record, headingId }">
 					<div class="ppo-page__identity">
 						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 class="erp-doc-title" :id="headingId">{{ record.item || "Production Order" }}</h1></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status_label" />
 					</div>
 				</template>
-				<template #header-actions><DocumentActionStrip :actions="actions" /></template>
+				<template #header-actions>
+					<CustomPrintButtons v-if="workspace.record?.name" doctype="YRP Production Order" :record="workspace.record" :permissions="workspace.permissions" :disabled="Boolean(acting)" />
+					<DocumentActionStrip :actions="actions" />
+				</template>
 				<template #fields>
 					<Tabs v-model:value="activeTab" class="ppo-tabs erp-tabs">
 						<TabList>
@@ -44,6 +47,7 @@
 </template>
 
 <script setup>
+import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"

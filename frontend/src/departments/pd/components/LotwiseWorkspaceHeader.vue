@@ -5,6 +5,7 @@
 			<h1>{{ title }}</h1>
 		</div>
 		<div class="lotwise-workspace__header-actions">
+			<DocumentPrintButton v-if="name" doctype="SD YRP Lotwise Item Profit" :name="name" :disabled="busy" />
 			<DocumentActionStrip :actions="actions" />
 			<DocumentSaveButton v-if="canEdit" :loading="saving" :disabled="busy" @save="emit('save')" />
 		</div>
@@ -12,6 +13,7 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
 

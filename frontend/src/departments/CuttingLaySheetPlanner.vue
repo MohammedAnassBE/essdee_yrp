@@ -13,7 +13,10 @@
 							<span class="planner-header-fact planner-header-fact--item" :title="record.item || 'No Item'"><small>Item</small><strong>{{ record.item || "—" }}</strong></span>
 						</div>
 					</div>
-					<div class="planner-record-actions"><Button v-if="activeTab === 'inputs' && actions.can_edit_inputs" label="Save Inputs" icon="pi pi-save" severity="secondary" outlined :loading="saving" :disabled="actionBusy || !plannerInputs?.canSave" @click="plannerInputs?.save()" /><Button v-if="actions.can_optimize" :label="actions.can_retry ? 'Retry Optimization' : results.successful?.length ? 'Re-optimize' : 'Optimize'" icon="pi pi-calculator" :loading="optimizing" :disabled="actionBusy" @click="optimize" /><Button icon="pi pi-refresh" aria-label="Refresh LaySheet Plan" severity="secondary" text rounded :loading="loading" :disabled="actionBusy" @click="load" /></div>
+					<div class="planner-record-actions">
+						<DocumentDeleteButton doctype="SD YRP Cutting Laysheet Planner" :name="record.name" :docstatus="record.docstatus" :disabled="loading || actionBusy" redirect-to="/cutting/lay-sheet-planner" />
+						<DocumentPrintButton doctype="SD YRP Cutting Laysheet Planner" :name="record.name" :docstatus="record.docstatus" :disabled="loading || actionBusy" />
+						<Button v-if="activeTab === 'inputs' && actions.can_edit_inputs" label="Save Inputs" icon="pi pi-save" severity="secondary" outlined :loading="saving" :disabled="actionBusy || !plannerInputs?.canSave" @click="plannerInputs?.save()" /><Button v-if="actions.can_optimize" :label="actions.can_retry ? 'Retry Optimization' : results.successful?.length ? 'Re-optimize' : 'Optimize'" icon="pi pi-calculator" :loading="optimizing" :disabled="actionBusy" @click="optimize" /><Button icon="pi pi-refresh" aria-label="Refresh LaySheet Plan" severity="secondary" text rounded :loading="loading" :disabled="actionBusy" @click="load" /></div>
 				</header>
 				<Message v-if="error || optimizationFailure" severity="error" :closable="false">{{ error || optimizationFailure }}</Message>
 				<Tabs v-model:value="activeTab" class="planner-tabs erp-card" :class="{ 'planner-tabs--plan': activeTab === 'plan' }">
@@ -41,6 +44,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"

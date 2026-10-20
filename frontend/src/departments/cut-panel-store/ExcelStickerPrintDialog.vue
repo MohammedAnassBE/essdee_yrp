@@ -103,6 +103,8 @@
 				<span>{{ footerSummary }}</span>
 				<div>
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
+					<DocumentDeleteButton v-if="record?.name" doctype="YRP Excel Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.name" doctype="YRP Excel Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="canPrint" label="Print Labels" icon="pi pi-print" severity="secondary" outlined :disabled="busy" @click="printerVisible = true" />
 					<Button v-if="documentPermissions.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty" @click="requestCommand('submit')" />
 					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !canSave" @click="save" />
@@ -135,6 +137,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
@@ -496,6 +500,10 @@ function messageOf(reason, fallback) {
 
 function clone(value) {
 	return JSON.parse(JSON.stringify(value))
+}
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
 }
 </script>
 

@@ -39,6 +39,7 @@
 				<div class="erp-footer-summary" :class="{ 'erp-footer-summary--active': hasSelection }"><i :class="hasSelection ? 'pi pi-check-circle' : 'pi pi-info-circle'" /><span>{{ hasSelection ? selectionSummaryText : "Select at least one bundle, panel, collapsed quantity, or accessory weight." }}</span></div>
 				<div class="erp-footer-actions">
 					<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
+					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cut Panel Movement" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel Movement" icon="pi pi-ban" severity="danger" outlined :loading="saving && saveMode === 'cancel'" @click="cancelMovement" />
 					<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :save-disabled="!generated" :submit-disabled="!hasSelection" :loading="saving" @save="save(false)" @submit="save(true)" />
@@ -50,6 +51,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"
@@ -195,6 +197,10 @@ async function performCancelMovement() {
 function replaceMovement(value) { Object.assign(movementData, emptyMovement(), clone(value)) }
 function emptyMovement() { return { panels: [], data: {}, accessory_data: [], collapsed_details: [], is_set_item: 0 } }
 function clone(value) { return JSON.parse(JSON.stringify(value || {})) }
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 </script>
 
 <style scoped>

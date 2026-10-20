@@ -232,6 +232,20 @@ export async function updateDoc(doctype, name, values) {
 	return payload.data || null
 }
 
+export async function getPrintOptions(doctype, name) {
+	const payload = await request(`/api/method/essdee_yrp.api.print.get_print_options${queryString({ doctype, name })}`, { method: "GET" })
+	return payload.message
+}
+
+export async function getDocPermissions(doctype, name) {
+	const payload = await request(`/api/method/frappe.client.get_doc_permissions${queryString({ doctype, docname: name })}`, { method: "GET" })
+	return payload.message.permissions
+}
+
+export function deleteDoc(doctype, name) {
+	return callMethod("frappe.client.delete", { doctype, name })
+}
+
 export function submitDoc(doctype, name, modified = "") {
 	return callMethod("essdee_yrp.api.lifecycle.submit_document", { doctype, name, modified: modified || undefined })
 }

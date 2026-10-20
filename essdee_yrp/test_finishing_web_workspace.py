@@ -40,6 +40,33 @@ def make_plan(**values):
 
 
 class TestFinishingWebWorkspace(TestCase):
+	def test_inward_print_caches_size_and_matches_desk_url(self):
+		workspace = self._workspace()
+		plan = make_plan(name="FP/1 & 2")
+		with (
+			patch.object(workspace, "get_plan", return_value=plan),
+			patch.object(workspace, "get_plan_actions", return_value={"print_inward": True}),
+			patch.object(workspace.transactions, "get_primary_values", return_value=["S", "M"]),
+			patch.object(workspace.inward, "cache_selected_size") as cache,
+		):
+			payload = workspace.prepare_inward_print(plan.name, "M")
+		cache.assert_called_once_with("inward_pf_size", "M", plan.name)
+		self.assertEqual(payload["url"], "/printview?doctype=SD+YRP+Finishing+Plan&name=FP%2F1+%26+2&trigger_print=1&format=Essdee+Finishing+Plan+Inward+Report&no_letterhead=1")
+
+	def test_inward_print_rejects_denied_action_and_invalid_size_before_caching(self):
+		workspace = self._workspace()
+		for allowed, size in ((False, "M"), (True, "Unknown")):
+			with (
+				patch.object(workspace, "get_plan", return_value=make_plan()),
+				patch.object(workspace, "get_plan_actions", return_value={"print_inward": allowed}),
+				patch.object(workspace.transactions, "get_primary_values", return_value=["M"]),
+				patch.object(workspace.inward, "cache_selected_size") as cache,
+				patch.object(frappe, "throw", side_effect=frappe.ValidationError),
+			):
+				with self.assertRaises(frappe.ValidationError):
+					workspace.prepare_inward_print("FP-1", size)
+				cache.assert_not_called()
+
 	def _workspace(self):
 		self.assertIsNotNone(find_spec(MODULE), "The Finishing web workspace must exist")
 		return import_module(MODULE)

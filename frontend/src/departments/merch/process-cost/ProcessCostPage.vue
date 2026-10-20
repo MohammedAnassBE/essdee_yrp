@@ -7,6 +7,7 @@
 				<InlinePageNavigation title-target="process-cost-title" />
 				<div class="process-cost-page__title"><h1 id="process-cost-title" class="erp-doc-title">Process Cost · {{ workspace.record.process_name }}</h1><span class="erp-doc-id">{{ workspace.record.name }}</span></div>
 				<DocumentStatusBadge :label="workspace.record.workflow_state" :docstatus="workspace.record.docstatus" />
+				<DocumentPrintButton doctype="YRP Process Cost" :name="workspace.record.name" :docstatus="workspace.record.docstatus" :disabled="acting" />
 				<DocumentActionStrip :actions="actions" />
 			</header>
 			<Message v-if="workspace.waiting_note" severity="info" :closable="false">{{ workspace.waiting_note }}</Message>
@@ -19,6 +20,7 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import Message from "primevue/message"
 import { computed, ref, watch } from "vue"
 import { useRouter } from "vue-router"

@@ -56,6 +56,10 @@ class TestSalesWebWorkspace(TestCase):
 		settings = patch.object(frappe.db, "get_single_value", return_value=1)
 		settings.start()
 		self.addCleanup(settings.stop)
+		# Leave the real registry in use, supplying deterministic Desk choices.
+		formats = patch("essdee_yrp.print_registry.get_desk_print_formats", return_value=["Standard", "Essdee Production Order"])
+		formats.start()
+		self.addCleanup(formats.stop)
 
 	def test_workspace_print_availability_respects_print_settings(self):
 		workspace = self._workspace()
@@ -87,7 +91,7 @@ class TestSalesWebWorkspace(TestCase):
 					self.assertEqual(payload["record"]["status_label"], label)
 					self.assertEqual(payload["record"]["status"], stored_status)
 					self.assertEqual(doc.get("status"), stored_status)
-					self.assertEqual(payload["print_formats"], [{"label": "Production Order", "format": "Essdee Production Order"}] if can_print else [])
+					self.assertEqual(payload["print_formats"], [{"label": name, "format": name} for name in ["Standard", "Essdee Production Order"]] if can_print else [])
 
 	def test_editor_and_save_reject_invalid_items_before_matrix_or_insert(self):
 		from essdee_yrp.test_sales_production_order_commands import FakeEditableProductionOrder

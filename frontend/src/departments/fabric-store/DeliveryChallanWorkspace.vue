@@ -14,6 +14,7 @@
 			@reload="load(true)"
 			@action="runWorkspaceAction"
 			@close="emit('closed')"
+			@deleted="documentDeleted"
 		>
 			<template #header="{ record, headingId }">
 				<div class="delivery-challan-header__identity" :class="{ 'delivery-challan-header__identity--embedded': presentation === 'embedded' }">
@@ -853,6 +854,10 @@ watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, sou
 	clearWorkspaceState(name || "")
 	load()
 })
+function documentDeleted() {
+	emit("changed", { deleted: true })
+	if (props.presentation === "embedded") emit("closed")
+}
 </script>
 
 <style scoped>

@@ -24,6 +24,7 @@
 				</div>
 				<div class="finishing-plan__actions">
 					<DocumentPrintButton v-if="workspace.permissions?.can_print" doctype="SD YRP Finishing Plan" :name="finishingPlanId" :formats="workspace.print_formats || []" :disabled="loading || busy" />
+					<DocumentDeleteButton doctype="SD YRP Finishing Plan" :name="record.name" :docstatus="record.docstatus" :disabled="loading || busy" :redirect-to="backTo" />
 					<FinishingPlanActions :workspace="workspace" :busy="busy" @command="(command) => runCommand(command)" @entry="openEntry" />
 				</div>
 			</header>
@@ -63,6 +64,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { useToast } from "primevue/usetoast"

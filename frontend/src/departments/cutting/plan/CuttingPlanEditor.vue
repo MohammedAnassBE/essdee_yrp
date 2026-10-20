@@ -7,6 +7,7 @@
 			</div>
 			<div class="cutting-plan-editor__actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
+				<slot name="document-actions" :busy="busy" :dirty="dirty" />
 				<DocumentSaveButton
 					:show-save="!name || dirty"
 					:show-submit="Boolean(name) && permissions.can_submit && !dirty"

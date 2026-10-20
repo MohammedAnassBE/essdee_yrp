@@ -166,6 +166,11 @@ class TestBillTrackingActions(TestCase):
 
 
 class TestBillTrackingWorkspace(TestCase):
+	def setUp(self):
+		formats = patch.object(web_workspace, "get_document_print_formats", return_value=[{"label": "Standard", "format": "Standard"}])
+		self.print_formats = formats.start()
+		self.addCleanup(formats.stop)
+
 	def test_workspace_requires_read(self):
 		doc = FakeBillTracking(
 			bill_tracking_history=[
@@ -190,6 +195,8 @@ class TestBillTrackingWorkspace(TestCase):
 
 		self.assertEqual(doc.checked_permissions, ["read"])
 		self.assertEqual(payload["record"]["name"], doc.name)
+		self.assertEqual(payload["print_formats"], [{"label": "Standard", "format": "Standard"}])
+		self.print_formats.assert_called_once_with(doc)
 		self.assertEqual(payload["history"][0]["remarks"], "Review")
 		self.assertTrue(payload["can_open_desk"])
 		self.assertEqual(doc.fieldlevel_permissions_applied, 1)

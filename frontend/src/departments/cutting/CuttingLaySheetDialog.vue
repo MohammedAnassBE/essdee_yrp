@@ -76,11 +76,13 @@
 		<template #footer>
 			<div class="laysheet-footer">
 				<div class="laysheet-footer__secondary">
+					<DocumentDeleteButton v-if="sheet?.name" doctype="SD YRP Cutting LaySheet" :name="sheet.name" :docstatus="sheet.docstatus" :disabled="Boolean(busy) || Boolean(detailBusy)" :redirect="false" @deleted="documentDeleted" />
+					<CustomPrintButtons v-if="sheet?.name" doctype="SD YRP Cutting LaySheet" :record="sheet" :permissions="sheet.permissions" :disabled="Boolean(busy)" />
 					<DocumentPrintButton
-						v-if="sheet && (sheet.permissions?.can_print_laysheet || sheet.permissions?.can_print_movement_chart)"
+						v-if="sheet?.name"
 						doctype="SD YRP Cutting LaySheet"
 						:name="sheet.name"
-						:formats="sheet.print_formats || []"
+						:docstatus="sheet.docstatus"
 						:disabled="Boolean(busy)"
 					/>
 				</div>
@@ -165,6 +167,8 @@
 </template>
 
 <script setup>
+import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
@@ -747,6 +751,10 @@ const DataBlock = defineComponent({
 		])
 	},
 })
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 </script>
 
 <style scoped>

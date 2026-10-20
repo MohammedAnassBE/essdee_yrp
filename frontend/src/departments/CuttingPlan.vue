@@ -18,7 +18,12 @@
 				:initial-payload="editorProbe"
 				@saved="editorSaved"
 				@cancel="cancelEditor"
-			/>
+			>
+				<template #document-actions="{ busy, dirty }">
+					<DocumentPrintButton doctype="SD YRP Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy" />
+					<DocumentDeleteButton doctype="SD YRP Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy || dirty" :redirect-to="backTo" />
+				</template>
+			</CuttingPlanEditor>
 		</div>
 		<div v-else-if="workspaceError && !workspaceReady" class="cutting-plan-probe erp-workspace">
 			<WorkspaceLoadError title="Cutting Plan unavailable" :message="workspaceError" :loading="workspaceLoading" @retry="retryWorkspace" />
@@ -62,6 +67,7 @@
 						:formats="workspaceData.print_formats || []"
 						:disabled="workspaceLoading"
 					/>
+					<DocumentDeleteButton doctype="SD YRP Cutting Plan" :name="doc.name" :docstatus="doc.docstatus" :disabled="workspaceLoading" :redirect-to="backTo" />
 					<CuttingPlanActions
 						:doc="doc"
 						:data="workspaceData"
@@ -106,6 +112,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Skeleton from "primevue/skeleton"
 import Message from "primevue/message"
 import Button from "primevue/button"

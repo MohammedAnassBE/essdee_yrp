@@ -9,7 +9,7 @@
 		inline-navigation
 	>
 		<section class="purchase-invoice-page">
-			<FabricDocumentWorkspace
+			<FabricDocumentWorkspace :show-delete="false"
 				doctype="YRP Purchase Invoice"
 				title="Purchase Invoice"
 				:workspace="workspace"

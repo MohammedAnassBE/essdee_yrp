@@ -9,7 +9,7 @@
 		inline-navigation
 	>
 		<section class="bill-tracking-page">
-			<FabricDocumentWorkspace
+			<FabricDocumentWorkspace :show-delete="false"
 				doctype="YRP Bill Tracking"
 				title="Bill Tracking"
 				:workspace="workspace"

@@ -56,6 +56,8 @@
 				<span>{{ hasSelection ? selectionSummaryText : "Generate current stock, then select what is moving." }}</span>
 				<div>
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="emit('update:visible', false)" />
+					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
 					<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !hasSelection" @click="requestCommand('submit')" />
 					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !generated" @click="save" />
@@ -108,6 +110,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
@@ -350,6 +354,10 @@ async function confirmCommand() {
 function replaceMovement(value) { Object.assign(movementData, emptyMovement(), clone(value)) }
 function emptyMovement() { return { panels: [], data: {}, accessory_data: [], collapsed_details: [], is_set_item: 0 } }
 function clone(value) { return JSON.parse(JSON.stringify(value || {})) }
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 </script>
 
 <style scoped>

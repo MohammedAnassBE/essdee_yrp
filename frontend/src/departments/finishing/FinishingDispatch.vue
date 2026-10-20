@@ -16,12 +16,14 @@
 					</div>
 				</div>
 				<div class="finishing-dispatch__actions">
+					<CustomPrintButtons v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :record="record" :permissions="permissions" :disabled="busy" />
+					<DocumentPrintButton v-if="dispatchId && record.name && permissions.can_print" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :formats="workspace.print_formats || []" :disabled="busy" />
+					<DocumentDeleteButton v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :docstatus="record.docstatus" :disabled="busy || loading" redirect-to="/finishing/dispatches" />
 					<template v-if="draft">
 						<Button label="Fetch Items" icon="pi pi-refresh" severity="secondary" outlined :disabled="busy" @click="confirmFetch" />
 						<DocumentSaveButton v-if="permissions.can_write" :show-submit="Boolean(permissions.can_submit)" :loading="busy" @save="save(false)" @submit="save(true)" />
 					</template>
 					<template v-else>
-						<DocumentPrintButton v-if="permissions.can_print" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :formats="workspace.print_formats || []" :disabled="busy" />
 						<Button v-if="permissions.can_dispatch_stock" label="Dispatch Stock" icon="pi pi-truck" :disabled="busy" @click="dispatchOpen = true" />
 						<Button v-if="permissions.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="confirmCancel" />
 					</template>
@@ -65,6 +67,8 @@
 </template>
 
 <script setup>
+import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"

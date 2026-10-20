@@ -16,7 +16,9 @@
 					<div v-if="hasAttributes"><dt>{{ fieldLabel("dependent_attribute", "Dependent Attribute") }}</dt><dd>{{ values.dependent_attribute || "—" }}</dd></div>
 					<div><dt>Variants</dt><dd>{{ workspace.variant_count || 0 }}</dd></div>
 				</dl>
-				<DocumentActionStrip class="erp-page-header__actions" v-if="actions.length" :actions="actions" />
+				<DocumentDeleteButton doctype="Item" :name="itemId" :docstatus="values.docstatus" :disabled="loading || acting" redirect-to="/purchase/items" />
+					<DocumentPrintButton doctype="Item" :name="itemId" :docstatus="values.docstatus" :disabled="loading || acting" />
+					<DocumentActionStrip class="erp-page-header__actions" v-if="actions.length" :actions="actions" />
 			</header>
 
 			<div v-if="loading" class="purchase-record__loading"><Skeleton height="180px" /><Skeleton height="300px" /></div>
@@ -62,6 +64,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Column from "primevue/column"
 import DataTable from "primevue/datatable"

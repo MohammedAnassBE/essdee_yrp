@@ -34,6 +34,7 @@
 			<div class="document-transaction-dialog__footer">
 				<Button label="Close" severity="secondary" text :disabled="Boolean(acting)" @click="requestVisibility(false)" />
 				<div>
+					<DocumentDeleteButton v-if="payload.record?.name" :doctype="payload.record?.doctype || doctype" :name="payload.record.name" :docstatus="payload.record.docstatus" :disabled="Boolean(acting)" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="payload.permissions?.can_print" :doctype="payload.record?.doctype || doctype" :name="payload.record?.name || name" :formats="payload.print_formats || []" :disabled="Boolean(acting)" />
 					<Button v-if="payload.actions?.can_make_delivery_challan" label="Make Delivery Challan" icon="pi pi-send" severity="secondary" outlined @click="makeDcVisible = true" />
 					<Button v-if="payload.actions?.can_end_transit" label="End Transit" icon="pi pi-check" :loading="acting === 'end-transit'" @click="endTransit" />
@@ -58,6 +59,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "./DocumentDeleteButton.vue"
 import { useRouter } from "vue-router"
 import StockEntryMakeDcModal from "../../views/dynamic/StockEntryMakeDcModal.vue"
 import Button from "primevue/button"
@@ -208,6 +210,10 @@ function formatField(field) {
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 
 defineExpose({ markDirty, reload: load })
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 </script>
 
 <style scoped>

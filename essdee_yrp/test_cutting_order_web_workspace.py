@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, call, patch
 
 import frappe
 
+from essdee_yrp.api.print import get_desk_print_formats
 from essdee_yrp.cutting.order_workspace import (
 	_build_detail_matrix,
 	_merge_order_matrix,
@@ -14,7 +15,6 @@ from essdee_yrp.cutting.order_workspace import (
 	save_order,
 	update_completed_items,
 )
-from essdee_yrp.print_registry import DOCUMENT_PRINT_FORMATS
 
 
 def detail_data():
@@ -185,14 +185,13 @@ class TestCuttingOrderWebWorkspace(TestCase):
 				change_order_status("CO-001", "submit", "older")
 
 	def test_cutting_order_print_formats_are_registered(self):
-		self.assertEqual(
-			DOCUMENT_PRINT_FORMATS["SD YRP Cutting Order"],
-			(
-				("Cutting Order", "Essdee Cutting Order"),
-				("Cutting Order Summary", "Essdee Cutting Order Summary"),
-				("Cutting Order CCR", "Essdee Cutting Order CCR"),
-			),
-		)
+		names = ["Essdee Cutting Order", "Essdee Cutting Order CCR", "Essdee Cutting Order Summary"]
+		with (
+			patch.object(frappe, "get_all", return_value=[{"name": name} for name in reversed(names)]),
+			patch.object(frappe, "get_meta", return_value=frappe._dict(default_print_format="")),
+			patch.object(frappe.db, "get_single_value", return_value=0),
+		):
+			self.assertEqual(get_desk_print_formats("SD YRP Cutting Order"), ["Standard", *reversed(names)])
 
 	def test_completed_update_accepts_only_flags_from_the_browser(self):
 		doc = frappe._dict(

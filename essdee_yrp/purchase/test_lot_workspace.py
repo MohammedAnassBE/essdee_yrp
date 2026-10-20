@@ -44,6 +44,16 @@ class TestLotWorkspace(TestCase):
 			)
 		]
 
+	def test_cloth_program_flag_reflects_rows(self):
+		for rows in ([], [{"name": "PROGRAM-1"}]):
+			doc = self._doc(lot_fabric_programs=rows)
+			with ExitStack() as stack:
+				stack.enter_context(patch.object(frappe, "get_doc", return_value=doc))
+				for method in ("get_facts", "get_order_items", "get_order_details", "get_bom", "get_ocr", "get_fabrics", "get_other_conversions"):
+					stack.enter_context(patch.object(workspace, method, return_value=[]))
+				payload = workspace.get_lot_workspace(doc.name)
+			self.assertEqual(payload["has_cloth_program"], bool(rows))
+
 	def test_rejects_unreadable_lot(self):
 		doc = SimpleNamespace(check_permission=Mock(side_effect=frappe.PermissionError))
 		with ExitStack() as stack:

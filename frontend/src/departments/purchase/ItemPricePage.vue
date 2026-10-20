@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Item Price" back-to="/purchase/item-prices" back-label="Item Prices" :show-title="false" flat full-width inline-navigation>
 		<section class="item-price-frame">
-			<FabricDocumentWorkspace doctype="YRP Item Price" title="Item Price" :workspace="workspace" :loading="loading" :error="loadError" :acting="acting" :show-lifecycle-actions="false" @reload="load">
+			<FabricDocumentWorkspace :show-delete="false" doctype="YRP Item Price" title="Item Price" :workspace="workspace" :loading="loading" :error="loadError" :acting="acting" :show-lifecycle-actions="false" @reload="load">
 				<template #header="{ record: header, headingId }">
 					<div class="item-price-page__identity">
 						<div><h1 class="erp-doc-title" :id="headingId">Item Price</h1><span class="erp-doc-id">{{ header.name }}</span></div>

@@ -13,6 +13,7 @@ from essdee_yrp.overrides.bill_tracking import (
 	CANCEL_PENDING_STATUS,
 	CANCEL_REQUESTABLE_STATUSES,
 )
+from essdee_yrp.print_registry import get_document_print_formats
 from essdee_yrp.sewing.web_workspace import get_capabilities as get_sewing_capabilities
 from essdee_yrp.web_common import action, assert_expected_modified, parse_mapping, permission_flags, value
 
@@ -225,6 +226,7 @@ def get_bill_tracking_workspace(name: str) -> dict:
 	doc.apply_fieldlevel_read_permissions()
 	return {
 		"record": _record(doc),
+		"print_formats": get_document_print_formats(doc),
 		"details": serialize_details(doc),
 		"history": serialize_history(doc),
 		"permissions": permissions,

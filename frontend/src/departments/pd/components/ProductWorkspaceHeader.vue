@@ -11,6 +11,14 @@
 			</div>
 		</div>
 		<div class="pd-product-workspace__actions">
+			<CustomPrintButtons v-if="record?.name" doctype="SD YRP Product" :record="record" :permissions="{ can_print: canPrint }" :disabled="busy" />
+			<DocumentPrintButton
+				v-if="canPrint && record.name"
+				doctype="SD YRP Product"
+				:name="record.name"
+				:formats="printFormats"
+				:disabled="busy"
+			/>
 			<template v-if="mode === 'edit'">
 				<div class="pd-product-workspace__edit-actions">
 					<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
@@ -19,19 +27,13 @@
 			</template>
 			<template v-else>
 				<DocumentActionStrip :actions="actions" />
-				<DocumentPrintButton
-					v-if="canPrint"
-					doctype="SD YRP Product"
-					:name="record.name"
-					:formats="printFormats"
-					:disabled="busy"
-				/>
 			</template>
 		</div>
 	</header>
 </template>
 
 <script setup>
+import CustomPrintButtons from "../../../components/documents/CustomPrintButtons.vue"
 import Button from "primevue/button"
 
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"

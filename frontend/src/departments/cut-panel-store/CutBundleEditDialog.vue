@@ -47,6 +47,8 @@
 				<span>{{ quantitySummary }}</span>
 				<div>
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
+					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Bundle Edit" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Cut Bundle Edit" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="record?.permissions?.can_print" label="Print Labels" icon="pi pi-print" severity="secondary" outlined :disabled="busy" @click="printerVisible = true" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
 					<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !inputs.length || !outputs.length" @click="requestCommand('submit')" />
@@ -70,6 +72,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Select from "primevue/select"
@@ -322,6 +326,10 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 function totalQty(rows) { return (rows || []).reduce((sum, row) => sum + Number(row.qty || 0) * Math.max(1, String(row.panel || "").split(",").filter(Boolean).length), 0) }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 function formatDateTime(value) { if (!value) return ""; const [date, time = ""] = String(value).split(" "); const [year, month, day] = date.split("-"); return year && month && day ? `${day}-${month}-${year}${time ? ` ${time.slice(0, 5)}` : ""}` : String(value) }
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 </script>
 
 <style scoped>

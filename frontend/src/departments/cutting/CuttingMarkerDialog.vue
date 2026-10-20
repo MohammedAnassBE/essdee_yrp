@@ -71,7 +71,8 @@
 
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cutting Marker" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
+			<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cutting Marker" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cutting Marker" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 			<Button v-if="record?.permissions?.can_cancel" label="Cancel Marker" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="cancelMarker" />
 			<Button v-if="canStartEdit" label="Edit Marker" icon="pi pi-pencil" severity="secondary" outlined :disabled="saving" @click="editingExisting = true" />
 			<DocumentSaveButton :show-save="canEdit" :show-submit="canSubmit" :loading="saving" @save="save(false)" @submit="save(true)" />
@@ -81,6 +82,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
@@ -317,6 +319,10 @@ function formatDate(value, includeTime = false) { const match = String(value || 
 
 function markerMethod(name) {
 	return `essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.${name}`
+}
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
 }
 </script>
 

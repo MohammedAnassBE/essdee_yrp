@@ -72,6 +72,7 @@ def _build_lot_workspace(name: str) -> dict:
 	doc.check_permission("read")
 	return {
 		"name": doc.name,
+		"has_cloth_program": bool(doc.get("lot_fabric_programs")),
 		"modified": str(doc.modified),
 		"status": doc.status or "Open",
 		"permissions": permission_flags("SD YRP Lot", ("write", "create"), doc),

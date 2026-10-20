@@ -6,8 +6,8 @@ from unittest.mock import patch
 import frappe
 
 from essdee_yrp import hooks
+from essdee_yrp.api.print import get_desk_print_formats
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item import sd_yrp_grn_rework_item as rework_items
-from essdee_yrp.print_registry import DOCUMENT_PRINT_FORMATS
 
 FORMATS = {
 	"essdee_rework_print": "Essdee Rework Print",
@@ -65,9 +65,16 @@ class TestFinishingReworkPrints(TestCase):
 				self.assertIn("get_rework_items(None, None, None, doc.name,", data["format_data"])
 
 	def test_formats_are_registered_for_grn_printing(self):
-		labels = dict(DOCUMENT_PRINT_FORMATS["YRP Goods Received Note"])
-		self.assertEqual(labels["Rework Print"], "Essdee Rework Print")
-		self.assertEqual(labels["Reworked Print"], "Essdee Reworked Print")
+		rows = []
+		for folder in FORMATS:
+			with open(os.path.join(FORMAT_DIR, folder, f"{folder}.json")) as handle:
+				rows.append(json.load(handle))
+		with (
+			patch.object(frappe, "get_all", return_value=rows),
+			patch.object(frappe, "get_meta", return_value=frappe._dict(default_print_format="")),
+			patch.object(frappe.db, "get_single_value", return_value=0),
+		):
+			self.assertEqual(get_desk_print_formats("YRP Goods Received Note"), ["Standard", *sorted(FORMATS.values(), key=str.casefold, reverse=True)])
 
 	def test_rework_items_is_a_jinja_method(self):
 		self.assertIn(

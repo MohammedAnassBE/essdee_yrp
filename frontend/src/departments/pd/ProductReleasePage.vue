@@ -41,6 +41,7 @@
 							<span>Open Product</span>
 						</RouterLink>
 						<DocumentActionStrip :actions="documentActions" />
+						<CustomPrintButtons v-if="record?.name" doctype="SD YRP Product Release" :record="record" :permissions="permissions" :disabled="deleting" />
 						<DocumentPrintButton
 							v-if="permissions.can_print"
 							doctype="SD YRP Product Release"
@@ -153,6 +154,7 @@
 </template>
 
 <script setup>
+import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import Skeleton from "primevue/skeleton"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"

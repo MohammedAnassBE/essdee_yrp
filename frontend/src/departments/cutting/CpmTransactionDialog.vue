@@ -9,7 +9,8 @@
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
-			<DocumentPrintButton v-if="record?.permissions?.can_print" :doctype="record.doctype" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
+			<DocumentDeleteButton v-if="record?.name" :doctype="record.doctype" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.permissions?.can_print" :doctype="record.doctype" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 			<Button v-if="record?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="changeStatus('cancel')" />
 			<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" :loading="saving" @click="changeStatus('submit')" />
 		</template>
@@ -18,6 +19,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
@@ -79,6 +81,10 @@ async function performStatusChange(action) {
 
 function display(value) { return value === null || value === undefined || value === "" ? "—" : String(value) }
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date }
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 </script>
 
 <style scoped>

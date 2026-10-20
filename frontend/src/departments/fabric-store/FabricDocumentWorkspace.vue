@@ -60,12 +60,24 @@
 					:disabled="Boolean(acting)"
 					@click="emit('reload')"
 				/>
+				<CustomPrintButtons v-if="doctype === 'SD YRP Lot'" :doctype="doctype" :record="{ ...record, has_cloth_program: workspace.has_cloth_program ?? record.has_cloth_program }" :permissions="workspace.permissions" :disabled="Boolean(acting)" />
 				<DocumentPrintButton
 					v-if="canPrint"
 					:doctype="record.doctype || doctype"
 					:name="record.name"
-					:formats="workspace.print_formats || []"
+					:formats="workspace.permissions?.can_print === undefined ? null : (workspace.print_formats || [])"
+					:label="printLabel"
+					:docstatus="record.docstatus"
 					:disabled="Boolean(acting)"
+				/>
+				<DocumentDeleteButton
+					v-if="showDelete && record.name"
+					:doctype="record.doctype || doctype"
+					:name="record.name"
+					:docstatus="record.docstatus"
+					:disabled="Boolean(acting) || dirty"
+					:redirect="presentation !== 'embedded'"
+					@deleted="handleDeleted"
 				/>
 			</div>
 		</div>
@@ -148,9 +160,11 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref } from "vue"
 import { onBeforeRouteLeave } from "vue-router"
 
+import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
@@ -165,10 +179,13 @@ const props = defineProps({
 	error: { type: String, default: "" },
 	dirty: { type: Boolean, default: false },
 	acting: { type: String, default: "" },
+	printLabel: { type: String, default: "Print" },
+	showDelete: { type: Boolean, default: true },
 	showLifecycleActions: { type: Boolean, default: true },
 	compactMobileRail: { type: Boolean, default: false },
 })
-const emit = defineEmits(["reload", "action", "close"])
+const emit = defineEmits(["reload", "action", "close", "deleted"])
+const instance = getCurrentInstance()
 const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
 
 const discardVisible = ref(false)
@@ -176,12 +193,17 @@ let pendingNavigation = null
 const record = computed(() => props.workspace.record || {})
 const capabilities = computed(() => props.workspace.capabilities || {})
 const hasWorkspace = computed(() => Boolean(Object.keys(props.workspace || {}).length))
-const canPrint = computed(() => Boolean(record.value.name && props.workspace.permissions?.can_print))
+const canPrint = computed(() => Boolean(record.value.name && (props.workspace.permissions?.can_print === undefined || props.workspace.permissions.can_print)))
 
 function capabilityLabel(name, fallback) { return name === "save" ? fallback : capabilities.value[name]?.label || fallback }
 function formatValue(value) {
 	if (value === null || value === undefined || value === "") return "—"
 	return typeof value === "number" ? value.toLocaleString("en-IN", { maximumFractionDigits: 3 }) : String(value)
+}
+function handleDeleted() {
+	const handled = Boolean(instance.vnode.props?.onDeleted)
+	emit("deleted")
+	if (props.presentation === "embedded" && !handled) emit("close")
 }
 function requestClose() {
 	if (props.dirty) { discardVisible.value = true; return }

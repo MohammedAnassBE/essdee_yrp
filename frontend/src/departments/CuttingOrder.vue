@@ -2,7 +2,12 @@
 	<DepartmentPage title="Cutting Order" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width :inline-navigation="!checking && !showDraftEditor">
 		<div v-if="checking" class="order-probe erp-workspace" aria-label="Loading Cutting Order"><Skeleton height="76px" /><Skeleton height="420px" /></div>
 		<div v-else-if="showDraftEditor" class="order-editor-route erp-workspace">
-			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')" />
+			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')">
+				<template #document-actions="{ busy, dirty }">
+					<DocumentPrintButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="busy" />
+					<DocumentDeleteButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="busy || dirty" redirect-to="/cutting/orders" />
+				</template>
+			</CuttingOrderEditor>
 		</div>
 		<div v-else-if="workspaceError && !workspaceReady" class="order-probe erp-workspace">
 			<WorkspaceLoadError title="Cutting Order unavailable" :message="workspaceError" @retry="initialise" />
@@ -31,6 +36,7 @@
 					</div>
 					<div class="order-record-actions">
 						<DocumentPrintButton v-if="workspace.permissions?.can_print" doctype="SD YRP Cutting Order" :name="cuttingOrderId" :formats="workspace.print_formats || []" :disabled="workspaceLoading" />
+						<DocumentDeleteButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="workspaceLoading || Boolean(lifecycleBusy)" redirect-to="/cutting/orders" />
 						<CuttingOrderActions v-if="record.name" :doc="record" :data="workspace" @refresh="loadWorkspace" />
 						<Button v-if="workspace.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="lifecycleBusy === 'cancel'" @click="changeStatus('cancel')" />
 						<Button v-if="workspace.permissions?.can_amend" label="Amend" icon="pi pi-copy" :loading="lifecycleBusy === 'amend'" @click="changeStatus('amend')" />
@@ -55,6 +61,7 @@
 </template>
 
 <script setup>
+import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"

@@ -4,6 +4,7 @@
 			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Cutting Order" : "New Cutting Order" }}</h1></div>
 			<div class="order-editor-actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
+				<slot name="document-actions" :busy="busy" :dirty="dirty" />
 				<DocumentSaveButton :show-submit="permissions.can_submit" :loading="Boolean(saving)" :disabled="busy || !canSave" @save="save(false)" @submit="save(true)" />
 			</div>
 		</header>

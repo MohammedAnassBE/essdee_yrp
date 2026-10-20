@@ -94,7 +94,7 @@ class TestMerchLotWorkspace(TestCase):
 		with (
 			patch(
 				f"{MODULE}.lot_workspace.get_lot_workspace",
-				return_value={"permissions": {"can_write": False}},
+				return_value={"permissions": {"can_write": False}, "has_cloth_program": True},
 			),
 			patch(
 				f"{MODULE}.lot_workspace.get_facts",
@@ -104,6 +104,7 @@ class TestMerchLotWorkspace(TestCase):
 			self.permissions.return_value = False
 			payload = self.original_workspace(self.doc.name)
 			self.assertFalse(payload["permissions"]["can_write"])
+			self.assertTrue(payload["has_cloth_program"])
 			self.assertFalse(payload["capabilities"]["edit"]["allowed"])
 			self.assertEqual(
 				payload["ipd_facts"], [{"fieldname": field, "value": 10} for field in workspace.IPD_FACTS]

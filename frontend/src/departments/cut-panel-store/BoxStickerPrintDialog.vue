@@ -212,6 +212,8 @@
 						:disabled="busy"
 						@click="resumePendingPrint"
 					/>
+					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Box Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Box Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button
 						v-if="pendingPrintConfirmation?.phase === 'printing'"
 						label="Confirm Printed"
@@ -293,6 +295,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
@@ -1028,6 +1032,10 @@ function messageOf(reason, fallback) {
 
 function clone(value) {
 	return JSON.parse(JSON.stringify(value))
+}
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
 }
 </script>
 

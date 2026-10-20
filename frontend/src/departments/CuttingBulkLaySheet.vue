@@ -22,6 +22,8 @@
 					</div>
 					<div class="bulk-record-header__actions">
 						<Button v-if="workspace.permissions?.can_write && !workspace.setup_locked" label="Edit Setup" icon="pi pi-pencil" severity="secondary" outlined size="small" :disabled="Boolean(busy)" @click="editSetupOpen = true" />
+						<DocumentDeleteButton doctype="SD YRP Cutting Bulk Lay Sheets" :name="record.name" :docstatus="record.docstatus" :disabled="loading || Boolean(busy) || activeEditorDirty" redirect-to="/cutting/bulk-lay-sheets" />
+						<DocumentPrintButton doctype="SD YRP Cutting Bulk Lay Sheets" :name="record.name" :docstatus="record.docstatus" :disabled="loading || Boolean(busy)" />
 						<BulkActions :actions="workspace.bulk_actions" :busy="busy" @action="runBulkAction" />
 						<Button icon="pi pi-refresh" aria-label="Refresh Bulk LaySheets" severity="secondary" text rounded :loading="loading" :disabled="Boolean(busy)" @click="loadWorkspace" />
 					</div>
@@ -68,6 +70,8 @@
 </template>
 
 <script setup>
+import DocumentPrintButton from "../components/documents/DocumentPrintButton.vue"
+import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"

@@ -11,6 +11,22 @@ async function config() {
 }
 
 const departments = ["cutting", "fabric-store", "cut-panel-store", "accessory-store", "sewing", "finishing", "merch", "purchase"]
+test("Lot Purchase Summary is available only in an allowed Purchase report area", async () => {
+	const { departmentDeskReports } = await config()
+	const capabilities = { lot_purchase_summary: { can_read: true, can_report: true } }
+	const tabs = departmentDeskReports("purchase", capabilities)
+	assert.deepEqual(tabs.map(({ key, value, label, componentProps }) => ({ key, value, label, componentProps })), [{
+		key: "lot_purchase_summary", value: "lot-purchase-summary", label: "Lot Purchase Summary",
+		componentProps: { reportKey: "lot-purchase-summary" },
+	}])
+	for (const department of [...departments.filter(value => value !== "purchase"), "sales", "pd", "hr", "accounts", "planning"]) {
+		assert.deepEqual(departmentDeskReports(department, capabilities), [])
+	}
+	assert.deepEqual(departmentDeskReports("purchase", capabilities, false), [])
+	assert.deepEqual(departmentDeskReports("purchase", {}), [])
+	assert.deepEqual(departmentDeskReports("purchase", { lot_purchase_summary: { can_read: false } }), [])
+})
+
 test("GRN menus cover exactly the requested departments and respect report capabilities", async () => {
 	const { departmentDeskReports } = await config()
 	for (const department of departments) {
@@ -33,6 +49,7 @@ test("web filters, defaults and select values match the actual Desk report defin
 		["grn-report", "sd_yrp_grn_report", "SD YRP GRN Report"],
 		["grn-summary", "sd_yrp_grn_summary", "SD YRP GRN Summary"],
 		["purchase-order-log", "sd_yrp_purchase_order_log", "SD YRP Purchase Order Log"],
+		["lot-purchase-summary", "sd_yrp_lot_purchase_summary", "SD YRP Lot Purchase Summary"],
 	]) {
 		const frappe = { query_reports: {}, datetime: { nowdate: () => "2026-03-31", get_today: () => "2026-03-31", add_months: () => "2026-02-28" } }
 		const source = new URL(`../../essdee_yrp/essdee_yrp/report/${slug}/${slug}.js`, import.meta.url)

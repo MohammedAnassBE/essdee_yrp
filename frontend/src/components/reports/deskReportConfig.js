@@ -17,6 +17,10 @@ export const deskReportConfig = {
 		title: "Purchase Order Log",
 		filters: [link("purchase_order", "Purchase Order", "Purchase Order"), { fieldname: "po_date", label: "PO Date", fieldtype: "Date" }, link("supplier", "Supplier", "Supplier")],
 	},
+	"lot-purchase-summary": {
+		title: "Lot Purchase Summary",
+		filters: [link("lot", "Lot", "SD YRP Lot"), link("item", "Item Variant", "Item"), link("parent_item", "Item", "Item")],
+	},
 	"finishing-inward-updates": {
 		title: "Finishing Inward Updates",
 		filters: [{ ...link("supplier", "Sewing Unit", "Supplier"), reqd: 1, filters: { is_company_location: 1 } }],
@@ -37,7 +41,7 @@ const grnDepartments = ["cutting", "fabric-store", "cut-panel-store", "accessory
 export function departmentDeskReports(department, capabilities, allowed = true) {
 	if (!allowed || !grnDepartments.includes(department)) return []
 	const keys = ["grn-report", "grn-summary"]
-	if (department === "purchase") keys.push("purchase-order-log")
+	if (department === "purchase") keys.push("purchase-order-log", "lot-purchase-summary")
 	if (department === "sewing") keys.push("finishing-inward-updates")
 	return keys.filter(value => capabilities?.[value.replaceAll("-", "_")]?.can_read).map(value => ({
 		key: value.replaceAll("-", "_"), value, label: deskReportConfig[value].title, icon: "pi pi-table",

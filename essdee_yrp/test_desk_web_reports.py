@@ -67,6 +67,59 @@ class TestDeskWebReports(IntegrationTestCase):
 	def test_finishing_inward_updates_is_registered(self):
 		self.assertIn("finishing-inward-updates", get_web_reports())
 
+	def test_lot_purchase_summary_registry_and_lot_results_match_desk(self):
+		entry = get_web_reports().get("lot-purchase-summary")
+		self.assertIsNotNone(entry)
+		self.assertEqual(entry.kind, "frappe_report")
+		self.assertEqual(entry.report, "SD YRP Lot Purchase Summary")
+		self.assertEqual(entry.filters, {
+			"lot": ("Link", "SD YRP Lot"), "item": ("Link", "Item"), "parent_item": ("Link", "Item"),
+		})
+		self.assertEqual(entry.link_sources, {"lot": "SD YRP Lot", "item": "Item", "parent_item": "Item"})
+		lot = f"_Test Lot Purchase Summary-{frappe.generate_hash(length=8)}"
+		item = f"{lot}-Item"
+		# Isolate report inputs without invoking lot planning or stock transaction hooks.
+		frappe.get_doc({"doctype": "Item", "name": item, "item_code": item, "item_name": item}).db_insert()
+		frappe.get_doc({"doctype": "SD YRP Lot", "name": lot}).db_insert()
+		frappe.get_doc({
+			"doctype": "SD YRP Lot BOM", "name": frappe.generate_hash(),
+			"parent": lot, "parenttype": "SD YRP Lot", "parentfield": "bom_summary",
+			"item_name": item, "required_qty": 10,
+		}).db_insert()
+		filters = {"lot": lot}
+		desk = run_desk_report(entry.report, filters=filters, ignore_prepared_report=True, are_default_filters=True)
+		web = run_web_report(entry.key, filters)
+		self.assertEqual(desk["result"], [{
+			"lot": lot, "item": item, "parent_item": item,
+			"required_qty": 10, "stock_qty": 0.0, "po_pending_qty": 0.0,
+		}])
+		self.assertEqual(web["columns"], desk["columns"])
+		self.assertEqual(web["result"], desk["result"])
+		self.assertTrue(all(row["lot"] == lot for row in web["result"]))
+
+	def test_lot_purchase_summary_is_purchase_only_and_respects_department_access(self):
+		from essdee_yrp.desk_web_reports import department_report_capabilities
+		from essdee_yrp.fabric_store.web_workspace import get_capabilities
+
+		self.assertTrue(get_capabilities()["sections"]["reports"]["reports"]["lot_purchase_summary"]["can_read"])
+		with patch("essdee_yrp.desk_web_reports.can_run_desk_report", return_value=True):
+			for department in ("cutting", "fabric-store", "cut-panel-store", "accessory-store", "sewing", "finishing", "merch", "sales", "pd", "hr", "accounts", "planning", "purchase"):
+				with self.subTest(department=department):
+					reports = department_report_capabilities(department, True)
+					self.assertEqual("lot_purchase_summary" in reports, department == "purchase")
+			self.assertEqual(department_report_capabilities("purchase", False), {})
+
+	def test_lot_purchase_summary_enforces_desk_report_permissions(self):
+		from essdee_yrp.desk_web_reports import department_report_capabilities
+
+		for target in ("frappe.core.doctype.report.report.Report.is_permitted", "frappe.has_permission"):
+			with self.subTest(permission=target), patch(target, return_value=False):
+				self.assertNotIn("lot_purchase_summary", department_report_capabilities("purchase", True))
+				with self.assertRaises(frappe.PermissionError):
+					run_desk_report("SD YRP Lot Purchase Summary", filters={}, ignore_prepared_report=True)
+				with self.assertRaises(frappe.PermissionError):
+					run_web_report("lot-purchase-summary", {})
+
 	def test_department_capabilities_follow_existing_report_access(self):
 		from essdee_yrp.cutting.reports import get_report_permissions
 		from essdee_yrp.cut_panel_store.web_workspace import get_capabilities as cut_panel

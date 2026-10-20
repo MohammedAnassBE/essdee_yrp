@@ -12,6 +12,7 @@ DESK_REPORTS = {
 	"grn_report": ("GRN Report", "SD YRP GRN Report"),
 	"grn_summary": ("GRN Summary", "SD YRP GRN Summary"),
 	"purchase_order_log": ("Purchase Order Log", "SD YRP Purchase Order Log"),
+	"lot_purchase_summary": ("Lot Purchase Summary", "SD YRP Lot Purchase Summary"),
 }
 FI_COLUMNS = [
 	{"fieldname": "lot", "label": "Lot", "fieldtype": "Link", "options": "SD YRP Lot", "width": 160},
@@ -44,7 +45,7 @@ def department_report_capabilities(department, allowed):
 		return {}
 	keys = ["grn_report", "grn_summary"]
 	if department == "purchase":
-		keys.append("purchase_order_log")
+		keys.extend(("purchase_order_log", "lot_purchase_summary"))
 	reports = {
 		key: {"label": _(DESK_REPORTS[key][0]), "can_read": True, "can_report": True}
 		for key in keys if can_run_desk_report(DESK_REPORTS[key][1])
@@ -74,6 +75,7 @@ def get_reports():
 	from essdee_yrp.essdee_yrp.report.sd_yrp_grn_report.sd_yrp_grn_report import get_columns as grn_columns
 	from essdee_yrp.essdee_yrp.report.sd_yrp_grn_summary.sd_yrp_grn_summary import get_columns as summary_columns
 	from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_log.sd_yrp_purchase_order_log import get_columns as log_columns
+	from essdee_yrp.essdee_yrp.report.sd_yrp_lot_purchase_summary.sd_yrp_lot_purchase_summary import get_columns as lot_purchase_columns
 
 	common_filters = {
 		"from_date": "Date", "to_date": "Date", "lot": ("Link", "SD YRP Lot"),
@@ -87,6 +89,9 @@ def get_reports():
 		_desk_entry("purchase-order-log", "SD YRP Purchase Order Log", {
 			"purchase_order": ("Link", "Purchase Order"), "po_date": "Date", "supplier": ("Link", "Supplier"),
 		}, log_columns()),
+		_desk_entry("lot-purchase-summary", "SD YRP Lot Purchase Summary", {
+			"lot": ("Link", "SD YRP Lot"), "item": ("Link", "Item"), "parent_item": ("Link", "Item"),
+		}, lot_purchase_columns()),
 		WebReport(
 			key="finishing-inward-updates", kind="callable",
 			runner="essdee_yrp.desk_web_reports.run_fi_updates",

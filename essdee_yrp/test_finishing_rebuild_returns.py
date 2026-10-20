@@ -44,3 +44,12 @@ class TestRebuildReturnGrns(TestCase):
 		self.assertEqual(values["return_qty"], 2)
 		self.assertEqual(values["rework_qty"], 0)
 		self.assertIsNone(rework)
+
+
+class TestEmptyDispatchSelection(TestCase):
+	def test_saving_with_no_quantity_keeps_an_empty_selection(self):
+		doc = frappe.new_doc("SD YRP Finishing Plan Dispatch")
+		doc.finishing_items = "[]"
+		doc.before_validate()
+		self.assertEqual(doc.finishing_plan_dispatch_items, [])
+		self.assertEqual(doc.finishing_items, "[]")

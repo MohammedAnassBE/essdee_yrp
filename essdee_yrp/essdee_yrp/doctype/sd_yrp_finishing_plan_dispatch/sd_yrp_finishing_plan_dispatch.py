@@ -64,7 +64,8 @@ class SDYRPFinishingPlanDispatch(Document):
 	def before_validate(self):
 		if not self.finishing_items:
 			return
-		finishing_items = update_if_string_instance(self.finishing_items)
+		# update_if_string_instance turns an empty selection ("[]") into {}.
+		finishing_items = update_if_string_instance(self.finishing_items) or []
 		if not isinstance(finishing_items, list):
 			frappe.throw("Finishing Items must be a JSON list")
 

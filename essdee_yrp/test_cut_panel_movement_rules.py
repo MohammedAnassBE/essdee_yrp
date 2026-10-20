@@ -62,3 +62,48 @@ class TestCutPanelMovementRequired(UnitTestCase):
 		exists.assert_called_once_with(
 			"Item Variant Attribute", {"parent": "TB-S", "attribute": "Stage", "attribute_value": "Cut"}
 		)
+
+
+class TestCutPanelMovementReceivedTypeRows(UnitTestCase):
+	def overlay(self, source_rows, qty, target="YRP Delivery Challan"):
+		qty_field = "quantity" if target == "YRP Goods Received Note" else "qty"
+		moved = [
+			frappe._dict(
+				item_variant="TB-S", set_combination={}, table_index=0, row_index=0, **{qty_field: qty}
+			)
+		]
+		return movement._overlay_source_rows(source_rows, moved, target_doctype=target)
+
+	def rework_rows(self):
+		return [
+			frappe._dict(
+				item_variant="TB-S", set_combination={}, received_type="Printing Mistake", pending_quantity=3
+			),
+			frappe._dict(
+				item_variant="TB-S", set_combination={}, received_type="Oil Mark", pending_quantity=2
+			),
+		]
+
+	def test_delivery_challan_fills_each_received_type_row_up_to_pending(self):
+		rows = self.overlay(self.rework_rows(), 5)
+		self.assertEqual(
+			[(row.received_type, row.qty) for row in rows], [("Printing Mistake", 3), ("Oil Mark", 2)]
+		)
+
+	def test_delivery_challan_excess_stays_on_the_first_row(self):
+		rows = self.overlay(self.rework_rows(), 6)
+		self.assertEqual(
+			[(row.received_type, row.qty) for row in rows], [("Printing Mistake", 4), ("Oil Mark", 2)]
+		)
+
+	def test_single_row_takes_the_whole_quantity(self):
+		rows = self.overlay(
+			[frappe._dict(item_variant="TB-S", set_combination={}, received_type="Accepted")], 4
+		)
+		self.assertEqual(
+			[(row.received_type, row.qty, row.delivered_quantity) for row in rows], [("Accepted", 4, 4)]
+		)
+
+	def test_goods_received_note_keeps_the_first_matching_row(self):
+		rows = self.overlay(self.rework_rows(), 5, target="YRP Goods Received Note")
+		self.assertEqual([(row.received_type, row.quantity) for row in rows], [("Printing Mistake", 5)])

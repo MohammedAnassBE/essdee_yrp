@@ -392,20 +392,45 @@ def _movement_details(rows, qty_field):
 	return details
 
 
+def _allocate_movement_qty(rows, qty, *, split_by_pending):
+	"""Split a moved quantity over same-variant rows; a DC fills each received-type row up to its pending first."""
+	allocation = [0.0] * len(rows)
+	if split_by_pending:
+		for index, row in enumerate(rows):
+			take = min(qty, max(flt(row.get("pending_quantity")), 0))
+			allocation[index] = take
+			qty = flt(qty - take, 9)
+	allocation[0] += qty
+	return allocation
+
+
 def _overlay_source_rows(source_rows, movement_rows, *, target_doctype):
 	qty_field = "quantity" if target_doctype == "YRP Goods Received Note" else "qty"
 	details = _movement_details(movement_rows, qty_field)
-	matched = 0
-	output = []
+	rows = []
+	rows_by_key = defaultdict(list)
 	for source in source_rows or []:
 		as_dict = getattr(source, "as_dict", None)
 		row = frappe._dict(as_dict() if callable(as_dict) else dict(source))
-		key = (row.get("item_variant"), _json_key(row.get("set_combination")))
-		movement = details.pop(key, None)
-		qty = flt(movement.qty) if movement else 0
+		rows.append(row)
+		rows_by_key[(row.get("item_variant"), _json_key(row.get("set_combination")))].append(row)
+
+	quantities = {}
+	for key, movement in list(details.items()):
+		matching = rows_by_key.get(key)
+		if not matching:
+			continue
+		details.pop(key)
+		split = target_doctype == "YRP Delivery Challan"
+		allocation = _allocate_movement_qty(matching, flt(movement.qty), split_by_pending=split)
+		for row, qty in zip(matching, allocation, strict=True):
+			quantities[id(row)] = (qty, movement)
+
+	output = []
+	for row in rows:
+		qty, movement = quantities.get(id(row), (0, None))
 		if not qty:
 			continue
-		matched += 1
 		# Work Order source rows may use a different row_index for every
 		# size. Preserve the CPM's panel/colour grouping for the generated
 		# transaction instead of inheriting those source display indexes.
@@ -421,7 +446,7 @@ def _overlay_source_rows(source_rows, movement_rows, *, target_doctype):
 		row.stock_qty = qty * conversion
 		row.amount = flt(row.stock_qty) * flt(row.get("valuation_rate") or row.get("rate"))
 		output.append(row)
-	if not matched:
+	if not output:
 		frappe.throw(_("The selected panels do not match any row in the selected Work Order."))
 	if details:
 		frappe.throw(_("Some selected panels do not match any row in the selected Work Order."))

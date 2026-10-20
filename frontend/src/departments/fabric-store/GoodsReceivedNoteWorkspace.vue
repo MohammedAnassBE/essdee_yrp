@@ -266,7 +266,7 @@ import {
 	saveGoodsReceivedNote,
 	saveGoodsReceivedNoteInspection,
 } from "../../api/fabricStore.js"
-import { searchLink, searchLinkedDocument } from "../../api/frappe.js"
+import { searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -771,7 +771,7 @@ function fieldOrder(fieldname) { const index = grnFieldOrder.indexOf(fieldname);
 function fieldGroupKey(fieldname) { return Object.entries(grnGroupFields).find(([, fields]) => fields.includes(fieldname))?.[0] || "additional" }
 function linkSearchHandler(field) {
 	if (field.fieldname === "supplier_address" || field.fieldname === "billing_address") return (text) => searchLinkedDocument("Address", "Supplier", form.supplier, text)
-	if (field.fieldname === "delivery_address") return (text) => searchLink("Address", text, { disabled: 0 })
+	if (field.fieldname === "delivery_address") return (text) => searchLinkedDocument("Address", "Supplier", form.delivery_location, text)
 	if (field.fieldname === "contact_person") return (text) => searchLinkedDocument("Contact", "Supplier", form.supplier, text)
 	return null
 }

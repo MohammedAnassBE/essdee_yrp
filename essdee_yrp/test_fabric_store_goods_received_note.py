@@ -32,8 +32,9 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 
 	def test_web_delivery_address_search_and_default_contract(self):
 		source = (Path(__file__).parent.parent / "frontend/src/departments/fabric-store/GoodsReceivedNoteWorkspace.vue").read_text()
-		self.assertIn('searchLink("Address", text, { disabled: 0 })', source)
-		self.assertNotIn('searchLinkedDocument("Address", "Supplier", form.delivery_location', source)
+		# Like production_api, the Delivery Address picker lists only the Delivery Location's addresses.
+		self.assertIn('searchLinkedDocument("Address", "Supplier", form.delivery_location, text)', source)
+		self.assertNotIn('searchLink("Address", text, { disabled: 0 })', source)
 		self.assertIn('searchLinkedDocument("Address", "Supplier", form.supplier, text)', source)
 		self.assertIn('searchLinkedDocument("Contact", "Supplier", form.supplier, text)', source)
 		self.assertIn('if (fieldname === "delivery_location") await defaultAddress("delivery_address", value)', source)

@@ -27,6 +27,12 @@ def on_submit(doc, method=None):
 	if doc.get("is_rework"):
 		return
 	if not doc.get("is_internal_unit"):
+		frappe.msgprint(
+			_("No Finishing Plan was created: {0} is not a company location.").format(
+				doc.get("supplier_name") or doc.get("supplier")
+			),
+			indicator="orange",
+		)
 		return
 	_transfer_alternative_stock(doc)
 	create_or_refresh_finishing_plan(doc)

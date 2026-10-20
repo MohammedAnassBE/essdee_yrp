@@ -75,22 +75,29 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		self.assertEqual(receivables[0]["qty"], 120)
 		self.assertEqual(receivables[0]["uom"], "Pieces")
 
+	@patch("essdee_yrp.finishing.work_order.frappe.msgprint")
 	@patch("essdee_yrp.finishing.work_order.create_or_refresh_finishing_plan")
 	@patch("essdee_yrp.finishing.work_order._transfer_alternative_stock")
 	def test_external_packing_work_order_does_not_create_finishing_plan(
-		self, transfer_alternative_stock, create_finishing_plan
+		self, transfer_alternative_stock, create_finishing_plan, msgprint
 	):
 		doc = frappe._dict(
 			name="TEST-EXTERNAL-PACKING-WO",
 			includes_packing=1,
 			is_rework=0,
 			is_internal_unit=0,
+			supplier="S-TEST",
+			supplier_name="Outside Packer",
 		)
 
 		on_packing_work_order_submit(doc)
 
 		transfer_alternative_stock.assert_not_called()
 		create_finishing_plan.assert_not_called()
+		msgprint.assert_called_once_with(
+			"No Finishing Plan was created: Outside Packer is not a company location.",
+			indicator="orange",
+		)
 
 	@patch("essdee_yrp.finishing.work_order._reverse_alternative_stock")
 	@patch("essdee_yrp.finishing.work_order.frappe.delete_doc")

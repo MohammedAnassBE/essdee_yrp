@@ -497,6 +497,7 @@ doc_events = {
 			"essdee_yrp.delivery_challan_hooks.before_validate",
 			"essdee_yrp.fabric_store.documents.delivery_challan.validate_location_addresses",
 		],
+		"validate": "essdee_yrp.cutting.movement.validate_movement_required",
 		"before_cancel": [
 			"essdee_yrp.cutting.movement.before_cancel",
 			"essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
@@ -530,6 +531,7 @@ doc_events = {
 			"essdee_yrp.purchase_order_lots.validate_grn_lots",
 			"essdee_yrp.cutting.movement.validate_transaction_link",
 		],
+		"before_submit": "essdee_yrp.cutting.movement.validate_movement_required",
 		"before_cancel": [
 			"essdee_yrp.finishing.grn.before_cancel",
 			"essdee_yrp.cutting.movement.before_cancel",

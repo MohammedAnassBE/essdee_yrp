@@ -591,6 +591,11 @@ def _bundle_tracking_disabled(lot):
 def _is_implicit_collapsed_return(doc, lot):
 	if doc.doctype != "YRP Goods Received Note" or not doc.get("is_return") or not lot:
 		return False
+	return has_cut_stage_items(doc.get("items") or [], lot)
+
+
+def has_cut_stage_items(rows, lot):
+	"""Return True when a row's variant is in the Lot IPD's stitching-in (cut panel) stage."""
 	production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
 	if not production_detail:
 		return False
@@ -601,7 +606,7 @@ def _is_implicit_collapsed_return(doc, lot):
 	) or (None, None)
 	if not stage or not dependent_attribute:
 		return False
-	for row in doc.get("items") or []:
+	for row in rows:
 		variant = row.get("item_variant")
 		if variant and frappe.db.exists(
 			"Item Variant Attribute",
@@ -613,6 +618,35 @@ def _is_implicit_collapsed_return(doc, lot):
 		):
 			return True
 	return False
+
+
+def _skips_movement_requirement(doc):
+	if doc.get("cut_panel_movement") or cint(doc.get("allow_non_bundle")):
+		return True
+	if doc.doctype != "YRP Goods Received Note":
+		return False
+	return bool(doc.get("cutting_laysheet") or doc.get("is_return") or doc.get("includes_packing"))
+
+
+def validate_movement_required(doc, method=None):
+	"""Block cut panels of a bundle-tracked Lot moving without a Cut Panel Movement, like production_api."""
+	del method
+	lot = doc.get("lot")
+	if _skips_movement_requirement(doc) or not lot or _bundle_tracking_disabled(lot):
+		return
+	rows = [
+		row
+		for row in doc.get("items") or []
+		if flt(row.get("delivered_quantity") or row.get("qty") or row.get("quantity")) > 0
+	]
+	if has_cut_stage_items(rows, lot):
+		frappe.throw(
+			_(
+				"Lot {0} tracks cut bundles, so its cut panels must move through a Cut Panel Movement. "
+				"Create this {1} from a Cut Panel Movement, or tick Allow Non Bundle."
+			).format(lot, _(doc.doctype.replace("YRP ", ""))),
+			title=_("Use Cut Panel Movement"),
+		)
 
 
 def _as_supplier(location):

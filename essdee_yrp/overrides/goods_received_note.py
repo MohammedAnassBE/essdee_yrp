@@ -31,6 +31,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 )
 
 from essdee_yrp.cloth_execution import qualifies_cloth_transaction
+from essdee_yrp.finishing.loose_piece import get_loose_piece_stock_variant
 
 QTY_TOLERANCE = 0.0001
 
@@ -1286,20 +1287,21 @@ def _return_stock_ledger_entries(grn, *, cancel=False):
 			continue
 		incoming = _sle_base(grn, row)
 		outgoing = dict(incoming)
+		outgoing["item"] = get_loose_piece_stock_variant(grn, row.item_variant)
 		if "received_type" in outgoing:
 			outgoing["received_type"] = default_received_type
 		dimensions = {fieldname: outgoing.get(fieldname) for fieldname in dimension_fields}
 		rate = 0
 		if not cancel:
 			rate, _matched_bucket = get_last_sle_rate(
-				row.item_variant,
+				outgoing["item"],
 				warehouse=grn.from_warehouse,
 				**dimensions,
 			)
 			if flt(rate) <= 0:
 				frappe.throw(
 					_("No source valuation rate is available for {0} in {1}.").format(
-						row.item_variant, grn.from_warehouse
+						outgoing["item"], grn.from_warehouse
 					)
 				)
 		transfer_key = f"{grn.name}:{row.name}:finishing-return"

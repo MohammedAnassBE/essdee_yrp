@@ -3,6 +3,7 @@
 import re
 
 import frappe
+from frappe import _
 from frappe.utils import flt, nowdate, nowtime
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
@@ -348,7 +349,13 @@ def create_delivery_challan(
 	vehicle_no,
 	fp_name,
 	actual_date,
+	quantity_field="balance_dc",
 ):
+	"""Create a Finishing DC for the typed quantities in ``quantity_field``.
+
+	``selected_type`` only flags the DC (Loose Piece / Loose Piece Packed), as in
+	Frappe 15; the posted quantity is always the entered one.
+	"""
 	payload = update_if_string_instance(data) or {}
 	selected_type = payload.get("selected_type")
 	work_order_doc = frappe.get_doc("YRP Work Order", work_order)
@@ -358,7 +365,7 @@ def create_delivery_challan(
 		lot,
 		item_name,
 		payload.get("items") or {},
-		is_loose_piece=selected_type == "return_qty",
+		quantity_field=quantity_field,
 	)
 	items = []
 	for row in work_order_doc.deliverables:
@@ -406,7 +413,9 @@ def create_delivery_challan(
 	return delivery_challan.name
 
 
-def get_delivery_challan_item_list(lot, item_name, data, is_loose_piece=False):
+def get_delivery_challan_item_list(lot, item_name, data, quantity_field="balance_dc"):
+	if quantity_field not in ("balance_dc", "return_qty"):
+		frappe.throw(_("Unknown Delivery Challan quantity field {0}.").format(quantity_field))
 	ipd_name = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
 	ipd = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	items = {}
@@ -415,7 +424,6 @@ def get_delivery_challan_item_list(lot, item_name, data, is_loose_piece=False):
 		if not colour_row.get("check_value"):
 			continue
 		for size, values in (colour_row.get("values") or {}).items():
-			quantity_field = "return_qty" if is_loose_piece else "balance_dc"
 			quantity = flt(values.get(quantity_field))
 			if quantity <= 0:
 				continue
@@ -550,7 +558,7 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 
 	delivery_challan = create_delivery_challan(
 		{
-			"selected_type": "return_qty",
+			"selected_type": "balance",
 			"items": payload,
 		},
 		item_name,
@@ -560,6 +568,7 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 		"NA",
 		frappe.db.get_value("SD YRP Finishing Plan", {"work_order": work_order}, "name"),
 		nowdate(),
+		quantity_field="return_qty",
 	)
 	goods_received_note = return_items(
 		payload,

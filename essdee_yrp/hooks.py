@@ -32,6 +32,7 @@ yrp_ui_actions = [
 ]
 yrp_stock_item_entry_fields = ["essdee_yrp.stock_item_extensions.get_entry_fields"]
 yrp_rework_received_type = ["essdee_yrp.rework_work_order.is_rework_received_type"]
+yrp_job_worker_stock_variant = ["essdee_yrp.finishing.loose_piece.get_loose_piece_stock_variant"]
 # Documents whose fields scope attribute Links on rows that reference them.
 yrp_attribute_link_context = {"lot": "SD YRP Lot", "cutting_plan": "SD YRP Cutting Plan"}
 

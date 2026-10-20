@@ -14,6 +14,7 @@ from essdee_yrp.fabric_grn import (
 	_allocate_to_work_order_deliverables,
 	populate_grn_deliverables,
 )
+from essdee_yrp.finishing.loose_piece import get_loose_piece_stock_variant
 from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 
@@ -171,7 +172,7 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 							)
 							if valuation_key not in valuation_cache:
 								_balance, valuation_cache[valuation_key] = get_stock_balance(
-									calculated_row.item_variant,
+									get_loose_piece_stock_variant(grn, calculated_row.item_variant),
 									grn.from_warehouse,
 									posting_date=grn.posting_date,
 									posting_time=grn.posting_time,
@@ -361,7 +362,7 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 				combination = json_object(calculated_row.set_combination)
 				dimensions = _stock_dimension_values(work_order, source)
 				_balance, valuation_rate = get_stock_balance(
-					calculated_row.item_variant,
+					get_loose_piece_stock_variant(grn, calculated_row.item_variant),
 					grn.from_warehouse,
 					posting_date=grn.posting_date,
 					posting_time=grn.posting_time,

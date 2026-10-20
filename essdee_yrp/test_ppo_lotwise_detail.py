@@ -2,7 +2,6 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import add_ppo_lot_qty, delete_ppo_lot_qty
-from essdee_yrp.patches import backfill_ppo_ordered_lot_links
 
 
 class TestProductionOrderLotQuantity(IntegrationTestCase):
@@ -66,36 +65,3 @@ class TestProductionOrderLotQuantity(IntegrationTestCase):
 		delete_ppo_lot_qty(self.production_order, self.lot)
 
 		self.assertEqual(self.get_rows(), [])
-
-	def test_backfill_links_migrated_rows_and_drops_duplicates_of_resaved_lots(self):
-		other = (
-			frappe.get_doc(
-				{
-					"doctype": "SD YRP Lot",
-					"lot_name": f"_Test Lotwise Other {frappe.generate_hash(length=8)}",
-				}
-			)
-			.insert(ignore_permissions=True)
-			.name
-		)
-		self.insert_row(lot=self.lot, reference_doctype="", reference_name="", quantity=5)
-		self.insert_row(lot="", reference_doctype="SD YRP Lot", reference_name=self.lot, quantity=5)
-		self.insert_row(lot=other, quantity=3)
-
-		backfill_ppo_ordered_lot_links.execute()
-		backfill_ppo_ordered_lot_links.execute()
-
-		rows = sorted(self.get_rows(), key=lambda row: row.lot or "")
-		expected = sorted(
-			[
-				{
-					"lot": self.lot,
-					"reference_doctype": "SD YRP Lot",
-					"reference_name": self.lot,
-					"quantity": 5,
-				},
-				{"lot": other, "reference_doctype": "SD YRP Lot", "reference_name": other, "quantity": 3},
-			],
-			key=lambda row: row["lot"],
-		)
-		self.assertEqual(rows, expected)

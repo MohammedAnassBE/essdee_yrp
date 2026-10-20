@@ -109,7 +109,7 @@
 				:disabled="!metadataReady"
 				@click="selectStatus(tab.value)"
 			>
-				<span v-if="tab.value !== ''" class="list-status-tab__dot" :class="statusTone(tab.label)"></span>
+				<span v-if="tab.value !== ''" class="list-status-tab__dot" :class="tab.tone || statusTone(tab.label)"></span>
 				{{ tab.label }}
 				<span class="list-status-tab__count">{{ tab.count }}</span>
 			</button>
@@ -497,7 +497,7 @@ import {
 	readNavigationState,
 } from "../../utils/listNavigation.js"
 import { listStatusTone } from "../../utils/statusTone.js"
-import { listStatusFilters } from "./listStatusFilters.js"
+import { listStandardFilterFields, listStatusFilters } from "./listStatusFilters.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -514,6 +514,7 @@ const props = defineProps({
 	excludedFilterFields: { type: Array, default: () => [] },
 	defaultOrderBy: { type: String, default: "modified desc" },
 	defaultColumns: { type: Array, default: () => [] },
+	extraFields: { type: Array, default: () => [] },
 	unsortableColumns: { type: Array, default: () => [] },
 	initialPageSize: { type: Number, default: 20 },
 	minTableWidth: { type: String, default: "900px" },
@@ -637,7 +638,11 @@ function sortFilterFields(fields) {
 
 const standardFilterFields = computed(() => {
 	const excluded = new Set(props.excludedFilterFields)
-	return eligibleFields.value.filter((field) => field.inStandardFilter && !field.hidden && !excluded.has(field.fieldname))
+	const fields = eligibleFields.value.filter((field) => field.inStandardFilter && !field.hidden && !excluded.has(field.fieldname))
+	return listStandardFilterFields(fields, {
+		statusField: effectiveStatusField.value === props.statusField ? props.statusField : "",
+		statusOptions: props.statusOptions,
+	})
 })
 
 const hasActiveQuery = computed(
@@ -683,7 +688,7 @@ const effectiveStatusOptions = computed(() => {
 	return selectFieldOptions(field)
 })
 const viewFields = computed(() => [
-	...new Set([...props.defaultColumns, detectedStatusField.value].filter(Boolean)),
+	...new Set([...props.defaultColumns, ...props.extraFields, detectedStatusField.value].filter(Boolean)),
 ])
 const activeFilterCount = computed(() => {
 	const statusIsSeparate = Boolean(
@@ -798,6 +803,7 @@ const fetchFields = computed(() => {
 	])
 	return [...new Set([
 		...activeColumns.value.map((column) => column.fieldname),
+		...props.extraFields,
 		...activeCurrencyFields.value,
 		...(effectiveStatusField.value ? [effectiveStatusField.value] : []),
 		"modified",
@@ -812,7 +818,7 @@ const statusTabs = computed(() => {
 		...effectiveStatusOptions.value.map((option) => {
 			const value = typeof option === "string" ? option : option.value
 			const label = typeof option === "string" ? option : option.label
-			return { label, value, count: statusCounts.value[value] ?? 0 }
+			return { label, value, tone: option.tone, count: statusCounts.value[value] ?? 0 }
 		}),
 	]
 })
@@ -1373,7 +1379,7 @@ function rowClass(row) {
 		const value = row[effectiveStatusField.value]
 		const option = effectiveStatusOptions.value.find((candidate) => String(typeof candidate === "string" ? candidate : candidate.value) === String(value))
 		const label = typeof option === "string" ? option : option?.label
-		classes.push(`premium-list-row--${statusTone(label || value)}`)
+		classes.push(`premium-list-row--${option?.tone || statusTone(label || value)}`)
 	}
 	return classes.join(" ")
 }

@@ -15,7 +15,7 @@
 				<template #header="{ record, headingId }">
 					<div class="purchase-order-page__identity">
 						<div><h1 class="erp-doc-title" :id="headingId">Purchase Order</h1><span class="erp-doc-id">{{ record.name }}</span></div>
-						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
+						<DocumentStatusBadge :docstatus="record.docstatus" :label="purchaseOrderStatusLabel(record)" :tone="purchaseOrderStatusTone(purchaseOrderStatusLabel(record))" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
 							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'">{{ record.supplier_name || record.supplier || "—" }}</strong></div>
 							<div><span>Order date</span><strong>{{ formatDate(record.transaction_date) }}</strong></div>
@@ -121,6 +121,7 @@ import DocumentOverview from "../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../components/stock/StockItemMatrix.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
+import { purchaseOrderStatusLabel, purchaseOrderStatusTone } from "../utils/purchaseOrderStatus.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 
@@ -163,14 +164,16 @@ const overviewDefinitions = [
 	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by"] },
 	{ key: "delivery", label: "Supplier & delivery", description: "Supplier and material destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "deliver_to_supplier", "default_delivery_location", "set_warehouse"] },
 	{ key: "schedule", label: "Schedule", description: "Ordering and required dates", icon: "pi pi-calendar", fields: ["transaction_date", "schedule_date"] },
-	{ key: "status", label: "Status & notes", description: "Fulfilment state and instructions", icon: "pi pi-clipboard", fields: ["status", "open_status", "yrp_fulfillment_status", "terms_and_condition", "comments"] },
+	{ key: "status", label: "Status & notes", description: "Fulfilment state and instructions", icon: "pi pi-clipboard", fields: ["status", "open_status", "terms_and_condition", "comments"] },
 ]
 const overviewAdditionalDefinition = { key: "additional", label: "Additional details", description: "Other order information", icon: "pi pi-ellipsis-h", wide: true }
 const overviewFields = computed(() => {
-	const fields = [...(workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || [])]
-	const existing = new Set(fields.map((field) => field.fieldname))
-	for (const [fieldname, label, fieldtype] of [["status", "Status", "Data"], ["is_yrp_managed", "YRP Managed", "Check"]]) {
-		if (!existing.has(fieldname) && workspace.value.record?.[fieldname] !== undefined) fields.push({ fieldname, label, fieldtype, value: workspace.value.record[fieldname] })
+	const record = workspace.value.record
+	const fields = (workspace.value.fields?.length ? workspace.value.fields : workspace.value.details || [])
+		.filter((field) => !["status", "yrp_fulfillment_status"].includes(field.fieldname))
+	if (record) fields.push({ fieldname: "status", label: "Status", fieldtype: "Data", value: purchaseOrderStatusLabel(record) })
+	if (record?.is_yrp_managed !== undefined && !fields.some((field) => field.fieldname === "is_yrp_managed")) {
+		fields.push({ fieldname: "is_yrp_managed", label: "YRP Managed", fieldtype: "Check", value: record.is_yrp_managed })
 	}
 	return fields
 })

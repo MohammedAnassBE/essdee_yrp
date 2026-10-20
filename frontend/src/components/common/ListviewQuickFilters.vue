@@ -21,6 +21,8 @@
 					:input-id="`quick-filter-${field.fieldname}`"
 					:model-value="modelValue[field.fieldname] || ''"
 					:options="selectOptions(field)"
+					option-label="label"
+					option-value="value"
 					:placeholder="`All ${field.label}`"
 					show-clear
 					fluid
@@ -120,10 +122,12 @@ function hasValue(value) {
 }
 
 function selectOptions(field) {
+	if (field.choices) return field.choices
 	return String(field.options || "")
 		.split("\n")
 		.map((option) => option.trim())
 		.filter(Boolean)
+		.map((option) => ({ label: option, value: option }))
 }
 
 function numberValue(value) {

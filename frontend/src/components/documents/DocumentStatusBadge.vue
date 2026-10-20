@@ -10,9 +10,10 @@ import { documentStatusTone } from "../../utils/statusTone.js"
 const props = defineProps({
 	docstatus: { type: [Number, String], default: null },
 	label: { type: String, default: "" },
+	tone: { type: String, default: "" },
 })
 
 const defaultLabels = { 0: "Draft", 1: "Submitted", 2: "Cancelled" }
 const displayLabel = computed(() => props.label || defaultLabels[Number(props.docstatus)] || "Unknown")
-const tone = computed(() => documentStatusTone(displayLabel.value, props.docstatus))
+const tone = computed(() => props.tone || documentStatusTone(displayLabel.value, props.docstatus))
 </script>

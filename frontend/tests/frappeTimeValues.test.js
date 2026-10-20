@@ -12,3 +12,9 @@ test("Frappe time values with single-digit fractional seconds still display", ()
 	assert.equal(normaliseFrappeTime("22:26:60"), "")
 	assert.equal(normaliseFrappeTime("22:2:00"), "")
 })
+
+test("List Time filters parse values with the shared Frappe time normaliser", async () => {
+	const { readFileSync } = await import("node:fs")
+	const source = readFileSync(new URL("../src/components/common/ListviewFilters.vue", import.meta.url), "utf8")
+	assert.match(source, /const match = normaliseFrappeTime\(value\)\.match\(/)
+})

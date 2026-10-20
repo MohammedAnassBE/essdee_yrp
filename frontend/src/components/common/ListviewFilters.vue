@@ -199,6 +199,7 @@ import DateTimeField from "./DateTimeField.vue"
 import LinkField from "./LinkField.vue"
 import MultiSelectField from "./MultiSelectField.vue"
 import TimeField from "./TimeField.vue"
+import { normaliseFrappeTime } from "../../utils/documentValues.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -566,7 +567,7 @@ function parseDate(value) {
 
 function parseTime(value) {
 	if (value instanceof Date) return value
-	const match = String(value || "").match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+	const match = normaliseFrappeTime(value).match(/^(\d{2}):(\d{2}):(\d{2})$/)
 	if (!match) return null
 	const result = new Date()
 	result.setHours(Number(match[1]), Number(match[2]), Number(match[3] || 0), 0)

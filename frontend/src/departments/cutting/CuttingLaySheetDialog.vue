@@ -237,6 +237,7 @@ const accessoryEditorOpen = ref(false)
 const accessoryEditIndex = ref(-1)
 const accessoryForm = reactive(emptyAccessoryForm())
 let loadSequence = 0
+const laysheetName = ref("")
 const resolvedParentName = computed(() => props.parentName || props.cuttingPlan)
 const resolvedParentField = computed(() => props.parentDoctype === "SD YRP Cutting Order" ? "cutting_order" : "cutting_plan")
 const parentArgs = computed(() => ({ [resolvedParentField.value]: resolvedParentName.value }))
@@ -307,7 +308,8 @@ watch(
 			loading.value = false
 			return
 		}
-		if (props.laysheetName) load()
+		laysheetName.value = props.laysheetName
+		if (laysheetName.value) load()
 		else startCreate()
 	},
 )
@@ -330,15 +332,19 @@ async function createLaySheet() {
 		error.value = "Select the Cutting Marker, Cutting Spreader, and Cutter."
 		return
 	}
+	const sequence = loadSequence
 	busy.value = "create"
 	try {
-		sheet.value = await callMethod(laysheetMethod("create_web_laysheet"), {
+		const created = await callMethod(laysheetMethod("create_web_laysheet"), {
 			...parentArgs.value,
 			values: createForm,
 		})
+		emit("changed", created)
+		if (sequence !== loadSequence) return
+		sheet.value = created
+		laysheetName.value = created.name
 		activeTab.value = "details"
 		success.value = "Lay Sheet created."
-		emit("changed", sheet.value)
 	} catch (reason) {
 		actionError.value = reason.message || "Unable to create the Cutting LaySheet."
 	} finally {
@@ -535,7 +541,7 @@ async function persistDetails(clothDetails, accessoryDetails, message) {
 
 async function load() {
 	const sequence = ++loadSequence
-	const requestedName = props.laysheetName
+	const requestedName = laysheetName.value
 	const requestedParent = { ...parentArgs.value }
 	loading.value = true
 	sheet.value = null
@@ -545,12 +551,12 @@ async function load() {
 	success.value = ""
 	try {
 		const data = await callMethod(laysheetMethod("get_web_laysheet"), { ...requestedParent, cutting_laysheet: requestedName })
-		if (sequence !== loadSequence || !props.visible || requestedName !== props.laysheetName) return
+		if (sequence !== loadSequence || !props.visible || requestedName !== laysheetName.value) return
 		sheet.value = data
 	} catch (reason) {
-		if (sequence === loadSequence && props.visible && requestedName === props.laysheetName) error.value = reason.message || "Unable to load the Cutting LaySheet."
+		if (sequence === loadSequence && props.visible && requestedName === laysheetName.value) error.value = reason.message || "Unable to load the Cutting LaySheet."
 	} finally {
-		if (sequence === loadSequence && requestedName === props.laysheetName) loading.value = false
+		if (sequence === loadSequence && requestedName === laysheetName.value) loading.value = false
 	}
 }
 

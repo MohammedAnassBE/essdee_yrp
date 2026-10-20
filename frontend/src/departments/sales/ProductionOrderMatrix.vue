@@ -105,7 +105,7 @@ function update(row, field, value) { emit("update", { size: row.size, field, val
 
 <style scoped>
 .ppo-matrix { min-width: 0; overflow: hidden; border-color: var(--erp-border); box-shadow: var(--erp-shadow-xs); }
-.ppo-matrix__header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 13px; border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 80%, white); }
+.ppo-matrix__header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 13px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .ppo-matrix__header > div { display: grid; gap: 2px; }
 .ppo-matrix__header span, .ppo-matrix__lots > header span { color: var(--erp-accent-hover); font-size: var(--erp-font-size-min); font-weight: 760; letter-spacing: .06em; }
 .ppo-matrix__header h2, .ppo-matrix__lots h3 { margin: 0; color: var(--erp-text); font-size: 15px; letter-spacing: -.01em; }
@@ -114,9 +114,9 @@ function update(row, field, value) { emit("update", { size: row.size, field, val
 .ppo-matrix table { width: 100%; border-collapse: collapse; }
 .ppo-matrix th, .ppo-matrix td { height: 43px; padding: 6px 10px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); text-align: center; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); font-variant-numeric: tabular-nums; }
 .ppo-matrix th:last-child, .ppo-matrix td:last-child { border-right: 0; }
-.ppo-matrix thead th { height: 34px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 780; letter-spacing: .035em; text-transform: uppercase; background: var(--erp-surface-muted); }
-.ppo-matrix tbody th { width: 190px; color: var(--erp-text); font-weight: 720; text-align: left; background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); }
-.ppo-matrix tbody tr:hover td { background: color-mix(in srgb, var(--erp-accent-soft) 34%, white); }
+.ppo-matrix thead th { height: 34px; color: var(--erp-text); font-size: var(--erp-font-size-min); font-weight: 780; letter-spacing: .035em; text-transform: uppercase; background: var(--erp-surface-soft); }
+.ppo-matrix tbody th { width: 190px; color: var(--erp-text); font-weight: 720; text-align: left; background: var(--erp-surface-soft); }
+.ppo-matrix tbody tr:hover td { background: var(--erp-surface-hover); }
 .ppo-matrix__row--quantity td { color: var(--erp-accent-hover); font-weight: 760; }
 .ppo-matrix__total { color: var(--erp-text) !important; font-weight: 800 !important; background: var(--erp-surface-soft); }
 .ppo-matrix__empty { color: var(--erp-text-muted); }

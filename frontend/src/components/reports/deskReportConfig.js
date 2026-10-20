@@ -107,6 +107,21 @@ export const deskReportConfig = {
 	},
 }
 
+export function deskReportQueryFilters(key, query = {}) {
+	const values = {}
+	for (const field of deskReportConfig[key].filters) {
+		let value = query[field.fieldname]
+		if (Array.isArray(value)) value = value[0]
+		if (value == null) continue
+		if (["Int", "Check"].includes(field.fieldtype)) {
+			if (value === "" || !Number.isFinite(Number(value))) continue
+			value = field.fieldtype === "Check" ? Number(Boolean(Number(value))) : Number(value)
+		}
+		values[field.fieldname] = value
+	}
+	return values
+}
+
 export function deskReportDefaults(key, today) {
 	const [year, month, day] = today.split("-").map(Number)
 	const monthly = deskReportConfig[key].dateDefaults === "previous-month"
@@ -141,4 +156,10 @@ export function departmentDeskReports(department, capabilities, allowed = true) 
 		key: value.replaceAll("-", "_"), value, label: deskReportConfig[value].title, icon: "pi pi-table",
 		componentProps: { reportKey: value }, props: { reportKey: value },
 	}))
+}
+
+export function selectReportTab(tabs, current, requested) {
+	if (requested && tabs.some(tab => tab.value === requested)) return requested
+	if (tabs.some(tab => tab.value === current)) return current
+	return tabs[0]?.value || ""
 }

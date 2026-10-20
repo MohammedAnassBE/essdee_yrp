@@ -51,6 +51,69 @@ class FakeChildRow:
 
 
 class TestSalesWebWorkspace(TestCase):
+	def test_fabric_fields_are_editable_and_visible_with_desk_types(self):
+		workspace = self._workspace()
+		for fieldname, fieldtype in (("gsm", "Float"), ("fabric", "Data"), ("dia", "Link")):
+			with self.subTest(fieldname=fieldname):
+				self.assertIn(fieldname, workspace.EDITOR_FIELDS)
+				self.assertIn(fieldname, workspace.RECORD_FIELDS)
+				self.assertIn(fieldname, workspace.FIELD_LABELS)
+				self.assertEqual(workspace.EDITOR_FIELD_SCHEMA[fieldname]["fieldtype"], fieldtype)
+		self.assertEqual(workspace.EDITOR_FIELD_SCHEMA["dia"]["options"], "YRP Item Attribute Value")
+		doc = FakeProductionOrder(gsm=180.5, fabric="Cotton", dia="DIA-1", comment_log="First line\nSecond line")
+		with patch.object(frappe, "get_doc", return_value=doc), patch.object(frappe, "has_permission", return_value=True):
+			payload = workspace.get_production_order_workspace(doc.name)
+		self.assertEqual(payload["histories"]["comments"], "First line\nSecond line")
+		self.assertEqual({field["fieldname"]: field["value"] for field in payload["fields"] if field["fieldname"] in {"gsm", "fabric", "dia"}}, {"gsm": 180.5, "fabric": "Cotton", "dia": "DIA-1"})
+
+	def test_title_linked_fields_carry_their_display_title(self):
+		workspace = self._workspace()
+		value = frappe.get_all("YRP Item Attribute Value", fields=["name", "attribute_value"], filters={"attribute_value": ["is", "set"]}, limit=1)[0]
+		doc = frappe.new_doc("YRP Production Order")
+		fields = workspace._production_order_fields(doc, {"dia": value.name})
+		dia = next(field for field in fields if field["fieldname"] == "dia")
+		self.assertEqual(dia["display_value"], value.attribute_value)
+
+	def test_pending_request_payload_for_every_approval_type_is_visible_to_readers(self):
+		workspace = self._workspace()
+		metadata = {"requested_by": "Sales Team", "requested_user": "sales@example.com", "requested_on": "2026-10-20 19:29:17", "reason": "Balance sizes"}
+		cases = [
+			(1, "Pending Request", "pending_production_order_request", {
+				"request_type": "status", "previous_status": "Open", "requested_status": "Not Processed", **metadata,
+			}, {"request_type": "status", "previous_status": "Open", "requested_status": "Not Processed", **metadata}),
+			(1, "Pending Request", "pending_production_order_request", {
+				"request_type": "quantity_ratio", "original_quantities": {"S": 10, "M": 20, "L": 30},
+				"requested_quantities": {"S": 12, "M": 20, "L": 30}, "original_ratios": {"S": 1, "M": 2, "L": 3},
+				"requested_ratios": {"S": 1, "M": 3, "L": 3}, **metadata,
+			}, {"request_type": "quantity_ratio", "previous_status": None, "changes": [
+				{"size": "S", "current_quantity": 10, "requested_quantity": 12, "current_ratio": 1, "requested_ratio": 1},
+				{"size": "M", "current_quantity": 20, "requested_quantity": 20, "current_ratio": 2, "requested_ratio": 3},
+			], **metadata}),
+			(1, "Pending Request", "incoming_quantity_transfer_request", {
+				"source_production_order": "PPO-SOURCE", "source_status": "Item Changed", "target_previous_status": "Open",
+				"transfers": {"S": 12}, "target_original_quantities": {"S": 10}, **metadata,
+			}, {"request_type": "transfer", "source_production_order": "PPO-SOURCE", "source_status": "Item Changed",
+				"target_previous_status": "Open", "transfers": {"S": 12}, "target_original_quantities": {"S": 10}, **metadata}),
+			(0, "PPO Request", "ppo_approval_request", {"requested_by": "sales@example.com", "requested_on": "2026-10-20 19:29:17"}, {
+				"request_type": "ppo_approval", "requested_by": "sales@example.com", "requested_on": "2026-10-20 19:29:17",
+			}),
+		]
+		for docstatus, status, key, request, expected in cases:
+			with self.subTest(key=key, request_type=request.get("request_type")):
+				doc = FakeProductionOrder(docstatus=docstatus, status=status, __onload={key: request})
+				with patch.object(frappe, "get_doc", return_value=doc), patch.object(frappe, "has_permission", side_effect=lambda _doctype, ptype="read", **_kwargs: ptype == "read"):
+					payload = workspace.get_production_order_workspace(doc.name)
+				self.assertEqual(payload["pending_request"], expected)
+				self.assertEqual(doc.checked_permissions, ["read"])
+
+	def test_pending_request_is_empty_without_an_active_request(self):
+		workspace = self._workspace()
+		for docstatus, status in ((0, "Draft"), (1, "Open"), (2, "Cancelled")):
+			with self.subTest(status=status):
+				doc = FakeProductionOrder(docstatus=docstatus, status=status, __onload={"ppo_approval_request": {"requested_by": "old@example.com"}})
+				with patch.object(frappe, "get_doc", return_value=doc), patch.object(frappe, "has_permission", return_value=True):
+					self.assertIsNone(workspace.get_production_order_workspace(doc.name)["pending_request"])
+
 	def setUp(self):
 		# Permission tests allow printing unless the test explicitly disables a setting.
 		settings = patch.object(frappe.db, "get_single_value", return_value=1)

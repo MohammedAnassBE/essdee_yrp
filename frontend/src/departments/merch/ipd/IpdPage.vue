@@ -77,6 +77,7 @@ import { IPD_TABS } from "./ipdTabs.js"
 import { createFocusRegistry, goToProblem } from "./ipdFocus.js"
 import { gridErrors, isStaleWriteError, problemsFor, recordActions, sectionStates, sectionsFor } from "./ipdEditor.js"
 import { IPD_EDITOR_KEY } from "./useIpdEditor.js"
+import { ipdCommandSuccess } from "./ipdCommandSuccess.js"
 import "./ipd.css"
 
 const props = defineProps({ ipdId: { type: String, required: true } })
@@ -197,7 +198,7 @@ async function runCommand(command) {
 		workspace.value = await executeIpdCommand(record.value.name, command, { expectedModified: record.value.modified })
 		revertVisible.value = false
 		checks.value = null
-		toast.add({ severity: "success", summary: capabilities.value[command]?.label || "Done", detail: record.value.name, life: 3500 })
+		toast.add(ipdCommandSuccess(command, record.value.name))
 	} catch (reason) {
 		actionError.value = reason?.message || "Unable to complete this action."
 		revertVisible.value = false

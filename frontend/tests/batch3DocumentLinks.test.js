@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 import { Vue, findNodes, loadComponent, mountComponent } from '../../scripts/helpers/vue_renderer.mjs'
 import * as targets from '../src/utils/linkTarget.js'
+import * as productionOrderDisplay from '../src/departments/sales/productionOrderDisplay.js'
 
 const require = createRequire(new URL('../package.json', import.meta.url))
 const { parse } = require('@vue/compiler-sfc')
@@ -102,7 +103,7 @@ for (const path of ['fabric-store/DeliveryChallanWorkspace','fabric-store/GoodsR
 
 test('D10 ProductionOrderOverview links typed facts only and preserves substituted labels', () => readable(() => {
  const fields = [{fieldname:'production_detail',label:'IPD',fieldtype:'Link',options:'YRP Item Production Detail',value:'IPD/1'}, {fieldname:'submitted_by',fieldtype:'Link',options:'User',link_name:'USER/1',value:'User Display'}, {fieldname:'comments',fieldtype:'Data',value:'Plain'}, {fieldname:'empty',fieldtype:'Link',options:'Item',value:''}]
- const root = loadComponent(resolve('frontend/src/departments/sales/ProductionOrderOverview.vue'), { ...modules, '../../utils/documentValues.js': {plainTextFromHtml: value => value} })
+ const root = loadComponent(resolve('frontend/src/departments/sales/ProductionOrderOverview.vue'), { ...modules, './productionOrderDisplay.js': productionOrderDisplay })
  check(mountComponent(root,{fields}), [['IPD/1','/web/merch/item-production-details/IPD%2F1'],pair('User Display','user','USER/1')])
 }))
 

@@ -38,6 +38,7 @@ import { applyBomFetch, bomFetchPlan, getBomItemValues, withoutBomFetch } from "
 import { createFocusRegistry } from "./ipdFocus.js"
 import { toggleRememberedRow } from "./sections/garmentGrids.js"
 import { problemTab, tabLabel } from "./ipdTabs.js"
+import { ipdCommandSuccess } from "./ipdCommandSuccess.js"
 
 export const IPD_EDITOR_KEY = Symbol("ipd-editor")
 const GRID_DEBOUNCE_MS = 400
@@ -303,7 +304,7 @@ export function useIpdEditor(initialName) {
 		actionError.value = ""
 		try {
 			const result = await executeIpdCommand(name.value, "approve", { expectedModified: record.value.modified })
-			toast.add({ severity: "success", summary: "IPD approved", detail: name.value, life: 3500 })
+			toast.add(ipdCommandSuccess("approve", name.value))
 			await router.push(recordLocation(name.value, result?.record?.modified))
 		} catch (reason) {
 			actionError.value = reason?.message || "Unable to approve this IPD."
@@ -319,7 +320,7 @@ export function useIpdEditor(initialName) {
 		try {
 			await executeIpdCommand(name.value, "regenerate_process_matrix", { expectedModified: record.value.modified })
 			await load(name.value)
-			toast.add({ severity: "success", summary: "Process matrix regenerated", detail: name.value, life: 3500 })
+			toast.add(ipdCommandSuccess("regenerate_process_matrix", name.value))
 		} catch (reason) {
 			actionError.value = reason?.message || "Unable to regenerate the process matrix."
 		} finally {

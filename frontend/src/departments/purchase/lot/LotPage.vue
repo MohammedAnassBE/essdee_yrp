@@ -98,6 +98,7 @@
 				</template>
 			</FabricDocumentWorkspace>
 		</section>
+		<LotPurchaseOrderDialog v-model:visible="purchaseOrderVisible" :lot="lotId" :mode="purchaseOrderMode" @changed="load(true)" />
 		<LotDocumentDialog
 			v-model:visible="documentVisible"
 			:lot="lotId"
@@ -122,6 +123,8 @@ import DepartmentPage from "../../../components/DepartmentPage.vue"
 import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import LotIdentity from "./LotIdentity.vue"
+import LotPurchaseOrderDialog from "./LotPurchaseOrderDialog.vue"
+import { lotPurchaseSummaryRoute, purchaseLotActions } from "./lotPurchaseActions.js"
 import { editTabFor } from "./lotEditor.js"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import { buildDocumentOverviewGroups } from "../../../utils/documentOverview.js"
@@ -158,6 +161,8 @@ const documentsRail = ref(null)
 const tabList = ref(null)
 const tabPanels = ref(null)
 const documentVisible = ref(false)
+const purchaseOrderVisible = ref(false)
+const purchaseOrderMode = ref("link")
 const selectedDocument = ref({ doctype: "", name: "" })
 let loadSequence = 0
 let documentsSequence = 0
@@ -195,10 +200,13 @@ const activeTab = computed({
 		}),
 })
 
-const lotActions = computed(() => workspace.value.permissions?.can_write ? [{
- key: "edit", label: "Edit", icon: "pi pi-pencil", primary: true,
- command: openEditor, disabled: Boolean(acting.value),
-}] : [])
+const lotActions = computed(() => purchaseLotActions(workspace.value, runLotAction, acting.value))
+function runLotAction(key) {
+	if (key === "edit") return openEditor()
+	if (key === "purchase_summary") return router.push(lotPurchaseSummaryRoute(props.lotId))
+	purchaseOrderMode.value = key === "link_po" ? "link" : "unlink"
+	purchaseOrderVisible.value = true
+}
 function openEditor() {
  return router.push({ name: PURCHASE_ROUTES.lotEdit, params: { lotId: props.lotId },
   query: { tab: editTabFor(activeTab.value) },
@@ -265,6 +273,7 @@ watch(
 	() => props.lotId,
 	() => {
 		documentVisible.value = false
+		purchaseOrderVisible.value = false
 		load()
 	},
 	{ immediate: true },

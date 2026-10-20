@@ -46,10 +46,10 @@
 			</div>
 			<fieldset v-else-if="options" class="ipd-copy-dialog__sections">
 				<legend class="erp-field-label">Sections to copy</legend>
-				<label v-for="section in options.sections" :key="section.key" class="ipd-copy-dialog__option" :class="{ 'is-locked': section.locked }">
-					<Checkbox :model-value="selected.includes(section.key)" binary :disabled="section.locked || copying" :input-id="`ipd-copy-${section.key}`" @update:model-value="toggle(section.key, $event)" />
-					<span>{{ tabLabel({ section: section.key }) }}<small v-if="section.locked"> · always copied</small></span>
-					<small class="ipd-copy-dialog__meta">{{ selected.includes(section.key) ? section.meta : "start empty" }}</small>
+				<label v-for="section in copyDialogSections(options.sections)" :key="section.key" class="ipd-copy-dialog__option" :class="{ 'is-locked': section.locked }">
+					<Checkbox :model-value="selected.includes(section.copyKey || section.key)" binary :disabled="section.locked || copying" :input-id="`ipd-copy-${section.key}`" @update:model-value="toggle(section.key, $event)" />
+					<span>{{ section.label }}<small v-if="section.note"> · {{ section.note }}</small></span>
+					<small class="ipd-copy-dialog__meta">{{ selected.includes(section.copyKey || section.key) ? section.meta : "start empty" }}</small>
 				</label>
 			</fieldset>
 			<Message v-if="error || missingMessage" severity="error" size="small" :closable="false">{{ error || missingMessage }}</Message>
@@ -72,7 +72,7 @@ import { computed, ref, watch } from "vue"
 
 import { copyIpd, getIpdCopyOptions, getIpdItemGroups } from "../../../api/merch.js"
 import LinkField from "../../../components/common/LinkField.vue"
-import { tabLabel } from "./ipdTabs.js"
+import { copyDialogSections } from "./ipdCopySections.js"
 import { copyDefaults, toggleCopySection } from "./ipdEditor.js"
 import "./ipd.css"
 

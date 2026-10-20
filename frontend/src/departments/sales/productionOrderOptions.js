@@ -4,6 +4,14 @@ export const productionOrderItemFilters = {
 	disabled: 0,
 }
 
+export function productionOrderChangeableStatuses(currentStatus) {
+	return ["Open", "Item Changed", "Not Processed"].filter((status) => status !== currentStatus)
+}
+
+export function productionOrderLotFilters(item) {
+	return { item, production_order: ["is", "not set"] }
+}
+
 export const productionOrderStatusOptions = [
 	{ label: "Draft", value: "Draft", filters: [["docstatus", "=", 0], ["status", "in", ["Draft", ""]]] },
 	{ label: "PPO Request", value: "PPO Request", filters: [["docstatus", "=", 0], ["status", "=", "PPO Request"]] },

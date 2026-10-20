@@ -1,6 +1,7 @@
 <template>
 	<section class="ppo-editor erp-card erp-editor-shell" aria-label="Production Order editor">
 		<header class="erp-editor-header ppo-editor__header"><div><span>{{ name || "New document" }}</span><h1 class="erp-doc-title">{{ name ? "Edit Production Order" : "New Production Order" }}</h1></div><div class="erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" /><DocumentSaveButton :saved="Boolean(record.name || name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Production Order ${record.name || name}`.trim()" :loading="Boolean(saving)" :disabled="busy || !canSave" show-submit submit-label="Request Approval" @save="save(false)" @submit="save(true)" /></div></header>
+		<p v-if="!loading && !loadFailed && saveBlockers.length" class="ppo-editor__notice" role="status">To save or request approval, add: {{ saveBlockers.join('; ') }}.</p>
 		<DocumentErrorDialog :message="loadFailed ? '' : error" title="Production Order could not be saved" @dismiss="error = ''" />
 		<div v-if="loading" class="ppo-editor__loading"><Skeleton height="180px" /><Skeleton height="300px" /></div>
 		<WorkspaceLoadError v-else-if="loadFailed" title="Production Order editor unavailable" :message="error" @retry="load" />
@@ -9,10 +10,13 @@
 				<div class="ppo-editor__field"><label class="erp-field-label">Series<span class="erp-required-mark">*</span></label><Select v-model="form.naming_series" :options="selectOptions('naming_series')" :disabled="Boolean(name)" fluid /></div>
 				<LinkField v-model="form.item" label="Item *" doctype="Item" :filters="productionOrderItemFilters" :disabled="Boolean(name)" required @select="itemSelected" />
 				<LinkField v-model="form.production_detail" label="Production Detail" doctype="YRP Item Production Detail" show-clear />
-				<LinkField v-model="form.production_term" label="Production Term *" doctype="YRP Production Term" required />
-				<label class="ppo-editor__field"><span class="erp-field-label">Delivery Date<span class="erp-required-mark">*</span></span><DateField v-model="form.delivery_date" fluid /></label>
+				<LinkField v-model="form.production_term" label="Production Term *" doctype="YRP Production Term" :filters="{ docstatus: 1 }" required />
+				<label class="ppo-editor__field"><span class="erp-field-label">Delivery Date<span class="erp-required-mark">*</span></span><DateField v-model="form.delivery_date" fluid /><span v-if="deliveryWarning" class="ppo-editor__warning" role="status">{{ deliveryWarning }}</span></label>
 				<label class="ppo-editor__field"><span class="erp-field-label">Don't Deliver After<span class="erp-required-mark">*</span></span><DateField v-model="form.dont_deliver_after" fluid /></label>
 				<label class="ppo-editor__check"><Checkbox v-model="form.skip_box_sticker_print" binary input-id="skip-box-sticker" /><span>Skip Box Sticker Print</span></label>
+				<label class="ppo-editor__field"><span class="erp-field-label">GSM</span><InputNumber v-model="form.gsm" :max-fraction-digits="6" fluid /></label>
+				<label class="ppo-editor__field"><span class="erp-field-label">Fabric</span><InputText v-model="form.fabric" fluid /></label>
+				<LinkField v-model="form.dia" label="Dia" doctype="YRP Item Attribute Value" show-clear />
 				<label class="ppo-editor__field ppo-editor__field--wide"><span class="erp-field-label">Comments</span><Textarea v-model="form.comments" rows="2" fluid /></label>
 			</div></section>
 			<ProductionOrderMatrix v-if="matrixRows.length" :rows="matrixRows" :ordered="matrix.ordered || {}" editable @update="updateMatrix" />
@@ -24,6 +28,8 @@
 <script setup>
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
+import InputNumber from "primevue/inputnumber"
+import InputText from "primevue/inputtext"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import Textarea from "primevue/textarea"
@@ -37,10 +43,11 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import { productionOrderItemFilters } from "./productionOrderOptions.js"
+import { productionOrderDeliveryWarning, productionOrderSaveBlockers } from "./productionOrderSaveBlockers.js"
 
 const props = defineProps({ name: { type: String, default: "" } })
 const emit = defineEmits(["saved", "cancel"])
-const form = reactive({ naming_series: "PPO-", item: "", production_detail: "", production_term: "", delivery_date: "", dont_deliver_after: "", comments: "", skip_box_sticker_print: false })
+const form = reactive({ naming_series: "PPO-", item: "", production_detail: "", production_term: "", delivery_date: "", dont_deliver_after: "", gsm: null, fabric: "", dia: "", comments: "", skip_box_sticker_print: false })
 const schemas = ref([])
 const matrix = ref({})
 const loading = ref(true)
@@ -56,13 +63,15 @@ const dirty = computed(() => !loading.value && signature.value !== cleanSignatur
 const busy = computed(() => loading.value || loadingMatrix.value || Boolean(saving.value))
 const loadFailed = computed(() => Boolean(error.value && !loaded.value))
 const matrixRows = computed(() => (matrix.value.primary_values || []).map((size) => ({ size, quantity: number(matrix.value.items?.[size]?.qty), ratio: number(matrix.value.items?.[size]?.ratio), prices: { mrp: number(matrix.value.items?.[size]?.mrp), wholesale_price: number(matrix.value.items?.[size]?.wholesale), retail_price: number(matrix.value.items?.[size]?.retail) } })))
-const canSave = computed(() => Boolean(form.item && form.production_term && form.delivery_date && form.dont_deliver_after && matrixRows.value.length && matrixRows.value.some((row) => row.quantity > 0)))
+const saveBlockers = computed(() => productionOrderSaveBlockers(form, matrixRows.value))
+const canSave = computed(() => saveBlockers.value.length === 0)
+const deliveryWarning = computed(() => productionOrderDeliveryWarning(form.delivery_date))
 
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 function selectOptions(fieldname) { return String(schemas.value.find((field) => field.fieldname === fieldname)?.options || "").split("\n").filter(Boolean) }
 function apply(payload) {
 	record.value = payload?.record || {}
-	for (const field of payload?.fields || []) if (field.fieldname in form) form[field.fieldname] = field.fieldtype === "Check" ? Boolean(Number(field.value)) : field.value ?? ""
+	for (const field of payload?.fields || []) if (field.fieldname in form) form[field.fieldname] = field.fieldtype === "Check" ? Boolean(Number(field.value)) : field.fieldtype === "Float" ? (field.value == null ? null : number(field.value)) : field.value ?? ""
 	schemas.value = payload?.fields || []
 	matrix.value = JSON.parse(JSON.stringify(payload?.matrix || {}))
 	modified.value = payload?.modified || ""
@@ -88,6 +97,8 @@ watch(() => props.name, load)
 	text-transform: uppercase;
 }
 .ppo-editor__header h1 { margin: 0; color: var(--erp-text); }
+.ppo-editor__notice { margin: 0; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); }
+.ppo-editor__warning { color: var(--erp-warning); font-size: var(--erp-font-size-caption); }
 .ppo-editor__loading, .ppo-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .ppo-editor__section { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
 .ppo-editor__section > header {

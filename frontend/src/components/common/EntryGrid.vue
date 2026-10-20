@@ -62,7 +62,7 @@
 							@mousedown="onCellMousedown($event, rowIndex, colIndex)"
 							@mouseenter="onCellMouseenter(rowIndex, colIndex)"
 							@click="onCellClick($event, rowIndex, colIndex)"
-							@dblclick="startEdit('edit')"
+							@dblclick="column.type !== 'check' && startEdit('edit')"
 						>
 							<template v-if="isEditing(rowIndex, colIndex)">
 								<LinkField v-if="isChoiceColumn(column)" ref="editor" class="entry-grid__link" :model-value="rawValue(rowIndex, colIndex)" :doctype="column.doctype || ''" :filters="column.filters || {}" :search-handler="choiceSearch(column)" :show-open-button="false" :aria-label="cellLabel(row, column)" :invalid="Boolean(cellError(rowIndex, colIndex))" :aria-describedby="cellError(rowIndex, colIndex) ? `${gridId}-error` : undefined" :show-validation-message="false" cell-editor @validation="linkValidation" @select="commitLink($event.name)" @clear="commitLink('')" @finish="onChoiceTab" @cancel="stopEdit" />
@@ -370,6 +370,7 @@ function fillValue(column) {
 }
 function toggleCheck() {
 	const { row, col } = active.value
+	if (!isEditable(row, col)) return
 	const cell = { rowKey: props.rows[row].key, colKey: props.columns[col].key, value: Number(rawValue(row, col)) ? 0 : 1 }
 	emitChanges(setCells(props.modelValue, [cell]), [cell])
 }
@@ -503,7 +504,14 @@ function stopDragging() { dragging = false }
 function onCellClick(event, row, col) {
 	if (event.target?.closest?.("a")) return
 	if (!isPlainClick(event) || dragged) return
-	if (isEditing(row, col) || !isEditable(row, col) || !isChoiceColumn(props.columns[col])) return
+	if (isEditing(row, col) || !isEditable(row, col)) return
+	if (props.columns[col].type === "check") {
+		if (event.detail > 1) return
+		select({ row, col })
+		toggleCheck()
+		return
+	}
+	if (!isChoiceColumn(props.columns[col])) return
 	select({ row, col })
 	startEdit("edit")
 }

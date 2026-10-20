@@ -59,3 +59,13 @@ test("field targets resolve Link, Dynamic Link and explicit backend targets with
 	assert.deepEqual(linkFieldTarget({ fieldtype: "Data", link_doctype: "Item", value: 123 }), { doctype: "Item", name: "123" })
 	for (const field of [{ fieldtype: "Data", value: "X" }, { fieldtype: "Link", options: "Item", value: " " }, { fieldtype: "Link", options: "Item", value: "X", link_name: "" }, { fieldtype: "Dynamic Link", options: "against", value: "X" }]) assert.equal(linkFieldTarget(field), null)
 })
+
+test("F-A18 Sales PPO linked lots open the Merch Lot page while other departments keep their routes", () => {
+	for (const path of ["/web/sales", "/web/sales/production-orders/PPO-1"]) {
+		assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", path), "/web/merch/lots/LOT%2F1")
+	}
+	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/planning/production-orders/PPO-1"), "/web/planning/lots/LOT%2F1")
+	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/merch/production-orders/PPO-1"), "/web/merch/lots/LOT%2F1")
+	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/purchase"), "/web/purchase/lots/LOT%2F1")
+	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/sales-other"), "/web/purchase/lots/LOT%2F1")
+})

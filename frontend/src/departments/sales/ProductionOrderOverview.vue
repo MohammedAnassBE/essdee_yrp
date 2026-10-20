@@ -13,22 +13,12 @@
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import { computed } from "vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
-import { plainTextFromHtml } from "../../utils/documentValues.js"
+import { productionOrderFieldDisplay as display } from "./productionOrderDisplay.js"
 
 const props = defineProps({ fields: { type: Array, default: () => [] } })
 const hidden = new Set(["status", "item"])
 const visibleFields = computed(() => props.fields.filter((field) => !hidden.has(field.fieldname)))
 
-function display(field) {
-	const value = field.value
-	if (value === null || value === undefined || value === "") return "—"
-	if ((field.fieldtype === "Date" || /date$/i.test(field.fieldname)) && /^\d{4}-\d{2}-\d{2}/.test(String(value))) {
-		const [year, month, day] = String(value).slice(0, 10).split("-")
-		return `${day}-${month}-${year}`
-	}
-	if (field.fieldname === "skip_box_sticker_print") return Number(value) ? "Yes" : "No"
-	return plainTextFromHtml(value)
-}
 </script>
 
 <style scoped>
@@ -71,7 +61,7 @@ function display(field) {
 	grid-column: 1 / -1;
 }
 
-.ppo-overview span {
+.ppo-overview__facts > div > span {
 	order: 2;
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);

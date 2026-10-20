@@ -1,6 +1,7 @@
 <template>
 	<Dialog class="document-confirmation-shell erp-dialog--sm" :visible="visible" modal :header="title" :closable="!busy" :dismissable-mask="false" @show="focusSafeAction" @hide="restoreFocus" @update:visible="emit('update:visible', $event)">
 		<div class="document-confirmation-dialog"><i :class="icon" /><p>{{ message }}</p></div>
+		<slot />
 		<template #footer><Button ref="safeAction" :label="cancelLabel" severity="secondary" text autofocus :disabled="busy" @click="emit('update:visible', false)" /><Button :label="confirmLabel" :icon="confirmIcon" :severity="severity" :loading="busy" @click="emit('confirm')" /></template>
 	</Dialog>
 </template>

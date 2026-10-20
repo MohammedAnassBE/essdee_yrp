@@ -27,11 +27,12 @@ import Checkbox from "primevue/checkbox"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
 import { computed, onMounted, reactive, ref, watch } from "vue"
+import { useRoute } from "vue-router"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
 import LinkField from "../common/LinkField.vue"
-import { deskReportConfig, deskReportDefaults } from "./deskReportConfig.js"
+import { deskReportConfig, deskReportDefaults, deskReportQueryFilters } from "./deskReportConfig.js"
 import ReportColumnPicker from "./ReportColumnPicker.vue"
 import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
@@ -39,7 +40,8 @@ import { stockCellValue, todayIso } from "./reportUtils.js"
 
 const props = defineProps({ reportKey: { type: String, required: true }, supplier: { type: String, default: "" } })
 const config = deskReportConfig[props.reportKey]
-const defaults = () => ({ ...deskReportDefaults(props.reportKey, todayIso()), ...(props.supplier ? { supplier: props.supplier } : {}) })
+const route = useRoute()
+const defaults = () => ({ ...deskReportDefaults(props.reportKey, todayIso()), ...(props.supplier ? { supplier: props.supplier } : {}), ...deskReportQueryFilters(props.reportKey, route.query) })
 const filters = reactive(defaults())
 const visibleFilters = computed(() => config.filters.filter(field => !field.depends_on || filters[field.depends_on]))
 const filterError = ref("")
@@ -71,7 +73,11 @@ function reset() {
 watch(filters, () => filtersChanged({ ...filters }), { deep: true })
 watch(activeFilters, request => { if (request) Object.assign(filters, request) }, { flush: "sync" })
 watch(() => props.supplier, () => reset())
-onMounted(loadLayout)
+watch(() => route.query, () => reset(), { deep: true })
+onMounted(() => {
+	if (Object.keys(deskReportQueryFilters(props.reportKey, route.query)).length) reset()
+	loadLayout()
+})
 </script>
 
 <style scoped>

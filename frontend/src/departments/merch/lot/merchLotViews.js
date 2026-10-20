@@ -9,6 +9,12 @@ export const MERCH_LOT_TABS = [
 	{ key: "bom", label: "BOM Summary" },
 	{ key: "ocr", label: "OCR Detail" },
 ]
+
+export function merchLotTabs(workspace = {}) {
+	const hasOcr = !Object.hasOwn(workspace, "ocr")
+		|| Object.keys(workspace.ocr?.processes || {}).length > 0 || Number(workspace.ocr?.total_dispatch) > 0
+	return MERCH_LOT_TABS.filter(tab => tab.key !== "ocr" || hasOcr)
+}
 export const MERCH_DETAIL_GROUPS = LOT_DETAIL_GROUPS.map((group) => ({
 	...group,
 	fields: group.key === "order" ? [...group.fields, "expected_delivery_date"] : group.fields,

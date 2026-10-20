@@ -46,10 +46,11 @@
 				/>
 				<p v-else class="erp-help-text">No embellishment.</p>
 				<p v-if="embellishment.rows.length" class="erp-help-text">Embellishment processes use the stitching in stage when saved.</p>
-				<p v-if="orphanProcess" class="ipd-grid-notice" role="status">
+				<p v-for="process in orphanProcesses" :key="process" class="ipd-grid-notice" role="status">
 					<i class="pi pi-info-circle" aria-hidden="true" />
-					<span>{{ orphanProcess }} still has a row in Processes.</span>
-					<Button label="Remove that row too" size="small" text @click="removeOrphan" />
+					<span>{{ process }} still has a row in Processes.</span>
+					<Button label="Remove that row too" size="small" text @click="removeOrphan(process)" />
+					<Button icon="pi pi-times" :aria-label="`Dismiss ${process} notice`" size="small" text @click="dismissOrphan(process)" />
 				</p>
 				<div v-if="!editor.readonly" class="ipd-inline-add">
 					<LinkField v-model="newEmbellishment" doctype="YRP Process" placeholder="Embellishment process" aria-label="Embellishment process" input-id="ipd-edit-new-embellishment" :show-open-button="false" />
@@ -70,7 +71,7 @@
 
 <script setup>
 import Button from "primevue/button"
-import { computed, inject, ref } from "vue"
+import { computed, inject, ref, watch } from "vue"
 
 import { ipdLinkColumns } from "../ipdLinks.js"
 import EntryGrid from "../../../../components/common/EntryGrid.vue"
@@ -78,6 +79,7 @@ import LinkField from "../../../../components/common/LinkField.vue"
 import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 import { attributeValues } from "./attributeValues.js"
+import { orphanProcessNotices } from "./orphanProcessNotices.js"
 import { addEmbellishment, embellishmentFromModel, embellishmentGrid, hasStageMismatch, processRowsFromModel, removeEmbellishment, removeTableRow, syncProcessStages, tableGrid } from "./garmentGrids.js"
 import { useSectionFocus } from "./sectionFocus.js"
 import "./sections.css"
@@ -93,7 +95,7 @@ const editor = inject(IPD_EDITOR_KEY)
 const processGrid = ref(null)
 const embellishmentGridRef = ref(null)
 const newEmbellishment = ref("")
-const orphanProcess = ref("")
+const orphanProcesses = ref([])
 const error = ref("")
 const draft = computed(() => editor.draft)
 const stages = computed(() => editor.context?.stage_values || [])
@@ -107,6 +109,10 @@ const processColumns = computed(() => [
 const stageMismatches = computed(() => (draft.value.ipd_processes || []).filter(hasStageMismatch).length)
 const embellishment = computed(() => embellishmentGrid(draft.value.emblishment_details_json || {}, panels.value))
 const migrated = computed(() => Array.isArray(draft.value.original_process_rows) ? draft.value.original_process_rows : [])
+
+watch(() => [draft.value.ipd_processes, draft.value.emblishment_details_json], () => {
+	orphanProcesses.value = orphanProcessNotices(orphanProcesses.value, draft.value.ipd_processes, draft.value.emblishment_details_json)
+}, { deep: true, flush: "sync" })
 
 useSectionFocus(editor, props.sectionKey, { ipd_processes: () => processGrid.value, emblishment_details_json: () => embellishmentGridRef.value }, props.part)
 
@@ -136,10 +142,12 @@ function addEmbellishmentProcess() {
 }
 function removeEmbellishmentProcess(process) {
 	editor.setValue("emblishment_details_json", removeEmbellishment(draft.value.emblishment_details_json, process))
-	orphanProcess.value = (draft.value.ipd_processes || []).some((row) => row.process_name === process) ? process : ""
+	orphanProcesses.value = orphanProcessNotices(orphanProcesses.value, draft.value.ipd_processes, draft.value.emblishment_details_json, process)
 }
-function removeOrphan() {
-	editor.setValue("ipd_processes", (draft.value.ipd_processes || []).filter((row) => row.process_name !== orphanProcess.value))
-	orphanProcess.value = ""
+function dismissOrphan(process) {
+	orphanProcesses.value = orphanProcesses.value.filter((notice) => notice !== process)
+}
+function removeOrphan(process) {
+	editor.setValue("ipd_processes", (draft.value.ipd_processes || []).filter((row) => row.process_name !== process))
 }
 </script>

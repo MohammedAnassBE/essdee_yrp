@@ -47,7 +47,7 @@
 					>
 						<TabList class="lot-tablist">
 							<Tab
-								v-for="tab in MERCH_LOT_TABS"
+								v-for="tab in tabs"
 								:key="tab.key"
 								:value="tab.key"
 							>
@@ -236,7 +236,7 @@ import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import LotOcrTable from "../../sales/LotOcrTable.vue"
 import { MERCH_ROUTES } from "../merchViews.js"
-import { MERCH_DETAIL_GROUPS, MERCH_LOT_TABS, merchLotActions } from "./merchLotViews.js"
+import { MERCH_DETAIL_GROUPS, merchLotTabs, merchLotActions } from "./merchLotViews.js"
 import MerchClothProgramDialog from "./MerchClothProgramDialog.vue"
 import MerchLotBomTab from "./MerchLotBomTab.vue"
 import MerchLotDocuments from "./MerchLotDocuments.vue"
@@ -269,9 +269,10 @@ const detailFields = computed(() => [
 const shellWorkspace = computed(() =>
 	workspace.value.name ? { record: { ...workspace.value, doctype: "SD YRP Lot" } } : {},
 )
+const tabs = computed(() => merchLotTabs(workspace.value))
 const activeTab = computed({
 	get: () =>
-		MERCH_LOT_TABS.some((tab) => tab.key === route.query.tab) ? route.query.tab : "details",
+		tabs.value.some((tab) => tab.key === route.query.tab) ? route.query.tab : "details",
 	set: (tab) =>
 		router.replace({ query: { ...route.query, tab }, state: preserveListNavigationState() }),
 })

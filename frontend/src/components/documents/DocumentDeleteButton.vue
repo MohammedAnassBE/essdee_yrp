@@ -8,17 +8,19 @@
 
 <script setup>
 import Button from "primevue/button"
+import { useToast } from "primevue/usetoast"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { deleteDoc } from "../../api/frappe.js"
 import { useDocumentPermissions } from "../../composables/useDocumentPermissions.js"
-import { canDeleteDocument, getDeleteRedirectTarget } from "../../utils/documentDelete.js"
+import { canDeleteDocument, documentDeletedToast, getDeleteRedirectTarget } from "../../utils/documentDelete.js"
 import { usePageNavigation } from "../navigation/pageNavigationContext.js"
 import DocumentConfirmationDialog from "./DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "./DocumentErrorDialog.vue"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
+	documentLabel: { type: String, default: "" },
 	name: { type: String, default: "" },
 	docstatus: { type: [Number, String], default: 0 },
 	disabled: { type: Boolean, default: false },
@@ -27,6 +29,7 @@ const props = defineProps({
 })
 const emit = defineEmits(["deleted"])
 const router = useRouter()
+const toast = useToast()
 const navigation = usePageNavigation()
 const permissions = useDocumentPermissions(() => [props.doctype, props.name, props.docstatus])
 const confirmVisible = ref(false)
@@ -44,7 +47,7 @@ watch(() => [props.doctype, props.name, props.docstatus], () => {
 
 async function remove() {
 	if (props.disabled || busy.value || !canDelete.value) return
-	const { doctype, name } = props
+	const { doctype, name, documentLabel } = props
 	busy.value = true
 	error.value = ""
 	try {
@@ -62,6 +65,7 @@ async function remove() {
 	if (!active || doctype !== props.doctype || name !== props.name) return
 	emit("deleted")
 	if (props.redirect) await router.replace(getDeleteRedirectTarget(props.redirectTo, navigation?.backTo?.value))
+	toast.add(documentDeletedToast(doctype, name, documentLabel))
 }
 </script>
 

@@ -21,9 +21,10 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, ref, watch } from "vue"
+import { useRoute } from "vue-router"
 
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
-import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
+import { departmentDeskReports, selectReportTab } from "../../components/reports/deskReportConfig.js"
 import LotCutQuantityReport from "../../components/reports/LotCutQuantityReport.vue"
 import StockBalanceReport from "../../components/reports/StockBalanceReport.vue"
 
@@ -32,6 +33,7 @@ const props = defineProps({
 	department: { type: String, default: "fabric-store" },
 	reportKeys: { type: Array, default: () => ["stock_balance"] },
 })
+const route = useRoute()
 const activeTab = ref("")
 const tabs = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: StockBalanceReport },
@@ -47,8 +49,8 @@ const visibleTabs = computed(() => [...tabs.filter((tab) => (
 	} : {},
 })), ...deskTabs.value])
 
-watch(visibleTabs, (available) => {
-	if (!available.some((tab) => tab.value === activeTab.value)) activeTab.value = available[0]?.value || ""
+watch([visibleTabs, () => route.query.report], ([available, requested]) => {
+	activeTab.value = selectReportTab(available, activeTab.value, requested)
 }, { immediate: true })
 </script>
 

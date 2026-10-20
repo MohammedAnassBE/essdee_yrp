@@ -165,11 +165,48 @@ test("stock report location lookups use Suppliers and Desk date calculations sur
 	}
 })
 
+test("report lot query prefills the lookup and follows navigation within the report", async () => {
+	const route = Vue.reactive({ query: { report: "lot-purchase-summary", lot: "LOT-1", unknown: "ignored" } })
+	const requests = []
+	const empty = () => Vue.ref([])
+	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"vue-router": { useRoute: () => route },
+		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null, "primevue/select": () => null,
+		"../common/DateField.vue": () => null, "../common/LinkField.vue": props => Vue.h("filter-link", props),
+		"./ReportShell.vue": Vue.defineComponent({ emits: ["generate", "reset"], setup: (_props, { slots, emit }) => () => Vue.h("report-shell", {
+			onGenerate: () => emit("generate"), onReset: () => emit("reset"),
+		}, slots.filters?.()) }),
+		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
+		"./deskReportConfig.js": await config(),
+		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useWebReport.js": { useWebReport: () => ({ sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null),
+			filtersChanged() {}, clear() {}, generate: async request => requests.push(request),
+		}) },
+		"../../composables/useReportColumns.js": { useReportColumns: () => ({ columns: empty(), displayColumns: empty(), rows: empty(), loadLayout() {} }) },
+	})
+	const root = mountComponent(component, { reportKey: "lot-purchase-summary" })
+	try {
+		const lotField = () => findNodes(root, node => node.type === "filter-link" && node.props.label === "Lot")[0]
+		assert.equal(lotField().props.modelValue, "LOT-1")
+		route.query = { report: "lot-purchase-summary", lot: "LOT-2" }
+		await Vue.nextTick()
+		assert.equal(lotField().props.modelValue, "LOT-2")
+		findNodes(root, node => node.type === "report-shell")[0].props.onGenerate()
+		await Vue.nextTick()
+		assert.deepEqual(requests, [{ lot: "LOT-2", item: "", parent_item: "" }])
+		lotField().props["onUpdate:modelValue"]("LOT-3")
+		findNodes(root, node => node.type === "report-shell")[0].props.onReset()
+		await Vue.nextTick()
+		assert.equal(lotField().props.modelValue, "LOT-2")
+	} finally { root.__vue_app__.unmount() }
+})
+
 test("FI Updates passes the company-location restriction to its supplier lookup", async () => {
 	const { deskReportConfig } = await config()
 	const empty = () => Vue.ref([])
 	const ReportShell = (_props, { slots }) => Vue.h("section", slots.filters?.())
 	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"vue-router": { useRoute: () => ({ query: {} }) },
 		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null, "primevue/select": () => null,
 		"../common/DateField.vue": () => null,
 		"../common/LinkField.vue": props => Vue.h("supplier-lookup", props),
@@ -205,6 +242,7 @@ test("GRN Summary sends each selected status including Draft as a string", async
 	const requests = []
 	const empty = () => Vue.ref([])
 	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"vue-router": { useRoute: () => ({ query: {} }) },
 		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null,
 		"primevue/select": props => Vue.h("status-select", props),
 		"../common/DateField.vue": () => null, "../common/LinkField.vue": () => null,
@@ -255,6 +293,7 @@ test("ageing ranges and warehouse defaults render, reset and reach report genera
 	const requests = []
 	const empty = () => Vue.ref([])
 	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"vue-router": { useRoute: () => ({ query: {} }) },
 		"primevue/button": () => null, "primevue/checkbox": props => Vue.h("warehouse-check", props),
 		"primevue/select": () => null, "primevue/inputnumber": props => Vue.h("age-range", props),
 		"../common/DateField.vue": () => null, "../common/LinkField.vue": () => null,
@@ -303,6 +342,7 @@ test("Purchase uses one shared PO tab and store menus exclude it even if passed 
 		"../../components/reports/deskReportConfig.js": shared,
 		"../../components/reports/LotCutQuantityReport.vue": () => null,
 		"../../components/reports/StockBalanceReport.vue": () => null,
+		"vue-router": { useRoute: () => ({ query: {} }) },
 	})
 	for (const department of ["purchase", "fabric-store", "accessory-store"]) {
 		const root = mountComponent(component, { department, reportKeys: ["purchase_order_itemwise"], capability: {
@@ -325,6 +365,7 @@ test("PO conditional dates and all Lot Consumption required filters reach the sh
 	const requests = []
 	const empty = () => Vue.ref([])
 	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"vue-router": { useRoute: () => ({ query: {} }) },
 		"primevue/button": () => null, "primevue/checkbox": () => null, "primevue/inputnumber": () => null,
 		"primevue/select": props => Vue.h("filter-select", props),
 		"../common/DateField.vue": props => Vue.h("filter-date", props),

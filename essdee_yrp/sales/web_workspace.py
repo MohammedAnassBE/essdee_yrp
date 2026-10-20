@@ -24,6 +24,9 @@ RECORD_FIELDS = (
 	"item",
 	"production_detail",
 	"production_term",
+	"gsm",
+	"fabric",
+	"dia",
 	"posting_date",
 	"delivery_date",
 	"dont_deliver_after",
@@ -40,6 +43,9 @@ FIELD_LABELS = {
 	"item": _("Item"),
 	"production_detail": _("Production Detail"),
 	"production_term": _("Production Term"),
+	"gsm": _("GSM"),
+	"fabric": _("Fabric"),
+	"dia": _("Dia"),
 	"posting_date": _("Posting Date"),
 	"delivery_date": _("Delivery Date"),
 	"dont_deliver_after": _("Don't Deliver After"),
@@ -78,12 +84,18 @@ EDITOR_FIELDS = (
 	"item",
 	"production_detail",
 	"production_term",
+	"gsm",
+	"fabric",
+	"dia",
 	"delivery_date",
 	"dont_deliver_after",
 	"comments",
 	"skip_box_sticker_print",
 )
 EDITOR_FIELD_SCHEMA = {
+	"gsm": {"label": _("GSM"), "fieldtype": "Float", "options": "", "reqd": False},
+	"fabric": {"label": _("Fabric"), "fieldtype": "Data", "options": "", "reqd": False},
+	"dia": {"label": _("Dia"), "fieldtype": "Link", "options": "YRP Item Attribute Value", "reqd": False},
 	"naming_series": {"label": _("Series"), "fieldtype": "Select", "options": "\nPPO-", "reqd": True},
 	"item": {"label": _("Item"), "fieldtype": "Link", "options": "Item", "reqd": True},
 	"production_detail": {"label": _("Production Detail"), "fieldtype": "Link", "options": "YRP Item Production Detail", "reqd": False},
@@ -343,8 +355,58 @@ def _production_order_fields(doc, record) -> list[dict]:
 			"options": field.options if field else None,
 			"value": record.get(fieldname),
 			**({"link_doctype": doc.get(field.options)} if field and field.fieldtype == "Dynamic Link" else {}),
+			**_link_display_value(field, record.get(fieldname)),
 		})
 	return fields
+
+
+def _link_display_value(field, value) -> dict:
+	if not field or field.fieldtype != "Link":
+		return {}
+	meta = frappe.get_meta(field.options)
+	if not (meta.show_title_field_in_link and meta.title_field):
+		return {}
+	return {"display_value": frappe.db.get_value(field.options, value, meta.title_field) or value}
+
+
+def _quantity_ratio_request_changes(request) -> list[dict]:
+	original_quantities = request.get("original_quantities") or {}
+	original_ratios = request.get("original_ratios") or {}
+	requested_quantities = request.get("requested_quantities") or {}
+	requested_ratios = request.get("requested_ratios") or {}
+	changes = []
+	for size, quantity in requested_quantities.items():
+		change = {
+			"size": size,
+			"current_quantity": flt(original_quantities.get(size)),
+			"requested_quantity": flt(quantity),
+			"current_ratio": flt(original_ratios.get(size)),
+			"requested_ratio": flt(requested_ratios.get(size)),
+		}
+		if change["current_quantity"] != change["requested_quantity"] or change["current_ratio"] != change["requested_ratio"]:
+			changes.append(change)
+	return changes
+
+
+def _pending_production_order_request(doc, onload) -> dict | None:
+	if cint(doc.docstatus) == 0 and doc.get("status") == "PPO Request":
+		return {"request_type": "ppo_approval", **(onload.get("ppo_approval_request") or {})}
+	if cint(doc.docstatus) != 1:
+		return None
+	request = onload.get("incoming_quantity_transfer_request") or {}
+	if request:
+		fields = ("source_production_order", "source_status", "target_previous_status", "transfers", "target_original_quantities", "requested_by", "requested_user", "requested_on", "reason")
+		return {"request_type": "transfer", **{key: request[key] for key in fields if key in request}}
+	request = onload.get("pending_production_order_request") or {}
+	if not request:
+		return None
+	fields = ("request_type", "requested_by", "requested_user", "requested_on", "reason", "previous_status")
+	pending = {key: request.get(key) for key in fields}
+	if request.get("request_type") == "status":
+		pending["requested_status"] = request.get("requested_status")
+	elif request.get("request_type") == "quantity_ratio":
+		pending["changes"] = _quantity_ratio_request_changes(request)
+	return pending
 
 
 @frappe.whitelist()
@@ -376,6 +438,7 @@ def get_production_order_workspace(production_order: str) -> dict:
 		"matrix": matrix,
 		"ordered": ordered,
 		"linked_lots": onload.get("linked_lots") or [],
+		"pending_request": _pending_production_order_request(doc, onload),
 		"histories": {
 			"dates": [_serialize_child_row(row) for row in doc.get("date_change_history") or []],
 			"transfers": [_serialize_child_row(row) for row in doc.get("quantity_transfer_history") or []],

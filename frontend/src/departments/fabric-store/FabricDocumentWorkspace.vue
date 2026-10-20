@@ -71,6 +71,7 @@
 					:disabled="Boolean(acting)"
 				/>
 				<DocumentDeleteButton
+					:document-label="title"
 					v-if="showDelete && record.name"
 					:doctype="record.doctype || doctype"
 					:name="record.name"

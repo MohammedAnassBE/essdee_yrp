@@ -26,7 +26,7 @@
 				<label class="ppo-action-field"><span>New Lot name *</span><InputText v-model="form.lot_name" autofocus fluid /></label>
 			</template>
 			<template v-else-if="mode === 'link_lot'">
-				<LinkField v-model="form.lot_name" label="Existing Lot *" doctype="SD YRP Lot" :show-open-button="false" />
+				<LinkField v-model="form.lot_name" label="Existing Lot *" doctype="SD YRP Lot" :filters="lotFilters" :show-open-button="false" />
 			</template>
 		</div>
 		<template #footer><Button label="Cancel" severity="secondary" text :disabled="busy" @click="emit('update:visible', false)" /><Button :label="submitLabel" icon="pi pi-check" :loading="busy" :disabled="!valid" @click="submit" /></template>
@@ -44,13 +44,15 @@ import { computed, reactive, ref, watch } from "vue"
 
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import { productionOrderChangeableStatuses, productionOrderLotFilters } from "./productionOrderOptions.js"
 
-const props = defineProps({ visible: { type: Boolean, default: false }, mode: { type: String, default: "" }, matrix: { type: Array, default: () => [] }, busy: { type: Boolean, default: false } })
+const props = defineProps({ visible: { type: Boolean, default: false }, mode: { type: String, default: "" }, matrix: { type: Array, default: () => [] }, currentStatus: { type: String, default: "" }, item: { type: String, default: "" }, busy: { type: Boolean, default: false } })
 const emit = defineEmits(["update:visible", "submit"])
 const form = reactive({ reason: "", date_field: "Delivery Date", new_date: "", new_status: "", requested_by: "", target_production_order: "", lot_name: "" })
 const editableRows = ref([])
 const dateFields = [{ label: "Delivery Date", value: "Delivery Date" }, { label: "Don't Deliver After", value: "Don't Deliver After" }]
-const statuses = ["Open", "Item Changed", "Not Processed"]
+const statuses = computed(() => productionOrderChangeableStatuses(props.currentStatus))
+const lotFilters = computed(() => productionOrderLotFilters(props.item))
 const requestedByOptions = ["Sales Team", "Planning Team", "Merch Team"]
 const titles = { request_changes: "Request PPO changes", change_dates: "Change delivery dates", change_status: "Change status", update_quantity_ratio: "Update quantity & ratio", transfer_quantity: "Transfer quantity", create_lot: "Create Lot", link_lot: "Link existing Lot" }
 const title = computed(() => titles[props.mode] || "Production Order action")
@@ -58,7 +60,7 @@ const submitLabel = computed(() => ({ request_changes: "Request Changes", change
 const valid = computed(() => {
 	if (props.mode === "request_changes") return Boolean(form.reason.trim())
 	if (props.mode === "change_dates") return Boolean(form.date_field && form.new_date && form.reason.trim())
-	if (props.mode === "change_status") return Boolean(form.new_status && form.reason.trim())
+	if (props.mode === "change_status") return Boolean(statuses.value.includes(form.new_status) && form.reason.trim())
 	if (props.mode === "update_quantity_ratio") return Boolean(form.requested_by && form.reason.trim() && editableRows.value.length)
 	if (props.mode === "transfer_quantity") return Boolean(form.target_production_order && form.reason.trim())
 	return Boolean(form.lot_name)

@@ -160,9 +160,11 @@ test("print button opens the dialog only when enabled with formats", async () =>
 function mountDelete(api, overrides = {}) {
 	const replacements = []
 	const deleted = []
+	const toasts = []
 	const props = Vue.reactive({ doctype: "Test Doc", name: "DOC-1", docstatus: 0, onDeleted: () => deleted.push(true), ...overrides })
 	const root = mountComponent(component("components/documents/DocumentDeleteButton", {
 		"primevue/button": Button,
+		"primevue/usetoast": { useToast: () => ({ add: message => toasts.push({ message, targets: [...replacements] }) }) },
 		"vue-router": { useRouter: () => ({ replace: target => replacements.push(target) }) },
 		"../navigation/pageNavigationContext.js": { usePageNavigation: () => ({ backTo: Vue.ref("/list") }) },
 		"../../composables/useDocumentPermissions.js": { useDocumentPermissions: source => useDocumentPermissions(source, () => true, api.getDocPermissions) },
@@ -170,7 +172,7 @@ function mountDelete(api, overrides = {}) {
 		"./DocumentConfirmationDialog.vue": props => Vue.h("confirmation", props),
 		"./DocumentErrorDialog.vue": props => Vue.h("error-dialog", props),
 	}), props)
-	return { root, props, replacements, deleted }
+	return { root, props, replacements, deleted, toasts }
 }
 test("delete button hides without permission and ignores stale permission responses", async () => {
 	let resolveOld
@@ -197,7 +199,7 @@ test("delete button reloads on status changes and never offers submitted deletio
 })
 test("delete confirms, emits success, and follows the navigation target", async () => {
 	const calls = []
-	const { root, replacements, deleted } = mountDelete({ getDocPermissions: async () => ({ delete: 1 }), deleteDoc: async (...args) => calls.push(args) })
+	const { root, replacements, deleted, toasts } = mountDelete({ getDocPermissions: async () => ({ delete: 1 }), deleteDoc: async (...args) => calls.push(args) })
 	await tick()
 	nodes(root, "button")[0].props.onClick()
 	await tick()
@@ -209,6 +211,7 @@ test("delete confirms, emits success, and follows the navigation target", async 
 	assert.deepEqual(calls, [["Test Doc", "DOC-1"]])
 	assert.deepEqual(deleted, [true])
 	assert.deepEqual(replacements, ["/list"])
+	assert.deepEqual(toasts, [{ message: { severity: "success", summary: "Test Doc DOC-1 deleted", life: 3500 }, targets: ["/list"] }])
 })
 test("embedded delete emits success without redirecting", async () => {
 	const { root, replacements, deleted } = mountDelete({ getDocPermissions: async () => ({ delete: 1 }), deleteDoc: async () => {} }, { redirect: false })
@@ -233,7 +236,7 @@ test("delete completion after unmount does not emit or navigate", async () => {
 	assert.deepEqual(replacements, [])
 })
 test("failed delete closes confirmation and displays the cleaned Frappe error", async () => {
-	const { root, replacements, deleted } = mountDelete({ getDocPermissions: async () => ({ delete: 1 }), deleteDoc: async () => { throw new Error("Linked with Invoice INV-1") } })
+	const { root, replacements, deleted, toasts } = mountDelete({ getDocPermissions: async () => ({ delete: 1 }), deleteDoc: async () => { throw new Error("Linked with Invoice INV-1") } })
 	await tick()
 	nodes(root, "button")[0].props.onClick()
 	await tick()
@@ -241,6 +244,7 @@ test("failed delete closes confirmation and displays the cleaned Frappe error", 
 	await tick()
 	assert.equal(nodes(root, "confirmation")[0].props.visible, false)
 	assert.equal(nodes(root, "error-dialog")[0].props.message, "Linked with Invoice INV-1")
+	assert.deepEqual(toasts, [])
 	assert.deepEqual(replacements, [])
 	assert.deepEqual(deleted, [])
 })

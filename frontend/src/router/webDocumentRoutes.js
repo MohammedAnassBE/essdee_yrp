@@ -24,6 +24,9 @@ const recordRoutes = {
 }
 
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/sales": {
+		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
+	},
 	"/planning": {
 		"SD YRP Lot": (name) => `/web/planning/lots/${encodeURIComponent(name)}`,
 		"YRP Work Order": (name) => `/web/planning/work-orders/${encodeURIComponent(name)}`,

@@ -22,6 +22,8 @@
 							<TabPanel value="details">
 								<div class="ppo-details">
 									<ProductionOrderOverview :fields="workspace.fields || []" />
+									<ProductionOrderPendingRequest :request="workspace.pending_request" />
+									<section v-if="workspace.histories?.comments" class="ppo-comment-log erp-card"><h2>Comment Log</h2><p>{{ workspace.histories.comments }}</p></section>
 									<ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" lot-clickable @open-lot="openLotOcr" />
 									<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
 								</div>
@@ -39,10 +41,12 @@
 			</FabricDocumentWorkspace>
 		</section>
 
-		<ProductionOrderActionDialog v-model:visible="actionVisible" :mode="actionMode" :matrix="workspace.matrix || []" :busy="Boolean(acting)" @submit="submitAction" />
+		<ProductionOrderActionDialog v-model:visible="actionVisible" :mode="actionMode" :matrix="workspace.matrix || []" :current-status="workspace.record?.status || ''" :item="workspace.record?.item || ''" :busy="Boolean(acting)" @submit="submitAction" />
 		<ProductionOrderUpdatePriceDialog v-model:visible="priceVisible" :production-order="workspace.record?.name || ''" :busy="Boolean(acting)" :error="error" @submit="submitPrice" />
 		<ProductionOrderLotOcrDialog v-model:visible="lotOcrVisible" :production-order="workspace.record?.name || ''" :lot="selectedLot" :item="workspace.record?.item || ''" />
-		<DocumentConfirmationDialog v-model:visible="confirmVisible" :title="confirmTitle" :message="confirmMessage" :confirm-label="confirmLabel" :busy="Boolean(acting)" @confirm="confirmAction" />
+		<DocumentConfirmationDialog v-model:visible="confirmVisible" :title="confirmTitle" :message="confirmMessage" :confirm-label="confirmLabel" :busy="Boolean(acting)" @confirm="confirmAction">
+			<ProductionOrderPendingRequest v-if="approvalRequest" :request="approvalRequest" />
+		</DocumentConfirmationDialog>
 	</DepartmentPage>
 </template>
 
@@ -54,6 +58,7 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
+import { useToast } from "primevue/usetoast"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
@@ -68,6 +73,9 @@ import ProductionOrderActionDialog from "./ProductionOrderActionDialog.vue"
 import ProductionOrderLotOcrDialog from "./ProductionOrderLotOcrDialog.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
+import ProductionOrderPendingRequest from "./ProductionOrderPendingRequest.vue"
+import { productionOrderApprovalRequest } from "./productionOrderPendingRequest.js"
+import { productionOrderConfirmation, productionOrderSuccess } from "./productionOrderMessages.js"
 import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
 import ProductionOrderUpdatePriceDialog from "./ProductionOrderUpdatePriceDialog.vue"
 
@@ -82,6 +90,7 @@ const props = defineProps({
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const workspace = ref({})
 const loading = ref(true)
 const error = ref("")
@@ -111,7 +120,8 @@ const dateActivity = computed(() => (workspace.value.histories?.dates || []).map
 })))
 const confirmTitle = computed(() => ({ cancel: "Cancel Production Order?", delete: "Delete Production Order?", amend: "Create an amendment?", approve_ppo: "Approve this PPO?", approve_quantity_ratio: "Approve quantity & ratio?", approve_status: "Approve status change?", approve_transfer: "Approve quantity transfer?", reopen: "Reopen Production Order?", request_ppo_approval: "Send for PPO approval?" }[pendingConfirm.value] || "Confirm action"))
 const confirmLabel = computed(() => workspace.value.capabilities?.[pendingConfirm.value]?.label || "Continue")
-const confirmMessage = computed(() => `${confirmLabel.value} for ${workspace.value.record?.name || "this Production Order"}? Existing workflow validations will be applied.`)
+const confirmMessage = computed(() => productionOrderConfirmation(pendingConfirm.value, workspace.value.record?.name))
+const approvalRequest = computed(() => productionOrderApprovalRequest(pendingConfirm.value, workspace.value.pending_request))
 
 async function load(refresh = false) {
 	const id = String(route.params.productionOrderId || "")
@@ -137,10 +147,12 @@ async function submitPrice(payload) { if (await runCommand("update_price", paylo
 async function confirmAction() { const command = pendingConfirm.value; confirmVisible.value = false; pendingConfirm.value = ""; if (command) await runCommand(command) }
 async function runCommand(command, payload = {}) {
 	const source = workspace.value.record
+	const label = workspace.value.capabilities?.[command]?.label
 	acting.value = command; error.value = ""
 	try {
 		const result = await executeProductionOrderCommand(source.name, command, payload, source.modified) || {}
-		if (result.deleted) { await router.replace({ name: props.listRouteName }); return }
+		toast.add({ severity: "success", summary: productionOrderSuccess(command, label, result), life: 3500 })
+		if (result.deleted) { await router.replace({ name: props.listRouteName }); return true }
 		workspace.value = result
 		const name = result.record?.name || source.name
 		if (name !== route.params.productionOrderId) await router.replace({ name: props.viewRouteName, params: { productionOrderId: name }, state: preserveListNavigationState(name) })
@@ -158,6 +170,15 @@ watch(() => route.params.productionOrderId, () => { priceVisible.value = false; 
 	width: 100%;
 	min-width: 0;
 }
+.ppo-page-frame :deep(.fabric-document-workspace__commandbar),
+.ppo-page-frame :deep(.fabric-document-workspace__domain-actions) { flex-wrap: wrap; }
+.ppo-page-frame :deep(.fabric-document-workspace__domain-actions) { min-width: 0; flex: 1 1 auto; }
+.ppo-page-frame :deep(.fabric-document-workspace__domain-actions .p-button) { flex-shrink: 0; white-space: nowrap; }
+.ppo-page-frame :deep(.document-print-button) { width: auto; padding-inline: var(--erp-space-3); flex-shrink: 0; }
+.ppo-page-frame :deep(.document-print-button .p-button-label) { display: inline; }
+.ppo-comment-log { min-width: 0; padding: 13px; }
+.ppo-comment-log h2 { margin: 0 0 8px; color: var(--erp-text); font-size: var(--erp-font-size-md); }
+.ppo-comment-log p { margin: 0; color: var(--erp-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--erp-font-size-caption); }
 .ppo-page__identity { display: flex; min-width: 0; align-items: center; gap: 12px; padding-block: 4px; }
 .ppo-page__title { display: grid; min-width: 0; gap: 2px; }
 .ppo-page__title > span {

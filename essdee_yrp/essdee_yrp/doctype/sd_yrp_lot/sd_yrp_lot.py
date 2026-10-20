@@ -214,6 +214,14 @@ class SDYRPLot(Document):
 	def on_update(self):
 		rebuild_plans_after_save(self)
 
+	def on_trash(self):
+		"""Drop this Lot's lotwise rows from every Production Order before Frappe's link check."""
+		frappe.db.delete("YRP Production Ordered Detail", {"lot": self.name})
+		frappe.db.delete(
+			"YRP Production Ordered Detail",
+			{"reference_doctype": "SD YRP Lot", "reference_name": self.name},
+		)
+
 	def onload(self):
 		self.set_onload("can_manage_cloth_program", has_cloth_program_role())
 		if self.get("lot_fabric_details"):

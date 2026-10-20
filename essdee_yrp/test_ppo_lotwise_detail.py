@@ -74,6 +74,18 @@ class TestProductionOrderLotQuantity(IntegrationTestCase):
 
 		self.assertEqual(self.get_rows(), [])
 
+	def test_deleting_lot_removes_its_rows_on_any_production_order(self):
+		other_lot = frappe.get_doc({"doctype": "SD YRP Lot", "lot_name": f"_Test Other {self.lot}"}).insert(
+			ignore_permissions=True
+		)
+		self.insert_row(lot=self.lot)
+		self.insert_row(reference_doctype="SD YRP Lot", reference_name=self.lot)
+		self.insert_row(lot=other_lot.name, reference_doctype="SD YRP Lot", reference_name=other_lot.name)
+
+		frappe.delete_doc("SD YRP Lot", self.lot, ignore_permissions=True)
+
+		self.assertEqual([row.lot for row in self.get_rows()], [other_lot.name])
+
 
 class TestLotQuantityIsNotBoundByProductionOrder(IntegrationTestCase):
 	"""A Lot may order more or less than its Production Order; the PPO keeps its own quantity."""
@@ -160,6 +172,19 @@ class TestLotQuantityIsNotBoundByProductionOrder(IntegrationTestCase):
 		self.assertEqual(self.get_lot_rows(name), {row.item_variant: row.qty for row in lot.items})
 		for row in lot.items:
 			self.assertLess(row.qty, self.ppo_quantities[row.item_variant])
+		self.assertEqual(self.get_ppo_quantities(), self.ppo_quantities)
+
+	def test_deleting_lot_removes_only_its_rows_and_keeps_ppo_quantity(self):
+		kept = self.insert_lot(1)
+		deleted = self.insert_lot(2)
+		kept_rows = self.get_lot_rows(kept)
+		self.assertTrue(self.get_lot_rows(deleted))
+
+		frappe.delete_doc("SD YRP Lot", deleted)
+
+		self.assertEqual(self.get_lot_rows(deleted), {})
+		self.assertFalse(frappe.db.exists("YRP Production Ordered Detail", {"lot": deleted}))
+		self.assertEqual(self.get_lot_rows(kept), kept_rows)
 		self.assertEqual(self.get_ppo_quantities(), self.ppo_quantities)
 
 	def test_over_ordered_production_order_suggests_zero_not_negative(self):

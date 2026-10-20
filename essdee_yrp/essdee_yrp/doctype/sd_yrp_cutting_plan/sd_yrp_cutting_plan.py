@@ -170,7 +170,7 @@ class SDYRPCuttingPlan(Document):
 	def _fabric_receipt_status(self):
 		if self.cp_status not in ["Planned", "Ready to Cut", "Fabric Partially Received"]:
 			return None
-		if not self.cutting_plan_cloth_details:
+		if not any(flt(row.weight) > 0 for row in self.cutting_plan_cloth_details or []):
 			return "Planned"
 		percent = frappe.db.get_single_value("SD YRP MRP Settings", "cloth_allowance_percentage")
 		for row in self.cutting_plan_cloth_details:
@@ -273,7 +273,19 @@ class SDYRPCuttingPlan(Document):
 		accessory_items = fetch_cloth_details(self.cutting_plan_accessory_details)
 		self.set_onload("item_accessory_details", accessory_items)
 
+	def validate_work_order_lot(self):
+		if not self.work_order:
+			return
+		work_order_lot = frappe.db.get_value("YRP Work Order", self.work_order, "lot")
+		if work_order_lot != self.lot:
+			frappe.throw(
+				_("Work Order {0} belongs to Lot {1}, not Lot {2}.").format(
+					self.work_order, work_order_lot, self.lot
+				)
+			)
+
 	def before_validate(self):
+		self.validate_work_order_lot()
 		if self.docstatus == 0 and self.amended_from:
 			self.cp_status = "Draft"
 		if not flt(self.piece_weight_tolerance):

@@ -193,6 +193,12 @@ def _get_lot(lot: str):
 		check_permission("read")
 	else:
 		frappe.has_permission(LOT_DOCTYPE, ptype="read", doc=lot_doc, throw=True)
+	if not _doc_value(lot_doc, "production_detail"):
+		frappe.throw(
+			_("Lot {0} has no Item Production Detail. Set it on the Lot before creating a Cutting Plan.").format(
+				lot_doc.name or lot
+			)
+		)
 	return lot_doc
 
 

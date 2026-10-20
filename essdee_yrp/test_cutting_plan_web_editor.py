@@ -90,6 +90,17 @@ class TestCuttingPlanWebEditor(TestCase):
 		self.assertEqual(payload["production_detail"], "IPD-001")
 		self.assertEqual(payload["groups"][0]["items"][0]["_row_key"], "g0:r0")
 
+	def test_lot_loader_names_lot_without_item_production_detail(self):
+		lot_doc = frappe._dict(name="LOT-NO-IPD", item="STYLE-001", production_detail=None)
+		lot_doc.check_permission = MagicMock()
+		with (
+			patch("essdee_yrp.cutting.plan_editor.frappe.get_doc", return_value=lot_doc),
+			patch("essdee_yrp.cutting.plan_editor.get_items") as get_items,
+			self.assertRaisesRegex(frappe.ValidationError, "Lot LOT-NO-IPD has no Item Production Detail"),
+		):
+			load_lot_items("LOT-NO-IPD")
+		get_items.assert_not_called()
+
 	def test_matrix_merge_accepts_only_authoritative_rows_and_quantity_cells(self):
 		authoritative = matrix_fixture()
 		incoming = deepcopy(authoritative)

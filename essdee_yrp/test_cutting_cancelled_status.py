@@ -94,7 +94,8 @@ class TestCuttingCancelledStatus(TestCase):
 
 	def test_plan_status_progression_still_uses_fabric_and_completion(self):
 		for status, weight, completed, expected in (
-			("Planned", 0, [False, False], "Fabric Partially Received"),
+			("Planned", 0, [False, False], "Planned"),
+			("Planned", 4, [False, False], "Fabric Partially Received"),
 			("Planned", 10, [False, False], "Ready to Cut"),
 			("Cutting In Progress", 10, [False, False], "Cutting In Progress"),
 			("Cutting In Progress", 10, [True, False], "Partially Completed"),

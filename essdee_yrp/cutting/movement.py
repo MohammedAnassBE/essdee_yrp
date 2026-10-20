@@ -32,7 +32,7 @@ from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_att
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 
-_COMPLETION_PURPOSES = {"DC Completion", "GRN Completion"}
+_COMPLETION_PURPOSES = {"DC Completion", "GRN Completion", "Receive at Warehouse"}
 _ROOT_TRANSACTION_DOCTYPES = (
 	"YRP Stock Entry",
 	"YRP Delivery Challan",
@@ -341,6 +341,21 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 	return doc, ipd_doc, rows
 
 
+def new_transaction_from_defaults(doctype, defaults):
+	"""Unsaved transaction from CPM defaults; grouped editor payloads are stored as JSON text."""
+	doc = frappe.new_doc(doctype)
+	table_fields = {df.fieldname for df in doc.meta.get_table_fields()}
+	doc.update(
+		{
+			key: frappe.as_json(value)
+			if isinstance(value, (list, dict)) and key not in table_fields
+			else value
+			for key, value in defaults.items()
+		}
+	)
+	return doc
+
+
 def build_stock_entry_defaults(doc_name):
 	_require_create_permission("YRP Stock Entry")
 	doc, _ipd, rows = get_grouped_movement_rows(doc_name, "YRP Stock Entry")
@@ -518,21 +533,21 @@ def set_completion_cut_panel_movement(stock_entry):
 	"""Carry authoritative bundle context into an internal completion leg."""
 	if stock_entry.purpose not in _COMPLETION_PURPOSES:
 		return
-	if not stock_entry.against or not stock_entry.against_id:
+	if stock_entry.purpose == "Receive at Warehouse":
+		source_doctype, source_name = "YRP Stock Entry", stock_entry.get("outgoing_stock_entry")
+	else:
+		source_doctype, source_name = stock_entry.against, stock_entry.against_id
+	if not source_doctype or not source_name:
 		return
-	against_meta = frappe.get_meta(stock_entry.against)
-	if not stock_entry.get("cut_panel_movement") and against_meta.get_field("cut_panel_movement"):
-		stock_entry.cut_panel_movement = frappe.db.get_value(
-			stock_entry.against, stock_entry.against_id, "cut_panel_movement"
-		)
-	if stock_entry.meta.get_field("allow_non_bundle") and against_meta.get_field("allow_non_bundle"):
+	source_meta = frappe.get_meta(source_doctype)
+	if source_meta.get_field("cut_panel_movement"):
+		stock_entry.cut_panel_movement = frappe.db.get_value(source_doctype, source_name, "cut_panel_movement")
+	if stock_entry.meta.get_field("allow_non_bundle") and source_meta.get_field("allow_non_bundle"):
 		# A completion is the second leg of the referenced transaction, so its
 		# exact-vs-collapsed mode is never client-selectable.  Reapply this even
 		# when the CPM link is already present to repair saved drafts created
 		# before this inheritance was added and to reject client flag spoofing.
-		stock_entry.allow_non_bundle = cint(
-			frappe.db.get_value(stock_entry.against, stock_entry.against_id, "allow_non_bundle")
-		)
+		stock_entry.allow_non_bundle = cint(frappe.db.get_value(source_doctype, source_name, "allow_non_bundle"))
 
 
 def add_cancel_link_exemptions(doc):

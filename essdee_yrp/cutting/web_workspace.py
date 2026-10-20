@@ -23,6 +23,7 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 from essdee_yrp.cutting.movement import (
 	build_delivery_challan_defaults,
 	build_stock_entry_defaults,
+	new_transaction_from_defaults,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
 	get_cut_bundle_unmoved_data,
@@ -30,6 +31,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_mo
 )
 from essdee_yrp.print_registry import get_document_print_formats
 
+PLAN_DOCTYPE = "SD YRP Cutting Plan"
 RELATION_DOCTYPE = "SD YRP Cutting Plan Stock Transfer"
 MOVEMENT_DOCTYPE = "SD YRP Cut Panel Movement"
 STOCK_ITEM_BUILDER_FILTERS = {
@@ -1200,6 +1202,23 @@ def _append_transaction_link(plan, doc):
 	return row
 
 
+def add_cutting_plan_link_exemption(doc, method=None):
+	"""Cutting Plan Stock Transfer rows are audit history and must not block a cancel."""
+	del method
+	if not frappe.db.exists(RELATION_DOCTYPE, {"against": doc.doctype, "against_id": doc.name}):
+		return
+	exemptions = list(doc.get("ignore_linked_doctypes") or ())
+	if PLAN_DOCTYPE not in exemptions:
+		exemptions.append(PLAN_DOCTYPE)
+	doc.ignore_linked_doctypes = tuple(exemptions)
+
+
+def remove_cutting_plan_link(doc, method=None):
+	"""A deleted draft leaves no Cutting Plan history row behind."""
+	del method
+	frappe.db.delete(RELATION_DOCTYPE, {"against": doc.doctype, "against_id": doc.name})
+
+
 def _submit_if_requested(doc, submit):
 	if cint(submit):
 		doc.check_permission("submit")
@@ -1474,14 +1493,12 @@ def create_movement_transaction(cutting_plan, movement, operation, values=None, 
 		to_warehouse = values.get("to_warehouse")
 		if not to_warehouse:
 			frappe.throw(_("To Warehouse is required."))
-		doc = frappe.new_doc("YRP Stock Entry")
-		doc.update(defaults)
+		doc = new_transaction_from_defaults("YRP Stock Entry", defaults)
 		doc.to_warehouse = to_warehouse
 		doc.comments = _("Cut panels from Cutting Plan {0}").format(plan.name)
 	else:
 		defaults = build_delivery_challan_defaults(cpm.name, plan.work_order)
-		doc = frappe.new_doc("YRP Delivery Challan")
-		doc.update(defaults)
+		doc = new_transaction_from_defaults("YRP Delivery Challan", defaults)
 		# Cutting dispatch is an auditable in-place Work Order delivery.
 		_apply_same_location_delivery_context(doc, context, _get_plan_work_order(plan))
 		doc.vehicle_no = values.get("vehicle_no") or "NA"

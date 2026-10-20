@@ -6,7 +6,10 @@ from frappe.model.document import Document
 
 
 class SDYRPCuttingPlanStockTransfer(Document):
-	pass
+	def get_invalid_links(self, is_submittable=False):
+		"""Rows are audit history, so a cancelled transaction stays listed."""
+		invalid_links, _cancelled_links = super().get_invalid_links(is_submittable=is_submittable)
+		return invalid_links, []
 
 
 def on_doctype_update():

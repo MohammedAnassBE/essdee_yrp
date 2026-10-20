@@ -179,15 +179,16 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 			get_field=lambda fieldname: fieldname in {"cut_panel_movement", "allow_non_bundle"}
 		)
 
+		source = {"cut_panel_movement": "CPM-ALREADY-COPIED", "allow_non_bundle": 1}
 		with (
 			patch.object(frappe, "get_meta", return_value=against_meta),
-			patch.object(frappe.db, "get_value", return_value=1) as get_value,
+			patch.object(frappe.db, "get_value", side_effect=lambda dt, name, field: source[field]) as get_value,
 		):
 			set_completion_cut_panel_movement(stock_entry)
 
 		self.assertEqual(stock_entry.cut_panel_movement, "CPM-ALREADY-COPIED")
 		self.assertEqual(stock_entry.allow_non_bundle, 1)
-		get_value.assert_called_once_with("YRP Delivery Challan", "DC-COLLAPSED", "allow_non_bundle")
+		get_value.assert_any_call("YRP Delivery Challan", "DC-COLLAPSED", "allow_non_bundle")
 
 	def test_completion_cannot_spoof_collapsed_bundle_mode(self):
 		stock_entry = frappe._dict(
@@ -203,9 +204,10 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 			get_field=lambda fieldname: fieldname in {"cut_panel_movement", "allow_non_bundle"}
 		)
 
+		source = {"cut_panel_movement": "CPM-EXACT", "allow_non_bundle": 0}
 		with (
 			patch.object(frappe, "get_meta", return_value=against_meta),
-			patch.object(frappe.db, "get_value", return_value=0),
+			patch.object(frappe.db, "get_value", side_effect=lambda dt, name, field: source[field]),
 		):
 			set_completion_cut_panel_movement(stock_entry)
 

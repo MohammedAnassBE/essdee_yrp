@@ -327,21 +327,16 @@ class SDYRPCuttingLaySheet(Document):
 		self.weight = weight
 		self.end_bit_weight = end_bit_weight
 		self.accessory_weight = accessory_weight
-		if self.is_manual_entry:
-			self.total_used_weight = used_weight
-			total_pieces = 0
-			for row in self.cutting_laysheet_bundles:
-				total_pieces += row.quantity
-			self.total_no_of_pieces = total_pieces
-		if self.total_no_of_pieces:
-			self.piece_weight = used_weight / self.total_no_of_pieces
-
-		else:
-			self.total_used_weight = used_weight
-			self.total_no_of_pieces = total_bits * ratio_sum
-			if self.total_no_of_pieces:
-				self.piece_weight = used_weight / self.total_no_of_pieces
+		self.set_piece_totals(total_bits, ratio_sum, used_weight)
 		self.set("cutting_laysheet_details", items)
+
+	def set_piece_totals(self, total_bits, ratio_sum, used_weight):
+		self.total_used_weight = used_weight
+		if self.is_manual_entry:
+			self.total_no_of_pieces = sum(row.quantity for row in self.cutting_laysheet_bundles)
+		else:
+			self.total_no_of_pieces = total_bits * ratio_sum
+		self.piece_weight = used_weight / self.total_no_of_pieces if self.total_no_of_pieces else 0
 
 	def _validate_bulk_editor_lock(self):
 		if (
@@ -2369,6 +2364,22 @@ def approve_grammage(doc_name):
 	frappe.msgprint("Grammage approved successfully", indicator="green", alert=True)
 
 
+def has_moved_bundles(laysheet):
+	"""True once a later voucher moved, collapsed or transformed this LaySheet's bundles."""
+	return bool(
+		frappe.db.sql(
+			"""
+			SELECT later.name FROM `tabSD YRP Cut Bundle Movement Ledger` own
+			JOIN `tabSD YRP Cut Bundle Movement Ledger` later ON later.cbm_key = own.cbm_key
+			WHERE own.voucher_no = %(laysheet)s AND own.is_cancelled = 0 AND later.is_cancelled = 0
+				AND (own.is_collapsed = 1 OR later.voucher_no != %(laysheet)s OR later.transformed = 1)
+			LIMIT 1
+			""",
+			{"laysheet": laysheet},
+		)
+	)
+
+
 @frappe.whitelist()
 def revert_labels(doc_name):
 	cls_doc = frappe.get_doc("SD YRP Cutting LaySheet", doc_name)
@@ -2379,14 +2390,7 @@ def revert_labels(doc_name):
 	cls_doc.reload()
 	if cls_doc.status != "Label Printed":
 		frappe.throw("Only a Label Printed Cutting LaySheet can be reverted")
-	is_moved_list = frappe.db.sql(
-		"""
-			SELECT name FROM `tabSD YRP Cutting LaySheet Bundle` WHERE parent = %s AND is_moved = 1
-		""",
-		(doc_name,),
-		as_list=True,
-	)
-	if len(is_moved_list) > 0:
+	if has_moved_bundles(doc_name):
 		frappe.throw("Some panels are moved, can't revert the process")
 
 	acc_moved_list = frappe.db.sql(
@@ -2886,6 +2890,8 @@ def cancel_laysheet(doc_name):
 	doc.reload()
 	if doc.status == "Cancelled":
 		frappe.throw("This Cutting LaySheet is already Cancelled")
+	if has_moved_bundles(doc_name):
+		frappe.throw("Some panels are moved, can't cancel the Cutting LaySheet")
 	doc.status = "Cancelled"
 	if doc.goods_received_note:
 		update_cloth_stock(doc, 1, -1)

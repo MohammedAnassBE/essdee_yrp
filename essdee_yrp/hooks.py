@@ -497,7 +497,11 @@ doc_events = {
 			"essdee_yrp.delivery_challan_hooks.before_validate",
 			"essdee_yrp.fabric_store.documents.delivery_challan.validate_location_addresses",
 		],
-		"before_cancel": "essdee_yrp.cutting.movement.before_cancel",
+		"before_cancel": [
+			"essdee_yrp.cutting.movement.before_cancel",
+			"essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
+		],
+		"on_trash": "essdee_yrp.cutting.web_workspace.remove_cutting_plan_link",
 		"on_submit": [
 			"essdee_yrp.cutting.movement.on_submit",
 			"essdee_yrp.work_order_piece_tracking.on_delivery_challan_submit",
@@ -530,7 +534,9 @@ doc_events = {
 			"essdee_yrp.finishing.grn.before_cancel",
 			"essdee_yrp.cutting.movement.before_cancel",
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item.before_grn_cancel",
+			"essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
 		],
+		"on_trash": "essdee_yrp.cutting.web_workspace.remove_cutting_plan_link",
 		"on_submit": [
 			"essdee_yrp.fabric_grn.on_submit",
 			"essdee_yrp.fabric_tracking.on_grn_submit",
@@ -565,13 +571,23 @@ doc_events = {
 		"before_cancel": [
 			"essdee_yrp.api.stock_transfer.guard_transfer_se_cancel",
 			"essdee_yrp.cutting.movement.before_cancel",
+			"essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
 		],
+		"on_trash": "essdee_yrp.cutting.web_workspace.remove_cutting_plan_link",
 		"on_cancel": "essdee_yrp.stock_entry_hooks.on_cancel",
 	},
 	"YRP Stock Reconciliation": {
 		"onload": "essdee_yrp.stock_reconciliation_hooks.onload",
+		"before_cancel": "essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
+		"on_trash": "essdee_yrp.cutting.web_workspace.remove_cutting_plan_link",
+	},
+	"YRP Stock Update": {
+		"before_cancel": "essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
+		"on_trash": "essdee_yrp.cutting.web_workspace.remove_cutting_plan_link",
 	},
 	"SD YRP Lot Transfer": {
+		"before_cancel": "essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",
+		"on_trash": "essdee_yrp.cutting.web_workspace.remove_cutting_plan_link",
 		"on_submit": [
 			"essdee_yrp.finishing.old_lot.on_lot_transfer_submit",
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",

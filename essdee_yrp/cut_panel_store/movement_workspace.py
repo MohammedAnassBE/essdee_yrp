@@ -25,6 +25,7 @@ from essdee_yrp.cutting.movement import (
 	build_goods_received_note_defaults,
 	build_stock_entry_defaults,
 	get_active_root_transactions,
+	new_transaction_from_defaults,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
 	get_cut_bundle_unmoved_data,
@@ -450,8 +451,7 @@ def create_movement_transaction(name: str, operation: str, values=None, submit=F
 			else build_goods_received_note_defaults(movement.name, work_order.name)
 		)
 
-	doc = frappe.new_doc(doctype)
-	doc.update(defaults)
+	doc = new_transaction_from_defaults(doctype, defaults)
 	if operation == "stock_entry":
 		doc.to_warehouse = to_warehouse
 	if values.get("comments") is not None and doc.meta.get_field("comments"):

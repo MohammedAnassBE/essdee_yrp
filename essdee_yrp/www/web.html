@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8" />
+	<script>
+		try {
+			document.documentElement.classList.toggle("erp-dark", localStorage.getItem("essdee-yrp-theme") === "dark")
+		} catch (_) {}
+	</script>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Essdee YRP</title>
 	<link rel="icon" href="{{ favicon }}" />

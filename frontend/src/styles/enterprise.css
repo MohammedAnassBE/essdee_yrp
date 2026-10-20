@@ -229,8 +229,13 @@
 	background: var(--erp-attention-soft);
 }
 
+:root.erp-dark .report-run-status--expired > i {
+	color: var(--erp-attention-text);
+}
+
 :root.erp-dark :is(.matrix-cost-heading, .matrix-cost),
 :root.erp-dark :is(.cloth-total, .multi-ccr-total, .completion-matrix__total) td,
+:root.erp-dark .completion-total td,
 :root.erp-dark .daily-cut-sheet__total {
 	background: var(--erp-success-soft);
 }
@@ -258,6 +263,49 @@
 :root.erp-dark .purchase-order-itemwise-report__status--overdue {
 	color: var(--erp-danger);
 	background: var(--erp-danger-soft);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__pending--future {
+	color: var(--erp-success-text);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__pending--today {
+	color: var(--erp-info);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__pending--excess {
+	color: var(--erp-attention-text);
+}
+
+:root.erp-dark :is(.stock-checks label, .selection-summary p, .subsection-label),
+:root.erp-dark .summary-day__counts span {
+	color: var(--erp-text-secondary);
+}
+
+:root.erp-dark .summary-day__counts b {
+	color: var(--erp-text);
+}
+
+:root.erp-dark .summary-day__counts .summary-day__output b {
+	color: var(--erp-accent);
+}
+
+:root.erp-dark :is(.production-metric small, .panel-values i),
+:root.erp-dark .panel-values:not(.panel-values--total) span {
+	color: var(--erp-text-muted);
+}
+
+:root.erp-dark .summary-day__date > span {
+	color: var(--erp-on-accent);
+}
+
+:root.erp-dark .cutter-chip {
+	color: var(--erp-success-text);
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark :is(.panel-strip span, .panel-chip) {
+	color: var(--erp-success-text);
 }
 
 :root.erp-dark :is(.old-lot__bucket--lp, .old-lot__bucket--lps) {
@@ -296,6 +344,19 @@
 :root.erp-dark .ppo-report__matrix-wrap::-webkit-scrollbar-thumb {
 	background: var(--erp-border-strong);
 	border-color: var(--erp-surface-muted);
+}
+
+:root.erp-dark .ppo-report__ppo a,
+:root.erp-dark :is(.ppo-report__total, .ppo-report__summary-total) {
+	color: var(--erp-success-text);
+}
+
+:root.erp-dark .ppo-report__group-label {
+	color: var(--erp-text-secondary);
+}
+
+:root.erp-dark .ppo-report__sort i {
+	color: var(--erp-text-muted);
 }
 
 :root.erp-dark .ppo-report__matrix thead th,
@@ -1701,7 +1762,7 @@ table td.erp-number {
 }
 
 .erp-date-time-panel.p-datepicker-panel .p-datepicker-day.p-datepicker-day-selected {
-	color: #fff;
+	color: var(--erp-on-accent);
 	font-weight: var(--erp-font-weight-semibold);
 	background: var(--erp-accent);
 }

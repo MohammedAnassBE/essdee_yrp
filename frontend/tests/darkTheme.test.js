@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
+import { runInNewContext } from "node:vm"
 
 import {
 	THEME_STORAGE_KEY,
@@ -26,6 +28,47 @@ function makeEnvironment() {
 		},
 	}
 	return { root, meta }
+}
+
+for (const entry of ["../index.html", "../../essdee_yrp/www/web.html"]) {
+	test(`${entry} restores the theme synchronously before assets or content`, () => {
+		const html = readFileSync(new URL(entry, import.meta.url), "utf8")
+		const head = html.match(/<head>([\s\S]*?)<\/head>/)[1]
+		const script = head.match(/<script>([\s\S]*?)<\/script>/)
+		assert.ok(script, "entry point needs an inline synchronous theme script")
+		assert.ok(script.index < head.search(/<link|<style|<script\s/))
+
+		for (const saved of ["dark", "light", null, "invalid"]) {
+			const { root } = makeEnvironment()
+			const localStorage = {
+				getItem(key) {
+					assert.equal(key, THEME_STORAGE_KEY)
+					return saved
+				},
+			}
+			runInNewContext(script[1], { document: { documentElement: root }, localStorage })
+			assert.equal(root.classList.contains("erp-dark"), saved === "dark")
+		}
+	})
+
+	test(`${entry} starts even when storage access throws`, () => {
+		const html = readFileSync(new URL(entry, import.meta.url), "utf8")
+		const head = html.match(/<head>([\s\S]*?)<\/head>/)[1]
+		const script = head.match(/<script>([\s\S]*?)<\/script>/)
+		assert.ok(script, "entry point needs an inline synchronous theme script")
+		for (const failGetter of [true, false]) {
+			const { root } = makeEnvironment()
+			const context = { document: { documentElement: root } }
+			Object.defineProperty(context, "localStorage", {
+				get() {
+					if (failGetter) throw new Error("storage blocked")
+					return { getItem() { throw new Error("read blocked") } }
+				},
+			})
+			assert.doesNotThrow(() => runInNewContext(script[1], context))
+			assert.equal(root.classList.contains("erp-dark"), false)
+		}
+	})
 }
 
 test("first visit keeps the light theme", () => {

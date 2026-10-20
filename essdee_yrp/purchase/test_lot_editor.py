@@ -162,13 +162,27 @@ class TestLotEditor(TestCase):
 
 	def test_ppo_item_is_verified_and_server_owned(self):
 		doc = frappe.new_doc("SD YRP Lot")
-		with patch.object(editor, "get_lot_production_order_item", return_value={"item": "PPO Item"}):
+		with patch.object(editor, "get_lot_production_order_item", return_value={"item": "PPO Item", "docstatus": 1}):
 			values = {"production_order": "PPO", "item": "PPO Item"}
 			editor._reject_locked_changes(doc, values, editor._lot_locks(doc, True, True))
 			editor._apply_production_order(doc, values, True)
 			self.assertEqual(doc.item, "PPO Item")
 			with self.assertRaisesRegex(frappe.ValidationError, "must match"):
 				editor._apply_production_order(doc, {"production_order": "PPO", "item": "Forged"}, True)
+
+	def test_new_ppo_link_requires_submitted_production_order(self):
+		doc = frappe.new_doc("SD YRP Lot")
+		for docstatus in (0, 2):
+			with patch.object(editor, "get_lot_production_order_item", return_value={"item": "PPO Item", "docstatus": docstatus}):
+				with self.assertRaisesRegex(frappe.ValidationError, "submitted Production Order"):
+					editor._apply_production_order(doc, {"production_order": "PPO", "item": "PPO Item"}, True)
+
+	def test_existing_ppo_link_survives_later_cancellation(self):
+		doc = frappe.new_doc("SD YRP Lot")
+		doc.production_order = "PPO"
+		with patch.object(editor, "get_lot_production_order_item", return_value={"item": "PPO Item", "docstatus": 2}):
+			editor._apply_production_order(doc, {"production_order": "PPO", "item": "PPO Item"}, True)
+		self.assertEqual(doc.item, "PPO Item")
 
 	def test_unchanged_desk_payload_round_trip(self):
 		doc = self.live_lot()

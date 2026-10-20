@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.desk.form.load import run_onload
+from frappe.utils import cint
 from yrp.attribute_links import value as attribute_value
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
@@ -138,7 +139,7 @@ def get_lot_production_order_item(production_order: str) -> dict:
 	check_context_permission()
 	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
-	return {"item": doc.item}
+	return {"item": doc.item, "docstatus": doc.docstatus}
 
 
 def is_ppo_item_change(doc, values):
@@ -215,7 +216,10 @@ def _reject_locked_changes(doc, values, locks):
 def _apply_production_order(doc, values, ppo_mode):
 	production_order = values.get("production_order", doc.production_order)
 	if ppo_mode and production_order:
-		item = get_lot_production_order_item(production_order)["item"]
+		order = get_lot_production_order_item(production_order)
+		if production_order != doc.production_order and cint(order.get("docstatus")) != 1:
+			frappe.throw(_("Select a submitted Production Order for this Item."))
+		item = order["item"]
 		if values.get("item", item) != item:
 			frappe.throw(_("Item must match the Production Order."))
 		doc.item = item

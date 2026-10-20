@@ -712,12 +712,12 @@ def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=Fa
 			frappe.throw(
 				_(
 					"Work Order {0} has only {1} stock available for calculated input {2}, "
-					"but received row {3} requires {4}. Deliver the remaining input first."
+					"but receiving {3} requires {4}. Deliver the remaining input first."
 				).format(
 					wo.name,
 					flt(required_stock_qty - remaining_stock_qty, 6),
 					required["item_variant"],
-					required["goods_received_note_item"],
+					required["received_item_variant"],
 					flt(required_stock_qty, 6),
 				)
 			)

@@ -5,6 +5,8 @@ import { resolve } from "node:path"
 import { readFileSync } from "node:fs"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as printUrl from "../src/utils/printUrl.js"
+import * as productionOrderPrint from "../src/utils/productionOrderPrint.js"
+import { getCustomPrintButtons } from "../src/utils/customPrintButtons.js"
 import { useDocumentPermissions } from "../src/composables/useDocumentPermissions.js"
 import * as documentDelete from "../src/utils/documentDelete.js"
 
@@ -16,6 +18,11 @@ const Select = Vue.defineComponent({
 	props: { modelValue: String, options: Array, showClear: Boolean },
 	emits: ["update:modelValue"],
 	setup: (props, { emit }) => () => Vue.h("select", { ...props, "onUpdate:modelValue": value => emit("update:modelValue", value) }),
+})
+const InputNumber = Vue.defineComponent({
+	props: { modelValue: Number, required: Boolean, maxFractionDigits: Number },
+	emits: ["update:modelValue"],
+	setup: (props, { emit }) => () => Vue.h("input", { ...props, "onUpdate:modelValue": value => emit("update:modelValue", value) }),
 })
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
 const nodes = (root, type) => findNodes(root, node => node.type === type)
@@ -269,24 +276,127 @@ test("shell falls back to permission loading only when can_print is absent", () 
 	} finally { globalThis.window = oldWindow }
 })
 
-test("custom print opens the exact URL and reports blocked pop-ups", async () => {
-	const { getCustomPrintButtons } = await import("../src/utils/customPrintButtons.js")
+function mountCustomPrint(api, overrides = {}) {
+	return mountComponent(component("components/documents/CustomPrintButtons", {
+		"primevue/button": Button, "primevue/dialog": Dialog,
+		"primevue/inputnumber": InputNumber,
+		"../../api/frappe.js": { callMethod: api },
+		"../../composables/useDocumentPermissions.js": { useDocumentPermissions: (source, enabled) => useDocumentPermissions(source, enabled) },
+		"../../utils/customPrintButtons.js": { getCustomPrintButtons },
+		"../../utils/productionOrderPrint.js": productionOrderPrint,
+		"../../utils/printUrl.js": printUrl,
+		"./DocumentErrorDialog.vue": props => Vue.h("error-dialog", props),
+	}), { doctype: "YRP Production Order", record: { name: "PPO/1 & 2#x", docstatus: 1 }, permissions: { can_print: true }, ...overrides })
+}
+
+test("custom Production Order print fetches settings and reports blocked pop-ups", async () => {
 	const oldWindow = globalThis.window
-	const opened = []
+	const opened = [], calls = []
 	globalThis.window = { open: (...args) => { opened.push(args); return null } }
 	try {
-		const root = mountComponent(component("components/documents/CustomPrintButtons", {
-			"primevue/button": Button,
-			"../../composables/useDocumentPermissions.js": { useDocumentPermissions: (source, enabled) => useDocumentPermissions(source, enabled) },
-			"../../utils/customPrintButtons.js": { getCustomPrintButtons },
-			"../../utils/printUrl.js": printUrl,
-			"./DocumentErrorDialog.vue": props => Vue.h("error-dialog", props),
-		}), { doctype: "YRP Production Order", record: { name: "PO/1", docstatus: 1 }, permissions: { can_print: true } })
+		const root = mountCustomPrint(async (...args) => { calls.push(args); return { fg_item_exists: true, pieces_per_box: 10 } })
 		const button = nodes(root, "button")[0]
 		assert.equal(button.props.label, "Print")
 		button.props.onClick()
 		await tick()
-		assert.deepEqual(opened, [["/printview?doctype=YRP+Production+Order&name=PO%2F1&trigger_print=1&format=Essdee+Production+Order", "_blank"]])
+		assert.deepEqual(calls, [["essdee_yrp.production_order_workflow.get_production_order_print_settings", { production_order: "PPO/1 & 2#x" }]])
+		assert.deepEqual(opened, [["/printview?doctype=YRP+Production+Order&name=PPO%2F1+%26+2%23x&trigger_print=1&format=Essdee+Production+Order&pieces_per_box=10", "_blank"]])
+		assert.equal(nodes(root, "dialog").length, 0)
 		assert.equal(nodes(root, "error-dialog")[0].props.message, "Please enable pop-ups to print.")
+	} finally { globalThis.window = oldWindow }
+})
+
+test("custom Production Order settings resolving after unmount do not open print", async () => {
+	const oldWindow = globalThis.window, opened = []
+	globalThis.window = { open: (...args) => { opened.push(args); return {} } }
+	try {
+		let resolveSettings
+		const root = mountCustomPrint(() => new Promise(resolve => { resolveSettings = resolve }))
+		const pending = nodes(root, "button")[0].props.onClick()
+		root.__vue_app__.unmount()
+		resolveSettings({ fg_item_exists: true, pieces_per_box: 10 })
+		await pending
+		await tick()
+		assert.deepEqual(opened, [])
+	} finally { globalThis.window = oldWindow }
+})
+
+test("custom Production Order dialog validates, prints pieces, and closes", async () => {
+	const oldWindow = globalThis.window, opened = []
+	globalThis.window = { open: (...args) => { opened.push(args); return {} } }
+	try {
+		const root = mountCustomPrint(async () => ({ fg_item_exists: false, pieces_per_box: null }))
+		await nodes(root, "button")[0].props.onClick()
+		await tick()
+		assert.equal(nodes(root, "dialog")[0].props.header, "Print Production Order")
+		assert.ok(findNodes(root, n => n.text.includes("Pieces per Box")).length)
+		assert.ok(findNodes(root, n => n.text.includes("The item is not available in FG Item Master.")).length)
+		assert.equal(nodes(root, "input")[0].props.modelValue, null)
+		assert.equal(nodes(root, "input")[0].props.required, true)
+		assert.equal(nodes(root, "input")[0].props.maxFractionDigits, 0)
+		const submit = () => nodes(root, "button").find(n => n.props.label === "Print" && n !== nodes(root, "button")[0]).props.onClick()
+		submit()
+		await tick()
+		assert.ok(findNodes(root, n => n.props.role === "alert" && n.text === "Pieces per Box is required.").length)
+		for (const [value, message] of [[0, "Pieces per Box is required."], [-1, "Pieces per Box must be greater than zero."]]) {
+			nodes(root, "input")[0].props["onUpdate:modelValue"](value)
+			submit()
+			await tick()
+			assert.ok(findNodes(root, n => n.text === message).length)
+			assert.equal(nodes(root, "dialog").length, 1)
+		}
+		assert.deepEqual(opened, [])
+		nodes(root, "input")[0].props["onUpdate:modelValue"](7)
+		submit()
+		await tick()
+		assert.equal(nodes(root, "dialog").length, 0)
+		assert.equal(opened.length, 1)
+		assert.equal(new URL(opened[0][0], "https://test.local").searchParams.get("pieces_per_box"), "7")
+	} finally { globalThis.window = oldWindow }
+})
+
+test("custom Production Order dialog cancels without printing and resets its input", async () => {
+	const oldWindow = globalThis.window, opened = []
+	globalThis.window = { open: (...args) => opened.push(args) }
+	try {
+		const root = mountCustomPrint(async () => ({ fg_item_exists: true, pieces_per_box: 0 }))
+		await nodes(root, "button")[0].props.onClick()
+		await tick()
+		assert.ok(findNodes(root, n => n.text === "Pieces per Box is not configured in FG Item Master.").length)
+		nodes(root, "input")[0].props["onUpdate:modelValue"](8)
+		nodes(root, "button").find(n => n.props.label === "Cancel").props.onClick()
+		await tick()
+		assert.equal(nodes(root, "dialog").length, 0)
+		assert.deepEqual(opened, [])
+		await nodes(root, "button")[0].props.onClick()
+		await tick()
+		assert.equal(nodes(root, "input")[0].props.modelValue, null)
+		nodes(root, "dialog")[0].props["onUpdate:visible"](false)
+		await tick()
+		assert.equal(nodes(root, "dialog").length, 0)
+		assert.deepEqual(opened, [])
+	} finally { globalThis.window = oldWindow }
+})
+
+test("custom print settings errors use DocumentErrorDialog; disabled clicks do nothing", async () => {
+	let calls = 0
+	const api = async () => { calls++; throw new Error("Print permission denied") }
+	const root = mountCustomPrint(api)
+	await nodes(root, "button")[0].props.onClick()
+	await tick()
+	assert.equal(nodes(root, "error-dialog")[0].props.message, "Print permission denied")
+	assert.equal(nodes(root, "dialog").length, 0)
+	const disabled = mountCustomPrint(api, { disabled: true })
+	await nodes(disabled, "button")[0].props.onClick()
+	assert.equal(calls, 1)
+})
+
+test("other custom print buttons open their URL without fetching settings", async () => {
+	const oldWindow = globalThis.window, opened = []
+	globalThis.window = { open: (...args) => { opened.push(args); return {} } }
+	try {
+		const root = mountCustomPrint(() => { assert.fail("unexpected settings call") }, { doctype: "SD YRP Product", record: { name: "PRODUCT/1" } })
+		await nodes(root, "button")[0].props.onClick()
+		assert.deepEqual(opened, [["/printview?doctype=SD+YRP+Product&name=PRODUCT%2F1&trigger_print=1&format=Essdee+Product+Tech+Pack&no_letterhead=1", "_blank"]])
 	} finally { globalThis.window = oldWindow }
 })

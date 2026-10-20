@@ -377,17 +377,8 @@ frappe.ui.form.on("YRP Production Order", {
         frm.set_df_property("comments", "read_only", true);
         frm.refresh_field("comments");
       }
-      frm.add_custom_button("Print", () => {
-        window.open(
-          frappe.urllib.get_full_url(
-            "/printview?doctype=Production Order" +
-              "&name=" +
-              encodeURIComponent(frm.doc.name) +
-			  "&format=Essdee%20Production%20Order" +
-              "&trigger_print=1"
-          ),
-          "_blank"
-        );
+      frm.add_custom_button(__("Print"), () => {
+        prepare_production_order_print(frm);
       });
       if (can_manage_production_order) {
         frm.add_custom_button(
@@ -434,6 +425,73 @@ frappe.ui.form.on("YRP Production Order", {
     render_production_order_editor(frm);
   },
 });
+
+function open_production_order_print(frm, pieces_per_box) {
+  let print_url =
+    "/printview?doctype=" +
+    encodeURIComponent("YRP Production Order") +
+    "&name=" +
+    encodeURIComponent(frm.doc.name) +
+    "&format=" +
+    encodeURIComponent("Essdee Production Order") +
+    "&trigger_print=1";
+
+  print_url += "&pieces_per_box=" + encodeURIComponent(pieces_per_box);
+
+  window.open(frappe.urllib.get_full_url(print_url), "_blank");
+}
+
+function prepare_production_order_print(frm) {
+  frappe.call({
+    method:
+      "essdee_yrp.production_order_workflow.get_production_order_print_settings",
+    args: { production_order: frm.doc.name },
+    freeze: true,
+    callback(r) {
+      const settings = r.message || {};
+      const pieces_per_box = Number(settings.pieces_per_box || 0);
+
+      if (pieces_per_box > 0) {
+        open_production_order_print(frm, pieces_per_box);
+        return;
+      }
+
+      show_production_order_print_dialog(frm, settings.fg_item_exists);
+    },
+  });
+}
+
+function show_production_order_print_dialog(frm, fg_item_exists) {
+  const dialog = new frappe.ui.Dialog({
+    title: __("Print Production Order"),
+    fields: [
+      {
+        fieldname: "pieces_per_box",
+        fieldtype: "Int",
+        label: __("Pieces per Box"),
+        reqd: 1,
+        description: fg_item_exists
+          ? __("Pieces per Box is not configured in FG Item Master.")
+          : __("The item is not available in FG Item Master."),
+      },
+    ],
+    primary_action_label: __("Print"),
+    primary_action() {
+      const values = dialog.get_values();
+      if (!values) return;
+
+      if (values.pieces_per_box <= 0) {
+        frappe.msgprint(__("Pieces per Box must be greater than zero."));
+        return;
+      }
+
+      dialog.hide();
+      open_production_order_print(frm, values.pieces_per_box);
+    },
+  });
+
+  dialog.show();
+}
 
 function reopen_production_order(frm) {
   frappe.confirm(__("Reopen this Production Order?"), () => {

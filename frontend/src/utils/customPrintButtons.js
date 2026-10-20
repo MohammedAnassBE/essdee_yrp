@@ -10,7 +10,7 @@ export function getCustomPrintButtons(doctype, record = {}, permissions = {}) {
 		return buttons
 	}
 	if (!permissions.can_print) return []
-	if (doctype === "YRP Production Order" && Number(record.docstatus) === 1) add("production-order", "Print", "Essdee Production Order", null)
+	if (doctype === "YRP Production Order" && Number(record.docstatus) === 1) buttons.push({ key: "production-order", label: "Print" })
 	if (doctype === "SD YRP Product") add("tech-pack", "Print Tech Pack", "Essdee Product Tech Pack")
 	if (doctype === "SD YRP Product Release") add("tech-pack", "Print Tech Pack", "Essdee Tech Pack")
 	if (doctype === "SD YRP Finishing Plan Dispatch" && Number(record.docstatus) === 1) add("dispatch", "Print Dispatch", "Essdee Finishing Plan Dispatch")

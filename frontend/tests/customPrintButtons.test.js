@@ -3,12 +3,18 @@ import test from "node:test"
 import { getCustomPrintButtons } from "../src/utils/customPrintButtons.js"
 
 const cases = [
-	["YRP Production Order", { docstatus: 1 }, "production-order", "Print", "Essdee Production Order", null],
 	["SD YRP Product", {}, "tech-pack", "Print Tech Pack", "Essdee Product Tech Pack", 1],
 	["SD YRP Product Release", {}, "tech-pack", "Print Tech Pack", "Essdee Tech Pack", 1],
 	["SD YRP Finishing Plan Dispatch", { docstatus: 1 }, "dispatch", "Print Dispatch", "Essdee Finishing Plan Dispatch", 1],
 	["SD YRP Lot", { has_cloth_program: true }, "cloth-program", "Cloth Program", "Essdee Lot Cloth Program", 1],
 ]
+test("Production Order prepares print settings only for submitted records with print permission", () => {
+	const record = { name: "PPO/1 & 2#x", docstatus: 1 }
+	assert.deepEqual(getCustomPrintButtons("YRP Production Order", record, { can_print: true }), [{ key: "production-order", label: "Print" }])
+	assert.deepEqual(getCustomPrintButtons("YRP Production Order", record, { can_print: false }), [])
+	assert.deepEqual(getCustomPrintButtons("YRP Production Order", { ...record, name: "" }, { can_print: true }), [])
+	for (const docstatus of [0, 2]) assert.deepEqual(getCustomPrintButtons("YRP Production Order", { ...record, docstatus }, { can_print: true }), [])
+})
 for (const [doctype, fields, key, label, format, noLetterhead] of cases) {
 	test(`${doctype}: saved record, permission, visibility and exact URL`, () => {
 		const record = { name: "DOC/1 & 2", ...fields }

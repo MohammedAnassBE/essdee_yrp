@@ -53,3 +53,4 @@ essdee_yrp.patches.space_size_type_slots
 
 essdee_yrp.patches.add_web_read_indexes
 essdee_yrp.patches.restore_web_read_indexes
+essdee_yrp.patches.backfill_ppo_ordered_lot_links

@@ -242,13 +242,14 @@ class SDYRPLot(Document):
 
 
 def delete_ppo_lot_qty(ppo, lot):
+	"""Delete the Lot's rows, including migrated rows that only carry the direct `lot` link."""
 	frappe.db.sql(
-		f"""
-			DELETE FROM `tabYRP Production Ordered Detail`
-			WHERE parent = {frappe.db.escape(ppo)}
-			AND reference_doctype = {frappe.db.escape("SD YRP Lot")}
-			AND reference_name = {frappe.db.escape(lot)}
 		"""
+			DELETE FROM `tabYRP Production Ordered Detail`
+			WHERE parent = %(ppo)s
+			AND ((reference_doctype = 'SD YRP Lot' AND reference_name = %(lot)s) OR lot = %(lot)s)
+		""",
+		{"ppo": ppo, "lot": lot},
 	)
 
 
@@ -260,6 +261,7 @@ def add_ppo_lot_qty(ppo, lot, items):
 		doc.quantity = item.qty
 		doc.reference_doctype = "SD YRP Lot"
 		doc.reference_name = lot
+		doc.lot = lot
 		doc.parenttype = "YRP Production Order"
 		doc.parentfield = "production_ordered_details"
 		doc.save(ignore_permissions=True)

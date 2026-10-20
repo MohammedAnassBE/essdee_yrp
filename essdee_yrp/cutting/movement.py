@@ -619,6 +619,29 @@ def _is_implicit_collapsed_return(doc, lot):
 	return has_cut_stage_items(doc.get("items") or [], lot)
 
 
+def is_stitching_consumption_grn(doc, lot):
+	"""Return True for a Stitching GRN whose consumed panels leave the job worker's bundles."""
+	if (
+		doc.doctype != "YRP Goods Received Note"
+		or doc.get("against") != "YRP Work Order"
+		or doc.get("is_return")
+		or doc.get("additional_grn")
+	):
+		return False
+	production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
+	stitching_process = frappe.db.get_value("YRP Item Production Detail", production_detail, "stiching_process")
+	if not stitching_process or not doc.get("process_name"):
+		return False
+	if doc.process_name == stitching_process:
+		return True
+	return cint(frappe.db.get_value("YRP Process", doc.process_name, "is_group")) and bool(
+		frappe.db.exists(
+			"YRP Process Details",
+			{"parent": doc.process_name, "parenttype": "YRP Process", "process_name": stitching_process},
+		)
+	)
+
+
 def has_cut_stage_items(rows, lot):
 	"""Return True when a row's variant is in the Lot IPD's stitching-in (cut panel) stage."""
 	production_detail = attribute_db.get_value("SD YRP Lot", lot, "production_detail")
@@ -776,7 +799,8 @@ def apply_transaction(doc, *, cancelled=False):
 	if not lot or _bundle_tracking_disabled(lot):
 		return
 	implicit_collapsed_return = _is_implicit_collapsed_return(doc, lot)
-	if not cpm_name and not allow_non_bundle and not implicit_collapsed_return:
+	stitching_consumption = not cpm_name and not allow_non_bundle and is_stitching_consumption_grn(doc, lot)
+	if not cpm_name and not allow_non_bundle and not implicit_collapsed_return and not stitching_consumption:
 		return
 
 	# Document hooks can be retried by the client or worker after an uncertain
@@ -795,6 +819,18 @@ def apply_transaction(doc, *, cancelled=False):
 			return
 
 	if not cpm_name:
+		if stitching_consumption:
+			from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
+				update_collapsed_bundle,
+			)
+
+			update_collapsed_bundle(
+				doc.doctype,
+				doc.name,
+				"on_cancel" if cancelled else "on_submit",
+				consume_grn_deliverables=True,
+			)
+			return
 		if allow_non_bundle or implicit_collapsed_return:
 			from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
 				update_collapsed_bundle,

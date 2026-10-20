@@ -432,7 +432,12 @@ def _collapsed_transaction_rows(doc, lot, source_location, attrs):
 	return list(movements.values())
 
 
-def update_collapsed_bundle(doctype, docname, event, non_stich_process=False):
+def update_collapsed_bundle(doctype, docname, event, non_stich_process=False, consume_grn_deliverables=False):
+	"""Move collapsed bundles for a transaction.
+
+	``consume_grn_deliverables`` follows Production API's Stitching GRN: the
+	consumed panels (GRN deliverables) leave the job worker and go nowhere.
+	"""
 	del non_stich_process
 	if event not in {"on_submit", "on_cancel"}:
 		frappe.throw(_("Unsupported collapsed-bundle event {0}.").format(event))
@@ -464,7 +469,11 @@ def update_collapsed_bundle(doctype, docname, event, non_stich_process=False):
 	from essdee_yrp.cutting.movement import _movement_locations
 
 	from_location, to_location = _movement_locations(doc)
-	movements = _collapsed_transaction_rows(doc, lot, from_location, attrs)
+	source_doc = doc
+	if consume_grn_deliverables:
+		source_doc = frappe._dict(doctype=doc.doctype, items=doc.get("grn_deliverables") or [])
+		to_location = None
+	movements = _collapsed_transaction_rows(source_doc, lot, from_location, attrs)
 	from_opening = {}
 	to_opening = {}
 	for movement in movements:
@@ -483,6 +492,8 @@ def update_collapsed_bundle(doctype, docname, event, non_stich_process=False):
 				from_opening,
 				lot,
 			)
+			if not to_location:
+				continue
 			to_opening = on_submit_collapsed_bundles(
 				doc,
 				doctype,
@@ -499,7 +510,7 @@ def update_collapsed_bundle(doctype, docname, event, non_stich_process=False):
 				add=True,
 			)
 		else:
-			for location in (from_location, to_location):
+			for location in filter(None, (from_location, to_location)):
 				cancel_collapse_bundles(
 					doc,
 					movement.variant,

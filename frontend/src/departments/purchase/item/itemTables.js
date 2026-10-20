@@ -128,9 +128,25 @@ function conversionSignature(values) {
 	])
 }
 
+export function itemAttributeEditing(editor = {}, canWrite = false) {
+	return {
+		rows: canWrite && !editor.attributes_locked,
+		values: canWrite,
+		primary: canWrite && !editor.primary_attribute_locked,
+		dependent: canWrite && !editor.dependent_attribute_locked,
+		createValues: canWrite && Boolean(editor.permissions?.can_write_item_attribute),
+	}
+}
+
+function missingPrimaryWarning(editor) {
+	const warning = "Box Sticker auto-create and size-wise pricing need a Primary Attribute."
+	if (!editor.primary_attribute_locked) return warning
+	return `${warning} ${editor.primary_attribute_lock_message || "Primary Attribute is locked because YRP stock exists for this Item."}`
+}
+
 export function itemTableWarnings(values = {}, editor = {}, original = null) {
 	const warnings = []
-	if (values.attributes?.length && !values.primary_attribute) warnings.push("Box Sticker auto-create and size-wise pricing need a Primary Attribute.")
+	if (values.attributes?.length && !values.primary_attribute) warnings.push(missingPrimaryWarning(editor))
 	if (editor.has_item_transactions && original && conversionSignature(values) !== conversionSignature(original)) warnings.push("Submitted rows keep their stored factor; open drafts and Lots recalculate.")
 	const packingUom = editor.fg_uom || "Box"
 	const packingRow = (values.uoms || []).find((row) => row.uom === packingUom)

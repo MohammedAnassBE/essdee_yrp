@@ -152,7 +152,8 @@ def final_dependent_details(values, attributes, dependent, stock_uom, doc=None) 
 		return {}
 	requested = parse_dependent_details(values.get("dependent_details")) or {}
 	stored = _stored_details(doc, dependent)
-	dependent_values = next(row["values"] for row in attributes if row["attribute"] == dependent)
+	picklist = next(row["values"] for row in attributes if row["attribute"] == dependent)
+	dependent_values = [*stored, *(v for v in requested if v in picklist and v not in stored)] if stored else picklist
 	allowed = {row["attribute"] for row in attributes} - {dependent}
 	default = {"uom": stock_uom, "attributes": [values.get("primary_attribute")]}
 	rows = {value: requested.get(value) or stored.get(value) or default for value in dependent_values}

@@ -274,6 +274,7 @@ def _item_prices(item: str) -> list[dict]:
 def _editor_payload(doc=None) -> dict:
 	is_existing = bool(doc and not doc.is_new())
 	variant_count = frappe.db.count("Item", {"variant_of": doc.name}) if is_existing else 0
+	stock_locked = bool(is_existing and _item_family_has_yrp_stock(doc.name))
 	fields = {fieldname: _field_schema(fieldname) for fieldname in EDITOR_FIELDS}
 	fields.update(table_field_schemas())
 	fields["stock_uom"]["read_only"] = is_existing
@@ -290,25 +291,37 @@ def _editor_payload(doc=None) -> dict:
 		"dependent_attribute": doc.get("dependent_attribute") if doc else None,
 		"dependent_details": dependent_details_payload(doc) if is_existing else [],
 		"dependent_mapping_modified": dependent_mapping_modified(doc) if is_existing else None,
-		"attributes": [_mapping_payload(row) for row in doc.get("attributes") or []]
-		if doc
-		else [],
+		"attributes": [_mapping_payload(row) for row in doc.get("attributes") or []] if doc else [],
 	}
 	permissions = permission_flags(
 		ITEM_DOCTYPE,
 		("read", "create", "write"),
 		doc if is_existing else None,
 	)
-	permissions["can_write_item_attribute"] = bool(
-		frappe.has_permission("Item Attribute", ptype="write")
-	)
+	permissions["can_write_item_attribute"] = bool(frappe.has_permission("Item Attribute", ptype="write"))
 	return {
 		"values": values,
 		"fields": fields,
 		"options": _editor_options(),
 		"variant_count": variant_count,
 		"attributes_locked": bool(variant_count),
-		"attribute_lock_message": _("Locked: variants exist") if variant_count else "",
+		"attribute_lock_message": _(
+			"Attributes are locked because variants exist. Values can still be added or removed."
+		)
+		if variant_count
+		else "",
+		"primary_attribute_locked": stock_locked,
+		"primary_attribute_lock_message": _(
+			"Primary Attribute is locked because YRP stock exists for this Item."
+		)
+		if stock_locked
+		else "",
+		"dependent_attribute_locked": stock_locked,
+		"dependent_attribute_lock_message": _(
+			"Dependent Attribute is locked because YRP stock exists for this Item."
+		)
+		if stock_locked
+		else "",
 		"has_item_transactions": bool(is_existing and has_item_transactions(doc.name)),
 		"fg_pcs_per_box": finished_goods_packing(doc.name) if is_existing else None,
 		"item_prices": _item_prices(doc.name) if is_existing else [],
@@ -418,11 +431,11 @@ def _fill_mapping(mapping_name: str, attribute: str, labels: list[str]) -> None:
 	_write_mapping_values(mapping, attribute, labels)
 
 
-def _parse_attribute_rules(values, attributes: list[dict]) -> tuple[str | None, str | None]:
+def _parse_attribute_rules(values, attributes: list[dict], doc=None) -> tuple[str | None, str | None]:
 	primary_attribute = cstr(values.get("primary_attribute")).strip() or None
 	if primary_attribute and primary_attribute not in {row["attribute"] for row in attributes}:
 		frappe.throw(_("Primary Attribute must be one of the selected Attributes."))
-	return primary_attribute, parse_dependent_attribute(values, attributes, primary_attribute)
+	return primary_attribute, parse_dependent_attribute(values, attributes, primary_attribute, doc)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -505,20 +518,19 @@ def _stored_attributes(doc) -> dict[str, dict]:
 	return stored
 
 
-def _attributes_changed(doc, requested, stored) -> bool:
-	if [row.attribute for row in doc.get("attributes") or []] != [
-		row["attribute"] for row in requested.rows
-	]:
-		return True
-	if bool(doc.has_variants) != bool(requested.rows):
-		return True
-	if (doc.primary_attribute or None) != (cstr(requested.primary_attribute).strip() or None):
-		return True
-	if (doc.get("dependent_attribute") or None) != requested.dependent_attribute:
-		return True
-	return any(
-		stored[row["attribute"]]["stored_values"] != row["values"] for row in requested.rows
-	)
+def _attribute_rows_changed(doc, attributes: list[dict]) -> bool:
+	return [row.attribute for row in doc.get("attributes") or []] != [
+		row["attribute"] for row in attributes
+	] or bool(doc.has_variants) != bool(attributes)
+
+
+def _validate_attribute_rule_stock_lock(doc, primary_attribute, dependent_attribute) -> None:
+	requested = {"primary_attribute": primary_attribute, "dependent_attribute": dependent_attribute}
+	changed = [field for field, value in requested.items() if (doc.get(field) or None) != value]
+	if changed and _item_family_has_yrp_stock(doc.name):
+		frappe.throw(
+			_("Cannot change {0} after YRP stock exists for Item {1}.").format(", ".join(changed), doc.name)
+		)
 
 
 def _price_references_value(item: str, attribute: str, removed_values: set[str]) -> bool:
@@ -571,20 +583,18 @@ def update_item(name: str, values, expected_modified) -> dict:
 	validated_values = {**values, "stock_uom": doc.stock_uom}
 	_validate_item_basics(validated_values)
 	attributes = _parse_attributes(values.get("attributes") or [])
-	primary_attribute, dependent_attribute = _parse_attribute_rules(values, attributes)
+	primary_attribute = cstr(values.get("primary_attribute")).strip() or None
+	dependent_attribute = cstr(values.get("dependent_attribute")).strip() or None
 	tables = parse_item_tables(values, doc.stock_uom, doc)
-	details = final_dependent_details(values, attributes, dependent_attribute, doc.stock_uom, doc)
-	validate_stage_conversions(details, tables["uoms"], doc.stock_uom)
-	validate_stage_variant_names(details)
 	stored = _stored_attributes(doc)
-	request = frappe._dict(
-		rows=attributes,
-		primary_attribute=primary_attribute,
-		dependent_attribute=dependent_attribute,
-	)
-	attribute_changes = _attributes_changed(doc, request, stored)
-	if attribute_changes and template_has_variants(doc.name):
-		frappe.throw(_("Locked: variants exist. Item attributes cannot be changed."))
+	if _attribute_rows_changed(doc, attributes) and template_has_variants(doc.name):
+		variant_count = frappe.db.count("Item", {"variant_of": doc.name})
+		frappe.throw(
+			_(
+				"Locked: variants exist ({0}). Attribute rows cannot be added, removed, reordered or replaced. Values can still be added or removed."
+			).format(variant_count)
+		)
+	_validate_attribute_rule_stock_lock(doc, primary_attribute, dependent_attribute)
 
 	stored_names = list(stored)
 	requested_names = [row["attribute"] for row in attributes]
@@ -611,6 +621,11 @@ def update_item(name: str, values, expected_modified) -> dict:
 				stored_row["mapping"], row.get("mapping_modified")
 			)
 
+	before = doc.as_dict()
+	primary_attribute, dependent_attribute = _parse_attribute_rules(values, attributes, doc)
+	details = final_dependent_details(values, attributes, dependent_attribute, doc.stock_uom, doc)
+	validate_stage_conversions(details, tables["uoms"], doc.stock_uom)
+	validate_stage_variant_names(details)
 	apply_item_tables(doc, tables)
 	validate_cloth_item(doc)
 	for row in attributes:
@@ -622,8 +637,9 @@ def update_item(name: str, values, expected_modified) -> dict:
 	doc.primary_attribute = primary_attribute
 	if (doc.get("dependent_attribute") or None) != dependent_attribute:
 		release_dependent_attribute(doc)
-	doc.save()
-	doc.reload()
+	if doc.as_dict() != before or not all(row.get("mapping") for row in doc.get("attributes") or []):
+		doc.save()
+		doc.reload()
 
 	for requested, attribute_row in zip(attributes, doc.get("attributes") or [], strict=True):
 		stored_row = stored.get(requested["attribute"])

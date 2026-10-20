@@ -28,7 +28,7 @@
 				<Message v-for="warning in tableWarnings" :key="warning" severity="warn" :closable="false">{{ warning }}</Message>
 				<section class="purchase-record-card">
 					<header><div><span>Configuration</span><h2>Attributes</h2></div><strong>{{ values.attributes?.length || 0 }}</strong></header>
-					<Message class="erp-attention-note" v-if="workspace.attributes_locked" severity="warn" :closable="false">{{ workspace.attribute_lock_message || "Locked: variants exist" }}</Message>
+					<Message class="erp-attention-note" v-if="workspace.attributes_locked" severity="warn" :closable="false">Attributes are locked because variants exist. Use Edit to add or remove values.</Message>
 					<ItemAttributeValues v-if="values.attributes?.length" :attributes="values.attributes" />
 					<div v-else class="purchase-record-empty">No variant attributes. This is a plain item.</div>
 					<ItemDependentAttributeTable v-if="values.dependent_attribute && dependentRows.length" :dependent-attribute="values.dependent_attribute" :rows="dependentRows" :attributes="combinationAttributes" :problems="stageProblems" />
@@ -107,7 +107,7 @@ let loadSequence = 0
 const values = computed(() => workspace.value.values || {})
 const hasAttributes = computed(() => Boolean(values.value.attributes?.length))
 const itemPrices = computed(() => workspace.value.item_prices || [])
-const dependentRows = computed(() => dependentDetailRows(itemEditorValues(values.value), values.value.stock_uom))
+const dependentRows = computed(() => dependentDetailRows(itemEditorValues(values.value), values.value.stock_uom, { preserveExisting: true }))
 const stageProblems = computed(() => [...stageConversionProblems(values.value), ...stageAttributeProblems(values.value), ...stageVariantNameProblems(values.value)])
 const stageMessages = computed(() => uniqueProblemMessages(stageProblems.value))
 const parameterProblems = computed(() => duplicateParameterProblems(values.value.additional_parameters))

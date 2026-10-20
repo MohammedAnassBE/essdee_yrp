@@ -152,7 +152,7 @@ class TestPurchaseItemEditor(TestCase):
 		return frappe.get_doc(
 			{
 				"doctype": "YRP Tax Slab",
-				"percentage": f"0.{cls.suffix[:6]}",
+				"percentage": int(cls.suffix[:6], 16) / 10**8,
 				"enabled": 1,
 			}
 		).insert(ignore_permissions=True).name
@@ -661,7 +661,7 @@ class TestPurchaseItemEditor(TestCase):
 			(1, 1, 10, 0.5),
 		)
 
-	def test_update_appends_values_before_variants_then_locks_all_attribute_changes(self):
+	def test_update_appends_values_before_and_after_variants_exist(self):
 		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
 
 		created = self._create_as(
@@ -689,6 +689,9 @@ class TestPurchaseItemEditor(TestCase):
 		payload = get_item_editor(doc.name)
 		self.assertTrue(payload["attributes_locked"])
 		self.assertEqual(payload["variant_count"], 1)
+		self.assertIn("Values can still", payload["attribute_lock_message"])
+		self.assertFalse(payload["primary_attribute_locked"])
+		self.assertFalse(payload["dependent_attribute_locked"])
 		values["attributes"][0]["values"].append(
 			{"name": attribute_value_name(self.colour, "Green"), "label": "Green"}
 		)
@@ -696,8 +699,237 @@ class TestPurchaseItemEditor(TestCase):
 			"YRP Item Item Attribute Mapping", mapping.name, "modified"
 		)
 		doc.reload()
-		with self.assertRaisesRegex(frappe.ValidationError, "Locked: variants exist"):
-			update_item(doc.name, values, doc.modified)
+		update_item(doc.name, values, doc.modified)
+		self.assertEqual(get_mapping_values(mapping.name), ["Red", "Blue", "Green"])
+
+	def _desk_copy_item(self, item):
+		frappe.set_user("Administrator")
+		doc = frappe.copy_doc(frappe.get_doc("Item", item))
+		doc.item_code = doc.item_name = f"ZZ TEST Desk Edit {frappe.generate_hash(length=8)}"
+		doc.item_hash_value = None
+		return doc.insert()
+
+	def test_web_mapping_edits_match_desk_with_and_without_variants(self):
+		for with_variants in (False, True):
+			for labels in (
+				["Red", "Blue", "Green"],
+				["Blue"],
+				["Red"],
+				[],
+				["Blue", "Red"],
+			):
+				with self.subTest(with_variants=with_variants, labels=labels):
+					item = self._create_as(
+						"item_manager",
+						self._values(
+							attributes=[self._attribute_row(self.colour, "Red", "Blue")],
+						),
+					)["name"]
+					desk = self._desk_copy_item(item)
+					variants = []
+					if with_variants:
+						for name in (item, desk.name):
+							variants.append(get_or_create_variant(name, {self.colour: "Red"}))
+					before_variants = {
+						variant: frappe.get_doc("Item", variant).as_dict() for variant in variants
+					}
+					before_items = {
+						name: frappe.get_doc("Item", name).as_dict() for name in (item, desk.name)
+					}
+					mapping = frappe.get_doc("YRP Item Item Attribute Mapping", desk.attributes[0].mapping)
+					mapping.set(
+						"values",
+						[{"attribute_value": ensure_value_master(self.colour, label)} for label in labels],
+					)
+					mapping.save()
+					self._update_colour_values(item, labels)
+					self.assertEqual(get_mapping_values(mapping.name), labels)
+					self.assertEqual(
+						get_mapping_values(frappe.get_doc("Item", item).attributes[0].mapping), labels
+					)
+					self.assertEqual(self._parity_snapshot(item), self._parity_snapshot(desk.name))
+					for variant, before in before_variants.items():
+						self.assertEqual(frappe.get_doc("Item", variant).as_dict(), before)
+					for name, before in before_items.items():
+						self.assertEqual(frappe.get_doc("Item", name).as_dict(), before)
+
+	def test_variant_templates_lock_attribute_row_add_remove_reorder_and_swap(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
+
+		item = self._create_as(
+			"item_manager",
+			self._values(
+				attributes=[
+					self._attribute_row(self.colour, "Red"),
+					self._attribute_row(self.size, "Small"),
+				]
+			),
+		)["name"]
+		get_or_create_variant(item, {self.colour: "Red", self.size: "Small"})
+		payload = get_item_editor(item)
+		rows = payload["values"]["attributes"]
+		before = self._parity_snapshot(item)
+		for attributes in (
+			[*rows, self._attribute_row(self.accent, "Red")],
+			rows[:1],
+			[],
+			list(reversed(rows)),
+			[rows[0], self._attribute_row(self.accent, "Red")],
+		):
+			with self.subTest(attributes=[row["attribute"] for row in attributes]):
+				with self.assertRaisesRegex(
+					frappe.ValidationError, "[Aa]ttribute.*locked|[Ll]ocked.*variant"
+				):
+					update_item(item, {**payload["values"], "attributes": attributes}, payload["modified"])
+				self.assertEqual(self._parity_snapshot(item), before)
+
+	def test_dependent_picklist_only_edits_preserve_stage_configuration_and_variants(self):
+		from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes
+
+		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
+
+		for labels, omit_details in (
+			(["Pack"], False),
+			(["Cut"], False),
+			([], False),
+			(["Cut", "Pack", "Loose"], False),
+			(["Cut", "Pack", "Loose"], True),
+		):
+			with self.subTest(labels=labels, omit_details=omit_details):
+				item = self._create_as("purchase_manager", self._dependent_values())["name"]
+				desk = self._desk_copy_item(item)
+				variants = {
+					name: get_or_create_variant(name, {self.stage: "Cut", self.size: "Small"})
+					for name in (item, desk.name)
+				}
+				before_variants = {
+					variant: frappe.get_doc("Item", variant).as_dict() for variant in variants.values()
+				}
+				before_items = {name: frappe.get_doc("Item", name).as_dict() for name in variants}
+				before_config = {
+					name: frappe.get_doc(
+						"YRP Item Dependent Attribute Mapping",
+						before_items[name]["dependent_attribute_mapping"],
+					).as_dict()
+					for name in variants
+				}
+				mapping = frappe.get_doc("YRP Item Item Attribute Mapping", desk.attributes[0].mapping)
+				mapping.set(
+					"values",
+					[{"attribute_value": ensure_value_master(self.stage, label)} for label in labels],
+				)
+				mapping.save()
+				frappe.set_user(self.fixture_users["purchase_manager"])
+				payload = get_item_editor(item)
+				values = {
+					**payload["values"],
+					"attributes": [
+						{**row, "values": labels if row["attribute"] == self.stage else row["values"]}
+						for row in payload["values"]["attributes"]
+					],
+				}
+				if omit_details:
+					values.pop("dependent_details")
+				update_item(item, values, payload["modified"])
+				for name, variant in variants.items():
+					doc = frappe.get_doc("Item", name)
+					self.assertEqual(doc.as_dict(), before_items[name])
+					self.assertEqual(get_mapping_values(doc.attributes[0].mapping), labels)
+					self.assertEqual(
+						frappe.get_doc(
+							"YRP Item Dependent Attribute Mapping", doc.dependent_attribute_mapping
+						).as_dict(),
+						before_config[name],
+					)
+					for stage in ("Cut", "Pack"):
+						self.assertEqual(
+							build_variant_attributes({self.size: "Small"}, stage, doc),
+							{self.stage: stage, self.size: "Small"},
+						)
+					self.assertEqual(
+						get_or_create_variant(name, {self.stage: "Cut", self.size: "Small"}), variant
+					)
+					self.assertEqual(frappe.get_doc("Item", variant).as_dict(), before_variants[variant])
+				self.assertEqual(self._parity_snapshot(item), self._parity_snapshot(desk.name))
+
+	def test_dependent_picklist_addition_keeps_removed_stage_and_skips_parent_save(self):
+		from yrp.yrp.doctype.yrp_item.yrp_item import update_dependent_attribute_details
+
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		item = self._create_as("purchase_manager", self._dependent_values())["name"]
+		desk = self._desk_copy_item(item)
+		variant = get_or_create_variant(item, {self.stage: "Cut", self.size: "Small"})
+		before_item = frappe.get_doc("Item", item).as_dict()
+		before_variant = frappe.get_doc("Item", variant).as_dict()
+		for labels in (["Pack"], ["Pack", "Loose"]):
+			payload = get_item_editor(item)
+			details = payload["values"]["dependent_details"]
+			if "Loose" in labels:
+				details = [
+					*details,
+					{"value": "Loose", "uom": self.uom, "display_name": "Loose", "attributes": [self.size]},
+				]
+			self._update_dependent(
+				item,
+				attributes=[
+					{**row, "values": labels if row["attribute"] == self.stage else row["values"]}
+					for row in payload["values"]["attributes"]
+				],
+				dependent_details=details,
+			)
+			self.assertEqual(frappe.get_doc("Item", item).as_dict(), before_item)
+			self.assertEqual(frappe.get_doc("Item", variant).as_dict(), before_variant)
+		frappe.set_user("Administrator")
+		mapping = frappe.get_doc("YRP Item Item Attribute Mapping", desk.attributes[0].mapping)
+		mapping.set(
+			"values",
+			[{"attribute_value": ensure_value_master(self.stage, label)} for label in ("Pack", "Loose")],
+		)
+		mapping.save()
+		update_dependent_attribute_details(
+			desk.dependent_attribute_mapping,
+			{
+				"attr_list": {
+					"Cut": {"uom": self.uom, "name": "", "attributes": [self.size]},
+					"Pack": {"uom": self.uom, "name": "Packed", "attributes": [self.size]},
+					"Loose": {"uom": self.uom, "name": "Loose", "attributes": [self.size]},
+				}
+			},
+		)
+		self.assertEqual(self._parity_snapshot(item), self._parity_snapshot(desk.name))
+		self.assertEqual(self._dependent_rows(item), self._dependent_rows(desk.name))
+		self.assertEqual(set(self._dependent_rows(item)), {"Cut", "Pack", "Loose"})
+
+	def test_new_stage_configuration_is_validated_before_mapping_only_writes(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		item = self._create_as("purchase_manager", self._dependent_values())["name"]
+		payload = get_item_editor(item)
+		before = self._parity_snapshot(item)
+		with self.assertRaisesRegex(frappe.ValidationError, "Stage Loose must use at least one attribute"):
+			self._update_dependent(
+				item,
+				attributes=[
+					{
+						**row,
+						"values": ["Cut", "Pack", "Loose"]
+						if row["attribute"] == self.stage
+						else row["values"],
+					}
+					for row in payload["values"]["attributes"]
+				],
+				dependent_details=[
+					*payload["values"]["dependent_details"],
+					{
+						"value": "Loose",
+						"uom": self.uom,
+						"display_name": "Loose",
+						"attributes": [],
+					},
+				],
+			)
+		self.assertEqual(self._parity_snapshot(item), before)
 
 	def test_variant_items_are_not_exposed_or_updated(self):
 		from essdee_yrp.purchase.item_editor import get_item_editor, update_item
@@ -767,6 +999,7 @@ class TestPurchaseItemEditor(TestCase):
 			self._values(attributes=[self._attribute_row(self.colour, "Red", "Blue")]),
 		)
 		mapping = frappe.db.get_value("Item Variant Attribute", {"parent": created["name"]}, "mapping")
+		get_or_create_variant(created["name"], {self.colour: "Red"})
 		self._make_colour_price(created["name"], "Blue")
 
 		with self.assertRaisesRegex(frappe.ValidationError, "price tier"):
@@ -979,6 +1212,44 @@ class TestPurchaseItemEditor(TestCase):
 		}
 		return self._values(**{**defaults, **overrides})
 
+	def test_combined_edit_keeps_stage_removed_from_picklist(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		item = self._create_as("purchase_manager", self._dependent_values())["name"]
+		get_or_create_variant(item, {self.stage: "Cut", self.size: "Small"})
+		stored = self._dependent_rows(item)
+		payload = get_item_editor(item)
+		attributes = [
+			{
+				**row,
+				"values": ["Pack"] if row["attribute"] == self.stage else [v["label"] for v in row["values"]],
+			}
+			for row in payload["values"]["attributes"]
+		]
+		self._update_dependent(item, attributes=attributes, description="Combined edit")
+		self.assertEqual(frappe.db.get_value("Item", item, "description"), "Combined edit")
+		self.assertEqual(self._dependent_rows(item), stored)
+		self._update_dependent(item, description="Later edit")
+		self.assertEqual(self._dependent_rows(item), stored)
+
+	def test_cleared_dependent_picklist_keeps_item_saveable(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		item = self._create_as("purchase_manager", self._dependent_values())["name"]
+		stored = self._dependent_rows(item)
+		payload = get_item_editor(item)
+		attributes = [
+			{**row, "values": [] if row["attribute"] == self.stage else [v["label"] for v in row["values"]]}
+			for row in payload["values"]["attributes"]
+		]
+		self._update_dependent(item, attributes=attributes)
+		self._update_dependent(item, description="After clearing")
+		frappe.set_user("Administrator")
+		doc = frappe.get_doc("Item", item)
+		doc.description = "Desk save after clearing"
+		doc.save()
+		self.assertEqual(self._dependent_rows(item), stored)
+
 	def _dependent_rows(self, item):
 		from essdee_yrp.purchase.item_editor import get_item_editor
 
@@ -1028,7 +1299,7 @@ class TestPurchaseItemEditor(TestCase):
 		self.assertEqual(payload["fields"]["primary_attribute"]["label"], "Primary Attribute")
 		self.assertIn(self.length, payload["options"]["numeric_attributes"])
 
-	def test_dependent_attribute_needs_explicit_values_on_create_and_update(self):
+	def test_dependent_attribute_needs_values_on_create_but_existing_picklist_can_clear(self):
 		values = self._dependent_values()
 		values["attributes"][0] = self._attribute_row(self.stage)
 		with self.assertRaisesRegex(frappe.ValidationError, "Please configure values for Dependent"):
@@ -1045,8 +1316,10 @@ class TestPurchaseItemEditor(TestCase):
 			frappe.get_doc("Item", item).attributes[0].mapping,
 			"modified",
 		)
-		with self.assertRaisesRegex(frappe.ValidationError, "Please configure values for Dependent"):
-			self._update_dependent(item, attributes=attributes)
+		before = self._dependent_rows(item)
+		self._update_dependent(item, attributes=attributes)
+		self.assertEqual(get_mapping_values(frappe.get_doc("Item", item).attributes[0].mapping), [])
+		self.assertEqual(self._dependent_rows(item), before)
 
 	def test_stage_variant_name_collision_rejects_create_before_writes(self):
 		for display_name in (None, "", " ", "Same"):
@@ -1054,7 +1327,12 @@ class TestPurchaseItemEditor(TestCase):
 				values = self._dependent_values(
 					name=f"ZZ TEST Stage Collision {frappe.generate_hash(length=8)}",
 					dependent_details=[
-						{"value": stage, "uom": self.uom, "display_name": display_name, "attributes": [self.size]}
+						{
+							"value": stage,
+							"uom": self.uom,
+							"display_name": display_name,
+							"attributes": [self.size],
+						}
 						for stage in ("Cut", "Pack")
 					],
 				)
@@ -1120,7 +1398,7 @@ class TestPurchaseItemEditor(TestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "standard Variant Attributes table"):
 			self._create_as("purchase_manager", values)
 
-	def test_update_keeps_one_combination_row_per_current_dependent_value(self):
+	def test_update_keeps_stored_stages_and_adds_requested_new_stage(self):
 		item = self._create_as("purchase_manager", self._dependent_values())["name"]
 		doc = frappe.get_doc("Item", item)
 		mapping_name = doc.dependent_attribute_mapping
@@ -1140,14 +1418,18 @@ class TestPurchaseItemEditor(TestCase):
 			attributes=attributes,
 			dependent_details=[
 				{"value": "Pack", "uom": self.box_uom, "display_name": "Box", "attributes": [self.colour]},
-				{"value": "Cut", "uom": self.box_uom, "display_name": "", "attributes": []},
+				{"value": "Loose", "uom": self.uom, "display_name": "Loose", "attributes": [self.size]},
 			],
 		)
 
 		self.assertEqual(frappe.db.get_value("Item", item, "dependent_attribute_mapping"), mapping_name)
 		self.assertEqual(
 			self._dependent_rows(item),
-			{"Pack": (self.box_uom, "Box", [self.colour]), "Loose": (self.uom, "", [self.size])},
+			{
+				"Cut": (self.uom, "", [self.size]),
+				"Pack": (self.box_uom, "Box", [self.colour]),
+				"Loose": (self.uom, "Loose", [self.size]),
+			},
 		)
 
 	def test_unchanged_dependent_details_do_not_rewrite_the_mapping(self):
@@ -1231,13 +1513,45 @@ class TestPurchaseItemEditor(TestCase):
 			update_item(item, values, payload["modified"])
 		self.assertEqual(self._dependent_rows(item)["Cut"], (self.box_uom, "Desk", [self.size]))
 
-	def test_dependent_attribute_is_locked_once_variants_exist(self):
-		item = self._create_as("purchase_manager", self._dependent_values())["name"]
+	def test_primary_attribute_set_change_and_clear_with_variants_matches_desk(self):
+		item = self._create_as(
+			"item_manager",
+			self._values(
+				attributes=[
+					self._attribute_row(self.colour, "Red"),
+					self._attribute_row(self.size, "Small"),
+				]
+			),
+		)["name"]
+		desk = self._desk_copy_item(item)
+		for name in (item, desk.name):
+			get_or_create_variant(name, {self.colour: "Red", self.size: "Small"})
+		for primary in (self.colour, self.size, None):
+			with self.subTest(primary=primary):
+				frappe.set_user("Administrator")
+				desk.primary_attribute = primary
+				desk.save()
+				self._update_dependent(item, primary_attribute=primary)
+				self.assertEqual(frappe.db.get_value("Item", item, "primary_attribute"), primary)
+				self.assertEqual(self._parity_snapshot(item), self._parity_snapshot(desk.name))
+
+	def test_dependent_attribute_clear_set_and_change_with_variants_matches_desk(self):
+		from yrp.yrp.doctype.yrp_item.yrp_item import update_dependent_attribute_details
+
+		item = self._create_as(
+			"purchase_manager",
+			self._dependent_values(
+				attributes=[
+					self._attribute_row(self.stage, "Cut", "Pack"),
+					self._attribute_row(self.size),
+					self._attribute_row(self.colour, "Red"),
+				]
+			),
+		)["name"]
+		desk = self._desk_copy_item(item)
 		frappe.set_user("Administrator")
-		get_or_create_variant(item, {self.stage: "Cut", self.size: "Small", self.colour: "Red"})
-		frappe.set_user(self.fixture_users["purchase_manager"])
-		with self.assertRaisesRegex(frappe.ValidationError, "Locked: variants exist"):
-			self._update_dependent(item, dependent_attribute=None)
+		for name in (item, desk.name):
+			get_or_create_variant(name, {self.stage: "Cut", self.size: "Small", self.colour: "Red"})
 		self._update_dependent(
 			item,
 			dependent_details=[
@@ -1245,6 +1559,89 @@ class TestPurchaseItemEditor(TestCase):
 			],
 		)
 		self.assertEqual(self._dependent_rows(item)["Cut"], (self.box_uom, "Cut Panel", [self.size]))
+		for dependent in (None, self.stage, self.colour, None):
+			with self.subTest(dependent=dependent):
+				frappe.set_user("Administrator")
+				if desk.dependent_attribute and dependent and desk.dependent_attribute != dependent:
+					desk.dependent_attribute = None
+					desk.save()
+				desk.dependent_attribute = dependent
+				desk.save()
+				if dependent:
+					stages = ("Cut", "Pack") if dependent == self.stage else ("Red",)
+					update_dependent_attribute_details(
+						desk.dependent_attribute_mapping,
+						{
+							"attr_list": {
+								value: {"uom": self.uom, "name": value, "attributes": [self.size]}
+								for value in stages
+							}
+						},
+					)
+				else:
+					stages = ()
+				self._update_dependent(
+					item,
+					dependent_attribute=dependent,
+					dependent_details=[
+						{"value": value, "uom": self.uom, "display_name": value, "attributes": [self.size]}
+						for value in stages
+					],
+				)
+				self.assertEqual(frappe.db.get_value("Item", item, "dependent_attribute"), dependent)
+				self.assertEqual(self._parity_snapshot(item), self._parity_snapshot(desk.name))
+				self.assertEqual(self._dependent_rows(item), self._dependent_rows(desk.name))
+
+	def test_primary_and_dependent_locks_follow_family_stock_and_preserve_values(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		for doctype, field in (
+			("YRP Bin", "item_code"),
+			("YRP Stock Ledger Entry", "item"),
+			("YRP Stock Reservation Entry", "item_code"),
+		):
+			for stock_on_variant in (False, True):
+				with self.subTest(doctype=doctype, stock_on_variant=stock_on_variant):
+					item = self._create_as("purchase_manager", self._dependent_values())["name"]
+					frappe.set_user("Administrator")
+					variant = get_or_create_variant(item, {self.stage: "Cut", self.size: "Small"})
+					frappe.get_doc(
+						{
+							"doctype": doctype,
+							"name": frappe.generate_hash(),
+							field: variant if stock_on_variant else item,
+						}
+					).db_insert()
+					payload = get_item_editor(item)
+					self.assertTrue(payload["primary_attribute_locked"])
+					self.assertTrue(payload["dependent_attribute_locked"])
+					self.assertIn("YRP stock", payload["primary_attribute_lock_message"])
+					self.assertIn("YRP stock", payload["dependent_attribute_lock_message"])
+					before = self._item_configuration(item)
+					before_details = self._dependent_rows(item)
+					for changes in ({"primary_attribute": self.colour}, {"dependent_attribute": None}):
+						desk = frappe.get_doc("Item", item)
+						desk.update(changes)
+						point = "stock_rule_" + frappe.generate_hash(length=8)
+						frappe.db.savepoint(point)
+						with self.assertRaisesRegex(frappe.ValidationError, "after YRP stock exists"):
+							desk.save()
+						frappe.db.rollback(save_point=point)
+						with self.assertRaisesRegex(frappe.ValidationError, "after YRP stock exists"):
+							self._update_dependent(item, **changes)
+						self.assertEqual(self._item_configuration(item), before)
+						self.assertEqual(self._dependent_rows(item), before_details)
+					self._update_dependent(
+						item,
+						attributes=[
+							payload["values"]["attributes"][0],
+							payload["values"]["attributes"][1],
+							{**payload["values"]["attributes"][2], "values": ["Red"]},
+						],
+					)
+					self.assertEqual(
+						get_mapping_values(frappe.get_doc("Item", item).attributes[2].mapping), ["Red"]
+					)
 
 	def test_values_staged_in_the_dialog_are_created_on_save(self):
 		created = self._create_as(

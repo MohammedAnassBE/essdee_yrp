@@ -41,7 +41,7 @@
 							<Button v-if="canEditAttributes" label="Add attribute" icon="pi pi-plus" severity="secondary" outlined size="small" :disabled="formDisabled || hasBlankAttribute" @click="addAttribute" />
 						</header>
 						<div class="purchase-form-section__content">
-							<Message v-if="attributesLocked" severity="warn" :closable="false">{{ editor.attribute_lock_message || "Locked: variants exist" }}</Message>
+							<Message v-if="attributesLocked" severity="warn" :closable="false">{{ editor.attribute_lock_message || "Attributes are locked because variants exist. Values can still be added or removed." }}</Message>
 							<div v-if="form.attributes.length" class="attribute-rows">
 								<article v-for="(row, index) in form.attributes" :key="row.key" class="attribute-row">
 									<LinkField :ref="(field) => { attributeFields[row.key] = field }" :model-value="row.attribute" label="Attribute *" doctype="Item Attribute" :filters="otherAttributeFilter(row)" :show-open-button="false" required :disabled="formDisabled || attributesLocked" @update:model-value="changeAttribute(row, $event)" />
@@ -50,10 +50,10 @@
 							</div>
 							<div v-else class="attribute-empty"><i class="pi pi-sliders-h" /><span>No attributes. This will be saved as a plain item.</span></div>
 							<div v-if="selectedAttributeOptions.length" class="purchase-form-grid">
-								<label class="purchase-field purchase-field--primary"><span class="erp-field-label">{{ fieldLabel("primary_attribute", "Primary Attribute") }}</span><Select v-model="form.primary_attribute" :options="selectedAttributeOptions" option-label="label" option-value="value" show-clear fluid :disabled="formDisabled || attributesLocked" @update:model-value="changePrimary" /></label>
-								<label class="purchase-field purchase-field--dependent"><span class="erp-field-label">{{ fieldLabel("dependent_attribute", "Dependent Attribute") }}</span><Select v-model="form.dependent_attribute" :options="dependentAttributeOptions" option-label="label" option-value="value" show-clear fluid placeholder="None" :disabled="formDisabled || attributesLocked" /></label>
+								<label class="purchase-field purchase-field--primary"><span class="erp-field-label">{{ fieldLabel("primary_attribute", "Primary Attribute") }}</span><Select v-model="form.primary_attribute" :options="selectedAttributeOptions" option-label="label" option-value="value" show-clear fluid :disabled="formDisabled || !attributeEditing.primary" @update:model-value="changePrimary" /></label>
+								<label class="purchase-field purchase-field--dependent"><span class="erp-field-label">{{ fieldLabel("dependent_attribute", "Dependent Attribute") }}</span><Select v-model="form.dependent_attribute" :options="dependentAttributeOptions" option-label="label" option-value="value" show-clear fluid placeholder="None" :disabled="formDisabled || !attributeEditing.dependent" /></label>
 							</div>
-							<ItemAttributeValues v-if="selectedAttributeOptions.length" :attributes="form.attributes" :editable="canEditAttributes && !formDisabled" @edit="openValues" />
+							<ItemAttributeValues v-if="selectedAttributeOptions.length" :attributes="form.attributes" :editable="attributeEditing.values && !formDisabled" @edit="openValues" />
 							<Message v-if="dependentProblem" class="purchase-dependent-problem" severity="error" :closable="false">{{ dependentProblem }}</Message>
 							<ItemDependentAttributeTable v-if="form.dependent_attribute && form.dependent_details.length" :dependent-attribute="form.dependent_attribute" :rows="form.dependent_details" :attributes="combinationAttributes" :editable="canEditPermission && !formDisabled" :uoms="form.uoms" :problems="tableProblems" />
 						</div>
@@ -96,7 +96,7 @@ import ItemAdditionalParameters from "./item/ItemAdditionalParameters.vue"
 import ItemMasterFields from "./item/ItemMasterFields.vue"
 import ItemUomConversions from "./item/ItemUomConversions.vue"
 import ItemYarnRatio from "./item/ItemYarnRatio.vue"
-import { itemTableProblems, itemTableWarnings, stockUomRows } from "./item/itemTables.js"
+import { itemAttributeEditing, itemTableProblems, itemTableWarnings, stockUomRows } from "./item/itemTables.js"
 import { PURCHASE_ROUTES, dependentDetailRows, itemCanSave, itemCodeHint, itemCombinationAttributes, itemDependentProblem, itemDependentValues, itemEditorValues, itemKindLabel, itemSaveValues, resetAttributeRow, storedAttributeMappings } from "./purchaseViews.js"
 
 const props = defineProps({ itemId: { type: String, default: "" } })
@@ -109,7 +109,7 @@ const loading = ref(true)
 const saving = ref(false)
 const loadError = ref("")
 const actionError = ref("")
-const attributesChanged = ref(false)
+const attributeRowsChanged = ref(false)
 const valuesVisible = ref(false)
 const valuesAttribute = ref("")
 const attributeFields = {}
@@ -126,8 +126,9 @@ const selectedNames = computed(() => new Set(form.attributes.map((row) => row.at
 const hasBlankAttribute = computed(() => form.attributes.some((row) => !row.attribute))
 const selectedAttributeOptions = computed(() => form.attributes.filter((row) => row.attribute).map((row) => ({ label: row.attribute, value: row.attribute })))
 const canEditPermission = computed(() => isEdit.value ? Boolean(editor.value.permissions?.can_write) : Boolean(editor.value.permissions?.can_create))
-const canEditAttributes = computed(() => canEditPermission.value && !attributesLocked.value)
-const canCreateAttributeValue = computed(() => canEditAttributes.value && Boolean(editor.value.permissions?.can_write_item_attribute))
+const attributeEditing = computed(() => itemAttributeEditing(editor.value, canEditPermission.value))
+const canEditAttributes = computed(() => attributeEditing.value.rows)
+const canCreateAttributeValue = computed(() => attributeEditing.value.createValues)
 const storedMappings = computed(() => storedAttributeMappings(editor.value.values?.attributes))
 const valuesRow = computed(() => form.attributes.find((row) => row.attribute && row.attribute === valuesAttribute.value) || null)
 const formDisabled = computed(() => saving.value || !canEditPermission.value)
@@ -148,7 +149,9 @@ function changePrimary(attribute) {
 }
 
 function syncDependentDetails() {
-	form.dependent_details = dependentDetailRows(form, form.stock_uom)
+	form.dependent_details = dependentDetailRows(form, form.stock_uom, {
+		preserveExisting: Boolean(form.dependent_mapping_modified) && form.dependent_attribute === editor.value.values?.dependent_attribute,
+	})
 	for (const row of form.dependent_details) row.uom ||= form.stock_uom
 }
 
@@ -160,7 +163,7 @@ function applyEditor(payload) {
 	editor.value = payload || {}
 	const values = itemEditorValues(payload?.values || {})
 	Object.assign(form, values, { attributes: values.attributes.map(newRow) })
-	attributesChanged.value = false
+	attributeRowsChanged.value = false
 }
 
 async function load() {
@@ -186,14 +189,14 @@ function otherAttributeFilter(row) {
 async function addAttribute() {
 	const row = newRow({ attribute: "", all_values_allowed: true })
 	form.attributes.push(row)
-	attributesChanged.value = true
+	attributeRowsChanged.value = true
 	await nextTick()
 	attributeFields[row.key]?.focus()
 }
 
 function removeAttribute(index) {
 	form.attributes.splice(index, 1)
-	attributesChanged.value = true
+	attributeRowsChanged.value = true
 	if (!selectedNames.value.has(form.primary_attribute)) form.primary_attribute = ""
 	if (!selectedNames.value.has(form.dependent_attribute)) form.dependent_attribute = ""
 }
@@ -203,7 +206,7 @@ function changeAttribute(row, attribute) {
 	if (form.primary_attribute === row.attribute) form.primary_attribute = ""
 	if (form.dependent_attribute === row.attribute) form.dependent_attribute = ""
 	Object.assign(row, resetAttributeRow(storedMappings.value, attribute || ""))
-	attributesChanged.value = true
+	attributeRowsChanged.value = true
 }
 
 function openValues(attribute) {
@@ -214,7 +217,6 @@ function openValues(attribute) {
 function applyValues(values, newValues) {
 	if (!valuesRow.value) return
 	Object.assign(valuesRow.value, { values, new_values: newValues, all_values_allowed: !values.length })
-	attributesChanged.value = true
 }
 
 async function save() {
@@ -223,7 +225,7 @@ async function save() {
 	actionError.value = ""
 	try {
 		const values = itemSaveValues(form, {
-			defaultSinglePrimary: !isEdit.value || attributesChanged.value,
+			defaultSinglePrimary: !isEdit.value || attributeRowsChanged.value,
 		})
 		const result = isEdit.value
 			? await updateItem(currentName.value, values, editor.value.modified)

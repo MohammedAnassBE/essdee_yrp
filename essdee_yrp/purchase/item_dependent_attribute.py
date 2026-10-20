@@ -3,7 +3,6 @@ from collections.abc import Mapping
 import frappe
 from frappe import _
 from frappe.utils import cstr
-from yrp.attribute_values import get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import update_dependent_attribute_details
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
@@ -28,7 +27,7 @@ def dependent_details_payload(doc) -> list[dict]:
 	]
 
 
-def parse_dependent_attribute(values, attributes: list[dict], primary_attribute) -> str | None:
+def parse_dependent_attribute(values, attributes: list[dict], primary_attribute, doc=None) -> str | None:
 	"""Validate the requested Dependent Attribute with the Desk messages."""
 	dependent = cstr(values.get("dependent_attribute")).strip() or None
 	if not dependent:
@@ -40,7 +39,8 @@ def parse_dependent_attribute(values, attributes: list[dict], primary_attribute)
 		frappe.throw(_("Please set Primary Attribute for this Item."))
 	if dependent == primary_attribute:
 		frappe.throw(_("Dependent Attribute cannot be the same as the Primary Attribute."))
-	if not row["values"]:
+	has_stages = bool(doc and doc.get("dependent_attribute") == dependent and dependent_details_payload(doc))
+	if not row["values"] and not has_stages:
 		frappe.throw(_("Please configure values for Dependent Attribute {0}.").format(dependent))
 	return dependent
 
@@ -115,11 +115,12 @@ def apply_dependent_attribute(doc, dependent: str | None, requested_details: dic
 
 
 def sync_dependent_details(doc, requested_details: dict | None) -> None:
-	"""Keep one combination row per current dependent value, saved through yrp."""
+	"""Save stage configuration through yrp; stored stages outlive picklist edits."""
 	stored = {row["value"]: row for row in dependent_details_payload(doc)}
+	values = list(requested_details) if requested_details is not None else [*stored]
 	desired = {
 		value: _detail_config(doc, value, _requested_row(doc, value, requested_details, stored))
-		for value in _dependent_values(doc)
+		for value in values
 	}
 	if _comparable(desired) != _comparable(_stored_configs(stored)):
 		update_dependent_attribute_details(doc.dependent_attribute_mapping, {"attr_list": desired})
@@ -128,11 +129,6 @@ def sync_dependent_details(doc, requested_details: dict | None) -> None:
 def _requested_row(doc, value, requested_details, stored) -> Mapping:
 	default = {"uom": doc.stock_uom, "display_name": "", "attributes": [doc.primary_attribute]}
 	return (requested_details or {}).get(value) or stored.get(value) or default
-
-
-def _dependent_values(doc) -> list[str]:
-	row = next(row for row in doc.get("attributes") or [] if row.attribute == doc.dependent_attribute)
-	return get_mapping_values(row.mapping)
 
 
 def _detail_config(doc, value: str, row: Mapping) -> dict:

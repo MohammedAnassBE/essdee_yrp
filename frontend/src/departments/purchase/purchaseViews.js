@@ -115,12 +115,15 @@ export function itemCombinationAttributes(values = {}, numericAttributes = []) {
 		.filter((attribute) => attribute && attribute !== values.dependent_attribute && !numeric.has(attribute))
 }
 
-export function dependentDetailRows(values = {}, stockUom = "") {
+export function dependentDetailRows(values = {}, stockUom = "", options = {}) {
 	if (!values.dependent_attribute) return []
 	const previous = new Map((values.dependent_details || []).map((row) => [row.value, row]))
 	const allowed = new Set((values.attributes || []).map((row) => row.attribute).filter((attribute) => attribute && attribute !== values.dependent_attribute))
 	const keepAllowed = (row) => ({ ...row, attributes: (row.attributes || []).filter((attribute) => allowed.has(attribute)) })
-	return itemDependentValues(values).map((value) => previous.has(value) ? keepAllowed(previous.get(value)) : {
+	const stageValues = options.preserveExisting
+		? [...new Set([...previous.keys(), ...itemDependentValues(values)])]
+		: itemDependentValues(values)
+	return stageValues.map((value) => previous.has(value) ? keepAllowed(previous.get(value)) : {
 		value,
 		uom: stockUom || "",
 		display_name: "",
@@ -140,7 +143,7 @@ function dependentDetailSaveRows(rows = [], selected = new Set()) {
 export function itemDependentProblem(values = {}) {
 	const dependent = values.dependent_attribute
 	if (!dependent) return ""
-	if (!itemDependentValues(values).length) return `Please configure values for Dependent Attribute ${dependent}.`
+	if (!itemDependentValues(values).length && !(values.dependent_mapping_modified && values.dependent_details?.length)) return `Please configure values for Dependent Attribute ${dependent}.`
 	if (!values.primary_attribute) return "Please set Primary Attribute for this Item."
 	if ((values.dependent_details || []).some((row) => !row.uom)) return `Set the UOM for every ${dependent} value.`
 	return ""

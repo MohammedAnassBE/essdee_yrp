@@ -42,6 +42,7 @@
 				<table class="table rework-table">
 					<thead>
 						<tr>
+							<th>{{ __("Print") }}</th>
 							<th></th>
 							<th>{{ __("Series No") }}</th>
 							<th>{{ __("Date") }}</th>
@@ -56,6 +57,7 @@
 					<tbody>
 						<template v-for="(value, key) in items.report_detail" :key="key">
 							<tr class="summary-row" @click="toggleRow(key)">
+								<td @click.stop="redirectToPrint(value.grn_number)"><span v-html="printerIcon"></span></td>
 								<td><span class="chevron" :class="{ open: expandedRowKey === key }">›</span></td>
 								<td><strong>{{ key }}</strong></td>
 								<td>{{ formatDate(value.date) }}</td>
@@ -69,7 +71,7 @@
 								<td><strong>{{ value.total - value.total_rejection }}</strong></td>
 							</tr>
 							<tr v-if="expandedRowKey === key" class="detail-row">
-								<td :colspan="8 + items.types.length">
+								<td :colspan="9 + items.types.length">
 									<div v-for="(group, groupKey) in value.rework_detail" :key="groupKey" class="detail-panel">
 										<div class="detail-panel-title">
 											<div>
@@ -117,7 +119,7 @@
 							</tr>
 						</template>
 						<tr class="total-row">
-							<th colspan="7">{{ __("Total") }}</th>
+							<th colspan="8">{{ __("Total") }}</th>
 							<th v-for="type in items.types" :key="type">
 								{{ (items.total_detail[type] || 0) - (items.total_rejection_detail[type] || 0) }}
 							</th>
@@ -135,6 +137,7 @@ import { computed, onMounted, ref } from "vue";
 import { copyElementAsImage } from "../../copyElementAsImage";
 
 const METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item";
+const printerIcon = frappe.utils.icon('printer', 'sm');
 const root = ref(null);
 const items = ref({ report_detail: {}, types: [], total_detail: {}, total_rejection_detail: {} });
 const expandedRowKey = ref(null);
@@ -204,6 +207,14 @@ function mistakeLabel(key) { return String(key || "").split("-")[0]; }
 function displayQty(value, type) { return (value.types?.[type] || 0) - (value.rejection_detail?.[type] || 0); }
 function formatDate(value) { return value ? frappe.datetime.str_to_user(String(value).slice(0, 10)) : ""; }
 function openGRN(name) { window.open(`/app/yrp-goods-received-note/${encodeURIComponent(name)}`, "_blank"); }
+
+function redirectToPrint(grn) {
+	const w = window.open(frappe.urllib.get_full_url(
+		"/printview?doctype=" + encodeURIComponent("YRP Goods Received Note") + "&name=" + encodeURIComponent(grn) +
+		"&trigger_print=1&format=" + encodeURIComponent(showReworkedValue.value ? "Essdee Reworked Print" : "Essdee Rework Print") + "&no_letterhead=1"
+	));
+	if (!w) frappe.msgprint(__("Please enable pop-ups"));
+}
 
 function validGroup(group) {
 	for (const row of group.items) {

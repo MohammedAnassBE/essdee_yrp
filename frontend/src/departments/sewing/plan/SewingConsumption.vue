@@ -1,6 +1,6 @@
 <template>
 	<section data-sewing-plan-tab="consumption" class="sewing-consumption" :aria-busy="loading || state.busy" aria-label="Sewing consumption">
-		<div class="sewing-consumption__toolbar"><div class="sewing-consumption__filters"><LinkField v-model="state.lot" doctype="SD YRP Lot" label="Lot" placeholder="Select a Lot" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="searchLots" /></div><Button label="Refresh" aria-label="Refresh consumption" icon="pi pi-refresh" severity="secondary" :disabled="!state.lot || loading || state.busy" @click="load()" /></div>
+		<div class="sewing-consumption__toolbar"><div class="sewing-consumption__filters"><LinkField v-model="state.lot" doctype="SD YRP Lot" label="Lot" placeholder="Select a Lot" :show-open-button="false" show-clear :disabled="loading || state.busy" :search-handler="searchLots" /></div><Button label="Refresh" aria-label="Refresh consumption" icon="pi pi-refresh" severity="secondary" :disabled="!state.lot || loading || state.busy" @click="load()" /><Button label="Print" icon="pi pi-print" severity="secondary" outlined :disabled="!state.data?.ipd || loading || state.busy" @click="handlePrint" /></div>
 		<p v-if="!state.lot" class="erp-empty-state">Select a Lot to view consumption mappings.</p>
 		<div v-else-if="loading && !state.data" role="status"><p>Loading consumption mappings</p><Skeleton height="160px" /></div>
 		<WorkspaceLoadError v-else-if="state.loadError && !state.data" message="Retry to load consumption mappings." @retry="load()" />
@@ -30,6 +30,7 @@ import { getSewingConsumption, getSewingSupplierLots } from "../../../api/sewing
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import { buildSewingConsumptionPrintUrl } from "../../../utils/sewingPrint.js"
 import SewingConsumptionTable from "../components/SewingConsumptionTable.vue"
 import { useSewingContext } from "../useSewingContext.js"
 
@@ -75,6 +76,11 @@ async function load() {
 		if (mounted && isCurrent(generation)) { props.state.loadError = reason.message || "Unable to load consumption mappings."; error.value = props.state.loadError }
 		return false
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
+}
+function handlePrint() {
+	const url = buildSewingConsumptionPrintUrl({ ipd: props.state.data.ipd, lot: props.state.lot })
+	// noopener keeps the print dialog from freezing this tab.
+	window.open(url, "_blank", "noopener")
 }
 function save() {
 	if (!supplier.value || !props.state.lot || !props.state.data || !hasRows.value || !canWrite.value || loading.value || props.state.busy || props.state.refreshRequired) return

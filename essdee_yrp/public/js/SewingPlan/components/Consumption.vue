@@ -352,7 +352,7 @@ const handlePrint = () => {
         return
     }
 
-    const printUrl = `/printview?doctype=Item%20Production%20Detail&name=${encodeURIComponent(selected_ipd.value)}&format=Sewing%20Consumption&no_letterhead=1&lot=${encodeURIComponent(selected_lot.value || '')}&trigger_print=1`
+    const printUrl = `/printview?doctype=YRP%20Item%20Production%20Detail&name=${encodeURIComponent(selected_ipd.value)}&format=Essdee%20Sewing%20Consumption&no_letterhead=1&lot=${encodeURIComponent(selected_lot.value || '')}&trigger_print=1`
 
     // Use noopener to break the link between this tab and the print tab.
     // Without noopener, Chrome's print dialog in the child tab freezes

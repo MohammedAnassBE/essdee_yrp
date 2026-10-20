@@ -7,6 +7,9 @@
 				<LinkField v-model="filters.inputType" doctype="SD YRP Sewing Plan Input Type" label="Input Type" :show-open-button="false" show-clear :disabled="loading || filters.showGrn" />
 				<div class="common-field monthly-grn"><label for="monthly-grn">GRN mode</label><Checkbox input-id="monthly-grn" v-model="filters.showGrn" binary :disabled="loading" /></div>
 			</template>
+			<template #actions>
+				<Button v-if="generated && data.rows?.length > 0 && !loading" type="button" label="Print" icon="pi pi-print" severity="secondary" outlined class="erp-action-button" @click="handlePrint" />
+			</template>
 			<SewingReportMatrix label="Monthly quantities by date and Item / Part" :columns="columns" :rows="data.rows || []" :totals="data.grand_total" total-label="Grand Total" />
 		</ReportShell>
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
@@ -14,6 +17,7 @@
 </template>
 
 <script setup>
+import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { getSewingMonthlySummary } from "../../../api/sewing.js"
@@ -21,6 +25,7 @@ import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
+import { buildMonthlySummaryPrintUrl } from "../../../utils/sewingPrint.js"
 import SewingReportMatrix from "../components/SewingReportMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
 
@@ -45,6 +50,11 @@ async function load() {
 	} catch (reason) {
 		if (mounted && isCurrent(generation)) error.value = reason.message || "Unable to generate Monthly Summary."
 	} finally { if (mounted && isCurrent(generation)) loading.value = false }
+}
+function handlePrint() {
+	const url = buildMonthlySummaryPrintUrl({ supplier: supplier.value, filters: props.filters })
+	// noopener keeps the print dialog from freezing this tab.
+	window.open(url, "_blank", "noopener")
 }
 function reset() {
 	Object.assign(props.filters, { fromDate: "", toDate: "", inputType: "", showGrn: false })

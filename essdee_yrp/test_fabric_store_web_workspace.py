@@ -190,6 +190,10 @@ class TestFabricStoreWebWorkspace(TestCase):
 		)
 
 	def test_capabilities_expose_each_permitted_shared_report(self):
+		permitted_reports = {
+			"SD YRP GRN Report", "SD YRP GRN Summary", "SD YRP Purchase Order Log",
+			"SD YRP Purchase Order Itemwise",
+		}
 		def has_permission(doctype, ptype="read", **kwargs):
 			if doctype == "YRP Stock Ledger Entry":
 				return False
@@ -201,7 +205,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 			report = MagicMock(
 				name=name,
 				report_type="Script Report",
-				ref_doctype="YRP Stock Ledger Entry" if name == "YRP Stock Balance" else "Purchase Order",
+				ref_doctype="Purchase Order" if name in permitted_reports else "YRP Stock Ledger Entry",
 				disabled=0,
 			)
 			report.is_permitted.return_value = True
@@ -226,6 +230,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 				"purchase_order_itemwise": {
 					"label": "Purchase Order Itemwise",
 					"can_read": True,
+					"can_report": True,
 				},
 				"lot_cut_quantity": {
 					"label": "Lot Cut Quantity",

@@ -8,9 +8,6 @@ from essdee_yrp.essdee_yrp.report.sd_yrp_dispatch_percentage_report.sd_yrp_dispa
 from essdee_yrp.essdee_yrp.report.sd_yrp_finishing_plan_report.sd_yrp_finishing_plan_report import (
 	get_columns as get_finishing_plan_columns,
 )
-from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_itemwise.sd_yrp_purchase_order_itemwise import (
-	get_columns as get_purchase_order_columns,
-)
 from essdee_yrp.essdee_yrp.report.sd_yrp_work_order_pending_report.sd_yrp_work_order_pending_report import (
 	get_columns as get_work_order_pending_columns,
 )
@@ -131,56 +128,6 @@ def get_reports() -> list[WebReport]:
 			permission_doctypes=("YRP Work Order",),
 			dependency_doctypes="essdee_yrp.web_reports.planning_work_order_dependency_doctypes",
 			background="never",
-		),
-		WebReport(
-			key="accounts-audit-pending-finishing-plans",
-			kind="callable",
-			runner="essdee_yrp.accounts.audit_pending.run",
-			access="essdee_yrp.accounts.audit_pending.require_access",
-			filters={
-				"lot": ("Link", "SD YRP Lot"),
-				"item": ("Link", "Item"),
-				"from_date": "Date",
-				"to_date": "Date",
-			},
-			link_sources={
-				"name": "SD YRP Finishing Plan", "lot": "SD YRP Lot",
-				"item": "Item", "work_order": "YRP Work Order",
-			},
-			permission_doctypes=("SD YRP Finishing Plan",),
-			dependency_doctypes="essdee_yrp.accounts.audit_pending.dependency_doctypes",
-			background="never",
-		),
-		WebReport(
-			key="purchase-order-itemwise",
-			kind="frappe_report",
-			report="SD YRP Purchase Order Itemwise",
-			filters={
-				"item": ("Link", "Item"),
-				"item_variant": ("Link", "Item"),
-				"supplier": ("Link", "Supplier"),
-				"purchase_order": ("Link", "Purchase Order"),
-				"delivery_location": ("Link", "Supplier"),
-				"lot": ("Link", "SD YRP Lot"),
-				"status": "Select",
-				"open_status": "Select",
-				"docstatus": "Select",
-				"date_based_on": "Select",
-				"from_date": "Date",
-				"to_date": "Date",
-			},
-			link_sources={
-				"name": "Purchase Order",
-				"supplier": "Supplier",
-				"item": "Item",
-				"item_variant": "Item",
-				"uom": "UOM",
-				"lot": "SD YRP Lot",
-				"modified_by": "User",
-			},
-			base_columns=_column_labels(get_purchase_order_columns()),
-			permission_doctypes=("Purchase Order",),
-			dependency_doctypes="essdee_yrp.web_reports.purchase_order_dependency_doctypes",
 		),
 		WebReport(
 			key="finishing-plan",

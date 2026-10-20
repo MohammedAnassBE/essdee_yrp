@@ -25,7 +25,6 @@ import { computed, ref, watch } from "vue"
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
 import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import LotCutQuantityReport from "../../components/reports/LotCutQuantityReport.vue"
-import PurchaseOrderItemwiseReport from "../../components/reports/PurchaseOrderItemwiseReport.vue"
 import StockBalanceReport from "../../components/reports/StockBalanceReport.vue"
 
 const props = defineProps({
@@ -36,10 +35,9 @@ const props = defineProps({
 const activeTab = ref("")
 const tabs = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: StockBalanceReport },
-	{ key: "purchase_order_itemwise", value: "purchase-order-itemwise", label: "Purchase Order Itemwise", icon: "pi pi-shopping-cart", component: PurchaseOrderItemwiseReport },
 	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: LotCutQuantityReport },
 ]
-const deskTabs = computed(() => departmentDeskReports(props.department, props.capability?.reports, tabs.some(tab => props.reportKeys.includes(tab.key) && props.capability?.reports?.[tab.key]?.can_read)).map(tab => ({ ...tab, component: DeskBackedReport })))
+const deskTabs = computed(() => departmentDeskReports(props.department, props.capability?.reports, props.reportKeys.some(key => props.capability?.reports?.[key]?.can_read)).map(tab => ({ ...tab, component: DeskBackedReport })))
 const visibleTabs = computed(() => [...tabs.filter((tab) => (
 	props.reportKeys.includes(tab.key) && props.capability?.reports?.[tab.key]?.can_read
 )).map((tab) => ({

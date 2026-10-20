@@ -1,9 +1,10 @@
 <template>
 	<ReportShell :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" @generate="generate" @reset="reset">
 		<template #filters>
-			<template v-for="field in config.filters" :key="field.fieldname">
+			<template v-for="field in visibleFilters" :key="field.fieldname">
 				<LinkField v-if="field.fieldtype === 'Link'" v-model="filters[field.fieldname]" :doctype="field.options" :label="field.label" :filters="field.filters" :required="Boolean(field.reqd)" :show-open-button="false" show-clear />
 				<DateField v-else-if="field.fieldtype === 'Date'" v-model="filters[field.fieldname]" :label="field.label" :required="Boolean(field.reqd)" />
+				<label v-else-if="field.fieldtype === 'Int'" class="desk-report-field"><span>{{ field.label }}</span><InputNumber v-model="filters[field.fieldname]" :required="Boolean(field.reqd)" :use-grouping="false" :max-fraction-digits="0" fluid /></label>
 				<label v-else-if="field.fieldtype === 'Select'" class="desk-report-field"><span>{{ field.label }}</span><Select v-model="filters[field.fieldname]" :options="field.options" option-label="label" option-value="value" fluid /></label>
 				<label v-else-if="field.fieldtype === 'Check'" class="desk-report-check"><Checkbox v-model="filters[field.fieldname]" binary :true-value="1" :false-value="0" /><span>{{ field.label }}</span></label>
 			</template>
@@ -23,8 +24,9 @@
 <script setup>
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
+import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
-import { onMounted, reactive, ref, watch } from "vue"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
@@ -39,6 +41,7 @@ const props = defineProps({ reportKey: { type: String, required: true }, supplie
 const config = deskReportConfig[props.reportKey]
 const defaults = () => ({ ...deskReportDefaults(props.reportKey, todayIso()), ...(props.supplier ? { supplier: props.supplier } : {}) })
 const filters = reactive(defaults())
+const visibleFilters = computed(() => config.filters.filter(field => !field.depends_on || filters[field.depends_on]))
 const filterError = ref("")
 const pickerVisible = ref(false)
 const {
@@ -54,7 +57,7 @@ async function generate() {
 	const missing = config.filters.find(field => field.reqd && !filters[field.fieldname])
 	filterError.value = missing ? `${missing.label} is required.` : ""
 	if (filterError.value) return
-	if (filters.from_date && filters.to_date && filters.from_date > filters.to_date) {
+	if (visibleFilters.value.some(field => field.fieldname === "from_date") && filters.from_date && filters.to_date && filters.from_date > filters.to_date) {
 		filterError.value = "From Date cannot be after To Date."
 		return
 	}

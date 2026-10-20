@@ -518,6 +518,33 @@ def derive_production_order_detail_fields(
 	return result
 
 
+def find_finishing_plan_status_since(name, status, versions):
+	"""MRP rule: latest Version transition into the plan's current source status."""
+	if not status:
+		return None
+	matches = []
+	for version in versions or []:
+		if version.get("docname") != name or not version.get("creation"):
+			continue
+		try:
+			data = version.get("data")
+			payload = json.loads(data) if isinstance(data, str) else data
+		except (TypeError, ValueError):
+			continue
+		changes = payload.get("changed") if isinstance(payload, dict) else None
+		if not isinstance(changes, (list, tuple)):
+			continue
+		if any(
+			isinstance(change, (list, tuple))
+			and len(change) >= 3
+			and change[0] == "fp_status"
+			and change[2] == status
+			for change in changes
+		):
+			matches.append(str(version["creation"]))
+	return max(matches, default=None)
+
+
 def derive_finishing_plan_audit_fields(
 	output: Mapping[str, Any],
 	source: Mapping[str, Any],
@@ -525,8 +552,11 @@ def derive_finishing_plan_audit_fields(
 	plan: MigrationPlan,
 	parent: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
-	"""Preserve the current audit workflow and normalize legacy OCR requests."""
+	"""Preserve audit workflow and the MRP current-status transition timestamp."""
 	result = dict(output)
+	result["fp_status_since"] = find_finishing_plan_status_since(
+		source.get("name"), source.get("fp_status"), source.get("__migration_fp_status_versions")
+	)
 	status = result.get("fp_status")
 	modified_date = str(source.get("modified") or "")[:10] or None
 	if status == "OCR Requested":

@@ -647,6 +647,34 @@ def _add_runtime_passwords(frappe, doctype, name, row):
 		row["__migration_passwords"] = passwords
 
 
+def _finishing_plan_versions(frappe, names=None):
+	filters = {"ref_doctype": "Finishing Plan"}
+	if names is not None:
+		filters["docname"] = ["in", list(names)]
+	return frappe.get_all(
+		"Version",
+		filters=filters,
+		fields=["docname", "creation", "data"],
+		order_by="creation desc, name desc",
+		limit_page_length=0,
+	)
+
+
+def finishing_plan_status_history(frappe):
+	"""Stream source identities, current statuses and raw read-only Version evidence."""
+	plans = frappe.get_all("Finishing Plan", fields=["name", "fp_status"], limit_page_length=0)
+	versions = {}
+	for version in _finishing_plan_versions(frappe):
+		versions.setdefault(version["docname"], []).append(dict(version))
+	for plan in plans:
+		yield {
+			"kind": "finishing_plan_status_history",
+			"name": plan["name"],
+			"fp_status": plan.get("fp_status"),
+			"versions": versions.get(plan["name"], []),
+		}
+
+
 def _emit_export_parent_rows(frappe, schemas, doctype, schema, rows):
 	"""Emit complete parent documents for an already selected row batch."""
 
@@ -654,6 +682,11 @@ def _emit_export_parent_rows(frappe, schemas, doctype, schema, rows):
 		return
 	by_name = {row["name"]: dict(row) for row in rows}
 	parent_names = list(by_name)
+	if doctype == "Finishing Plan":
+		for data in by_name.values():
+			data["__migration_fp_status_versions"] = []
+		for version in _finishing_plan_versions(frappe, parent_names):
+			by_name[version["docname"]]["__migration_fp_status_versions"].append(dict(version))
 	for table_field in _table_fields(schema):
 		child_doctype = table_field["options"]
 		child_schema = schemas.get(child_doctype)
@@ -1040,6 +1073,9 @@ def _collect_reference_names(value):
 
 def emit_reference_data(frappe):
 	"""Stream authoritative master/default values needed by F16 derivations."""
+
+	for row in finishing_plan_status_history(frappe):
+		_write(row)
 
 	default_received_type = frappe.db.get_single_value("Stock Settings", "default_received_type")
 	default_packing_process = frappe.db.get_single_value("IPD Settings", "default_packing_process")
@@ -2121,6 +2157,7 @@ def main():
 	subparsers.add_parser("auth-rows")
 	subparsers.add_parser("retired-rows").add_argument("--metadata-only", action="store_true")
 	subparsers.add_parser("reference-data")
+	subparsers.add_parser("finishing-plan-status-history")
 	subparsers.add_parser("related-business-masters")
 	subparsers.add_parser("approved-frappe-data")
 	subparsers.add_parser("approved-frappe-census")
@@ -2219,6 +2256,8 @@ def main():
 	os.chdir(source_bench / "sites")
 	frappe.init(site=args.source_site, sites_path=str(source_bench / "sites"))
 	frappe.connect()
+	if args.command == "finishing-plan-status-history":
+		frappe.db.sql("SET SESSION TRANSACTION READ ONLY")
 	try:
 		installed_apps = set(frappe.get_installed_apps())
 		missing_apps = {args.source_app, "frappe_tools"} - installed_apps
@@ -2260,6 +2299,9 @@ def main():
 		elif args.command == "retired-rows":
 			for record in retired_source_rows(frappe, metadata_only=args.metadata_only):
 				_write(record)
+		elif args.command == "finishing-plan-status-history":
+			for row in finishing_plan_status_history(frappe):
+				_write(row)
 		elif args.command == "reference-data":
 			emit_reference_data(frappe)
 		elif args.command == "file-status":

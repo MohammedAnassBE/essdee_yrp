@@ -240,6 +240,27 @@ class ReviewedTransformerTest(unittest.TestCase):
 		self.assertEqual(settings["doctype"], "SD YRP MRP Settings")
 		self.assertEqual(settings["accounts_user_role"], "Accounts User")
 
+	def test_finishing_status_since_uses_latest_transition_into_current_status(self):
+		versions = [
+			{"docname": "FP-1", "creation": "2026-04-01 10:00:00", "data": '{"changed": [["fp_status", "Planned", "Dispatched"]]}'},
+			{"docname": "FP-1", "creation": "2026-05-15 12:30:00", "data": {"changed": [["fp_status", "Partially Dispatched", "Dispatched"]]}},
+			{"docname": "FP-1", "creation": "2026-06-01 10:00:00", "data": '{"changed": [["other", 1, 2]]}'},
+			{"docname": "FP-2", "creation": "2026-07-01 10:00:00", "data": {"changed": [["fp_status", "Planned", "Dispatched"]]}},
+			{"docname": "FP-1", "creation": "2026-08-01 10:00:00", "data": "bad-json"},
+		]
+		row = transform_document({"doctype": "Finishing Plan", "name": "FP-1", "fp_status": "Dispatched", "__migration_fp_status_versions": versions}, self.plan)
+		self.assertEqual(row.get("fp_status_since"), "2026-05-15 12:30:00")
+		self.assertNotIn("__migration_fp_status_versions", row)
+
+	def test_finishing_status_since_does_not_invent_a_date_without_matching_history(self):
+		row = transform_document({"doctype": "Finishing Plan", "name": "FP-1", "fp_status": "Dispatched", "modified": "2026-08-01 10:00:00", "__migration_fp_status_versions": [{"docname": "FP-1", "creation": "2026-05-15 12:30:00", "data": {"changed": [None, 2, [], ["fp_status", "Planned", "Fully Dispatched"]]}}]}, self.plan)
+		self.assertIsNone(row.get("fp_status_since"))
+
+	def test_finishing_status_since_normalizes_legacy_ocr_request_after_matching_source_status(self):
+		row = transform_document({"doctype": "Finishing Plan", "name": "FP-1", "fp_status": "OCR Requested", "__migration_fp_status_versions": [{"docname": "FP-1", "creation": "2026-05-15 12:30:00", "data": {"changed": [["fp_status", "Dispatched", "OCR Requested"]]}}]}, self.plan)
+		self.assertEqual(row["fp_status"], "Ready for Audit")
+		self.assertEqual(row.get("fp_status_since"), "2026-05-15 12:30:00")
+
 	def test_purchase_order_item_builds_standard_commercial_shadow_values(self):
 		row = transform_document(
 			{

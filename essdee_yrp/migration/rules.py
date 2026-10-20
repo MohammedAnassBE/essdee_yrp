@@ -94,6 +94,7 @@ RULES = {
 	),
 	"Essdee Raw Print Format Detail": DocTypeRule(target="YRP ZPL Raw Print Format Detail"),
 	"FG Stock Entry": DocTypeRule(value_transformers={"warehouse": "supplier_to_warehouse"}),
+	# Source exports attach Version history for the current-status timestamp.
 	"Finishing Plan": DocTypeRule(
 		post_transformer="derive_finishing_plan_audit_fields",
 	),

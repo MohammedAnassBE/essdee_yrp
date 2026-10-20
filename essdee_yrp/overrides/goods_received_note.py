@@ -17,6 +17,7 @@ from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import get_dimension_fieldnames
 from yrp.stock.stock_ledger import make_sl_entries
 from yrp.stock.utils import get_last_sle_rate
+from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	_get_warehouse_for_supplier,
 	_normal_json,
@@ -184,6 +185,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 					self.against_id
 				)
 		validate_sewing_plan_quantity(self)
+		validate_quality_inspection_passed(self)
 		plan_kind = _new_consumption_plan_kind(self)
 		if plan_kind:
 			if plan_kind == "fabric" and qualified_cloth:
@@ -1138,6 +1140,77 @@ def validate_sewing_plan_quantity(grn):
 			"<br>".join(mismatches),
 			title=_("Sewing Plan Qty Mismatch"),
 		)
+
+
+def validate_quality_inspection_passed(grn):
+	"""Require a submitted Pass inspection for every colour/size a Sewing Plan Work Order receives."""
+	if grn.get("against") != "YRP Work Order" or grn.get("is_return") or not grn.get("against_id"):
+		return
+	if not frappe.db.exists("SD YRP Sewing Plan", {"work_order": grn.against_id}):
+		return
+
+	inspected = {
+		(row.colour, row.size)
+		for row in frappe.db.sql(
+			"""
+				select colour.colour, size.size
+				from `tabSD YRP Essdee Quality Inspection Colour` colour
+				join `tabSD YRP Essdee Quality Inspection Size` size on size.parent = colour.parent
+				join `tabSD YRP Essdee Quality Inspection` inspection on inspection.name = colour.parent
+				where inspection.against = 'YRP Work Order'
+				  and inspection.against_id = %(work_order)s
+				  and inspection.docstatus = 1
+				  and inspection.result = 'Pass'
+				  and colour.selected = 1
+				  and size.selected = 1
+			""",
+			{"work_order": grn.against_id},
+			as_dict=True,
+		)
+	}
+	missing = [
+		combination
+		for combination in dict.fromkeys(_received_colour_sizes(grn))
+		if combination not in inspected
+	]
+	if missing:
+		frappe.throw(
+			_(
+				"A passed quality inspection has not been submitted for these colour/size combinations"
+				" of Work Order {0} (Lot {1}):<br>{2}<br>"
+				"A quality inspection with result Pass must be submitted for each combination before receiving."
+			).format(
+				grn.against_id,
+				grn.get("lot"),
+				"<br>".join(f"{colour} / {size}" for colour, size in missing),
+			),
+			title=_("Passed Quality Inspection Missing"),
+		)
+
+
+def _received_colour_sizes(grn):
+	"""Yield (colour, size) per received row the way Production API pairs inspection rows."""
+	ipd_name = frappe.db.get_value("YRP Work Order", grn.against_id, "production_detail")
+	ipd = frappe.db.get_value(
+		"YRP Item Production Detail",
+		ipd_name,
+		["is_set_item", "packing_attribute", "primary_item_attribute", "set_item_attribute", "major_attribute_value"],
+		as_dict=True,
+	)
+	for item in grn.get("items") or []:
+		if flt(item.get("quantity")) <= 0:
+			continue
+		attributes = get_variant_attr_details(item.get("item_variant"))
+		size = attributes.get(ipd.primary_item_attribute)
+		colour = (update_if_string_instance(item.get("set_combination")) or {}).get("major_colour")
+		if cint(ipd.is_set_item) and attributes.get(ipd.set_item_attribute) != _attribute_value(
+			ipd.major_attribute_value
+		):
+			part_colour = attributes.get(ipd.packing_attribute)
+			colour = f"{part_colour}({colour})" if part_colour and colour else None
+		# Rows without a colour or size (accessories) are not inspected.
+		if colour and size:
+			yield colour, size
 
 
 def _canonical_json(value):

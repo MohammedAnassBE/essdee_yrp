@@ -669,7 +669,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 		with self.assertRaisesRegex(
 			frappe.ValidationError,
-			"after the configured .* allowance",
+			r"after the configured \d+(\.\d+)?% allowance",
 		):
 			submit_data_entry_log(
 				{
@@ -1398,8 +1398,10 @@ class TestSewingClosedGrnConcurrency(IntegrationTestCase):
 		with ThreadPoolExecutor(max_workers=2) as executor:
 			try:
 				supplier, groups, selected = executor.submit(connection, setup).result(30)
+				# The race is about the Work Order lock; the passed-inspection gate is covered separately.
 				with patch.object(database_class, "sql", new=observe_sql), \
-					patch.object(service, "_get_closed_sewing_work_order", new=observe_lock):
+					patch.object(service, "_get_closed_sewing_work_order", new=observe_lock), \
+					patch("essdee_yrp.overrides.goods_received_note.validate_quality_inspection_passed"):
 					first = executor.submit(connection, lambda: create("first", supplier, groups))
 					second = executor.submit(connection, lambda: create("second", supplier, groups))
 					self.assertEqual([first.result(30), second.result(30)], ["submitted", "rejected"])

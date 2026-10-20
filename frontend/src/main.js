@@ -8,12 +8,17 @@ import "@fontsource-variable/inter"
 import "primeicons/primeicons.css"
 
 import App from "./App.vue"
-import router from "./router/index.js"
+import router, { reloadRouteChunk } from "./router/index.js"
 import { initializeTheme } from "./utils/themePreference.js"
 import "./styles/main.css"
 import "./styles/enterprise.css"
 
 initializeTheme()
+
+window.addEventListener("vite:preloadError", (event) => {
+	event.preventDefault()
+	reloadRouteChunk()
+})
 
 const EssdeeAura = definePreset(Aura, {
 	semantic: {

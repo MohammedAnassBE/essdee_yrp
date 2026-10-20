@@ -21,7 +21,7 @@
 			>
 				<template #document-actions="{ busy, dirty }">
 					<DocumentPrintButton doctype="SD YRP Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy" />
-					<DocumentDeleteButton doctype="SD YRP Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy || dirty" :redirect-to="backTo" />
+					<DocumentDeleteButton doctype="SD YRP Cutting Plan" document-label="Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy || dirty" :redirect-to="backTo" />
 				</template>
 			</CuttingPlanEditor>
 		</div>
@@ -67,7 +67,7 @@
 						:formats="workspaceData.print_formats || []"
 						:disabled="workspaceLoading"
 					/>
-					<DocumentDeleteButton doctype="SD YRP Cutting Plan" :name="doc.name" :docstatus="doc.docstatus" :disabled="workspaceLoading" :redirect-to="backTo" />
+					<DocumentDeleteButton doctype="SD YRP Cutting Plan" document-label="Cutting Plan" :name="doc.name" :docstatus="doc.docstatus" :disabled="workspaceLoading" :redirect-to="backTo" />
 					<CuttingPlanActions
 						:doc="doc"
 						:data="workspaceData"

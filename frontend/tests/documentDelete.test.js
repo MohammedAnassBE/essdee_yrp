@@ -17,5 +17,6 @@ test("delete redirect prefers the explicit target, then navigation backTo, then 
 
 test("delete toast uses the document label and name", () => {
 	assert.deepEqual(documentDeletedToast("SD YRP Lot", "LOT-1", "Lot"), { severity: "success", summary: "Lot LOT-1 deleted", life: 3500 })
+	assert.equal(documentDeletedToast("SD YRP Cutting Plan", "CP-1", "Cutting Plan").summary, "Cutting Plan CP-1 deleted")
 	assert.equal(documentDeletedToast("Purchase Order", "PO-1").summary, "Purchase Order PO-1 deleted")
 })

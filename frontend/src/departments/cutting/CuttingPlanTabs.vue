@@ -80,14 +80,14 @@
 								<div v-if="panelNames(group).length" class="panel-strip"><strong>Panels</strong><span>{{ panelNames(group).join(", ") }}</span></div>
 								<div class="table-scroll" role="region" tabindex="0" :aria-label="`Completed cut quantity group ${groupIndex + 1}`">
 									<table class="data-table matrix-table">
-										<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th><th>Total</th></tr></thead>
+										<thead><tr><th>S.No.</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="value in group.primary_attribute_values || []" :key="value">{{ value }}</th><th>Total</th><th>Completed</th></tr></thead>
 										<tbody>
 											<tr v-for="(item, itemIndex) in group.items || []" :key="itemIndex">
 												<td>{{ itemIndex + 1 }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ displayAttribute(item, attribute) }}</td>
 												<td v-for="value in group.primary_attribute_values || []" :key="value" class="number-cell">{{ displayQuantity(item.values?.[value]) }}</td>
-												<td class="number-cell strong-cell">{{ rowTotal(item, group.primary_attribute_values) }}</td>
+												<td class="number-cell strong-cell">{{ rowTotal(item, group.primary_attribute_values) }}</td><td>{{ item.completed ? "Yes" : "No" }}</td>
 											</tr>
-											<tr class="total-row"><td>Total</td><td v-for="attribute in group.attributes || []" :key="attribute"></td><td v-for="value in group.primary_attribute_values || []" :key="value" class="number-cell">{{ completedColumnTotal(group, value) }}</td><td class="number-cell">{{ completedGrandTotal(group) }}</td></tr>
+											<tr class="total-row"><td>Total</td><td v-for="attribute in group.attributes || []" :key="attribute"></td><td v-for="value in group.primary_attribute_values || []" :key="value" class="number-cell">{{ completedColumnTotal(group, value) }}</td><td class="number-cell">{{ completedGrandTotal(group) }}</td><td></td></tr>
 										</tbody>
 									</table>
 								</div>
@@ -208,7 +208,7 @@ const fallbackLabels = {
 const fieldsByName = computed(() => Object.fromEntries((props.meta?.fields || []).map((item) => [item.fieldname, item])))
 const overviewFields = computed(() => detailFieldnames.value.map((fieldname) => ({ ...field(fieldname), value: props.doc[fieldname] })))
 const itemGroups = computed(() => normaliseGroups(props.data.item_details))
-const completedGroups = computed(() => filterGroups(props.data.completed_items, (item) => Boolean(item.completed)))
+const completedGroups = computed(() => filterGroups(props.data.completed_items, hasExcess))
 const incompleteGroups = computed(() => filterGroups(props.data.incomplete_items, hasExcess))
 const requirementColumns = [
 	{ field: "colour", label: "Colour" },

@@ -1,7 +1,7 @@
 <template>
 	<template v-if="canDelete">
 		<Button type="button" class="document-delete-button" label="Delete" icon="pi pi-trash" severity="danger" text :disabled="disabled || busy" @click="confirmVisible = true" />
-		<DocumentConfirmationDialog v-model:visible="confirmVisible" title="Delete document?" :message="`Permanently delete ${doctype} ${name}?`" confirm-label="Delete" confirm-icon="pi pi-trash" :busy="busy" @confirm="remove" />
+		<DocumentConfirmationDialog v-model:visible="confirmVisible" title="Delete document?" :message="`Permanently delete ${documentLabel || doctype} ${name}?`" confirm-label="Delete" confirm-icon="pi pi-trash" :busy="busy" @confirm="remove" />
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 	</template>
 </template>

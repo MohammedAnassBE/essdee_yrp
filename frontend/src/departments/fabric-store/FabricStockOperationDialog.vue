@@ -29,7 +29,7 @@
 		<template #footer>
 			<div class="fabric-stock-footer">
 				<Button label="Close" severity="secondary" text :disabled="saving" @click="requestVisibility(false)" />
-				<div><Button v-if="canDiscard" label="Discard Draft" icon="pi pi-trash" severity="danger" outlined :disabled="saving" @click="requestDiscard" /><DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(editor.docstatus || editor.record?.docstatus || 0)" :document-label="`${labels[operation]} ${currentName}`.trim()" :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
+				<div><DocumentDeleteButton v-if="canDelete" :doctype="editor.doctype" :document-label="labels[operation]" :name="currentName" :docstatus="Number(editor.docstatus ?? editor.record?.docstatus ?? 0)" :disabled="saving" :redirect="false" @deleted="documentDeleted" /><Button v-if="canDiscard" label="Discard Draft" icon="pi pi-trash" severity="danger" outlined :disabled="saving" @click="requestDiscard" /><DocumentSaveButton :saved="Boolean(currentName)" :dirty="dirty" :docstatus="Number(editor.docstatus || editor.record?.docstatus || 0)" :document-label="`${labels[operation]} ${currentName}`.trim()" :show-save="!editor.protected_completion && (editor.permissions?.can_create || editor.permissions?.can_write)" :show-submit="Boolean(editor.permissions?.can_submit)" :submit-label="editor.protected_completion ? 'Submit Completion' : 'Submit'" :disabled="!canSave" :loading="saving" @save="save(false)" @submit="save(true)" /></div>
 			</div>
 		</template>
 	</Dialog>
@@ -46,6 +46,7 @@ import { computed, reactive, ref, watch } from "vue"
 import { getCount } from "../../api/frappe.js"
 import { discardCompletionDraft, getFabricStockItemSchema, getFabricStockOperationEditor, getStockUpdateRates, saveFabricStockOperation } from "../../api/fabricStore.js"
 import FormField from "../../components/common/FormField.vue"
+import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
@@ -101,6 +102,12 @@ function updateField(fieldname, value) {
 }
 
 const canDiscard = computed(() => Boolean(currentName.value && editor.value.protected_completion && editor.value.permissions?.can_delete))
+
+const canDelete = computed(() => Boolean(currentName.value && Number(editor.value.docstatus ?? editor.value.record?.docstatus ?? 0) === 0 && editor.value.permissions?.can_delete && !canDiscard.value))
+function documentDeleted() {
+	emit("update:visible", false)
+	emit("changed")
+}
 
 watch(() => [props.visible, props.operation, props.name, JSON.stringify(props.sourceContext || {}), props.initialEditor], ([visible]) => { if (visible) { currentName.value = props.name; load() } }, { immediate: true })
 

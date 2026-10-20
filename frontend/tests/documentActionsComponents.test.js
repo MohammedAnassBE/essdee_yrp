@@ -470,3 +470,16 @@ test("other custom print buttons open their URL without fetching settings", asyn
 		assert.deepEqual(opened, [["/printview?doctype=SD+YRP+Product&name=PRODUCT%2F1&trigger_print=1&format=Essdee+Product+Tech+Pack&no_letterhead=1", "_blank"]])
 	} finally { globalThis.window = oldWindow }
 })
+
+
+test("Cutting Plan delete uses the human label in confirmation and toast", async () => {
+	const { root, toasts } = mountDelete({ getDocPermissions: async () => ({ delete: 1 }), deleteDoc: async () => {} }, { doctype: "SD YRP Cutting Plan", documentLabel: "Cutting Plan", name: "CP-1" })
+	await tick()
+	assert.equal(nodes(root, "confirmation")[0].props.message, "Permanently delete Cutting Plan CP-1?")
+	await nodes(root, "confirmation")[0].props.onConfirm()
+	assert.equal(toasts[0].message.summary, "Cutting Plan CP-1 deleted")
+	const source = readFileSync(resolve(rootPath, "frontend/src/departments/CuttingPlan.vue"), "utf8")
+	const buttons = source.match(/<DocumentDeleteButton\b[^>]+\/>/g)
+	assert.equal(buttons.length, 2)
+	for (const button of buttons) assert.match(button, /document-label="Cutting Plan"/)
+})

@@ -569,8 +569,7 @@ function sourceConfirmationVisibilityChanged(visible) {
 
 async function runWorkspaceAction(action) {
 	if (action === "save") return save(false)
-	if (action === "submit") return save(true)
-	if (["cancel", "amend"].includes(action)) return requestLifecycleAction(action)
+	if (["submit", "cancel", "amend"].includes(action)) return requestLifecycleAction(action)
 }
 
 function startSubmittedEdit() {
@@ -674,11 +673,11 @@ async function runCommand(command, payload = {}, destructive = false) {
 		if (!actionIsStale(sequence, requestedRouteName)) acting.value = ""
 	}
 }
-const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan?" : "Amend Delivery Challan?")
-const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan" : "Create Amendment")
-const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${currentName.value}? This keeps the document for audit and reverses its submitted effect.` : `Create a new draft amendment from ${currentName.value}?`)
+const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit Delivery Challan?" : pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan?" : "Amend Delivery Challan?")
+const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit" : pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan" : "Create Amendment")
+const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "submit" ? `Permanently submit ${currentName.value}?` : pendingLifecycleCommand.value === "cancel" ? `Cancel ${currentName.value}? This keeps the document for audit and reverses its submitted effect.` : `Create a new draft amendment from ${currentName.value}?`)
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
-async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command) await runCommand(command) }
+async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "submit") await save(true); else if (command) await runCommand(command) }
 
 async function createReturn(payload) {
 	returnError.value = ""

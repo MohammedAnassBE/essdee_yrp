@@ -89,8 +89,8 @@
 				<div class="laysheet-footer__primary">
 					<Button label="Close" severity="secondary" text :disabled="Boolean(busy)" @click="emit('update:visible', false)" />
 					<Button v-if="!sheet && canCreate" label="Create Lay Sheet" icon="pi pi-plus" :loading="busy === 'create'" @click="createLaySheet" />
-					<Button v-if="sheet?.permissions?.can_revert_labels" label="Revert Labels" severity="warn" outlined :loading="busy === 'revert'" @click="runStatusAction('revert_labels', 'revert')" />
-					<Button v-if="sheet?.permissions?.can_restore_labels" label="Restore Label Status" severity="secondary" outlined :loading="busy === 'restore'" @click="runStatusAction('update_label_print_status', 'restore')" />
+					<Button v-if="sheet?.permissions?.can_revert_labels" label="Revert Labels" severity="warn" outlined :loading="busy === 'revert'" @click="revertLabels" />
+					<Button v-if="sheet?.permissions?.can_restore_labels" label="Update Status" severity="secondary" outlined :loading="busy === 'restore'" @click="runStatusAction('update_label_print_status', 'restore')" />
 					<Button v-if="sheet?.permissions?.can_cancel" label="Cancel Lay Sheet" icon="pi pi-ban" severity="danger" outlined :loading="busy === 'cancel'" @click="cancelLaySheet" />
 					<Button v-if="sheet?.permissions?.can_approve" label="Approve Grammage" icon="pi pi-check" :loading="busy === 'approve'" @click="runStatusAction('approve_grammage', 'approve')" />
 					<Button v-if="sheet?.permissions?.can_generate" label="Generate Bundles" icon="pi pi-box" outlined @click="openGenerate" />
@@ -256,8 +256,8 @@ const laysheetOverviewFields = computed(() => {
 		{ fieldname: "width", label: "Width (in)", fieldtype: "Float", value: row.width },
 		{ fieldname: "maximum_no_of_plys", label: "Maximum No Of Plys", fieldtype: "Int", value: row.maximum_no_of_plys },
 		{ fieldname: "maximum_allow_percentage", label: "Maximum Allow Percentage", fieldtype: "Percent", value: row.maximum_allow_percentage },
-		{ fieldname: "cutting_spreader", label: "Cutting Spreader", fieldtype: "Link", value: row.cutting_spreader },
-		{ fieldname: "cutter", label: "Cutter", fieldtype: "Link", value: row.cutter },
+		{ fieldname: "cutting_spreader", label: "Cutting Spreader", fieldtype: "Link", options: "SD YRP Cutting Spreader", value: row.cutting_spreader },
+		{ fieldname: "cutter", label: "Cutter", fieldtype: "Link", options: "SD YRP Cutter", value: row.cutter },
 		{ fieldname: "no_of_rolls", label: "No Of Rolls", fieldtype: "Int", value: row.no_of_rolls },
 		{ fieldname: "no_of_bits", label: "No Of Bits", fieldtype: "Int", value: row.no_of_bits },
 		{ fieldname: "weight", label: "Weight (kg)", fieldtype: "Float", value: row.weight },
@@ -269,8 +269,8 @@ const laysheetOverviewFields = computed(() => {
 		{ fieldname: "total_no_of_pieces", label: "Total No Of Pieces", fieldtype: "Int", value: row.total_no_of_pieces },
 		{ fieldname: "piece_weight", label: "Piece Weight (kg)", fieldtype: "Float", precision: 4, value: row.piece_weight },
 		{ fieldname: "required_pcs_weight", label: "Required Piece Weight (kg)", fieldtype: "Float", precision: 4, value: row.required_pcs_weight },
-		{ fieldname: "approved_by", label: "Approved By", fieldtype: "Link", value: row.approved_by },
-		{ fieldname: "goods_received_note", label: "Goods Received Note", fieldtype: "Link", value: row.goods_received_note },
+		{ fieldname: "approved_by", label: "Approved By", fieldtype: "Link", options: "User", value: row.approved_by },
+		{ fieldname: "goods_received_note", label: "Goods Received Note", fieldtype: "Link", options: "YRP Goods Received Note", value: row.goods_received_note },
 	]
 })
 const canEditDetails = computed(() => Boolean(sheet.value?.permissions?.can_edit_details))
@@ -664,6 +664,16 @@ async function runStatusAction(method, action) {
 	}
 }
 
+function revertLabels() {
+	const { name, goods_received_note } = sheet.value
+	return confirmAction({
+		header: "Revert labels?",
+		message: `Revert labels for ${name}? This cancels ${goods_received_note ? `Goods Received Note ${goods_received_note} and ` : ""}the bundle ledger; labels must be updated again.`,
+		acceptLabel: "Revert Labels",
+		accept: () => runStatusAction("revert_labels", "revert"),
+	})
+}
+
 async function cancelLaySheet() {
 	return confirmAction({
 		header: "Cancel Cutting LaySheet?",
@@ -675,7 +685,9 @@ async function cancelLaySheet() {
 }
 
 async function reloadChanged() {
+	const message = success.value
 	await load()
+	success.value = message
 	emit("changed", sheet.value)
 }
 

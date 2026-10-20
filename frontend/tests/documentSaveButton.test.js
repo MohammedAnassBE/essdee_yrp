@@ -105,6 +105,7 @@ test("Fabric stock draft stays open, adopts saved identity, and tracks header an
 		"../../components/common/FormField.vue": props => Vue.h("field", props),
 		"../../components/stock/StockItemComposer.vue": props => Vue.h("composer", props),
 		"../../components/documents/DocumentErrorDialog.vue": () => null,
+		"../../components/documents/DocumentDeleteButton.vue": () => null,
 		"../../components/documents/DocumentSaveButton.vue": await saveButton(options => confirmations.push(options)),
 		"../../utils/fieldErrors.js": { ...fieldErrors, requiredFieldErrors: () => ({}) },
 		"../../utils/useActionConfirmation.js": { useActionConfirmation: () => () => {} },

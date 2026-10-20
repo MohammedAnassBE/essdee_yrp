@@ -1,17 +1,19 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import fs from "node:fs"
+import { computed, nextTick, reactive, ref, watch } from "vue"
 
-function setup(doc) {
+function setup(doc, browser = { setTimeout: () => 0, clearTimeout: () => {} }) {
+	let unmount
 	const calls = []
 	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingPlanActions.vue", import.meta.url), "utf8").split("<script setup>")[1].split("</script>")[0].replace(/^import .*$/gm, "")
-	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyElementAsImage", "window", `${source}\nreturn { runPlanAction, dialogError }`)(
-		(value) => ({ value }), (fn) => ({ get value() { return fn() } }), (value) => value,
+	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyElementAsImage", "window", "watch", "onBeforeUnmount", `${source}\nreturn { runPlanAction, dialogError, feedback, showFeedback }`)(
+		ref, computed, reactive,
 		() => ({ doc, data: {} }), () => () => {},
 		async (method, args) => { calls.push({ method: method.split(".").pop(), args }) },
-		() => {}, { setTimeout: () => 0, clearTimeout: () => {} },
+		() => {}, browser, watch, callback => { unmount = callback },
 	)
-	return { ...api, calls }
+	return { ...api, calls, unmount }
 }
 
 test("plan actions send the loaded document name, not the name at mount", async () => {
@@ -25,4 +27,32 @@ test("plan actions send the loaded document name, not the name at mount", async 
 		{ method: "fetch_received_cloth", args: { docname: "CP-1" } },
 		{ method: "calculate_laysheets", args: { cutting_plan: "CP-1" } },
 	])
+})
+
+
+test("plan feedback expires after four seconds, resets for new feedback, and clears on unmount", async () => {
+	const timers = new Map(), delays = []
+	let nextId = 0
+	const state = setup({}, {
+		setTimeout: (callback, delay) => { delays.push(delay); timers.set(++nextId, callback); return nextId },
+		clearTimeout: id => timers.delete(id),
+	})
+	state.showFeedback("Saved")
+	await nextTick()
+	assert.deepEqual(delays, [4000])
+	state.showFeedback("Updated")
+	await nextTick()
+	assert.equal(timers.size, 1)
+	assert.equal(timers.has(1), false)
+	timers.get(2)()
+	await nextTick()
+	assert.equal(state.feedback.value, "")
+	assert.equal(timers.size, 0)
+	state.showFeedback("Saved again")
+	await nextTick()
+	state.unmount()
+	assert.equal(timers.size, 0)
+	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingPlanActions.vue", import.meta.url), "utf8")
+	assert.match(source, /\.plan-action-feedback\s*\{[^}]*pointer-events: none;/)
+	assert.match(source, /\.plan-action-feedback :deep\(\.p-message-close-button\)\s*\{ pointer-events: auto;/)
 })

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
 import { getLockedRedirect } from "./departmentLock.js"
+import { isChunkLoadError, reloadChunkTarget } from "./chunkReload.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
 import { PLANNING_ROUTES } from "../departments/planning/planningViews.js"
@@ -882,6 +883,19 @@ const router = createRouter({
 	routes,
 })
 
-router.beforeEach((to) => getLockedRedirect(to.path))
+let chunkReloadTarget = null
+router.beforeEach((to) => {
+	chunkReloadTarget = to
+	return getLockedRedirect(to.path)
+})
+router.afterEach(() => { chunkReloadTarget = null })
+
+export function reloadRouteChunk(to = chunkReloadTarget || router.currentRoute.value) {
+	return reloadChunkTarget(router.resolve(to).href)
+}
+
+router.onError((error, to) => {
+	if (isChunkLoadError(error)) reloadRouteChunk(to)
+})
 
 export default router

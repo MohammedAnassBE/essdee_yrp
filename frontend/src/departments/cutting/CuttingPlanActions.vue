@@ -124,7 +124,7 @@ import InputText from "primevue/inputtext"
 import Menu from "primevue/menu"
 import Message from "primevue/message"
 import Select from "primevue/select"
-import { computed, reactive, ref } from "vue"
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import LinkField from "../../components/common/LinkField.vue"
@@ -142,6 +142,12 @@ const permissions = computed(() => props.data.permissions || {})
 const busy = ref("")
 const feedback = ref("")
 const feedbackSeverity = ref("success")
+let feedbackTimer
+watch(feedback, (message) => {
+	window.clearTimeout(feedbackTimer)
+	if (message) feedbackTimer = window.setTimeout(() => { feedback.value = "" }, 4000)
+})
+onBeforeUnmount(() => window.clearTimeout(feedbackTimer))
 const dialogError = ref("")
 const completedReportOpen = ref(false)
 const completedReportGeneratedAt = ref("")
@@ -456,6 +462,7 @@ function toggleMoreActions(event) {
 }
 
 .plan-action-feedback {
+	pointer-events: none;
 	position: fixed;
 	z-index: 6100;
 	top: 72px;
@@ -465,6 +472,8 @@ function toggleMoreActions(event) {
 	transform: translateX(-50%);
 	box-shadow: var(--erp-shadow-dialog);
 }
+
+.plan-action-feedback :deep(.p-message-close-button) { pointer-events: auto; }
 
 :global(.plan-actions-menu.p-menu) {
 	width: 252px;

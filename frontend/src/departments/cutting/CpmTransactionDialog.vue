@@ -56,6 +56,14 @@ async function load() {
 }
 
 async function changeStatus(action) {
+	if (action === "submit") return confirmAction({
+		header: `Submit ${record.value.doctype}?`,
+		message: `Permanently submit ${record.value.doctype} ${record.value.name}?`,
+		acceptLabel: "Submit",
+		acceptIcon: "pi pi-check",
+		acceptSeverity: "primary",
+		accept: () => performStatusChange(action),
+	})
 	if (action === "cancel") return confirmAction({
 		header: `Cancel ${record.value.doctype}?`,
 		message: `Cancel ${record.value.doctype} ${record.value.name}? This changes the document status and cannot be undone here.`,

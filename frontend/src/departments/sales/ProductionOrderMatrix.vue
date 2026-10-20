@@ -2,7 +2,7 @@
 	<section class="ppo-matrix erp-card" aria-label="Production Order quantities">
 		<header class="ppo-matrix__header">
 			<div><span>SIZE MATRIX</span><h2>Total Order Quantity</h2></div>
-			<strong>{{ formatNumber(totalQuantity) }} pcs</strong>
+			<strong>{{ formatNumber(totalQuantity) }} boxes</strong>
 		</header>
 		<div class="ppo-matrix__table-wrap" tabindex="0" role="region" aria-label="Production Order size matrix">
 			<table class="ppo-matrix__main" :style="tableStyle">

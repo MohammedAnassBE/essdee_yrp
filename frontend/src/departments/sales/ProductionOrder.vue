@@ -31,7 +31,7 @@
 					</Tabs>
 				</template>
 				<template #rail>
-					<div class="ppo-page__metric"><span>Total quantity</span><strong>{{ formatNumber(workspace.record?.total_quantity) }}</strong><small>pieces</small></div>
+					<div class="ppo-page__metric"><span>Total quantity</span><strong>{{ formatNumber(workspace.record?.total_quantity) }}</strong><small>boxes</small></div>
 					<div class="ppo-page__metric"><span>Delivery date</span><strong>{{ formatDate(workspace.record?.delivery_date) }}</strong></div>
 					<div class="ppo-page__metric"><span>Lead time</span><strong>{{ workspace.record?.lead_time_given || 0 }} days</strong></div>
 					<div v-if="workspace.linked_lots?.length" class="ppo-page__lots"><span>Linked Lots</span><strong v-for="lot in workspace.linked_lots" :key="lot"><DocumentLink doctype="SD YRP Lot" :name="lot" :label="lot" /></strong></div>

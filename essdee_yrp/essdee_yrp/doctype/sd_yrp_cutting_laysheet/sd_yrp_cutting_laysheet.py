@@ -2907,15 +2907,15 @@ def cancel_laysheet(doc_name):
 		):
 			cancel_cut_bundle(doc, is_cancelled=1)
 	doc.goods_received_note = None
+	# Save Cancelled first so the recalculation no longer counts this LaySheet as Label Printed.
+	_save_laysheet_terminal_transition(doc)
 	if doc.cutting_plan:
 		from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import calculate_laysheets
 
 		calculate_laysheets(doc.cutting_plan)
+		update_cutting_plan_dates(doc.cutting_plan)
 	elif doc.cutting_order:
 		calculate_cutting_order_laysheets(doc.cutting_order)
-	_save_laysheet_terminal_transition(doc)
-	if doc.cutting_plan:
-		update_cutting_plan_dates(doc.cutting_plan)
 
 
 @frappe.whitelist()

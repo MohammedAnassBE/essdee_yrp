@@ -724,7 +724,8 @@ def calculate_laysheets(cutting_plan, ignore_phantom_panels=False):
 				f"Recalculation proceeded; those completed quantities are stranded back in incomplete_items_json."
 			),
 		)
-	frappe.enqueue(calc, "short", cutting_plan=cutting_plan)
+	# Run after commit so the job reads the LaySheet statuses this request saved.
+	frappe.enqueue(calc, "short", cutting_plan=cutting_plan, enqueue_after_commit=True)
 
 
 def calc(cutting_plan):

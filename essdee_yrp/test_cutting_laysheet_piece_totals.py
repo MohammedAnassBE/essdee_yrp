@@ -74,3 +74,48 @@ class TestLaySheetRevertGuard(TestCase):
 		):
 			module.cancel_laysheet("CLS-1")
 		update_cloth_stock.assert_not_called()
+
+
+class TestLaySheetCancelRecalculation(TestCase):
+	def test_cancelled_status_is_saved_before_the_plan_recalculates(self):
+		from unittest.mock import MagicMock, patch
+
+		import frappe
+
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet import sd_yrp_cutting_laysheet as module
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan import sd_yrp_cutting_plan as plan_module
+
+		doc = MagicMock(status="Label Printed", goods_received_note=None, cutting_plan="CP-1")
+		calls = []
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "get_roles", return_value=["System Manager"]),
+			patch.object(module, "_lock_cutting_laysheet"),
+			patch.object(module, "has_moved_bundles", return_value=False),
+			patch.object(
+				module,
+				"_save_laysheet_terminal_transition",
+				side_effect=lambda d: calls.append(("save", d.status)),
+			),
+			patch.object(
+				plan_module, "calculate_laysheets", side_effect=lambda cp: calls.append(("calc", cp))
+			),
+			patch.object(module, "update_cutting_plan_dates"),
+		):
+			module.cancel_laysheet("CLS-1")
+		self.assertEqual(calls, [("save", "Cancelled"), ("calc", "CP-1")])
+
+	def test_plan_recalculation_is_enqueued_after_commit(self):
+		from unittest.mock import patch
+
+		import frappe
+
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan import sd_yrp_cutting_plan as plan_module
+
+		with (
+			patch.object(plan_module, "_get_submitted_cutting_plan"),
+			patch.object(plan_module, "get_phantom_panels", return_value=[]),
+			patch.object(frappe, "enqueue") as enqueue,
+		):
+			plan_module.calculate_laysheets("CP-1")
+		self.assertTrue(enqueue.call_args.kwargs["enqueue_after_commit"])

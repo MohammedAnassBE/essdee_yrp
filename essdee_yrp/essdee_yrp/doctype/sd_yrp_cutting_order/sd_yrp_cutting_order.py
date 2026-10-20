@@ -184,7 +184,7 @@ class SDYRPCuttingOrder(Document):
 @frappe.whitelist()
 def calculate_laysheets(cutting_order):
 	frappe.get_doc("SD YRP Cutting Order", cutting_order).check_permission("write")
-	frappe.enqueue(calc_laysheets, "short", cutting_order=cutting_order)
+	frappe.enqueue(calc_laysheets, "short", cutting_order=cutting_order, enqueue_after_commit=True)
 
 
 def calc_laysheets(cutting_order):

@@ -68,6 +68,7 @@ import Tabs from "primevue/tabs"
 import { computed, defineComponent, h, ref } from "vue"
 
 import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
+import { groupAttributes } from "../shared/quantityMatrixLayout.js"
 
 const props = defineProps({ data: { type: Object, default: () => ({}) }, loading: Boolean, error: { type: String, default: "" } })
 const activeTab = ref("details")
@@ -96,7 +97,6 @@ const overviewFields = computed(() => {
 
 function normaliseGroups(value) { if (Array.isArray(value)) return value; if (value?.items) return [value]; if (value && typeof value === "object") return Object.values(value).filter((group) => group?.items); return [] }
 function sizes(group) { return group.primary_attribute_values || Object.keys(group.items?.[0]?.values || {}) }
-function groupAttributes(group) { if (group.attributes?.length) return group.attributes; const list = [group.pack_attr]; if (group.is_set_item && group.set_attr) list.push(group.set_attr); return list.filter(Boolean) }
 function rowCount(groups) { return groups.reduce((count, group) => count + (group.items?.length || 0), 0) }
 function numeric(value) { const number = Number(value || 0); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—" }
 function valueTotal(value) { if (value && typeof value === "object" && !("qty" in value)) return Object.values(value).reduce((total, entry) => total + Number(entry || 0), 0); return Number(value?.qty ?? value ?? 0) }

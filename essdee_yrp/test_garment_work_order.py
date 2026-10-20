@@ -163,6 +163,42 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 		)
 
 
+class TestStitchingClothAccessoryDeliverables(IntegrationTestCase):
+	def test_stitching_delivers_cloth_accessories_like_production_api(self):
+		name = "WO-2526-00720"
+		if not frappe.db.exists(
+			"YRP Work Order", {"name": name, "docstatus": 0, "process_name": "Stitching"}
+		):
+			self.skipTest(f"Draft Stitching Work Order oracle {name} is unavailable")
+		legacy = {
+			row.item_variant: row.qty
+			for row in frappe.get_all(
+				"YRP Work Order Deliverables",
+				filters={"parent": name, "uom": "Kg"},
+				fields=["item_variant", "qty"],
+			)
+		}
+		self.assertTrue(legacy)
+		context = get_garment_work_order_context(name)
+		calculate_garment_work_order(
+			name,
+			[
+				{"source_row": row["source_row"], "qty": row["qty"]}
+				for row in context["rows"]
+				if row["qty"] > 0
+			],
+		)
+
+		calculated = {
+			row.item_variant: row.qty
+			for row in frappe.get_doc("YRP Work Order", name).deliverables
+			if row.uom == "Kg"
+		}
+		self.assertLessEqual(legacy.keys(), calculated.keys())
+		for variant, qty in legacy.items():
+			self.assertAlmostEqual(calculated[variant], qty, places=3)
+
+
 class TestGarmentWorkOrderPlannedQuantity(TestCase):
 	def test_every_calculation_resets_planned_quantity_to_the_selected_demand(self):
 		module = "essdee_yrp.garment_work_order"

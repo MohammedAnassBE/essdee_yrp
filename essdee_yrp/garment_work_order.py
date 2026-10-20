@@ -204,6 +204,10 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 
 	deliverables, receivables = calculate_garment_process_rows(ipd, lot, wo.process_name, demands)
 	processes = _processes(wo.process_name)
+	if processes[:1] == [ipd.stiching_process]:
+		# Production API delivers cloth accessories to Stitching but its GRN
+		# never consumes them, so they stay out of the shared process rows.
+		deliverables += _stitching_cloth_accessory_deliverables(ipd, demands)
 	deliverables = normalize_item_matrix_row_indexes(deliverables)
 	receivables = normalize_item_matrix_row_indexes(receivables)
 	if not deliverables:
@@ -560,6 +564,15 @@ def _cutting_accessory_outputs(ipd, demands):
 				}
 			)
 	return rows
+
+
+def _stitching_cloth_accessory_deliverables(ipd, demands):
+	"""Return one cloth accessory row per variant, like Production API's Stitching calculation."""
+	totals = {}
+	for row in _cutting_accessory_outputs(ipd, demands):
+		total = totals.setdefault(row["item_variant"], {**row, "qty": 0})
+		total["qty"] += flt(row["qty"])
+	return [{**row, "qty": flt(row["qty"], 3)} for row in totals.values()]
 
 
 def _panel_rows(ipd, demands, stage, process_name=None):

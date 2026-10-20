@@ -4,7 +4,7 @@
 		<div v-else class="erp-transaction-detail">
 			<div v-if="record" class="erp-transaction-status"><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><small>Updated {{ formatDate(record.modified, true) }}</small></div>
 			<section v-if="record?.details?.length" class="erp-detail-grid"><div v-for="row in record.details" :key="row.fieldname"><span>{{ row.label }}</span><strong>{{ display(row.value) }}</strong></div></section>
-			<StockItemMatrix v-if="record?.item_groups?.length" :groups="record.item_groups" :doctype="record.doctype" :physical-row-count="record.item_row_count || 0" />
+			<StockItemMatrix :dimensions="record.dimensions || []" v-if="record?.item_groups?.length" :groups="record.item_groups" :doctype="record.doctype" :physical-row-count="record.item_row_count || 0" />
 			<section v-else-if="record?.item_row_count" class="erp-items-empty"><i class="pi pi-exclamation-circle"></i><div><strong>Item matrix unavailable</strong><span>The transaction has item rows, but their parent-item attributes could not be resolved.</span></div></section>
 		</div>
 		<template #footer>

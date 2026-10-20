@@ -19,9 +19,9 @@
 		</div>
 		<div v-else ref="capture" class="ppo-lot-ocr__capture">
 			<header class="ppo-lot-ocr__context">
-				<div><span>Lot</span><strong>{{ context.lot || lot }}</strong></div>
-				<div><span>Production Order</span><strong>{{ context.production_order || productionOrder }}</strong></div>
-				<div><span>Item</span><strong>{{ context.item || item || "—" }}</strong></div>
+				<div><span>Lot</span><strong><DocumentLink doctype="SD YRP Lot" :name="context.lot || lot" :label="context.lot || lot" /></strong></div>
+				<div><span>Production Order</span><strong><DocumentLink doctype="YRP Production Order" :name="context.production_order || productionOrder" :label="context.production_order || productionOrder" /></strong></div>
+				<div><span>Item</span><strong><DocumentLink doctype="Item" :name="context.item || item" :label="context.item || item || '—'" /></strong></div>
 			</header>
 
 			<LotOcrTable :payload="payload" />
@@ -36,6 +36,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"

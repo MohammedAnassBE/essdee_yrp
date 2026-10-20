@@ -1,8 +1,8 @@
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
-from yrp.attribute_read_context import attribute_read_scope
 from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_read_context import attribute_read_scope
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
@@ -90,22 +90,34 @@ def _build_lot_workspace(name: str) -> dict:
 def get_facts(doc, fieldnames):
 	facts = []
 	for fieldname in fieldnames:
-		value = doc.get(fieldname)
+		raw_value = doc.get(fieldname)
+		value = raw_value
 		if fieldname == "assigned_person":
 			value = doc.get("assigned_person_name") or value
 		if not value:
 			continue
 		if fieldname in ATTRIBUTE_VALUE_FIELDS:
 			value = _attribute_value(value)
-		facts.append(
-			{
-				"fieldname": fieldname,
-				"label": doc.meta.get_label(fieldname),
-				"fieldtype": doc.meta.get_field(fieldname).fieldtype,
-				"value": value,
-			}
-		)
+		field = doc.meta.get_field(fieldname)
+		fact = {
+			"fieldname": fieldname,
+			"label": doc.meta.get_label(fieldname),
+			"fieldtype": field.fieldtype,
+			"value": value,
+			**link_fact_metadata(doc, field),
+		}
+		if value != raw_value and field.fieldtype in ("Link", "Dynamic Link"):
+			fact["link_name"] = raw_value
+		facts.append(fact)
 	return facts
+
+
+def link_fact_metadata(doc, field):
+	if field.fieldtype == "Dynamic Link":
+		return {"options": field.options, "link_doctype": doc.get(field.options)}
+	if field.fieldtype == "Link":
+		return {"options": field.options}
+	return {}
 
 
 def get_order_items(doc):

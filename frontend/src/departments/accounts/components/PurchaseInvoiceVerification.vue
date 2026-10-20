@@ -7,7 +7,7 @@
 						<span>Work Order verification</span>
 						<h2>
 							<RouterLink :to="documentRoute('YRP Work Order', item.work_order)">{{ value(item.work_order) }}</RouterLink>
-							<template v-if="item.lot"> · {{ item.lot }}</template>
+							<template v-if="item.lot"> · <DocumentLink doctype="SD YRP Lot" :name="item.lot" :label="item.lot" /></template>
 							<template v-if="item.item_name"> · {{ item.item_name }}</template>
 						</h2>
 					</div>
@@ -97,7 +97,7 @@
 					<tbody>
 						<tr v-for="debit in debitSummary" :key="debit.name">
 							<td><RouterLink :to="documentRoute('YRP Work Order', debit.work_order)">{{ value(debit.work_order) }}</RouterLink></td>
-							<td>{{ value(debit.name) }}</td>
+							<td><DocumentLink doctype="YRP Debit" :name="debit.name" :label="value(debit.name)" /></td>
 							<td>{{ value(debit.debit_no) }}</td>
 							<td class="verification-table__number">{{ money(debit.debit_value) }}</td>
 							<td>{{ value(debit.status) }}</td>
@@ -116,7 +116,7 @@
 					<thead><tr><th>Approved by</th><th>Approved on</th><th>Comments</th></tr></thead>
 					<tbody>
 						<tr v-for="(approval, index) in approvals" :key="`${approval.user}-${approval.approved_time}-${index}`">
-							<td>{{ value(approval.user) }}</td>
+							<td><DocumentLink doctype="User" :name="approval.user" :label="value(approval.user)" /></td>
 							<td>{{ dateTime(approval.approved_time) }}</td>
 							<td>{{ value(approval.comments) }}</td>
 						</tr>
@@ -135,6 +135,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import { computed, ref } from "vue"
 

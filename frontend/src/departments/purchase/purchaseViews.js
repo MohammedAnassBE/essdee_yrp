@@ -337,7 +337,7 @@ export const ITEM_PRICE_SECTIONS = [
 
 export function itemPriceOverviewFields(workspace = {}) {
 	const approvedBy = itemPriceApprovedBy(workspace.record || {})
-	return (workspace.fields || []).map((field) => (field.fieldname === "approved_by" ? { ...field, value: approvedBy } : field))
+	return (workspace.fields || []).map((field) => (field.fieldname === "approved_by" ? { ...field, value: approvedBy, link_name: field.link_name ?? field.value } : field))
 }
 
 export function itemPriceFieldLabel(fields, fieldname, fallback) {

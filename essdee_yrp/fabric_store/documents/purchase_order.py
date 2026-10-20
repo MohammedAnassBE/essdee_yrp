@@ -56,6 +56,7 @@ PURCHASE_ORDER_FIELDS = (
 	"set_warehouse",
 	"deliver_to_supplier",
 	"default_delivery_location",
+	"default_lot",
 	"currency",
 	"terms_and_condition",
 	"comments",

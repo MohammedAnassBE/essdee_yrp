@@ -85,11 +85,11 @@ const overviewFields = computed(() => {
 	const fields = [...(props.data.details || [])]
 	const existing = new Set(fields.map((field) => field.fieldname))
 	const metadata = {
-		cutting_order_detail: ["Cutting Order Detail", "Link"], item: ["Item", "Link"], is_set_item: ["Set Item", "Check"],
+		cutting_order_detail: ["Cutting Order Detail", "Link", "SD YRP Cutting Order Detail"], item: ["Item", "Data"], is_set_item: ["Set Item", "Check"],
 		cutting_start_date: ["Cutting Start Date", "Date"], cutting_end_date: ["Cutting End Date", "Date"], status: ["Status", "Data"],
 	}
-	for (const [fieldname, [label, fieldtype]] of Object.entries(metadata)) {
-		if (!existing.has(fieldname)) fields.push({ fieldname, label, fieldtype, value: props.data.record?.[fieldname] })
+	for (const [fieldname, [label, fieldtype, options]] of Object.entries(metadata)) {
+		if (!existing.has(fieldname)) fields.push({ fieldname, label, fieldtype, options, value: props.data.record?.[fieldname] })
 	}
 	return fields
 })

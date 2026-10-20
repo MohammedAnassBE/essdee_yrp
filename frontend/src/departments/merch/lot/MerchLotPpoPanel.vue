@@ -20,7 +20,7 @@
 					<RouterLink :to="`/merch/production-orders/${encodeURIComponent(ppo.name)}`">
 						{{ ppo.name }}
 					</RouterLink>
-					· {{ ppo.item }}
+					· <DocumentLink doctype="Item" :name="ppo.item" />
 				</dd>
 			</div>
 			<div>
@@ -106,6 +106,7 @@
 </template>
 <script setup>
 import Button from "primevue/button"
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Dialog from "primevue/dialog"
 import { computed, ref, watch } from "vue"
 import LinkField from "../../../components/common/LinkField.vue"

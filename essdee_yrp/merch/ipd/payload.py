@@ -100,6 +100,24 @@ def mapping_memo(doc):
 		frappe.local.ipd_mapping_values = previous
 
 
+def link_names(doc):
+	def names(doctype, record):
+		return {
+			fieldname: {"name": record.get(fieldname), "value": attribute_value(record.get(fieldname))}
+			for fieldname in attribute_link_fields(doctype)
+			if record.get(fieldname)
+		}
+
+	return {
+		"fields": names(registry.DOCTYPE, doc),
+		"tables": {
+			table.fieldname: {row.name: names(table.options, row) for row in doc.get(table.fieldname) or []}
+			for table in frappe.get_meta(registry.DOCTYPE).get_table_fields()
+			if attribute_link_fields(table.options)
+		},
+	}
+
+
 def plain(doctype, fieldname, raw):
 	return attribute_value(raw) if fieldname in attribute_link_fields(doctype) else raw
 
@@ -345,6 +363,7 @@ def context(doc, mappings):
 		"attributes": attribute_context(doc, mappings),
 		"dependent": dependent,
 		"stage_values": stage_values(doc),
+		"link_names": link_names(doc),
 		"cutting_attribute_choices": cutting_attribute_choices(doc, dependent),
 		"bom_mappings": bom_mapping_context(doc),
 		"options": {
@@ -491,6 +510,7 @@ def build_payload(doc, editor=False):
 	with mapping_memo(doc) as mappings:
 		payload = {
 			"record": record(doc),
+			"fields": field_schema(doc),
 			"permissions": permissions,
 			"capabilities": get_capabilities(doc, permissions),
 			"values": document_values(doc),
@@ -500,7 +520,6 @@ def build_payload(doc, editor=False):
 			"source": source(doc),
 		}
 		if editor:
-			payload["fields"] = field_schema(doc)
 			payload.update(editor_grids(doc))
 	payload["messages"] = frappe.get_message_log()[message_start:]
 	return payload

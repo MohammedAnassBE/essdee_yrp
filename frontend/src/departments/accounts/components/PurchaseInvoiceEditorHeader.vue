@@ -6,7 +6,7 @@
 				<h1 class="erp-doc-title">{{ currentName ? "Edit Purchase Invoice" : "New Purchase Invoice" }}</h1>
 				<span v-if="billTracking" class="purchase-invoice-editor__fact">
 					<i class="pi pi-link" aria-hidden="true" />
-					From Bill Tracking {{ billTracking }}
+					From Bill Tracking <DocumentLink doctype="YRP Bill Tracking" :name="billTracking" :label="billTracking" />
 				</span>
 			</div>
 		</div>
@@ -24,6 +24,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"

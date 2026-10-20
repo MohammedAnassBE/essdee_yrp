@@ -17,7 +17,7 @@
 						<div><h1 class="erp-doc-title" :id="headingId">Purchase Order</h1><span class="erp-doc-id">{{ record.name }}</span></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="purchaseOrderStatusLabel(record)" :tone="purchaseOrderStatusTone(purchaseOrderStatusLabel(record))" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
-							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'">{{ record.supplier_name || record.supplier || "—" }}</strong></div>
+							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier" :label="record.supplier_name || record.supplier || '—'" /></strong></div>
 							<div><span>Order date</span><strong>{{ formatDate(record.transaction_date) }}</strong></div>
 							<div><span>Grand total</span><strong>{{ formatAmount(record.grand_total, record.currency) }}</strong></div>
 						</div>
@@ -36,7 +36,7 @@
 								<DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-unclaimed :unclaimed-definition="overviewAdditionalDefinition" aria-label="Purchase Order overview" id-prefix="purchase-order-overview" />
 							</TabPanel>
 							<TabPanel value="items">
-								<StockItemMatrix v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-lot-column show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
+								<StockItemMatrix :dimensions="workspace.dimensions || []" v-if="itemGroups.length" :groups="itemGroups" doctype="Purchase Order" :physical-row-count="workspace.item_row_count || 0" :currency="workspace.record?.currency || ''" group-by-item show-lot-column show-pricing show-fulfillment :show-received="false" :show-amount="false" pricing-before-fulfillment />
 								<div v-else-if="!loading" class="purchase-order-page__empty"><i class="pi pi-inbox" /><div><strong>No item details</strong><span>This Purchase Order has no grouped item quantities.</span></div></div>
 							</TabPanel>
 						</TabPanels>
@@ -76,7 +76,7 @@
 		<Dialog v-model:visible="lotEditorVisible" modal header="Manage Linked Lots" class="fabric-action-dialog erp-dialog--md">
 			<div class="purchase-order-lots">
 				<div class="purchase-order-lots__list">
-					<span v-for="lot in lotDraft" :key="lot" class="purchase-order-lots__chip">{{ lot }}<Button icon="pi pi-times" severity="secondary" text rounded :aria-label="`Remove ${lot}`" @click="removeLot(lot)" /></span>
+					<span v-for="lot in lotDraft" :key="lot" class="purchase-order-lots__chip"><DocumentLink doctype="SD YRP Lot" :name="lot" :label="lot" /><Button icon="pi pi-times" severity="secondary" text rounded :aria-label="`Remove ${lot}`" @click="removeLot(lot)" /></span>
 					<span v-if="!lotDraft.length" class="purchase-order-lots__empty">No Lots linked</span>
 				</div>
 				<div class="purchase-order-lots__add"><LinkField v-model="lotCandidate" label="Add Lot" doctype="SD YRP Lot" :show-open-button="false" /><Button label="Add" severity="secondary" outlined :disabled="!lotCandidate || lotDraft.includes(lotCandidate)" @click="addLot" /></div>
@@ -100,6 +100,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"

@@ -18,7 +18,7 @@
 				<section v-if="payload.details?.length" class="purchase-order-detail-grid">
 					<div v-for="field in payload.details" :key="field.fieldname"><span>{{ field.label }}</span><strong :class="{ 'purchase-order-detail-link': field.fieldtype === 'Link' }" :title="formatField(field)">{{ formatField(field) }}</strong></div>
 				</section>
-				<StockItemMatrix v-if="payload.item_groups?.length" :groups="payload.item_groups" doctype="Purchase Order" :physical-row-count="payload.item_row_count || 0" />
+				<StockItemMatrix :dimensions="payload.dimensions || []" v-if="payload.item_groups?.length" :groups="payload.item_groups" doctype="Purchase Order" :physical-row-count="payload.item_row_count || 0" />
 				<div v-else class="purchase-order-empty"><i class="pi pi-inbox" /><div><strong>No item details</strong><span>This Purchase Order has no grouped item quantities to display.</span></div></div>
 				<Message v-if="payload.grn && !payload.grn.can_create && payload.grn.reason" severity="secondary" :closable="false">{{ payload.grn.reason }}</Message>
 			</template>

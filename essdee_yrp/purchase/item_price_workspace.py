@@ -348,13 +348,21 @@ def get_save_actions(doc) -> list[dict]:
 	]
 
 
+def _overview_fields(doc) -> list[dict]:
+	fields = get_effective_fields(doc, VIEW_FIELDS)
+	for field in fields:
+		if field["fieldname"] == "approved_by":
+			field["link_name"] = doc.get("approved_by")
+	return fields
+
+
 @frappe.whitelist()
 def get_item_price_workspace(name: str) -> dict:
 	doc = frappe.get_doc(DOCTYPE, name)
 	frappe.has_permission(DOCTYPE, ptype="read", doc=doc, throw=True)
 	return {
 		"record": _record(doc),
-		"fields": get_effective_fields(doc, VIEW_FIELDS),
+		"fields": _overview_fields(doc),
 		"tier_fields": _tier_fields(),
 		"tiers": _tiers(doc),
 		"actions": _actions(doc),

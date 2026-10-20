@@ -23,11 +23,14 @@
 						</span>
 					</div>
 				</header>
-				<button
+				<div
 					v-for="row in section.visibleRows"
 					:key="row.name"
 					:ref="(element) => setCard(section.doctype, row.name, element)"
-					type="button"
+					role="button"
+					tabindex="0"
+					@keydown.enter.self.prevent="open(section.doctype, row.name)"
+					@keydown.space.self.prevent="open(section.doctype, row.name)"
 					class="lot-documents-card"
 					aria-haspopup="dialog"
 					@click="open(section.doctype, row.name)"
@@ -37,7 +40,7 @@
 						<DocumentStatusBadge :docstatus="row.docstatus" :label="row.status" />
 					</div>
 					<span class="lot-documents-card__context">
-						{{ lotDocumentContext(section.doctype, row) }}
+						<LotDocumentContext :doctype="section.doctype" :row="row" />
 					</span>
 					<div class="lot-documents-card__meta">
 						<span>
@@ -50,7 +53,7 @@
 						</span>
 					</div>
 					<i class="pi pi-chevron-right lot-documents-card__chevron" />
-				</button>
+				</div>
 				<div v-if="!section.rows.length" class="lot-documents-empty">
 					<i class="pi pi-inbox" />
 					<span>No {{ section.label }}</span>
@@ -77,6 +80,7 @@
 
 <script setup>
 import Button from "primevue/button"
+import LotDocumentContext from "./LotDocumentContext.vue"
 import Skeleton from "primevue/skeleton"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
@@ -84,7 +88,6 @@ import DocumentStatusBadge from "../../../components/documents/DocumentStatusBad
 import {
 	countLabel,
 	formatLotDate,
-	lotDocumentContext,
 	lotDocumentQuantityLine,
 	lotDocumentSections,
 } from "./lotViews.js"

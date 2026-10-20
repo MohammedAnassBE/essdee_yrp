@@ -127,7 +127,7 @@ function itemKeys(value, carry) {
 
 function diaColumn(dia) {
 	return {
-		type: "link", doctype: "Item Attribute Value", options: valueOptions(dia), field: "dia", width: 140,
+		type: "link", fieldtype: "Data", doctype: "Item Attribute Value", options: valueOptions(dia), field: "dia", width: 140,
 		searchHandler: (text) => {
 			const query = String(text ?? "").toLowerCase()
 			const exact = [], prefixes = [], contains = []

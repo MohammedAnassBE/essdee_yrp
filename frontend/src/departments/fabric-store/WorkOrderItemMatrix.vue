@@ -3,8 +3,8 @@
 		<section v-for="section in itemSections" :key="section.key" class="work-order-item-group work-order-item-matrix">
 			<header class="work-order-item-group__header">
 				<div>
-					<strong>{{ section.name || "Unspecified item" }}</strong>
-					<span v-if="section.lot">{{ section.lot }}</span>
+					<strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong>
+					<span v-if="section.lot"><DocumentLink doctype="SD YRP Lot" :name="section.lot" /></span>
 					<template v-if="processCostViewRouteName">
 						<RouterLink v-for="name in processCostNames(section.items)" :key="name" :to="{ name: processCostViewRouteName, params: { processCostId: name } }">Process Cost · {{ name }}</RouterLink>
 					</template>
@@ -44,7 +44,7 @@
 							<td class="erp-number matrix-pending">{{ pendingQuantity(metric(item, "default", "pending")) }}</td>
 							<td v-if="hasCost(section.group)" class="erp-number matrix-cost">{{ money(item.values?.default?.cost) }}</td>
 							<td v-if="hasTotalCost(section.group)" class="erp-number matrix-cost">{{ money(item.values?.default?.total_cost) }}</td>
-							<td v-if="hasProcessCost(section.group)" class="matrix-process-cost">{{ item.process_cost || "—" }}</td>
+							<td v-if="hasProcessCost(section.group)" class="matrix-process-cost"><DocumentLink doctype="YRP Process Cost" :name="item.process_cost" :label="item.process_cost || '—'" /></td>
 						</tr>
 					</tbody>
 					<tbody v-else-if="mode === 'items'">
@@ -82,6 +82,7 @@
 
 <script setup>
 import { computed } from "vue"
+import DocumentLink from "../../components/common/DocumentLink.vue"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },

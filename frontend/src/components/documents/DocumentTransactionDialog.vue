@@ -25,7 +25,7 @@
 				<section v-if="visibleDetails.length" class="document-detail-grid">
 					<div v-for="field in visibleDetails" :key="field.fieldname"><span>{{ field.label }}</span><strong :class="{ 'document-detail-link': field.fieldtype === 'Link' }" :title="formatField(field)">{{ formatField(field) }}</strong></div>
 				</section>
-				<StockItemMatrix v-if="payload.item_groups?.length" :groups="payload.item_groups" :doctype="payload.record?.doctype" :physical-row-count="payload.item_row_count || 0" :group-by-item="Boolean(payload.context?.work_order)" />
+				<StockItemMatrix :dimensions="payload.dimensions || []" v-if="payload.item_groups?.length" :groups="payload.item_groups" :doctype="payload.record?.doctype" :physical-row-count="payload.item_row_count || 0" :group-by-item="Boolean(payload.context?.work_order)" />
 				<div v-else-if="payload.item_row_count" class="document-items-unavailable"><i class="pi pi-exclamation-circle" /><div><strong>Item matrix unavailable</strong><span>The item variants could not be grouped for display.</span></div></div>
 			</template>
 		</div>

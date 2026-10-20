@@ -51,11 +51,11 @@
 						/>
 						<span class="cutting-plan-header-fact cutting-plan-header-fact--lot" :title="doc.lot || 'No Lot'">
 							<small>Lot</small>
-							<strong>{{ doc.lot || "—" }}</strong>
+							<strong><DocumentLink doctype="SD YRP Lot" :name="doc.lot" :label="doc.lot || '—'" /></strong>
 						</span>
 						<span class="cutting-plan-header-fact cutting-plan-header-fact--item" :title="doc.item || 'No Item'">
 							<small>Item</small>
-							<strong>{{ doc.item || "—" }}</strong>
+							<strong><DocumentLink doctype="Item" :name="doc.item" :label="doc.item || '—'" /></strong>
 						</span>
 					</div>
 				</template>
@@ -112,6 +112,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../components/common/DocumentLink.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Skeleton from "primevue/skeleton"
 import Message from "primevue/message"

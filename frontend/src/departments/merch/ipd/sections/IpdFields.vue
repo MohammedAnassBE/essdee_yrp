@@ -2,7 +2,7 @@
 	<dl v-if="editor.readonly" class="ipd-facts">
 		<div v-for="field in visibleFields" :id="`ipd-edit-${field.fieldname}`" :key="field.fieldname" tabindex="-1">
 			<dt>{{ field.label }}</dt>
-			<dd>{{ display(field) }}</dd>
+			<dd><DocumentLink v-if="target(field)" v-bind="target(field)" :label="display(field)" /><template v-else>{{ display(field) }}</template></dd>
 		</div>
 	</dl>
 	<div v-else class="ipd-fields">
@@ -15,7 +15,6 @@
 				:invalid="Boolean(problem(field.fieldname))"
 				:error="problem(field.fieldname)"
 				:input-id="`ipd-edit-${field.fieldname}`"
-				:show-open-button="false"
 				compact
 				@update:model-value="update(field.fieldname, $event)"
 			/>
@@ -27,7 +26,11 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted } from "vue"
 
+import DocumentLink from "../../../../components/common/DocumentLink.vue"
+import { linkFieldTarget } from "../../../../utils/linkTarget.js"
+
 import FormField from "../../../../components/common/FormField.vue"
+import { ipdAttributeLinkName } from "../ipdLinks.js"
 import { stableStringify } from "../ipdEditor.js"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 
@@ -49,6 +52,12 @@ function withCurrent(field) {
 	return current && !field.options.includes(current) ? [...field.options, current] : field.options
 }
 function value(field) { return editor.draft[field.fieldname] ?? editor.record?.[field.fieldname] }
+function target(field) {
+	const meta = editor.fields?.[field.fieldname] || schema(field)
+	const current = value(field)
+	const link_name = meta.options === "YRP Item Attribute Value" ? ipdAttributeLinkName(editor, field.fieldname, current) : undefined
+	return linkFieldTarget({ ...meta, value: current, link_name }, { ...editor.record, ...editor.draft })
+}
 function display(field) {
 	const current = value(field)
 	if (field.fieldtype === "Check") return Number(current) ? "Yes" : "No"

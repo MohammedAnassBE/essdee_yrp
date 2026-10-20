@@ -25,7 +25,7 @@
 								<tr v-for="grn in workspace.grns" :key="grn.grn">
 									<td><button type="button" class="purchase-invoice-link" @click="emit('open-grn', grn.grn)">{{ grn.grn }}</button></td>
 									<td>{{ date(grn.posting_date) }}</td>
-									<td>{{ grn.against_id || "—" }}</td>
+									<td><DocumentLink :doctype="grn.against" :name="grn.against_id" :label="grn.against_id || '—'" /></td>
 									<td>{{ grn.supplier_document_no || "—" }}</td>
 									<td class="purchase-invoice-number">{{ number(grn.total_received_quantity) }}</td>
 									<td class="purchase-invoice-number">{{ money(grn.grand_total) }}</td>
@@ -50,6 +50,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"

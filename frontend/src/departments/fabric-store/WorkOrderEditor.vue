@@ -30,20 +30,20 @@
 				<section class="work-order-editor__section work-order-editor__entry-card">
 					<header><div><span>Source</span><h2>Production source</h2></div><small>These fields define the calculation source.</small></header>
 					<div class="work-order-editor__fields">
-						<LinkField input-id="field-process_name-value" :reset-version="sourceRevision" :model-value="form.process_name" :label="fieldLabel('process_name', 'Process')" doctype="YRP Process" :required="isRequired('process_name')" :show-open-button="false" show-clear :disabled="loading || (Boolean(saving) && saving !== 'source') || isReadOnly('process_name')" @update:model-value="changeSource('process_name', $event)" />
-						<LinkField input-id="field-lot-value" :reset-version="sourceRevision" :model-value="form.lot" :label="fieldLabel('lot', 'Lot')" doctype="SD YRP Lot" :required="isRequired('lot')" :show-open-button="false" show-clear :disabled="loading || (Boolean(saving) && saving !== 'source') || isReadOnly('lot')" @update:model-value="changeSource('lot', $event)" />
-						<LinkField input-id="field-item-value" :reset-version="sourceRevision" :model-value="form.item" :label="fieldLabel('item', 'Item')" doctype="Item" :required="isRequired('item')" :search-handler="searchAllowedItems" :show-open-button="false" show-clear :disabled="busy || isReadOnly('item') || !selectionContext.options?.length" @update:model-value="changeItem" />
-						<LinkField v-model="form.production_detail" :label="fieldLabel('production_detail', 'Production detail')" doctype="YRP Item Production Detail" :required="isRequired('production_detail')" :show-open-button="false" :disabled="true" />
+						<LinkField input-id="field-process_name-value" :reset-version="sourceRevision" :model-value="form.process_name" :label="fieldLabel('process_name', 'Process')" doctype="YRP Process" :required="isRequired('process_name')" show-clear :disabled="loading || (Boolean(saving) && saving !== 'source') || isReadOnly('process_name')" @update:model-value="changeSource('process_name', $event)" />
+						<LinkField input-id="field-lot-value" :reset-version="sourceRevision" :model-value="form.lot" :label="fieldLabel('lot', 'Lot')" doctype="SD YRP Lot" :required="isRequired('lot')" show-clear :disabled="loading || (Boolean(saving) && saving !== 'source') || isReadOnly('lot')" @update:model-value="changeSource('lot', $event)" />
+						<LinkField input-id="field-item-value" :reset-version="sourceRevision" :model-value="form.item" :label="fieldLabel('item', 'Item')" doctype="Item" :required="isRequired('item')" :search-handler="searchAllowedItems" show-clear :disabled="busy || isReadOnly('item') || !selectionContext.options?.length" @update:model-value="changeItem" />
+						<LinkField v-model="form.production_detail" :label="fieldLabel('production_detail', 'Production detail')" doctype="YRP Item Production Detail" :required="isRequired('production_detail')" :disabled="true" />
 					</div>
 				</section>
 
 				<section class="work-order-editor__section work-order-editor__entry-card">
 					<header><div><span>Route</span><h2>Supplier & delivery</h2></div><small>Choose the job worker and both addresses.</small></header>
 					<div class="work-order-editor__fields">
-						<LinkField :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier')" doctype="Supplier" :required="isRequired('supplier')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('supplier')" @update:model-value="changeSupplier" />
-						<LinkField v-model="form.supplier_address" :label="fieldLabel('supplier_address', 'Supplier address')" doctype="Address" :required="isRequired('supplier_address')" :search-handler="searchSupplierAddresses" :show-open-button="false" show-clear :disabled="busy || isReadOnly('supplier_address') || !form.supplier" @update:model-value="markDirty" />
-						<LinkField :model-value="form.delivery_location" :label="fieldLabel('delivery_location', 'Delivery location')" doctype="Supplier" :required="isRequired('delivery_location')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('delivery_location')" @update:model-value="changeDeliveryLocation" />
-						<LinkField v-model="form.delivery_address" :label="fieldLabel('delivery_address', 'Delivery address')" doctype="Address" :required="isRequired('delivery_address')" :search-handler="searchDeliveryAddresses" :show-open-button="false" show-clear :disabled="busy || isReadOnly('delivery_address') || !form.delivery_location" @update:model-value="markDirty" />
+						<LinkField :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier')" doctype="Supplier" :required="isRequired('supplier')" show-clear :disabled="busy || isReadOnly('supplier')" @update:model-value="changeSupplier" />
+						<LinkField v-model="form.supplier_address" :label="fieldLabel('supplier_address', 'Supplier address')" doctype="Address" :required="isRequired('supplier_address')" :search-handler="searchSupplierAddresses" show-clear :disabled="busy || isReadOnly('supplier_address') || !form.supplier" @update:model-value="markDirty" />
+						<LinkField :model-value="form.delivery_location" :label="fieldLabel('delivery_location', 'Delivery location')" doctype="Supplier" :required="isRequired('delivery_location')" show-clear :disabled="busy || isReadOnly('delivery_location')" @update:model-value="changeDeliveryLocation" />
+						<LinkField v-model="form.delivery_address" :label="fieldLabel('delivery_address', 'Delivery address')" doctype="Address" :required="isRequired('delivery_address')" :search-handler="searchDeliveryAddresses" show-clear :disabled="busy || isReadOnly('delivery_address') || !form.delivery_location" @update:model-value="markDirty" />
 					</div>
 				</section>
 
@@ -60,7 +60,7 @@
 				<section class="work-order-editor__section work-order-editor__entry-card">
 					<header><div><span>Controls</span><h2>Terms & notes</h2></div><small>Capture receipt rules and operational notes.</small></header>
 					<div class="work-order-editor__fields work-order-editor__notes-fields">
-						<LinkField v-model="form.terms_and_condition" :label="fieldLabel('terms_and_condition', 'Terms and condition')" doctype="YRP Terms and Condition" :required="isRequired('terms_and_condition')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('terms_and_condition')" @update:model-value="markDirty" />
+						<LinkField v-model="form.terms_and_condition" :label="fieldLabel('terms_and_condition', 'Terms and condition')" doctype="YRP Terms and Condition" :required="isRequired('terms_and_condition')" show-clear :disabled="busy || isReadOnly('terms_and_condition')" @update:model-value="markDirty" />
 						<label class="work-order-editor__check"><Checkbox v-model="noReceivables" binary input-id="wo-no-receivables" :disabled="busy || isReadOnly('no_receivables')" @change="markDirty" /><span>{{ fieldLabel('no_receivables', 'No receivables expected', false) }}</span></label>
 						<label class="work-order-editor__comments"><span>{{ fieldLabel('comments', 'Comments', false) }}</span><Textarea v-model="form.comments" rows="3" auto-resize fluid :disabled="busy || isReadOnly('comments')" @input="markDirty" /></label>
 					</div>
@@ -69,7 +69,7 @@
 				<section v-if="isRework" class="work-order-editor__section work-order-editor__entry-card work-order-editor__rework-card">
 					<header><div><span>Source-owned</span><h2>Rework details</h2></div><small>Created from the approved rework flow.</small></header>
 					<div class="work-order-editor__facts">
-						<div><span>Parent Work Order</span><strong>{{ form.parent_wo || "—" }}</strong></div>
+						<div><span>Parent Work Order</span><strong><DocumentLink doctype="YRP Work Order" :name="form.parent_wo" :label="form.parent_wo || '—'" /></strong></div>
 						<div><span>Supplier type</span><strong>{{ form.supplier_type || "—" }}</strong></div>
 						<div><span>Rework type</span><strong>{{ form.rework_type || "—" }}</strong></div>
 					</div>
@@ -77,7 +77,7 @@
 
 				<section v-if="dynamicDimensions.length" class="work-order-editor__section work-order-editor__entry-card work-order-editor__dimensions-card">
 					<header><div><span>Stock context</span><h2>Stock dimensions</h2></div><small>Additional inventory dimensions for this Work Order.</small></header>
-					<div class="work-order-editor__dimensions"><LinkField v-for="dimension in dynamicDimensions" :key="dimension.fieldname" v-model="form[dimension.fieldname]" :label="`${dimension.label || dimension.fieldname}${dimension.mandatory ? ' *' : ''}`" :doctype="dimension.options" :required="Boolean(dimension.mandatory)" :show-open-button="false" show-clear :disabled="busy || Boolean(dimension.read_only)" @update:model-value="markDirty" /></div>
+					<div class="work-order-editor__dimensions"><LinkField v-for="dimension in dynamicDimensions" :key="dimension.fieldname" v-model="form[dimension.fieldname]" :label="`${dimension.label || dimension.fieldname}${dimension.mandatory ? ' *' : ''}`" :doctype="dimension.options" :required="Boolean(dimension.mandatory)" show-clear :disabled="busy || Boolean(dimension.read_only)" @update:model-value="markDirty" /></div>
 				</section>
 			</div>
 
@@ -99,6 +99,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"

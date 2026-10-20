@@ -358,6 +358,17 @@ def _related_permissions(doctype):
 	}
 
 
+def _overview_detail(doc, fieldname, label):
+	field = doc.meta.get_field(fieldname)
+	return {
+		"fieldname": fieldname,
+		"label": label,
+		"fieldtype": field.fieldtype if field else "Data",
+		"options": field.options if field else None,
+		"value": _doc_value(doc, fieldname),
+	}
+
+
 @frappe.whitelist()
 def get_order_workspace(cutting_order):
 	doc = frappe.get_doc(DOCTYPE, cutting_order)
@@ -388,7 +399,7 @@ def get_order_workspace(cutting_order):
 	return {
 		"record": _record(doc),
 		"details": [
-			{"fieldname": fieldname, "label": label, "value": _doc_value(doc, fieldname)}
+			_overview_detail(doc, fieldname, label)
 			for fieldname, label in (
 				("cutting_order_detail", "Cutting Order Detail"),
 				("item", "Item"),

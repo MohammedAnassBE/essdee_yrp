@@ -27,7 +27,7 @@
 				<thead><tr><th>GRN</th><th>Colour</th><th>Ratio</th><th class="erp-number">Received Boxes</th><th class="erp-number">Dispatched</th><th class="erp-number">Balance</th></tr></thead>
 				<tbody>
 					<tr v-for="batch in batches" :key="batch.batch_row">
-						<td>{{ batch.grn }}</td>
+						<td><DocumentLink doctype="YRP Goods Received Note" :name="batch.grn" :label="batch.grn" /></td>
 						<td>{{ batch.colour }}</td>
 						<td>{{ ratioText(batch.ratio) }}</td>
 						<td class="erp-number">{{ formatQuantity(batch.box_quantity) }}</td>
@@ -41,6 +41,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import { computed } from "vue"
 
 import { formatQuantity, packedRows } from "../finishingViews.js"

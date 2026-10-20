@@ -11,7 +11,7 @@
 					title="Item BOM"
 					row-header-label="#"
 					:rows="bom.rows"
-					:columns="bomColumns"
+					:columns="ipdLinkColumns(bomColumns, editor, 'item_bom')"
 					:model-value="bom.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('item_bom')"
@@ -102,6 +102,7 @@ import InputText from "primevue/inputtext"
 import Select from "primevue/select"
 import { computed, inject, ref } from "vue"
 
+import { ipdLinkColumns } from "../ipdLinks.js"
 import EntryGrid from "../../../../components/common/EntryGrid.vue"
 import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
@@ -149,12 +150,12 @@ const isSet = computed(() => Boolean(Number(draft.value.is_set_item)))
 const setParts = computed(() => attributeValues(editor, draft.value.set_item_attribute))
 const bom = computed(() => tableGrid(draft.value.item_bom, BOM_FIELDS))
 const bomColumns = computed(() => [
-	{ key: "item", label: "Item", type: "link", doctype: "Item", filters: { disabled: 0 } },
-	{ key: "process_name", label: "Process Name", type: "link", doctype: "YRP Process" },
-	...(draft.value.dependent_attribute ? [{ key: "dependent_attribute_value", label: "Dependent Attribute Value", type: "value", options: editor.context?.stage_values || [] }] : []),
+	{ key: "item", label: "Item", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item", filters: { disabled: 0 } },
+	{ key: "process_name", label: "Process Name", type: "link", fieldtype: "Link", link_doctype: "YRP Process", doctype: "YRP Process" },
+	...(draft.value.dependent_attribute ? [{ key: "dependent_attribute_value", fieldtype: "Link", link_doctype: "YRP Item Attribute Value", label: "Dependent Attribute Value", type: "value", options: editor.context?.stage_values || [] }] : []),
 	{ key: "qty_of_product", label: "Qty of Product", type: "number", min: 0 },
 	{ key: "qty_of_bom_item", label: "Qty of BOM Item", type: "number", min: 0 },
-	{ key: "uom", label: "UOM", type: "text", readonly: true },
+	{ key: "uom", fieldtype: "Link", link_doctype: "UOM", label: "UOM", type: "text", readonly: true },
 	{ key: "based_on_attribute_mapping", label: "Based on Attribute Mapping", type: "check" },
 	{ key: "wastage_pct", label: "Wastage %", type: "number", min: 0 },
 ])

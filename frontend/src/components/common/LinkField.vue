@@ -40,15 +40,23 @@
 				</template>
 			</AutoComplete>
 			<Button
-				v-if="showOpenButton && modelValue"
+				v-if="canOpen && openHandler"
 				icon="pi pi-arrow-up-right"
 				severity="secondary"
 				text
 				rounded
 				:aria-label="`Open ${modelValue}`"
 				:title="`Open ${modelValue}`"
-				@click.prevent="openRecord"
+				@click.prevent="openHandler(doctype, modelValue)"
 			/>
+			<DocumentLink
+				v-else-if="canOpen"
+				:doctype="doctype"
+				:name="modelValue"
+				class="link-field__open"
+				:aria-label="`Open ${modelValue}`"
+				:title="`Open ${modelValue}`"
+			><i class="pi pi-arrow-up-right" aria-hidden="true" /></DocumentLink>
 		</span>
 		<small v-if="validationError && showValidationMessage" :id="`${resolvedInputId}-link-error`" class="link-field__error" role="alert">{{ validationError }}</small>
 		<small v-if="helpText" class="common-field__help">{{ helpText }}</small>
@@ -61,7 +69,8 @@ import Button from "primevue/button"
 import { computed, nextTick, ref, useId, watch } from "vue"
 
 import { invalidatePendingReads, searchLink } from "../../api/frappe.js"
-import { webDocumentPath } from "../../router/webDocumentRoutes.js"
+import { canReadDoctype } from "../../utils/linkTarget.js"
+import DocumentLink from "./DocumentLink.vue"
 import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "./autocompleteKeys.js"
 
 const AutoComplete = withAutocompleteCompositionGuard(PrimeAutoComplete)
@@ -98,6 +107,7 @@ const labelParts = computed(() => {
 	const match = /^(.*?)\s*\*$/.exec(props.label || "")
 	return match ? { text: match[1], required: true } : { text: props.label, required: props.required }
 })
+const canOpen = computed(() => props.showOpenButton && props.modelValue && String(props.modelValue).trim() && canReadDoctype(props.doctype))
 
 const emit = defineEmits(["update:modelValue", "select", "clear", "validation", "finish", "cancel"])
 
@@ -313,15 +323,6 @@ function syncModelValue() {
 		: null
 }
 
-function openRecord() {
-	if (props.openHandler) {
-		props.openHandler(props.doctype, props.modelValue)
-		return
-	}
-	const route = webDocumentPath(props.doctype, props.modelValue)
-	window.open(route, "_blank", "noopener")
-}
-
 function focus() {
 	input.value?.$el?.querySelector("input")?.focus()
 }
@@ -362,6 +363,19 @@ defineExpose({ focus, open, finishEdit })
 	display: flex;
 	align-items: center;
 	gap: 4px;
+}
+
+.link-field__open {
+	display: inline-grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: var(--erp-control-height);
+	height: var(--erp-control-height);
+	border-radius: 50%;
+}
+
+.link-field__open:hover {
+	background: var(--erp-surface-soft);
 }
 
 .link-field__control :deep(.p-autocomplete) {

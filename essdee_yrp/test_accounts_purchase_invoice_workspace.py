@@ -439,6 +439,7 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 			{
 				"grn",
 				"posting_date",
+				"against",
 				"against_id",
 				"supplier_document_no",
 				"total_received_quantity",

@@ -8,7 +8,7 @@
 				<template v-for="(process, processIndex) in processRows" :key="process.name">
 					<tr class="ppo-lot-ocr__process-start">
 						<td rowspan="3" class="ppo-lot-ocr__serial">{{ processIndex + 1 }}</td>
-						<th rowspan="3" class="ppo-lot-ocr__process">{{ process.name }}</th>
+						<th rowspan="3" class="ppo-lot-ocr__process"><DocumentLink doctype="YRP Process" :name="process.name" /></th>
 						<td rowspan="3" class="ppo-lot-ocr__documents">
 							<div v-if="process.wo_list.length"><span>Work Orders</span><template v-for="document in process.wo_list" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('YRP Work Order', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div>
 							<div v-if="process.cp_list.length"><span>Cutting Plans</span><template v-for="document in process.cp_list" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('SD YRP Cutting Plan', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div>
@@ -44,6 +44,7 @@
 
 <script setup>
 import { computed } from "vue"
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import { RouterLink } from "vue-router"
 
 import { webDocumentRoute } from "../../router/webDocumentRoutes.js"

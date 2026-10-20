@@ -485,3 +485,24 @@ class TestMerchLotWorkspace(TestCase):
 				},
 			],
 		)
+
+	def test_record_facts_include_metadata_for_empty_link_and_dynamic_link(self):
+		self.doc = get_lot(reference_type="Item")
+		fields = {
+			"season": Row(label="Season", fieldtype="Link", options="YRP Season"),
+			"reference": Row(label="Reference", fieldtype="Dynamic Link", options="reference_type"),
+		}
+		self.doc.meta.get_field.side_effect = fields.get
+		facts = {row["fieldname"]: row for row in workspace.get_record_facts(self.doc, fields)}
+		self.assertEqual(facts["season"]["options"], "YRP Season")
+		self.assertIsNone(facts["season"]["value"])
+		self.assertEqual(facts["reference"]["options"], "reference_type")
+		self.assertEqual(facts["reference"]["link_doctype"], "Item")
+
+	def test_record_facts_retain_link_targets_and_substituted_labels(self):
+		self.doc = get_lot(assigned_person="person@example.test", assigned_person_name="Person")
+		self.doc.meta.get_field.side_effect = lambda field: Row(label=field, fieldtype="Link", options="User")
+		fact = workspace.get_record_facts(self.doc, ["assigned_person"])[0]
+		self.assertEqual(fact["value"], "Person")
+		self.assertEqual(fact["link_name"], "person@example.test")
+		self.assertEqual(fact["options"], "User")

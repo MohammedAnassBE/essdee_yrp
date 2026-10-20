@@ -18,7 +18,7 @@ class FakeProductionOrder:
 		self.modified = values.pop("modified", "2026-10-09 10:30:00.000000")
 		self._values = values
 		self.checked_permissions = []
-		self.meta = SimpleNamespace(fields=[], is_submittable=1)
+		self.meta = SimpleNamespace(fields=[], is_submittable=1, get_field=lambda _fieldname: None)
 
 	def get(self, key, default=None):
 		if key == "name":

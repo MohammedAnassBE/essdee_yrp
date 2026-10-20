@@ -21,7 +21,7 @@
 					<div v-if="presentation !== 'embedded'" class="goods-received-note-header__title"><h1 :id="headingId">Goods Received Note</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
 					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="goods-received-note-header__facts" role="region" aria-label="Goods Received Note context" tabindex="0">
-						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
+						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)"><DocumentLink :doctype="fact.doctype" :name="fact.name" :label="fact.value" /></strong></div>
 					</div>
 				</div>
 			</template>
@@ -69,7 +69,7 @@
 							<div class="goods-received-note-tab-matrices">
 								<section v-for="block in matrixBlocks" :key="`readonly-${block.key}`" class="goods-received-note-tab-matrix">
 									<header><div><span>{{ block.kind === 'items' ? 'Receivables' : 'Corrections' }}</span><h2>{{ block.title }}</h2></div><strong>{{ logicalRowCount(block.groups) }} rows</strong></header>
-									<StockItemMatrix :groups="block.groups" doctype="YRP Goods Received Note" group-by-item show-lot-column show-availability show-pricing show-amount :currency="workspace.record?.currency || ''" />
+									<StockItemMatrix :dimensions="workspace.dimensions || []" :groups="block.groups" doctype="YRP Goods Received Note" group-by-item show-lot-column show-availability show-pricing show-amount :currency="workspace.record?.currency || ''" />
 								</section>
 								<div v-if="!matrixBlocks.length" class="goods-received-note-matrix__empty"><i class="pi pi-inbox" /><span>No Goods Received Note item rows are available.</span></div>
 							</div>
@@ -114,7 +114,7 @@
 					</header>
 					<div class="goods-received-note-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="goods-received-note-matrix__group">
-							<header><div><strong>{{ section.name || "Unspecified item" }}</strong><small v-if="section.lot && !canEditLots">{{ section.lot }}</small></div></header>
+							<header><div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong><small v-if="section.lot && !canEditLots"><DocumentLink doctype="SD YRP Lot" :name="section.lot" :label="section.lot" /></small></div></header>
 							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
@@ -147,7 +147,7 @@
 											<td v-if="hasActualDia && block.kind === 'items'" class="erp-number">{{ formatQty(receivableBalance(section.group, row)) }}</td>
 											<td v-if="canEditLots && block.kind === 'items'">
 												<Select v-if="canEditLotForEntry(row, workspace.lot_options, lotFieldname)" v-model="row.dimensions[lotFieldname]" :options="lotChoicesForEntry(row, workspace.lot_options, lotFieldname)" option-label="label" option-value="value" option-disabled="disabled" placeholder="Choose lot" aria-label="Receipt lot" @update:model-value="markDirty" />
-												<span v-else>{{ row.dimensions?.[lotFieldname] }}</span>
+												<span v-else><DocumentLink doctype="SD YRP Lot" :name="row.dimensions?.[lotFieldname]" :label="row.dimensions?.[lotFieldname]" /></span>
 												<Button v-if="unusedLots(section.group, row).length" label="Add lot" text size="small" @click="addLot(section.group, row)" />
 												<Button v-if="canRemoveLot(section.group, row)" label="Remove" text size="small" @click="removeLot(section.group, row)" />
 											</td>
@@ -155,7 +155,7 @@
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity goods-received-note-matrix__primary-cell">
 												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Receive', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
 												<small>Available {{ formatQty(availableQuantity(row.values[value])) }}</small>
-												<div v-if="secondaryUom(row, value)" class="goods-received-note-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><span>{{ secondaryUom(row, value) }}</span></div>
+												<div v-if="secondaryUom(row, value)" class="goods-received-note-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><span><DocumentLink doctype="UOM" :name="secondaryUom(row, value)" :label="secondaryUom(row, value)" /></span></div>
 											</td>
 										</template>
 										<template v-else>
@@ -163,12 +163,12 @@
 											<td class="erp-number goods-received-note-matrix__quantity"><InputNumber v-model="row.values.default.qty" :aria-label="matrixInputLabel('Receive', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /></td>
 											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number goods-received-note-matrix__secondary">
 												<InputNumber v-model="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
-												<small>{{ secondaryUom(row, "default") }}</small>
+												<small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
 											<td><InputText v-model="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="markDirty" /><Button v-if="block.kind === 'items' && canEditDraft && !workspace.special_source?.active" label="Add split" size="small" severity="secondary" text @click="openSplit(section.group, row)" /></td><td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td class="erp-number goods-received-note-matrix__value">{{ formatMoney(rowValue(row)) }}</td>
-											<td>{{ row.default_uom || row.uom || "—" }}</td>
+											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>
 									</tbody>
 								</table>
@@ -240,6 +240,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import InputText from "primevue/inputtext"
 import Button from "primevue/button"
@@ -448,11 +449,11 @@ const matrixBlocks = computed(() => {
 	return blocks
 })
 const headerFacts = computed(() => [
-	["Source", workspace.value.record?.against_id || form.against_id],
-	["Process", workspace.value.record?.process_name || form.process_name],
-	["Item", workspace.value.record?.item || form.item],
-	["Supplier", workspace.value.record?.supplier_name || workspace.value.record?.supplier || form.supplier],
-].filter(([, value]) => value).map(([label, value]) => ({ label, value })))
+	["Source", workspace.value.record?.against_id || form.against_id, workspace.value.record?.against || form.against],
+	["Process", workspace.value.record?.process_name || form.process_name, "YRP Process"],
+	["Item", workspace.value.record?.item || form.item, "Item"],
+	["Supplier", workspace.value.record?.supplier || form.supplier, "Supplier", workspace.value.record?.supplier_name || workspace.value.record?.supplier || form.supplier],
+].map(([label, name, doctype, value = name]) => ({ label, value, doctype, name })).filter(({ value }) => value))
 const transferPercent = computed(() => Math.max(0, Math.min(100, Number(workspace.value.record?.ste_transferred_percent || (workspace.value.record?.transfer_complete ? 100 : 0)))))
 const inspectionEntries = computed(() => workspace.value.inspection?.entries || workspace.value.related?.inspection_entries || [])
 

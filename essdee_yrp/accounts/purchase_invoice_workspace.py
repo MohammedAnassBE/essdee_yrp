@@ -60,6 +60,11 @@ ACTION_LABELS = {
 }
 
 
+def _invoice_link_name(doc, fieldname):
+	masked = getattr(getattr(doc, "flags", None), "masked_fieldnames", ()) or ()
+	return "" if fieldname in masked else doc.get(fieldname)
+
+
 def _record(doc) -> dict:
 	status = doc.get("status") or {0: _("Draft"), 1: _("Submitted"), 2: _("Cancelled")}.get(
 		cint(doc.docstatus), _("Draft")
@@ -71,6 +76,7 @@ def _record(doc) -> dict:
 		"status": status,
 		"modified": doc.get("modified"),
 		"supplier": doc.get("supplier"),
+		"supplier_link_name": _invoice_link_name(doc, "supplier"),
 		"bill_no": doc.get("bill_no"),
 		"against": doc.get("against"),
 		"grand_total": doc.get("grand_total"),
@@ -92,6 +98,7 @@ def _detail_field(doc, fieldname: str) -> dict:
 		"fieldtype": field.fieldtype if field else "Data",
 		"value": doc.get(fieldname),
 		"options": field.options if field else None,
+		**({"link_name": _invoice_link_name(doc, fieldname)} if field and field.fieldtype == "Link" else {}),
 	}
 
 
@@ -130,6 +137,7 @@ def serialize_grns(doc) -> list[dict]:
 		fields=[
 			"name as grn",
 			"posting_date",
+			"against",
 			"against_id",
 			"supplier_document_no",
 			"total_received_quantity",

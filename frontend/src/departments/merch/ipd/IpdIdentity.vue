@@ -8,7 +8,7 @@
 			<div class="ipd-identity__heading">
 				<h1 :id="headingId" class="erp-doc-title" :aria-label="[name || 'New IPD', itemName || item].filter(Boolean).join(' · ')">
 					<span class="ipd-identity__name">{{ name || "New IPD" }}</span>
-					<template v-if="itemName || item"><span class="ipd-identity__separator" aria-hidden="true">·</span><span class="ipd-identity__item">{{ itemName || item }}</span></template>
+					<template v-if="itemName || item"><span class="ipd-identity__separator" aria-hidden="true">·</span><span class="ipd-identity__item"><DocumentLink doctype="Item" :name="item" :label="itemName || item" /></span></template>
 				</h1>
 				<DocumentStatusBadge v-if="name" :label="status || 'Not Approved'" />
 			</div>
@@ -25,6 +25,7 @@
 <script setup>
 import { computed } from "vue"
 
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 
 const props = defineProps({

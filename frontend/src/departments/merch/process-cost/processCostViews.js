@@ -24,7 +24,7 @@ export function mergeProcessCostRows(values = [], tiers = [], attribute = "") {
 }
 
 export function buildProcessCostGrid(tiers = []) {
-	const rows = tiers.map((tier, index) => ({ key: `tier-${index}`, label: tier.attribute_value_label || tier.attribute_value || "—" }))
+	const rows = tiers.map((tier, index) => ({ key: `tier-${index}`, label: tier.attribute_value_label || tier.attribute_value || "—", link_doctype: "YRP Item Attribute Value", link_name: tier.attribute_value }))
 	const model = Object.fromEntries(rows.map((row, index) => [row.key, { min_order_qty: tiers[index].min_order_qty, price: tiers[index].price }]))
 	return { rows, model }
 }

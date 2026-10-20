@@ -50,7 +50,7 @@
 					class="lot-edit-fact"
 				>
 					<span>{{ derivedLabels[fieldname] }}</span>
-					<strong>{{ derived[fieldname] ?? "—" }}</strong>
+					<strong><DocumentLink v-if="derivedTarget(fieldname)" v-bind="derivedTarget(fieldname)" :label="derived[fieldname] ?? '—'" /><template v-else>{{ derived[fieldname] ?? '—' }}</template></strong>
 				</div>
 			</template>
 		</DocumentFieldGroupGrid>
@@ -84,6 +84,7 @@
 </template>
 <script setup>
 import { computed } from "vue"
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import ChildTableField from "../../../components/common/ChildTableField.vue"
 import FormField from "../../../components/common/FormField.vue"
 import DocumentFieldGroupGrid from "../../../components/documents/DocumentFieldGroupGrid.vue"
@@ -138,6 +139,12 @@ const fabricErrors = computed(() =>
 		),
 	),
 )
+function derivedTarget(fieldname) {
+	if (!props.derived[fieldname]) return null
+	if (["uom", "packing_uom"].includes(fieldname)) return { doctype: "UOM", name: props.derived[fieldname] }
+	if (["pack_in_stage", "pack_out_stage"].includes(fieldname) && props.derived[`${fieldname}_name`]) return { doctype: "YRP Item Attribute Value", name: props.derived[`${fieldname}_name`] }
+	return null
+}
 function fieldSchema(fieldname) {
 	const field = props.fields.find((field) => field.fieldname === fieldname)
 	if (!field) throw new Error(`Missing Lot field: ${fieldname}`)

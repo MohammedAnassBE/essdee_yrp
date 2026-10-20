@@ -2,7 +2,7 @@
 	<p v-if="!lots.length" class="finishing-empty">No alternative details available</p>
 	<div v-else class="finishing-stack">
 		<section v-for="lot in lots" :key="lot.name" class="finishing-section" :aria-label="`Alternative ${lot.name}`">
-			<h3 class="finishing-section__title">{{ lot.name }} - {{ lot.item }}</h3>
+			<h3 class="finishing-section__title"><DocumentLink doctype="SD YRP Lot" :name="lot.name" /> - <DocumentLink doctype="Item" :name="lot.item" /></h3>
 			<div v-for="(detail, detailIndex) in lot.details" :key="detailIndex" class="finishing-scroll" role="region" tabindex="0" :aria-label="`${lot.name} quantities ${detailIndex + 1}`">
 				<table class="finishing-table">
 					<thead>
@@ -34,6 +34,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import { computed } from "vue"
 
 import { formatQuantity } from "../finishingViews.js"

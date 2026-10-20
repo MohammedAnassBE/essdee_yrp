@@ -9,7 +9,7 @@
 				</div>
 				<h1 class="erp-doc-title" :id="headingId" :aria-label="[name || draftName || 'New Lot', item].filter(Boolean).join(' · ')">
 					<span class="lot-page__lot">{{ name || draftName || "New Lot" }}</span>
-					<template v-if="item"><span class="lot-page__title-separator" aria-hidden="true">·</span><span>{{ item }}</span></template>
+					<template v-if="item"><span class="lot-page__title-separator" aria-hidden="true">·</span><DocumentLink doctype="Item" :name="item" /></template>
 				</h1>
 			</div>
 			<DocumentStatusBadge :label="status || 'Open'" />
@@ -17,6 +17,7 @@
 	</div>
 </template>
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { formatLotDate } from "./lotViews.js"
 defineProps({

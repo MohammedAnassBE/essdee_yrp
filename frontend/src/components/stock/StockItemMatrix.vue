@@ -16,8 +16,8 @@
 				<header class="item-matrix__group-header">
 					<div>
 						<i v-if="!groupByItem" class="pi pi-th-large"></i>
-						<strong>{{ groupByItem ? group.itemIdentity : group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</strong>
-						<small v-if="groupByItem && group.itemLot && !showLotColumn">{{ group.itemLot }}</small>
+						<strong><DocumentLink v-if="groupByItem" doctype="Item" :name="group.items?.[0]?.name" :label="group.itemIdentity" /><template v-else>{{ group.primary_attribute ? `${group.primary_attribute} matrix` : "Quantity" }}</template></strong>
+						<small v-if="groupByItem && group.itemLot && !showLotColumn"><DocumentLink doctype="SD YRP Lot" :name="group.itemLot" /></small>
 						<small v-if="groupByItem && group.itemComment" class="item-matrix__item-comment">{{ group.itemComment }}</small>
 					</div>
 					<span>{{ group.items?.length || 0 }} {{ group.items?.length === 1 ? "row" : "rows" }}</span>
@@ -40,10 +40,10 @@
 						<tbody>
 							<tr v-for="(row, rowIndex) in group.items || []" :key="`${row.name}-${rowIndex}`">
 								<td v-if="!groupByItem" class="item-matrix__index">{{ rowIndex + 1 }}</td>
-								<td v-if="!groupByItem" class="item-matrix__item"><strong>{{ row.name || "—" }}</strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="normalizedComment(row.comments)" class="item-matrix__item-comment">{{ normalizedComment(row.comments) }}</small></td>
-								<td v-for="column in leadingContextColumns(group)" :key="column.key">{{ contextDisplay(row, column) }}</td>
+								<td v-if="!groupByItem" class="item-matrix__item"><strong><DocumentLink doctype="Item" :name="row.name" :label="row.name || '—'" /></strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="normalizedComment(row.comments)" class="item-matrix__item-comment">{{ normalizedComment(row.comments) }}</small></td>
+								<td v-for="column in leadingContextColumns(group)" :key="column.key"><DocumentLink v-if="contextTarget(row, column)" v-bind="contextTarget(row, column)" :label="contextDisplay(row, column)" /><template v-else>{{ contextDisplay(row, column) }}</template></td>
 								<td v-for="attribute in group.attributes || []" :key="attribute"><span class="item-matrix__attribute">{{ display(row.attributes?.[attribute]) }}</span></td>
-								<td v-for="column in trailingContextColumns(group)" :key="column.key">{{ contextDisplay(row, column) }}</td>
+								<td v-for="column in trailingContextColumns(group)" :key="column.key"><DocumentLink v-if="contextTarget(row, column)" v-bind="contextTarget(row, column)" :label="contextDisplay(row, column)" /><template v-else>{{ contextDisplay(row, column) }}</template></td>
 								<td v-for="value in primaryValues(group)" :key="value" class="item-matrix__number item-matrix__qty">
 									<strong>{{ formatQty(row.values?.[value]?.qty) }}</strong>
 									<small v-if="secondaryQty(row.values?.[value])">{{ formatQty(row.values[value].secondary_qty) }} {{ row.values[value].secondary_uom || row.secondary_uom }}</small>
@@ -55,7 +55,7 @@
 									<small v-if="showFulfillment && pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 								</td>
 								<td v-if="showTotalColumn(group)" class="item-matrix__number item-matrix__total item-matrix__qty"><strong>{{ formatQty(rowTotal(row)) }}</strong><small v-if="showFulfillment && showReceived && rowHasFulfillment(row)" class="item-matrix__received">Received {{ formatQty(rowMetricTotal(row, receivedQty)) }}</small><small v-if="showFulfillment && rowHasFulfillment(row)" class="item-matrix__pending">{{ fulfillmentTotalLabel(row) }}</small><small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(rowAmount(row)) }}</small></td>
-								<td><span class="item-matrix__uom">{{ row.default_uom || "—" }}</span></td>
+								<td><span class="item-matrix__uom"><DocumentLink doctype="UOM" :name="row.default_uom" :label="row.default_uom || '—'" /></span></td>
 							</tr>
 						</tbody>
 					</table>
@@ -68,9 +68,12 @@
 <script setup>
 import { groupItemsForDisplay } from "../../engine/stock/groupItemsForDisplay.js"
 import { computed } from "vue"
+import DocumentLink from "../common/DocumentLink.vue"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
+	dimensions: { type: Array, default: () => [] },
 	doctype: { type: String, default: "" },
 	physicalRowCount: { type: Number, default: 0 },
 	groupByItem: { type: Boolean, default: false },
@@ -140,6 +143,11 @@ function contextColumns(group) {
 function leadingContextColumns(group) { return contextColumns(group).filter((column) => !isPurchaseOrder.value || column.dimension) }
 function trailingContextColumns(group) { return contextColumns(group).filter((column) => isPurchaseOrder.value && !column.dimension) }
 function contextValue(row, column) { return column.dimension ? row.dimensions?.[column.key] : row[column.key] }
+function contextTarget(row, column) {
+	const field = props.dimensions.find((field) => field.fieldname === column.key)
+	const options = { lot: "SD YRP Lot", from_lot: "SD YRP Lot", to_lot: "SD YRP Lot", delivery_location: "Supplier", warehouse: "Warehouse" }[column.key]
+	return linkFieldTarget({ ...(field ? { ...field, fieldtype: field.fieldtype || (field.options ? "Link" : "Data") } : { fieldtype: "Link", options }), value: contextValue(row, column) }, row.dimensions || row)
+}
 function contextDisplay(row, column) {
 	const value = contextValue(row, column)
 	if (isPurchaseOrder.value && column.key === "schedule_date") return formatDate(value)

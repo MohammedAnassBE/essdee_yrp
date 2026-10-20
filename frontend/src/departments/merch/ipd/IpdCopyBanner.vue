@@ -3,7 +3,7 @@
 		<i class="pi pi-copy" aria-hidden="true" />
 		<span v-if="source?.hidden">Copied from an IPD you cannot open.</span>
 		<span v-else>
-			Started from <strong>{{ source?.name }}</strong> ({{ source?.approval_status || "Not Approved" }}, used by {{ lotLabel }}).
+			Started from <strong><DocumentLink doctype="YRP Item Production Detail" :name="source?.name" /></strong> ({{ source?.approval_status || "Not Approved" }}, used by {{ lotLabel }}).
 			<template v-if="changes !== null"><strong>{{ changes.length }} {{ changes.length === 1 ? "change" : "changes" }}</strong> so far<template v-if="changes.length">: {{ changeSummary }}</template>.</template>
 		</span>
 		<Button v-if="!source?.hidden" label="Show changes" icon="pi pi-eye" size="small" outlined severity="secondary" @click="emit('show-changes')" />
@@ -13,6 +13,8 @@
 <script setup>
 import Button from "primevue/button"
 import { computed } from "vue"
+
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 
 import { tabLabel } from "./ipdTabs.js"
 

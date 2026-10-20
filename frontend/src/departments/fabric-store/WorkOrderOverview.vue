@@ -17,7 +17,7 @@
 			<dl class="work-order-overview__facts">
 				<div v-for="field in group.fields" :key="field.fieldname" :class="{ 'work-order-overview__fact--wide': isWide(field) }">
 					<dt>{{ field.label }}</dt>
-					<dd :title="String(formatValue(field))">{{ formatValue(field) }}</dd>
+					<dd :title="String(formatValue(field))"><DocumentLink v-if="field.value !== null && field.value !== undefined && field.value !== '' && linkFieldTarget(field)" v-bind="linkFieldTarget(field)" :label="formatValue(field)" /><template v-else>{{ formatValue(field) }}</template></dd>
 				</div>
 			</dl>
 		</section>
@@ -26,6 +26,9 @@
 
 <script setup>
 import { computed } from "vue"
+
+import DocumentLink from "../../components/common/DocumentLink.vue"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
 
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 

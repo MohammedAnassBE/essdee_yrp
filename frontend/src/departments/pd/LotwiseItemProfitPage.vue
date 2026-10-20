@@ -24,6 +24,8 @@
 				<LotwiseWorkspaceHeader
 					:name="form.name"
 					:title="pageTitle"
+					:product="form.product"
+					:item="form.item"
 					:actions="documentActions"
 					:can-edit="canEdit"
 					:saving="saving"

@@ -5,7 +5,7 @@
 		<article v-else class="process-cost-page erp-workspace">
 			<header class="process-cost-page__header">
 				<InlinePageNavigation title-target="process-cost-title" />
-				<div class="process-cost-page__title"><h1 id="process-cost-title" class="erp-doc-title">Process Cost · {{ workspace.record.process_name }}</h1><span class="erp-doc-id">{{ workspace.record.name }}</span></div>
+				<div class="process-cost-page__title"><h1 id="process-cost-title" class="erp-doc-title">Process Cost · <DocumentLink doctype="YRP Process" :name="workspace.record.process_name" /></h1><span class="erp-doc-id">{{ workspace.record.name }}</span></div>
 				<DocumentStatusBadge :label="workspace.record.workflow_state" :docstatus="workspace.record.docstatus" />
 				<DocumentPrintButton doctype="YRP Process Cost" :name="workspace.record.name" :docstatus="workspace.record.docstatus" :disabled="acting" />
 				<DocumentActionStrip :actions="actions" />
@@ -20,6 +20,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import Message from "primevue/message"
 import { computed, ref, watch } from "vue"

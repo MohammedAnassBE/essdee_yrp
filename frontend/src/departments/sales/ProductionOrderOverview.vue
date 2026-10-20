@@ -3,14 +3,16 @@
 		<header><h2 id="ppo-overview-heading">Details</h2></header>
 		<div class="ppo-overview__facts">
 			<div v-for="field in visibleFields" :key="field.fieldname" :class="{ 'ppo-overview__wide': /comments/i.test(field.fieldname) }">
-				<span>{{ field.label }}</span><strong>{{ display(field) }}</strong>
+				<span>{{ field.label }}</span><strong><DocumentLink :doctype="linkFieldTarget(field)?.doctype" :name="linkFieldTarget(field)?.name" :label="display(field)" /></strong>
 			</div>
 		</div>
 	</section>
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import { computed } from "vue"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 
 const props = defineProps({ fields: { type: Array, default: () => [] } })

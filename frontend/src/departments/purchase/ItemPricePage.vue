@@ -7,8 +7,8 @@
 						<div><h1 class="erp-doc-title" :id="headingId">Item Price</h1><span class="erp-doc-id">{{ header.name }}</span></div>
 						<DocumentStatusBadge :docstatus="header.docstatus" :label="header.workflow_state" />
 						<div class="item-price-page__facts" role="region" aria-label="Item Price context" tabindex="0">
-							<div><span>{{ fieldLabel("item_name", "Item") }}</span><strong :title="header.item_name">{{ header.item_name || "—" }}</strong></div>
-							<div><span>{{ fieldLabel("supplier", "Supplier") }}</span><strong :title="header.supplier_name || header.supplier">{{ header.supplier_name || header.supplier || "—" }}</strong></div>
+							<div><span>{{ fieldLabel("item_name", "Item") }}</span><strong :title="header.item_name"><DocumentLink doctype="Item" :name="header.item_name" :label="header.item_name || '—'" /></strong></div>
+							<div><span>{{ fieldLabel("supplier", "Supplier") }}</span><strong :title="header.supplier_name || header.supplier"><DocumentLink doctype="Supplier" :name="header.supplier" :label="header.supplier_name || header.supplier || '—'" /></strong></div>
 							<div><span>{{ fieldLabel("from_date", "From Date") }}</span><strong>{{ formatDate(header.from_date) }}</strong></div>
 						</div>
 					</div>
@@ -27,12 +27,12 @@
 						</header>
 						<dl class="item-price-values__facts">
 							<div><dt>{{ fieldLabel("depends_on_attribute", "Depends On Attribute") }}</dt><dd>{{ record.depends_on_attribute ? "Yes" : "No" }}</dd></div>
-							<div v-if="record.depends_on_attribute"><dt>{{ fieldLabel("attribute", "Attribute") }}</dt><dd>{{ record.attribute || "—" }}</dd></div>
+							<div v-if="record.depends_on_attribute"><dt>{{ fieldLabel("attribute", "Attribute") }}</dt><dd><DocumentLink doctype="Item Attribute" :name="record.attribute" :label="record.attribute || '—'" /></dd></div>
 						</dl>
 						<div class="item-price-values__body">
 						<DataTable v-if="tiers.length" :value="tiers" size="small" scrollable class="erp-data-table item-price-values__table">
 							<Column header="No." class="item-price-values__index"><template #body="{ index }">{{ index + 1 }}</template></Column>
-							<Column v-if="record.depends_on_attribute" :header="tierLabel('attribute_value', 'Attribute Value')"><template #body="{ data }">{{ data.attribute_value_label || data.attribute_value || "—" }}</template></Column>
+							<Column v-if="record.depends_on_attribute" :header="tierLabel('attribute_value', 'Attribute Value')"><template #body="{ data }"><DocumentLink doctype="YRP Item Attribute Value" :name="data.attribute_value" :label="data.attribute_value_label || data.attribute_value || '—'" /></template></Column>
 							<Column v-for="fieldname in NUMBER_COLUMNS" :key="fieldname" :header="tierLabel(fieldname, fieldname)" class="item-price-values__number"><template #body="{ data }">{{ formatTier(fieldname, data[fieldname]) }}</template></Column>
 						</DataTable>
 						<div v-else class="erp-empty-state"><span class="erp-empty-state__text">No price values.</span></div>
@@ -74,6 +74,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import Column from "primevue/column"
 import DataTable from "primevue/datatable"
 import { computed, ref, watch } from "vue"

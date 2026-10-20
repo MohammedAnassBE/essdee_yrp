@@ -2,7 +2,7 @@
 	<header class="lotwise-workspace__header">
 		<div class="lotwise-workspace__identity">
 			<span>Lotwise Item Profit · {{ name || "New" }}</span>
-			<h1>{{ title }}</h1>
+			<h1><DocumentLink v-if="product" doctype="SD YRP Product" :name="product" :label="title" /><DocumentLink v-else-if="item" doctype="SD YRP FG Item Master" :name="item" :label="title" /><template v-else>{{ title }}</template></h1>
 		</div>
 		<div class="lotwise-workspace__header-actions">
 			<DocumentPrintButton v-if="name" doctype="SD YRP Lotwise Item Profit" :name="name" :disabled="busy" />
@@ -13,6 +13,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
@@ -20,6 +21,8 @@ import DocumentSaveButton from "../../../components/documents/DocumentSaveButton
 defineProps({
 	name: { type: String, default: "" },
 	title: { type: String, required: true },
+	product: { type: String, default: "" },
+	item: { type: String, default: "" },
 	actions: { type: Array, required: true },
 	canEdit: { type: Boolean, default: false },
 	saving: { type: Boolean, default: false },

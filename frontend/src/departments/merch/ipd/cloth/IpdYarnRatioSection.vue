@@ -32,7 +32,7 @@
 				v-if="recipes.rows.value.length"
 				ref="recipeGrid" validation-field="colour_yarn_recipes"
 				:rows="recipes.keys.value"
-				:columns="RECIPE_COLUMNS"
+				:columns="ipdLinkColumns(RECIPE_COLUMNS, editor, 'colour_yarn_recipes')"
 				:model-value="recipes.model.value"
 				readonly
 				title="Colour-wise Yarn Recipes"
@@ -48,6 +48,7 @@
 import { computed, ref } from "vue"
 import Button from "primevue/button"
 
+import { ipdLinkColumns } from "../ipdLinks.js"
 import EntryGrid from "../../../../components/common/EntryGrid.vue"
 import IpdSection from "../IpdSection.vue"
 import { ratioTotal } from "./clothGrids.js"
@@ -61,14 +62,14 @@ const props = defineProps({
 
 const RATIO_FIELDS = ["yarn_item", "ratio"]
 const RATIO_COLUMNS = [
-	{ key: "yarn_item", label: "Yarn Item", type: "link", doctype: "Item", filters: { is_cloth_item: 0 } },
+	{ key: "yarn_item", label: "Yarn Item", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item", filters: { is_cloth_item: 0 } },
 	{ key: "ratio", label: "Ratio (%)", type: "number", min: 0, precision: 3 },
 ]
 const RECIPE_FIELDS = ["colour", "yarn_item", "yarn_colour", "ratio"]
 const RECIPE_COLUMNS = [
-	{ key: "colour", label: "Fabric Colour", type: "text" },
-	{ key: "yarn_item", label: "Yarn Item", type: "text" },
-	{ key: "yarn_colour", label: "Yarn Colour", type: "text" },
+	{ key: "colour", fieldtype: "Link", link_doctype: "YRP Item Attribute Value", label: "Fabric Colour", type: "text" },
+	{ key: "yarn_item", fieldtype: "Link", link_doctype: "Item", label: "Yarn Item", type: "text" },
+	{ key: "yarn_colour", fieldtype: "Link", link_doctype: "YRP Item Attribute Value", label: "Yarn Colour", type: "text" },
 	{ key: "ratio", label: "Ratio (%)", type: "number" },
 ]
 

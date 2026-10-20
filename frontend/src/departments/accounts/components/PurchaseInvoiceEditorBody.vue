@@ -16,7 +16,6 @@
 						:form="form"
 						:required="Boolean(field.reqd)"
 						:disabled="busy"
-						:show-open-button="false"
 						@update:model-value="emit('update-field', field.fieldname, $event)"
 					/>
 				</template>
@@ -87,7 +86,6 @@
 						:form="form"
 						:required="Boolean(field.reqd)"
 						:disabled="busy"
-						:show-open-button="false"
 						@update:model-value="emit('update-field', field.fieldname, $event)"
 					/>
 				</template>

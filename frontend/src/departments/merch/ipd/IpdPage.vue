@@ -138,7 +138,7 @@ const revertMessage = computed(() => lots.value.length
 
 const readOnlyApi = reactive({
 	draft: computed(() => readonly(values.value)), context: computed(() => workspace.value.context || {}),
-	grids: {}, gridDrift: {}, fields: {}, record, checks, isNew: false, sections, states, readonly: true,
+	grids: {}, gridDrift: {}, fields: computed(() => workspace.value.fields || {}), record, checks, isNew: false, sections, states, readonly: true,
 	problemsFor: (sectionKey) => problemsFor(checks.value, sectionKey),
 	cellError: (field, rowKey, column) => gridErrors(checks.value, field)?.[rowKey]?.[column ?? ""] || "",
 	gridErrors: (field) => gridErrors(checks.value, field),

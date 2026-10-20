@@ -13,10 +13,10 @@
 			<header class="material-requirement-group__header requirement-group__header">
 				<div class="material-requirement-group__identity requirement-group__identity">
 					<strong :title="group.accessory || group.item">
-						{{ group.accessory || group.item || "Unspecified item" }}
+						<template v-if="group.accessory">{{ group.accessory }}</template><DocumentLink v-else doctype="Item" :name="group.item" :label="group.item || 'Unspecified item'" />
 					</strong>
 					<span v-if="group.accessory" :title="group.item">
-						{{ group.item || "Unspecified item" }}
+						<DocumentLink doctype="Item" :name="group.item" :label="group.item || 'Unspecified item'" />
 					</span>
 				</div>
 				<div class="material-requirement-group__meta requirement-group__meta">
@@ -64,6 +64,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import { computed } from "vue"
 

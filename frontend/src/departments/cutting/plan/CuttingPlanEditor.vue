@@ -39,7 +39,7 @@
 						</label>
 						<div class="cutting-plan-editor__field cutting-plan-editor__field--wide">
 							<label>Lot <span>*</span></label>
-							<LinkField v-model="form.lot" doctype="SD YRP Lot" :show-open-button="false" :disabled="busy || !canEditField('lot')" show-clear @select="loadLot" @clear="clearLot" />
+							<LinkField v-model="form.lot" doctype="SD YRP Lot" :disabled="busy || !canEditField('lot')" show-clear @select="loadLot" @clear="clearLot" />
 						</div>
 						<div class="cutting-plan-editor__field">
 							<label for="cp-item">Item</label>
@@ -47,7 +47,7 @@
 						</div>
 						<div v-if="fields.show_work_order" class="cutting-plan-editor__field">
 							<label>Work Order</label>
-							<LinkField v-model="form.work_order" doctype="YRP Work Order" :filters="workOrderFilters" :show-open-button="false" :disabled="busy || !form.lot || !fields.can_edit_work_order || !canEditField('work_order')" show-clear />
+							<LinkField v-model="form.work_order" doctype="YRP Work Order" :filters="workOrderFilters" :disabled="busy || !form.lot || !fields.can_edit_work_order || !canEditField('work_order')" show-clear />
 						</div>
 					</div>
 				</section>

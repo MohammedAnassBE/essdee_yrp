@@ -32,8 +32,8 @@
 			<p v-if="!rows.length" class="finishing-empty">{{ draft ? "No Finishing Plans have packed boxes waiting for dispatch." : "This dispatch has no Finishing Plan rows." }}</p>
 			<section v-for="row in rows" :key="`${row.doc_name}-${rowsVersion}`" class="finishing-section" :aria-label="`${row.lot} ${row.item}`">
 				<h2 class="finishing-dispatch__plan">
-					<span>{{ row.lot }}-{{ row.item }}</span>
-					<RouterLink :to="`/finishing/plans/${encodeURIComponent(row.doc_name)}`" class="finishing-dispatch__link">{{ row.doc_name }}</RouterLink>
+					<span><DocumentLink doctype="SD YRP Lot" :name="row.lot" />-<DocumentLink doctype="Item" :name="row.item" /></span>
+					<DocumentLink doctype="SD YRP Finishing Plan" :name="row.doc_name" class="finishing-dispatch__link" />
 				</h2>
 				<FinishingDispatchEntry
 					:ref="(component) => setEntry(row.doc_name, component)"
@@ -67,6 +67,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
@@ -76,7 +77,7 @@ import InputText from "primevue/inputtext"
 import Skeleton from "primevue/skeleton"
 import { useToast } from "primevue/usetoast"
 import { computed, reactive, ref, watch } from "vue"
-import { RouterLink, useRoute, useRouter } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 
 import { executeDispatchCommand, fetchDispatchItems, getDispatchWorkspace, saveDispatch } from "../../api/finishing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"

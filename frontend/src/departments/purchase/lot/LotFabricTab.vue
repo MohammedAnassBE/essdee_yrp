@@ -10,9 +10,9 @@
 			<header>
 				<div>
 					<span>Cloth route</span>
-					<h2>{{ entry.cloth_item || "Unassigned cloth route" }}</h2>
+					<h2><DocumentLink doctype="Item" :name="entry.cloth_item" :label="entry.cloth_item || 'Unassigned cloth route'" /></h2>
 					<small v-if="entry.production_detail" class="lot-muted">
-						{{ entry.production_detail }}
+						<DocumentLink doctype="YRP Item Production Detail" :name="entry.production_detail" />
 					</small>
 				</div>
 				<Tag
@@ -103,7 +103,7 @@
 							class="lot-group"
 						>
 							<header class="lot-group__header">
-								<strong>{{ step.process_name }}</strong>
+								<strong><DocumentLink doctype="YRP Process" :name="step.process_name" /></strong>
 								<span>{{ step.shape }}</span>
 							</header>
 							<template v-for="side in ['outputs', 'inputs']" :key="side">
@@ -197,13 +197,13 @@
 									v-for="(row, rowIndex) in conversions(entry, index).rows"
 									:key="rowIndex"
 								>
-									<td>{{ row.process_name }}</td>
-									<td><a :href="itemPath(row.planned_item)">{{ row.planned_item }}</a> → <a :href="itemPath(row.actual_item)">{{ row.actual_item }}</a></td>
+									<td><DocumentLink doctype="YRP Process" :name="row.process_name" /></td>
+									<td><DocumentLink doctype="Item" :name="row.planned_item" /> → <DocumentLink doctype="Item" :name="row.actual_item" /></td>
 									<td class="erp-number">
 										{{ formatQuantity(row.actual_quantity) }}
 										{{ row.stock_uom }}
 									</td>
-									<td>{{ countLabel(row.source_grn_count || 0, "GRN") }}<br /><a v-if="row.production_detail" :href="`/web/merch/item-production-details/${encodeURIComponent(row.production_detail)}`">{{ row.production_detail }}</a></td>
+									<td>{{ countLabel(row.source_grn_count || 0, "GRN") }}<br /><DocumentLink v-if="row.production_detail" doctype="YRP Item Production Detail" :name="row.production_detail" /></td>
 								</tr>
 							</tbody>
 						</table>
@@ -276,6 +276,7 @@ import Checkbox from "primevue/checkbox"
 import Message from "primevue/message"
 import Tag from "primevue/tag"
 import { computed, ref } from "vue"
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 
 import LotEmptyState from "./LotEmptyState.vue"
 import {
@@ -302,7 +303,6 @@ const includeUnchanged = ref({})
 const conversionSearch = ref({})
 const conversionProcess = ref({})
 function conversions(entry, index) { return conversionView(entry.conversions, { search: conversionSearch.value[index], process: conversionProcess.value[index], includeUnchanged: includeUnchanged.value[index] }) }
-function itemPath(item) { return `/app/item/${encodeURIComponent(item)}` }
 const cards = computed(() => {
 	const entries = [...props.fabrics]
 	if (props.otherConversions.length) entries.push({ conversions: props.otherConversions })

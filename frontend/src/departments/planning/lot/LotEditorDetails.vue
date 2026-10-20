@@ -8,7 +8,7 @@
 			</template>
 		</DocumentFieldGroupGrid>
 		<DocumentFieldGroupGrid :groups="derivedGroups" wide-last-odd facts aria-label="Derived Lot facts">
-			<template #default="{ group }"><div v-for="fieldname in group.fields" :key="fieldname" class="lot-edit-fact"><span>{{ DERIVED_LABELS[fieldname] }}</span><strong>{{ derived[fieldname] ?? '—' }}</strong></div></template>
+			<template #default="{ group }"><div v-for="fieldname in group.fields" :key="fieldname" class="lot-edit-fact"><span>{{ DERIVED_LABELS[fieldname] }}</span><strong><DocumentLink v-if="derivedTarget(fieldname)" v-bind="derivedTarget(fieldname)" :label="derived[fieldname] ?? '—'" /><template v-else>{{ derived[fieldname] ?? '—' }}</template></strong></div></template>
 		</DocumentFieldGroupGrid>
 		<section class="lot-section">
 			<header><div><span>Fabric</span><h2>Fabric Details</h2></div><span class="lot-count">{{ countLabel(form.lot_fabric_details.length, 'row') }}</span></header>
@@ -20,6 +20,7 @@
 </template>
 <script setup>
 import { computed } from "vue"
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import ChildTableField from "../../../components/common/ChildTableField.vue"
 import FormField from "../../../components/common/FormField.vue"
 import DocumentFieldGroupGrid from "../../../components/documents/DocumentFieldGroupGrid.vue"
@@ -30,6 +31,12 @@ const emit = defineEmits(["set-field", "fabric-rows"])
 const editableGroups = LOT_EDIT_GROUPS.filter((group) => group.key !== "derived")
 const derivedGroups = LOT_EDIT_GROUPS.filter((group) => group.key === "derived")
 const fabricErrors = computed(() => Object.fromEntries(props.form.lot_fabric_details.flatMap((row, index) => props.attemptedSave && !row.cloth_item ? [[`${index}.cloth_item`, "Cloth Item is required."]] : [])))
+function derivedTarget(fieldname) {
+	if (!props.derived[fieldname]) return null
+	if (["uom", "packing_uom"].includes(fieldname)) return { doctype: "UOM", name: props.derived[fieldname] }
+	if (["pack_in_stage", "pack_out_stage"].includes(fieldname) && props.derived[`${fieldname}_name`]) return { doctype: "YRP Item Attribute Value", name: props.derived[`${fieldname}_name`] }
+	return null
+}
 function fieldSchema(fieldname) {
 	const field = props.fields.find((field) => field.fieldname === fieldname)
 	if (!field) throw new Error(`Missing Lot field: ${fieldname}`)

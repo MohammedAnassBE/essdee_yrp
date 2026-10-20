@@ -20,7 +20,7 @@
 						<tr v-for="(bucket, bucketIndex) in buckets(group)" :key="bucket.key">
 							<template v-if="bucketIndex === 0">
 								<td :rowspan="buckets(group).length" class="finishing-table__index">{{ index + 1 }}</td>
-								<td :rowspan="buckets(group).length"><strong>{{ group.fp }}</strong><small class="old-lot__sub">{{ group.lot }}</small></td>
+								<td :rowspan="buckets(group).length"><strong><DocumentLink doctype="SD YRP Finishing Plan" :name="group.fp" :label="group.fp" /></strong><small class="old-lot__sub"><DocumentLink doctype="SD YRP Lot" :name="group.lot" :label="group.lot" /></small></td>
 								<td :rowspan="buckets(group).length">{{ group.colour }}</td>
 								<td :rowspan="buckets(group).length">{{ group.part || "—" }}</td>
 							</template>
@@ -47,7 +47,7 @@
 			</div>
 			<p v-if="!availableRows.length" class="finishing-empty">No transferable loose pieces found in other Finishing Plans for this item.</p>
 			<div v-for="row in availableRows" :key="`${row.source_fp}-${row.lot}-${row.warehouse}`" class="finishing-section">
-				<h4 class="old-lot__lot">{{ row.lot }} <small>{{ row.source_fp }} · {{ row.warehouse_name }}</small></h4>
+				<h4 class="old-lot__lot"><DocumentLink doctype="SD YRP Lot" :name="row.lot" :label="row.lot" /> <small><DocumentLink doctype="SD YRP Finishing Plan" :name="row.source_fp" :label="row.source_fp" /> · {{ row.warehouse_name }}</small></h4>
 				<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`Available loose pieces in ${row.lot}`">
 					<table class="finishing-table">
 						<thead>
@@ -92,6 +92,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"

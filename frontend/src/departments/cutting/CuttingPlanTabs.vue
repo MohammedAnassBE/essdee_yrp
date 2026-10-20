@@ -59,7 +59,7 @@
 									<tbody>
 										<tr v-for="(row, index) in data.grammage_change_logs || []" :key="row.name || index">
 											<td>{{ index + 1 }}</td><td>{{ decimal(row.from_grammage_allowance, 4) }}</td><td>{{ decimal(row.to_grammage_allowance, 4) }}</td>
-											<td>{{ row.changed_by || "—" }}</td><td>{{ row.changed_on || "—" }}</td>
+											<td><DocumentLink doctype="User" :name="row.changed_by" :label="row.changed_by || '—'" /></td><td>{{ row.changed_on || "—" }}</td>
 										</tr>
 									</tbody>
 								</table>
@@ -153,6 +153,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import Tab from "primevue/tab"

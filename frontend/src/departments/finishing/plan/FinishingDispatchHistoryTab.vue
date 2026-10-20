@@ -24,7 +24,7 @@
 						<button v-if="log.stock_entry" type="button" class="dispatch-history__open" @click="emit('open', 'YRP Stock Entry', log.stock_entry)">{{ log.stock_entry }}</button>
 						<span v-else>—</span>
 					</td>
-					<td>{{ log.source_name ? `${log.source_doctype || ""} ${log.source_name}`.trim() : "—" }}</td>
+					<td><DocumentLink :doctype="log.source_doctype" :name="log.source_name" :label="log.source_name ? `${log.source_doctype || ''} ${log.source_name}`.trim() : '—'" /></td>
 					<td class="dispatch-history__date">{{ formatDate(log.posting_date) }} {{ (log.posting_time || "").slice(0, 8) }}</td>
 					<td class="erp-number">{{ formatQuantity(log.dispatch_boxes) }}</td>
 					<td class="erp-number">{{ formatQuantity(log.dispatch_pieces) }}</td>
@@ -40,6 +40,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { formatDate } from "../../../components/reports/reportUtils.js"
 import { formatQuantity } from "../finishingViews.js"

@@ -11,7 +11,7 @@
 					title="IPD Processes"
 					row-header-label="#"
 					:rows="processes.rows"
-					:columns="processColumns"
+					:columns="ipdLinkColumns(processColumns, editor, 'ipd_processes')"
 					:model-value="processes.model"
 					:readonly="editor.readonly"
 					:errors="editor.gridErrors('ipd_processes')"
@@ -72,6 +72,7 @@
 import Button from "primevue/button"
 import { computed, inject, ref } from "vue"
 
+import { ipdLinkColumns } from "../ipdLinks.js"
 import EntryGrid from "../../../../components/common/EntryGrid.vue"
 import LinkField from "../../../../components/common/LinkField.vue"
 import IpdSection from "../IpdSection.vue"
@@ -99,9 +100,9 @@ const stages = computed(() => editor.context?.stage_values || [])
 const panels = computed(() => attributeValues(editor, draft.value.stiching_attribute))
 const processes = computed(() => tableGrid(draft.value.ipd_processes, PROCESS_FIELDS))
 const processColumns = computed(() => [
-	{ key: "process_name", label: "Process", type: "link", doctype: "YRP Process" },
-	{ key: "process_item", label: "Process Item", type: "link", doctype: "Item" },
-	{ key: "in_stage", label: "Stage", type: "value", options: stages.value },
+	{ key: "process_name", label: "Process", type: "link", fieldtype: "Link", link_doctype: "YRP Process", doctype: "YRP Process" },
+	{ key: "process_item", label: "Process Item", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item" },
+	{ key: "in_stage", fieldtype: "Link", link_doctype: "YRP Item Attribute Value", label: "Stage", type: "value", options: stages.value },
 ])
 const stageMismatches = computed(() => (draft.value.ipd_processes || []).filter(hasStageMismatch).length)
 const embellishment = computed(() => embellishmentGrid(draft.value.emblishment_details_json || {}, panels.value))

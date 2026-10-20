@@ -126,6 +126,53 @@ class TestLotWorkspace(TestCase):
 		)
 		self.assertEqual([r["value"] for r in facts], ["PPO-1", "Item", "Person"])
 
+	def test_facts_include_link_metadata_and_preserve_raw_substituted_names(self):
+		doc = frappe.new_doc("SD YRP Lot")
+		values = {
+			"production_order": "PPO-1",
+			"item": "Item-1",
+			"production_detail": "IPD-1",
+			"assigned_person": "person@example.test",
+			"season": "Summer",
+			"primary_item_attribute": "Size",
+			"uom": "Nos",
+			"pack_in_stage": "IAV-Stitched",
+			"pack_out_stage": "IAV-Packed",
+			"packing_uom": "Box",
+			"transferred_lot": "Lot-2",
+			"version": "V3",
+		}
+		doc.update({**values, "assigned_person_name": "Person"})
+		with patch.object(workspace, "_attribute_value", side_effect=lambda value: value.removeprefix("IAV-")):
+			facts = {row["fieldname"]: row for row in workspace.get_facts(doc, values)}
+		for fieldname, raw in values.items():
+			field = doc.meta.get_field(fieldname)
+			with self.subTest(fieldname=fieldname):
+				if field.fieldtype == "Link":
+					self.assertEqual(facts[fieldname]["options"], field.options)
+				else:
+					self.assertNotIn("options", facts[fieldname])
+				if fieldname in ("assigned_person", "pack_in_stage", "pack_out_stage"):
+					self.assertEqual(facts[fieldname]["link_name"], raw)
+		self.assertEqual(facts["assigned_person"]["value"], "Person")
+		self.assertEqual(facts["pack_in_stage"]["value"], "Stitched")
+		self.assertEqual(facts["pack_out_stage"]["value"], "Packed")
+
+	def test_dynamic_link_facts_include_resolved_doctype(self):
+		doc = self._doc(reference="DOC-1", reference_type="Item")
+		doc.meta.get_field = lambda field: SimpleNamespace(fieldtype="Dynamic Link", options="reference_type")
+		fact = workspace.get_facts(doc, ["reference"])[0]
+		self.assertEqual(fact["options"], "reference_type")
+		self.assertEqual(fact["link_doctype"], "Item")
+
+	def test_planning_workspace_reuses_purchase_link_facts(self):
+		from essdee_yrp.planning import lot_workspace as planning_workspace
+
+		payload = {"header": [{"fieldtype": "Link", "options": "Item", "value": "Item-1"}]}
+		with patch.object(workspace, "get_lot_workspace", return_value=payload) as get_workspace:
+			self.assertEqual(planning_workspace.get_lot_workspace("LOT-1"), payload)
+		get_workspace.assert_called_once_with("LOT-1")
+
 	def _stage_group(self, small, large):
 		return [
 			{
@@ -155,7 +202,7 @@ class TestLotWorkspace(TestCase):
 		]
 		with (
 			patch.object(frappe, "get_cached_doc", return_value=frappe._dict(name="IPD-1")),
-			patch.object(workspace, "build_order_item_stages", return_value=dict(zip(("quantity", "cut_qty", "stich_qty", "pack_qty"), fixtures))) as builder,
+			patch.object(workspace, "build_order_item_stages", return_value=dict(zip(("quantity", "cut_qty", "stich_qty", "pack_qty"), fixtures, strict=True))) as builder,
 			patch.object(workspace, "get_colour_attribute", return_value="Colour"),
 		):
 			payload = workspace.get_order_details(doc)

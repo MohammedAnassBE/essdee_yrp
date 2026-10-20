@@ -19,7 +19,7 @@
 					<div class="order-editor-field order-editor-field--detail">
 						<label>Cutting Order Detail <span>*</span></label>
 						<div class="detail-selector">
-							<LinkField v-model="form.cutting_order_detail" doctype="SD YRP Cutting Order Detail" :show-open-button="false" :disabled="busy" show-clear @select="detailSelected" @clear="clearDetail" />
+							<LinkField v-model="form.cutting_order_detail" doctype="SD YRP Cutting Order Detail" :disabled="busy" show-clear @select="detailSelected" @clear="clearDetail" />
 							<Button v-if="detailPermissions.can_create" label="Create Detail" icon="pi pi-plus" severity="secondary" outlined :disabled="busy" @click="openDetail('')" />
 							<Button v-if="form.cutting_order_detail && detailPermissions.can_write" label="Edit Detail" icon="pi pi-pencil" severity="secondary" text :disabled="busy" @click="openDetail(form.cutting_order_detail)" />
 						</div>

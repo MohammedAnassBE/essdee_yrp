@@ -19,11 +19,9 @@
 			<dl>
 				<div v-for="field in supplierFields" :key="field.fieldname">
 					<dt>{{ field.label }}</dt>
-					<dd v-if="field.fieldname === 'bill_tracking'">
-						<RouterLink :to="documentRoute('YRP Bill Tracking', field.value)">{{ field.value }}</RouterLink>
-					</dd>
-					<dd v-else :title="String(formatDocumentOverviewValue(field))">
-						{{ formatDocumentOverviewValue(field) }}
+					<dd :title="String(formatDocumentOverviewValue(field))">
+						<DocumentLink v-if="linkFieldTarget(field)" v-bind="linkFieldTarget(field)" :label="formatDocumentOverviewValue(field)" />
+						<template v-else>{{ formatDocumentOverviewValue(field) }}</template>
 					</dd>
 				</div>
 			</dl>
@@ -39,10 +37,11 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import { computed } from "vue"
 
 import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
-import { webDocumentPath } from "../../../router/webDocumentRoutes.js"
+import { linkFieldTarget } from "../../../utils/linkTarget.js"
 import {
 	documentOverviewHasValue,
 	formatDocumentOverviewValue,
@@ -89,9 +88,6 @@ const supplierFields = computed(() => {
 		.filter((field) => field && documentOverviewHasValue(field.value))
 })
 
-function documentRoute(doctype, name) {
-	return webDocumentPath(doctype, name).replace(/^\/web(?=\/)/, "")
-}
 </script>
 
 <style scoped>

@@ -36,7 +36,7 @@
 							:label="payload.record.status"
 						/>
 						<strong>
-							{{ payload.record.supplier_name || payload.record.supplier || "—" }}
+							<DocumentLink doctype="Supplier" :name="payload.record.supplier" :label="payload.record.supplier_name || payload.record.supplier || '—'" />
 						</strong>
 					</div>
 					<small>Updated {{ formatLotDate(payload.record.modified, true) }}</small>
@@ -68,7 +68,7 @@
 							:class="{ 'lot-document-detail-link': field.fieldtype === 'Link' }"
 							:title="field.fieldtype === 'Link' ? field.value : formatField(field)"
 						>
-							{{ formatField(field) }}
+							<DocumentLink v-if="linkFieldTarget(field, payload.record)" v-bind="linkFieldTarget(field, payload.record)" :label="formatField(field)" /><template v-else>{{ formatField(field) }}</template>
 						</strong>
 					</div>
 				</section>
@@ -91,7 +91,7 @@
 						reason="No deliverable quantities are recorded for this Work Order."
 					/>
 				</section>
-				<StockItemMatrix
+				<StockItemMatrix :dimensions="payload.dimensions || []"
 					v-else-if="doctype === 'Purchase Order' && payload.item_groups?.length"
 					:groups="payload.item_groups"
 					:doctype="doctype"
@@ -105,7 +105,7 @@
 					:show-amount="false"
 					pricing-before-fulfillment
 				/>
-				<StockItemMatrix
+				<StockItemMatrix :dimensions="payload.dimensions || []"
 					v-else-if="payload.item_groups?.length"
 					:groups="payload.item_groups"
 					:doctype="doctype"
@@ -141,6 +141,8 @@
 
 <script setup>
 import Button from "primevue/button"
+import DocumentLink from "../../../components/common/DocumentLink.vue"
+import { linkFieldTarget } from "../../../utils/linkTarget.js"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import { computed, ref, watch } from "vue"

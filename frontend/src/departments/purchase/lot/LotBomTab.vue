@@ -25,15 +25,15 @@
 					</thead>
 					<tbody v-for="group in bomProcessGroups(section.rows)" :key="group.process">
 						<tr class="lot-group-row">
-							<th :colspan="4">{{ group.process }}</th>
+							<th :colspan="4"><DocumentLink doctype="YRP Process" :name="group.process === '—' ? '' : group.process" :label="group.process" /></th>
 						</tr>
 						<tr v-for="row in group.rows" :key="row.index">
 							<td>{{ row.index }}</td>
-							<td>{{ row.item }}</td>
+							<td><DocumentLink doctype="Item" :name="row.item" /></td>
 							<td class="erp-number">
 								{{ formatQuantity(row.required_qty, bom.precision) }}
 							</td>
-							<td>{{ row.uom }}</td>
+							<td><DocumentLink doctype="UOM" :name="row.uom" /></td>
 						</tr>
 					</tbody>
 					<tfoot
@@ -44,7 +44,7 @@
 							<td class="erp-number lot-total">
 								{{ quantityTotal(total.total, bom.precision) }}
 							</td>
-							<td>{{ total.uom }}</td>
+							<td><DocumentLink doctype="UOM" :name="total.uom" /></td>
 						</tr>
 					</tfoot>
 				</table>
@@ -60,6 +60,7 @@
 
 <script setup>
 import { computed } from "vue"
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import LotEmptyState from "./LotEmptyState.vue"
 import {
 	countLabel,

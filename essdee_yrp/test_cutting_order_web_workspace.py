@@ -133,6 +133,11 @@ class TestCuttingOrderWebWorkspace(TestCase):
 			completed_items_json='{"items":[{"completed":true}]}',
 			incomplete_items_json='{"items":[]}',
 		)
+		doc.meta = MagicMock()
+		doc.meta.get_field.side_effect = lambda fieldname: frappe._dict(
+			fieldtype="Link" if fieldname == "cutting_order_detail" else "Data",
+			options="SD YRP Cutting Order Detail" if fieldname == "cutting_order_detail" else None,
+		)
 		doc.has_permission = MagicMock(side_effect=lambda ptype: ptype in {"read", "write", "print"})
 		planned = [{"items": [{"attributes": {"Colour": "Navy"}}]}]
 
@@ -156,6 +161,8 @@ class TestCuttingOrderWebWorkspace(TestCase):
 		get_planned.assert_called_once_with("CO-001")
 		self.assertEqual(payload["completed_items"]["items"][0]["completed"], True)
 		self.assertEqual(payload["planned_detail"], planned)
+		self.assertEqual(payload["details"][0]["options"], "SD YRP Cutting Order Detail")
+		self.assertEqual(payload["details"][1]["fieldtype"], "Data")
 		self.assertTrue(payload["permissions"]["can_create_marker"])
 		self.assertFalse(payload["permissions"]["can_create_laysheet"])
 		self.assertTrue(payload["actions"]["can_calculate_laysheets"])

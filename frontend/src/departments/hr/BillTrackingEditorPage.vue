@@ -56,7 +56,6 @@
 							:invalid="hasFieldError(field.fieldname)"
 							:error="fieldError(field.fieldname)"
 							:disabled="busy"
-							:show-open-button="false"
 						/>
 						<DeliveryPersonSuggestion
 							v-if="group.key === 'delivery' && form.supplier"

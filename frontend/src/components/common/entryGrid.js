@@ -252,7 +252,7 @@ export function displayCell(column, value) {
 	if (column.type === "number" && Number.isInteger(column.precision) && typeof value === "number") {
 		return value.toLocaleString("en-IN", { maximumFractionDigits: column.precision, useGrouping: false })
 	}
-	const option = (column.options || []).find((candidate) => typeof candidate === "object" && candidate.value === value)
+	const option = (Array.isArray(column.options) ? column.options : []).find((candidate) => typeof candidate === "object" && candidate.value === value)
 	return option ? option.label : String(value)
 }
 

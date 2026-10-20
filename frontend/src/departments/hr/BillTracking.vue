@@ -27,7 +27,7 @@
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.form_status" />
 						</div>
 						<dl class="bill-tracking-header__facts">
-							<div><dt>Supplier</dt><dd :title="record.supplier || '—'">{{ record.supplier || "—" }}</dd></div>
+							<div><dt>Supplier</dt><dd :title="record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier" :label="record.supplier || '—'" /></dd></div>
 							<div><dt>Bill No</dt><dd :title="record.bill_no || '—'">{{ record.bill_no || "—" }}</dd></div>
 							<div><dt>Invoice Value</dt><dd>{{ money(record.invoice_value) }}</dd></div>
 						</dl>
@@ -59,8 +59,8 @@
 											<tbody>
 												<tr v-for="(row, index) in workspace.history" :key="`${row.assigned_on || 'history'}-${index}`">
 													<td>{{ row.action || "—" }}</td>
-													<td>{{ row.assigned_to || "—" }}</td>
-													<td>{{ row.assigned_by || "—" }}</td>
+													<td><DocumentLink doctype="Department" :name="row.assigned_to" :label="row.assigned_to || '—'" /></td>
+													<td><DocumentLink doctype="User" :name="row.assigned_by" :label="row.assigned_by || '—'" /></td>
 													<td>{{ dateTime(row.assigned_on) }}</td>
 													<td>{{ Number(row.received) ? "Yes" : "No" }}</td>
 													<td>{{ row.remarks || "—" }}</td>
@@ -110,6 +110,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"

@@ -17,8 +17,8 @@
 						</td>
 						<td data-label="Size"><strong>{{ row.size || "—" }}</strong></td>
 						<td data-label="Quantity" class="is-number"><strong>{{ formatNumber(row.quantity) }}</strong><small>{{ formatNumber(row.quantity_before) }} → {{ formatNumber(row.quantity_after) }}</small></td>
-						<td data-label="Requested"><strong>{{ row.requested_by || "—" }}</strong><small>{{ formatDateTime(row.requested_on) }}</small></td>
-						<td data-label="Approved"><strong>{{ row.approved_by || "—" }}</strong><small>{{ formatDateTime(row.approved_on) }}</small></td>
+						<td data-label="Requested"><strong><DocumentLink doctype="User" :name="row.requested_by" :label="row.requested_by || '—'" /></strong><small>{{ formatDateTime(row.requested_on) }}</small></td>
+						<td data-label="Approved"><strong><DocumentLink doctype="User" :name="row.approved_by" :label="row.approved_by || '—'" /></strong><small>{{ formatDateTime(row.approved_on) }}</small></td>
 						<td data-label="Reason"><span>{{ row.reason || "—" }}</span></td>
 					</tr>
 				</tbody>
@@ -29,6 +29,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 defineProps({
 	rows: { type: Array, default: () => [] },
 	viewRouteName: { type: String, default: "sales-production-order" },

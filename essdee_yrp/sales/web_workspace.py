@@ -330,6 +330,23 @@ def get_production_order_status(doc) -> str:
 	return doc.get("status") or ("Submitted" if docstatus == 1 else "Draft")
 
 
+def _production_order_fields(doc, record) -> list[dict]:
+	fields = []
+	for fieldname in RECORD_FIELDS:
+		if record.get(fieldname) in (None, ""):
+			continue
+		field = doc.meta.get_field(fieldname)
+		fields.append({
+			"fieldname": fieldname,
+			"label": FIELD_LABELS.get(fieldname, fieldname),
+			"fieldtype": field.fieldtype if field else "Data",
+			"options": field.options if field else None,
+			"value": record.get(fieldname),
+			**({"link_doctype": doc.get(field.options)} if field and field.fieldtype == "Dynamic Link" else {}),
+		})
+	return fields
+
+
 @frappe.whitelist()
 def get_production_order_workspace(production_order: str) -> dict:
 	doc = frappe.get_doc(DOCTYPE, production_order)
@@ -352,11 +369,7 @@ def get_production_order_workspace(production_order: str) -> dict:
 	for fieldname in RECORD_FIELDS:
 		record[fieldname] = doc.get(fieldname)
 
-	fields = [
-		{"fieldname": fieldname, "label": FIELD_LABELS.get(fieldname, fieldname), "value": record.get(fieldname)}
-		for fieldname in RECORD_FIELDS
-		if record.get(fieldname) not in (None, "")
-	]
+	fields = _production_order_fields(doc, record)
 	return {
 		"record": record,
 		"fields": fields,

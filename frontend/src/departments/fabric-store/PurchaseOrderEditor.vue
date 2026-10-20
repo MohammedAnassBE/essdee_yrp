@@ -21,8 +21,8 @@
 				<div class="purchase-order-editor__document-fields">
 					<label class="purchase-order-editor__control" for="po-naming-series"><span class="erp-field-label">{{ fieldLabel('naming_series', 'Naming Series', false) }}<span v-if="isRequired('naming_series', true)" class="erp-required-mark" aria-hidden="true">*</span></span><Select v-model="form.naming_series" input-id="po-naming-series" :aria-label="fieldLabel('naming_series', 'Naming Series', true, true)" aria-required="true" :options="fieldOptions('naming_series')" :disabled="busy || isReadOnly('naming_series')" fluid @change="markDirty" /></label>
 					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" :label="fieldLabel('transaction_date', 'Order date', false)" :required="isRequired('transaction_date', true)" :disabled="busy || isReadOnly('transaction_date')" @update:model-value="markDirty" />
-					<LinkField v-model="form.company" :label="fieldLabel('company', 'Company', false)" doctype="Company" :required="isRequired('company')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('company')" @update:model-value="markDirty" />
-					<LinkField v-model="form.currency" :label="fieldLabel('currency', 'Currency', false)" doctype="Currency" :required="isRequired('currency')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('currency')" @update:model-value="markDirty" />
+					<LinkField v-model="form.company" :label="fieldLabel('company', 'Company', false)" doctype="Company" :required="isRequired('company')" show-clear :disabled="busy || isReadOnly('company')" @update:model-value="markDirty" />
+					<LinkField v-model="form.currency" :label="fieldLabel('currency', 'Currency', false)" doctype="Currency" :required="isRequired('currency')" show-clear :disabled="busy || isReadOnly('currency')" @update:model-value="markDirty" />
 				</div>
 			</section>
 
@@ -30,7 +30,7 @@
 				<section class="purchase-order-editor__section purchase-order-editor__entry-card">
 					<header><div><span>Procurement</span><h2>Supplier & schedule</h2></div><small>Choose the supplier and required delivery date.</small></header>
 					<div class="purchase-order-editor__fields">
-						<LinkField input-id="field-supplier-value" :reset-version="sourceRevision" :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier', true, true)" doctype="Supplier" :required="isRequired('supplier', true)" :filters="{ disabled: 0 }" :show-open-button="false" show-clear :disabled="loading || composerPreparing || previewPending || (Boolean(saving) && saving !== 'source') || isReadOnly('supplier')" @update:model-value="changeSupplier" />
+						<LinkField input-id="field-supplier-value" :reset-version="sourceRevision" :model-value="form.supplier" :label="fieldLabel('supplier', 'Supplier', true, true)" doctype="Supplier" :required="isRequired('supplier', true)" :filters="{ disabled: 0 }" show-clear :disabled="loading || composerPreparing || previewPending || (Boolean(saving) && saving !== 'source') || isReadOnly('supplier')" @update:model-value="changeSupplier" />
 						<DateField v-model="form.schedule_date" class="purchase-order-editor__date" :label="fieldLabel('schedule_date', 'Required by', false)" :required="isRequired('schedule_date', true)" :disabled="busy || isReadOnly('schedule_date')" @update:model-value="markDirty" />
 					</div>
 				</section>
@@ -39,15 +39,15 @@
 					<header><div><span>Destination</span><h2>Delivery destination</h2></div><small>Choose the receiving location and warehouse.</small></header>
 					<div class="purchase-order-editor__fields purchase-order-editor__delivery-fields">
 						<label class="purchase-order-editor__check"><Checkbox v-model="deliverToSupplier" binary input-id="po-deliver-to-supplier" :disabled="busy || isReadOnly('deliver_to_supplier')" @change="deliveryModeChanged" /><span>{{ fieldLabel('deliver_to_supplier', 'Deliver to supplier', false) }}</span></label>
-						<LinkField :model-value="form.default_delivery_location" :label="fieldLabel('default_delivery_location', 'Delivery location', false)" doctype="Supplier" :required="isRequired('default_delivery_location')" :filters="deliveryLocationFilters" :show-open-button="false" show-clear :disabled="busy || isReadOnly('default_delivery_location')" @update:model-value="changeDeliveryLocation" />
-						<LinkField v-model="form.set_warehouse" :label="fieldLabel('set_warehouse', 'Delivery warehouse', true, true)" doctype="Warehouse" :required="isRequired('set_warehouse', true)" :filters="deliveryWarehouseFilters" :show-open-button="false" show-clear :disabled="busy || isReadOnly('set_warehouse') || !form.default_delivery_location" @update:model-value="markDirty" />
+						<LinkField :model-value="form.default_delivery_location" :label="fieldLabel('default_delivery_location', 'Delivery location', false)" doctype="Supplier" :required="isRequired('default_delivery_location')" :filters="deliveryLocationFilters" show-clear :disabled="busy || isReadOnly('default_delivery_location')" @update:model-value="changeDeliveryLocation" />
+						<LinkField v-model="form.set_warehouse" :label="fieldLabel('set_warehouse', 'Delivery warehouse', true, true)" doctype="Warehouse" :required="isRequired('set_warehouse', true)" :filters="deliveryWarehouseFilters" show-clear :disabled="busy || isReadOnly('set_warehouse') || !form.default_delivery_location" @update:model-value="markDirty" />
 					</div>
 				</section>
 
 				<section class="purchase-order-editor__section purchase-order-editor__entry-card purchase-order-editor__notes-card">
 					<header><div><span>Commercial</span><h2>Terms & notes</h2></div><small>Capture the agreed terms and operator comments.</small></header>
 					<div class="purchase-order-editor__fields">
-						<LinkField v-model="form.terms_and_condition" :label="fieldLabel('terms_and_condition', 'Terms and condition', false)" doctype="YRP Terms and Condition" :required="isRequired('terms_and_condition')" :show-open-button="false" show-clear :disabled="busy || isReadOnly('terms_and_condition')" @update:model-value="markDirty" />
+						<LinkField v-model="form.terms_and_condition" :label="fieldLabel('terms_and_condition', 'Terms and condition', false)" doctype="YRP Terms and Condition" :required="isRequired('terms_and_condition')" show-clear :disabled="busy || isReadOnly('terms_and_condition')" @update:model-value="markDirty" />
 						<label class="purchase-order-editor__comments"><span class="erp-field-label">{{ fieldLabel('comments', 'Comments', false) }}</span><Textarea v-model="form.comments" rows="3" auto-resize fluid :disabled="busy || isReadOnly('comments')" @input="markDirty" /></label>
 					</div>
 				</section>

@@ -21,7 +21,7 @@
 					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1 :id="headingId">Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
 					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="delivery-challan-header__facts" role="region" aria-label="Delivery Challan context" tabindex="0">
-						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)">{{ fact.value }}</strong></div>
+						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)"><DocumentLink :doctype="fact.doctype" :name="fact.name" :label="fact.value" /></strong></div>
 					</div>
 				</div>
 			</template>
@@ -70,7 +70,7 @@
 							<div class="delivery-challan-tab-matrices">
 								<section v-for="block in matrixBlocks" :key="`readonly-${block.key}`" class="delivery-challan-tab-matrix">
 									<header><div><span>{{ block.kind === 'items' ? 'Deliverables' : 'Corrections' }}</span><h2>{{ block.title }}</h2></div><strong>{{ logicalRowCount(block.groups) }} rows</strong></header>
-									<StockItemMatrix :groups="block.groups" doctype="YRP Delivery Challan" group-by-item show-lot-column show-fulfillment :show-received="false" />
+									<StockItemMatrix :dimensions="workspace.dimensions || []" :groups="block.groups" doctype="YRP Delivery Challan" group-by-item show-lot-column show-fulfillment :show-received="false" />
 								</section>
 								<div v-if="!matrixBlocks.length" class="delivery-challan-matrix__empty"><i class="pi pi-inbox" /><span>No Delivery Challan item rows are available.</span></div>
 							</div>
@@ -115,7 +115,7 @@
 					</header>
 					<div class="delivery-challan-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="delivery-challan-matrix__group">
-							<header><div><strong>{{ section.name || "Unspecified item" }}</strong></div></header>
+							<header><div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong></div></header>
 							<div class="erp-table-wrap delivery-challan-matrix__scroll" tabindex="0" role="region" :aria-label="`Delivery quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
@@ -131,18 +131,18 @@
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number delivery-challan-matrix__quantity delivery-challan-matrix__primary-cell">
 												<InputNumber :model-value="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, value, $event)" />
 												<small>Pending {{ formatQty(pendingQuantity(row.values[value])) }}</small>
-												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber :model-value="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, value, $event)" /><span>{{ secondaryUom(row, value) }}</span></div>
+												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber :model-value="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, value, $event)" /><span><DocumentLink doctype="UOM" :name="secondaryUom(row, value)" :label="secondaryUom(row, value)" /></span></div>
 											</td>
 										</template>
 										<template v-else>
 											<td class="erp-number delivery-challan-matrix__pending">{{ formatQty(pendingQuantity(row.values.default)) }}</td>
 											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber :model-value="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, 'default', $event)" /></td>
 											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number delivery-challan-matrix__secondary">
-												<InputNumber :model-value="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, 'default', $event)" /><small>{{ secondaryUom(row, "default") }}</small>
+												<InputNumber :model-value="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, 'default', $event)" /><small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
 											<td><InputText :model-value="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="setDisplayComment(row, $event)" /></td><td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
-											<td>{{ row.default_uom || row.uom || "—" }}</td>
+											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>
 									</tbody>
 								</table>
@@ -202,6 +202,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import { groupItemsForDisplay, setAggregatedCellQuantity, setAggregatedItemField } from "../../engine/stock/groupItemsForDisplay.js"
 import InputText from "primevue/inputtext"
 import Button from "primevue/button"
@@ -396,11 +397,11 @@ const matrixBlocks = computed(() => {
 	return blocks
 })
 const headerFacts = computed(() => [
-	["Source", workspace.value.record?.work_order || form.work_order],
-	["Process", workspace.value.record?.process_name || form.process_name],
-	["Item", workspace.value.record?.item || form.item],
-	["Lot", workspace.value.record?.lot || form.lot],
-].filter(([, value]) => value).map(([label, value]) => ({ label, value })))
+	["Source", workspace.value.record?.work_order || form.work_order, "YRP Work Order"],
+	["Process", workspace.value.record?.process_name || form.process_name, "YRP Process"],
+	["Item", workspace.value.record?.item || form.item, "Item"],
+	["Lot", workspace.value.record?.lot || form.lot, "SD YRP Lot"],
+].filter(([, value]) => value).map(([label, value, doctype]) => ({ label, value, doctype, name: value })))
 const transferPercent = computed(() => Math.max(0, Math.min(100, Number(workspace.value.record?.ste_transferred_percent || (workspace.value.record?.transfer_complete ? 100 : 0)))))
 
 async function load(refresh = false) {

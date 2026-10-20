@@ -11,9 +11,9 @@
 									<span class="work-order-page__date"><span>WO date</span><strong>{{ woDate }}</strong></span>
 								</div>
 								<h1 :id="headingId" :aria-label="[record.lot, record.item || 'Work Order'].filter(Boolean).join(' · ')">
-									<span v-if="record.lot" class="work-order-page__lot">{{ record.lot }}</span>
+									<span v-if="record.lot" class="work-order-page__lot"><DocumentLink doctype="SD YRP Lot" :name="record.lot" :label="record.lot" /></span>
 									<span v-if="record.lot && record.item" class="work-order-page__title-separator" aria-hidden="true">·</span>
-									<span>{{ record.item || "Work Order" }}</span>
+									<span><DocumentLink doctype="Item" :name="record.item" :label="record.item || 'Work Order'" /></span>
 								</h1>
 							</div>
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
@@ -65,6 +65,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"

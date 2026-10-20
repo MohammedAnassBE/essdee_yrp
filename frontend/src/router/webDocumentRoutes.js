@@ -1,4 +1,9 @@
 const recordRoutes = {
+	"Item": (name) => `/web/purchase/items/${encodeURIComponent(name)}`,
+	"YRP Production Order": (name) => `/web/sales/production-orders/${encodeURIComponent(name)}`,
+	"SD YRP Cutting Order": (name) => `/web/cutting/orders/${encodeURIComponent(name)}`,
+	"SD YRP Cutting Bulk Lay Sheets": (name) => `/web/cutting/bulk-lay-sheets/${encodeURIComponent(name)}`,
+	"SD YRP Cutting Laysheet Planner": (name) => `/web/cutting/lay-sheet-planner/${encodeURIComponent(name)}`,
 	"YRP Debit": (name) => `/web/accounts/debits/${encodeURIComponent(name)}`,
 	"SD YRP Lot": (name) => `/web/purchase/lots/${encodeURIComponent(name)}`,
 	"YRP Work Order": (name) => `/web/fabric-store/work-orders/${encodeURIComponent(name)}`,
@@ -19,6 +24,13 @@ const recordRoutes = {
 }
 
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/planning": {
+		"SD YRP Lot": (name) => `/web/planning/lots/${encodeURIComponent(name)}`,
+		"YRP Work Order": (name) => `/web/planning/work-orders/${encodeURIComponent(name)}`,
+		"YRP Production Order": (name) => `/web/planning/production-orders/${encodeURIComponent(name)}`,
+		"SD YRP Cutting Plan": (name) => `/web/planning/cutting-plans/${encodeURIComponent(name)}`,
+		"SD YRP Finishing Plan": (name) => `/web/planning/finishing-plans/${encodeURIComponent(name)}`,
+	},
 	"/merch": {
 		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
 		"YRP Work Order": (name) => `/web/merch/work-orders/${encodeURIComponent(name)}`,
@@ -30,11 +42,21 @@ export const DEPARTMENT_RECORD_ROUTES = {
 	},
 }
 
+function documentPage(doctype, currentPath = globalThis.location?.pathname) {
+	const department = Object.keys(DEPARTMENT_RECORD_ROUTES).find(
+		(path) => currentPath === `/web${path}` || currentPath?.startsWith(`/web${path}/`),
+	)
+	return DEPARTMENT_RECORD_ROUTES[department]?.[doctype] || recordRoutes[doctype]
+}
+
+export function hasWebDocumentPage(doctype, currentPath) {
+	return Boolean(documentPage(doctype, currentPath))
+}
+
 export function webDocumentPath(doctype, name, currentPath = globalThis.location?.pathname) {
 	if (!doctype || !name) return "/web/document-unavailable"
-	const departmentRoutes = /^\/web\/merch(?:\/|$)/.test(currentPath || "") ? DEPARTMENT_RECORD_ROUTES["/merch"] : null
-	if (departmentRoutes?.[doctype]) return departmentRoutes[doctype](String(name))
-	if (recordRoutes[doctype]) return recordRoutes[doctype](String(name))
+	const page = documentPage(doctype, currentPath)
+	if (page) return page(String(name))
 	const query = new URLSearchParams({ doctype: String(doctype), name: String(name) })
 	return `/web/document-unavailable?${query.toString()}`
 }

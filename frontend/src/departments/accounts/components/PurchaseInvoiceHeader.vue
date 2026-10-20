@@ -9,7 +9,7 @@
 			/>
 		</div>
 		<dl class="purchase-invoice-header__facts">
-			<div><dt>Supplier</dt><dd :title="record.supplier || '—'">{{ record.supplier || "—" }}</dd></div>
+			<div><dt>Supplier</dt><dd :title="record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier_link_name ?? record.supplier" :label="record.supplier || '—'" /></dd></div>
 			<div><dt>Supplier Invoice No</dt><dd :title="record.bill_no || '—'">{{ record.bill_no || "—" }}</dd></div>
 			<div><dt>Grand Total</dt><dd>{{ money(record.grand_total) }}</dd></div>
 		</dl>
@@ -17,6 +17,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 
 defineProps({

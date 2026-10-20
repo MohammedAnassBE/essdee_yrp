@@ -94,7 +94,7 @@ const CLOTH_CARRY = ["Cloth"]
 const CLOTH_FIELDS = ["name1", "cloth", "required_gsm", "is_bom_item"]
 const CLOTH_COLUMNS = [
 	{ key: "name1", label: "Name", type: "text" },
-	{ key: "cloth", label: "Cloth", type: "link", doctype: "Item" },
+	{ key: "cloth", label: "Cloth", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item" },
 	{ key: "required_gsm", label: "Required GSM", type: "number", min: 0 },
 	{ key: "is_bom_item", label: "Is BOM Item", type: "check" },
 ]

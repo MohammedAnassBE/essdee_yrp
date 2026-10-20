@@ -70,9 +70,9 @@ const props = defineProps({
 const PROCESS_FIELDS = ["sequence", "fabric_process", "input_item", "output_item", "quantity_ratio"]
 const PROCESS_COLUMNS = [
 	{ key: "sequence", label: "Sequence", type: "number", min: 0, precision: 0 },
-	{ key: "fabric_process", label: "Process", type: "link", doctype: "YRP Process", filters: { is_cloth_process: 1 } },
-	{ key: "input_item", label: "Input Item", type: "link", doctype: "Item" },
-	{ key: "output_item", label: "Output Item", type: "link", doctype: "Item" },
+	{ key: "fabric_process", label: "Process", type: "link", fieldtype: "Link", link_doctype: "YRP Process", doctype: "YRP Process", filters: { is_cloth_process: 1 } },
+	{ key: "input_item", label: "Input Item", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item" },
+	{ key: "output_item", label: "Output Item", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item" },
 	{ key: "quantity_ratio", label: "Quantity Ratio", type: "number", min: 0 },
 ]
 const MAPPING_FIELDS = ["sequence", "mapping_index", "attribute", "role", "from_value", "to_value"]
@@ -88,7 +88,7 @@ const attributes = computed(() => withStoredOptions((editor.draft.item_attribute
 const mappingColumns = computed(() => [
 	{ key: "sequence", label: "Sequence", type: "select", options: withStoredOptions(sequences.value, mappings.rows.value, ["sequence"]) },
 	{ key: "mapping_index", label: "Mapping Index", type: "number", min: 0, precision: 0 },
-	{ key: "attribute", label: "Attribute", type: "select", options: attributes.value },
+	{ key: "attribute", fieldtype: "Link", link_doctype: "Item Attribute", label: "Attribute", type: "select", options: attributes.value },
 	{ key: "role", label: "Role", type: "select", options: cloth.value.mapping_roles || ["Change", "Introduce", "Pin", "Consume"] },
 	{ key: "from_value", label: "From Value", type: "text" },
 	{ key: "to_value", label: "To Value", type: "text" },

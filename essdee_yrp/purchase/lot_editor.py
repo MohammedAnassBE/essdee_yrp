@@ -84,6 +84,7 @@ def size_set_colour_options(doc):
 def derived_values(doc):
 	values = {field: doc.get(field) for field in DERIVED_FIELDS}
 	for field in ("pack_in_stage", "pack_out_stage"):
+		values[f"{field}_name"] = values[field]
 		values[field] = attribute_value(values[field])
 	return values
 
@@ -124,7 +125,11 @@ def get_lot_production_detail_context(production_detail: str, item: str, product
 	context = get_isfinal_uom(production_detail, get_pack_stage=True)
 	details = get_item_details(item_name=item, uom=context["uom"], production_detail=production_detail,
 		dependent_attr_mapping=context.get("dependent_attr_mapping"), ppo=production_order)
-	return {"derived": {field: context.get(key) for field, key in IPD_DERIVED.items()},
+	derived = {field: context.get(key) for field, key in IPD_DERIVED.items()}
+	stages = frappe.db.get_value("YRP Item Production Detail", production_detail,
+		["pack_in_stage", "pack_out_stage"], as_dict=True) or {}
+	derived.update({f"{field}_name": stages.get(field) for field in ("pack_in_stage", "pack_out_stage")})
+	return {"derived": derived,
 		"item_details": details or None, "messages": frappe.get_message_log()[message_start:]}
 
 

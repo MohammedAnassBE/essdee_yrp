@@ -16,8 +16,8 @@
 						<div class="bulk-record-title"><h1 id="bulk-laysheets-title">Bulk LaySheets</h1><span>{{ bulkName }}</span></div>
 						<div class="bulk-record-meta">
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Setup'" />
-							<span class="bulk-header-fact bulk-header-fact--lot" :title="record.main_lot || 'No Main Lot'"><small>Main Lot</small><strong>{{ record.main_lot || "—" }}</strong></span>
-							<span class="bulk-header-fact bulk-header-fact--location" :title="record.from_location || 'No Location'"><small>Location</small><strong>{{ record.from_location || "—" }}</strong></span>
+							<span class="bulk-header-fact bulk-header-fact--lot" :title="record.main_lot || 'No Main Lot'"><small>Main Lot</small><strong><DocumentLink doctype="SD YRP Lot" :name="record.main_lot" :label="record.main_lot || '—'" /></strong></span>
+							<span class="bulk-header-fact bulk-header-fact--location" :title="record.from_location || 'No Location'"><small>Location</small><strong><DocumentLink doctype="Supplier" :name="record.from_location" :label="record.from_location || '—'" /></strong></span>
 						</div>
 					</div>
 					<div class="bulk-record-header__actions">
@@ -30,7 +30,7 @@
 				</header>
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 				<Message v-if="feedback" severity="success" closable @close="feedback = ''">{{ feedback }}</Message>
-				<section class="bulk-setup-summary erp-card" aria-label="Bulk setup summary"><div v-for="item in setupSummary" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.value || "—" }}</strong></div></section>
+				<section class="bulk-setup-summary erp-card" aria-label="Bulk setup summary"><div v-for="item in setupSummary" :key="item.label"><span>{{ item.label }}</span><strong><DocumentLink :doctype="item.doctype" :name="item.value" :label="item.value || '—'" /></strong></div></section>
 				<div class="bulk-workspace-layout">
 					<section class="bulk-workspace-main" aria-label="Active bulk LaySheet">
 						<Tabs v-model:value="activeTab" class="bulk-workspace-tabs erp-tabs">
@@ -39,10 +39,10 @@
 								<TabPanel value="laysheet"><BulkActiveLaySheet ref="activeEditor" :bulk-name="bulkName" :row="activeRow" :data="workspace.active_laysheet" :modified="workspace.active_laysheet?.context?.modified" :can-write="workspace.permissions?.laysheet?.can_write" :busy="Boolean(busy)" @saved="applyWorkspace" @dirty-change="activeEditorDirty = $event" /></TabPanel>
 								<TabPanel value="bundles"><BulkBundleTable :rows="workspace.bundles || []" /></TabPanel>
 								<TabPanel value="delivery">
-									<section class="bulk-related-panel"><header><div><span>Movement</span><h2>Delivery documents</h2></div><strong>{{ deliveryRows.length }}</strong></header><div v-if="deliveryRows.length" class="bulk-related-list"><article v-for="row in deliveryRows" :key="row.name"><div><strong>{{ row.delivery_challan }}</strong><span>{{ row.lot }} · {{ row.cutting_laysheet || 'No LaySheet' }}</span></div><DocumentStatusBadge :label="row.status" /></article></div><div v-else class="bulk-related-empty"><i class="pi pi-truck" /><strong>No Delivery Challans</strong><span>Create them from the required split-lot card.</span></div></section>
+									<section class="bulk-related-panel"><header><div><span>Movement</span><h2>Delivery documents</h2></div><strong>{{ deliveryRows.length }}</strong></header><div v-if="deliveryRows.length" class="bulk-related-list"><article v-for="row in deliveryRows" :key="row.name"><div><strong><DocumentLink doctype="YRP Delivery Challan" :name="row.delivery_challan" :label="row.delivery_challan" /></strong><span><DocumentLink doctype="SD YRP Lot" :name="row.lot" :label="row.lot" /> · <DocumentLink doctype="SD YRP Cutting LaySheet" :name="row.cutting_laysheet" :label="row.cutting_laysheet || 'No LaySheet'" /></span></div><DocumentStatusBadge :label="row.status" /></article></div><div v-else class="bulk-related-empty"><i class="pi pi-truck" /><strong>No Delivery Challans</strong><span>Create them from the required split-lot card.</span></div></section>
 								</TabPanel>
 								<TabPanel value="activity">
-									<section class="bulk-related-panel"><header><div><span>Progress</span><h2>Lot activity</h2></div><strong>{{ workspace.rows?.length || 0 }}</strong></header><div v-if="workspace.rows?.length" class="bulk-related-list"><article v-for="row in workspace.rows" :key="`activity-${row.name}`"><div><strong>{{ row.lot }}</strong><span>{{ [row.cutting_laysheet, row.lot_transfer, row.delivery_challan].filter(Boolean).join(' · ') || 'Setup pending' }}</span></div><DocumentStatusBadge :label="row.status" /></article></div><div v-else class="bulk-related-empty"><i class="pi pi-history" /><strong>No activity yet</strong><span>Add split lots to begin the workflow.</span></div></section>
+									<section class="bulk-related-panel"><header><div><span>Progress</span><h2>Lot activity</h2></div><strong>{{ workspace.rows?.length || 0 }}</strong></header><div v-if="workspace.rows?.length" class="bulk-related-list"><article v-for="row in workspace.rows" :key="`activity-${row.name}`"><div><strong><DocumentLink doctype="SD YRP Lot" :name="row.lot" :label="row.lot" /></strong><span><template v-for="(reference, index) in [{ doctype: 'SD YRP Cutting LaySheet', name: row.cutting_laysheet }, { doctype: 'SD YRP Lot Transfer', name: row.lot_transfer }, { doctype: 'YRP Delivery Challan', name: row.delivery_challan }].filter((reference) => reference.name)" :key="reference.doctype"><template v-if="index"> · </template><DocumentLink :doctype="reference.doctype" :name="reference.name" /></template><template v-if="!row.cutting_laysheet && !row.lot_transfer && !row.delivery_challan">Setup pending</template></span></div><DocumentStatusBadge :label="row.status" /></article></div><div v-else class="bulk-related-empty"><i class="pi pi-history" /><strong>No activity yet</strong><span>Add split lots to begin the workflow.</span></div></section>
 								</TabPanel>
 							</TabPanels>
 						</Tabs>
@@ -70,6 +70,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../components/common/DocumentLink.vue"
 import DocumentPrintButton from "../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
@@ -131,7 +132,7 @@ const record = computed(() => workspace.value.record || {})
 const activeRow = computed(() => (workspace.value.rows || []).find((row) => row.cutting_laysheet === record.value.active_cutting_laysheet) || null)
 const deliveryRows = computed(() => (workspace.value.rows || []).filter((row) => row.delivery_challan))
 const setupSummary = computed(() => [
-	{ label: "Posting Date", value: formatDate(record.value.posting_date) }, { label: "Cutting Spreader", value: record.value.cutting_spreader }, { label: "Cutter", value: record.value.cutter },
+	{ label: "Posting Date", value: formatDate(record.value.posting_date) }, { label: "Cutting Spreader", value: record.value.cutting_spreader, doctype: "SD YRP Cutting Spreader" }, { label: "Cutter", value: record.value.cutter, doctype: "SD YRP Cutter" },
 ])
 
 async function loadWorkspace() {

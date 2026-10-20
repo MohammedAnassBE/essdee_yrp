@@ -14,11 +14,11 @@
 			<section class="bulk-setup-card">
 				<header><div><span class="section-kicker">Stock source</span><h2>Bulk setup</h2></div><Tag v-if="setupLocked" value="Locked after LaySheet creation" severity="secondary" rounded /></header>
 				<div class="bulk-setup-fields">
-					<LinkField v-model="form.main_lot" label="Main Stock Lot *" doctype="SD YRP Lot" :disabled="busy || setupLocked" :show-open-button="false" show-clear />
-					<LinkField v-model="form.from_location" label="Stock Location *" doctype="Supplier" :disabled="busy || setupLocked" :show-open-button="false" show-clear />
+					<LinkField v-model="form.main_lot" label="Main Stock Lot *" doctype="SD YRP Lot" :disabled="busy || setupLocked" show-clear />
+					<LinkField v-model="form.from_location" label="Stock Location *" doctype="Supplier" :disabled="busy || setupLocked" show-clear />
 					<DateField v-model="form.posting_date" label="Posting Date" required :disabled="busy || setupLocked" />
-					<LinkField v-model="form.cutting_spreader" label="Cutting Spreader *" doctype="SD YRP Cutting Spreader" :disabled="busy || setupLocked" :show-open-button="false" show-clear />
-					<LinkField v-model="form.cutter" label="Cutter *" doctype="SD YRP Cutter" :disabled="busy || setupLocked" :show-open-button="false" show-clear />
+					<LinkField v-model="form.cutting_spreader" label="Cutting Spreader *" doctype="SD YRP Cutting Spreader" :disabled="busy || setupLocked" show-clear />
+					<LinkField v-model="form.cutter" label="Cutter *" doctype="SD YRP Cutter" :disabled="busy || setupLocked" show-clear />
 				</div>
 			</section>
 

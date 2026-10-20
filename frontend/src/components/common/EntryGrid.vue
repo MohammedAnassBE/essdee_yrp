@@ -46,7 +46,7 @@
 				</thead>
 				<tbody>
 					<tr v-for="(row, rowIndex) in rows" :key="row.key" role="row" :aria-rowindex="rowIndex + 2">
-						<th scope="row" role="rowheader" class="entry-grid__row-header">{{ row.label }}</th>
+						<th scope="row" role="rowheader" class="entry-grid__row-header"><DocumentLink v-if="row.link_doctype" :doctype="row.link_doctype" :name="row.link_name" :label="row.label" /><template v-else>{{ row.label }}</template></th>
 						<td
 							v-for="(column, colIndex) in columns"
 							:key="column.key"
@@ -68,7 +68,7 @@
 								<LinkField v-if="isChoiceColumn(column)" ref="editor" class="entry-grid__link" :model-value="rawValue(rowIndex, colIndex)" :doctype="column.doctype || ''" :filters="column.filters || {}" :search-handler="choiceSearch(column)" :show-open-button="false" :aria-label="cellLabel(row, column)" :invalid="Boolean(cellError(rowIndex, colIndex))" :aria-describedby="cellError(rowIndex, colIndex) ? `${gridId}-error` : undefined" :show-validation-message="false" cell-editor @validation="linkValidation" @select="commitLink($event.name)" @clear="commitLink('')" @finish="onChoiceTab" @cancel="stopEdit" />
 								<input v-else ref="editor" v-model="editText" class="entry-grid__box entry-grid__input" :class="alignClass(column)" :inputmode="column.type === 'number' ? 'decimal' : undefined" :aria-label="cellLabel(row, column)" @keydown="onEditorKeydown" @blur="commitEdit()">
 							</template>
-							<div v-else class="entry-grid__box" :class="boxClasses(rowIndex, colIndex)" :title="cellError(rowIndex, colIndex) || derivedTitle(rowIndex, colIndex)">{{ cellText(rowIndex, colIndex) }}</div>
+							<div v-else class="entry-grid__box" :class="boxClasses(rowIndex, colIndex)" :title="cellError(rowIndex, colIndex) || derivedTitle(rowIndex, colIndex)"><DocumentLink v-if="cellTarget(rowIndex, colIndex)" v-bind="cellTarget(rowIndex, colIndex)" :label="cellText(rowIndex, colIndex)" /><template v-else>{{ cellText(rowIndex, colIndex) }}</template></div>
 						</td>
 						<td v-if="hasRowTotals" class="entry-grid__total entry-grid__number">{{ formatTotal(rowTotal(modelValue, row, columns)) }}</td>
 						<td v-if="removableRows && !readonly" class="entry-grid__remove">
@@ -95,6 +95,8 @@ import Button from "primevue/button"
 import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch } from "vue"
 
 import LinkField from "./LinkField.vue"
+import DocumentLink from "./DocumentLink.vue"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
 import {
 	ENTRY_GRID_INVALID_KEY,
 	applyBlock,
@@ -207,15 +209,22 @@ function isSelected(row, col) {
 	return selectedCount.value > 1 && row >= top && row <= bottom && col >= left && col <= right
 }
 function alignClass(column) { return column.align === "right" || (column.type === "number" && column.align !== "left") ? "entry-grid__number" : "" }
-function normalizedOptions(column) { return (column.options || []).map((option) => typeof option === "object" ? option : { value: option, label: option }) }
+function normalizedOptions(column) { return (Array.isArray(column.options) ? column.options : []).map((option) => typeof option === "object" ? option : { value: option, label: option }) }
 function choiceSearch(column) {
 	if (column.type === "link" && column.searchHandler) return column.searchHandler
-	if (column.type === "link" && !column.options?.length) return null
+	if (column.type === "link" && (!Array.isArray(column.options) || !column.options.length)) return null
 	const options = normalizedOptions(column).map((option) => ({ name: option.value, label: option.label }))
 	return (query) => searchOptions(options, query)
 }
 function editorElement(reference) { return Array.isArray(reference) ? reference[0] : reference }
 function cellLabel(row, column) { return `${row.label} ${column.label}` }
+function cellTarget(row, col) {
+	const record = { ...props.rows[row], ...props.modelValue[props.rows[row].key] }
+	const column = props.columns[col]
+	if (!["Link", "Dynamic Link"].includes(column.fieldtype)) return null
+	const value = rawValue(row, col)
+	return linkFieldTarget({ ...column, value, link_name: column.linkName ? column.linkName(value, record) : column.link_name }, record)
+}
 function rawValue(row, col) { return cellValue(props.modelValue, props.rows[row].key, props.columns[col].key) }
 function cellError(row, col) {
 	return invalidCells.value[cellKey(row, col)]?.message || props.errors?.[props.rows[row]?.key]?.[props.columns[col]?.key] || ""
@@ -401,6 +410,7 @@ function onChoiceTab(event) {
 }
 
 function onKeydown(event) {
+	if (event.target?.closest?.("a")) return
 	if (editing.value) { cancelEditKey(event); return }
 	if (!canHandleGridKey(event)) return
 	if (handleShortcut(event) || handleNavigation(event)) return
@@ -474,6 +484,7 @@ function onCopy(event) {
 }
 
 function onCellMousedown(event, row, col) {
+	if (event.target?.closest?.("a")) return
 	if (isEditing(row, col)) return
 	if (editing.value) commitEdit()
 	if (event.button !== 0) return
@@ -490,6 +501,7 @@ function onCellMouseenter(row, col) {
 }
 function stopDragging() { dragging = false }
 function onCellClick(event, row, col) {
+	if (event.target?.closest?.("a")) return
 	if (!isPlainClick(event) || dragged) return
 	if (isEditing(row, col) || !isEditable(row, col) || !isChoiceColumn(props.columns[col])) return
 	select({ row, col })

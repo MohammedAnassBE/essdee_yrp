@@ -163,15 +163,12 @@
 							:class="{ 'view-field--wide': isWideReadField(field) }"
 						>
 							<span class="view-field__label">{{ field.label || field.fieldname }}</span>
-							<a
-								v-if="field.fieldtype === 'Link' && hasValue(form[field.fieldname])"
-								class="view-field__value view-field__link"
-								:href="webDocumentPath(field.options, form[field.fieldname])"
-								target="_blank"
-								rel="noopener"
-							>
-								{{ displayValue(form[field.fieldname], field) }}
-							</a>
+							<DocumentLink
+								v-if="readLinkTarget(field)"
+								v-bind="readLinkTarget(field)"
+								class="view-field__value"
+								:label="displayValue(form[field.fieldname], field)"
+							/>
 							<span v-else class="view-field__value">
 								{{ displayValue(form[field.fieldname], field) }}
 							</span>
@@ -221,7 +218,8 @@ import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
-import { webDocumentPath } from "../../router/webDocumentRoutes.js"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
+import DocumentLink from "./DocumentLink.vue"
 import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
 import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"
@@ -523,6 +521,10 @@ function childViewColumns(table) {
 	return preferred.length ? preferred : fields.slice(0, 6)
 }
 
+function readLinkTarget(field) {
+	return linkFieldTarget({ ...field, value: form[field.fieldname] }, form)
+}
+
 function displayValue(value, field) {
 	if (value === null || value === undefined || value === "") return "—"
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
@@ -806,17 +808,6 @@ defineExpose({ save, reload: load, doc: form, mode })
 	white-space: pre-line;
 	order: 1;
 	line-height: 1.35;
-}
-
-.view-field__link {
-	color: var(--erp-accent-ink);
-	text-decoration: underline dotted;
-	text-underline-offset: 2px;
-}
-
-.view-field__link::after {
-	content: " ↗";
-	color: var(--erp-accent);
 }
 
 .view-field__label {

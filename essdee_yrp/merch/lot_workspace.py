@@ -160,6 +160,7 @@ def get_record_facts(doc, fields):
 				"label": field.label,
 				"fieldtype": field.fieldtype,
 				"value": 0 if field.fieldtype in ("Check", "Int", "Float", "Percent") else doc.get(fieldname),
+				**lot_workspace.link_fact_metadata(doc, field),
 			}
 		)
 	return facts

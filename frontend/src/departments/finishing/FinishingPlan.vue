@@ -18,7 +18,7 @@
 					<div class="finishing-plan__meta">
 						<DocumentStatusBadge :label="record.fp_status || 'Planned'" />
 						<span v-for="fact in headerFacts" :key="fact.label" class="finishing-plan__fact" :class="`finishing-plan__fact--${fact.key}`" :title="fact.value">
-							<small>{{ fact.label }}</small><strong>{{ fact.value || "—" }}</strong>
+							<small>{{ fact.label }}</small><strong><DocumentLink :doctype="fact.doctype" :name="fact.value" :label="fact.value || '—'" /></strong>
 						</span>
 					</div>
 				</div>
@@ -64,6 +64,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
@@ -113,9 +114,9 @@ const entryAction = ref("")
 const RELATED_DOCUMENT_DOCTYPES = new Set(["YRP Delivery Challan", "YRP Goods Received Note"])
 const openedDocument = reactive({ doctype: "YRP Delivery Challan", name: "" })
 const headerFacts = computed(() => [
-	{ key: "lot", label: "Lot", value: record.value.lot },
-	{ key: "item", label: "Item", value: record.value.item },
-	{ key: "work-order", label: "Work Order", value: record.value.work_order },
+	{ key: "lot", label: "Lot", value: record.value.lot, doctype: "SD YRP Lot" },
+	{ key: "item", label: "Item", value: record.value.item, doctype: "Item" },
+	{ key: "work-order", label: "Work Order", value: record.value.work_order, doctype: "YRP Work Order" },
 	{ key: "pieces-per-box", label: "Pcs / Box", value: record.value.pieces_per_box },
 ])
 const successMessages = {

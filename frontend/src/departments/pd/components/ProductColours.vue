@@ -52,7 +52,7 @@
 			<div v-for="(row, index) in rows" :key="row.name || `${row.product_colour}-${index}`" class="product-colours__row">
 				<i class="product-colours__swatch" :style="swatchStyle(detailsFor(row).colour_code)" />
 				<div>
-					<strong>{{ row.product_colour || "Unnamed colour" }}</strong>
+					<strong><DocumentLink doctype="SD YRP Product Colour Code" :name="row.product_colour" :label="row.product_colour || 'Unnamed colour'" /></strong>
 					<span>{{ detailsFor(row).colour_code || "No colour code" }}</span>
 				</div>
 				<Tag v-if="duplicateCount(row.product_colour) > 1" :value="`x${duplicateCount(row.product_colour)}`" severity="secondary" />
@@ -66,6 +66,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import { FilterService } from "@primevue/core/api"
 import Button from "primevue/button"
 import MultiSelect from "primevue/multiselect"

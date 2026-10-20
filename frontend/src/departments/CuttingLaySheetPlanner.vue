@@ -9,8 +9,8 @@
 						<div class="planner-record-title"><h1>LaySheet Planner</h1><span>{{ plannerName }}</span></div>
 						<div class="planner-record-meta">
 							<DocumentStatusBadge :label="record.optimization_status || 'Not Started'" />
-							<span class="planner-header-fact planner-header-fact--lot" :title="record.lot || 'No Lot'"><small>Lot</small><strong>{{ record.lot || "—" }}</strong></span>
-							<span class="planner-header-fact planner-header-fact--item" :title="record.item || 'No Item'"><small>Item</small><strong>{{ record.item || "—" }}</strong></span>
+							<span class="planner-header-fact planner-header-fact--lot" :title="record.lot || 'No Lot'"><small>Lot</small><strong><DocumentLink doctype="SD YRP Lot" :name="record.lot" :label="record.lot || '—'" /></strong></span>
+							<span class="planner-header-fact planner-header-fact--item" :title="record.item || 'No Item'"><small>Item</small><strong><DocumentLink doctype="Item" :name="record.item" :label="record.item || '—'" /></strong></span>
 						</div>
 					</div>
 					<div class="planner-record-actions">
@@ -44,6 +44,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../components/common/DocumentLink.vue"
 import DocumentPrintButton from "../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"

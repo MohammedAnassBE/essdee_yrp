@@ -282,6 +282,12 @@ def _assert_not_stale(doc, expected_modified=None) -> None:
 	assert_expected_modified(doc, expected_modified)
 
 
+def _detail_link_target(doc, field) -> dict:
+	if field.fieldtype == "Dynamic Link":
+		return {"link_doctype": doc.get(field.options) or ""}
+	return {}
+
+
 def _document_details(doc) -> list[dict]:
 	permitted = set(get_permitted_fields(doc.doctype, permission_type="read"))
 	details = []
@@ -302,6 +308,7 @@ def _document_details(doc) -> list[dict]:
 				"label": field.label or field.fieldname,
 				"fieldtype": field.fieldtype,
 				"options": field.options or "",
+				**_detail_link_target(doc, field),
 				"value": value,
 				"read_only": bool(field.read_only or doc.docstatus != 0),
 			}
@@ -970,6 +977,7 @@ def _work_order_details(doc) -> list[dict]:
 				"label": field.label or fieldname,
 				"fieldtype": field.fieldtype or "Data",
 				"options": field.options or "",
+				**_detail_link_target(doc, field),
 				"value": value,
 			}
 		)

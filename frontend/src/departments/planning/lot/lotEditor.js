@@ -4,7 +4,7 @@ export const LOT_EDIT_GROUPS = [
 	{ key: "production", eyebrow: "Production", label: "Production settings", fields: ["primary_item_attribute", "size_set_colour", "capacity_planning"] },
 	{ key: "derived", eyebrow: "From IPD", label: "Derived from Item Production Detail", fields: ["uom", "pack_in_stage", "pack_out_stage", "packing_uom", "version", "cloth_excess_percentage", "total_order_quantity"] },
 ]
-export const IPD_DERIVED_FIELDS = ["uom", "pack_in_stage", "packing_uom", "pack_out_stage", "dependent_attribute_mapping", "tech_pack_version", "pattern_version", "packing_combo"]
+export const IPD_DERIVED_FIELDS = ["uom", "pack_in_stage", "pack_in_stage_name", "packing_uom", "pack_out_stage", "pack_out_stage_name", "dependent_attribute_mapping", "tech_pack_version", "pattern_version", "packing_combo"]
 export const DERIVED_LABELS = { uom: "UOM", pack_in_stage: "Pack In Stage", pack_out_stage: "Pack Out Stage", packing_uom: "Packing UOM", version: "Version", cloth_excess_percentage: "Cloth Excess Percentage", total_order_quantity: "Total Order Quantity" }
 
 export function editTabFor(tab) {

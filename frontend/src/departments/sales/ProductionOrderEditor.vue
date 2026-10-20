@@ -7,9 +7,9 @@
 		<div v-else class="ppo-editor__body">
 			<section class="ppo-editor__section"><header><span>ORDER</span><h2>Production & delivery</h2></header><div class="ppo-editor__fields">
 				<div class="ppo-editor__field"><label class="erp-field-label">Series<span class="erp-required-mark">*</span></label><Select v-model="form.naming_series" :options="selectOptions('naming_series')" :disabled="Boolean(name)" fluid /></div>
-				<LinkField v-model="form.item" label="Item *" doctype="Item" :filters="productionOrderItemFilters" :show-open-button="false" :disabled="Boolean(name)" required @select="itemSelected" />
-				<LinkField v-model="form.production_detail" label="Production Detail" doctype="YRP Item Production Detail" :show-open-button="false" show-clear />
-				<LinkField v-model="form.production_term" label="Production Term *" doctype="YRP Production Term" :show-open-button="false" required />
+				<LinkField v-model="form.item" label="Item *" doctype="Item" :filters="productionOrderItemFilters" :disabled="Boolean(name)" required @select="itemSelected" />
+				<LinkField v-model="form.production_detail" label="Production Detail" doctype="YRP Item Production Detail" show-clear />
+				<LinkField v-model="form.production_term" label="Production Term *" doctype="YRP Production Term" required />
 				<label class="ppo-editor__field"><span class="erp-field-label">Delivery Date<span class="erp-required-mark">*</span></span><DateField v-model="form.delivery_date" fluid /></label>
 				<label class="ppo-editor__field"><span class="erp-field-label">Don't Deliver After<span class="erp-required-mark">*</span></span><DateField v-model="form.dont_deliver_after" fluid /></label>
 				<label class="ppo-editor__check"><Checkbox v-model="form.skip_box_sticker_print" binary input-id="skip-box-sticker" /><span>Skip Box Sticker Print</span></label>

@@ -155,6 +155,7 @@ def get_effective_fields(doc, fieldnames: Iterable[str]) -> list[dict]:
 				"label": field.label or fieldname.replace("_", " ").title(),
 				"fieldtype": field.fieldtype,
 				"options": field.options or "",
+				**({"link_doctype": doc.get(field.options)} if field.fieldtype == "Dynamic Link" else {}),
 				"reqd": bool(field.reqd),
 				"allow_on_submit": bool(field.get("allow_on_submit")),
 				"read_only": bool(

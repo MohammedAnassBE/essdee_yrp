@@ -27,7 +27,7 @@
 						<div class="order-record-meta">
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Draft'" />
 							<span class="order-header-fact order-header-fact--detail" :title="record.cutting_order_detail || 'No Cutting Order Detail'">
-								<small>Order Detail</small><strong>{{ record.cutting_order_detail || "—" }}</strong>
+								<small>Order Detail</small><strong><DocumentLink doctype="SD YRP Cutting Order Detail" :name="record.cutting_order_detail" :label="record.cutting_order_detail || '—'" /></strong>
 							</span>
 							<span class="order-header-fact order-header-fact--item" :title="record.item || 'No Item'">
 								<small>Item</small><strong>{{ record.item || "—" }}</strong>
@@ -61,6 +61,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../components/common/DocumentLink.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Message from "primevue/message"

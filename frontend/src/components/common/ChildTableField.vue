@@ -41,6 +41,8 @@ import DataTable from "primevue/datatable"
 import { computed, defineComponent, h } from "vue"
 
 import FormField from "./FormField.vue"
+import DocumentLink from "./DocumentLink.vue"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
 import { childTableColumnField } from "./childTableFields.js"
 
 const props = defineProps({
@@ -120,6 +122,8 @@ function renderCell(fieldname, { data, index }) {
 	const column = columns.value.find((item) => item.fieldname === fieldname)
 	if (!column) return null
 	const field = childTableColumnField(column, props.columnFilters, data)
+	const target = linkFieldTarget({ ...column, value: data[fieldname] }, data)
+	if ((isDisabled.value || column.read_only) && target) return h(DocumentLink, { ...target, label: data[fieldname] })
 	const error = props.errors[`${index}.${fieldname}`] || ""
 	return h(FormField, {
 		field, modelValue: data[fieldname], form: data, disabled: isDisabled.value,

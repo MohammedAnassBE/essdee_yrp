@@ -4,7 +4,7 @@
 			<FabricDocumentWorkspace print-label="Print Format" :show-delete="false" doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
 				<template #header="{ record, headingId }">
 					<div class="ppo-page__identity">
-						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 class="erp-doc-title" :id="headingId">{{ record.item || "Production Order" }}</h1></div>
+						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 class="erp-doc-title" :id="headingId"><DocumentLink doctype="Item" :name="record.item" :label="record.item || 'Production Order'" /></h1></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status_label" />
 					</div>
 				</template>
@@ -34,7 +34,7 @@
 					<div class="ppo-page__metric"><span>Total quantity</span><strong>{{ formatNumber(workspace.record?.total_quantity) }}</strong><small>pieces</small></div>
 					<div class="ppo-page__metric"><span>Delivery date</span><strong>{{ formatDate(workspace.record?.delivery_date) }}</strong></div>
 					<div class="ppo-page__metric"><span>Lead time</span><strong>{{ workspace.record?.lead_time_given || 0 }} days</strong></div>
-					<div v-if="workspace.linked_lots?.length" class="ppo-page__lots"><span>Linked Lots</span><strong v-for="lot in workspace.linked_lots" :key="lot">{{ lot }}</strong></div>
+					<div v-if="workspace.linked_lots?.length" class="ppo-page__lots"><span>Linked Lots</span><strong v-for="lot in workspace.linked_lots" :key="lot"><DocumentLink doctype="SD YRP Lot" :name="lot" :label="lot" /></strong></div>
 				</template>
 			</FabricDocumentWorkspace>
 		</section>
@@ -47,6 +47,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../components/common/DocumentLink.vue"
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"

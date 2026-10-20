@@ -17,7 +17,10 @@
 			<dl class="document-overview__facts">
 				<div v-for="field in group.fields" :key="field.fieldname" :class="{ 'document-overview__fact--wide': isWide(field) }">
 					<dt>{{ field.label }}</dt>
-					<dd :title="String(formatDocumentOverviewValue(field))">{{ formatDocumentOverviewValue(field) }}</dd>
+					<dd :title="String(formatDocumentOverviewValue(field))">
+						<DocumentLink v-if="documentOverviewHasValue(field.value) && linkFieldTarget(field)" v-bind="linkFieldTarget(field)" :label="formatDocumentOverviewValue(field)" />
+						<template v-else>{{ formatDocumentOverviewValue(field) }}</template>
+					</dd>
 				</div>
 			</dl>
 		</section>
@@ -27,7 +30,9 @@
 <script setup>
 import { computed } from "vue"
 
-import { buildDocumentOverviewGroups, formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+import DocumentLink from "../common/DocumentLink.vue"
+import { linkFieldTarget } from "../../utils/linkTarget.js"
+import { buildDocumentOverviewGroups, documentOverviewHasValue, formatDocumentOverviewValue } from "../../utils/documentOverview.js"
 
 const props = defineProps({
 	fields: { type: Array, default: () => [] },

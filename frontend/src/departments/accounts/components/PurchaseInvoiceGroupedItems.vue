@@ -17,10 +17,10 @@
 				</thead>
 				<tbody>
 					<tr v-for="(row, index) in rows" :key="row.group_key || `${row.item}-${row.lot}-${index}`">
-						<td><strong>{{ value(row.item) }}</strong></td>
-						<td>{{ value(row.lot) }}</td>
+						<td><strong><DocumentLink doctype="Item" :name="row.item" :label="value(row.item)" /></strong></td>
+						<td><DocumentLink doctype="SD YRP Lot" :name="row.lot" :label="value(row.lot)" /></td>
 						<td class="purchase-invoice-items__number">{{ number(row.qty) }}</td>
-						<td>{{ value(row.uom) }}</td>
+						<td><DocumentLink doctype="UOM" :name="row.uom" :label="value(row.uom)" /></td>
 						<td class="purchase-invoice-items__number">{{ money(row.source_rate) }}</td>
 						<td class="purchase-invoice-items__number purchase-invoice-items__rate">
 							<InputNumber
@@ -35,7 +35,7 @@
 							/>
 							<template v-else>{{ money(row.rate) }}</template>
 						</td>
-						<td>{{ value(row.tax) }}</td>
+						<td><DocumentLink doctype="YRP Tax Slab" :name="row.tax" :label="value(row.tax)" /></td>
 						<td class="purchase-invoice-items__number purchase-invoice-items__amount">{{ money(row.amount) }}</td>
 						<td v-if="erpSyncEnabled">{{ value(row.expense_head) }}</td>
 					</tr>
@@ -50,6 +50,7 @@
 </template>
 
 <script setup>
+import DocumentLink from "../../../components/common/DocumentLink.vue"
 import InputNumber from "primevue/inputnumber"
 
 const props = defineProps({

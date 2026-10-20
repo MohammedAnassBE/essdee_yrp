@@ -9,8 +9,11 @@ import "primeicons/primeicons.css"
 
 import App from "./App.vue"
 import router from "./router/index.js"
+import { initializeTheme } from "./utils/themePreference.js"
 import "./styles/main.css"
 import "./styles/enterprise.css"
+
+initializeTheme()
 
 const EssdeeAura = definePreset(Aura, {
 	semantic: {

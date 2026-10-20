@@ -16,6 +16,17 @@
 				<span v-if="activeDepartment" class="app-topbar__context" aria-current="page">
 					{{ activeDepartment.label }}
 				</span>
+				<button
+					type="button"
+					class="app-theme-toggle"
+					:aria-label="themeToggleLabel"
+					:title="themeToggleLabel"
+					:aria-pressed="isDarkTheme"
+					@click="switchTheme"
+				>
+					<i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'" aria-hidden="true" />
+					<span>{{ isDarkTheme ? "Light" : "Dark" }}</span>
+				</button>
 				<RouterLink v-if="!lockedDepartment" class="app-topbar__home" to="/" aria-label="Workspaces">
 					<i class="pi pi-th-large" aria-hidden="true" />
 					<span>Workspaces</span>
@@ -44,10 +55,18 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
 import { departments } from "./departments/registry.js"
 import { getHomePath, lockedDepartment } from "./router/departmentLock.js"
+import { currentTheme, toggleTheme } from "./utils/themePreference.js"
 
 const route = useRoute()
 const router = useRouter()
 const isNavigating = ref(false)
+const isDarkTheme = ref(currentTheme() === "dark")
+const themeToggleLabel = computed(() => isDarkTheme.value ? "Switch to light theme" : "Switch to dark theme")
+
+function switchTheme() {
+	isDarkTheme.value = toggleTheme() === "dark"
+}
+
 let pendingNavigation = null
 const removeBeforeEach = router.beforeEach((to) => {
 	pendingNavigation = to

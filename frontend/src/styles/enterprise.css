@@ -140,6 +140,230 @@
 	--erp-layer-toast: 300;
 }
 
+:root.erp-dark {
+	color-scheme: dark;
+	--erp-bg: #0D0E0D;
+	--erp-canvas: #0D0E0D;
+	--erp-surface: #151714;
+	--erp-surface-raised: #181A17;
+	--erp-surface-soft: #1B1D1A;
+	--erp-surface-muted: #20221F;
+	--erp-surface-hover: #252824;
+	--erp-border-subtle: #262925;
+	--erp-border: #30332E;
+	--erp-border-strong: #44483F;
+	--erp-text: #F1EEE8;
+	--erp-text-secondary: #D0CCC4;
+	--erp-text-muted: #A39E94;
+	--erp-text-subtle: #7D786F;
+	--erp-neutral-400: #77736B;
+	--erp-neutral-600: #B8B3AA;
+	--erp-neutral-800: #DEDAD2;
+	--erp-neutral-950: #FAF7F2;
+	--erp-emerald-50: #102A20;
+	--erp-emerald-100: #123729;
+	--erp-emerald-200: #185039;
+	--erp-emerald-300: #247052;
+	--erp-emerald-400: #35A071;
+	--erp-emerald-500: #4BC88E;
+	--erp-emerald-600: #65D9A3;
+	--erp-emerald-700: #8BE6BB;
+	--erp-emerald-800: #B5F1D3;
+	--erp-emerald-900: #DDF9EA;
+	--erp-accent-50: #2B1E19;
+	--erp-accent-100: #3B261F;
+	--erp-accent-200: #573226;
+	--erp-accent-300: #814632;
+	--erp-accent-400: #B85F42;
+	--erp-accent-500: #E17B58;
+	--erp-accent-600: #EB8B69;
+	--erp-accent-700: #F0A083;
+	--erp-accent-800: #F6BCA8;
+	--erp-accent-900: #FBD9CE;
+	--erp-accent-950: #FFF1EC;
+	--erp-focus-ring: 0 0 0 3px rgb(225 123 88 / 32%);
+	--erp-attention: #E8A24E;
+	--erp-attention-hover: #F0B565;
+	--erp-attention-soft: #302417;
+	--erp-attention-border: #644A27;
+	--erp-attention-text: #F2BD75;
+	--erp-success: #4BC88E;
+	--erp-success-text: #65D9A3;
+	--erp-success-soft: #123426;
+	--erp-danger: #F17087;
+	--erp-danger-soft: #391C24;
+	--erp-warning: #E8A24E;
+	--erp-warning-soft: #302417;
+	--erp-info: #74A7FF;
+	--erp-info-soft: #17263D;
+	--erp-heat-positive: #1C4B37;
+	--erp-heat-negative: #4B222C;
+	--erp-heat-zero: #4A3B1D;
+	--erp-heat-zero-inward: #203B46;
+	--erp-shadow-xs: 0 1px 2px rgba(0,0,0,.22), 0 1px 1px rgba(0,0,0,.18);
+	--erp-shadow-sm: var(--erp-shadow-xs);
+	--erp-shadow-card: 0 1px 2px rgba(0,0,0,.24), 0 12px 30px rgba(0,0,0,.14);
+	--erp-shadow-md: var(--erp-shadow-card);
+	--erp-shadow-lg: 0 14px 40px rgba(0,0,0,.42);
+	--erp-shadow-dialog: 0 18px 48px rgba(0,0,0,.48);
+	--erp-shadow-pop: 0 14px 40px rgba(0,0,0,.42);
+	--erp-shadow-button: 0 1px 2px rgba(0,0,0,.32);
+	--erp-on-accent: #0D0E0D;
+}
+
+:root.erp-dark .workspace-load-error {
+	background: color-mix(in srgb, var(--erp-danger-soft) 64%, var(--erp-surface));
+}
+
+:root.erp-dark .workspace-load-error__icon {
+	background: var(--erp-surface-raised);
+}
+
+/* A few report and workflow views predate the shared surface tokens. Keep
+	those legacy accents dark without changing their light-theme presentation. */
+:root.erp-dark .report-run-status--expired,
+:root.erp-dark :is(.matrix-pending-heading, .matrix-pending),
+:root.erp-dark .matrix-stage--pending td {
+	color: var(--erp-attention-text);
+	border-color: var(--erp-attention-border);
+	background: var(--erp-attention-soft);
+}
+
+:root.erp-dark :is(.matrix-cost-heading, .matrix-cost),
+:root.erp-dark :is(.cloth-total, .multi-ccr-total, .completion-matrix__total) td,
+:root.erp-dark .daily-cut-sheet__total {
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__status {
+	color: var(--erp-text-secondary);
+	background: var(--erp-surface-muted);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__status--ordered {
+	color: var(--erp-info);
+	background: var(--erp-info-soft);
+}
+
+:root.erp-dark :is(.purchase-order-itemwise-report__status--partially-delivered, .purchase-order-itemwise-report__status--draft) {
+	color: var(--erp-attention-text);
+	background: var(--erp-attention-soft);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__status--delivered {
+	color: var(--erp-success-text);
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark .purchase-order-itemwise-report__status--overdue {
+	color: var(--erp-danger);
+	background: var(--erp-danger-soft);
+}
+
+:root.erp-dark :is(.old-lot__bucket--lp, .old-lot__bucket--lps) {
+	color: var(--erp-attention-text);
+	background: var(--erp-attention-soft);
+}
+
+:root.erp-dark .old-lot__bucket--lps {
+	color: var(--erp-success-text);
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark .finishing-ocr__subtotal > * {
+	background: var(--erp-surface-muted) !important;
+}
+
+:root.erp-dark :is(.completed-report, .completed-report__group, .completed-report__panel) {
+	color: var(--erp-text-secondary);
+	background: var(--erp-surface);
+}
+
+:root.erp-dark .completed-report__table thead th {
+	color: var(--erp-text-muted);
+	background: var(--erp-surface-muted);
+}
+
+:root.erp-dark .completed-report__total-row > * {
+	color: var(--erp-success-text);
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark .ppo-report__matrix-wrap::-webkit-scrollbar-track {
+	background: var(--erp-surface-muted);
+}
+
+:root.erp-dark .ppo-report__matrix-wrap::-webkit-scrollbar-thumb {
+	background: var(--erp-border-strong);
+	border-color: var(--erp-surface-muted);
+}
+
+:root.erp-dark .ppo-report__matrix thead th,
+:root.erp-dark .ppo-report__size-group-row th,
+:root.erp-dark .ppo-report__summary-row > td,
+:root.erp-dark .ppo-report__summary-status > td {
+	background: var(--erp-surface-muted);
+}
+
+:root.erp-dark .ppo-report__matrix tbody tr:hover > :is(td, th) {
+	background: var(--erp-surface-hover);
+}
+
+:root.erp-dark :is(.ppo-report__size-group-row .ppo-report__size-group, .ppo-report__size-group-row .ppo-report__size-column, .ppo-report__quantity, .ppo-report__summary-quantity, .ppo-report__matrix tfoot th, .ppo-report__matrix tfoot td) {
+	color: var(--erp-success-text);
+	background: var(--erp-success-soft) !important;
+}
+
+:root.erp-dark .ppo-report__summary-footer > :is(th, td) {
+	color: var(--erp-success-text);
+	background: color-mix(in srgb, var(--erp-success-soft) 78%, var(--erp-surface));
+}
+
+:root.erp-dark :is(.erp-master-check, .erp-bundle-table, .erp-table, .erp-cell-value, .erp-bundle-number) {
+	color: var(--erp-text-secondary);
+}
+
+:root.erp-dark :is(.erp-bundle-table th, .erp-table th, .erp-index-column) {
+	color: var(--erp-text-muted);
+}
+
+:root.erp-dark :is(.erp-bundle-table td, .erp-table td) {
+	border-color: var(--erp-border-subtle);
+}
+
+:root.erp-dark .erp-row-selected td {
+	background: var(--erp-surface-hover);
+}
+
+:root.erp-dark .erp-panel-choice--selected {
+	color: var(--erp-success-text);
+	border-color: color-mix(in srgb, var(--erp-success) 52%, var(--erp-border));
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark .erp-status {
+	color: var(--erp-text-secondary);
+	background: var(--erp-surface-muted);
+}
+
+:root.erp-dark .erp-status--submitted {
+	color: var(--erp-success-text);
+	background: var(--erp-success-soft);
+}
+
+:root.erp-dark .erp-status--cancelled {
+	color: var(--erp-danger);
+	background: var(--erp-danger-soft);
+}
+
+:root.erp-dark .bulk-workflow-card__title > span {
+	background: var(--erp-surface-raised);
+}
+
+:root.erp-dark :is(.box-sticker-preview__canvas, .excel-sticker-preview__canvas) {
+	background: var(--erp-surface-muted);
+}
+
 /* Keep long ERP forms and matrices visibly scrollable without letting the
 			browser's default chrome dominate the compact surface system. */
 :where(.app-shell, .p-dialog),

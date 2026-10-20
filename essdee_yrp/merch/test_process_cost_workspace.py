@@ -124,6 +124,33 @@ class TestProcessCostWorkspace(TestCase):
 		self.assertEqual(workspace._waiting_note(cost_document(), [], False), "Waiting for a Purchase User to submit")
 		self.assertEqual(workspace._waiting_note(cost_document("Approval Pending"), [], False), "Waiting for Purchase Manager approval")
 
+	def test_workspace_includes_readable_work_orders_with_permission_filtered_count(self):
+		doc = cost_document()
+		section = workspace.DOCUMENT_SECTIONS["work_orders"]
+		rows = [frappe._dict(name="ZZ TEST WO", docstatus=1, modified=doc.modified, status="Open")]
+		with patch("frappe.get_doc", return_value=doc), patch(f"{MODULE}._schema", return_value={}), \
+			patch("frappe.get_list", side_effect=[rows, [frappe._dict(count=501)]]) as get_list:
+			payload = workspace.get_process_cost_workspace(doc.name)
+		self.assertEqual(payload["work_orders"], {"permitted": True, "count": 501, "rows": [dict(rows[0])]})
+		doc.check_permission.assert_any_call("read")
+		filters = {"process_cost": doc.name, "docstatus": ["!=", 2]}
+		self.assertEqual(get_list.call_count, 2)
+		get_list.assert_any_call(section["doctype"], filters=filters,
+			fields=["name", "docstatus", "modified", *section["fields"]],
+			order_by=section["order_by"], limit_page_length=500)
+		get_list.assert_any_call(section["doctype"], filters=filters,
+			fields=[{"COUNT": "name", "as": "count"}], order_by="", limit_page_length=1)
+
+	def test_work_orders_without_read_permission_do_not_query(self):
+		with patch("frappe.has_permission", return_value=False) as has_permission, patch("frappe.get_list") as get_list:
+			self.assertEqual(workspace._work_orders("ZZ TEST PC"), {"permitted": False, "count": 0, "rows": []})
+		has_permission.assert_called_once_with("YRP Work Order", "read")
+		get_list.assert_not_called()
+
+	def test_work_orders_with_no_visible_rows(self):
+		with patch("frappe.get_list", side_effect=[[], [frappe._dict(count=0)]]):
+			self.assertEqual(workspace._work_orders("ZZ TEST PC"), {"permitted": True, "count": 0, "rows": []})
+
 	def test_approval_preview_and_clash(self):
 		with patch(f"{MODULE}._approval_matches", return_value=[frappe._dict(name="ZZ TEST Older", from_date="2098-01-01")]):
 			preview = workspace._approve_preview(cost_document())

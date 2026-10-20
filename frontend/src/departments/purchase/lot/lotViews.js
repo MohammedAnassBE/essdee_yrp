@@ -309,8 +309,8 @@ export const LOT_DOCUMENT_SECTIONS = [
 	},
 ]
 
-export function lotDocumentSections(payload = {}, expanded = {}, previewLimit = 5) {
-	return LOT_DOCUMENT_SECTIONS.filter((section) => payload[section.key]?.permitted !== false).map(
+export function lotDocumentSections(payload = {}, expanded = {}, previewLimit = 5, sections = LOT_DOCUMENT_SECTIONS) {
+	return sections.filter((section) => payload[section.key]?.permitted !== false).map(
 		(section) => {
 			const data = payload[section.key] || { count: 0, rows: [] }
 			return {

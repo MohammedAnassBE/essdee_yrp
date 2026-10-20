@@ -1,7 +1,7 @@
 <template>
-	<aside class="lot-documents-rail" aria-label="Lot purchase documents">
+	<aside class="lot-documents-rail" :aria-label="ariaLabel">
 		<template v-if="loading">
-			<section v-for="section in 4" :key="section" class="lot-documents-section">
+			<section v-for="section in props.sections" :key="section.key" class="lot-documents-section">
 				<div class="lot-section__body">
 					<Skeleton v-for="row in 3" :key="row" height="2.4rem" />
 				</div>
@@ -14,7 +14,7 @@
 			@retry="emit('retry')"
 		/>
 		<template v-else>
-			<section v-for="section in sections" :key="section.key" class="lot-documents-section">
+			<section v-for="section in documentSections" :key="section.key" class="lot-documents-section">
 				<header>
 					<div>
 						<h2 :title="section.label">{{ section.label }}</h2>
@@ -86,6 +86,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import {
+	LOT_DOCUMENT_SECTIONS,
 	countLabel,
 	formatLotDate,
 	lotDocumentQuantityLine,
@@ -94,6 +95,8 @@ import {
 
 const props = defineProps({
 	documents: { type: Object, default: () => ({}) },
+	sections: { type: Array, default: () => LOT_DOCUMENT_SECTIONS },
+	ariaLabel: { type: String, default: "Lot purchase documents" },
 	loading: Boolean,
 	error: { type: String, default: "" },
 })
@@ -102,8 +105,8 @@ const expanded = ref({})
 const previewLimit = ref(5)
 const cards = new Map()
 let origin = ""
-const sections = computed(() =>
-	lotDocumentSections(props.documents, expanded.value, previewLimit.value),
+const documentSections = computed(() =>
+	lotDocumentSections(props.documents, expanded.value, previewLimit.value, props.sections),
 )
 const mediaQuery = window.matchMedia("(max-width: 620px)")
 function updatePreview() {

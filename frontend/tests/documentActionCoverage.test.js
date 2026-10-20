@@ -36,12 +36,12 @@ test("WO, PO, DC, GRN, IPD and the three Lot pages retain shared Delete", () => 
 	}
 })
 test("pages with domain Delete retain exactly one source of Delete actions", () => {
-	for (const path of ["sales/ProductionOrder", "hr/BillTracking", "accounts/PurchaseInvoice", "purchase/ItemPricePage"]) {
+	for (const path of ["sales/ProductionOrder", "hr/BillTracking", "accounts/PurchaseInvoice", "purchase/ItemPricePage", "merch/process-cost/ProcessCostPage"]) {
 		const text = source(`departments/${path}`)
 		assert.match(text, /:show-delete="false"/)
 		assert.doesNotMatch(text, /<DocumentDeleteButton/)
 	}
-	for (const path of ["merch/process-cost/ProcessCostPage", "pd/ProductPage", "pd/ProductReleasePage", "pd/LotwiseItemProfitPage"]) {
+	for (const path of ["pd/ProductPage", "pd/ProductReleasePage", "pd/LotwiseItemProfitPage"]) {
 		const text = source(`departments/${path}`)
 		assert.doesNotMatch(text, /<DocumentDeleteButton|<FabricDocumentWorkspace/)
 		assert.match(text, /(?:deleteVisible|pending|deleteTarget)/)
@@ -85,8 +85,15 @@ test("D1–D7 page actions use the saved identity, status, and list destination"
 	}
 })
 test("P2–P7 and QZ dialogs offer generic print through the shared button", () => {
-	for (const path of ["CuttingBulkLaySheet", "CuttingLaySheetPlanner", "cut-panel-store/CutPanelMovementDialog", "pd/components/LotwiseWorkspaceHeader", "merch/process-cost/ProcessCostPage", "purchase/ItemPage", "cut-panel-store/BoxStickerPrintDialog", "cut-panel-store/ExcelStickerPrintDialog", "cut-panel-store/CutBundleEditDialog"]) {
+	for (const path of ["CuttingBulkLaySheet", "CuttingLaySheetPlanner", "cut-panel-store/CutPanelMovementDialog", "pd/components/LotwiseWorkspaceHeader", "purchase/ItemPage", "cut-panel-store/BoxStickerPrintDialog", "cut-panel-store/ExcelStickerPrintDialog", "cut-panel-store/CutBundleEditDialog"]) {
 		const text = source(`departments/${path}`)
 		assert.equal((text.match(/<DocumentPrintButton\b/g) || []).length, 1)
 	}
+})
+
+test("Process Cost delegates print to its document workspace", () => {
+	const text = source("departments/merch/process-cost/ProcessCostPage")
+	assert.match(text, /<FabricDocumentWorkspace\b/)
+	assert.doesNotMatch(text, /<DocumentPrintButton\b/)
+	assert.match(text, /pending\.value = \{ action: "Delete"/)
 })

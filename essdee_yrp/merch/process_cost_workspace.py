@@ -10,6 +10,7 @@ from yrp.stock.dimensions import append_production_group_filters
 
 from essdee_yrp import process_cost
 from essdee_yrp.api.work_order import get_work_order_selection_context
+from essdee_yrp.purchase.lot_documents import DOCUMENT_SECTIONS
 from essdee_yrp.web_common import action, assert_expected_modified, parse_mapping, permission_flags
 
 DOCTYPE = "YRP Process Cost"
@@ -126,6 +127,22 @@ def get_process_cost_list_capabilities():
 	return {**permission_flags(DOCTYPE, ("read", "create")), "workflow_states": list(STATES)}
 
 
+def _work_orders(name):
+	section = DOCUMENT_SECTIONS["work_orders"]
+	doctype = section["doctype"]
+	if not frappe.has_permission(doctype, "read"):
+		return {"permitted": False, "count": 0, "rows": []}
+	filters = {"process_cost": name, "docstatus": ["!=", 2]}
+	rows = frappe.get_list(
+		doctype, filters=filters, fields=["name", "docstatus", "modified", *section["fields"]],
+		order_by=section["order_by"], limit_page_length=500,
+	)
+	count = frappe.get_list(
+		doctype, filters=filters, fields=[{"COUNT": "name", "as": "count"}], order_by="", limit_page_length=1,
+	)
+	return {"permitted": True, "count": cint(count[0].count), "rows": [dict(row) for row in rows]}
+
+
 @frappe.whitelist()
 def get_process_cost_workspace(name):
 	doc = frappe.get_doc(DOCTYPE, name)
@@ -140,6 +157,7 @@ def get_process_cost_workspace(name):
 		"actions": actions, "can_edit": can_edit, "can_delete": is_deletable_by_user(doc),
 		"permissions": permission_flags(DOCTYPE, PERMISSIONS, doc),
 		"waiting_note": _waiting_note(doc, actions, can_edit),
+		"work_orders": _work_orders(doc.name),
 	}
 
 

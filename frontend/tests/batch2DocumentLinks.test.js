@@ -197,12 +197,17 @@ test('B6 Merch PPO item and sales OCR process use DocumentLink', () => readable(
 }))
 
 test('B7 Process Cost header links the process name', () => readable(async () => {
+ const workspaceControl = { setup(props, { attrs, slots }) { return () => Vue.h('workspace', {}, slots.header?.({ record: attrs.workspace.record || {}, headingId: 'heading' })) } }
  const root = mountComponent(component('departments/merch/process-cost/ProcessCostPage', {
+  'vue-router': { useRoute: () => ({ query: {} }), useRouter: () => ({ push() {}, replace() {} }) },
+  '../../../router/listDocumentNavigation.js': { preserveListNavigationState: () => ({}) },
+  '../merchViews.js': { MERCH_ROUTES: {} },
   '../../../api/merch.js': { getProcessCostWorkspace: async () => ({ record: { name: 'PC', process_name: 'Stitching' } }) },
   '../../../components/DepartmentPage.vue': control,
-  '../../../components/common/WorkspaceLoadError.vue': control,
-  ...Object.fromEntries(['DocumentPrintButton','DocumentOverview','DocumentStatusBadge','DocumentActionStrip','DocumentConfirmationDialog','DocumentErrorDialog'].map(name => [`../../../components/documents/${name}.vue`, control])),
-  '../../../components/navigation/InlinePageNavigation.vue': control, './ProcessCostGrid.vue': control,
+  ...Object.fromEntries(['DocumentOverview','DocumentStatusBadge','DocumentActionStrip','DocumentConfirmationDialog','DocumentErrorDialog'].map(name => [`../../../components/documents/${name}.vue`, control])),
+  '../../fabric-store/FabricDocumentWorkspace.vue': workspaceControl,
+  '../../purchase/lot/LotDocumentsRail.vue': control, './ProcessCostGrid.vue': control,
+  ...Object.fromEntries(['tab','tablist','tabpanel','tabpanels','tabs'].map(name => [`primevue/${name}`, control])),
  }), { processCostId: 'PC' })
  await tick()
  assert.deepEqual(links(root), [['Stitching', '/desk/yrp-process/Stitching']])

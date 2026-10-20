@@ -1,13 +1,22 @@
 import { cellValue } from "../../../components/common/entryGrid.js"
+import { LOT_DOCUMENT_SECTIONS } from "../../purchase/lot/lotViews.js"
 
 export const PROCESS_COST_LIST_PATH = "/merch/process-costs"
 export const PROCESS_COST_STATES = ["Draft", "Approval Pending", "Approved", "Rejected", "Expired"]
 export const PROCESS_COST_COLUMNS = ["process_name", "item", "supplier", "from_date", "to_date", "lot"]
 export const PROCESS_COST_DETAILS = ["lot", "process_name", "item", "uom", "supplier", "supplier_name", "from_date", "to_date", "is_rework", "tax_slab", "attribute"]
-export const PROCESS_COST_SECTIONS = [{
-	key: "details", label: "Details", icon: "pi pi-calculator",
-	fields: [...PROCESS_COST_DETAILS, "is_expired", "depends_on_attribute", "approved_by"],
-}]
+export const PROCESS_COST_SECTIONS = [
+	{ key: "process", label: "Process", icon: "pi pi-cog", description: "Lot, process and item",
+		fields: ["lot", "process_name", "item", "uom", "is_rework"] },
+	{ key: "supplier", label: "Supplier", icon: "pi pi-building", description: "Supplier and tax",
+		fields: ["supplier", "supplier_name", "tax_slab"] },
+	{ key: "validity", label: "Validity", icon: "pi pi-calendar", description: "Rate window and approval",
+		fields: ["from_date", "to_date", "is_expired", "approved_by"] },
+	{ key: "attribute", label: "Attribute", icon: "pi pi-tags", description: "Pricing by attribute",
+		fields: ["depends_on_attribute", "attribute"] },
+]
+export const PROCESS_COST_TABS = [{ key: "details", label: "Details" }, { key: "values", label: "Process Cost Values" }]
+export const PROCESS_COST_DOCUMENT_SECTIONS = LOT_DOCUMENT_SECTIONS.filter((section) => section.key === "work_orders")
 
 export function processCostPath(name) {
 	return `${PROCESS_COST_LIST_PATH}/${encodeURIComponent(name)}`

@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import UnitTestCase
 
-from essdee_yrp.work_order_close import _get_owned_output_sle, close_work_order
+from essdee_yrp.work_order_close import (
+	_get_excess_output_allocations,
+	_get_owned_output_sle,
+	close_work_order,
+)
 
 
 class TestWorkOrderClose(UnitTestCase):
@@ -226,6 +230,123 @@ class TestWorkOrderClose(UnitTestCase):
 
 		make_entries.assert_not_called()
 		doc.save.assert_not_called()
+
+	def test_unconsumed_row_of_a_mapped_work_order_has_no_output_to_carry_value(self):
+		work_order = frappe._dict(name="WO-1")
+		deliverable = frappe._dict(name="WOD-UNSEWN", idx=4)
+		dimensions = {"lot": "LOT-1", "received_type": "Accepted"}
+		with (
+			patch.object(frappe.db, "sql", return_value=[]),
+			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=True),
+		):
+			self.assertEqual(_get_excess_output_allocations(work_order, deliverable, dimensions), [])
+
+		with (
+			patch.object(frappe.db, "sql", return_value=[]),
+			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=False),
+			self.assertRaisesRegex(frappe.ValidationError, "Historical ambiguous lineage"),
+		):
+			_get_excess_output_allocations(work_order, deliverable, dimensions)
+
+		mismatched = frappe._dict(
+			output_receipt_sle="SLE-1",
+			output_voucher="GRN-1",
+			output_detail="GRN-ITEM-1",
+			output_item="OUT-1",
+			stock_qty=5,
+			stock_dimensions='{"lot": "LOT-2", "received_type": "Accepted"}',
+		)
+		with (
+			patch.object(frappe.db, "sql", return_value=[mismatched]),
+			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=True),
+			self.assertRaisesRegex(frappe.ValidationError, "matching Stock Dimensions"),
+		):
+			_get_excess_output_allocations(work_order, deliverable, dimensions)
+
+	def test_close_consumes_unsewn_input_without_a_valuation_allocation(self):
+		doc, row = self._manager_close_doc()
+		ledger_result = {"entries": {"wo-close:WOD-1": {"sle": "SLE-UNSEWN", "rate": 13, "value": 3900}}}
+
+		def record_usage(_doc, plan):
+			plan["audit_row"] = frappe._dict(name="WO-EXCESS-1")
+
+		with ExitStack() as stack:
+			for target, kwargs in (
+				("essdee_yrp.work_order_close._is_wo_close_manager", {"return_value": True}),
+				("essdee_yrp.work_order_close._validate_wo_close", {}),
+				("essdee_yrp.work_order_close._apply_close_details", {}),
+				(
+					"essdee_yrp.work_order_close._stock_dimension_values",
+					{"return_value": {"lot": "LOT-1", "received_type": "Accepted"}},
+				),
+				("essdee_yrp.work_order_close._get_excess_output_allocations", {"return_value": []}),
+				("essdee_yrp.work_order_close._record_excess_usage", {"side_effect": record_usage}),
+				(
+					"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
+					{"return_value": "WH-1"},
+				),
+				(
+					"yrp.stock.utils.get_conversion_factor",
+					{"return_value": {"conversion_factor": 1, "stock_uom": "Piece"}},
+				),
+				("yrp.stock.utils.get_stock_balance", {"return_value": (300, 12)}),
+				("yrp.stock.stock_ledger.enqueue_voucher_repost", {}),
+				("yrp.stock.utils.close_voucher_reservations", {}),
+				("essdee_yrp.work_order_close.nowdate", {"return_value": "2026-08-26"}),
+				("essdee_yrp.work_order_close.nowtime", {"return_value": "17:30:00"}),
+			):
+				stack.enter_context(patch(target, **kwargs))
+			stack.enter_context(patch.object(frappe.db, "sql"))
+			stack.enter_context(patch.object(frappe, "get_doc", return_value=doc))
+			make_entries = stack.enter_context(
+				patch("yrp.stock.stock_ledger.make_sl_entries", return_value=ledger_result)
+			)
+			svc = "yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment"
+			register_links = stack.enter_context(patch(f"{svc}.register_production_links"))
+			create_adjustment = stack.enter_context(patch(f"{svc}.create_adjustment"))
+			result = close_work_order("WO-1", sd_close_reason="Sewing Shortage")
+
+		self.assertEqual(make_entries.call_args.args[0][0]["qty"], -300)
+		self.assertEqual(row.stock_update, 5500)
+		self.assertEqual(result, {"status": "Close", "deducted_qty": 300.0})
+		self.assertEqual(register_links.call_args.args[2], [])
+		self.assertEqual(create_adjustment.call_args.kwargs["allocations"], [])
+
+	def test_close_leaves_pieces_the_packing_unit_holds_as_another_stage(self):
+		doc, row = self._manager_close_doc()
+		with (
+			patch.object(frappe.db, "sql"),
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
+			patch("essdee_yrp.work_order_close._validate_wo_close"),
+			patch("essdee_yrp.work_order_close._apply_close_details"),
+			patch(
+				"essdee_yrp.work_order_close.get_job_worker_stock_variant",
+				return_value="INPUT-VARIANT-LOOSE-PIECE",
+			),
+			patch(
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
+				return_value="WH-1",
+			),
+			patch("yrp.stock.utils.get_stock_balance") as get_balance,
+			patch("yrp.stock.stock_ledger.make_sl_entries", return_value={"entries": {}}) as make_entries,
+			patch("essdee_yrp.work_order_close.nowdate", return_value="2026-08-26"),
+			patch("essdee_yrp.work_order_close.nowtime", return_value="17:30:00"),
+			patch("yrp.stock.stock_ledger.enqueue_voucher_repost"),
+			patch("yrp.stock.utils.close_voucher_reservations"),
+			patch(
+				"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment.register_production_links"
+			),
+			patch(
+				"yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment.create_adjustment"
+			),
+		):
+			result = close_work_order("WO-1", sd_close_reason="Sewing Shortage")
+
+		get_balance.assert_not_called()
+		self.assertEqual(make_entries.call_args.args[0], [])
+		self.assertEqual(row.stock_update, 5200)
+		self.assertEqual(result, {"status": "Close", "deducted_qty": 0})
 
 	def test_output_sle_must_be_an_active_receipt_owned_by_mapped_grn(self):
 		output = {

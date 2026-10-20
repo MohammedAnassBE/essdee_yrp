@@ -3,6 +3,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt, nowdate, nowtime
+from yrp.stock.job_worker_variant import get_job_worker_stock_variant
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	_apply_close_details,
 	_get_wo_close_approver_role,
@@ -89,6 +90,9 @@ def close_work_order(
 		delivered_qty = flt(row.qty) - flt(row.pending_quantity)
 		reduce_qty = delivered_qty - flt(row.stock_update)
 		if reduce_qty <= 0:
+			continue
+		if get_job_worker_stock_variant(doc, row.item_variant) != row.item_variant:
+			# The unit holds these as another stage (Loose Piece); they stay for later lots.
 			continue
 		conversion = get_conversion_factor(row.item_variant, row.uom)
 		factor = flt(conversion.get("conversion_factor")) or 1
@@ -181,6 +185,8 @@ def close_work_order(
 	adjustment_allocations = []
 	production_links = []
 	for plan in excess_plans:
+		if not plan["output_allocations"]:
+			continue
 		detail = plan["ledger_detail"]
 		weights = sum(flt(row["allocation_weight"]) for row in plan["output_allocations"])
 		if weights <= 0:
@@ -302,6 +308,9 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 			row.output_item,
 		)
 		grouped[key] = flt(grouped.get(key)) + flt(row.stock_qty)
+	if not rows and _has_mapped_output_lineage(work_order.name):
+		# No receipt ever used this input: it is unsewn stock, so nothing carries its value.
+		return []
 	if not grouped:
 		frappe.throw(
 			_(
@@ -321,6 +330,28 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 		for key, weight in grouped.items()
 		if weight > 0
 	]
+
+
+def _has_mapped_output_lineage(work_order):
+	"""Whether this Work Order's receipts record which input row each output consumed."""
+	return bool(
+		frappe.db.sql(
+			"""
+			SELECT d.name
+			FROM `tabSD YRP GRN Deliverable` d
+			INNER JOIN `tabYRP Goods Received Note` g ON g.name = d.parent
+			WHERE d.parenttype = 'YRP Goods Received Note'
+			  AND d.parentfield = 'grn_deliverables'
+			  AND g.docstatus = 1
+			  AND g.against = 'YRP Work Order'
+			  AND g.against_id = %s
+			  AND COALESCE(d.work_order_deliverable, '') != ''
+			  AND COALESCE(d.output_receipt_sle, '') != ''
+			LIMIT 1
+			""",
+			(work_order,),
+		)
+	)
 
 
 def _get_owned_output_sle(output):

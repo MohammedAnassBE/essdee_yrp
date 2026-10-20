@@ -17,7 +17,7 @@ def execute(filters=None):
 	columns = [
 		*desk.lot_columns(),
 		desk.column("type", "Type"),
-		*desk.size_columns(sizes),
+		*desk.size_columns(sizes, unit="Pcs"),
 		desk.column("total_boxes", "Total Boxes", "Float"),
 		desk.column("pieces_per_box", "Pcs/Box"),
 		desk.column("total_pieces", "Total Pieces", "Float"),

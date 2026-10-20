@@ -26,7 +26,7 @@
 									<th class="finishing-table__index">#</th>
 									<th>Lot</th>
 									<th>Item</th>
-									<th v-for="size in row.sizes" :key="size" class="erp-number">{{ size }}</th>
+									<th v-for="size in row.sizes" :key="size" class="erp-number">{{ size }} (Pcs)</th>
 									<th class="erp-number">Total Pieces</th>
 									<th class="erp-number">Pcs/Box</th>
 									<th class="erp-number">Total Boxes</th>

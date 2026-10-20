@@ -10,7 +10,7 @@ def execute(filters=None):
 	columns = [
 		desk.column("date", "Date", "Date"),
 		*desk.lot_columns(),
-		*desk.size_columns(sizes),
+		*desk.size_columns(sizes, unit="Pcs"),
 		desk.column("total_pieces", "Total Pieces", "Float"),
 		desk.column("pieces_per_box", "Pcs/Box"),
 		desk.column("total_boxes", "Total Boxes", "Float"),

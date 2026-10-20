@@ -535,7 +535,6 @@ doc_events = {
 		],
 		"before_submit": "essdee_yrp.cutting.movement.validate_movement_required",
 		"before_cancel": [
-			"essdee_yrp.finishing.grn.before_cancel",
 			"essdee_yrp.cutting.movement.before_cancel",
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item.before_grn_cancel",
 			"essdee_yrp.cutting.web_workspace.add_cutting_plan_link_exemption",

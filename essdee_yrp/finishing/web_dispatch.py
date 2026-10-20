@@ -136,6 +136,21 @@ def fetch_dispatch_items():
 	return dispatch_service.fetch_fp_items()
 
 
+def dispatch_defaults(items):
+	plans = {row.get("doc_name") for row in items if row.get("doc_name")}
+	if not plans or not frappe.has_permission("SD YRP Finishing Plan", "read"):
+		return {"from_supplier": ""}
+	locations = frappe.get_list(
+		"SD YRP Finishing Plan",
+		filters={"name": ["in", sorted(plans)]},
+		fields=["name", "delivery_location"],
+		limit_page_length=0,
+	)
+	suppliers = {row.delivery_location for row in locations}
+	supplier = suppliers.pop() if len(locations) == len(plans) and len(suppliers) == 1 else ""
+	return {"from_supplier": supplier or ""}
+
+
 @frappe.whitelist()
 def get_dispatch_workspace(name: str | None = None) -> dict:
 	"""Return the dispatch grid, record and permissions for a new or saved dispatch."""
@@ -158,9 +173,11 @@ def get_dispatch_workspace(name: str | None = None) -> dict:
 	doc = frappe.get_doc(DOCTYPE, name)
 	doc.check_permission("read")
 	doc.run_method("onload")
+	items = (doc.get_onload() or {}).get("items") or []
 	return {
 		"record": {field: doc.get(field) for field in RECORD_FIELDS},
-		"items": (doc.get_onload() or {}).get("items") or [],
+		"items": items,
+		"dispatch_defaults": dispatch_defaults(items),
 		"permissions": dispatch_permissions(doc),
 		"print_formats": get_document_print_formats(doc),
 	}

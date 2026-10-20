@@ -59,6 +59,9 @@
 			:show-edit="false"
 			@changed="documentChanged"
 		/>
+		<Toast group="finishing-stock-entry" position="bottom-center">
+			<template #message="{ message }"><div><strong>{{ message.summary }}</strong><p><DocumentLink :doctype="message.document.doctype" :name="message.document.name" /></p></div></template>
+		</Toast>
 		<DocumentErrorDialog :message="actionError" title="Finishing Plan action failed" @dismiss="actionError = ''" />
 	</DepartmentPage>
 </template>
@@ -66,6 +69,7 @@
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
+import Toast from "primevue/toast"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { useToast } from "primevue/usetoast"
@@ -165,7 +169,8 @@ async function runCommand(command, payload = {}) {
 		const { result = null, ...data } = await executeFinishingPlanCommand(finishingPlanId.value, command, payload, record.value.modified) || {}
 		workspace.value = data
 		version.value += 1
-		toast.add({ severity: "success", summary: successMessages[command], detail: result?.name || finishingPlanId.value, life: 3500 })
+		toast.add({ severity: "success", summary: successMessages[command], detail: result?.name || finishingPlanId.value,
+			...(command === "dispatch_box" && result?.name ? { group: "finishing-stock-entry", document: result } : {}), life: 5000 })
 		return { result }
 	} catch (reason) {
 		actionError.value = reason?.message || "Unable to complete this Finishing Plan action."

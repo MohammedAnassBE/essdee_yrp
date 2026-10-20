@@ -13,8 +13,8 @@
 					<LinkField v-else-if="field === 'delivery_location'" v-model="form.delivery_location" doctype="Supplier" label="Delivery Location" required :show-open-button="false" :disabled="busy" />
 					<DateField v-else-if="field === 'actual_date'" v-model="form.actual_date" label="Actual Date" required :disabled="busy" />
 					<LinkField v-else-if="field === 'received_type'" v-model="form.received_type" doctype="YRP Received Type" label="Received Type" required :show-open-button="false" :disabled="busy" />
-					<label v-else-if="field === 'goods_value'" class="common-field"><span class="finishing-entry-dialog__label">Goods Value</span><InputNumber v-model="form.goods_value" :min-fraction-digits="0" :max-fraction-digits="2" input-id="finishing-goods-value" fluid :disabled="busy" /></label>
-					<label v-else-if="field === 'vehicle_no'" class="common-field"><span class="finishing-entry-dialog__label">Vehicle No</span><InputText v-model="form.vehicle_no" fluid :disabled="busy" /></label>
+					<label v-else-if="field === 'goods_value'" class="common-field"><span class="finishing-entry-dialog__label">Goods Value</span><InputNumber v-model="form.goods_value" :min-fraction-digits="0" :max-fraction-digits="2" input-id="finishing-goods-value" aria-label="Goods Value" fluid :disabled="busy" /></label>
+					<label v-else-if="field === 'vehicle_no'" class="common-field"><span class="finishing-entry-dialog__label">Vehicle No</span><InputText id="finishing-vehicle-no" aria-label="Vehicle No" v-model="form.vehicle_no" fluid :disabled="busy" /></label>
 					<label v-else-if="field === 'lot_source'" class="common-field"><span class="finishing-entry-dialog__label">Lot Source</span><Select v-model="form.lot_source" :options="['New Lot', 'Existing Lot']" fluid :disabled="busy" /></label>
 					<label v-else-if="field === 'lot_name'" class="common-field"><span class="finishing-entry-dialog__label">Lot Name</span><InputText v-model="form.lot_name" fluid :disabled="busy" /></label>
 					<LinkField v-else-if="field === 'existing_lot'" v-model="form.existing_lot" doctype="SD YRP Lot" label="Existing Lot" required :search-handler="searchUnconfiguredLots" :show-open-button="false" :disabled="busy" />
@@ -24,11 +24,11 @@
 				</template>
 			</div>
 			<div v-if="definition.typeSelect" class="finishing-entry-dialog__type">
-				<label class="common-field"><span class="finishing-entry-dialog__label">Choose Type</span><Select v-model="form.selected_type" :options="deliveryTypes" option-label="label" option-value="value" :disabled="busy" @change="fill" /></label>
+				<label class="common-field"><span class="finishing-entry-dialog__label">Choose Type</span><Select v-model="form.selected_type" :options="deliveryTypes" option-label="label" option-value="value" :disabled="busy" @change="resetQuantities" /></label>
 				<Button label="Fill" icon="pi pi-download" severity="secondary" outlined :disabled="busy" @click="fill" />
 			</div>
 			<FinishingPackingEntry v-if="definition.component === 'packing'" ref="custom" :sizes="source.primary_values || []" :config="source.packing_config || {}" :disabled="busy" />
-			<FinishingDispatchEntry v-else-if="definition.component === 'dispatch'" ref="custom" :sizes="source.primary_values || []" :packed="source.packed || {}" :config="source.packing_config || {}" :disabled="busy" />
+			<FinishingDispatchEntry v-else-if="definition.component === 'dispatch'" ref="custom" :label="name" :sizes="source.primary_values || []" :packed="source.packed || {}" :config="source.packing_config || {}" :disabled="busy" />
 			<FinishingEntryMatrix v-else :payload="matrixPayload" :model-value="entry" :references="references" :input-label="definition.inputLabel" :checkable="Boolean(definition.checkable)" :disabled="busy" />
 		</form>
 		<template #footer>
@@ -136,6 +136,8 @@ async function setSupplier(side, supplier) {
 	const message = await setDispatchSupplier(form, side, supplier)
 	if (message) validationError.value = message
 }
+
+function resetQuantities() { entry.value = initialEntry(source.value) }
 
 function fill() {
 	fillEntry(source.value, entry.value, form.selected_type)

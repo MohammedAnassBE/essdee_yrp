@@ -71,7 +71,8 @@ class TestFinishingDeskReports(TestCase):
 				self.assertEqual(source.call_args_list[0], source.call_args_list[1])
 				self.assertEqual([{k: row[k] for k in api["data"][0]} for row in rows], api["data"])
 				self.assertEqual(
-					[rows[0][c["fieldname"]] for c in columns if c["label"] in ("S", "M")], [12, 6]
+					[rows[0][c["fieldname"]] for c in columns if c["label"] in ("S (Pcs)", "M (Pcs)")],
+					[12, 6],
 				)
 
 	def test_dispatch_preserves_packed_dispatched_and_negative_differences(self):
@@ -105,7 +106,7 @@ class TestFinishingDeskReports(TestCase):
 		)
 		self.assertEqual([row["type"] for row in rows], ["Packed", "Dispatched", "Diff"])
 		self.assertEqual(
-			[[row[c["fieldname"]] for c in columns if c["label"] in ("S", "M")] for row in rows],
+			[[row[c["fieldname"]] for c in columns if c["label"] in ("S (Pcs)", "M (Pcs)")] for row in rows],
 			[[2, 1], [3, 0], [-1, 1]],
 		)
 		self.assertEqual([row["total_pieces"] for row in rows], [18, 18, 0])

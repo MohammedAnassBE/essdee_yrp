@@ -217,6 +217,9 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		return super().before_submit()
 
 	def before_cancel(self):
+		from essdee_yrp.finishing.grn import validate_packing_cancellation
+
+		validate_packing_cancellation(self)
 		qualified_cloth = _requires_versioned_cloth_lifecycle(self, persisted=True)
 		if qualified_cloth:
 			if not self.flags.get("cloth_execution_lot_locked"):

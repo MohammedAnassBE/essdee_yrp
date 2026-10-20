@@ -24,7 +24,7 @@
 						<DocumentSaveButton :saved="Boolean(record.name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Finishing Plan Dispatch ${record.name || ''}`.trim()" v-if="permissions.can_write" :show-submit="Boolean(permissions.can_submit)" :loading="busy" @save="save(false)" @submit="save(true)" />
 					</template>
 					<template v-else>
-						<Button v-if="permissions.can_dispatch_stock" label="Dispatch Stock" icon="pi pi-truck" :disabled="busy" @click="dispatchOpen = true" />
+						<Button v-if="permissions.can_dispatch_stock" label="Dispatch Stock" icon="pi pi-truck" :disabled="busy" @click="openDispatch" />
 						<Button v-if="permissions.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="confirmCancel" />
 					</template>
 				</div>
@@ -37,6 +37,7 @@
 				</h2>
 				<FinishingDispatchEntry
 					:ref="(component) => setEntry(row.doc_name, component)"
+					:label="row.doc_name"
 					:sizes="dispatchEntrySource(row).sizes"
 					:packed="dispatchEntrySource(row).packed"
 					:config="row.packing_config || {}"
@@ -53,8 +54,8 @@
 				<LinkField v-model="stock.from_warehouse" doctype="Warehouse" label="From Warehouse" required :filters="warehouseFilters(stock.from_supplier)" :show-open-button="false" :disabled="busy" />
 				<LinkField :model-value="stock.to_supplier" doctype="Supplier" label="To Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('to', value)" />
 				<LinkField v-model="stock.to_warehouse" doctype="Warehouse" label="To Warehouse" required :filters="warehouseFilters(stock.to_supplier)" :show-open-button="false" :disabled="busy" />
-				<label class="common-field"><span class="finishing-field-label">Goods Value</span><InputNumber v-model="stock.goods_value" :max-fraction-digits="2" fluid :disabled="busy" /></label>
-				<label class="common-field"><span class="finishing-field-label">Vehicle No</span><InputText v-model="stock.vehicle_no" fluid :disabled="busy" /></label>
+				<label class="common-field"><span class="finishing-field-label">Goods Value</span><InputNumber input-id="dispatch-goods-value" aria-label="Goods Value" v-model="stock.goods_value" :max-fraction-digits="2" fluid :disabled="busy" /></label>
+				<label class="common-field"><span class="finishing-field-label">Vehicle No</span><InputText id="dispatch-vehicle-no" aria-label="Vehicle No" v-model="stock.vehicle_no" fluid :disabled="busy" /></label>
 			</form>
 			<template #footer>
 				<Button label="Close" severity="secondary" text :disabled="busy" @click="dispatchOpen = false" />
@@ -199,6 +200,11 @@ async function setSupplier(side, supplier) {
 	if (message) actionError.value = message
 }
 
+function openDispatch() {
+	dispatchOpen.value = true
+	setSupplier("from", workspace.value.dispatch_defaults?.from_supplier || "")
+}
+
 function dispatchStock() {
 	const missing = [["from_supplier", "From Supplier"], ["from_warehouse", "From Warehouse"], ["to_supplier", "To Supplier"], ["to_warehouse", "To Warehouse"], ["goods_value", "Goods Value"], ["vehicle_no", "Vehicle No"]].filter(([field]) => stock[field] === null || stock[field] === "").map(([, label]) => label)
 	if (missing.length) {
@@ -239,6 +245,8 @@ watch(dispatchId, () => {
 .finishing-dispatch__plan { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 700; }
 .finishing-dispatch__link { padding: 0; color: var(--erp-accent-dark); background: none; border: 0; font: inherit; font-size: var(--erp-font-size-table); font-weight: 650; cursor: pointer; text-decoration: none; }
 .finishing-dispatch__link:hover, .finishing-dispatch__link:focus-visible { text-decoration: underline; }
+.finishing-field-label { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
+.finishing-dispatch__form .common-field { display: grid; gap: 6px; }
 .finishing-dispatch__form { display: grid; gap: 12px; }
 .finishing-plan__probe { display: grid; gap: var(--erp-space-3); }
 .finishing-plan__fact { display: grid; gap: 2px; padding-left: 12px; border-left: 1px solid var(--erp-border); }

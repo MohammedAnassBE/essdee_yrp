@@ -25,8 +25,11 @@ def lot_columns():
 	return [column("lot", "Lot", "Link", "SD YRP Lot"), column("item", "Item", "Link", "Item")]
 
 
-def size_columns(sizes):
-	return [column(f"size_{index}", str(size), "Float", width=85) for index, size in enumerate(sizes)]
+def size_columns(sizes, unit=None):
+	return [
+		column(f"size_{index}", f"{size} ({unit})" if unit else str(size), "Float", width=85)
+		for index, size in enumerate(sizes)
+	]
 
 
 def size_values(sizes, values):

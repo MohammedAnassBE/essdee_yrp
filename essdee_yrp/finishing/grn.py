@@ -16,7 +16,7 @@ from essdee_yrp.finishing.state import (
 from essdee_yrp.finishing.status import apply_auto_fp_status
 
 
-def before_cancel(grn, method=None):
+def validate_packing_cancellation(grn):
 	"""Do not cancel a packing GRN while any of its boxes are dispatched."""
 	if not grn.get("includes_packing"):
 		return
@@ -24,8 +24,29 @@ def before_cancel(grn, method=None):
 		(row for row in grn.get("packing_batches") or [] if flt(row.get("dispatched_boxes")) > 0),
 		None,
 	)
-	if dispatched_batch:
+	if dispatched_batch or _size_wise_boxes_dispatched(grn):
 		frappe.throw(_("Cancel the related Finishing Plan dispatch entries before cancelling this GRN"))
+
+
+def _size_wise_boxes_dispatched(grn):
+	if grn.get("packing_batches") or not grn.get("from_finishing") or grn.get("is_return"):
+		return False
+	plan_name = frappe.db.get_value(
+		"SD YRP Finishing Plan", {"work_order": grn.get("against_id"), "lot": grn.get("lot")}, "name"
+	)
+	if not plan_name:
+		return False
+	plan = frappe.get_doc("SD YRP Finishing Plan", plan_name)
+	removed = {}
+	for row in grn.get("items") or []:
+		variant = row.get("item_variant")
+		removed[variant] = removed.get(variant, 0) + flt(row.get("quantity"))
+	return any(
+		flt(row.get("dispatched")) > 0
+		and flt(row.get("quantity")) - removed.get(row.get("item_variant"), 0) + 0.000001
+		< flt(row.get("dispatched"))
+		for row in plan.get("finishing_plan_grn_details") or []
+	)
 
 
 def on_submit(grn, method=None):

@@ -22,6 +22,7 @@
 					<SewingQuantityMatrix :colours="matrix(entry).colours" :model-value="matrix(entry).quantities" :primary-values="entry.primary_values" label="Saved Sewing entry" :show-caption="false" quantity-label="Quantity" :editable="false" />
 				</article>
 			</section>
+			<Button v-if="hasMore" label="Load more" severity="secondary" outlined :loading="loading" :disabled="loading || state.busy" @click="load(true)" />
 			<Message v-if="success" severity="success" :closable="false" role="status">{{ success }}</Message>
 		</template>
 		<DocumentConfirmationDialog :visible="Boolean(selected)" title="Cancel Sewing entry" message="Cancel this entry? Its saved quantities will be removed." confirm-label="Cancel entry" cancel-label="Keep entry" :busy="state.busy" @update:visible="value => { if (!value && !state.busy) selected = '' }" @confirm="cancel" />
@@ -47,6 +48,7 @@ const props = defineProps({ state: { type: Object, required: true }, mutate: { t
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
 const records = ref({}), loading = ref(false), loaded = ref(false), loadError = ref(""), success = ref(""), selected = ref("")
 const loadPopup = ref("")
+const hasMore = ref(false), nextStart = ref(0)
 const error = computed(() => props.state.operation?.status === "rejected" && !props.state.operation.acknowledged && props.state.operation.supplier === supplier.value ? props.state.operation.error : "")
 let mounted = true
 const searches = new Map()
@@ -81,14 +83,16 @@ async function search(doctype, text) {
 		return current() ? rows : []
 	} catch (reason) { if (current()) loadPopup.value = reason.message || 'Unable to load entry filters.'; return [] }
 }
-async function load() {
+async function load(append = false) {
 	if (!supplier.value) return false
 	const generation = beginRequest()
 	loading.value = true; loadError.value = ""
 	try {
-		const data = await getSewingEntries(supplier.value, props.state.filters)
+		const data = await getSewingEntries(supplier.value, props.state.filters, append ? nextStart.value : 0)
 		if (!mounted || !isCurrent(generation)) return false
-		records.value = data || {}; loaded.value = true; props.state.refreshRequired = false
+		records.value = append ? { ...records.value, ...data.rows } : data.rows || {}
+		hasMore.value = Boolean(data.has_more); nextStart.value = data.next_start || 0
+		loaded.value = true; props.state.refreshRequired = false
 		return true
 	} catch (reason) {
 		if (mounted && isCurrent(generation)) { loadError.value = reason.message || "Unable to load Sewing entries."; loadPopup.value = loadError.value }
@@ -108,6 +112,7 @@ function dismissError() {
 onMounted(() => watch(() => [supplier.value, props.state.filters.workStation, props.state.filters.inputType, props.state.filters.lot, props.state.busy], async () => {
 	if (props.state.busy) return
 	selected.value = ""
+	records.value = {}; loaded.value = false; hasMore.value = false; nextStart.value = 0
 	const operation = props.state.operation
 	const refreshed = await load()
 	if (mounted && operation?.status === "succeeded" && operation.version === props.state.operation?.version && !operation.noticeShown) {

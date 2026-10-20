@@ -45,7 +45,9 @@
 						<TimeField v-model="filters.time" label="Time" input-id="sewing-entry-time" required :invalid="missing('time')" :disabled="loading || busy" :error="missing('time') ? 'Choose a Time.' : ''" />
 					</div>
 					<p id="sewing-entry-help" class="sewing-data-entry__help">{{ inputContext }} Remaining quantities are server-provided context; the server validates each save.</p>
-					<SewingQuantityMatrix v-model="entryQuantities" :colours="currentPlan.colours" :primary-values="currentPlan.details.primary_values" :context-columns="contextColumns" :label="filters.plan" :disabled="busy || loading" :editable="canCreate" />
+					<SewingQuantityMatrix v-model="entryQuantities" :colours="entryColours" :primary-values="currentPlan.details.primary_values" :context-columns="contextColumns" :label="filters.plan" :disabled="busy || loading" :editable="canCreate">
+						<template #colour-actions="{ colourKey }"><label v-if="canCreate && inputKey"><input type="checkbox" :checked="Boolean(filledColours[`${entryDraftKey}:${colourKey}`])" :aria-label="`${colourKey} Fill remaining`" :disabled="busy || loading" @change="fillColourQuantities(colourKey, $event.target.checked)" /> Fill remaining</label></template>
+					</SewingQuantityMatrix>
 				</form>
 				<template #footer><div class="sewing-data-entry__actions"><small v-if="!canCreate">You do not have permission to create Sewing entries.</small><small v-else>Enter at least one positive quantity. Required fields are marked *.</small><Button type="button" label="Close entry" severity="secondary" text :disabled="busy" @click="entryVisible = false" /><Button type="submit" form="sewing-entry-form" label="Save entry" icon="pi pi-check" :disabled="busy || loading || refreshRequired || !canCreate" /></div></template>
 			</Dialog>
@@ -59,10 +61,11 @@
 					<div class="sewing-data-entry__inspection-heading"><div><h3>Inspection quantities</h3><p>Update saved totals. Revert clears the selected inspection for every row in this plan.</p></div><div class="common-field"><label for="sewing-inspection">Inspection Type</label><Select input-id="sewing-inspection" v-model="filters.inspectionType" :options="inspectionTypes" option-label="label" option-value="value" aria-label="Inspection Type" :disabled="busy || loading" fluid /></div></div>
 					<SewingQuantityMatrix v-model="inspectionQuantities" :colours="currentPlan.colours" :primary-values="currentPlan.details.primary_values" :context-columns="[{ key: 'order_qty', label: 'Ordered' }]" :label="`${filters.plan} inspection`" quantity-label="Inspection quantity" :disabled="busy || loading" :editable="canWrite" />
 				</section>
-				<template #footer><div class="sewing-data-entry__actions"><small v-if="!canWrite">You do not have permission to update inspections.</small><Button label="Close inspection" severity="secondary" text :disabled="busy" @click="inspectionVisible = false" /><Button label="Update inspection" severity="secondary" :disabled="busy || loading || refreshRequired || !canWrite" @click="saveInspection('update')" /><Button label="Revert inspection" severity="danger" outlined :disabled="busy || loading || refreshRequired || !canWrite" @click="saveInspection('revert')" /></div></template>
+				<template #footer><div class="sewing-data-entry__actions"><small v-if="!canWrite">You do not have permission to update inspections.</small><Button label="Close inspection" severity="secondary" text :disabled="busy" @click="inspectionVisible = false" /><Button label="Update inspection" severity="secondary" :disabled="busy || loading || refreshRequired || !canWrite" @click="saveInspection('update')" /><Button label="Revert inspection" severity="danger" outlined :disabled="busy || loading || refreshRequired || !canWrite" @click="revertConfirmVisible = true" /></div></template>
 			</Dialog>
 		</template>
 		<DocumentErrorDialog :message="error || mutationError" @dismiss="dismissError" />
+		<DocumentConfirmationDialog v-model:visible="revertConfirmVisible" title="Revert inspection?" :message="revertInspectionMessage" confirm-label="Revert inspection" :busy="busy" @confirm="confirmRevertInspection" />
 	</section>
 </template>
 
@@ -79,6 +82,7 @@ import DateField from "../../../components/common/DateField.vue"
 import TimeField from "../../../components/common/TimeField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
@@ -88,6 +92,12 @@ const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContex
 const { response, loaded, loadError, busy, error, success, attempted, entryDrafts, inspectionDrafts, refreshRequired } = toRefs(props.state)
 const loading = ref(false)
 const editor = ref("")
+const revertConfirmVisible = ref(false)
+const revertInspectionMessage = computed(() => `Revert ${inspectionTypes.find(type => type.value === props.filters.inspectionType)?.label || "inspection"} for every colour and size in Sewing Plan ${props.filters.plan} (Work Order ${currentPlan.value?.details?.work_order || "—"}, Lot ${currentPlan.value?.details?.lot || "—"})? All inspection quantities will be cleared.`)
+async function confirmRevertInspection() {
+	revertConfirmVisible.value = false
+	await saveInspection("revert")
+}
 const mutationError = computed(() => props.state.operation?.status === 'rejected' && !props.state.operation.acknowledged ? props.state.operation.error : '')
 let mounted = true
 const searchSequences = new Map()
@@ -106,9 +116,26 @@ const predecessorKey = computed(() => response.value.diff?.[inputKey.value])
 const contextColumns = computed(() => [
 	{ key: "order_qty", label: "Ordered" },
 	...(predecessorKey.value && predecessorKey.value !== "order_qty" ? [{ key: predecessorKey.value, label: "Previous stage" }] : []),
-	...(inputKey.value ? [{ key: inputKey.value, label: "Entered" }, { key: `${inputKey.value}_remaining`, label: "Remaining" }] : []),
+	...(inputKey.value ? [{ key: inputKey.value, label: "Entered" }, { key: `${inputKey.value}_remaining`, label: "Remaining" }, { key: "allowed_remaining", label: "Up to (with allowance)" }] : []),
 ])
 const inputContext = computed(() => props.filters.inputType ? `${props.filters.inputType} · Allowance ${response.value.allowances?.[inputKey.value] ?? 0}%.` : "Choose an Input Type to see stage context.")
+const filledColours = ref({})
+const entryColours = computed(() => Object.fromEntries(Object.entries(currentPlan.value?.colours || {}).map(([key, colour]) => [key, {
+	...colour, values: Object.fromEntries(Object.entries(colour.values || {}).map(([size, value]) => [size, { ...value, allowed_remaining: allowanceLimit(value) }])),
+}])))
+function remaining(value) { return Number(value[`${inputKey.value}_remaining`] ?? value[predecessorKey.value] ?? 0) }
+function allowanceLimit(value) {
+	const baseQuantity = Number(value[predecessorKey.value] || 0)
+	const allowance = Number(response.value.allowances?.[inputKey.value] || 0)
+	const entered = Number(value[inputKey.value] || 0)
+	return Math.max(0, baseQuantity * (1 + allowance / 100) - entered)
+}
+function fillColourQuantities(colourKey, checked) {
+	filledColours.value[`${entryDraftKey.value}:${colourKey}`] = checked
+	const quantities = { ...entryQuantities.value }
+	for (const value of Object.values(currentPlan.value?.colours?.[colourKey]?.values || {})) quantities[value.order_detail] = checked ? remaining(value) : 0
+	entryQuantities.value = quantities
+}
 const inspectionTypes = [{ value: "pre_final", label: "Pre Final" }, { value: "final_inspection", label: "Final Inspection" }]
 const entryDraftKey = computed(() => inputKey.value ? `${props.filters.plan}:${inputKey.value}` : "")
 const entryQuantities = computed({
@@ -130,8 +157,8 @@ function openEditor(plan, mode) {
 function validQuantities(quantities) { return Object.values(quantities).every(value => Number.isFinite(Number(value)) && Number(value) >= 0) }
 function initializeEntry() {
 	if (!currentPlan.value || !entryDraftKey.value || entryDrafts.value[entryDraftKey.value]) return
-	const remainingKey = `${inputKey.value}_remaining`
-	entryDrafts.value[entryDraftKey.value] = Object.fromEntries(values().map(value => [value.order_detail, Number(value[remainingKey] ?? 0)]))
+	entryDrafts.value[entryDraftKey.value] = Object.fromEntries(values().map(value => [value.order_detail, 0]))
+	for (const key of Object.keys(currentPlan.value.colours || {})) filledColours.value[`${entryDraftKey.value}:${key}`] = false
 }
 function initializeInspection() {
 	if (currentPlan.value && !inspectionDrafts.value[inspectionDraftKey.value]) inspectionDrafts.value[inspectionDraftKey.value] = Object.fromEntries(values().map(value => [value.order_detail, value[props.filters.inspectionType] || 0]))

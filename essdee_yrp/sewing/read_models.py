@@ -38,7 +38,7 @@ def _plans(supplier, *, lots=None, items=None):
 	)
 
 
-def _entries(plans, *, entry_date=None, work_station=None, input_type=None):
+def _entries(plans, *, entry_date=None, work_station=None, input_type=None, start=0, page_length=0):
 	if not plans:
 		return []
 	frappe.has_permission("SD YRP Sewing Plan Entry Detail", "read", throw=True)
@@ -61,8 +61,9 @@ def _entries(plans, *, entry_date=None, work_station=None, input_type=None):
 			"entry_date",
 			"entry_time",
 		],
-		order_by="entry_date desc, entry_time desc, creation desc",
-		limit_page_length=0,
+		order_by="entry_date desc, entry_time desc, creation desc, name desc",
+		limit_start=start,
+		limit_page_length=page_length,
 	)
 
 
@@ -307,12 +308,31 @@ def _natural_name_key(value):
 @frappe.whitelist()
 def get_sewing_plan_entries(supplier, input_type=None, work_station=None, lot_name=None):
 	with attribute_read_scope():
-		return _read_get_sewing_plan_entries(supplier, input_type, work_station, lot_name)
+		return _read_get_sewing_plan_entries(supplier, input_type, work_station, lot_name)["rows"]
 
 
-def _read_get_sewing_plan_entries(supplier, input_type=None, work_station=None, lot_name=None):
+@frappe.whitelist()
+def get_sewing_plan_entry_page(
+	supplier, input_type=None, work_station=None, lot_name=None, start=0, page_length=100
+):
+	start = max(0, cint(start))
+	page_length = min(500, max(1, cint(page_length) or 100))
+	with attribute_read_scope():
+		return _read_get_sewing_plan_entries(supplier, input_type, work_station, lot_name, start, page_length)
+
+
+def _read_get_sewing_plan_entries(
+	supplier, input_type=None, work_station=None, lot_name=None, start=0, page_length=0
+):
+	"""Return entries newest first; ``page_length`` 0 reads every entry."""
 	plans = _plans(supplier, lots=[lot_name] if lot_name else None)
-	entries = _entries(plans, work_station=work_station, input_type=input_type)
+	fetch_length = page_length + 1 if page_length else 0
+	entries = _entries(
+		plans, work_station=work_station, input_type=input_type, start=start, page_length=fetch_length
+	)
+	has_more = bool(page_length) and len(entries) > page_length
+	if page_length:
+		entries = entries[:page_length]
 	detail_rows = _details(entries)
 	plan_map = {row.name: row for row in plans}
 	lots, ipds = _metadata(plans)
@@ -384,7 +404,7 @@ def _read_get_sewing_plan_entries(supplier, input_type=None, work_station=None, 
 			group["values"][size] = flt(group["values"].get(size)) + flt(row.quantity)
 			group["total"] += flt(row.quantity)
 		result[entry.name] = value
-	return result
+	return {"rows": result, "has_more": has_more, "next_start": start + len(entries)}
 
 
 @frappe.whitelist()

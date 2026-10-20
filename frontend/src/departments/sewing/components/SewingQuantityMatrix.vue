@@ -6,7 +6,7 @@
 				<thead><tr><th scope="col">Colour / Part</th><th v-for="size in sizes" :key="size" scope="col">{{ size }}</th></tr></thead>
 				<tbody>
 					<tr v-for="(colour, key) in colours" :key="key">
-						<th scope="row">{{ colour.colour || key }}<small v-if="colour.part">{{ colour.part }}</small></th>
+						<th scope="row">{{ colour.colour || key }}<small v-if="colour.part">{{ colour.part }}</small><slot name="colour-actions" :colour="colour" :colour-key="key" /></th>
 						<td v-for="size in sizes" :key="colour.values?.[size]?.order_detail || size">
 							<template v-if="colour.values?.[size]">
 								<small v-for="column in contextColumns" :key="column.key">{{ column.label }} <b>{{ format(colour.values[size][column.key]) }}</b></small>

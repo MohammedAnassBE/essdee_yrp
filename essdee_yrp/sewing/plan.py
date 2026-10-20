@@ -8,7 +8,7 @@ from frappe.utils import cint, flt
 
 
 def on_work_order_submit(doc, method=None):
-	if not _should_have_sewing_plan(doc):
+	if not _should_have_sewing_plan(doc, notify=True):
 		return
 	create_or_get_sewing_plan(doc)
 
@@ -72,31 +72,45 @@ def create_or_get_sewing_plan(work_order) -> str:
 	return plan.name
 
 
-def _should_have_sewing_plan(work_order) -> bool:
+def _should_have_sewing_plan(work_order, *, notify=False) -> bool:
 	if work_order.get("is_rework"):
 		return False
-	if not cint(work_order.get("is_internal_unit")):
-		return False
-	if not cint(frappe.db.get_value("Supplier", work_order.supplier, "apply_sewing_plan")):
-		return False
-
 	sewing_process = frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process")
 	if not sewing_process or not work_order.process_name:
 		return False
-	if work_order.process_name == sewing_process:
-		return True
-	if not cint(frappe.db.get_value("YRP Process", work_order.process_name, "is_group")):
-		return False
-	return bool(
-		frappe.db.exists(
-			"YRP Process Details",
-			{
-				"parent": work_order.process_name,
-				"parenttype": "YRP Process",
-				"process_name": sewing_process,
-			},
+	is_sewing = work_order.process_name == sewing_process
+	if not is_sewing and cint(frappe.db.get_value("YRP Process", work_order.process_name, "is_group")):
+		is_sewing = bool(
+			frappe.db.exists(
+				"YRP Process Details",
+				{
+					"parent": work_order.process_name,
+					"parenttype": "YRP Process",
+					"process_name": sewing_process,
+				},
+			)
 		)
+	if not is_sewing:
+		return False
+	if not cint(work_order.get("is_internal_unit")):
+		if notify:
+			_sewing_plan_skip_message(work_order, "not_company")
+		return False
+	if not cint(frappe.db.get_value("Supplier", work_order.supplier, "apply_sewing_plan")):
+		if notify:
+			_sewing_plan_skip_message(work_order, "disabled")
+		return False
+	return True
+
+
+def _sewing_plan_skip_message(work_order, reason):
+	supplier = frappe.db.get_value("Supplier", work_order.supplier, "supplier_name") or work_order.supplier
+	message = (
+		_("No Sewing Plan was created: {0} is not a company location.")
+		if reason == "not_company"
+		else _("No Sewing Plan was created: {0} does not use Sewing Plans.")
 	)
+	frappe.msgprint(message.format(supplier), indicator="orange")
 
 
 def _order_rows(work_order) -> list[dict]:

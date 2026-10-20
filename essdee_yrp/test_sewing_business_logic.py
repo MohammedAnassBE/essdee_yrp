@@ -40,6 +40,7 @@ from essdee_yrp.sewing.read_models import (
 	get_sewing_consumption_print_data,
 	get_sewing_plan_dpr_data,
 	get_sewing_plan_entries,
+	get_sewing_plan_entry_page,
 	get_sp_status_summary,
 	get_supplier_lots,
 	get_the_lot,
@@ -1137,11 +1138,16 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		)
 		self.assertEqual(flt(monthly["grand_total"]["total"]), expected)
 
-		entries = get_sewing_plan_entries(
-			sample.supplier,
-			input_type=sample.input_type,
-			lot_name=sample.lot,
-		)
+		entries = {}
+		start = 0
+		while True:
+			page = get_sewing_plan_entry_page(
+				sample.supplier, input_type=sample.input_type, lot_name=sample.lot, start=start
+			)
+			entries.update(page["rows"])
+			if not page["has_more"]:
+				break
+			start = page["next_start"]
 		self.assertTrue(entries)
 		entry_total = sum(
 			flt(colour["total"]) for entry in entries.values() for colour in entry["details"].values()
@@ -1397,7 +1403,7 @@ class TestSewingClosedGrnConcurrency(IntegrationTestCase):
 
 		with ThreadPoolExecutor(max_workers=2) as executor:
 			try:
-				supplier, groups, selected = executor.submit(connection, setup).result(30)
+				supplier, groups, _selected = executor.submit(connection, setup).result(30)
 				# The race is about the Work Order lock; the passed-inspection gate is covered separately.
 				with patch.object(database_class, "sql", new=observe_sql), \
 					patch.object(service, "_get_closed_sewing_work_order", new=observe_lock), \

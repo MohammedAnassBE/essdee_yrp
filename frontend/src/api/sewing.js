@@ -60,9 +60,9 @@ export function updateSewingInspection(payload) {
 	return callMethod(`${PLAN_METHOD}.update_sewing_plan_data`, { payload })
 }
 
-export function getSewingEntries(supplier, filters = {}) {
-	return callMethod(`${PLAN_METHOD}.get_sewing_plan_entries`, {
-		supplier, work_station: filters.workStation || "", input_type: filters.inputType || "", lot_name: filters.lot || "",
+export function getSewingEntries(supplier, filters = {}, start = 0, pageLength = 100) {
+	return callMethod(`${PLAN_METHOD}.get_sewing_plan_entry_page`, {
+		supplier, work_station: filters.workStation || "", input_type: filters.inputType || "", lot_name: filters.lot || "", start, page_length: pageLength,
 	})
 }
 

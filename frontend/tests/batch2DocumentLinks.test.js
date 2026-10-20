@@ -16,6 +16,7 @@ import * as lotEditor from '../src/departments/purchase/lot/lotEditor.js'
 import * as program from '../src/engine/lotClothProgram.js'
 import * as costViews from '../src/departments/merch/process-cost/processCostViews.js'
 import * as priceViews from '../src/departments/purchase/purchaseViews.js'
+import * as lotOcrView from '../src/departments/sales/lotOcrView.js'
 
 const nodes = (root, type) => findNodes(root, node => node.type === type)
 const text = node => node.type === 'comment' ? '' : node.text + node.children.map(text).join('')
@@ -34,7 +35,7 @@ const defaults = {
  '../../utils/stockItemComposer.js': stockItemComposer,
  './lotViews.js': lotViews, './lotEditor.js': lotEditor, '../../purchase/lot/lotEditor.js': lotEditor,
  '../../purchase/lot/lotViews.js': lotViews, '../../../engine/lotClothProgram.js': program,
- './processCostViews.js': costViews, './purchaseViews.js': priceViews,
+ './processCostViews.js': costViews, './purchaseViews.js': priceViews, './lotOcrView.js': lotOcrView,
  '../ipdLinks.js': ipdLinks,
  './LinkField.vue': control, './FormField.vue': formControl,
  '../../../../components/common/FormField.vue': formControl,

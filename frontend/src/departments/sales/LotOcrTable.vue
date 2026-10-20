@@ -35,7 +35,7 @@
 					<td class="ppo-lot-ocr__documents"><div v-if="finishingPlans.length"><span>Finishing Plans</span><template v-for="document in finishingPlans" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('SD YRP Finishing Plan', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div><em v-else>—</em></td>
 					<th>Dispatched</th>
 					<td v-for="size in sizes" :key="`dispatch-${size}`">{{ formatNumber(dispatchDetail[size]) }}</td>
-					<td class="ppo-lot-ocr__total">{{ formatNumber(payload.total_dispatch) }}</td>
+					<td class="ppo-lot-ocr__total">{{ formatNumber(view.totalDispatch) }}</td>
 				</tr>
 			</tbody>
 		</table>
@@ -48,22 +48,18 @@ import DocumentLink from "../../components/common/DocumentLink.vue"
 import { RouterLink } from "vue-router"
 
 import { webDocumentRoute } from "../../router/webDocumentRoutes.js"
+import { lotOcrView } from "./lotOcrView.js"
 
 const props = defineProps({
 	payload: { type: Object, default: () => ({}) },
 	linked: { type: Boolean, default: false },
 })
 
-const sizes = computed(() => props.payload.sizes || [])
-const processRows = computed(() => Object.entries(props.payload.processes || {}).map(([name, process]) => ({
-	name,
-	...process,
-	wo_list: process?.wo_list || [],
-	cp_list: process?.cp_list || [],
-	data: process?.data || {},
-})))
-const dispatchDetail = computed(() => props.payload.dispatch_detail || {})
-const finishingPlans = computed(() => props.payload.finishing_plan_list || [])
+const view = computed(() => lotOcrView(props.payload))
+const sizes = computed(() => view.value.sizes)
+const processRows = computed(() => view.value.processRows)
+const dispatchDetail = computed(() => view.value.dispatchDetail)
+const finishingPlans = computed(() => view.value.finishingPlans)
 
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
 function formatNumber(value) { return number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }

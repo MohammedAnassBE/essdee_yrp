@@ -327,7 +327,7 @@ watch(() => props.name, load)
 	flex-direction: column;
 	gap: var(--erp-space-3);
 	padding: 0 0 var(--erp-space-4);
-	border-color: color-mix(in srgb, var(--erp-border) 84%, white);
+	border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface));
 	background: var(--erp-bg);
 }
 .work-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
@@ -358,10 +358,10 @@ watch(() => props.name, load)
 .work-order-editor__date-control { min-height: 42px; padding: 0 11px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface-soft); }
 .work-order-editor__comments { display: grid; grid-column: span 2; gap: 6px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 600; }
 .work-order-editor__calculated { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.work-order-editor__calculated > div { display: grid; gap: 3px; padding: 9px 11px; border-left: 3px solid color-mix(in srgb, var(--erp-accent) 58%, white); background: var(--erp-surface-soft); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
+.work-order-editor__calculated > div { display: grid; gap: 3px; padding: 9px 11px; border-left: 3px solid color-mix(in srgb, var(--erp-accent) 58%, var(--erp-surface)); background: var(--erp-surface-soft); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-editor__calculated strong { overflow: hidden; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .work-order-editor__calculated span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.work-order-editor__matrix-prompt { display: flex; min-height: 82px; align-items: center; gap: 12px; padding: 14px 16px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: color-mix(in srgb, var(--erp-surface-soft) 78%, white); }
+.work-order-editor__matrix-prompt { display: flex; min-height: 82px; align-items: center; gap: 12px; padding: 14px 16px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); background: color-mix(in srgb, var(--erp-surface-soft) 78%, var(--erp-surface)); }
 .work-order-editor__matrix-prompt > i { display: grid; width: 38px; height: 38px; flex: 0 0 auto; color: var(--erp-accent); background: var(--erp-accent-soft); border-radius: var(--erp-control-radius); place-items: center; }
 .work-order-editor__matrix-prompt > div { display: grid; gap: 3px; }
 .work-order-editor__matrix-prompt strong { color: var(--erp-text); font-size: var(--erp-font-size-body); }

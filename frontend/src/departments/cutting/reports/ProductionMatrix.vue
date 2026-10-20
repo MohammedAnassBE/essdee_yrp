@@ -310,7 +310,7 @@ function signed(value) {
 }
 
 .production-table-wrap:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--erp-accent) 56%, white);
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 56%, var(--erp-surface));
 	outline-offset: -2px;
 }
 

@@ -357,7 +357,7 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 }
 
 .item-matrix tbody tr:hover td {
-	background: color-mix(in srgb, var(--erp-accent) 3%, white);
+	background: color-mix(in srgb, var(--erp-accent) 3%, var(--erp-surface));
 }
 
 .item-matrix__index {

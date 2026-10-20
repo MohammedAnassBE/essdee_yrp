@@ -1723,7 +1723,7 @@ defineExpose({ refresh: reload })
 	padding: 11px 12px;
 	color: var(--erp-text-secondary);
 	background: var(--erp-danger-soft);
-	border: 1px solid color-mix(in srgb, var(--erp-danger) 24%, white);
+	border: 1px solid color-mix(in srgb, var(--erp-danger) 24%, var(--erp-surface));
 	border-radius: var(--erp-control-radius);
 }
 
@@ -1752,7 +1752,7 @@ defineExpose({ refresh: reload })
 	gap: 12px;
 	padding: 11px 14px;
 	background: var(--list-accent-soft);
-	border: 1px solid color-mix(in srgb, var(--list-accent) 25%, white);
+	border: 1px solid color-mix(in srgb, var(--list-accent) 25%, var(--erp-surface));
 	border-radius: var(--erp-control-radius);
 }
 

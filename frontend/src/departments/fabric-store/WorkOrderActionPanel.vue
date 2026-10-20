@@ -375,7 +375,7 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-recut-row:last-child { border-bottom: 0; }
 .work-order-recut-row > div, .work-order-recut-row label { display: grid; gap: 4px; }
 .work-order-recut-row small, .work-order-recut-row label span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.work-order-fabric-row { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 54%, white); background: color-mix(in srgb, var(--erp-surface-soft) 70%, white); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
+.work-order-fabric-row { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 54%, var(--erp-surface)); background: color-mix(in srgb, var(--erp-surface-soft) 70%, var(--erp-surface)); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-fabric-row > header { display: flex; justify-content: space-between; gap: 12px; }
 .work-order-fabric-row > header div { display: grid; gap: 2px; }
 .work-order-fabric-row > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
@@ -390,7 +390,7 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-action-panel__existing div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--erp-font-size-caption); }
 .work-order-change-items { display: grid; gap: 7px; }
 .work-order-change-items label { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface); transition: background-color 160ms ease; }
-.work-order-change-items label:hover { background: color-mix(in srgb, var(--erp-accent-soft) 40%, white); }
+.work-order-change-items label:hover { background: color-mix(in srgb, var(--erp-accent-soft) 40%, var(--erp-surface)); }
 .work-order-change-items label > span { display: grid; gap: 2px; }
 .work-order-change-items small { color: var(--erp-text-muted); }
 .work-order-action-panel__copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }

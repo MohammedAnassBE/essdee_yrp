@@ -79,7 +79,7 @@ watch(() => [props.visible, props.name], ([visible, name], previous) => {
 
 <style scoped>
 :global(.related-document-workspace-dialog .p-dialog-content) { display: flex; min-height: 0; flex-direction: column; }
-.related-document-workspace-dialog__unsupported { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: var(--erp-space-3); padding: var(--erp-space-4); text-align: center; background: color-mix(in srgb, var(--erp-surface-soft) 70%, white); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
+.related-document-workspace-dialog__unsupported { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: var(--erp-space-3); padding: var(--erp-space-4); text-align: center; background: color-mix(in srgb, var(--erp-surface-soft) 70%, var(--erp-surface)); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 @media (max-width: 620px) {
 	:global(.related-document-workspace-dialog .p-dialog-content) { position: relative; display: block; }
 	:global(.related-document-workspace-dialog .delivery-challan-workspace--embedded),

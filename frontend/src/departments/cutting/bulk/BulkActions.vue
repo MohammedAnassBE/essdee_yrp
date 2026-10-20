@@ -46,7 +46,7 @@ function toggle(event) { menu.value?.toggle(event) }
 
 <style scoped>
 .bulk-actions { display: flex; align-items: center; min-width: 0; }
-.bulk-actions :deep(.bulk-actions-trigger.p-button:focus-visible) { outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, white); outline-offset: 2px; }
+.bulk-actions :deep(.bulk-actions-trigger.p-button:focus-visible) { outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, var(--erp-surface)); outline-offset: 2px; }
 .bulk-actions :deep(.bulk-actions-trigger .p-button-label) { white-space: nowrap; }
 :global(.bulk-actions-menu.p-menu) { width: 250px; padding: 6px; font-family: var(--erp-font-family); font-size: var(--erp-font-size-caption); background: var(--erp-surface); border: 1px solid var(--erp-border-strong); border-radius: var(--erp-panel-radius); box-shadow: var(--erp-shadow-dialog); }
 :global(.bulk-actions-menu .p-menu-item-content) { border-radius: 7px; }

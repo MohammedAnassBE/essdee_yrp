@@ -672,8 +672,8 @@ function clone(value) { return value === undefined ? {} : JSON.parse(JSON.string
 .stock-composer__quantity-cell:focus-within {
 	position: relative;
 	z-index: 1;
-	background: color-mix(in srgb, var(--erp-accent) 4%, white);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--erp-accent) 36%, white);
+	background: color-mix(in srgb, var(--erp-accent) 4%, var(--erp-surface));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--erp-accent) 36%, var(--erp-surface));
 }
 
 .stock-composer__quantity-cell strong {
@@ -838,7 +838,7 @@ function clone(value) { return value === undefined ? {} : JSON.parse(JSON.string
 }
 
 .stock-composer tbody tr:hover td {
-	background: color-mix(in srgb, var(--erp-accent) 3%, white);
+	background: color-mix(in srgb, var(--erp-accent) 3%, var(--erp-surface));
 }
 
 .stock-composer td > strong {

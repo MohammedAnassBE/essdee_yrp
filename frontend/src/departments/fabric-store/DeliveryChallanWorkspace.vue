@@ -892,7 +892,7 @@ function documentDeleted() {
 .delivery-challan-header__identity--embedded { width: 100%; overflow: hidden; }
 .delivery-challan-header__identity--embedded .delivery-challan-header__facts { overflow-x: auto; flex-wrap: nowrap; padding-left: 0; border-left: 0; scrollbar-width: thin; }
 .delivery-challan-header__identity--embedded .delivery-challan-header__facts > div { flex: 0 0 auto; }
-.delivery-challan-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, white); }
+.delivery-challan-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, var(--erp-surface)); }
 .delivery-challan-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .delivery-challan-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .delivery-challan-matrix { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: none; }
@@ -900,7 +900,7 @@ function documentDeleted() {
 .delivery-challan-matrix__header > div { display: grid; gap: 2px; }
 .delivery-challan-matrix__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
 .delivery-challan-matrix__header > strong { padding: 3px 8px; color: var(--erp-accent); font-size: var(--erp-font-size-min); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
-.delivery-challan-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, white); }
+.delivery-challan-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, var(--erp-surface)); }
 .delivery-challan-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
 .delivery-challan-matrix__group > header { display: flex; min-height: 40px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .delivery-challan-matrix__group > header div { display: grid; gap: 2px; }
@@ -924,7 +924,7 @@ function documentDeleted() {
 .delivery-challan-totals .delivery-challan-total { min-height: 56px; border-bottom: 0; }
 .delivery-challan-total:last-child, .delivery-challan-transfer-progress:last-child { border-bottom: 0; }
 .delivery-challan-total strong, .delivery-challan-transfer-progress strong { color: var(--erp-text); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
-.delivery-challan-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }
+.delivery-challan-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, var(--erp-surface)); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, var(--erp-surface)); }
 .delivery-challan-total--primary strong { color: var(--erp-accent-hover); font-size: 21px; }
 .delivery-challan-transfer-progress > div { overflow: hidden; height: 6px; background: var(--erp-border); border-radius: var(--erp-pill-radius); }
 .delivery-challan-transfer-progress > div i { display: block; height: 100%; background: var(--erp-accent); transition: width .2s ease; }

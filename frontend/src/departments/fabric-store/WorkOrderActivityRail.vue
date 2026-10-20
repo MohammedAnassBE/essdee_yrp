@@ -201,8 +201,8 @@ defineExpose({ reopenExpanded })
 .activity-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0; scrollbar-gutter: stable; }
 .activity-card { position: relative; display: grid; width: 100%; gap: 5px; margin: 0; padding: 11px 34px 11px 12px; color: inherit; font: inherit; text-align: left; background: var(--erp-surface); border: 0; border-bottom: 1px solid var(--erp-border); border-radius: 0; cursor: pointer; transition: background-color 160ms ease, padding-left 160ms ease; }
 .activity-card:last-of-type { border-bottom: 0; }
-.activity-card:hover { padding-left: 15px; background: color-mix(in srgb, var(--erp-accent-soft) 42%, white); }
-.activity-card:focus-visible { outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, white); outline-offset: -2px; }
+.activity-card:hover { padding-left: 15px; background: color-mix(in srgb, var(--erp-accent-soft) 42%, var(--erp-surface)); }
+.activity-card:focus-visible { outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, var(--erp-surface)); outline-offset: -2px; }
 .activity-card__top { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
 .activity-card__top strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .activity-status { padding: 2px 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-bold); text-transform: uppercase; background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); }

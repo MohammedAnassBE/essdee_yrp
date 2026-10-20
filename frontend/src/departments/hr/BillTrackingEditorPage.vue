@@ -365,7 +365,7 @@ watch(currentName, load, { immediate: true })
 </script>
 
 <style scoped>
-.bill-tracking-editor { display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 0 var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, white); background: color-mix(in srgb, var(--erp-bg) 72%, white); }
+.bill-tracking-editor { display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 0 var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface)); background: color-mix(in srgb, var(--erp-bg) 72%, var(--erp-surface)); }
 .bill-tracking-editor__loading, .bill-tracking-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .bill-tracking-editor__body { width: 100%; }
 .bill-tracking-editor__fields { align-items: end; }

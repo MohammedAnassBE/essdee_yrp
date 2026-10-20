@@ -276,8 +276,8 @@ function displayDate(value) {
 .purchase-invoice-grn-picker__table :deep(.p-datatable-thead > tr > th) { padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x); color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; background: var(--erp-surface-muted); border-color: var(--erp-border); }
 .purchase-invoice-grn-picker__table :deep(.p-datatable-tbody > tr) { background: var(--erp-surface); }
 .purchase-invoice-grn-picker__table :deep(.p-datatable-tbody > tr > td) { padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x); color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); border-color: var(--erp-border-subtle); }
-.purchase-invoice-grn-picker__table :deep(.p-datatable-tbody > tr:hover) { background: color-mix(in srgb, var(--erp-accent) 4%, white); }
-.purchase-invoice-grn-picker__table :deep(.p-datatable-tbody > tr.p-datatable-row-selected) { background: color-mix(in srgb, var(--erp-accent) 9%, white); }
+.purchase-invoice-grn-picker__table :deep(.p-datatable-tbody > tr:hover) { background: color-mix(in srgb, var(--erp-accent) 4%, var(--erp-surface)); }
+.purchase-invoice-grn-picker__table :deep(.p-datatable-tbody > tr.p-datatable-row-selected) { background: color-mix(in srgb, var(--erp-accent) 9%, var(--erp-surface)); }
 .purchase-invoice-grn-picker__table :deep(.p-tag) { padding: 3px 7px; font-size: var(--erp-font-size-min); white-space: nowrap; }
 .purchase-invoice-grn-picker__table :deep(.purchase-invoice-grn-picker__number) { text-align: right !important; font-variant-numeric: tabular-nums; }
 .purchase-invoice-grn-picker__table :deep(.purchase-invoice-grn-picker__number .p-datatable-column-header-content) { justify-content: flex-end; }

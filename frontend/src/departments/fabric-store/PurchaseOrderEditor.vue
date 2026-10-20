@@ -420,7 +420,7 @@ watch(() => props.name, load)
 	flex-direction: column;
 	gap: var(--erp-space-3);
 	padding: 0 0 var(--erp-space-4);
-	border-color: color-mix(in srgb, var(--erp-border) 84%, white);
+	border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface));
 	background: var(--erp-bg);
 }
 .purchase-order-editor__section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }

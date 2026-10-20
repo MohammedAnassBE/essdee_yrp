@@ -954,7 +954,7 @@ function documentDeleted() {
 .goods-received-note-header__identity--embedded { width: 100%; overflow: hidden; }
 .goods-received-note-header__identity--embedded .goods-received-note-header__facts { overflow-x: auto; flex-wrap: nowrap; padding-left: 0; border-left: 0; scrollbar-width: thin; }
 .goods-received-note-header__identity--embedded .goods-received-note-header__facts > div { flex: 0 0 auto; }
-.goods-received-note-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, white); }
+.goods-received-note-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, var(--erp-surface)); }
 .goods-received-note-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .goods-received-note-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .goods-received-note-matrix { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: none; }
@@ -962,7 +962,7 @@ function documentDeleted() {
 .goods-received-note-matrix__header > div { display: grid; gap: 2px; }
 .goods-received-note-matrix__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
 .goods-received-note-matrix__header > strong { padding: 3px 8px; color: var(--erp-accent); font-size: var(--erp-font-size-min); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
-.goods-received-note-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, white); }
+.goods-received-note-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, var(--erp-surface)); }
 .goods-received-note-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
 .goods-received-note-matrix__group > header { display: flex; min-height: 40px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .goods-received-note-matrix__group > header div { display: grid; gap: 2px; }
@@ -986,7 +986,7 @@ function documentDeleted() {
 .goods-received-note-totals .goods-received-note-total { min-height: 56px; border-bottom: 0; }
 .goods-received-note-total:last-child, .goods-received-note-transfer-progress:last-child { border-bottom: 0; }
 .goods-received-note-total strong, .goods-received-note-transfer-progress strong { color: var(--erp-text); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
-.goods-received-note-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, white); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, white); }
+.goods-received-note-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, var(--erp-surface)); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, var(--erp-surface)); }
 .goods-received-note-total--primary strong { color: var(--erp-accent-hover); font-size: 21px; }
 .goods-received-note-transfer-progress > div { overflow: hidden; height: 6px; background: var(--erp-border); border-radius: var(--erp-pill-radius); }
 .goods-received-note-transfer-progress > div i { display: block; height: 100%; background: var(--erp-accent); transition: width .2s ease; }

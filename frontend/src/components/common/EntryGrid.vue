@@ -540,7 +540,7 @@ defineExpose({ focusCell })
 .entry-grid__table thead th { height: 34px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-align: left; text-transform: uppercase; white-space: nowrap; border: 1px solid var(--erp-border); background: var(--erp-surface-muted); }
 .entry-grid__table thead th.entry-grid__number { text-align: right; }
 .entry-grid__corner, .entry-grid__row-header { position: sticky; left: 0; z-index: var(--erp-layer-content); min-width: 140px; }
-.entry-grid__row-header { padding: 0 10px; color: var(--erp-text); font-weight: 600; text-align: left; white-space: nowrap; border: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); }
+.entry-grid__row-header { padding: 0 10px; color: var(--erp-text); font-weight: 600; text-align: left; white-space: nowrap; border: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 72%, var(--erp-surface)); }
 .entry-grid__table td { padding: 3px; border: 1px solid var(--erp-border); }
 .entry-grid__cell:focus { outline: none; }
 .entry-grid__box { display: flex; width: 100%; min-width: 0; height: var(--erp-control-height-compact); align-items: center; padding: 0 7px; overflow: hidden; color: var(--erp-text); white-space: nowrap; text-overflow: ellipsis; border: 1px solid var(--erp-border-strong); border-radius: 5px; background: var(--erp-surface); font: inherit; }

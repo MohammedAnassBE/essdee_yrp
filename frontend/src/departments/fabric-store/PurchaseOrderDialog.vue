@@ -148,7 +148,7 @@ function formatDate(value, includeTime = false) { const match = String(value || 
 .purchase-order-detail-grid span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; }
 .purchase-order-detail-grid strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .purchase-order-detail-grid .purchase-order-detail-link { color: var(--erp-accent); }
-.purchase-order-empty { display: flex; min-height: 112px; align-items: center; justify-content: center; gap: 10px; padding: 16px; color: var(--erp-text-muted); background: color-mix(in srgb, var(--erp-surface-soft) 72%, white); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
+.purchase-order-empty { display: flex; min-height: 112px; align-items: center; justify-content: center; gap: 10px; padding: 16px; color: var(--erp-text-muted); background: color-mix(in srgb, var(--erp-surface-soft) 72%, var(--erp-surface)); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 .purchase-order-empty div { display: grid; gap: 2px; }
 .purchase-order-empty strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .purchase-order-empty span { font-size: var(--erp-font-size-min); }

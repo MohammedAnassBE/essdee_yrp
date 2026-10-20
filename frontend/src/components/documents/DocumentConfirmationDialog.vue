@@ -66,7 +66,7 @@ function restoreFocus() {
 
 <style scoped>
 .document-confirmation-dialog { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 14px; padding: 8px 0 4px; }
-.document-confirmation-dialog > i { display: grid; width: 40px; height: 40px; place-items: center; color: var(--erp-warning); border: 1px solid color-mix(in srgb, var(--erp-warning) 24%, white); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-warning) 9%, white); }
+.document-confirmation-dialog > i { display: grid; width: 40px; height: 40px; place-items: center; color: var(--erp-warning); border: 1px solid color-mix(in srgb, var(--erp-warning) 24%, var(--erp-surface)); border-radius: var(--erp-control-radius); background: color-mix(in srgb, var(--erp-warning) 9%, var(--erp-surface)); }
 .document-confirmation-dialog p { margin: 3px 0 0; color: var(--erp-text); font-size: 0.88rem; line-height: 1.55; }
 @media (max-width: 420px) {
 	:global(.document-confirmation-shell .p-dialog-footer) { display: flex; align-items: stretch; flex-direction: column-reverse; }

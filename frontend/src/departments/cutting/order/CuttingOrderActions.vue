@@ -137,7 +137,7 @@ function toggleMoreActions(event) { moreActionsMenu.value?.toggle(event) }
 
 <style scoped>
 .order-actions { display: flex; align-items: center; min-width: 0; }
-.order-actions :deep(.order-actions-trigger.p-button:focus-visible) { outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, white); outline-offset: 2px; }
+.order-actions :deep(.order-actions-trigger.p-button:focus-visible) { outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, var(--erp-surface)); outline-offset: 2px; }
 .order-actions :deep(.order-actions-trigger .p-button-label) { white-space: nowrap; }
 .order-action-feedback { position: fixed; z-index: 6100; top: 72px; left: 50%; width: min(92vw, 560px); margin: 0; transform: translateX(-50%); box-shadow: var(--erp-shadow-dialog); }
 :global(.order-actions-menu.p-menu) { width: 242px; padding: 6px; font-family: var(--erp-font-family); font-size: var(--erp-font-size-caption); background: var(--erp-surface); border: 1px solid var(--erp-border-strong); border-radius: var(--erp-panel-radius); box-shadow: var(--erp-shadow-dialog); }

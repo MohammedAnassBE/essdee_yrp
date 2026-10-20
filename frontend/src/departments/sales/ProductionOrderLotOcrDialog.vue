@@ -119,7 +119,7 @@ watch(() => [props.visible, props.productionOrder, props.lot], ([visible]) => {
 
 <style scoped>
 .ppo-lot-ocr__capture { display: grid; min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
-.ppo-lot-ocr__context { display: grid; grid-template-columns: .8fr 1fr 1.5fr; border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 82%, white); }
+.ppo-lot-ocr__context { display: grid; grid-template-columns: .8fr 1fr 1.5fr; border-bottom: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 82%, var(--erp-surface)); }
 .ppo-lot-ocr__context > div { display: grid; min-width: 0; gap: 3px; padding: 11px 13px; border-right: 1px solid var(--erp-border); }
 .ppo-lot-ocr__context > div:last-child { border-right: 0; }
 .ppo-lot-ocr__context span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 780; letter-spacing: .045em; text-transform: uppercase; }

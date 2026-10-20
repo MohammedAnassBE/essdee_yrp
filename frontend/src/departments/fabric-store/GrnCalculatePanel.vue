@@ -120,7 +120,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 
 <style scoped>
 .grn-calculate-panel { display: grid; overflow: hidden; gap: var(--erp-space-3); border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
-.grn-calculate-panel__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid var(--erp-accent); background: color-mix(in srgb, var(--erp-accent-soft) 72%, white); }
+.grn-calculate-panel__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid var(--erp-accent); background: color-mix(in srgb, var(--erp-accent-soft) 72%, var(--erp-surface)); }
 .grn-calculate-panel__header > div { display: grid; gap: 2px; }
 .grn-calculate-panel__header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .grn-calculate-panel__header h2 { margin: 0; font-size: var(--erp-font-size-section); }

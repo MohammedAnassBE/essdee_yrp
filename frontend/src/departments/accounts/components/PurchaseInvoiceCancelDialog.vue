@@ -68,7 +68,7 @@ watch(() => props.visible, (visible, previous) => {
 
 <style scoped>
 .purchase-invoice-cancel-dialog { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 13px; padding: 4px 1px 8px; }
-.purchase-invoice-cancel-dialog__icon { display: grid; width: 40px; height: 40px; color: var(--erp-danger); border: 1px solid color-mix(in srgb, var(--erp-danger) 22%, white); border-radius: var(--erp-control-radius); background: var(--erp-danger-soft); place-items: center; }
+.purchase-invoice-cancel-dialog__icon { display: grid; width: 40px; height: 40px; color: var(--erp-danger); border: 1px solid color-mix(in srgb, var(--erp-danger) 22%, var(--erp-surface)); border-radius: var(--erp-control-radius); background: var(--erp-danger-soft); place-items: center; }
 .purchase-invoice-cancel-dialog p { margin: 2px 0 0; color: var(--erp-text); font-size: .88rem; line-height: 1.55; }
 .purchase-invoice-cancel-dialog label { display: flex; align-items: center; grid-column: 1 / -1; gap: 9px; padding: 10px 11px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 670; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface-soft); }
 </style>

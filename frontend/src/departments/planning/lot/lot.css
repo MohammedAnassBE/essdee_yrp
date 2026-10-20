@@ -89,7 +89,7 @@
 
 .lot-tabs .lot-panels {
 	padding: var(--erp-space-3);
-	background: color-mix(in srgb, var(--erp-bg) 72%, white);
+	background: color-mix(in srgb, var(--erp-bg) 72%, var(--erp-surface));
 }
 
 .lot-panels .p-tabpanel {
@@ -375,11 +375,11 @@
 
 .lot-documents-card:hover {
 	padding-left: 15px;
-	background: color-mix(in srgb, var(--erp-accent-soft) 42%, white);
+	background: color-mix(in srgb, var(--erp-accent-soft) 42%, var(--erp-surface));
 }
 
 .lot-documents-card:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, white);
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, var(--erp-surface));
 	outline-offset: -2px;
 }
 
@@ -768,7 +768,7 @@
 }
 
 .lot-page__editing { color: var(--erp-text-muted); font-weight: 500; }
-.lot-edit-fact { display: grid; min-width: 0; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, white); }
+.lot-edit-fact { display: grid; min-width: 0; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, var(--erp-surface)); }
 .lot-edit-fact span {
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);

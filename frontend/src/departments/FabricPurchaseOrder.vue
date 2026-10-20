@@ -479,8 +479,8 @@ watch(() => route.params.purchaseOrderId, () => loadWorkspace(false), { immediat
 }
 .purchase-order-related > button:last-child { border-bottom: 0; }
 
-.purchase-order-related > button:hover { padding-left: 13px; background: color-mix(in srgb, var(--erp-accent-soft) 45%, white); }
-.purchase-order-related > button:focus-visible { outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, white); outline-offset: -2px; }
+.purchase-order-related > button:hover { padding-left: 13px; background: color-mix(in srgb, var(--erp-accent-soft) 45%, var(--erp-surface)); }
+.purchase-order-related > button:focus-visible { outline: 2px solid color-mix(in srgb, var(--erp-accent) 72%, var(--erp-surface)); outline-offset: -2px; }
 .purchase-order-related > button > div { display: grid; min-width: 0; gap: 2px; }
 .purchase-order-related > button > div strong { overflow: hidden; font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .purchase-order-related > button > div span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }

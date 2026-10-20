@@ -211,7 +211,7 @@ function money(value) {
 <style scoped>
 .work-order-matrix-stack { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .work-order-item-matrix { overflow: hidden; min-width: 0; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 3px 10px rgb(28 61 45 / 3%); }
-.work-order-item-group__header { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; background: color-mix(in srgb, var(--erp-surface-soft) 76%, white); border-bottom: 1px solid var(--erp-border); }
+.work-order-item-group__header { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; background: color-mix(in srgb, var(--erp-surface-soft) 76%, var(--erp-surface)); border-bottom: 1px solid var(--erp-border); }
 .work-order-item-group__header > div { display: grid; min-width: 0; gap: 2px; }
 .work-order-item-group__header strong,
 .work-order-item-group__header span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

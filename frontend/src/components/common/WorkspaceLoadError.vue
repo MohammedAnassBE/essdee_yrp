@@ -33,7 +33,7 @@ defineEmits(["retry"])
 	padding: var(--erp-space-3);
 	border: 1px solid color-mix(in srgb, var(--erp-danger) 28%, var(--erp-border));
 	border-radius: var(--erp-panel-radius);
-	background: color-mix(in srgb, var(--erp-danger-soft) 64%, white);
+	background: color-mix(in srgb, var(--erp-danger-soft) 64%, var(--erp-surface));
 }
 
 .workspace-load-error__icon {

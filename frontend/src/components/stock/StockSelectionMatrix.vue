@@ -204,7 +204,7 @@ function groupKey(group, index) { return `${group.primary_attribute || "quantity
 }
 
 .selection-matrix tbody tr:hover td {
-	background: color-mix(in srgb, var(--erp-accent) 3%, white);
+	background: color-mix(in srgb, var(--erp-accent) 3%, var(--erp-surface));
 }
 
 .selection-matrix__index {

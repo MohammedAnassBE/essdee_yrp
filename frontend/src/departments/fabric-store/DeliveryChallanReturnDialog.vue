@@ -117,7 +117,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 <style scoped>
 .dc-return-content, .dc-return-loading { display: grid; gap: var(--erp-space-3); }
 .dc-return-content { min-height: 180px; overflow-y: visible; padding: 2px 1px; }
-.dc-return-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; background: color-mix(in srgb, var(--erp-surface-soft) 76%, white); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
+.dc-return-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; background: color-mix(in srgb, var(--erp-surface-soft) 76%, var(--erp-surface)); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .dc-return-context > div { display: grid; gap: 3px; padding: 9px 12px; border-right: 1px solid var(--erp-border); }
 .dc-return-context > div:last-child { border-right: 0; }
 .dc-return-context span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }

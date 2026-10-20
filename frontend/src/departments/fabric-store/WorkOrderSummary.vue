@@ -29,8 +29,8 @@ const additionalDeliverables = computed(() => (props.summary.deliverables || [])
 
 <style scoped>
 .work-order-summary { display: grid; gap: var(--erp-space-3); }
-.work-order-summary__section { overflow: hidden; border-color: color-mix(in srgb, var(--erp-border) 84%, white); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
-.work-order-summary__section > header { padding: 11px 13px; background: color-mix(in srgb, var(--erp-surface-soft) 78%, white); border-bottom: 1px solid var(--erp-border); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 68%, white); }
+.work-order-summary__section { overflow: hidden; border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface)); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
+.work-order-summary__section > header { padding: 11px 13px; background: color-mix(in srgb, var(--erp-surface-soft) 78%, var(--erp-surface)); border-bottom: 1px solid var(--erp-border); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 68%, var(--erp-surface)); }
 .work-order-summary__section h2 { margin: 0; font-size: 14px; }
 .work-order-summary__section > :deep(.work-order-matrix-stack) { padding: var(--erp-space-3); }
 </style>

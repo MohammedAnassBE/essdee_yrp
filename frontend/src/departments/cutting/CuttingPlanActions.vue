@@ -453,7 +453,7 @@ function toggleMoreActions(event) {
 }
 
 .plan-actions :deep(.plan-actions-trigger.p-button:focus-visible) {
-	outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, white);
+	outline: 2px solid color-mix(in srgb, var(--erp-accent) 45%, var(--erp-surface));
 	outline-offset: 2px;
 }
 

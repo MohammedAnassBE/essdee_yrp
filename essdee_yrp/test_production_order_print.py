@@ -123,6 +123,18 @@ class TestProductionOrderPrint(TestCase):
 		self.assertNotIn("doctype=Production Order", source)
 
 	def test_print_format_renders_box_and_piece_rows_from_request(self):
+		text = self.render_format({"pieces_per_box": "7"})
+		self.assertIn("Qty (Box) 525.0 350.0 875.0", text)
+		self.assertIn("Qty (Piece) 3675.0 2450.0 6125.0", text)
+		self.assertIn("Ratio 3.0 2.0", text)
+
+	def test_generic_print_renders_without_pieces_per_box(self):
+		text = self.render_format({})
+		self.assertIn("Qty (Box) 525.0 350.0 875.0", text)
+		self.assertIn("Ratio 3.0 2.0", text)
+		self.assertNotIn("Qty (Piece)", text)
+
+	def render_format(self, form):
 		path = Path(__file__).parent / "essdee_yrp/print_format/essdee_production_order/essdee_production_order.json"
 		html = json.loads(json.loads(path.read_text())["format_data"])[-1]["options"]
 		doc = _dict(production_order_details=[], check_permission=MagicMock())
@@ -130,14 +142,11 @@ class TestProductionOrderPrint(TestCase):
 		get_doc = frappe.get_doc
 		with (
 			patch.object(frappe, "get_doc", side_effect=lambda *args: doc if args[0] == "YRP Production Order" else get_doc(*args)),
-			patch.object(frappe, "form_dict", _dict(pieces_per_box="7")),
+			patch.object(frappe, "form_dict", _dict(form)),
 			patch.object(workflow, "get_order_qty", return_value=quantities),
 		):
 			rendered = frappe.render_template(html, {
 				"doc": _dict(name="PPO-TEST", item="STYLE", production_term=None),
 				"get_production_order_details": workflow.get_production_order_details,
 			})
-		text = " ".join(frappe.utils.strip_html(rendered).split())
-		self.assertIn("Qty (Box) 525.0 350.0 875.0", text)
-		self.assertIn("Qty (Piece) 3675.0 2450.0 6125.0", text)
-		self.assertIn("Ratio 3.0 2.0", text)
+		return " ".join(frappe.utils.strip_html(rendered).split())

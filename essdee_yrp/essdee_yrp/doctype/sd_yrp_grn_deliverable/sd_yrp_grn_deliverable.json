@@ -81,7 +81,8 @@
    "fieldtype": "Link",
    "label": "Lot",
    "options": "SD YRP Lot",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "received_type",

@@ -101,13 +101,14 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Lot",
-   "options": "SD YRP Lot"
+   "options": "SD YRP Lot",
+   "search_index": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-05-05 10:00:00.000000",
+ "modified": "2026-10-21 00:35:05.634000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP FG Stock Entry Detail",

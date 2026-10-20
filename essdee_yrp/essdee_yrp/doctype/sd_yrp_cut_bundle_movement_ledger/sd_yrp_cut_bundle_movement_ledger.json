@@ -41,7 +41,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Lot",
-   "options": "SD YRP Lot"
+   "options": "SD YRP Lot",
+   "search_index": 1
   },
   {
    "fieldname": "item",
@@ -201,7 +202,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-25 15:12:33.705488",
+ "modified": "2026-10-21 00:34:54.303732",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Cut Bundle Movement Ledger",

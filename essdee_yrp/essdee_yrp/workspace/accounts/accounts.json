@@ -1,0 +1,51 @@
+{
+ "doctype": "Workspace",
+ "name": "Accounts",
+ "label": "Accounts",
+ "title": "Accounts",
+ "module": "Essdee YRP",
+ "standard": 1,
+ "type": "Workspace",
+ "public": 1,
+ "is_hidden": 0,
+ "icon": "file",
+ "sequence_id": 8,
+ "content": "[{\"id\":\"accounts-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Accounts</span>\",\"col\":12}},{\"id\":\"accounts-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "links": [
+  {
+   "type": "Card Break",
+   "label": "Reports",
+   "link_count": 2,
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_type": "DocType",
+   "onboard": 0
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Previous Month Pending Bills - Departmentwise",
+   "link_count": 0,
+   "link_to": "SD YRP Previous Month Pending Bills - Departmentwise",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Audit Pending Finishing Plans",
+   "link_count": 0,
+   "link_to": "audit-pending-finishing-plans",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "roles": [],
+ "charts": [],
+ "custom_blocks": [],
+ "number_cards": [],
+ "shortcuts": [],
+ "quick_lists": []
+}

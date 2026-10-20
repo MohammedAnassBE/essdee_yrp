@@ -1,0 +1,35 @@
+{
+ "doctype": "Report",
+ "name": "SD YRP Previous Month Pending Bills - Departmentwise",
+ "report_name": "SD YRP Previous Month Pending Bills - Departmentwise",
+ "ref_doctype": "YRP Bill Tracking",
+ "module": "Essdee YRP",
+ "report_type": "Report Builder",
+ "is_standard": "Yes",
+ "disabled": 0,
+ "prepared_report": 0,
+ "add_total_row": 0,
+ "json": "{\"filters\":[[\"YRP Bill Tracking\",\"bill_date\",\"Timespan\",\"last month\",false],[\"YRP Bill Tracking\",\"form_status\",\"!=\",\"Closed\",false],[\"YRP Bill Tracking\",\"docstatus\",\"!=\",\"2\",false]],\"fields\":[[\"assigned_to\",\"YRP Bill Tracking\"],[\"_aggregate_column\",\"YRP Bill Tracking\"]],\"order_by\":\"`tabYRP Bill Tracking`.`modified` desc\",\"add_totals_row\":0,\"page_length\":20,\"column_widths\":{\"assigned_to\":120,\"_aggregate_column\":200},\"group_by\":{\"group_by\":\"`tabYRP Bill Tracking`.`assigned_to`\",\"aggregate_function\":\"count\"}}",
+ "roles": [
+  {
+   "role": "DocType Reader"
+  },
+  {
+   "role": "AI Bot"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "HR User"
+  },
+  {
+   "role": "All"
+  }
+ ],
+ "columns": [],
+ "filters": []
+}

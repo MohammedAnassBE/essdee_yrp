@@ -1,0 +1,41 @@
+{
+ "doctype": "Workspace",
+ "name": "Sewing",
+ "label": "Sewing",
+ "title": "Sewing",
+ "module": "Essdee YRP",
+ "standard": 1,
+ "type": "Workspace",
+ "public": 1,
+ "is_hidden": 0,
+ "icon": "file",
+ "sequence_id": 8,
+ "content": "[{\"id\":\"sewing-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Sewing</span>\",\"col\":12}},{\"id\":\"sewing-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "links": [
+  {
+   "type": "Card Break",
+   "label": "Reports",
+   "link_count": 1,
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_type": "DocType",
+   "onboard": 0
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "IO Input Pending",
+   "link_count": 0,
+   "link_to": "SD YRP IO Input Pending",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "roles": [],
+ "charts": [],
+ "custom_blocks": [],
+ "number_cards": [],
+ "shortcuts": [],
+ "quick_lists": []
+}

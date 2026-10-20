@@ -1,0 +1,34 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "module": "Essdee YRP",
+ "name": "SD YRP Lot Wise Stock Ageing",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "YRP Stock Ledger Entry",
+ "report_name": "SD YRP Lot Wise Stock Ageing",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Stock User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Merch Manager"
+  },
+  {
+   "role": "Merch User"
+  }
+ ]
+}

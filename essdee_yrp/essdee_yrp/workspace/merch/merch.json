@@ -1,0 +1,25 @@
+{
+ "doctype": "Workspace",
+ "name": "Merch",
+ "label": "Merch",
+ "title": "Merch",
+ "module": "Essdee YRP",
+ "app": "essdee_yrp",
+ "public": 1,
+ "is_hidden": 0,
+ "icon": "briefcase",
+ "content": "[{\"id\": \"merch-reports\", \"type\": \"card\", \"data\": {\"card_name\": \"Reports\", \"col\": 12}}]",
+ "links": [
+  {
+   "type": "Card Break",
+   "label": "Reports"
+  },
+  {
+   "type": "Link",
+   "label": "Lot Profit Comparison",
+   "link_type": "Report",
+   "link_to": "SD YRP Lot Profit Comparison",
+   "is_query_report": 1
+  }
+ ]
+}

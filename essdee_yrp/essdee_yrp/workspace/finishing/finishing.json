@@ -92,6 +92,13 @@
    "type": "Link"
   },
   {
+   "type": "Link",
+   "label": "FG Stock With Lot",
+   "link_type": "Report",
+   "link_to": "SD YRP FG Stock With Lot",
+   "is_query_report": 1
+  },
+  {
    "hidden": 0,
    "is_query_report": 0,
    "label": "Details",

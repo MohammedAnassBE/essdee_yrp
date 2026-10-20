@@ -1,0 +1,64 @@
+// Copyright (c) 2025, Essdee and contributors
+// For license information, please see license.txt
+frappe.query_reports["SD YRP Stock Item Balance Difference"] = {
+	"filters": [
+		{
+			"fieldname":"from_date",
+			"label": __("From Date"),
+			"fieldtype": "Date",
+			"width": "80",
+			"read_only" : 1,
+			"default": frappe.datetime.add_months(frappe.datetime.get_today(), -1),
+		},
+		{
+			"fieldname":"to_date",
+			"label": __("To Date"),
+			"fieldtype": "Date",
+			"width": "80",
+			"read_only" : 1,
+			"default": frappe.datetime.get_today()
+		},
+		{
+			"fieldname": "item",
+			"label": __("Item Variant"),
+			"fieldtype": "Link",
+			"width": "80",
+			"options": "Item",
+		},
+		{
+			"fieldname": "parent_item",
+			"label": __("Item"),
+			"fieldtype": "Link",
+			"width": "80",
+			"options": "Item",
+		},
+		{
+			"fieldname": "warehouse",
+			"label": __("Warehouse"),
+			"fieldtype": "Link",
+			"width": "80",
+			"options": "Warehouse",
+		},
+		{
+			"fieldname": "lot",
+			"label": __("Lot"),
+			"fieldtype": "Link",
+			"width": "80",
+			"options": "SD YRP Lot",
+		},
+		{
+			"fieldname":"received_type",
+			"fieldtype":"Link",
+			"label":"Received Type",
+			"options":"YRP Received Type",
+			"width":80,
+		},
+		{
+			"fieldname": "remove_zero_diff",
+			"label": __("Remove Zero Differences"),
+			"fieldtype": "Check",
+		},
+		
+	],
+
+};

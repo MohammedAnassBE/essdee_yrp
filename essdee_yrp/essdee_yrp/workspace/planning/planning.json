@@ -40,6 +40,36 @@
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Supplier Pending Report",
+   "link_count": 0,
+   "link_to": "SD YRP Supplier Pending Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Item Wise Pending Report",
+   "link_count": 0,
+   "link_to": "SD YRP Item Wise Pending Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Datewise Item Packed",
+   "link_count": 0,
+   "link_to": "SD YRP Datewise Item Packed",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
  "module": "Essdee YRP",

@@ -1,0 +1,131 @@
+{
+ "doctype": "Workspace",
+ "name": "Stock Reports",
+ "label": "Stock Reports",
+ "title": "Stock Reports",
+ "module": "Essdee YRP",
+ "standard": 1,
+ "type": "Workspace",
+ "public": 1,
+ "is_hidden": 0,
+ "icon": "file",
+ "sequence_id": 9,
+ "content": "[{\"id\":\"stock-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Stock Reports</span>\",\"col\":12}},{\"id\":\"stock-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "links": [
+  {
+   "type": "Card Break",
+   "label": "Reports",
+   "link_count": 10,
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_type": "DocType",
+   "onboard": 0
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "SD YRP Item Balance",
+   "link_count": 0,
+   "link_to": "SD YRP Item Balance",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "SD YRP Item Conversion Report",
+   "link_count": 0,
+   "link_to": "SD YRP Item Conversion Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "SD YRP Lot Consumption Report",
+   "link_count": 0,
+   "link_to": "SD YRP Lot Consumption Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "SD YRP Lot Wise Stock Ageing",
+   "link_count": 0,
+   "link_to": "SD YRP Lot Wise Stock Ageing",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Ledger",
+   "link_count": 0,
+   "link_to": "SD YRP Stock Ledger",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Reserved Stock",
+   "link_count": 0,
+   "link_to": "SD YRP Reserved Stock",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Entry Report",
+   "link_count": 0,
+   "link_to": "SD YRP Stock Entry Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Item Balance Difference",
+   "link_count": 0,
+   "link_to": "SD YRP Stock Item Balance Difference",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Reconciliation Report",
+   "link_count": 0,
+   "link_to": "SD YRP Stock Reconciliation Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Stock Update Report",
+   "link_count": 0,
+   "link_to": "SD YRP Stock Update Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "roles": [],
+ "charts": [],
+ "custom_blocks": [],
+ "number_cards": [],
+ "shortcuts": [],
+ "quick_lists": []
+}

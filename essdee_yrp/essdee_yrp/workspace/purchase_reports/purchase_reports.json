@@ -1,0 +1,51 @@
+{
+ "doctype": "Workspace",
+ "name": "Purchase Reports",
+ "label": "Purchase Reports",
+ "title": "Purchase Reports",
+ "module": "Essdee YRP",
+ "standard": 1,
+ "type": "Workspace",
+ "public": 1,
+ "is_hidden": 0,
+ "icon": "file",
+ "sequence_id": 8,
+ "content": "[{\"id\":\"purchase-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Purchase Reports</span>\",\"col\":12}},{\"id\":\"purchase-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}}]",
+ "links": [
+  {
+   "type": "Card Break",
+   "label": "Reports",
+   "link_count": 2,
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_type": "DocType",
+   "onboard": 0
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "PURCHASE ORDER",
+   "link_count": 0,
+   "link_to": "SD YRP PURCHASE ORDER",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "PURCHASE ORDER - 13.02.2026",
+   "link_count": 0,
+   "link_to": "SD YRP PURCHASE ORDER - 13.02.2026",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "roles": [],
+ "charts": [],
+ "custom_blocks": [],
+ "number_cards": [],
+ "shortcuts": [],
+ "quick_lists": []
+}

@@ -9,6 +9,17 @@ from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 QTY_TOLERANCE = 0.0001
 
 
+REWORK_RECEIVED_TYPE_CLASSES = ("Mistake", "Rejected")
+
+
+def is_rework_received_type(received_type):
+	"""Like production_api's GRN Item Type: only Mistake and Rejected types are reworked."""
+	received_type_class = frappe.get_cached_value("YRP Received Type", received_type, "type")
+	if not received_type_class:
+		return None
+	return received_type_class in REWORK_RECEIVED_TYPE_CLASSES
+
+
 @frappe.whitelist()
 def get_rework_source_rows(work_order):
 	"""Return base rework sources after Essdee direct-clear consumption.

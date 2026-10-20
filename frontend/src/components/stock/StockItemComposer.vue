@@ -84,7 +84,7 @@
 							<strong>{{ value }}</strong>
 							<span>{{ quantityLabel }}</span>
 							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched[value] = true" />
-							<template v-if="operation === 'stock_entry' && purpose === 'Material Receipt'"><span>Rate</span><input v-model.number="receiptRates[value]" type="number" min="0" step="0.0001" :disabled="disabled" /></template>
+							<template v-if="rateEditable"><span>Rate</span><input v-model.number="receiptRates[value]" type="number" min="0" step="0.0001" :disabled="disabled" /></template>
 							<template v-if="itemSchema.secondary_uom && operation === 'stock_entry'">
 								<span>{{ itemSchema.secondary_uom }}</span>
 								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" :disabled="disabled" />
@@ -93,7 +93,7 @@
 					</div>
 					<div v-else class="stock-composer__single-quantity">
 						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched.default = true" /></label>
-						<label v-if="operation === 'stock_entry' && purpose === 'Material Receipt'"><span>Rate</span><input v-model.number="receiptRates.default" type="number" min="0" step="0.0001" :disabled="disabled" /></label>
+						<label v-if="rateEditable"><span>Rate</span><input v-model.number="receiptRates.default" type="number" min="0" step="0.0001" :disabled="disabled" /></label>
 						<label v-if="itemSchema.secondary_uom && operation === 'stock_entry'"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :disabled="disabled" /></label>
 					</div>
 				</div>
@@ -121,7 +121,7 @@
 					<div class="stock-composer__table-scroll" tabindex="0" role="region" :aria-label="`${group.name || group.item || 'Added items'} table`">
 						<table>
 							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><template v-if="operation === 'purchase_order'"><th>Delivery location</th><th>Required by</th><th class="stock-composer__number">Discount</th></template><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
-								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong><span v-if="operation === 'purchase_order' && row.comments" class="stock-composer__row-note">{{ row.comments }}</span><slot name="row-warning" :row="row" :group="group" :group-index="groupIndex" :item-index="itemIndex" /></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><template v-if="operation === 'purchase_order'"><td>{{ row.delivery_location || "—" }}</td><td>{{ formatDate(row.schedule_date) }}</td><td class="stock-composer__number">{{ formatQty(row.discount_percentage) }}%</td></template><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Rate {{ formatMoney(row.values?.default?.rate) }}</span><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" :disabled="disabled || preparing" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" :disabled="disabled || preparing" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
+								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong><span v-if="operation === 'purchase_order' && row.comments" class="stock-composer__row-note">{{ row.comments }}</span><slot name="row-warning" :row="row" :group="group" :group-index="groupIndex" :item-index="itemIndex" /></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><template v-if="operation === 'purchase_order'"><td>{{ row.delivery_location || "—" }}</td><td>{{ formatDate(row.schedule_date) }}</td><td class="stock-composer__number">{{ formatQty(row.discount_percentage) }}%</td></template><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><span v-if="rateLabel" class="stock-composer__price">{{ rateLabel }} {{ formatMoney(row.values?.[value]?.rate) }}</span><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><span v-if="rateLabel" class="stock-composer__price">{{ rateLabel }} {{ formatMoney(row.values?.default?.rate) }}</span><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" :disabled="disabled || preparing" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" :disabled="disabled || preparing" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
 						</table>
 					</div>
 				</div>
@@ -137,7 +137,7 @@ import Message from "primevue/message"
 import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
-import { mergeStockItemDraft } from "../../utils/stockItemComposer.js"
+import { mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -174,6 +174,8 @@ const editing = ref(null)
 const preparing = ref(false)
 
 const dimensions = computed(() => props.editor.dimensions || [])
+const rateLabel = computed(() => stockRateLabels[props.operation] || (props.operation === "purchase_order" ? "Rate" : ""))
+const rateEditable = computed(() => props.operation === "stock_reconciliation" || (props.operation === "stock_entry" && props.purpose === "Material Receipt"))
 const lockedDimensions = computed(() => {
 	const locked = props.editor.locked_dimensions
 		|| dimensions.value.filter((dimension) => dimension.locked).map((dimension) => dimension.fieldname)
@@ -314,7 +316,7 @@ async function stageItem() {
 		total += qty
 		values[value] = { qty }
 		if (!editing.value?.row?.values?.[value]) values[value].rate = 0
-		if (props.operation === "stock_entry" && props.purpose === "Material Receipt") values[value].rate = Number(receiptRates[value] || 0)
+		if (rateEditable.value) values[value].rate = Number(receiptRates[value] || 0)
 		if (itemSchema.value.secondary_uom && props.operation === "stock_entry") {
 			values[value].secondary_qty = Number(secondaryQuantities[value] || 0)
 			values[value].secondary_uom = itemSchema.value.secondary_uom

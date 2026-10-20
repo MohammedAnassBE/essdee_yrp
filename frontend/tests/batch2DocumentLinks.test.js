@@ -10,6 +10,7 @@ import * as overview from '../src/utils/documentOverview.js'
 import * as grid from '../src/components/common/entryGrid.js'
 import * as childFields from '../src/components/common/childTableFields.js'
 import * as groups from '../src/engine/stock/groupItemsForDisplay.js'
+import * as stockItemComposer from '../src/utils/stockItemComposer.js'
 import * as lotViews from '../src/departments/purchase/lot/lotViews.js'
 import * as lotEditor from '../src/departments/purchase/lot/lotEditor.js'
 import * as program from '../src/engine/lotClothProgram.js'
@@ -30,6 +31,7 @@ const defaults = {
  '../../utils/documentValues.js': values, '../../utils/documentOverview.js': overview,
  './entryGrid.js': grid, './childTableFields.js': childFields,
  '../../engine/stock/groupItemsForDisplay.js': groups,
+ '../../utils/stockItemComposer.js': stockItemComposer,
  './lotViews.js': lotViews, './lotEditor.js': lotEditor, '../../purchase/lot/lotEditor.js': lotEditor,
  '../../purchase/lot/lotViews.js': lotViews, '../../../engine/lotClothProgram.js': program,
  './processCostViews.js': costViews, './purchaseViews.js': priceViews,

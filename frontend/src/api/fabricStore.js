@@ -241,6 +241,17 @@ export function getFabricStockItemSchema(operation, item) {
 	return callMethod(`${WORKSPACE_METHOD}.get_stock_item_schema`, { operation, item })
 }
 
+export function getStockUpdateRates(row, warehouse) {
+	return callMethod("yrp.yrp_stock.doctype.yrp_stock_update.yrp_stock_update.get_stock_update_rates", {
+		item: row.name,
+		attributes: row.attributes || {},
+		primary_attribute: row.primary_attribute || "",
+		value_keys: Object.keys(row.values || {}),
+		warehouse,
+		dimensions: row.dimensions || {},
+	})
+}
+
 export function saveFabricStockOperation(operation, values, options = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.save_stock_operation`, {
 		operation,

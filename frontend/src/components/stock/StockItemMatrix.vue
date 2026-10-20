@@ -50,11 +50,11 @@
 									<small v-if="showFulfillment && showReceived && hasFulfillment(row.values?.[value])" class="item-matrix__received">Received {{ formatQty(receivedQty(row.values[value])) }}</small>
 									<small v-if="showAvailability && hasAvailability(row.values?.[value])" class="item-matrix__available">Available {{ formatQty(availabilityQty(row.values[value])) }}</small>
 									<small v-if="showFulfillment && !pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
-									<small v-if="showPricing" class="item-matrix__price">Rate {{ formatMoney(row.values?.[value]?.rate) }}</small>
-									<small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</small>
+									<small v-if="rateLabel" class="item-matrix__price">{{ rateLabel }} {{ formatMoney(row.values?.[value]?.rate) }}</small>
+									<small v-if="displayAmount" class="item-matrix__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</small>
 									<small v-if="showFulfillment && pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 								</td>
-								<td v-if="showTotalColumn(group)" class="item-matrix__number item-matrix__total item-matrix__qty"><strong>{{ formatQty(rowTotal(row)) }}</strong><small v-if="showFulfillment && showReceived && rowHasFulfillment(row)" class="item-matrix__received">Received {{ formatQty(rowMetricTotal(row, receivedQty)) }}</small><small v-if="showFulfillment && rowHasFulfillment(row)" class="item-matrix__pending">{{ fulfillmentTotalLabel(row) }}</small><small v-if="showPricing && showAmount" class="item-matrix__price">Amount {{ formatMoney(rowAmount(row)) }}</small></td>
+								<td v-if="showTotalColumn(group)" class="item-matrix__number item-matrix__total item-matrix__qty"><strong>{{ formatQty(rowTotal(row)) }}</strong><small v-if="showFulfillment && showReceived && rowHasFulfillment(row)" class="item-matrix__received">Received {{ formatQty(rowMetricTotal(row, receivedQty)) }}</small><small v-if="showFulfillment && rowHasFulfillment(row)" class="item-matrix__pending">{{ fulfillmentTotalLabel(row) }}</small><small v-if="displayAmount" class="item-matrix__price">Amount {{ formatMoney(rowAmount(row)) }}</small></td>
 								<td><span class="item-matrix__uom"><DocumentLink doctype="UOM" :name="row.default_uom" :label="row.default_uom || '—'" /></span></td>
 							</tr>
 						</tbody>
@@ -70,6 +70,7 @@ import { groupItemsForDisplay } from "../../engine/stock/groupItemsForDisplay.js
 import { computed } from "vue"
 import DocumentLink from "../common/DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
+import { stockRateLabels } from "../../utils/stockItemComposer.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
@@ -89,6 +90,8 @@ const props = defineProps({
 
 const logicalRowCount = computed(() => props.groups.reduce((total, group) => total + (group.items?.length || 0), 0))
 const isPurchaseOrder = computed(() => props.doctype === "Purchase Order")
+const rateLabel = computed(() => stockRateLabels[props.doctype] || (props.showPricing ? "Rate" : ""))
+const displayAmount = computed(() => props.showPricing && props.showAmount && !stockRateLabels[props.doctype])
 const displayGroups = computed(() => {
 	const groups = ["YRP Work Order", "YRP Delivery Challan"].includes(props.doctype) ? groupItemsForDisplay(props.groups) : props.groups
 	if (!props.groupByItem) return groups

@@ -22,6 +22,7 @@
 				:editor="editor"
 				:read-only="editor.protected_completion"
 				:schema-loader="loadSchema"
+				:row-preparer="prepareRow"
 			/>
 		</div>
 
@@ -43,13 +44,14 @@ import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref, watch } from "vue"
 
 import { getCount } from "../../api/frappe.js"
-import { discardCompletionDraft, getFabricStockItemSchema, getFabricStockOperationEditor, saveFabricStockOperation } from "../../api/fabricStore.js"
+import { discardCompletionDraft, getFabricStockItemSchema, getFabricStockOperationEditor, getStockUpdateRates, saveFabricStockOperation } from "../../api/fabricStore.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { mapFieldError, requiredFieldErrors } from "../../utils/fieldErrors.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { prepareStockUpdateRow, refreshStockUpdateGroupRates } from "../../utils/stockItemComposer.js"
 import { buildStockHeaderFields, createWarehouseCheck } from "./stockHeaderFields.js"
 
 const props = defineProps({
@@ -95,6 +97,7 @@ function updateField(fieldname, value) {
 	delete fieldErrors.value[fieldname]
 	warehouseCheck.supplierChanged(fieldname)
 	if (fieldname === "purpose" && value === "Material Receipt") form.from_warehouse = ""
+	if (fieldname === "warehouse") refreshStockUpdateRates()
 }
 
 const canDiscard = computed(() => Boolean(currentName.value && editor.value.protected_completion && editor.value.permissions?.can_delete))
@@ -117,6 +120,18 @@ async function load(reload = false) {
 }
 
 function loadSchema(operation, item) { return getFabricStockItemSchema(operation, item) }
+async function prepareRow(row) {
+	if (props.operation !== "stock_update") return row
+	return prepareStockUpdateRow(row, form.warehouse, getStockUpdateRates)
+}
+async function refreshStockUpdateRates() {
+	const warehouse = form.warehouse
+	if (props.operation !== "stock_update" || !warehouse || !itemDetails.value.length) return
+	try {
+		const groups = await refreshStockUpdateGroupRates(itemDetails.value, warehouse, getStockUpdateRates)
+		if (warehouse === form.warehouse) itemDetails.value = groups
+	} catch (reason) { error.value = reason?.message || "Unable to refresh the Valuation Rates." }
+}
 async function save(submit) {
 	if (!canSave.value) return
 	await warehouseCheck.settled()

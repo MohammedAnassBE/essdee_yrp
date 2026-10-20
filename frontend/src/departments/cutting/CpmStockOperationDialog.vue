@@ -16,7 +16,7 @@
 				<label class="erp-select-field"><span>Update Type *</span><Select v-model="form.update_type" :options="stock.update_type_options || ['Add', 'Reduce']" placeholder="Select Add or Reduce" fluid /></label>
 			</div>
 
-			<StockItemComposer v-model="itemDetails" :cutting-plan="cuttingPlan" :operation="operation" :purpose="form.purpose" :update-type="form.update_type" :editor="stock" />
+			<StockItemComposer v-model="itemDetails" :cutting-plan="cuttingPlan" :operation="operation" :purpose="form.purpose" :update-type="form.update_type" :editor="stock" :warehouse="stock.context?.source_warehouse" />
 		</div>
 
 		<template #footer>

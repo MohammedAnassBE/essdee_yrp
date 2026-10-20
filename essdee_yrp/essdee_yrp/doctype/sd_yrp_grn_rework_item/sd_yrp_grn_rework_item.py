@@ -75,7 +75,8 @@ def sync_grn_rework(doc, method=None):
 	del method
 	if isinstance(doc, str):
 		doc = frappe.get_doc("YRP Goods Received Note", doc)
-	if doc.docstatus != 1 or doc.get("is_return") or doc.get("is_rework"):
+	# Returns are included: Frappe 15 opens rework for a Finishing "Return Item" too.
+	if doc.docstatus != 1 or doc.get("is_rework"):
 		return []
 
 	accepted, rejected = _received_type_defaults()

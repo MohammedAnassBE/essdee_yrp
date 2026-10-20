@@ -123,7 +123,7 @@ def _update_return_receipt(finishing_doc, grn, *, cancelled):
 					"quantity": 0,
 					"reworked_quantity": 0,
 					"rejected_qty": 0,
-					"set_combination": row.set_combination,
+					"set_combination": frappe.as_json(json_object(row.set_combination)),
 				},
 			)
 			rework["quantity"] += operation * quantity
@@ -177,7 +177,7 @@ def _update_finishing_inward(finishing_doc, grn, *, cancelled):
 					"quantity": 0,
 					"reworked_quantity": 0,
 					"rejected_qty": 0,
-					"set_combination": row.set_combination,
+					"set_combination": frappe.as_json(json_object(row.set_combination)),
 				},
 			)
 			rework["quantity"] += quantity

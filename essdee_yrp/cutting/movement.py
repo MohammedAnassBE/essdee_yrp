@@ -11,6 +11,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
+from frappe.contacts.doctype.address.address import get_address_display, get_default_address
 from frappe.utils import cint, flt
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
@@ -478,7 +479,21 @@ def build_delivery_challan_defaults(doc_name, work_order):
 	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _get_warehouse_for_supplier
 
 	defaults["from_warehouse"] = _get_warehouse_for_supplier(cpm.from_warehouse)
+	from_address = get_location_address(cpm.from_warehouse, defaults.get("from_address"))
+	if from_address != defaults.get("from_address"):
+		defaults["from_address"] = from_address
+		defaults["from_address_details"] = get_address_display(from_address) if from_address else ""
 	return defaults
+
+
+def get_location_address(location, preferred=None):
+	"""Return ``preferred`` when it is linked to ``location``, else the location's default address."""
+	if preferred and frappe.db.exists(
+		"Dynamic Link",
+		{"parenttype": "Address", "parent": preferred, "link_doctype": "Supplier", "link_name": location},
+	):
+		return preferred
+	return get_default_address("Supplier", location)
 
 
 def build_goods_received_note_defaults(doc_name, work_order, return_items=False, delivery_challan=None):

@@ -371,3 +371,46 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 		self.assertEqual(grn["record"]["name"], "GRN-NEW")
 		self.assertEqual(created[0].update.call_args.args[0], build_dc.return_value)
 		self.assertEqual(created[1].update.call_args.args[0], build_grn.return_value)
+
+
+class TestCutPanelMovementDeliveryChallanAddress(UnitTestCase):
+	MODULE = "essdee_yrp.cutting.movement"
+
+	def build(self, linked):
+		cpm = frappe._dict(
+			name="CPM-1", lot="LOT-1", from_warehouse="S-0170", posting_date="2026-10-20",
+			posting_time="10:00:00", cut_panel_movement_json="{}",
+		)
+		work_order = MagicMock(docstatus=1, open_status="Open", lot="LOT-1")
+		work_order.name = "WO-1"
+		work_order.meta.get_field.return_value = True
+		work_order.get.side_effect = {"delivery_address": "Sewing-Billing"}.get
+		with (
+			patch(f"{self.MODULE}._require_create_permission"),
+			patch(f"{self.MODULE}.get_grouped_movement_rows", return_value=(cpm, None, [])),
+			patch(f"{self.MODULE}.frappe.get_doc", return_value=work_order),
+			patch(f"{self.MODULE}.get_dc_work_order_defaults", return_value={"items": []}),
+			patch(f"{self.MODULE}._overlay_source_rows", return_value=[]),
+			patch(f"{self.MODULE}.group_items_for_ui", return_value=[]),
+			patch(f"{self.MODULE}._movement_uses_collapsed", return_value=False),
+			patch(f"{self.MODULE}.frappe.db.exists", return_value=linked),
+			patch(f"{self.MODULE}.get_default_address", return_value="S-0170-Billing"),
+			patch(f"{self.MODULE}.get_address_display", return_value="Cut Panel Store"),
+			patch(
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
+				return_value="S-0170",
+			),
+		):
+			from essdee_yrp.cutting.movement import build_delivery_challan_defaults
+
+			return build_delivery_challan_defaults("CPM-1", "WO-1")
+
+	def test_from_address_belongs_to_the_movement_source_location(self):
+		defaults = self.build(linked=False)
+
+		self.assertEqual(defaults["from_location"], "S-0170")
+		self.assertEqual(defaults["from_address"], "S-0170-Billing")
+		self.assertEqual(defaults["from_address_details"], "Cut Panel Store")
+
+	def test_work_order_delivery_address_is_kept_when_it_belongs_to_the_source(self):
+		self.assertEqual(self.build(linked=True)["from_address"], "Sewing-Billing")

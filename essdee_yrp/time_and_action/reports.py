@@ -448,21 +448,35 @@ def execute_time_and_action_summary(filters=None):
 	names = _names_or_empty({"lot": filters.lot} if filters.lot else None)
 	if not names:
 		return columns, [], None, _summary_chart([])
+	# MRP's supported lot/no-lot plans scan parents by primary key, then
+	# details by (parent, name). Rank that representative explicitly so a
+	# different ERP query plan or insertion order cannot change its date.
+	# Keep MIN over every candidate and MAX only across per-lot dates.
 	data = frappe.db.sql(
 		"""
-		SELECT grouped.action, SUM(grouped.no_of_completed) AS no_of_completed,
-			MAX(grouped.actual_date) AS actual_date
-		FROM (
-			SELECT parent.lot, detail.action, MIN(detail.completed) AS no_of_completed,
-				action.default_order, MAX(detail.actual_date) AS actual_date
+		WITH ranked AS (
+			SELECT parent.lot, detail.action, detail.completed, detail.actual_date,
+				action.default_order,
+				ROW_NUMBER() OVER (
+					PARTITION BY parent.lot, detail.action
+					ORDER BY parent.name, detail.name
+				) AS representative_rank
 			FROM `tabSD YRP Time and Action Detail` detail
 			JOIN `tabSD YRP Time and Action` parent ON parent.name = detail.parent
 			JOIN `tabSD YRP Action` action ON action.name = detail.action
 			WHERE parent.name IN %(names)s AND action.`default` = 1
-			GROUP BY parent.lot, detail.action, action.default_order
-		) grouped
-		GROUP BY grouped.action, grouped.default_order
-		ORDER BY grouped.default_order ASC
+		), grouped AS (
+			SELECT lot, action, MIN(completed) AS no_of_completed,
+				MAX(default_order) AS default_order,
+				MAX(CASE WHEN representative_rank = 1 THEN actual_date END) AS actual_date
+			FROM ranked
+			GROUP BY lot, action
+		)
+		SELECT action, SUM(no_of_completed) AS no_of_completed,
+			MAX(actual_date) AS actual_date
+		FROM grouped
+		GROUP BY action
+		ORDER BY MAX(default_order) ASC
 		""",
 		{"names": names},
 		as_dict=True,

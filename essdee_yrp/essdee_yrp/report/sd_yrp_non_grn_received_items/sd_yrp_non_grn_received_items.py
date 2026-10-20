@@ -34,6 +34,13 @@ def get_columns():
 			"label": "From Warehouse",
 			"width": 130,
 		},
+		{
+			"fieldname": "from_supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "From Supplier",
+			"width": 130,
+		},
 		{"fieldname": "from_location_name", "fieldtype": "Data", "label": "From Location Name", "width": 200},
 		{
 			"fieldname": "received_location",
@@ -43,10 +50,24 @@ def get_columns():
 			"width": 140,
 		},
 		{
+			"fieldname": "received_supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "Received Supplier",
+			"width": 130,
+		},
+		{
 			"fieldname": "received_location_name",
 			"fieldtype": "Data",
 			"label": "Received Location Name",
 			"width": 200,
+		},
+		{
+			"fieldname": "supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "Supplier",
+			"width": 130,
 		},
 		{"fieldname": "lot", "fieldtype": "Link", "options": "SD YRP Lot", "label": "Lot", "width": 120},
 		{"fieldname": "item", "fieldtype": "Link", "options": "Item", "label": "Item", "width": 180},
@@ -98,7 +119,7 @@ def get_data(filters):
 		params["lot"] = filters.lot
 
 	if filters.get("received_location"):
-		conditions.append("se.to_warehouse = %(received_location)s")
+		conditions.append("(se.to_warehouse = %(received_location)s OR received_warehouse.supplier = %(received_location)s)")
 		params["received_location"] = filters.received_location
 
 	if filters.get("supplier"):
@@ -115,9 +136,12 @@ def get_data(filters):
 			se.name AS source_name,
 			se.purpose AS purpose,
 			{from_location_expression} AS from_location,
-			from_warehouse.warehouse_name AS from_location_name,
+			CASE WHEN IFNULL(se.from_warehouse, '') = '' THEN se.transfer_supplier
+				ELSE from_warehouse.supplier END AS from_supplier,
+			COALESCE(NULLIF(from_supplier.supplier_name, ''), from_warehouse.warehouse_name) AS from_location_name,
 			se.to_warehouse AS received_location,
-			received_warehouse.warehouse_name AS received_location_name,
+			received_warehouse.supplier AS received_supplier,
+			COALESCE(NULLIF(received_supplier.supplier_name, ''), received_warehouse.warehouse_name) AS received_location_name,
 			{supplier_expression} AS supplier,
 			supplier.supplier_name AS supplier_name,
 			sed.lot AS lot,
@@ -131,7 +155,11 @@ def get_data(filters):
 		FROM `tabYRP Stock Entry Detail` sed
 		INNER JOIN `tabYRP Stock Entry` se ON se.name = sed.parent
 		LEFT JOIN `tabWarehouse` from_warehouse ON from_warehouse.name = {from_location_expression}
+		LEFT JOIN `tabSupplier` from_supplier ON from_supplier.name = CASE
+			WHEN IFNULL(se.from_warehouse, '') = '' THEN se.transfer_supplier
+			ELSE from_warehouse.supplier END
 		LEFT JOIN `tabWarehouse` received_warehouse ON received_warehouse.name = se.to_warehouse
+		LEFT JOIN `tabSupplier` received_supplier ON received_supplier.name = received_warehouse.supplier
 		LEFT JOIN `tabSupplier` supplier ON supplier.name = {supplier_expression}
 		LEFT JOIN `tabItem` iv ON iv.name = sed.item
 		WHERE {conditions}

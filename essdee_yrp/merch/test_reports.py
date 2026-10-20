@@ -81,13 +81,13 @@ class TestWorkInProgress(TestCase):
 				reports.filter_names(value)
 
 	@patch.object(reports.frappe, "get_list")
-	def test_lot_resolution_is_permission_aware_and_to_date_inclusive(self, get_list):
+	def test_lot_resolution_is_permission_aware_and_to_date_midnight_inclusive(self, get_list):
 		get_list.side_effect = [["LOT"], [{"name": "LOT", "creation": "2026-10-15 23:59:59"}]]
 		filters = reports.validate_filters({"lot": ["LOT"], "from_date": "2026-10-15", "to_date": "2026-10-15"})
 		self.assertEqual(reports.resolve_lots(filters)[0]["name"], "LOT")
 		conditions = get_list.call_args.kwargs["filters"]
 		self.assertIn(["creation", ">=", "2026-10-15"], conditions)
-		self.assertIn(["creation", "<", "2026-10-16"], conditions)
+		self.assertIn(["creation", "<=", "2026-10-15"], conditions)
 		self.assertEqual(get_list.call_args.args, ("SD YRP Lot",))
 
 	@patch.object(reports.frappe, "get_list")
@@ -448,9 +448,12 @@ class TestWorkInProgressLive(TestCase):
 			self.assertGreaterEqual(result["summary"]["Lots"], 50)
 			self.assertLessEqual(sql.call_count, 15)
 
-	def test_real_creation_day_is_included(self):
+	def test_real_creation_day_ends_at_midnight_like_mrp(self):
 		created = str(frappe.db.get_value("SD YRP Lot", LIVE_LOTS[0], "creation"))[:10]
 		result = reports.run_work_in_progress({"lot": [LIVE_LOTS[0]], "from_date": created, "to_date": created})
+		self.assertEqual([row["lot"] for row in result["result"] if not row.get("is_total_row")], [])
+		from frappe.utils import add_days
+		result = reports.run_work_in_progress({"lot": [LIVE_LOTS[0]], "from_date": created, "to_date": str(add_days(created, 1))})
 		self.assertEqual([row["lot"] for row in result["result"] if not row.get("is_total_row")], [LIVE_LOTS[0]])
 
 

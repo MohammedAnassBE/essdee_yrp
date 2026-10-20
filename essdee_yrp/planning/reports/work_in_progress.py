@@ -121,7 +121,7 @@ def run(filters, progress=None) -> dict:
 	processes = quantities.authorize_filter_values("YRP Process", filters.get("process_list"))
 	if progress:
 		progress(0, 4)
-	lots = quantities.production_lots(filters)
+	lots = quantities.production_lots(filters, creation_end_midnight=True)
 	context = quantities.production_context(lots, processes)
 	if progress:
 		progress(1, 4)

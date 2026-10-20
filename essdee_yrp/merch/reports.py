@@ -2,7 +2,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, flt, getdate
+from frappe.utils import flt, getdate
 
 CUT = (("order_qty", "Order Qty"), ("cut_qty", "Cut Qty"), ("order_to_cut_diff", "Order to Cut Diff"))
 SEWING = (
@@ -96,7 +96,7 @@ def resolve_lots(filters):
 		conditions.append(["season", "=", filters["product_season"]])
 	if filters.get("from_date"):
 		conditions.extend([["creation", ">=", str(getdate(filters["from_date"]))],
-			["creation", "<", str(add_days(getdate(filters["to_date"]), 1))]])
+			["creation", "<=", str(getdate(filters["to_date"]))]])
 	return frappe.get_list("SD YRP Lot", filters=conditions,
 		fields=["name", "item", "production_order", "production_detail"], order_by="name", limit_page_length=0)
 

@@ -6,11 +6,11 @@ import re
 from collections import defaultdict
 
 import frappe
-from yrp.attribute_read_context import attribute_read_scope
 from frappe import _
 from frappe.utils import cint, cstr, flt, getdate, today
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
@@ -179,7 +179,7 @@ def get_scr_data(supplier, lot):
 	order_rows = frappe.get_all(
 		"SD YRP Sewing Plan Order Detail",
 		filters={"parent": ["in", list(plan_map)]},
-		fields=["parent", "item_variant", "set_combination", "quantity", "pre_final", "final_inspection"],
+		fields=["parent", "item_variant", "set_combination", "quantity"],
 		limit_page_length=0,
 	)
 	entries = _entries(plans)
@@ -230,8 +230,6 @@ def get_scr_data(supplier, lot):
 
 	for row in order_rows:
 		add(row, "Order Qty", row.quantity)
-		add(row, "Pre Final", row.pre_final)
-		add(row, "Final Inspection", row.final_inspection)
 	for row in delivered_rows:
 		add(row, "Delivered Qty", row.delivered_quantity)
 	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
@@ -247,10 +245,10 @@ def get_scr_data(supplier, lot):
 
 	stages = [row.input_type for row in configuration]
 	# Legacy SCR includes every non-default receipt in the configured total,
-	# including receipts at another stage; inspection fields are not receipts.
+	# including receipts at another stage.
 	received_headers = sorted(
 		(header for header in observed_headers
-		 if header not in {"Order Qty", "Delivered Qty", "Pre Final", "Final Inspection", *stages}),
+		 if header not in {"Order Qty", "Delivered Qty", *stages}),
 		key=lambda header: (any(header.startswith(f"{stage} ") for stage in stages), header),
 	)
 	headers = ["Order Qty", "Delivered Qty", "Delivered - Input"]
@@ -264,7 +262,6 @@ def get_scr_data(supplier, lot):
 		balance_headers.append(f"{stage} Balance")
 	if total_stage not in stages:
 		headers.extend(received_headers)
-	headers.extend(["Pre Final", "Final Inspection"])
 	for colour, group in data.items():
 		group["lines"] = sorted(lines[colour], key=_natural_name_key)
 		for values in group["values"].values():
@@ -276,6 +273,11 @@ def get_scr_data(supplier, lot):
 					flt(values.get(header)) for header in received_headers
 				)
 			for row in configuration:
+				# MRP derives a balance only when this size has an entry for the
+				# stage itself. Missing stages render as zero, while an observed
+				# zero quantity still has a signed balance against its predecessor.
+				if row.input_type not in values:
+					continue
 				source = f"{row.input_type} Total" if row.input_type == total_stage else row.input_type
 				values[f"{row.input_type} Balance"] = flt(values.get(source)) - flt(values.get(row.difference_from))
 			for header in headers:

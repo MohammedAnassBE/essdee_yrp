@@ -83,7 +83,7 @@ class TestSewingReports(IntegrationTestCase):
 		expected = ["Order Qty", "Delivered Qty", "Delivered - Input", "Input Qty", "Input Qty Balance",
 			"Line Output", "Line Output Balance", "Checking Output", self.reject_type.name,
 			f"Input Qty {self.reject_type.name}", "Checking Output Total", "Checking Output Balance",
-			"AQL Output", "AQL Output Balance", "Pre Final", "Final Inspection"]
+			"AQL Output", "AQL Output Balance"]
 		self.assertEqual(result["headers"], expected)
 		self.assertFalse(result.get("derived_balances_omitted", False))
 		self.assertEqual(result["balance_headers"], ["Delivered - Input", "Input Qty Balance", "Line Output Balance", "Checking Output Balance", "AQL Output Balance"])
@@ -98,20 +98,39 @@ class TestSewingReports(IntegrationTestCase):
 		plan = self._plan(self.other_supplier)
 		result = api.get_scr_data(self.other_supplier, plan.lot)
 		group = next(iter(result["data"].values()))
-		self.assertEqual(group["type_wise_total"].get("Input Qty Balance"), -100)
+		self.assertEqual(group["type_wise_total"].get("Input Qty Balance"), 0)
 		self.assertEqual(group["type_wise_total"].get("Checking Output Total"), 0)
 		self.assertEqual(group["type_wise_total"].get("Checking Output Balance"), 0)
 		self.assertLess(result["headers"].index("Line Output"), result["headers"].index("Checking Output"))
 
-	def test_scr_received_only_total_and_positive_balances(self):
+	def test_scr_received_only_total_has_no_default_stage_balance(self):
 		plan = self._plan(self.other_supplier)
 		self._entry(plan, "Checking Output", "2090-01-01", 7, self.reject_type.name)
 		result = api.get_scr_data(self.other_supplier, plan.lot)
 		group = next(iter(result["data"].values()))
 		self.assertEqual(group["type_wise_total"]["Checking Output"], 0)
 		self.assertEqual(group["type_wise_total"]["Checking Output Total"], 7)
-		self.assertEqual(group["type_wise_total"]["Checking Output Balance"], 7)
+		self.assertEqual(group["type_wise_total"]["Checking Output Balance"], 0)
 		self.assertEqual(group["type_wise_total"]["Delivered - Input"], 90)
+
+	def test_scr_absent_stage_stays_zero_with_nonzero_predecessor(self):
+		# Quantities from the live JB2627-020 and F0826-22/2 W PJ 1 evidence.
+		for quantity in (4048, 5575, 561):
+			with self.subTest(quantity=quantity):
+				plan = self._plan(self.other_supplier)
+				self._entry(plan, "Checking Output", "2090-01-03", quantity)
+				result = api.get_scr_data(self.other_supplier, plan.lot)
+				group = next(iter(result["data"].values()))
+				self.assertEqual(group["type_wise_total"]["AQL Output Balance"], 0)
+				self.assertEqual(group["type_wise_total"]["Checking Output Balance"], quantity)
+				self.assertTrue(all(values["AQL Output Balance"] == 0 for values in group["values"].values()))
+
+	def test_scr_observed_zero_stage_still_calculates_signed_balance(self):
+		plan = self._plan(self.other_supplier)
+		self._entry(plan, "Checking Output", "2090-01-03", 561)
+		self._entry(plan, "AQL Output", "2090-01-04", 0)
+		group = next(iter(api.get_scr_data(self.other_supplier, plan.lot)["data"].values()))
+		self.assertEqual(group["type_wise_total"]["AQL Output Balance"], -561)
 
 	def _plan(self, supplier, *, status="Open", wo_supplier=None):
 		lot = frappe.get_doc(
@@ -220,11 +239,10 @@ class TestSewingReports(IntegrationTestCase):
 		self.assertTrue(callable(endpoint), "DPR date-range endpoint must be exported")
 		return endpoint(*args, **kwargs)
 
-	def test_status_totals_exclude_closed_other_and_mismatched_work_order_owners(self):
+	def test_status_totals_exclude_closed_and_other_plan_suppliers(self):
 		other = self._plan(self.other_supplier)
 		closed = self._plan(self.supplier, status="Close")
-		stale = self._plan(self.supplier, wo_supplier=self.other_supplier)
-		for plan in (other, closed, stale):
+		for plan in (other, closed):
 			self._entry(plan, "Input Qty", "2090-01-01", 9000)
 		result = api.get_sp_status_summary(self.supplier)
 		self.assertNotIn("derived_balances_omitted", result)
@@ -243,7 +261,7 @@ class TestSewingReports(IntegrationTestCase):
 			"Pre Final": 25,
 			"Final Inspection": 20,
 			"Line Stock": -20,
-			"Checking Stock": -15,
+			"Stock": -15,
 			"GRN Pending": 25,
 		}.items():
 			self.assertIn(label, result["header2"])
@@ -253,6 +271,19 @@ class TestSewingReports(IntegrationTestCase):
 		self.assertEqual(row["checking_stock"], -15)
 		self.assertEqual(row["grn_pending"], 25)
 		self.assertEqual(total["checking_stock"], -15)
+
+	def test_status_scopes_supplier_to_plan_and_uses_configured_column_order(self):
+		stale = self._plan(self.supplier, wo_supplier=self.other_supplier)
+		self._entry(stale, "Input Qty", "2090-01-01", 12)
+		self._entry(stale, "Input Qty", "2090-01-02", 2, self.reject_type.name)
+		result = api.get_sp_status_summary(self.supplier)
+		self.assertEqual(len(result["data"]), 3)
+		self.assertEqual(result["data"][0]["Input Qty"], 92)
+		self.assertEqual(result["header2"], ["Order Qty", "Delivered Qty", "Input Qty", "Line Output",
+			"Checking Output", self.reject_type.name, "AQL Output", "Pre Final", "Final Inspection",
+			"GRN Qty", "GRN Pending", "Line Stock", "Stock"])
+		self.assertEqual(result["header3"], ["Ready for Checking", "Ready for AQL",
+			"Ready for Pre final", "Ready for Final Inspection"])
 
 	def test_status_dates_readiness_and_running_days_are_explicit(self):
 		result = api.get_sp_status_summary(self.supplier)
@@ -273,7 +304,7 @@ class TestSewingReports(IntegrationTestCase):
 			self.assertEqual(row[label], expected)
 			self.assertEqual(row[key], expected)
 
-	def test_status_missing_dates_and_unstarted_readiness_are_not_fabricated(self):
+	def test_status_missing_dates_and_readiness_stay_blank(self):
 		plan = self._plan(self.other_supplier)
 		frappe.db.set_value(
 			"SD YRP Sewing Plan Order Detail",
@@ -284,8 +315,14 @@ class TestSewingReports(IntegrationTestCase):
 		for key in ("fi_date", "input_date", "last_output_date", "running_days"):
 			self.assertIn(key, row)
 			self.assertIsNone(row[key])
-		self.assertEqual(row["ready_for_checking"], "Not Started")
-		self.assertEqual(row["ready_for_final_inspection"], "Not Started")
+		for label, key in (
+			("Ready for Checking", "ready_for_checking"),
+			("Ready for AQL", "ready_for_aql"),
+			("Ready for Pre final", "ready_for_pre_final"),
+			("Ready for Final Inspection", "ready_for_final_inspection"),
+		):
+			self.assertEqual(row[label], "")
+			self.assertEqual(row[key], "")
 
 	def test_readiness_compares_default_output_while_checking_stock_includes_rejects(self):
 		self._entry(self.plan, "AQL Output", "2090-01-04", 10)
@@ -295,7 +332,7 @@ class TestSewingReports(IntegrationTestCase):
 		self.assertEqual(row["ready_for_aql"], "Completed")
 		self.assertEqual(row["Line Output"], 60)
 		self.assertEqual(row[f"Line Output {self.reject_type.name}"], 7)
-		self.assertIn(f"Line Output {self.reject_type.name}", result["header2"])
+		self.assertNotIn(f"Line Output {self.reject_type.name}", result["header2"])
 		self.assertEqual(row["line_stock"], -20)
 		self.assertEqual(row["checking_stock"], -15)
 
@@ -359,11 +396,11 @@ class TestSewingReports(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			api.get_sp_status_summary(self.supplier)
 
-	def test_readiness_is_ready_before_work_and_completed_when_fully_checked(self):
+	def test_readiness_stays_blank_before_checking_and_completes_when_fully_checked(self):
 		plan = self._plan(self.other_supplier)
 		self._entry(plan, "Line Output", "2090-01-03", 10)
 		row = api.get_sp_status_summary(self.other_supplier)["data"][1]
-		self.assertEqual(row["ready_for_checking"], "Ready")
+		self.assertEqual(row["ready_for_checking"], "")
 		self._entry(plan, "Checking Output", "2090-01-03", 10)
 		row = api.get_sp_status_summary(self.other_supplier)["data"][1]
 		self.assertEqual(row["ready_for_checking"], "Completed")

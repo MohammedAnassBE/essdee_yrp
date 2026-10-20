@@ -37,7 +37,7 @@ const rows = computed(() => (data.value.data || []).filter(row => !row.is_total)
 const columns = computed(() => [
 	...(data.value.header1 || []).map(label => ({ key: identityKeys[label] || label, label, frozen: true, width: frozenWidths[label], numeric: label === "Total Running Days" })),
 	...(data.value.header2 || []).map(label => ({ key: label, label, numeric: true })),
-	...(data.value.header3 || []).map(label => ({ key: label, label })),
+	...(data.value.header3 || []).map(label => ({ key: label === "Work Order Status" ? "work_order_status" : label, label })),
 ])
 function options(key) { return [...new Set(rows.value.map(row => row[key]).filter(value => value != null && value !== ""))] }
 const visible = computed(() => rows.value.filter(row => identities.every(({ key }) => !props.filters[key].length || props.filters[key].includes(row[key]))

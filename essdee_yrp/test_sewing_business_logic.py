@@ -1232,7 +1232,7 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 		self.assertNotIn("derived_balances_omitted", status)
 		self.assertEqual(status["header1"][:4], ["Item", "SD YRP Lot", "Colour", "Part"])
 		self.assertIn("FI Date", status["header1"])
-		self.assertIn("Checking Stock", status["header2"])
+		self.assertIn("Stock", status["header2"])
 
 	def test_all_sewing_view_providers_execute_against_migrated_data(self):
 		rows = frappe.db.sql(

@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, getdate
 from yrp.attribute_links import value as attribute_value
+from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 from essdee_yrp.sewing.config import get_sewing_input_configuration
@@ -35,9 +36,11 @@ def _report_plans(supplier, *, open_only=False):
 	names = list({row.work_order for row in plans if row.work_order})
 	work_orders = {}
 	if names:
-		filters = {"name": ["in", names], "supplier": cstr(supplier).strip()}
+		filters = {"name": ["in", names]}
 		if open_only:
 			filters["open_status"] = "Open"
+		else:
+			filters["supplier"] = cstr(supplier).strip()
 		work_orders = {
 			row.name: row
 			for row in frappe.get_list(
@@ -47,11 +50,15 @@ def _report_plans(supplier, *, open_only=False):
 				limit=0,
 			)
 		}
-	# Unlinked plans remain applicable to DPR; a linked WO must share its owner.
-	return [row for row in plans if row.work_order in work_orders or (not open_only and not row.work_order)]
+	# Status scopes the supplier on the plan, as MRP does. DPR retains its owner check.
+	plans = [row for row in plans if row.work_order in work_orders or (not open_only and not row.work_order)]
+	# MRP's plan scan follows its primary key; get_list otherwise defaults to modified desc.
+	return sorted(plans, key=lambda row: row.name) if open_only else plans
 
 
-def _snapshot(plans, *, from_date=None, to_date=None, work_station=None, input_type=None):
+def _snapshot(
+	plans, *, from_date=None, to_date=None, work_station=None, input_type=None, status_order=False
+):
 	from essdee_yrp.sewing.read_models import _details, _metadata
 
 	plan_map = {row.name: row for row in plans}
@@ -69,6 +76,7 @@ def _snapshot(plans, *, from_date=None, to_date=None, work_station=None, input_t
 				"final_inspection",
 				"fi_date",
 			],
+			order_by="name asc" if status_order else None,
 			limit=0,
 		)
 		frappe.has_permission("SD YRP Sewing Plan Entry Detail", "read", throw=True)
@@ -83,10 +91,22 @@ def _snapshot(plans, *, from_date=None, to_date=None, work_station=None, input_t
 			"SD YRP Sewing Plan Entry Detail",
 			filters=filters,
 			fields=["name", "sewing_plan", "input_type", "received_type", "work_station", "entry_date"],
-			order_by="entry_date asc, name asc",
+			order_by="name asc" if status_order else "entry_date asc, name asc",
 			limit=0,
 		)
-	details = _details(entries)
+	if status_order and entries:
+		details = frappe.get_all(
+			"SD YRP Sewing Plan Detail",
+			filters={
+				"parent": ["in", [row.name for row in entries]],
+				"parenttype": "SD YRP Sewing Plan Entry Detail",
+			},
+			fields=["parent", "item_variant", "set_combination", "quantity"],
+			order_by="name asc",
+			limit=0,
+		)
+	else:
+		details = _details(entries)
 	lots, ipds = _metadata(plans) if plans else ({}, {})
 	return frappe._dict(
 		plans=plan_map,
@@ -121,17 +141,11 @@ def _quantity_key(label):
 	return label.lower().replace(" ", "_")
 
 
-def _readiness(source, completed, underway):
-	if not source and not completed:
-		return "Not Started"
-	if completed >= source:
-		return "Completed"
-	return underway if completed else "Ready"
-
-
 def status_summary(supplier):
 	plans = _report_plans(supplier, open_only=True)
-	snapshot = _snapshot(plans)
+	if not plans:
+		return {"header1": [], "header2": [], "header3": [], "data": []}
+	snapshot = _snapshot(plans, status_order=True)
 	settings = frappe.get_cached_doc("SD YRP MRP Settings")
 	configuration = get_sewing_input_configuration()
 	default_received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
@@ -146,10 +160,13 @@ def status_summary(supplier):
 			label = settings.meta.get_field(field).label
 			frappe.throw(_("Configure {0} as a Sewing Input Type in MRP Settings.").format(_(label)))
 	columns = [
-		_stage_label(row.input_type, row.received_type, settings, default_received_type)
+		(
+			row.received_type
+			if row.input_type == settings.type_wise_diff_summary and row.received_type != default_received_type
+			else row.input_type
+		)
 		for row in settings.sewing_plan_status_summary
 	]
-	columns = list(dict.fromkeys([*stages, *columns]))
 	work_orders = list({row.work_order for row in plans})
 	# DC/GRN lifecycle hooks rebuild garment-piece projections here. Raw stock
 	# deliverables can include multiple panels and accessories with other UOMs.
@@ -158,6 +175,7 @@ def status_summary(supplier):
 			"YRP Work Order Calculated Item",
 			filters={"parent": ["in", work_orders], "parenttype": "YRP Work Order"},
 			fields=["parent", "item_variant", "set_combination", "delivered_quantity", "received_qty"],
+			order_by="name asc",
 			limit=0,
 		)
 		if work_orders
@@ -169,29 +187,26 @@ def status_summary(supplier):
 	data, columns = _assemble_status(
 		snapshot, calculated, attributes, settings, default_received_type, columns
 	)
-	headers = list(
-		dict.fromkeys(
-			[
-				"Order Qty",
-				"Delivered Qty",
-				*columns,
-				"Pre Final",
-				"Final Inspection",
-				"GRN Qty",
-				"GRN Pending",
-				"Line Stock",
-				"Checking Stock",
-			]
-		)
-	)
+	headers = [
+		"Order Qty",
+		"Delivered Qty",
+		*columns,
+		"Pre Final",
+		"Final Inspection",
+		"GRN Qty",
+		"GRN Pending",
+		"Line Stock",
+		"Stock",
+	]
 	totals = {"is_total": True}
 	for header in headers:
 		totals[header] = sum(flt(row.get(header)) for row in data)
 		totals[_quantity_key(header)] = totals[header]
+	totals["Checking Stock"] = totals["checking_stock"] = totals["Stock"]
 	return {
 		"header1": ["Item", "SD YRP Lot", "Colour", "Part", *DATE_FIELDS],
 		"header2": headers,
-		"header3": [*READINESS_FIELDS, "Work Order Status"],
+		"header3": list(READINESS_FIELDS),
 		"data": [totals, *data] if data else [],
 	}
 
@@ -201,13 +216,28 @@ def _assemble_status(snapshot, calculated, attributes, settings, default_receive
 	groups = {}
 	dates = defaultdict(lambda: defaultdict(list))
 	checking_totals = defaultdict(float)
-	by_work_order = defaultdict(list)
-	for plan in snapshot.plans.values():
-		by_work_order[plan.work_order].append(plan)
+	calculated_by_wo, orders_by_plan, entries_by_plan, details_by_entry = (defaultdict(list) for _ in range(4))
+	for row in calculated:
+		calculated_by_wo[row.parent].append(row)
+	for row in snapshot.orders:
+		orders_by_plan[row.parent].append(row)
+	for entry in snapshot.entries:
+		entries_by_plan[entry.sewing_plan].append(entry)
+	for row in snapshot.details:
+		details_by_entry[row.parent].append(row)
 
 	def group(plan, row):
-		_ipd, bucket, _size = _bucket_context(snapshot, plan, row, attributes)
-		key = (plan.name, bucket["key"], attribute_value(bucket["part"]))
+		ipd, bucket, _size = _bucket_context(snapshot, plan, row, attributes)
+		variant = attributes.get(row.item_variant, {})
+		non_size = tuple(sorted(v for k, v in variant.items() if k != ipd.primary_item_attribute)) or None
+		combination = update_if_string_instance(row.set_combination) or {}
+		key = (plan.item, plan.lot, non_size, tuple(sorted(combination.items())))
+		# MRP always shows both variant and major colour for a set, including equal colours.
+		colour = (
+			f"{variant.get(ipd.packing_attribute, '')} ({combination.get('major_colour', '')})"
+			if ipd.is_set_item
+			else combination.get("major_colour", "")
+		)
 		return key, groups.setdefault(
 			key,
 			{
@@ -215,48 +245,47 @@ def _assemble_status(snapshot, calculated, attributes, settings, default_receive
 				"lot": plan.lot,
 				"sewing_plan": plan.name,
 				"work_order": plan.work_order,
-				"colour": bucket["key"],
+				"colour": colour,
 				"part": attribute_value(bucket["part"]),
 				"work_order_status": "Open",
 			},
 		)
 
-	for row in snapshot.orders:
-		key, values = group(snapshot.plans[row.parent], row)
-		for header, field in (
-			("Order Qty", "quantity"),
-			("Pre Final", "pre_final"),
-			("Final Inspection", "final_inspection"),
-		):
-			values[header] = flt(values.get(header)) + flt(row.get(field))
-		if row.fi_date:
-			dates[key]["fi_date"].append(getdate(row.fi_date))
-	for row in calculated:
-		for plan in by_work_order[row.parent]:
+	# Dict insertion order is visible in MRP: each plan's calculated items first,
+	# then its order and entry facts. Group identity deliberately excludes plan/WO.
+	for plan in snapshot.plans.values():
+		for row in calculated_by_wo[plan.work_order]:
 			_key, values = group(plan, row)
 			for label, field in (("Delivered Qty", "delivered_quantity"), ("GRN Qty", "received_qty")):
 				values[label] = flt(values.get(label)) + flt(row.get(field))
-	entry_map = {row.name: row for row in snapshot.entries}
-	for row in snapshot.details:
-		entry = entry_map[row.parent]
-		key, values = group(snapshot.plans[entry.sewing_plan], row)
-		label = _stage_label(entry.input_type, entry.received_type, settings, default_received_type)
-		if label not in columns:
-			columns.append(label)
-		values[label] = flt(values.get(label)) + flt(row.quantity)
-		if entry.input_type == settings.type_wise_diff_summary:
-			checking_totals[key] += flt(row.quantity)
-		if entry.entry_date and flt(row.quantity):
-			if entry.input_type == settings.sewing_input_qty_type:
-				dates[key]["input_date"].append(getdate(entry.entry_date))
-			if entry.input_type == settings.sewing_line_output_type:
-				dates[key]["last_output_date"].append(getdate(entry.entry_date))
+		for row in orders_by_plan[plan.name]:
+			key, values = group(plan, row)
+			for header, field in (
+				("Order Qty", "quantity"),
+				("Pre Final", "pre_final"),
+				("Final Inspection", "final_inspection"),
+			):
+				values[header] = flt(values.get(header)) + flt(row.get(field))
+			if row.fi_date:
+				dates[key]["fi_date"].append(getdate(row.fi_date))
+		for entry in entries_by_plan[plan.name]:
+			for row in details_by_entry[entry.name]:
+				key, values = group(plan, row)
+				label = _stage_label(entry.input_type, entry.received_type, settings, default_received_type)
+				values[label] = flt(values.get(label)) + flt(row.quantity)
+				if entry.input_type == settings.type_wise_diff_summary:
+					checking_totals[key] += flt(row.quantity)
+				if entry.entry_date:
+					if entry.input_type == settings.sewing_input_qty_type:
+						dates[key]["input_date"].append(getdate(entry.entry_date))
+					if entry.input_type == settings.sewing_line_output_type:
+						dates[key]["last_output_date"].append(getdate(entry.entry_date))
 	for key, values in groups.items():
 		line = flt(values.get(settings.sewing_line_output_type))
 		checking = checking_totals[key]
 		aql = flt(values.get(settings.sewing_plan_inspection_type))
 		values["Line Stock"] = line - flt(values.get(settings.sewing_input_qty_type))
-		values["Checking Stock"] = checking - line
+		values["Stock"] = values["Checking Stock"] = values["checking_stock"] = checking - line
 		values["GRN Pending"] = line - flt(values.get("GRN Qty"))
 		for name, aggregate in (("fi_date", min), ("input_date", min), ("last_output_date", max)):
 			values[name] = aggregate(dates[key][name]) if dates[key][name] else None
@@ -265,18 +294,25 @@ def _assemble_status(snapshot, calculated, attributes, settings, default_receive
 			if values["last_output_date"] and values["input_date"]
 			else None
 		)
-		for label, source, completed, underway in (
-			("Ready for Checking", line, checking, "Under Checking"),
-			("Ready for AQL", flt(values.get(settings.type_wise_diff_summary)), aql, "Under AQL"),
-			("Ready for Pre final", aql, flt(values.get("Pre Final")), "Under Pre Final"),
+		accepted_checking = flt(values.get(settings.type_wise_diff_summary))
+		pre_final = flt(values.get("Pre Final"))
+		final = flt(values.get("Final Inspection"))
+		# Match MRP's quantity guards before filling readiness. An upstream
+		# quantity alone (or an observed zero entry) leaves the cell blank.
+		for label, source, completed, underway, started in (
+			("Ready for Checking", line, checking, "Under Checking", line and checking),
+			("Ready for AQL", accepted_checking, aql, "Under AQL", accepted_checking and aql),
+			("Ready for Pre final", aql, pre_final, "Under Pre Final", aql and pre_final > 0),
 			(
 				"Ready for Final Inspection",
-				flt(values.get("Pre Final")),
-				flt(values.get("Final Inspection")),
+				pre_final,
+				final,
 				"Under Final Inspection",
+				final > 0,
 			),
 		):
-			values[label] = values[READINESS_FIELDS[label]] = _readiness(source, completed, underway)
+			status = (underway if source > completed else "Completed") if started else ""
+			values[label] = values[READINESS_FIELDS[label]] = status
 		for label, field in DATE_FIELDS.items():
 			values[label] = values[field]
 		for label in [
@@ -293,16 +329,7 @@ def _assemble_status(snapshot, calculated, attributes, settings, default_receive
 			values[label] = flt(values.get(label))
 			values[_quantity_key(label)] = values[label]
 	return (
-		sorted(
-			groups.values(),
-			key=lambda row: (
-				row["lot"],
-				row["item"],
-				cstr(row["colour"]),
-				cstr(row["part"]),
-				row["sewing_plan"],
-			),
-		),
+		list(groups.values()),
 		columns,
 	)
 

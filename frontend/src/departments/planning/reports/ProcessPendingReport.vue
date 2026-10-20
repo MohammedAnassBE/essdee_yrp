@@ -18,7 +18,9 @@
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 			
 			<template #metrics><div v-for="metric in reportSummary || []" :key="metric.label" class="report-metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></template>
-			<PlanningReportTable title="Process Pending" :columns="columns" :rows="rows" :cell-link="(column, row) => column.fieldname === 'lot' && row.lot && !row.is_total_row ? '/planning/lots/' + encodeURIComponent(row.lot) : ''" :cell-align="cellAlign" :formatted-cell="formattedCell" />
+			<PlanningReportTable title="Process Pending" :columns="columns" :rows="rows" :cell-link="(column, row) => column.fieldname === 'lot' && row.lot && !row.is_total_row ? '/planning/lots/' + encodeURIComponent(row.lot) : ''" :cell-align="cellAlign" :formatted-cell="formattedCell">
+				<template #annotation="{ column, row }"><small v-if="pendingAnnotation(column, row)" class="pending-days" :title="pendingAnnotation(column, row).title">{{ pendingAnnotation(column, row).label }}</small></template>
+			</PlanningReportTable>
 		</ReportShell>
 		<Dialog v-model:visible="pasteVisible" header="Paste values" modal>
 			<div class="finishing-stack"><label class="common-field"><span class="erp-field-label">Apply to</span><Select v-model="pasteTarget" :options="['Lot', 'Item']" aria-label="Apply to" fluid /></label>
@@ -37,6 +39,7 @@ import ReportShell from "../../../components/reports/ReportShell.vue"
 import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
 import { useWebReport } from "../../../composables/useWebReport.js"
 import PlanningReportTable from "./PlanningReportTable.vue"
+import { pendingAnnotation } from "./processPendingAnnotations.js"
 import { usePlanningQuantityColumns } from "./usePlanningQuantityColumns.js"
 import Dialog from "primevue/dialog"
 import LinkField from "../../../components/common/LinkField.vue"
@@ -81,5 +84,6 @@ onMounted(loadDefaults)
 </script>
 
 <style scoped>
+.pending-days { display: block; margin-top: 0.25rem; color: var(--erp-text-muted); font-size: 0.75rem; }
 .process-defaults-error { width: 100%; margin: 0; padding: var(--erp-space-2); }
 </style>

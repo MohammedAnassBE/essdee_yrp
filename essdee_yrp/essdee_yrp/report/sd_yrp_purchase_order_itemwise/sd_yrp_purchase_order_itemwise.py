@@ -2,8 +2,8 @@
 # For license information, please see license.txt
 
 import frappe
-from frappe.query_builder.functions import Coalesce
-from pypika import Order
+from frappe.query_builder.functions import Coalesce, NullIf
+from pypika import Case, Order
 
 
 def execute(filters=None):
@@ -92,6 +92,22 @@ def get_data(filters):
 	po = frappe.qb.DocType("Purchase Order")
 	supplier = frappe.qb.DocType("Supplier")
 	item_variant = frappe.qb.DocType("Item")
+	# Migration preserves fulfillment separately: Ordered and Partially Received
+	# both have ERP status To Receive. Use the preserved state for MRP labels.
+	fulfillment_status = (
+		Case()
+		.when(po.is_yrp_managed == 1, Coalesce(NullIf(po.yrp_fulfillment_status, ""), po.status))
+		.else_(po.status)
+	)
+	legacy_status = (
+		Case()
+		.when(po.status == "Pending Approval", "Pending Approval")
+		.when(fulfillment_status == "Received", "Delivered")
+		.when(fulfillment_status == "Partially Received", "Partially Delivered")
+		.when(fulfillment_status == "To Receive", "Ordered")
+		.when(fulfillment_status == "Completed", "Delivered")
+		.else_(fulfillment_status)
+	)
 
 	query = (
 		frappe.qb.from_(po_item)
@@ -125,7 +141,7 @@ def get_data(filters):
 			po.supplier_name,
 			po.transaction_date.as_("po_date"),
 			po.comments.as_("po_comments"),
-			po.status,
+			legacy_status.as_("status"),
 		)
 	)
 	if filters.get("docstatus"):
@@ -146,9 +162,10 @@ def get_data(filters):
 	if filters.get("lot"):
 		query = query.where(po_item.lot == filters.get("lot"))
 	if filters.get("status"):
-		query = query.where(po.status == filters.get("status"))
+		query = query.where(legacy_status == filters.get("status"))
 	if filters.get("open_status"):
-		query = query.where(po.open_status == filters.get("open_status"))
+		open_status = "Close" if filters.get("open_status") == "Closed" else filters.get("open_status")
+		query = query.where(po.open_status == open_status)
 	if filters.get("date_based_on"):
 		if filters.get("date_based_on") == "Posting Date":
 			if filters.get("from_date"):
@@ -162,6 +179,5 @@ def get_data(filters):
 				query = query.where(po_item.schedule_date <= filters.get("to_date"))
 
 	query = query.orderby(po.modified, order=Order.desc)
-	data = query.run(as_dict=True)
-
-	return data
+	# User decision (2026-10-20): display the stored ERP UOM.
+	return query.run(as_dict=True)

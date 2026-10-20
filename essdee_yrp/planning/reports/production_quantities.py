@@ -69,7 +69,7 @@ def work_orders(filters, include_rework=False, extra_fields=()):
 
 def calculated_items(orders):
 	return child_rows("YRP Work Order Calculated Item", [row["name"] for row in orders], [
-		"item_variant", "set_combination", "received_type_json", "received_qty", "delivered_quantity",
+		"item_variant", "set_combination", "received_type_json", "received_qty", "delivered_quantity", "idx",
 	], "YRP Work Order")
 
 
@@ -154,7 +154,7 @@ def process_comparison(process, detail):
 	return "cut" if process.get("in_stage") == detail.get("stiching_in_stage") else "piece"
 
 
-def production_lots(filters, category_field="category"):
+def production_lots(filters, category_field="category", *, creation_end_midnight=False):
 	lots = authorize_filter_values("SD YRP Lot", filters.get("lot"))
 	items = authorize_filter_values("Item", filters.get("item"))
 	category = filters.get(category_field)
@@ -180,7 +180,8 @@ def production_lots(filters, category_field="category"):
 
 		conditions["creation"] = [">=", str(getdate(start))]
 		conditions = [["SD YRP Lot", key, *(value if isinstance(value, list) else ["=", value])] for key, value in conditions.items()]
-		conditions.append(["SD YRP Lot", "creation", "<", str(add_days(getdate(end), 1))])
+		# WIP preserves the legacy SQL BETWEEN date-string midnight boundary.
+		conditions.append(["SD YRP Lot", "creation", "<=" if creation_end_midnight else "<", str(getdate(end) if creation_end_midnight else add_days(getdate(end), 1))])
 	return frappe.get_list("SD YRP Lot", filters=conditions, fields=["name", "item", "production_detail"], order_by="name", limit_page_length=0)
 
 
@@ -196,7 +197,7 @@ def production_context(lots, processes):
 		for field in ("cutting_process", "stiching_process"):
 			expanded.setdefault(detail.get(field), expand_processes(detail.get(field), process_details))
 	stages = child_rows("YRP IPD Process", details, ["process_name", "in_stage", "out_stage"], "YRP Item Production Detail")
-	order_rows = child_rows("SD YRP Lot Order Detail", [lot["name"] for lot in lots], ["item_variant", "quantity", "cut_qty", "set_combination"], "SD YRP Lot")
+	order_rows = child_rows("SD YRP Lot Order Detail", [lot["name"] for lot in lots], ["item_variant", "quantity", "cut_qty", "set_combination", "idx"], "SD YRP Lot")
 	orders = work_orders({"lot": ["in", [lot["name"] for lot in lots]]}, extra_fields=("includes_packing",)) if lots else []
 	items = calculated_items(orders)
 	attributes = variant_attributes({row["item_variant"] for row in [*order_rows, *items]})

@@ -439,8 +439,16 @@ doc_events = {
 	},
 	"Purchase Order": {
 		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
-		"before_save": "essdee_yrp.purchase_order_approval.apply_draft_approval_status",
-		"before_submit": "essdee_yrp.purchase_order_approval.validate_approval_submit",
+		"before_save": [
+			"essdee_yrp.purchase_order_approval.apply_draft_approval_status",
+			"essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_itemwise.mrp_uom_provenance.retire_changed_uom",
+		],
+		"before_submit": [
+			"essdee_yrp.purchase_order_approval.validate_approval_submit",
+			"essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_itemwise.mrp_uom_provenance.retire_changed_uom",
+		],
+		"before_update_after_submit": "essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_itemwise.mrp_uom_provenance.retire_changed_uom",
+		"before_cancel": "essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_itemwise.mrp_uom_provenance.retire_changed_uom",
 		"on_submit": "essdee_yrp.purchase_order_approval.finalize_purchase_order_submission",
 	},
 	"Item": {

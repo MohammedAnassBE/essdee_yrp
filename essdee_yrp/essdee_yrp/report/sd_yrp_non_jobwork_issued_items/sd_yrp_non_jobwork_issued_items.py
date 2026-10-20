@@ -34,6 +34,13 @@ def get_columns():
 			"label": "From Warehouse",
 			"width": 130,
 		},
+		{
+			"fieldname": "from_supplier",
+			"fieldtype": "Link",
+			"options": "Supplier",
+			"label": "From Supplier",
+			"width": 130,
+		},
 		{"fieldname": "from_location_name", "fieldtype": "Data", "label": "From Location Name", "width": 200},
 		{
 			"fieldname": "supplier",
@@ -91,7 +98,7 @@ def get_data(filters):
 		params["lot"] = filters.lot
 
 	if filters.get("from_location"):
-		conditions.append("se.from_warehouse = %(from_location)s")
+		conditions.append("(se.from_warehouse = %(from_location)s OR from_warehouse.supplier = %(from_location)s)")
 		params["from_location"] = filters.from_location
 
 	if filters.get("supplier"):
@@ -108,7 +115,8 @@ def get_data(filters):
 			se.name AS source_name,
 			se.purpose AS purpose,
 			se.from_warehouse AS from_location,
-			from_warehouse.warehouse_name AS from_location_name,
+			from_warehouse.supplier AS from_supplier,
+			COALESCE(NULLIF(from_supplier.supplier_name, ''), from_warehouse.warehouse_name) AS from_location_name,
 			{supplier_expression} AS supplier,
 			supplier.supplier_name AS supplier_name,
 			sed.lot AS lot,
@@ -122,6 +130,7 @@ def get_data(filters):
 		FROM `tabYRP Stock Entry Detail` sed
 		INNER JOIN `tabYRP Stock Entry` se ON se.name = sed.parent
 		LEFT JOIN `tabWarehouse` from_warehouse ON from_warehouse.name = se.from_warehouse
+		LEFT JOIN `tabSupplier` from_supplier ON from_supplier.name = from_warehouse.supplier
 		LEFT JOIN `tabSupplier` supplier ON supplier.name = {supplier_expression}
 		LEFT JOIN `tabItem` iv ON iv.name = sed.item
 		WHERE {conditions}

@@ -51,11 +51,12 @@ def aggregate(items, attributes, detail, sizes, orders, statuses=None, supplier_
 			values = [str(order[field]) for order in group["orders"].values() if order.get(field)]
 			dates[field] = reducer(values) if values else None
 		for row_type in ("Delivered", "Received", "Difference"):
-			values = group[row_type.lower()] if row_type != "Difference" else {size: group["delivered"][size] - group["received"][size] for size in sizes}
+			values = group[row_type.lower()] if row_type != "Difference" else {size: group["received"][size] - group["delivered"][size] for size in sizes}
 			row = quantities.numeric_row({"number": number, "colour": colour, "part": part, "supplier": (supplier_labels or {}).get(supplier) or supplier, "type": row_type}, values, sizes)
 			for size, amount in values.items():
 				footers[part][row_type][size] += amount
-			row.update(first_date=dates["first_dc_date"], last_date=dates["last_grn_date"], diff=date_diff(dates["last_grn_date"], dates["last_dc_date"]) if dates["last_grn_date"] and dates["last_dc_date"] else None)
+			prefix = {"Delivered": "dc", "Received": "grn"}.get(row_type)
+			row.update(first_date=dates[f"first_{prefix}_date"] if prefix else None, last_date=dates[f"last_{prefix}_date"] if prefix else None, diff=date_diff(dates["last_grn_date"], dates["last_dc_date"]) if dates["last_grn_date"] and dates["last_dc_date"] else None)
 			row["tones"] = {f"size_{index}": group["tones"].get(size, {}).get("tone", "") for index, size in enumerate(sizes)} if row_type == "Received" else {}
 			result.append(row)
 	for part, types in sorted(footers.items()):

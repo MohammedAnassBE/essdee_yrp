@@ -1,6 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 
+import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp.planning.reports import work_in_progress as report
@@ -83,6 +84,23 @@ class TestWorkInProgress(TestCase):
 		context["items"] = []
 		finishing = {"plans": {}, "parts": {}, "dispatches": [], "inwards": []}
 		self.assertEqual(report.aggregate(context, finishing, receipt_fixture(), [])["result"], [])
+
+
+class TestWorkInProgressDateParity(TestCase):
+	def test_both_runners_include_only_midnight_at_end_date(self):
+		from essdee_yrp.merch import reports as merch
+		from essdee_yrp.planning.reports import production_quantities as quantities
+		filters = {"lot": ["L"], "item": [], "lot_status": "Open", "from_date": "2026-10-09", "to_date": "2026-10-09"}
+		def read(doctype, **kwargs):
+			if kwargs.get("pluck"):
+				return ["L"]
+			conditions = kwargs["filters"]
+			upper = next(row for row in conditions if row[-3] == "creation" and row[-2] in ("<", "<="))
+			self.assertEqual(upper[-2:], ["<=", "2026-10-09"])
+			return []
+		with patch.object(frappe, "get_list", side_effect=read):
+			quantities.production_lots(filters, creation_end_midnight=True)
+			merch.resolve_lots(filters)
 
 
 class TestWorkInProgressLive(LiveProductionChecks, IntegrationTestCase):

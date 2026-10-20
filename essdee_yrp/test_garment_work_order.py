@@ -1,5 +1,8 @@
 """Regression coverage for the migrated garment Work Order calculator."""
 
+from unittest import TestCase
+from unittest.mock import MagicMock, patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -158,3 +161,38 @@ class TestGarmentWorkOrder(IntegrationTestCase):
 				for value in (item.get("values") or {}).values()
 			)
 		)
+
+
+class TestGarmentWorkOrderPlannedQuantity(TestCase):
+	def test_every_calculation_resets_planned_quantity_to_the_selected_demand(self):
+		module = "essdee_yrp.garment_work_order"
+		work_order = frappe._dict(
+			name="WO-1", docstatus=0, modified="m", lot="LOT-1", production_detail="IPD-1",
+			process_name="Printing", planned_quantity=137, no_receivables=0, includes_packing=0,
+		)
+		work_order.check_permission = MagicMock()
+		work_order.set = MagicMock()
+		work_order.append = MagicMock()
+		work_order.save = MagicMock()
+		demands = [
+			{"item_variant": "V-S", "qty": 300, "table_index": 0, "row_index": 0, "set_combination": {}},
+			{"item_variant": "V-M", "qty": 337, "table_index": 0, "row_index": 1, "set_combination": {}},
+		]
+		rows = [{"qty": 1}]
+		with (
+			patch(f"{module}.frappe.get_doc", side_effect=[work_order, frappe._dict(name="LOT-1")]),
+			patch(f"{module}.frappe.get_cached_doc"),
+			patch(f"{module}._validate_garment_work_order"),
+			patch(f"{module}._validated_demands", return_value=demands),
+			patch(f"{module}.calculate_garment_process_rows", return_value=(rows, rows)),
+			patch(f"{module}._processes", return_value=[]),
+			patch(f"{module}.normalize_item_matrix_row_indexes", side_effect=lambda value: value),
+			patch(f"{module}.frappe.db.get_single_value", return_value="Accepted"),
+			patch(f"{module}._filter_child_fields", side_effect=lambda _doctype, value: value),
+			patch(f"{module}._colour_summary", return_value=""),
+			patch(f"{module}._update_cutting_tracking_json"),
+		):
+			calculate_garment_work_order("WO-1", [])
+
+		self.assertEqual(work_order.planned_quantity, 637)
+		work_order.save.assert_called_once()

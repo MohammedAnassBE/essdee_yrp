@@ -268,6 +268,7 @@ def calculate_garment_work_order(work_order, rows, modified=None):
 	wo.deliverable_details = ""
 	wo.receivable_details = ""
 	wo.wo_colours = _colour_summary(ipd, demands)
+	wo.planned_quantity = sum(flt(demand["qty"]) for demand in demands)
 	wo.save()
 	_update_cutting_tracking_json(wo, ipd, processes)
 

@@ -33,7 +33,7 @@ export const PURCHASE_INVOICE_LIST_COLUMNS = [
 ]
 
 export const PURCHASE_INVOICE_EDITOR_GROUPS = [
-	{ key: "invoice", eyebrow: "Document", label: "Invoice", fields: ["supplier", "against", "posting_date", "due_date"] },
+	{ key: "invoice", eyebrow: "Document", label: "Invoice", fields: ["supplier", "against", "posting_date", "due_date", "do_not_submit_invoice"] },
 	{ key: "supplier-bill", eyebrow: "Vendor invoice", label: "Supplier bill", fields: ["bill_no", "billing_supplier", "bill_date", "eligibility_for_itc"] },
 	{ key: "debit", eyebrow: "Adjustment", label: "Debit", fields: ["debit_type", "debit_no", "debit_value"] },
 	{ key: "notes", eyebrow: "Context", label: "Notes", fields: ["remarks"] },
@@ -44,6 +44,7 @@ const PURCHASE_INVOICE_FALLBACK_SCHEMA = {
 	against: { label: "Against", fieldtype: "Select", options: "Purchase Order\nYRP Work Order", reqd: true },
 	posting_date: { label: "Posting Date", fieldtype: "Date", reqd: true },
 	due_date: { label: "Due Date", fieldtype: "Date" },
+	do_not_submit_invoice: { label: "Do not submit Invoice", fieldtype: "Check" },
 	bill_no: { label: "Supplier Invoice No", fieldtype: "Data", reqd: true },
 	billing_supplier: { label: "Billing Supplier", fieldtype: "Link", options: "Supplier", reqd: true },
 	bill_date: { label: "Supplier Invoice Date", fieldtype: "Date", reqd: true },

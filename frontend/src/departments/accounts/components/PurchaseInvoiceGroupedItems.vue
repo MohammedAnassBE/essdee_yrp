@@ -102,7 +102,7 @@ function money(input) {
 .purchase-invoice-items th { position: sticky; z-index: 1; top: 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .025em; background: var(--erp-surface-muted); }
 .purchase-invoice-items th:last-child, .purchase-invoice-items td:last-child { border-right: 0; }
 .purchase-invoice-items tbody tr:last-child td { border-bottom: 0; }
-.purchase-invoice-items tbody tr:hover { background: color-mix(in srgb, var(--erp-accent-soft) 32%, white); }
+.purchase-invoice-items tbody tr:hover { background: color-mix(in srgb, var(--erp-accent-soft) 32%, var(--erp-surface)); }
 .purchase-invoice-items td strong { color: var(--erp-text); font-weight: 720; }
 .purchase-invoice-items__number { text-align: right !important; font-variant-numeric: tabular-nums; }
 .purchase-invoice-items__rate, .purchase-invoice-items__amount { color: var(--erp-accent-hover); font-weight: 740; }

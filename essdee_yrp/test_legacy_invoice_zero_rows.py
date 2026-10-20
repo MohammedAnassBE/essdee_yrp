@@ -856,6 +856,27 @@ class WorkOrderBillingTest(unittest.TestCase):
 			[("GARMENT-S", 2), ("GARMENT-L", 0)],
 		)
 
+	def test_zero_quantity_tier_group_is_not_a_commercial_line(self):
+		fixture = self._fixture(
+			calculated=[
+				self._calculated("GARMENT-S", 10),
+				self._calculated("GARMENT-L", 0),
+			]
+		)
+		fixture[4].process_cost_values = [
+			frappe._dict(min_order_qty=0, price=6),
+			frappe._dict(min_order_qty=1, price=7.5),
+		]
+
+		payload = self._build(fixture)
+
+		self.assertTrue(payload["commercial_items"])
+		self.assertTrue(all(flt(row["qty"]) for row in payload["commercial_items"]))
+		self.assertEqual(
+			[(row["item_variant"], row["quantity"]) for row in payload["wo_items"]],
+			[("GARMENT-S", 2), ("GARMENT-L", 0)],
+		)
+
 
 class LegacyInvoiceZeroRowsTest(unittest.TestCase):
 	def test_zero_row_with_any_nonzero_receipt_is_not_ignored(self):

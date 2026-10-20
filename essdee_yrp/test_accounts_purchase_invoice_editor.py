@@ -409,7 +409,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 		self.assertEqual(bill.checked_permissions, ["read"])
 		self.assertEqual(
 			get_list.call_args.kwargs["filters"],
-			{"docstatus": 1, "supplier": "SUP-2", "against": "YRP Work Order"},
+			{"docstatus": 1, "supplier": "SUP-2", "against": "YRP Work Order", "is_return": 0},
 		)
 
 	def test_eligible_grns_keep_only_unlinked_cancelled_or_own_draft_rows(self):
@@ -457,7 +457,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 		)
 		self.assertEqual(
 			get_list.call_args.kwargs["filters"],
-			{"docstatus": 1, "supplier": "SUP-1", "against": "YRP Work Order"},
+			{"docstatus": 1, "supplier": "SUP-1", "against": "YRP Work Order", "is_return": 0},
 		)
 
 	def test_eligible_grns_pages_past_an_ineligible_first_window(self):
@@ -653,6 +653,28 @@ class TestPurchaseInvoiceEditor(TestCase):
 		):
 			_validate_selected_grn("GRN-1", "SUP-1", "YRP Work Order")
 
+	def test_work_order_invoice_rejects_return_grn(self):
+		from essdee_yrp.work_order_billing import _validate_selected_grn
+
+		grn = frappe._dict(
+			docstatus=1,
+			supplier="SUP-1",
+			against="YRP Work Order",
+			purchase_invoice_name=None,
+			is_return=1,
+		)
+		with (
+			patch("essdee_yrp.work_order_billing.frappe.db.exists", return_value=True),
+			patch("essdee_yrp.work_order_billing.frappe.db.get_value", return_value=grn),
+			patch("essdee_yrp.work_order_billing.frappe.has_permission"),
+			patch("essdee_yrp.work_order_billing._is_active_purchase_invoice", return_value=False),
+			patch("essdee_yrp.work_order_billing._active_invoice_links_for_grns", return_value={}),
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "GRN-1 is a return"):
+				_validate_selected_grn("GRN-1", "SUP-1", "YRP Work Order")
+			grn.against = "Purchase Order"
+			self.assertIs(_validate_selected_grn("GRN-1", "SUP-1", "Purchase Order"), grn)
+
 	def test_eligible_grn_hook_uses_mask_aware_override(self):
 		method = "yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice.get_eligible_grns"
 		overrides = frappe.get_hooks("override_whitelisted_methods")
@@ -668,6 +690,13 @@ class TestPurchaseInvoiceEditor(TestCase):
 
 		self.assertEqual(doc.get("status"), "Draft")
 		self.assertIsNone(doc.get("approved_by"))
+
+	def test_save_keeps_the_erp_bill_as_draft_choice(self):
+		doc = FakeInvoice(do_not_submit_invoice=0)
+
+		self.save_existing(doc, values={"do_not_submit_invoice": 1})
+
+		self.assertEqual(doc.get("do_not_submit_invoice"), 1)
 
 	def test_editor_prefills_from_bill_tracking(self):
 		from essdee_yrp.accounts.purchase_invoice_editor import get_purchase_invoice_editor

@@ -30,6 +30,7 @@ EDITOR_FIELDS = (
 	"against",
 	"posting_date",
 	"due_date",
+	"do_not_submit_invoice",
 	"bill_no",
 	"billing_supplier",
 	"bill_date",

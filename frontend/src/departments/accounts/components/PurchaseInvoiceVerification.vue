@@ -259,7 +259,7 @@ function dateTime(input) {
 .verification-table th:last-child, .verification-table td:last-child, .verification-summary th:last-child, .verification-summary td:last-child { border-right: 0; }
 .verification-table tbody:last-child tr:last-child > *, .verification-summary tbody tr:last-child td { border-bottom: 0; }
 .verification-table__number { text-align: right !important; font-variant-numeric: tabular-nums; }
-.verification-table__total { color: var(--erp-accent-hover); font-weight: 760; background: color-mix(in srgb, var(--erp-accent-soft) 34%, white); }
+.verification-table__total { color: var(--erp-accent-hover); font-weight: 760; background: color-mix(in srgb, var(--erp-accent-soft) 34%, var(--erp-surface)); }
 .verification-table__grand-total th { color: var(--erp-text); font-weight: 780; background: var(--erp-accent-soft); }
 .verification-summary > header { display: flex; min-height: 46px; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .verification-summary > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }

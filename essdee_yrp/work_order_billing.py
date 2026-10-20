@@ -74,7 +74,7 @@ def _validate_selected_grn(grn_name, supplier=None, against=None, purchase_invoi
 	grn = frappe.db.get_value(
 		"YRP Goods Received Note",
 		grn_name,
-		["docstatus", "supplier", "against", "purchase_invoice_name"],
+		["docstatus", "supplier", "against", "purchase_invoice_name", "is_return"],
 		as_dict=True,
 	)
 	if grn.docstatus != 1:
@@ -83,6 +83,13 @@ def _validate_selected_grn(grn_name, supplier=None, against=None, purchase_invoi
 		frappe.throw(_("Goods Received Note {0} belongs to another supplier.").format(grn_name))
 	if against and grn.against != against:
 		frappe.throw(_("Goods Received Note {0} is against {1}.").format(grn_name, grn.against))
+	if grn.against == "YRP Work Order" and grn.is_return:
+		frappe.throw(
+			_(
+				"Goods Received Note {0} is a return of delivered material, not processed work, "
+				"so it cannot be billed."
+			).format(grn_name)
+		)
 	owners = set(_active_invoice_links_for_grns([grn_name]).get(grn_name, set()))
 	if _is_active_purchase_invoice(grn.purchase_invoice_name):
 		owners.add(grn.purchase_invoice_name)
@@ -203,10 +210,13 @@ def build_work_order_invoice_payload(
 		_merge_hidden_rows(hidden, work_order_hidden)
 		billed_rows.extend(work_order_billed)
 
-	commercial_rows = list(commercial.values())
-	for row in commercial_rows:
+	commercial_rows = []
+	for row in commercial.values():
 		row["qty"] = round(flt(row["qty"]), quantity_precisions["commercial"])
 		row["amount"] = flt(row["qty"]) * flt(row["rate"])
+		# A rate tier that only zero-quantity items fall into bills nothing.
+		if row["qty"]:
+			commercial_rows.append(row)
 
 	hidden_rows = list(hidden.values())
 	for row in hidden_rows:

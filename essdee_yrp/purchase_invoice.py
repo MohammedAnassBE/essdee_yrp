@@ -438,6 +438,8 @@ def get_eligible_grns(
 	purchase_invoice = purchase_invoice if _is_active_purchase_invoice(purchase_invoice) else None
 	limit = max(1, min(int(limit or 100), MAX_SELECTED_GRNS))
 	filters = {"docstatus": 1, "supplier": resolved_supplier, "against": against}
+	if against == "YRP Work Order":
+		filters["is_return"] = 0
 	search_text = (search_text or "").strip()
 	or_filters = None
 	if search_text:

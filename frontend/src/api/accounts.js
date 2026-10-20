@@ -5,6 +5,26 @@ const WORKSPACE_METHOD = "essdee_yrp.accounts.purchase_invoice_workspace"
 const EDITOR_METHOD = "essdee_yrp.accounts.purchase_invoice_editor"
 const PURCHASE_INVOICE_METHOD = "yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice"
 const ERP_INVOICE_METHOD = "essdee_yrp.erp_purchase_invoice"
+const AUDIT_PENDING_METHOD = "essdee_yrp.accounts.audit_pending"
+
+export function getAuditPendingDashboard(showPartiallyDispatched = false) {
+	return callMethod(`${AUDIT_PENDING_METHOD}.get_dashboard_data`, {
+		show_partially_dispatched: showPartiallyDispatched ? 1 : 0,
+	})
+}
+
+export function getAuditPendingBreakdown(finishingPlan) {
+	return callMethod(`${AUDIT_PENDING_METHOD}.get_pending_breakdown`, { finishing_plan: finishingPlan })
+}
+
+export function getAuditPendingDispatchDetail(finishingPlan, history) {
+	return callMethod(`${AUDIT_PENDING_METHOD}.get_dispatch_detail`, {
+		finishing_plan: finishingPlan,
+		source_doctype: history.source_doctype,
+		source_name: history.source_name,
+		stock_entry: history.stock_entry,
+	})
+}
 
 export function getAccountsCapabilities() {
 	return callMethod(`${CAPABILITIES_METHOD}.get_capabilities`)

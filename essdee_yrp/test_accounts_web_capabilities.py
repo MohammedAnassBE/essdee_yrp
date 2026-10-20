@@ -66,7 +66,7 @@ class TestAccountsHrCapabilities(TestCase):
 		}
 		with patch.object(web_capabilities, "REPORT_GATES", gates), patch.object(
 			frappe, "has_permission", return_value=True
-		):
+		), patch("essdee_yrp.desk_web_reports.can_run_desk_report", return_value=False):
 			result = web_capabilities.get_capabilities()
 		self.assertEqual(list(result["reports"]), ["stock_balance"])
 		self.assertTrue(result["sections"]["reports"]["can_read"])

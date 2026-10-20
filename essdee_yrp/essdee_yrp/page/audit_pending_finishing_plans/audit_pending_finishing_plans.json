@@ -1,0 +1,17 @@
+{
+ "content": null,
+ "doctype": "Page",
+ "module": "Essdee YRP",
+ "name": "audit-pending-finishing-plans",
+ "page_name": "audit-pending-finishing-plans",
+ "roles": [
+  {"role": "Accounts User"},
+  {"role": "Accounts Manager"},
+  {"role": "System Manager"}
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Audit Pending Finishing Plans"
+}

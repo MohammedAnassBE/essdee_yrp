@@ -15,7 +15,7 @@
 					</TabList>
 					<TabPanels class="accounts-reports__panels">
 						<TabPanel :key="active" :value="active">
-							<component :is="currentTab.component" />
+							<component :is="currentTab.component" v-bind="currentTab.componentProps" />
 						</TabPanel>
 					</TabPanels>
 				</Tabs>
@@ -36,6 +36,7 @@ import { computed, defineAsyncComponent, onMounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { getAccountsCapabilities } from "../../api/accounts.js"
+import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import { accountsReportTabs } from "./accountsViews.js"
@@ -57,7 +58,7 @@ const loadError = ref("")
 const capabilities = ref({ reports: {} })
 const tabs = computed(() => accountsReportTabs(capabilities.value.reports).map((report) => ({
 	...report,
-	component: REPORT_COMPONENTS[report.key],
+	component: REPORT_COMPONENTS[report.key] || DeskBackedReport,
 })))
 const active = computed({
 	get: () => (tabs.value.some((tab) => tab.value === route.query.report) ? route.query.report : tabs.value[0]?.value),

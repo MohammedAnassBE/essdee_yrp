@@ -3,6 +3,7 @@ from frappe import _
 
 from essdee_yrp.accounts import audit_pending
 from essdee_yrp.cutting.reports import get_report_permissions
+from essdee_yrp.desk_web_reports import department_report_capabilities
 from essdee_yrp.fabric_store.web_workspace import can_run_report
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
 from essdee_yrp.finishing.web_workspace import get_capabilities as get_finishing_capabilities
@@ -47,6 +48,7 @@ def get_capabilities() -> dict:
 			for key, (label, is_allowed) in REPORT_GATES.items()
 			if is_allowed()
 		}
+		reports.update(department_report_capabilities("accounts", True))
 	return {
 		"sections": {
 			"debits": {"label": _("Debits"), "can_read": bool(frappe.has_permission("YRP Debit", ptype="read"))},

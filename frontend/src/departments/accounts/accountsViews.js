@@ -1,3 +1,5 @@
+import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
+
 export const ACCOUNTS_REPORTS = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse" },
 	{ key: "cutting_dpr", value: "cutting-dpr", label: "Cutting DPR", icon: "pi pi-chart-line" },
@@ -67,7 +69,7 @@ const PURCHASE_INVOICE_ACTIONS = [
 const PURCHASE_INVOICE_PRIMARY_ACTIONS = ["submit", "approve", "edit"]
 
 export function accountsReportTabs(reports) {
-	return ACCOUNTS_REPORTS.filter((report) => reports?.[report.key]?.can_read)
+	return [...ACCOUNTS_REPORTS.filter((report) => reports?.[report.key]?.can_read), ...departmentDeskReports("accounts", reports)]
 }
 
 /** Mirror YRPPurchaseInvoice.calculate_total: sum unrounded rows, round the totals once. */

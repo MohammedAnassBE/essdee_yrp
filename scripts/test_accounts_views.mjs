@@ -45,16 +45,18 @@ assert.deepEqual(allAccountsTabs.map(({ value }) => value), [
 ])
 const auditPendingComponent = readFileSync(new URL("../frontend/src/departments/accounts/reports/AuditPendingFinishingPlans.vue", import.meta.url), "utf8")
 for (const contract of [
-	"ReportShell", 'useWebReport({ reportKey: "accounts-audit-pending-finishing-plans" })',
-	'doctype="SD YRP Lot"', 'doctype="Item"', 'label="Requested From"', 'label="To"',
-	"/finishing/plans/${encodeURIComponent(row.name)}", "row.days_pending >= 7", "text-align: right",
-	"Plans pending", "No Finishing Plans are waiting for audit.", ':loading="loading"', ':error="error"',
-	"Boolean(filters.from_date) !== Boolean(filters.to_date)", "filters.from_date > filters.to_date",
+    "ReportShell", "getAuditPendingDashboard", "getAuditPendingBreakdown", "getAuditPendingDispatchDetail",
+    "filters.plan", "filters.lot", "filters.item", "filters.status", "filters.age",
+    "/finishing/plans/${encodeURIComponent(name)}", "Overdue Plans", "Fully Dispatched", "Oldest Pending",
+    "Show Partially Dispatched", "Total Cut", "Sewing Rx", "Packed", "Boxes Dispatched", "Dispatch History",
+    "Size-wise Dispatch Detail", "selectedPart.sizes", "category.size_totals", "row.total", "category.total",
+    "var(--erp-surface)", "var(--erp-text)", "pendingGeneration", "detailGeneration",
 ]) assert.ok(auditPendingComponent.includes(contract), `Missing Audit Pending contract: ${contract}`)
+assert.ok(!auditPendingComponent.includes("useWebReport"), "The legacy flat audit report has been replaced")
 const accountsReportPage = readFileSync(new URL("../frontend/src/departments/accounts/AccountsReports.vue", import.meta.url), "utf8")
 assert.ok(accountsReportPage.includes('audit_pending_finishing_plans: defineAsyncComponent(() => import("./reports/AuditPendingFinishingPlans.vue"))'))
 const reportProvider = readFileSync(new URL("../essdee_yrp/web_reports.py", import.meta.url), "utf8")
-assert.ok(reportProvider.includes('key="accounts-audit-pending-finishing-plans"'))
+assert.ok(!reportProvider.includes('key="accounts-audit-pending-finishing-plans"'), "The obsolete flat report registration has been removed")
 
 assert.deepEqual(
 	groupedItemTotals(

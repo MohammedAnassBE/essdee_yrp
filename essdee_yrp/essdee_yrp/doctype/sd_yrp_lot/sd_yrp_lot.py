@@ -776,6 +776,9 @@ def get_item_details(
 			for row in ppo_doc.production_ordered_details:
 				attrs = get_variant_attr_details(row.item_variant)
 				values[attrs[primary]]["qty"] -= row.quantity
+			for value in values.values():
+				# Lots may exceed the PPO; never suggest a negative remaining quantity.
+				value["qty"] = max(flt(value["qty"]), 0)
 			d["values"] = values
 			item["items"].append(d)
 

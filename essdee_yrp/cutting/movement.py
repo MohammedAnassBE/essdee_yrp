@@ -799,7 +799,8 @@ def apply_transaction(doc, *, cancelled=False):
 	if not lot or _bundle_tracking_disabled(lot):
 		return
 	implicit_collapsed_return = _is_implicit_collapsed_return(doc, lot)
-	stitching_consumption = not cpm_name and not allow_non_bundle and is_stitching_consumption_grn(doc, lot)
+	# Stitched outputs are not cut panels: Allow Non Bundle must not skip consuming the panels.
+	stitching_consumption = not cpm_name and is_stitching_consumption_grn(doc, lot)
 	if not cpm_name and not allow_non_bundle and not implicit_collapsed_return and not stitching_consumption:
 		return
 

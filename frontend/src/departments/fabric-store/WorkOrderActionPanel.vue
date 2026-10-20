@@ -99,7 +99,8 @@
 
 			<template v-else-if="mode === 'create_rework'">
 				<div class="work-order-action-panel__fields"><label><span>Supplier type</span><Select v-model="draft.supplier_type" :options="['Same Supplier', 'Different Supplier']" fluid /></label><LinkField v-if="draft.supplier_type === 'Different Supplier'" v-model="draft.supplier" label="Supplier *" doctype="Supplier" :show-open-button="false" /></div>
-				<div class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody></table></div>
+				<Message v-if="!reworkRows.length && !error" severity="secondary" :closable="false">No rework items. Rework rows come from this Work Order's submitted GRNs received in a rework type such as Printing Mistake.</Message>
+				<div v-else class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody></table></div>
 			</template>
 
 			<template v-else-if="mode === 'create_recut'">
@@ -343,7 +344,7 @@ function sourcePreview(entry) {
 	return `${entry.source_grn || "Shared source"} · Required ${number(demand)} · Available ${number(entry.source_stock_available)}${entry.source_shared ? " · Shared availability: allocate across rows" : ""}`
 }
 function attributeText(attributes) { return Object.entries(attributes || {}).map(([key, value]) => `${key}: ${value}`).join(" · ") || "—" }
-function reworkContext(row) { return [row.role, row.received_type, ...Object.values(row.dimensions || {})].filter(Boolean).join(" · ") || "—" }
+function reworkContext(row) { return [...new Set([row.role, row.received_type, ...Object.values(row.dimensions || {})].filter(Boolean))].join(" · ") || "—" }
 function primaryValues(group) { return group.primary_attribute_values?.length ? group.primary_attribute_values : ["default"] }
 function number(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 

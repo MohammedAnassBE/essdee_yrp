@@ -68,3 +68,18 @@ class TestStitchingGrnBundleConsumption(TestCase):
 		self.assertEqual(submit.call_count, 1)
 		self.assertEqual(submit.call_args.args[3], "S-0172")
 		self.assertNotIn("add", submit.call_args.kwargs)
+
+	def test_allow_non_bundle_still_consumes_the_stitched_panels(self):
+		from essdee_yrp.cutting.movement import apply_transaction
+
+		doc = self.grn(lot="LOT-1", allow_non_bundle=1, cut_panel_movement=None)
+		with (
+			patch(f"{MOVEMENT}._bundle_tracking_disabled", return_value=False),
+			patch(f"{MOVEMENT}._is_implicit_collapsed_return", return_value=False),
+			patch(f"{MOVEMENT}.is_stitching_consumption_grn", return_value=True),
+			patch(f"{MOVEMENT}.frappe.db.get_value", return_value=None),
+			patch(f"{LEDGER}.update_collapsed_bundle") as update,
+		):
+			apply_transaction(doc)
+
+		update.assert_called_once_with(doc.doctype, doc.name, "on_submit", consume_grn_deliverables=True)

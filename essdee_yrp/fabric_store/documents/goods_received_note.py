@@ -131,6 +131,7 @@ GOODS_RECEIVED_NOTE_EDITOR_FIELDS = (
 	"actual_date",
 	"letter_head",
 	"dc_no",
+	"allow_non_bundle",
 )
 
 RETURN_LOCKED_FIELDS = {
@@ -187,7 +188,6 @@ SPECIAL_SOURCE_FIELDS = (
 	"cut_panel_movement",
 	"from_closed_wo_sewing_details",
 	"from_finishing",
-	"allow_non_bundle",
 )
 
 INSPECTION_FIELDS = (
@@ -1078,6 +1078,9 @@ def _editable_headers(doc, values: Mapping) -> dict:
 	fieldnames = GOODS_RECEIVED_NOTE_EDITOR_FIELDS
 	if doc.get("is_return"):
 		fieldnames = tuple(fieldname for fieldname in fieldnames if fieldname not in RETURN_LOCKED_FIELDS)
+	if doc.get("cut_panel_movement"):
+		# The Cut Panel Movement decides exact or collapsed bundle handling.
+		fieldnames = tuple(fieldname for fieldname in fieldnames if fieldname != "allow_non_bundle")
 	return {fieldname: values[fieldname] for fieldname in fieldnames if fieldname in values}
 
 

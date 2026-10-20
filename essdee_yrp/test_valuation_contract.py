@@ -1277,6 +1277,21 @@ class TestEssdeeValuationContract(UnitTestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "is not a Deliverable"):
 			_find_deliverable(deliverables, received, "WO-IDENTITY-1")
 
+	def test_identity_mistake_output_consumes_the_panel_sent_in_the_default_type(self):
+		accepted = frappe._dict(
+			name="WO-D-1", item_variant="PANEL-M", uom="Piece", set_combination="{}", lot="LOT-A", received_type="Accepted"
+		)
+		mistake = frappe._dict(
+			name="WO-D-2", item_variant="PANEL-M", uom="Piece", set_combination="{}", lot="LOT-A", received_type="Printing Mistake"
+		)
+		received = frappe._dict(
+			item_variant="PANEL-M", uom="Piece", set_combination="{}", lot="LOT-A", received_type="Printing Mistake"
+		)
+
+		with patch("frappe.db.get_single_value", return_value="Accepted"):
+			self.assertEqual(_find_deliverable([accepted], received, "WO-IDENTITY-1").name, "WO-D-1")
+			self.assertEqual(_find_deliverable([mistake, accepted], received, "WO-IDENTITY-1").name, "WO-D-1")
+
 	def test_identity_accessory_is_mapped_to_its_exact_received_output(self):
 		calculated = frappe._dict(
 			item_variant="GARMENT-WINE-S",

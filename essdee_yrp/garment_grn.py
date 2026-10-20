@@ -776,11 +776,14 @@ def _find_deliverable(deliverables, received, work_order_name):
 		row for row in candidates if _normal_json(row.get("set_combination")) == received_combination
 	]
 
-	for fieldname in ("lot", "received_type"):
-		value = received.get(fieldname)
-		if not value:
-			continue
-		candidates = [row for row in candidates if row.get(fieldname) == value]
+	lot = received.get("lot")
+	if lot:
+		candidates = [row for row in candidates if row.get("lot") == lot]
+	# The received row's type grades the output (e.g. Printing Mistake); like
+	# production_api, the consumed input is the panel sent in the default type.
+	if len(candidates) > 1:
+		default_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
+		candidates = [row for row in candidates if (row.get("received_type") or default_type) == default_type]
 
 	if len(candidates) == 1:
 		return candidates[0]

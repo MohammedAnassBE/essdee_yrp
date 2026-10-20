@@ -7,9 +7,11 @@ from frappe.model.base_document import BaseDocument
 from frappe.tests.utils import FrappeTestCase
 
 from essdee_yrp.fabric_store.documents.goods_received_note import (
+	_editable_headers,
 	_merge_authoritative_rows,
 	_merge_inspection_sources,
 	_source_defaults,
+	_special_source_context,
 	calculate_goods_received_note,
 	execute_goods_received_note_command,
 	get_delivery_address,
@@ -267,6 +269,15 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		self.assertIsNone(workspace["record"]["name"])
 		self.assertEqual(workspace["values"]["comments"], source.comments)
 		self.assertEqual(workspace["matrices"]["items"], [{"copy": "items"}])
+
+	def test_allow_non_bundle_is_an_editable_draft_header_like_desk(self):
+		# production_api's GRN form lets the user tick Allow Non Bundle; the received rows stay editable.
+		self.assertFalse(_special_source_context({"allow_non_bundle": 1})["active"])
+		doc = frappe._dict(is_return=0)
+		self.assertEqual(_editable_headers(doc, {"allow_non_bundle": 1, "is_rework": 1}), {"allow_non_bundle": 1})
+		# A Cut Panel Movement GRN keeps the bundle mode its movement set.
+		cpm_grn = frappe._dict(is_return=0, cut_panel_movement="CPM-1")
+		self.assertEqual(_editable_headers(cpm_grn, {"allow_non_bundle": 0, "comments": "x"}), {"comments": "x"})
 
 	def test_special_source_grn_cannot_be_duplicated_as_an_ordinary_receipt(self):
 		source = self.make_document(docstatus=1)

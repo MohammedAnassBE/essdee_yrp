@@ -325,7 +325,7 @@ const primaryTotals = new Set(["total_received_quantity", "total", "grand_total"
 const headerFieldnames = new Set(["against", "against_id", "delivery_challan", "process_name", "item", "supplier", "supplier_name"])
 const sourceFieldnames = new Set(["against", "against_id", "delivery_challan"])
 const fieldLabelOverrides = { against: "Source Type", against_id: "Source Document" }
-const sourceOwnedFieldnames = new Set(["is_return", "is_rework", "additional_grn", "allow_non_bundle", "includes_packing", "cutting_laysheet", "cut_panel_movement", "from_closed_wo_sewing_details", "from_finishing", "is_manual_entry", "is_pack", "avoid_sewing_plan_qty"])
+const sourceOwnedFieldnames = new Set(["is_return", "is_rework", "additional_grn", "includes_packing", "cutting_laysheet", "cut_panel_movement", "from_closed_wo_sewing_details", "from_finishing", "is_manual_entry", "is_pack", "avoid_sewing_plan_qty"])
 const presentationHiddenFieldnames = new Set(["against", "against_id", "delivery_challan", "production_detail"])
 const afterMatrixFieldnames = new Set(["freight_charges", "comments", "is_internal_unit", "transfer_complete", "ste_transferred", "ste_transferred_percent"])
 
@@ -384,6 +384,8 @@ function canEditMatrixBlock(kind) {
 	if (!editingSubmitted.value) return true
 	return allowOnSubmitFields.value.has(kind === "items" ? "items" : "correction_items")
 }
+// A Cut Panel Movement decides exact or collapsed bundle handling for its GRN.
+const cutPanelMovementOwned = computed(() => Boolean(form.cut_panel_movement || workspace.value.record?.cut_panel_movement))
 const visibleFields = computed(() => {
 	const result = new Map()
 	for (const source of workspace.value.fields || []) {
@@ -395,7 +397,7 @@ const visibleFields = computed(() => {
 			...source,
 			label: fieldLabelOverrides[source.fieldname] || source.label,
 			reqd: Boolean(source.reqd || source.mandatory || evaluateCondition(source.mandatory_depends_on)),
-			read_only: Boolean(source.read_only || evaluateCondition(source.read_only_depends_on)),
+			read_only: Boolean(source.read_only || evaluateCondition(source.read_only_depends_on) || (source.fieldname === "allow_non_bundle" && cutPanelMovementOwned.value)),
 		}
 		if (!canEdit.value && !hasDocumentDisplayValue(form[source.fieldname] ?? source.value)) continue
 		result.set(source.fieldname, field)

@@ -388,6 +388,8 @@ def _apply_return_grns(doc, items, rework, default_type, rejected_type):
 				values["quantity"] += quantity
 				if received_type == rejected_type:
 					values["rejected_qty"] += quantity
+					# A rejected return has no GRN Rework Item; keep its rework row.
+					items[key]["rework_qty"] += quantity
 				items[key]["accepted_qty"] -= quantity
 			else:
 				fieldname = "pack_return_qty" if grn.get("is_pack") else "return_qty"

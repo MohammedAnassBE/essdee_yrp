@@ -135,7 +135,7 @@ class TestFinishingDeliveryChallanQuantity(TestCase):
 			self._item_list("balance")
 
 	def test_conversion_creates_an_unflagged_dc_for_the_entered_quantity(self):
-		work_order = MagicMock()
+		work_order = MagicMock(supplier="S-1")
 		real_get_doc = frappe.get_doc
 		with (
 			patch.object(
@@ -162,3 +162,14 @@ class TestFinishingDeliveryChallanQuantity(TestCase):
 		self.assertEqual(create_dc.call_args.args[0]["selected_type"], "balance")
 		self.assertEqual(create_dc.call_args.kwargs["quantity_field"], "return_qty")
 		self.assertEqual(return_items.call_args.args[4]["received_type"], "Accepted")
+
+	def test_conversion_from_another_location_names_the_packing_unit(self):
+		work_order = MagicMock(supplier="S-0171")
+		with (
+			patch.object(frappe, "get_doc", return_value=work_order),
+			patch.object(transactions, "_validate_work_order_context"),
+			patch.object(transactions, "create_delivery_challan") as create_dc,
+			self.assertRaisesRegex(frappe.ValidationError, "already at S-0171"),
+		):
+			transactions.convert_to_loose_piece_items({"data": {}}, "WO-1", "LOT-1", "EC-TEST", "S-0172")
+		create_dc.assert_not_called()

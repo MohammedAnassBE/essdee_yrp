@@ -555,6 +555,13 @@ def convert_to_loose_piece_items(data, work_order, lot, item_name, from_location
 	_validate_work_order_context(work_order_doc, lot, item_name)
 	if not from_location:
 		frappe.throw("From Location is required")
+	if from_location != work_order_doc.supplier:
+		# The conversion DC lands at the packing unit and its return takes it back from there.
+		frappe.throw(
+			_("Convert to Loose Piece works on pieces already at {0}. Choose From Location {0}.").format(
+				work_order_doc.supplier
+			)
+		)
 
 	delivery_challan = create_delivery_challan(
 		{

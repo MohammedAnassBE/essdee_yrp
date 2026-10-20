@@ -3,9 +3,11 @@
 		<div class="attribute-values-dialog__body">
 			<div v-if="!draft.length" class="attribute-values__all"><strong>All {{ attribute }} values are allowed.</strong><span>Add values below to restrict this item.</span></div>
 			<div v-else class="attribute-values-dialog__state"><span>{{ draft.length }} selected</span><Button label="Allow all values" severity="secondary" text size="small" @click="draft = []" /></div>
-			<div v-if="draft.length" class="attribute-values-dialog__chips">
-				<span v-for="value in draft" :key="value" :class="{ 'is-new': draftNewValues.includes(value) }">{{ value }}<small v-if="draftNewValues.includes(value)">New</small><Button icon="pi pi-times" severity="secondary" text rounded :aria-label="`Remove ${value}`" @click="draft = removeAttributeValueDraft(draft, value)" /></span>
+			<div v-if="draft.length" ref="chipList" class="attribute-values-dialog__chips" role="list" :aria-label="`${attribute} values`">
+				<span v-for="(value, index) in draft" :key="value" v-bind="chipProps(value, index)" :class="{ 'is-new': draftNewValues.includes(value) }">{{ value }}<small v-if="draftNewValues.includes(value)">New</small><Button icon="pi pi-times" severity="secondary" text rounded :aria-label="`Remove ${value}`" @click="draft = removeAttributeValueDraft(draft, value)" /></span>
 			</div>
+			<p v-if="!creating && draft.length > 1" class="erp-help-text">Drag to reorder, or Alt + ← / →.</p>
+			<span class="attribute-values-dialog__announcement" role="status" aria-live="polite">{{ reorderMessage }}</span>
 			<div @keydown.escape="keepDialogOpen">
 				<LinkField v-model="candidate" label="Add value" doctype="Item Attribute Value" :search-handler="searchValues" :show-open-button="false" :placeholder="`Search ${attribute}…`" @select="addValue($event.label)" />
 			</div>
@@ -31,6 +33,7 @@ import { computed, nextTick, ref, watch } from "vue"
 
 import { searchItemAttributeValues } from "../../../api/purchase.js"
 import LinkField from "../../../components/common/LinkField.vue"
+import { useChipReorder } from "../../../components/common/useChipReorder.js"
 import { addAttributeValueDraft, isSameAttributeValue, matchingAttributeValue, removeAttributeValueDraft } from "../purchaseViews.js"
 
 const props = defineProps({
@@ -48,6 +51,15 @@ const candidate = ref("")
 const newValue = ref("")
 const creating = ref(false)
 const error = ref("")
+const chipList = ref(null)
+const reorderMessage = ref("")
+const { chipProps } = useChipReorder({
+	items: () => draft.value,
+	enabled: () => props.visible && !creating.value,
+	container: chipList,
+	onReorder: values => { draft.value = values },
+	announce: message => { reorderMessage.value = message },
+})
 let openSequence = 0
 
 const draftNewValues = computed(() => stagedValues.value.filter((value) => draft.value.includes(value)))
@@ -62,6 +74,7 @@ watch(() => props.visible, (visible) => {
 	candidate.value = ""
 	newValue.value = ""
 	error.value = ""
+	reorderMessage.value = ""
 })
 
 async function searchValues(text) {
@@ -113,6 +126,12 @@ function apply() {
 .attribute-values-dialog__chips { display: flex; min-width: 0; flex-wrap: wrap; gap: calc(var(--erp-space-1) + 2px); }
 .attribute-values-dialog__chips > span { display: inline-flex; max-width: 100%; align-items: center; gap: var(--erp-space-1); padding-left: var(--erp-space-3); overflow-wrap: anywhere; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 700; border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); background: var(--erp-surface-soft); }
 .attribute-values-dialog__chips > span.is-new { border-style: dashed; }
+.attribute-values-dialog__chips > span.is-reorderable { cursor: grab; touch-action: none; user-select: none; }
+.attribute-values-dialog__chips > span.is-dragging { opacity: 0.45; cursor: grabbing; }
+.attribute-values-dialog__chips > span.is-drop-before { border-left-color: var(--erp-accent); box-shadow: -2px 0 var(--erp-accent); }
+.attribute-values-dialog__chips > span.is-drop-after { border-right-color: var(--erp-accent); box-shadow: 2px 0 var(--erp-accent); }
+.attribute-values-dialog__chips > span:focus-visible { outline: none; box-shadow: var(--erp-focus-ring); }
+.attribute-values-dialog__announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .attribute-values-dialog__chips small { flex-shrink: 0; white-space: nowrap; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }
 .attribute-values-dialog__add { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--erp-space-2); }
 .attribute-values__all { display: grid; min-width: 0; gap: var(--erp-space-1); padding: var(--erp-space-2) var(--erp-space-3); border: 1px solid color-mix(in srgb, var(--erp-accent) 24%, var(--erp-border)); border-radius: var(--erp-control-radius); background: var(--erp-accent-soft); }

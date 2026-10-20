@@ -139,6 +139,11 @@
 	background: var(--erp-accent-soft);
 }
 .ipd-chip--removable { padding: 0 2px 0 var(--erp-space-3); }
+.ipd-chip.is-reorderable { cursor: grab; touch-action: none; user-select: none; }
+.ipd-chip.is-dragging { opacity: 0.45; cursor: grabbing; }
+.ipd-chip.is-drop-before { border-left-color: var(--erp-accent); box-shadow: -2px 0 var(--erp-accent); }
+.ipd-chip.is-drop-after { border-right-color: var(--erp-accent); box-shadow: 2px 0 var(--erp-accent); }
+.ipd-chip:focus-visible { outline: none; box-shadow: var(--erp-focus-ring); }
 .ipd-chip-add { flex: 1 1 160px; min-width: 0; }
 .ipd-chip--removable .p-button { width: 24px; height: 24px; padding: 0; }
 .ipd-chip.is-new { border-style: dashed; }

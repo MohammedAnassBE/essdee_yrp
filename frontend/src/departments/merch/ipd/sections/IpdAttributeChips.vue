@@ -5,8 +5,8 @@
 			<span v-for="role in roles" :key="role" class="erp-count-badge erp-count-badge--active">{{ ROLE_LABELS[role] }}</span>
 			<Button v-if="removable" icon="pi pi-trash" text rounded severity="secondary" size="small" :aria-label="`Remove ${attribute}`" @click="emit('remove')" />
 		</header>
-		<ul class="ipd-chip-list" :aria-label="`${attribute} values`">
-			<li v-for="(value, index) in values" :key="value" class="ipd-chip" :class="{ 'ipd-chip--removable': editable, 'is-selected': selectedIndex === index }">
+		<ul ref="chipList" class="ipd-chip-list" :aria-label="`${attribute} values`">
+			<li v-for="(value, index) in values" :key="value" v-bind="chipProps(value, index)" class="ipd-chip" :class="{ 'ipd-chip--removable': editable, 'is-selected': selectedIndex === index }">
 				{{ value }}
 				<Button v-if="editable" icon="pi pi-times" text rounded severity="secondary" size="small" :aria-label="`Remove ${value}`" :disabled="busy" @click="remove(value)" />
 			</li>
@@ -26,9 +26,10 @@
 				/>
 			</li>
 		</ul>
+		<p v-if="editable && !busy && values.length > 1" class="erp-help-text">Drag to reorder, or Alt + ← / →.</p>
 		<p v-if="!values.length && !pending.length && !editable" class="erp-help-text">{{ emptyText }}</p>
 		<p v-if="note" class="erp-help-text">{{ note }}</p>
-		<p v-if="meta" class="ipd-chip-meta" role="status">{{ meta }}</p>
+		<p class="ipd-chip-meta" role="status">{{ meta }}</p>
 		<p v-if="error" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />{{ error }}</p>
 		<DocumentConfirmationDialog
 			v-model:visible="confirmVisible"
@@ -50,6 +51,7 @@ import { computed, inject, nextTick, ref } from "vue"
 
 import { searchItemAttributeValues } from "../../../../api/purchase.js"
 import LinkField from "../../../../components/common/LinkField.vue"
+import { useChipReorder } from "../../../../components/common/useChipReorder.js"
 import DocumentConfirmationDialog from "../../../../components/documents/DocumentConfirmationDialog.vue"
 import { parseValueList, usageMessage, valueListMessage } from "../ipdEditor.js"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
@@ -80,6 +82,14 @@ const confirmValue = ref("")
 const confirmMessage = ref("")
 
 const known = computed(() => [...props.values, ...pending.value])
+const chipList = ref(null)
+const { chipProps } = useChipReorder({
+	items: () => props.values,
+	enabled: () => props.editable && !busy.value,
+	container: chipList,
+	onReorder: values => { selectedIndex.value = -1; return save(values) },
+	announce: message => { meta.value = message },
+})
 
 async function save(values) {
 	busy.value = true

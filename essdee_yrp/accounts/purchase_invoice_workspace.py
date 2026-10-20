@@ -90,13 +90,22 @@ def apply_purchase_invoice_response_permissions(doc) -> bool:
 	return duplicate_billing_supplier
 
 
+def _supplier_display_name(doc, fieldname):
+	name = _invoice_link_name(doc, fieldname)
+	if not name:
+		return doc.get(fieldname)
+	return frappe.db.get_value("Supplier", name, "supplier_name") or name
+
+
 def _detail_field(doc, fieldname: str) -> dict:
 	field = doc.meta.get_field(fieldname)
 	return {
 		"fieldname": fieldname,
 		"label": field.label if field and field.label else fieldname.replace("_", " ").title(),
 		"fieldtype": field.fieldtype if field else "Data",
-		"value": doc.get(fieldname),
+		"value": _supplier_display_name(doc, fieldname)
+		if fieldname == "billing_supplier"
+		else doc.get(fieldname),
 		"options": field.options if field else None,
 		**({"link_name": _invoice_link_name(doc, fieldname)} if field and field.fieldtype == "Link" else {}),
 	}
@@ -105,15 +114,15 @@ def _detail_field(doc, fieldname: str) -> dict:
 def serialize_purchase_invoice_details(doc, duplicate_billing_supplier: bool = False) -> list[dict]:
 	details = []
 	for fieldname in DETAIL_FIELDS:
+		if fieldname == "billing_supplier" and (
+			duplicate_billing_supplier or doc.get("billing_supplier") == doc.get("supplier")
+		):
+			continue
 		detail = _detail_field(doc, fieldname)
 		value = detail["value"]
 		if value in (None, ""):
 			continue
 		if detail["fieldtype"] in NUMERIC_FIELD_TYPES and value == 0:
-			continue
-		if fieldname == "billing_supplier" and (
-			duplicate_billing_supplier or value == doc.get("supplier")
-		):
 			continue
 		details.append(detail)
 	return details

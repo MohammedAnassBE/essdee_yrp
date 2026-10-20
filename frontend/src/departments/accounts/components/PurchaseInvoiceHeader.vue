@@ -41,7 +41,7 @@ function money(input) {
 <style scoped>
 .purchase-invoice-header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 14px; padding-block: 3px; }
 .purchase-invoice-header__identity { display: flex; min-width: 0; align-items: center; gap: 10px; }
-.purchase-invoice-header__identity h1 { margin: 0; overflow: hidden; color: var(--erp-text); font-size: clamp(18px, 1.35vw, 22px); letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.purchase-invoice-header__identity h1 { min-width: 0; overflow-wrap: anywhere; white-space: normal; margin: 0; overflow: hidden; color: var(--erp-text); font-size: clamp(18px, 1.35vw, 22px); letter-spacing: -.02em; text-overflow: ellipsis; }
 .purchase-invoice-header__facts { display: flex; min-width: 0; align-items: center; margin: 0; gap: 0; }
 .purchase-invoice-header__facts > div { display: grid; min-width: 100px; max-width: 210px; gap: 2px; padding: 1px 12px; border-left: 1px solid var(--erp-border); }
 .purchase-invoice-header__facts dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 730; letter-spacing: .035em; text-transform: uppercase; }

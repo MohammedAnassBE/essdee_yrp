@@ -267,8 +267,40 @@ def _local_erp_purchase_invoice_api():
 	return purchase_invoice
 
 
+def _validate_supplier_invoice_number(payload):
+	supplier = payload.get("billing_supplier") or payload.get("supplier")
+	bill_no = payload.get("bill_no")
+	if not supplier or not bill_no:
+		return
+	if not cint(frappe.get_single_value("Accounts Settings", "check_supplier_invoice_uniqueness")):
+		return
+	from erpnext import get_default_company
+	from erpnext.accounts.utils import get_fiscal_year
+
+	# The local creator uses the default company; ERPNext uses it to select the fiscal year.
+	fiscal_year = get_fiscal_year(payload.get("posting_date"), company=get_default_company(), as_dict=True)
+	existing = frappe.db.get_value(
+		"Purchase Invoice",
+		{
+			"supplier": supplier,
+			"bill_no": bill_no,
+			"docstatus": ["<", 2],
+			"posting_date": ["between", [fiscal_year.year_start_date, fiscal_year.year_end_date]],
+		},
+		"name",
+	)
+	if existing:
+		frappe.throw(
+			_(
+				"ERP Purchase Invoice {0} already uses Supplier Invoice No {1}. "
+				"Cancel that ERP bill or change the Supplier Invoice No, then submit again."
+			).format(existing, bill_no)
+		)
+
+
 def _create_local_erp_invoice(payload):
 	"""Use Essdee's established creator without calling the retired remote MRP callback."""
+	_validate_supplier_invoice_number(payload)
 	local_payload = dict(payload)
 	local_payload["items"] = [dict(row) for row in payload.get("items") or []]
 	bill_tracking = local_payload.get("vendor_bill_tracking")

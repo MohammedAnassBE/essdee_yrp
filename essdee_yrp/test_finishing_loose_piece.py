@@ -29,7 +29,7 @@ def accepted_or_db(real):
 class TestLoosePieceStockVariant(TestCase):
 	def _resolve(self, doc, *, is_stitched=True, loose_piece_stage="Loose Piece"):
 		with (
-			patch.object(loose_piece.attribute_db, "get_value", return_value=("Stage", "Piece")),
+			patch.object(loose_piece.attribute_db, "get_value", return_value=("Stage", "Piece", "Pack")),
 			patch.object(loose_piece, "check_dependent_stage_variant", return_value=is_stitched) as check,
 			patch.object(frappe.db, "get_single_value", return_value=loose_piece_stage),
 			patch.object(
@@ -68,20 +68,42 @@ class TestLoosePieceStockVariant(TestCase):
 		self.assertEqual(result, PIECE)
 		create.assert_not_called()
 
-	def test_cancel_reverses_a_voucher_posted_before_loose_piece_holding(self):
-		doc = packing_doc(docstatus=2, name="DC-OLD")
-		with patch.object(frappe.db, "exists", return_value=None) as exists:
-			result, *_mocks = self._resolve(doc)
-		self.assertEqual(result, PIECE)
-		exists.assert_called_once_with(
-			"YRP Stock Ledger Entry",
-			{"voucher_type": "YRP Delivery Challan", "voucher_no": "DC-OLD", "item": "EC-TEST-Loose Piece-S"},
-		)
+	def test_cancel_reverses_the_stage_variant_the_voucher_posted(self):
+		attributes = {
+			PIECE: {"Colour": "Liver", "Size": "S", "Stage": "Piece"},
+			"EC-TEST-Old Loose-S": {"Size": "S", "Stage": "Old Loose"},
+			"EC-TEST-S": {"Size": "S", "Stage": "Pack"},
+			"EC-TEST-Cool Grey-S": {"Colour": "Cool Grey", "Size": "S", "Stage": "Piece"},
+		}
+		posted = ["EC-TEST-S", PIECE, "EC-TEST-Cool Grey-S", "EC-TEST-Old Loose-S"]
+		with (
+			patch.object(frappe, "get_all", return_value=posted),
+			patch.object(loose_piece, "get_variant_attr_details", side_effect=attributes.get),
+			patch.object(loose_piece, "get_parent_item", return_value="EC-TEST"),
+		):
+			result = loose_piece.get_posted_stock_variant(
+				packing_doc(docstatus=2, name="DC-1"), PIECE, "Stage", excluded_stages={"Pack"}
+			)
+		self.assertEqual(result, "EC-TEST-Old Loose-S")
 
-	def test_cancel_reverses_a_loose_piece_voucher_as_posted(self):
-		with patch.object(frappe.db, "exists", return_value="SLE-1"):
-			result, *_mocks = self._resolve(packing_doc(docstatus=2, name="DC-NEW"))
-		self.assertEqual(result, "EC-TEST-Loose Piece-S")
+	def test_cancel_of_a_voucher_posted_before_loose_piece_keeps_the_variant(self):
+		with (
+			patch.object(frappe, "get_all", return_value=[PIECE]),
+			patch.object(
+				loose_piece, "get_variant_attr_details", return_value={"Size": "S", "Stage": "Piece"}
+			),
+			patch.object(loose_piece, "get_parent_item", return_value="EC-TEST"),
+		):
+			result = loose_piece.get_posted_stock_variant(
+				packing_doc(docstatus=2, name="DC-OLD"), PIECE, "Stage"
+			)
+		self.assertEqual(result, PIECE)
+
+	def test_cancel_does_not_need_the_loose_piece_setting(self):
+		with patch.object(loose_piece, "get_posted_stock_variant", return_value=PIECE) as posted:
+			result, *_mocks = self._resolve(packing_doc(docstatus=2, name="DC-OLD"), loose_piece_stage=None)
+		self.assertEqual(result, PIECE)
+		posted.assert_called_once()
 
 	def test_missing_loose_piece_stage_fails_loudly(self):
 		with self.assertRaises(frappe.ValidationError):

@@ -260,24 +260,28 @@ export function cancelDoc(doctype, name, modified = "") {
 
 export async function getList(
 	doctype,
-	{ fields = ["name"], filters = [], orderBy = "modified desc", start = 0, pageLength = 20 } = {},
+	{ fields = ["name"], filters = [], orderBy = "modified desc", start = 0, pageLength = 20, groupBy } = {},
 ) {
 	const params = {
 		fields,
 		filters,
+		group_by: groupBy,
 		order_by: orderBy,
 		limit_start: start,
 		limit_page_length: pageLength,
 	}
-	const payload = await request(
-		`/api/resource/${encodeURIComponent(doctype)}${queryString(params)}`,
-		{ method: "GET" },
-	)
+	const url = `/api/resource/${encodeURIComponent(doctype)}${queryString(params)}`
+	if (url.length > 6000) return await sharedRead("frappe.client.get_list", { doctype, ...params }) || []
+	const payload = await request(url, { method: "GET" })
 	return payload.data || []
 }
 
-export async function getCount(doctype, filters = []) {
-	const value = await sharedRead("frappe.desk.reportview.get_count", { doctype, filters })
+export function getItemFilterValues(items) {
+	return sharedRead("essdee_yrp.api.item_filter.get_item_filter_values", { items })
+}
+
+export async function getCount(doctype, filters = [], { distinct = false } = {}) {
+	const value = await sharedRead("frappe.desk.reportview.get_count", distinct ? { doctype, filters, distinct } : { doctype, filters })
 	return Number(value || 0)
 }
 

@@ -471,6 +471,7 @@ import {
 	cancelDoc,
 	getBulkEditFields,
 	getCount,
+	getItemFilterValues,
 	getList,
 	getMeta,
 	getActiveWorkflow,
@@ -488,6 +489,7 @@ import {
 	frappeStandardFilterFields,
 } from "./listColumns.js"
 import ListviewFilters from "./ListviewFilters.vue"
+import { expandTemplateItemFilters, hasChildTableFilter, parentGroupBy, templateItemFilterItems } from "./listItemFilters.js"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
 import UserListviewColumns from "./UserListviewColumns.vue"
 import {
@@ -508,6 +510,7 @@ const props = defineProps({
 	nameColumnLabel: { type: String, default: "Document" },
 	columnLabels: { type: Object, default: () => ({}) },
 	linkFilters: { type: Object, default: () => ({}) },
+	templateItemFilters: { type: Boolean, default: false },
 	rowMark: { type: String, default: "DOC" },
 	filters: { type: [Array, Object], default: () => [] },
 	initialAdvancedFilters: { type: Array, default: () => [] },
@@ -592,6 +595,8 @@ let quickFilterTimer = null
 const quickFilterDelay = 1000
 let restoredNavigationKey = ""
 const initialisationGuard = createListInitialisationGuard()
+const variantsByItem = Object.create(null)
+const pendingItemFilters = new Map()
 
 const eligibleFields = computed(() => allowedFields.value.map((field) => ({
 	fieldname: field.fieldname,
@@ -636,13 +641,19 @@ function sortFilterFields(fields) {
 	)
 }
 
+function templateItemFilterField(field) {
+	return props.templateItemFilters && field.fieldtype === "Link" && field.options === "Item"
+		? { ...field, link_filters: { variant_of: ["is", "not set"] } }
+		: field
+}
+
 const standardFilterFields = computed(() => {
 	const excluded = new Set(props.excludedFilterFields)
 	const fields = eligibleFields.value.filter((field) => field.inStandardFilter && !field.hidden && !excluded.has(field.fieldname))
 	return listStandardFilterFields(fields, {
 		statusField: effectiveStatusField.value === props.statusField ? props.statusField : "",
 		statusOptions: props.statusOptions,
-	})
+	}).map(templateItemFilterField)
 })
 
 const hasActiveQuery = computed(
@@ -793,8 +804,26 @@ const filterFields = computed(() => {
 		if (seen.has(key)) return false
 		seen.add(key)
 		return true
-	})
+	}).map(templateItemFilterField)
 })
+
+const itemFilterFields = computed(() => [...filterFields.value, ...standardFilterFields.value]
+	.filter(field => field.fieldtype === "Link" && field.options === "Item")
+	.flatMap(field => field.doctype === props.doctype ? [field, { ...field, doctype: "" }] : [field]))
+
+async function resolveItemFilters(filters) {
+	if (!props.templateItemFilters) return filters
+	const items = templateItemFilterItems(filters, itemFilterFields.value)
+	const missing = items.filter(item => !Object.hasOwn(variantsByItem, item) && !pendingItemFilters.has(item))
+	if (missing.length) {
+		const request = getItemFilterValues(missing)
+			.then(values => Object.assign(variantsByItem, values))
+			.finally(() => missing.forEach(item => pendingItemFilters.delete(item)))
+		missing.forEach(item => pendingItemFilters.set(item, request))
+	}
+	await Promise.all(items.map(item => pendingItemFilters.get(item)))
+	return expandTemplateItemFilters(filters, itemFilterFields.value, variantsByItem)
+}
 
 const fetchFields = computed(() => {
 	const allowed = new Set([
@@ -897,7 +926,7 @@ function initialStatusQuickFilters() {
 	return props.statusField && hasFilterValue(props.initialStatus) ? { [props.statusField]: props.initialStatus } : {}
 }
 
-function allFilters() {
+function allFilters({ expand = true } = {}) {
 	const option = effectiveStatusOptions.value.find((candidate) => String(candidate?.value) === String(activeStatus.value))
 	const usesOptionFilters = Array.isArray(option?.filters)
 	const filters = [...baseFilters(), ...advancedFilters.value, ...quickFilterTuples({ excludeStatus: usesOptionFilters })]
@@ -911,7 +940,9 @@ function allFilters() {
 	if (appliedSearch.value.trim()) {
 		filters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
 	}
-	return filters
+	return props.templateItemFilters && expand
+		? expandTemplateItemFilters(filters, itemFilterFields.value, variantsByItem)
+		: filters
 }
 
 async function initialise() {
@@ -975,20 +1006,23 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 		statusCounts.value = {}
 		return
 	}
-	const filters = [
+	const rawFilters = [
 		...baseFilters(),
 		...advancedFilters.value,
 		...quickFilterTuples({ excludeStatus: true }),
 	]
-	if (appliedSearch.value.trim()) filters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
+	if (appliedSearch.value.trim()) rawFilters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
 	try {
+		const filters = await resolveItemFilters(rawFilters)
+		if (existingSequence !== loadSequence) return
 		const values = effectiveStatusOptions.value.map((option) =>
 			typeof option === "string" ? option : option.value,
 		)
+		const countOptions = { distinct: hasChildTableFilter(filters, props.doctype) }
 		const counts = await Promise.all([
-			getCount(props.doctype, filters),
+			getCount(props.doctype, filters, countOptions),
 			...values.map((value) =>
-				getCount(props.doctype, [...filters, ...listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)]),
+				getCount(props.doctype, [...filters, ...listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)], countOptions),
 			),
 		])
 		if (existingSequence !== loadSequence) return
@@ -1006,7 +1040,8 @@ async function loadRows(existingSequence = null) {
 	loading.value = true
 	error.value = ""
 	try {
-		const filters = allFilters()
+		const filters = await resolveItemFilters(allFilters({ expand: false }))
+		if (sequence !== loadSequence) return
 		const orderBy = deterministicOrder(sortField.value, sortOrder.value === 1 ? "asc" : "desc")
 		const [data, count] = await Promise.all([
 			getList(props.doctype, {
@@ -1015,8 +1050,9 @@ async function loadRows(existingSequence = null) {
 				orderBy,
 				start: first.value,
 				pageLength: pageSize.value,
+				groupBy: parentGroupBy(filters, props.doctype),
 			}),
-			getCount(props.doctype, filters),
+			getCount(props.doctype, filters, { distinct: hasChildTableFilter(filters, props.doctype) }),
 		])
 		if (sequence !== loadSequence) return
 		rows.value = data
@@ -1036,6 +1072,7 @@ async function loadRows(existingSequence = null) {
 function reload(includeCounts = false) {
 	if (!metadataReady.value) return Promise.resolve([])
 	const sequence = ++loadSequence
+	for (const item of Object.keys(variantsByItem)) delete variantsByItem[item]
 	const tasks = [loadRows(sequence)]
 	if (includeCounts) tasks.push(loadStatusCounts(sequence))
 	return Promise.all(tasks)

@@ -394,6 +394,9 @@ class TestCuttingWebWorkspace(UnitTestCase):
 		self.assertEqual(result["default_dimensions"], {"lot": "LOT-TEST"})
 		self.assertEqual(result["locked_dimensions"], ["lot"])
 		self.assertEqual(result["context"]["source_warehouse"], "CUTTING-WH")
+		self.assertEqual(result["item_filters"], {
+			"is_stock_item": 1, "disabled": 0, "variant_of": ["is", "not set"],
+		})
 
 	@patch("essdee_yrp.cutting.web_workspace._get_stock_item_schema_data")
 	@patch("essdee_yrp.cutting.web_workspace.frappe.has_permission", return_value=True)

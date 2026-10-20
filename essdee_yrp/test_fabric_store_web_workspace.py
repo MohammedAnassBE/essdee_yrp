@@ -937,6 +937,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		plain.is_purchase_item = 1
 		plain.docstatus = 0
 		plain.disabled = 0
+		plain.variant_of = None
 		plain.attributes = []
 		plain.get.side_effect = lambda key, default=None: getattr(plain, key, default)
 		with (
@@ -961,6 +962,27 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(payload["attribute_values"], {})
 		self.assertEqual(validate_stock.call_count, 2)
 		plain.check_permission.assert_has_calls([call("read"), call("read")])
+
+	def test_shared_stock_schema_rejects_variants_before_loading_attributes(self):
+		from essdee_yrp.cutting.web_workspace import _get_stock_item_schema_data
+
+		variant = MagicMock()
+		variant.name = "VARIANT"
+		variant.variant_of = "TEMPLATE"
+		with (
+			patch("essdee_yrp.cutting.web_workspace.frappe.get_doc", return_value=variant),
+			patch("essdee_yrp.cutting.web_workspace._", side_effect=lambda text: text),
+			patch("essdee_yrp.cutting.web_workspace.frappe.throw", side_effect=frappe.ValidationError) as throw,
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details", return_value={"item": "TEMPLATE"}) as attributes,
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values", return_value={}),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_is_stock_item"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_cancelled_item"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_disabled"),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				_get_stock_item_schema_data("VARIANT")
+		throw.assert_called_once_with("Select the template Item TEMPLATE instead of its variant VARIANT.")
+		attributes.assert_not_called()
 
 	def test_purchase_order_parameter_search_uses_po_permission_for_non_system_manager(self):
 		def permissions(doctype, ptype="read", **kwargs):
@@ -1071,6 +1093,10 @@ class TestFabricStoreWebWorkspace(TestCase):
 			["from_lot", "to_lot", "warehouse", "received_type"],
 		)
 		self.assertTrue(all(editors[key]["permissions"]["can_submit"] for key in editors))
+		for editor in editors.values():
+			self.assertEqual(editor["item_filters"], {
+				"is_stock_item": 1, "disabled": 0, "variant_of": ["is", "not set"],
+			})
 
 	@patch("essdee_yrp.fabric_store.web_workspace._document_item_groups", return_value=([{"items": [{"name": "STYLE"}]}], 1))
 	@patch("essdee_yrp.fabric_store.web_workspace._permission_flags", return_value={"can_write": True, "can_submit": True})

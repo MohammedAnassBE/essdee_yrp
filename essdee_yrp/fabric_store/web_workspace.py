@@ -666,6 +666,7 @@ def _fabric_stock_dimensions(operation: str) -> list[dict]:
 @frappe.whitelist()
 def get_stock_operation_editor(operation: str, name: str | None = None, source_context=None) -> dict:
 	"""Return a context-free grouped editor for a new or existing Draft stock document."""
+	from essdee_yrp.cutting.web_workspace import STOCK_ITEM_BUILDER_FILTERS
 
 	doctype = _require_supported_operation(operation)
 	frappe.has_permission("Item", ptype="read", throw=True)
@@ -726,7 +727,7 @@ def get_stock_operation_editor(operation: str, name: str | None = None, source_c
 			else []
 		),
 		"update_type_options": list(FABRIC_STOCK_UPDATE_TYPES) if operation == "stock_update" else [],
-		"item_filters": {"is_stock_item": 1, "disabled": 0},
+		"item_filters": dict(STOCK_ITEM_BUILDER_FILTERS),
 		"posting_fields": [
 			{"fieldname": fieldname, "label": field.label, "reqd": bool(field.reqd)}
 			for fieldname in ("posting_date", "posting_time")

@@ -20,7 +20,7 @@ const otherInputs = fields.map(([name, label, options]) => ({
 }));
 const tableFields = fields.map(([name, label]) => ({name, label}));
 tableFields.push({name: 'rate', label: 'Rate', uses_primary_attribute: 1});
-const args = {item_query: () => ({filters: {is_stock_item: 1}})};
+const args = {item_query: () => ({filters: {is_stock_item: 1, variant_of: ['is', 'not set']}})};
 const dirty = () => props.frm.dirty();
 function load(data) {
  items.value = JSON.parse(JSON.stringify(data || []));

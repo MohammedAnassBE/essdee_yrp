@@ -29,7 +29,7 @@
 					:model-value="itemName"
 					label="Item *"
 					doctype="Item"
-					:filters="editor.item_filters || { is_stock_item: 1, disabled: 0 }"
+					:filters="editor.item_filters || { is_stock_item: 1, disabled: 0, variant_of: ['is', 'not set'] }"
 					:show-open-button="false"
 					:disabled="disabled"
 					@update:model-value="setItem"

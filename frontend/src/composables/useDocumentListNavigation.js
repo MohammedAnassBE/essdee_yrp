@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref, toValue, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { getList } from "../api/frappe.js"
+import { parentGroupBy } from "../components/common/listItemFilters.js"
 import {
 	adjacentWindowStart,
 	navigationContextMatches,
@@ -64,6 +65,7 @@ export function useDocumentListNavigation({ currentName, disabled }) {
 			orderBy: state.orderBy,
 			start: adjacentWindowStart(reference.index),
 			pageLength: 3,
+			groupBy: parentGroupBy(state.filters, state.doctype),
 		})
 		return resolveAdjacentNames({ reference, rows })
 	}

@@ -32,6 +32,11 @@ from essdee_yrp.print_registry import get_document_print_formats
 
 RELATION_DOCTYPE = "SD YRP Cutting Plan Stock Transfer"
 MOVEMENT_DOCTYPE = "SD YRP Cut Panel Movement"
+STOCK_ITEM_BUILDER_FILTERS = {
+	"is_stock_item": 1,
+	"disabled": 0,
+	"variant_of": ["is", "not set"],
+}
 
 OPERATION_DOCTYPES = {
 	"stock_entry": "YRP Stock Entry",
@@ -877,7 +882,7 @@ def get_stock_operation_editor(cutting_plan, operation):
 		],
 		"purpose_options": sorted(STOCK_ENTRY_PURPOSES) if operation == "stock_entry" else [],
 		"update_type_options": ["Add", "Reduce"] if operation == "stock_update" else [],
-		"item_filters": {"is_stock_item": 1, "disabled": 0},
+		"item_filters": dict(STOCK_ITEM_BUILDER_FILTERS),
 		"permissions": {
 			"can_create": True,
 			"can_submit": bool(frappe.has_permission(doctype, "submit")),
@@ -896,6 +901,8 @@ def _get_stock_item_schema_data(item):
 
 	selected = frappe.get_doc("Item", item)
 	selected.check_permission("read")
+	if selected.variant_of:
+		frappe.throw(_("Select the template Item {0} instead of its variant {1}.").format(selected.variant_of, selected.name))
 	validate_is_stock_item(selected.name, selected.is_stock_item)
 	validate_cancelled_item(selected.name, selected.docstatus)
 	validate_disabled(selected.name, selected.disabled)

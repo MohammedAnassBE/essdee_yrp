@@ -1,0 +1,145 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"finishing-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Finishing</span>\",\"col\":12}},{\"id\":\"finishing-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Finishing Reports\",\"col\":6}},{\"id\":\"finishing-details\",\"type\":\"card\",\"data\":{\"card_name\":\"Details\",\"col\":6}}]",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "check-square",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Finishing",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Finishing Reports",
+   "link_count": 7,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Finishing Plan Dispatch Details",
+   "link_count": 0,
+   "link_to": "SD YRP Finishing Plan Dispatch Details",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Finishing Plan DPR",
+   "link_count": 0,
+   "link_to": "SD YRP Finishing Plan DPR",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Finishing Plan Ironing Report",
+   "link_count": 0,
+   "link_to": "SD YRP Finishing Plan Ironing Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Rejection Details",
+   "link_count": 0,
+   "link_to": "SD YRP Rejection Details",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Rework Completion Report",
+   "link_count": 0,
+   "link_to": "SD YRP Rework Completion Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Rework Group Details",
+   "link_count": 0,
+   "link_to": "SD YRP Rework Group Details",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Finishing Plan Report",
+   "link_count": 0,
+   "link_to": "SD YRP Finishing Plan Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Details",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Finishing Plan",
+   "link_count": 0,
+   "link_to": "SD YRP Finishing Plan",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Finishing Plan Dispatch",
+   "link_count": 0,
+   "link_to": "SD YRP Finishing Plan Dispatch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "GRN Rework Item",
+   "link_count": 0,
+   "link_to": "SD YRP GRN Rework Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "module": "Essdee YRP",
+ "name": "Finishing",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 6.0,
+ "shortcuts": [],
+ "title": "Finishing"
+}

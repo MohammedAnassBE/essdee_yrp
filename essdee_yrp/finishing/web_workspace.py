@@ -98,11 +98,16 @@ def _permission_flags(
 
 
 def _readable_reports() -> dict:
-	return {
+	reports = {
 		key: {"label": _(label), "can_read": True}
 		for key, (label, checks) in REPORTS.items()
 		if all(frappe.has_permission(doctype, ptype=ptype) for doctype, ptype in checks)
 	}
+
+	from essdee_yrp.desk_web_reports import department_report_capabilities
+
+	reports.update(department_report_capabilities("finishing", bool(reports)))
+	return reports
 
 
 def _section(label, doctype, flags):

@@ -34,6 +34,8 @@ import { computed, defineAsyncComponent, onMounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { getMerchCapabilities } from "../../api/merch.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
+import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
+import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 
 const REPORTS = [
@@ -50,7 +52,7 @@ const router = useRouter()
 const loading = ref(true)
 const loadError = ref("")
 const reports = ref({})
-const tabs = computed(() => REPORTS.filter((report) => reports.value[report.key]?.can_read))
+const tabs = computed(() => [...REPORTS.filter((report) => reports.value[report.key]?.can_read), ...departmentDeskReports("merch", reports.value).map(tab => ({ ...tab, component: DeskBackedReport }))])
 const active = computed({
 	get: () => tabs.value.some((tab) => tab.value === route.query.report) ? route.query.report : tabs.value[0]?.value,
 	set: (report) => router.replace({ query: { ...route.query, report } }),

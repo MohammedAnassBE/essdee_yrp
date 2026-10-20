@@ -22,12 +22,15 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, ref, watch } from "vue"
 
+import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
+import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import LotCutQuantityReport from "../../components/reports/LotCutQuantityReport.vue"
 import PurchaseOrderItemwiseReport from "../../components/reports/PurchaseOrderItemwiseReport.vue"
 import StockBalanceReport from "../../components/reports/StockBalanceReport.vue"
 
 const props = defineProps({
 	capability: { type: Object, default: () => ({}) },
+	department: { type: String, default: "fabric-store" },
 	reportKeys: { type: Array, default: () => ["stock_balance"] },
 })
 const activeTab = ref("")
@@ -36,14 +39,15 @@ const tabs = [
 	{ key: "purchase_order_itemwise", value: "purchase-order-itemwise", label: "Purchase Order Itemwise", icon: "pi pi-shopping-cart", component: PurchaseOrderItemwiseReport },
 	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: LotCutQuantityReport },
 ]
-const visibleTabs = computed(() => tabs.filter((tab) => (
+const deskTabs = computed(() => departmentDeskReports(props.department, props.capability?.reports, tabs.some(tab => props.reportKeys.includes(tab.key) && props.capability?.reports?.[tab.key]?.can_read)).map(tab => ({ ...tab, component: DeskBackedReport })))
+const visibleTabs = computed(() => [...tabs.filter((tab) => (
 	props.reportKeys.includes(tab.key) && props.capability?.reports?.[tab.key]?.can_read
 )).map((tab) => ({
 	...tab,
 	componentProps: tab.key === "lot_cut_quantity" ? {
 		canReadCuttingPlan: Boolean(props.capability?.reports?.[tab.key]?.can_read_cutting_plan),
 	} : {},
-})))
+})), ...deskTabs.value])
 
 watch(visibleTabs, (available) => {
 	if (!available.some((tab) => tab.value === activeTab.value)) activeTab.value = available[0]?.value || ""

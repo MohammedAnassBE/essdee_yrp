@@ -112,6 +112,8 @@ class TestFinishingWebWorkspace(TestCase):
 				"finishing_plan_report",
 				"rejection_details",
 				"rework_completion",
+				"grn_report",
+				"grn_summary",
 			],
 		)
 

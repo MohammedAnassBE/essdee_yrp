@@ -52,7 +52,7 @@ const sectionProps = computed(() => ({
 		viewRouteName: props.purchaseOrderViewRouteName,
 		newRouteName: props.purchaseOrderNewRouteName,
 	} : {}),
-	...(props.section === "reports" ? { reportKeys: props.reportKeys } : {}),
+	...(props.section === "reports" ? { reportKeys: props.reportKeys, department: props.basePath.slice(1) } : {}),
 }))
 const loading = ref(true)
 const error = ref("")

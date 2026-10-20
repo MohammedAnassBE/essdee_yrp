@@ -84,4 +84,11 @@ def get_capabilities() -> dict:
 		if can_view_dispatch_report():
 			reports["finishing_dispatch"] = _report_capability("Finishing Plan Dispatch")
 
+	from essdee_yrp.desk_web_reports import department_report_capabilities
+
+	reports.update({
+		key: _report_capability(capability["label"])
+		for key, capability in department_report_capabilities("sewing", bool(reports)).items()
+	})
+
 	return {"sections": sections, "plan_actions": plan_actions, "reports": reports}

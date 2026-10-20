@@ -55,6 +55,9 @@ def _readable_reports() -> dict:
 			doctype, ptype="report"
 		):
 			reports[key] = {"label": _(label), "can_read": True}
+	from essdee_yrp.desk_web_reports import department_report_capabilities
+
+	reports.update(department_report_capabilities("cut-panel-store", bool(reports)))
 	return reports
 
 

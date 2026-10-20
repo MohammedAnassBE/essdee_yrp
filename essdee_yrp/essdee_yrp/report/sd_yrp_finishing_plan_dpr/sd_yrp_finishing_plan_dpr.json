@@ -1,0 +1,40 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "is_standard": "Yes",
+ "module": "Essdee YRP",
+ "name": "SD YRP Finishing Plan DPR",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "YRP Goods Received Note",
+ "report_name": "SD YRP Finishing Plan DPR",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Store User"
+  },
+  {
+   "role": "Stock User"
+  },
+  {
+   "role": "Production Planner"
+  },
+  {
+   "role": "Merch User"
+  },
+  {
+   "role": "AI Bot"
+  },
+  {
+   "role": "Accounts User"
+  }
+ ],
+ "timeout": 0
+}

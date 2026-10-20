@@ -55,6 +55,9 @@ class TestSewingWebWorkspace(TestCase):
 				"monthly_summary": "Monthly Summary",
 				"item_summary": "Item Summary",
 				"finishing_dispatch": "Finishing Plan Dispatch",
+				"grn_report": "GRN Report",
+				"grn_summary": "GRN Summary",
+				"finishing_inward_updates": "Finishing Inward Updates",
 			},
 		)
 

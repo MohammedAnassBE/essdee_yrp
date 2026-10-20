@@ -220,6 +220,9 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(
 			payload["sections"]["reports"]["reports"],
 			{
+				"grn_report": {"label": "GRN Report", "can_read": True, "can_report": True},
+				"grn_summary": {"label": "GRN Summary", "can_read": True, "can_report": True},
+				"purchase_order_log": {"label": "Purchase Order Log", "can_read": True, "can_report": True},
 				"purchase_order_itemwise": {
 					"label": "Purchase Order Itemwise",
 					"can_read": True,

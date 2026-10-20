@@ -7,6 +7,7 @@
 			<TabPanels class="cut-panel-store-reports__panels">
 				<TabPanel v-if="hasReport('stock_balance')" value="stock-balance"><StockBalanceReport /></TabPanel>
 				<TabPanel v-if="hasReport('cut_bundle_balance')" value="cut-bundle-balance"><CutBundleBalanceReport /></TabPanel>
+				<TabPanel v-for="tab in deskTabs" :key="tab.value" :value="tab.value"><DeskBackedReport :report-key="tab.value" /></TabPanel>
 			</TabPanels>
 		</Tabs>
 		<Message v-else severity="warn" :closable="false">You do not have permission to view these reports.</Message>
@@ -22,6 +23,8 @@ import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, ref, watch } from "vue"
 
+import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
+import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import StockBalanceReport from "../../components/reports/StockBalanceReport.vue"
 import CutBundleBalanceReport from "./CutBundleBalanceReport.vue"
 
@@ -31,7 +34,8 @@ const tabs = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse" },
 	{ key: "cut_bundle_balance", value: "cut-bundle-balance", label: "Cut Bundle Balance", icon: "pi pi-box" },
 ]
-const visibleTabs = computed(() => tabs.filter((tab) => hasReport(tab.key)))
+const deskTabs = computed(() => departmentDeskReports("cut-panel-store", props.capability?.reports))
+const visibleTabs = computed(() => [...tabs.filter((tab) => hasReport(tab.key)), ...deskTabs.value])
 
 function hasReport(key) {
 	return Boolean(props.capability?.reports?.[key]?.can_read)

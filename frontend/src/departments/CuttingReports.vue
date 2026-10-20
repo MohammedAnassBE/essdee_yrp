@@ -34,6 +34,7 @@
 					<TabPanel v-if="reportPermissions['multi-ccr']" value="multi-ccr"><MultiCCRReport /></TabPanel>
 					<TabPanel v-if="reportPermissions['cutting-detail']" value="cutting-detail"><CuttingDetailReport /></TabPanel>
 					<TabPanel v-if="reportPermissions['stock-balance']" value="stock-balance"><StockBalanceReport /></TabPanel>
+					<TabPanel v-for="tab in deskTabs" :key="tab.value" :value="tab.value"><DeskBackedReport :report-key="tab.value" /></TabPanel>
 				</TabPanels>
 			</Tabs>
 			<Message v-else severity="warn" :closable="false">You do not have permission to view these reports.</Message>
@@ -51,10 +52,13 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { computed, onMounted, ref } from "vue"
+import { useRoute } from "vue-router"
 
 import { getCuttingReportPermissions } from "../api/cuttingReports.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DeskBackedReport from "../components/reports/DeskBackedReport.vue"
+import { departmentDeskReports } from "../components/reports/deskReportConfig.js"
 import StockBalanceReport from "../components/reports/StockBalanceReport.vue"
 import CuttingDetailReport from "./cutting/reports/CuttingDetailReport.vue"
 import DailyCutSheetReport from "./cutting/reports/DailyCutSheetReport.vue"
@@ -63,6 +67,7 @@ import MultiCCRReport from "./cutting/reports/MultiCCRReport.vue"
 
 defineProps({ embedded: { type: Boolean, default: false } })
 
+const route = useRoute()
 const activeTab = ref("")
 const loadingPermissions = ref(true)
 const permissionError = ref("")
@@ -74,7 +79,8 @@ const tabs = [
 	{ value: "cutting-detail", label: "Cutting Detail", icon: "pi pi-chart-bar" },
 	{ value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse" },
 ]
-const visibleTabs = computed(() => tabs.filter((tab) => reportPermissions.value[tab.value]))
+const deskTabs = computed(() => departmentDeskReports(route.path.split("/")[1], Object.fromEntries(Object.entries(reportPermissions.value).map(([key, can_read]) => [key.replaceAll("-", "_"), { can_read }]))))
+const visibleTabs = computed(() => [...tabs.filter((tab) => reportPermissions.value[tab.value]), ...deskTabs.value])
 
 async function load() {
 	loadingPermissions.value = true

@@ -14,6 +14,7 @@
 				<SewingMonthlySummary v-else-if="active === 'monthly-summary'" :filters="monthlyFilters" />
 				<SewingItemSummary v-else-if="active === 'item-summary'" :filters="itemFilters" />
 				<FinishingDispatchReport v-else-if="active === 'finishing-dispatch'" />
+				<DeskBackedReport v-else-if="deskTabs.some(tab => tab.value === active)" :key="active" :report-key="active" :supplier="active === 'finishing-inward-updates' ? supplier : ''" />
 			</TabPanel></TabPanels>
 		</Tabs>
 	</section>
@@ -30,6 +31,11 @@ import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, reactive } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
+import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
+import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
+import { useSewingContext } from "./useSewingContext.js"
+
+const { supplier } = useSewingContext()
 const SewingStatusSummary = defineAsyncComponent(() => import("./reports/SewingStatusSummary.vue"))
 const SewingDpr = defineAsyncComponent(() => import("./reports/SewingDpr.vue"))
 const SewingScr = defineAsyncComponent(() => import("./reports/SewingScr.vue"))
@@ -46,7 +52,8 @@ const REPORTS = [
 	{ value: "item-summary", key: "item_summary", label: "Item Summary" },
 	{ value: "finishing-dispatch", key: "finishing_dispatch", label: "Finishing Plan Dispatch" },
 ]
-const tabs = computed(() => REPORTS.filter(tab => props.capabilities.reports?.[tab.key]?.can_read))
+const deskTabs = computed(() => departmentDeskReports(route.path.split("/")[1], props.capabilities.reports))
+const tabs = computed(() => [...REPORTS.filter(tab => props.capabilities.reports?.[tab.key]?.can_read), ...deskTabs.value])
 const active = computed({
 	get: () => tabs.value.some(tab => tab.value === route.query.tab) ? route.query.tab : tabs.value[0]?.value,
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),

@@ -32,6 +32,10 @@ REPORTS = {
 @frappe.whitelist()
 def get_capabilities() -> dict:
 	reports = {key: {"label": _(label), "can_read": bool(access())} for key, (label, access) in REPORTS.items()}
+	from essdee_yrp.desk_web_reports import department_report_capabilities
+
+	reports.update(department_report_capabilities("merch", any(report["can_read"] for report in reports.values())))
+
 	return {
 		"sections": {
 			key: {"label": _(label), **permission_flags(doctype, ("read", "create"))}

@@ -1459,6 +1459,10 @@ def get_capabilities() -> dict:
 			),
 		}
 
+	from essdee_yrp.desk_web_reports import department_report_capabilities
+
+	reports.update(department_report_capabilities("purchase", bool(reports)))
+
 	if reports:
 		sections["reports"] = {
 			"label": SECTION_LABELS["reports"],

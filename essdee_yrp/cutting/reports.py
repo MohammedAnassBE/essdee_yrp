@@ -74,7 +74,7 @@ def get_report_permissions():
 		frappe.has_permission("YRP Stock Ledger Entry", ptype="read")
 		and frappe.has_permission("YRP Stock Ledger Entry", ptype="report")
 	)
-	return {
+	reports = {
 		"cutting-plans": bool(frappe.has_permission("SD YRP Cutting Plan", ptype="read")),
 		"daily-production": can_read_cutting,
 		"daily-cut-sheet": can_read_cutting,
@@ -82,6 +82,12 @@ def get_report_permissions():
 		"cutting-detail": can_read_cutting,
 		"stock-balance": can_read_stock,
 	}
+
+	from essdee_yrp.desk_web_reports import department_report_capabilities
+
+	can_view_reports = can_read_cutting or can_read_stock
+	reports.update({key.replace("_", "-"): value["can_read"] for key, value in department_report_capabilities("cutting", can_view_reports).items()})
+	return reports
 
 
 def update_if_string_instance(value):

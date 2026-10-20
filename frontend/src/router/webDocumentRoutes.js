@@ -24,6 +24,10 @@ const recordRoutes = {
 }
 
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/cut-panel-store": {
+		"YRP Delivery Challan": (name) => `/web/cut-panel-store/delivery-challans/${encodeURIComponent(name)}`,
+		"YRP Goods Received Note": (name) => `/web/cut-panel-store/goods-received-notes/${encodeURIComponent(name)}`,
+	},
 	"/sales": {
 		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
 	},

@@ -253,3 +253,55 @@ class TestCutPanelStoreCutBundleWorkspace(UnitTestCase):
 		doc.check_permission.assert_any_call("write")
 		cache.delete_value.assert_called_once_with("cut-bundle-print:TOKEN")
 		doc.db_set.assert_called_once()
+
+
+class TestCutBundleAmendment(TestCase):
+	def test_amend_creates_a_draft_linked_to_the_cancelled_edit(self):
+		doc = MagicMock(name="cancelled")
+		doc.name = "CBE-1"
+		doc.docstatus = 2
+		doc.modified = "old"
+		draft = MagicMock(name="draft")
+		draft.name = "CBE-1-1"
+		with (
+			patch("essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.get_doc", return_value=doc),
+			patch("essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.copy_doc", return_value=draft) as copy_doc,
+			patch("essdee_yrp.cut_panel_store.cut_bundle_workspace._record_payload", return_value={"name": draft.name}) as payload,
+		):
+			result = execute_cut_bundle_command(doc.name, "amend", expected_modified="old")
+		copy_doc.assert_called_once_with(doc)
+		doc.check_permission.assert_called_once_with("amend")
+		self.assertEqual(doc.docstatus, 2)
+		self.assertEqual(draft.docstatus, 0)
+		self.assertEqual(draft.amended_from, doc.name)
+		self.assertIsNone(draft.printed_time)
+		draft.insert.assert_called_once_with()
+		payload.assert_called_once_with(draft)
+		self.assertEqual(result["name"], draft.name)
+
+	def test_amend_rejects_active_edits_and_stale_documents(self):
+		for docstatus, modified, exception in (
+			(0, "old", frappe.ValidationError),
+			(1, "old", frappe.ValidationError),
+			(2, "new", frappe.TimestampMismatchError),
+		):
+			with self.subTest(docstatus=docstatus, modified=modified):
+				doc = MagicMock(docstatus=docstatus, modified=modified)
+				with (
+					patch("essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.get_doc", return_value=doc),
+					patch("essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.copy_doc") as copy_doc,
+					self.assertRaises(exception),
+				):
+					execute_cut_bundle_command("CBE-1", "amend", expected_modified="old")
+				copy_doc.assert_not_called()
+
+	def test_amend_permission_is_exposed_only_for_authorized_cancelled_edits(self):
+		from essdee_yrp.cut_panel_store.cut_bundle_workspace import _permissions
+
+		for docstatus in (0, 1, 2):
+			for allowed in (False, True):
+				with self.subTest(docstatus=docstatus, allowed=allowed):
+					doc = MagicMock(docstatus=docstatus)
+					doc.has_permission.return_value = allowed
+					with patch("essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.has_permission", return_value=True):
+						self.assertEqual(_permissions(doc)["can_amend"], docstatus == 2 and allowed)

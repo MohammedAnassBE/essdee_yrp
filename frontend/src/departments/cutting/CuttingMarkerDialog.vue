@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record?.name ? `Edit Cutting Marker · ${record.name}` : 'Create New Marker'" class="marker-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record?.name ? `${canEdit ? 'Edit Cutting Marker' : 'Cutting Marker'} · ${record.name}` : 'Create New Marker'" class="marker-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="marker-loading"><Skeleton v-for="index in 6" :key="index" height="3.2rem" /></div>
 		<div v-else class="marker-content">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>

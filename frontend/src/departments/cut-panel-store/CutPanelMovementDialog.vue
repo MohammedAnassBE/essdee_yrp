@@ -76,12 +76,13 @@
 		<div class="transaction-create-content">
 			<div class="transaction-create-source"><span>Cut Panel Movement</span><strong>{{ record?.name }}</strong><small>{{ editor.context?.lot }} · {{ editor.context?.item }}</small></div>
 			<LinkField v-if="createOperation === 'stock_entry'" v-model="transactionForm.to_warehouse" label="To Warehouse" doctype="Warehouse" required :show-open-button="false" />
+			<label v-if="createOperation === 'stock_entry'" class="movement-toggle"><span>Skip Transit</span><Checkbox v-model="transactionForm.skip_transit" binary :disabled="busy" /></label>
 			<template v-else>
 				<div class="transaction-work-order-heading"><span>Submitted Work Orders for this Lot</span><strong>{{ workOrders.length }}</strong></div>
 				<div v-if="workOrdersLoading" class="transaction-work-order-loading"><Skeleton v-for="index in 3" :key="index" height="3.5rem" /></div>
 				<div v-else-if="workOrders.length" class="transaction-work-orders">
 					<button v-for="workOrder in workOrders" :key="workOrder.name" type="button" :class="{ selected: transactionForm.work_order === workOrder.name }" :aria-pressed="transactionForm.work_order === workOrder.name" @click="transactionForm.work_order = workOrder.name">
-						<span><strong>{{ workOrder.name }}</strong><i v-if="transactionForm.work_order === workOrder.name" class="pi pi-check-circle" /></span>
+						<span><strong>{{ [workOrder.name, workOrder.process_name, workOrder.supplier].filter(Boolean).join(' · ') }}</strong><i v-if="transactionForm.work_order === workOrder.name" class="pi pi-check-circle" /></span>
 						<small>{{ [workOrder.item, workOrder.supplier].filter(Boolean).join(' · ') || editor.context?.lot }}</small>
 					</button>
 				</div>
@@ -112,7 +113,10 @@
 <script setup>
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
+import { useRouter } from "vue-router"
+import { webDocumentRoute } from "../../router/webDocumentRoutes.js"
 import Button from "primevue/button"
+import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import ToggleSwitch from "primevue/toggleswitch"
@@ -130,6 +134,7 @@ import FabricStockOperationDialog from "../fabric-store/FabricStockOperationDial
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"
 import CutPanelMovementRail from "./CutPanelMovementRail.vue"
 
+const router = useRouter()
 const props = defineProps({ visible: Boolean, movement: { type: String, default: "" } })
 const emit = defineEmits(["update:visible", "changed"])
 const loading = ref(false)
@@ -149,7 +154,7 @@ const createOperation = ref("")
 const creatingTransaction = ref(false)
 const workOrdersLoading = ref(false)
 const workOrders = ref([])
-const transactionForm = reactive({ to_warehouse: "", work_order: "" })
+const transactionForm = reactive({ to_warehouse: "", work_order: "", skip_transit: false })
 const stockDocumentVisible = ref(false)
 const relatedDocumentVisible = ref(false)
 const linkedDocumentDoctype = ref("")
@@ -278,6 +283,7 @@ async function openTransactionCreator(operation) {
 	createOperation.value = operation
 	transactionForm.to_warehouse = ""
 	transactionForm.work_order = ""
+	transactionForm.skip_transit = false
 	workOrders.value = []
 	transactionCreateVisible.value = true
 	if (operation === "stock_entry") return
@@ -320,6 +326,10 @@ async function createTransaction() {
 
 function openLinkedDocument(document) {
 	if (!document?.name || !document?.doctype) return
+	if (["YRP Delivery Challan", "YRP Goods Received Note"].includes(document.doctype)) {
+		router.push(webDocumentRoute(document.doctype, document.name, "/web/cut-panel-store"))
+		return
+	}
 	linkedDocumentDoctype.value = document.doctype
 	linkedDocumentName.value = document.name
 	if (document.doctype === "YRP Stock Entry") stockDocumentVisible.value = true

@@ -455,6 +455,18 @@ def _movement_identity(doc, plan, context):
 	doc.movement_from_cutting = 1
 
 
+def _draft_movement_message(plan, context):
+	existing = frappe.db.exists(
+		MOVEMENT_DOCTYPE,
+		{"lot": plan.lot, "from_warehouse": context.source_supplier, "docstatus": 0},
+	)
+	if existing:
+		return _("Submit or delete draft Cut Panel Movement {0} for {1} / {2} first.").format(
+			existing, context.source_supplier, plan.lot
+		)
+	return ""
+
+
 def _movement_editor_payload(plan, context, doc=None):
 	posting_date = doc.posting_date if doc else nowdate()
 	posting_time = doc.posting_time if doc else nowtime()
@@ -491,7 +503,10 @@ def get_movement_editor(cutting_plan, movement=None):
 		_require_active_plan(plan)
 		context = _plan_context(plan, require_source=True)
 		frappe.has_permission(MOVEMENT_DOCTYPE, "create", throw=True)
-		return _movement_editor_payload(plan, context)
+		return {
+			**_movement_editor_payload(plan, context),
+			"create_blocker": _draft_movement_message(plan, context),
+		}
 	context = _plan_context(plan)
 	doc = frappe.get_doc(MOVEMENT_DOCTYPE, movement)
 	doc.check_permission("read")
@@ -506,6 +521,8 @@ def generate_movement_bundles(cutting_plan, posting_date=None, posting_time=None
 	_require_active_plan(plan)
 	context = _plan_context(plan, require_source=True)
 	frappe.has_permission(MOVEMENT_DOCTYPE, "create", throw=True)
+	if message := _draft_movement_message(plan, context):
+		frappe.throw(message)
 	return get_cut_bundle_unmoved_data(
 		context.source_supplier,
 		plan.lot,
@@ -1384,6 +1401,23 @@ def _apply_delivery_quantities(groups, quantities, known, used):
 				cell["delivered_quantity"] = qty
 
 
+def _positive_delivery_groups(groups):
+	result = []
+	for group in groups or []:
+		items = []
+		for entry in group.get("items") or []:
+			values = {
+				key: cell
+				for key, cell in (entry.get("values") or {}).items()
+				if isinstance(cell, dict) and flt(cell.get("qty")) > 0
+			}
+			if values:
+				items.append({**entry, "values": values})
+		if items:
+			result.append({**group, "items": items})
+	return result
+
+
 def _work_order_delivery_defaults(plan):
 	from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 		get_work_order_defaults,
@@ -1459,8 +1493,12 @@ def create_work_order_delivery_challan(cutting_plan, values=None, submit=False):
 	)
 	doc.work_order = work_order.name
 	_apply_same_location_delivery_context(doc, context, work_order)
-	doc.item_details = json.dumps(item_details)
-	doc.correction_item_details = json.dumps(correction_details)
+	doc.item_details = json.dumps(_positive_delivery_groups(item_details))
+	doc.correction_item_details = json.dumps([
+		{**block, "item_details": groups}
+		for block in correction_details
+		if (groups := _positive_delivery_groups(block.get("item_details")))
+	])
 	if doc.meta.get_field("vehicle_no"):
 		doc.vehicle_no = "NA"
 	if doc.meta.get_field("supplier_document_no"):

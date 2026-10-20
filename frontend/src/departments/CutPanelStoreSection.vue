@@ -24,6 +24,7 @@ import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import ListPageSkeleton from "../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import CutPanelDocuments from "./cut-panel-store/CutPanelDocuments.vue"
 import CutPanelMovements from "./cut-panel-store/CutPanelMovements.vue"
 import CutBundleEdits from "./cut-panel-store/CutBundleEdits.vue"
 import BoxStickerPrints from "./cut-panel-store/BoxStickerPrints.vue"
@@ -37,6 +38,8 @@ const props = defineProps({
 	backLabel: { type: String, default: "Cut Panel Store" },
 })
 const definitions = {
+	delivery_challans: { label: "Delivery Challans", icon: "pi pi-truck", component: CutPanelDocuments },
+	goods_received_notes: { label: "Goods Received Notes", icon: "pi pi-inbox", component: CutPanelDocuments },
 	movements: { label: "Cut Panel Movement", icon: "pi pi-arrow-right-arrow-left", component: CutPanelMovements },
 	work_orders: {
 		label: "Work Orders",

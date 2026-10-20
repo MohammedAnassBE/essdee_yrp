@@ -119,10 +119,6 @@ function toggleMenu(event, actions) {
 <style scoped>
 .document-action-strip { position: relative; display: flex; min-width: 0; align-items: center; gap: 4px; flex-wrap: nowrap; }
 .document-action-strip :deep(.p-button) { min-height: var(--erp-control-height); flex: 0 0 auto; white-space: nowrap; border-radius: var(--erp-control-radius); }
-.document-action-strip :deep(.document-action-strip__reason-disabled) {
-	opacity: .5;
-	cursor: not-allowed;
-}
 .document-action-strip__primary {
 	margin-right: 2px;
 }

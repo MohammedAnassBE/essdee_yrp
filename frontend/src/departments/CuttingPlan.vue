@@ -68,6 +68,8 @@
 						:disabled="workspaceLoading"
 					/>
 					<DocumentDeleteButton doctype="SD YRP Cutting Plan" document-label="Cutting Plan" :name="doc.name" :docstatus="doc.docstatus" :disabled="workspaceLoading" :redirect-to="backTo" />
+					<Button v-if="currentDocument?.docstatus === 1 && editorProbe?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="workspaceLoading || Boolean(lifecycleBusy)" @click="requestLifecycleAction('cancel')" />
+					<Button v-if="currentDocument?.docstatus === 2 && editorProbe?.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :disabled="workspaceLoading || Boolean(lifecycleBusy)" @click="requestLifecycleAction('amend')" />
 					<CuttingPlanActions
 						:doc="doc"
 						:data="workspaceData"
@@ -108,6 +110,8 @@
 				@refresh="refreshPage"
 			/>
 		</div>
+		<DocumentConfirmationDialog v-model:visible="lifecycleConfirmVisible" :title="pendingLifecycleCommand === 'cancel' ? 'Cancel Cutting Plan?' : 'Amend Cutting Plan?'" :message="pendingLifecycleCommand === 'cancel' ? `Cancel ${cuttingPlanId}? This keeps the document for audit and reverses its submitted effect.` : `Create a new draft amendment from ${cuttingPlanId}?`" :confirm-label="pendingLifecycleCommand === 'cancel' ? 'Cancel Cutting Plan' : 'Create Amendment'" :busy="Boolean(lifecycleBusy)" @confirm="confirmLifecycleAction" />
+		<DocumentErrorDialog :message="lifecycleError" title="Cutting Plan action failed" @dismiss="lifecycleError = ''" />
 	</DepartmentPage>
 </template>
 
@@ -120,11 +124,14 @@ import Button from "primevue/button"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
-import { getCuttingPlanEditor } from "../api/cuttingPlanEditor.js"
+import { changeCuttingPlanStatus, getCuttingPlanEditor } from "../api/cuttingPlanEditor.js"
 import { callMethod } from "../api/frappe.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import FormView from "../components/common/FormView.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
+import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
+import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import CuttingPlanActions from "./cutting/CuttingPlanActions.vue"
 import DocumentPrintButton from "./cutting/DocumentPrintButton.vue"
@@ -159,6 +166,11 @@ const workspaceError = ref("")
 const workspaceReady = ref(false)
 const currentDocument = ref(null)
 const formView = ref(null)
+const lifecycleConfirmVisible = ref(false)
+const pendingLifecycleCommand = ref("")
+const lifecycleBusy = ref("")
+const lifecycleError = ref("")
+let lifecycleRequest = null
 let loadSequence = 0
 let probeSequence = 0
 let suppressNextLoaded = false
@@ -227,6 +239,38 @@ function retryWorkspace() {
 	formView.value?.reload()
 }
 
+function requestLifecycleAction(action) {
+	if (lifecycleBusy.value) return
+	pendingLifecycleCommand.value = action
+	lifecycleRequest = { name: cuttingPlanId.value, modified: currentDocument.value?.modified }
+	lifecycleConfirmVisible.value = true
+}
+
+async function confirmLifecycleAction() {
+	const request = lifecycleRequest
+	const action = pendingLifecycleCommand.value
+	if (!request || request.name !== cuttingPlanId.value || lifecycleBusy.value) return
+	lifecycleRequest = null
+	lifecycleConfirmVisible.value = false
+	lifecycleBusy.value = action
+	lifecycleError.value = ""
+	try {
+		const payload = await changeCuttingPlanStatus(request.name, action, request.modified)
+		if (request.name !== cuttingPlanId.value) return
+		if (action === "amend") {
+			const name = payload.record.name
+			await router.replace({ name: route.name, params: { ...route.params, cuttingPlanId: name }, state: preserveListNavigationState(name) })
+		} else {
+			editorProbe.value = payload
+			refreshPage()
+		}
+	} catch (reason) {
+		if (request.name === cuttingPlanId.value) lifecycleError.value = reason?.message || `Unable to ${action} the Cutting Plan.`
+	} finally {
+		if (request.name === cuttingPlanId.value) lifecycleBusy.value = ""
+	}
+}
+
 function refreshPage() {
 	formView.value?.reload()
 }
@@ -236,6 +280,10 @@ async function probeEditor() {
 	const requestedId = cuttingPlanId.value
 	loadSequence += 1
 	checkingEditor.value = true
+	lifecycleBusy.value = ""
+	lifecycleError.value = ""
+	lifecycleConfirmVisible.value = false
+	lifecycleRequest = null
 	editingSubmitted.value = false
 	editorProbe.value = null
 	workspaceData.value = {}

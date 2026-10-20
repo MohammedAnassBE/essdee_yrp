@@ -12,6 +12,7 @@
 	>
 		<div v-if="loading" class="erp-dialog-loading"><Skeleton v-for="index in 7" :key="index" height="3.25rem" /></div>
 		<div v-else class="erp-dialog-stack">
+			<Message v-if="editor.create_blocker && !record" severity="warn" :closable="false">{{ editor.create_blocker }}</Message>
 			<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
 			<section class="erp-context-strip">
 				<div><span>Lot</span><strong>{{ editor.context?.lot || "—" }}</strong></div>
@@ -77,6 +78,7 @@ const hasGenerated = ref(false)
 const saveMode = ref("")
 const error = ref("")
 const success = ref("")
+const savedDraft = ref(null)
 const editor = reactive({ context: {}, defaults: {}, permissions: {}, record: null })
 const movementData = reactive(emptyMovement())
 const cleanSignature = ref("")
@@ -85,7 +87,7 @@ const dirty = computed(() => !loading.value && signature.value !== cleanSignatur
 let loadSequence = 0
 let actionSequence = 0
 const record = computed(() => editor.record)
-const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
+const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create) && !editor.create_blocker)
 const canSubmit = computed(() => canEdit.value && Boolean(record.value ? record.value.permissions?.can_submit : editor.permissions?.can_submit))
 const status = computed(() => record.value?.status || "Draft")
 const generated = computed(() => hasGenerated.value)
@@ -101,6 +103,7 @@ watch(() => [props.visible, props.movement, props.cuttingPlan], ([visible]) => {
 		loading.value = false
 		saving.value = false
 		generating.value = false
+		if (savedDraft.value) { emit("changed", savedDraft.value); savedDraft.value = null }
 	}
 })
 
@@ -136,6 +139,7 @@ function actionIsStale(sequence, requestedMovement, requestedCuttingPlan, reques
 }
 
 async function generateBundles() {
+	if (editor.create_blocker) { error.value = editor.create_blocker; return }
 	const sequence = ++actionSequence
 	const requestedMovement = props.movement
 	const requestedCuttingPlan = props.cuttingPlan
@@ -167,7 +171,9 @@ async function save(submit) {
 	try {
 		const saved = await saveMovement(requestedCuttingPlan, request, requestedRecord, submit, expectedModified)
 		if (actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) return
-		editor.record = saved; replaceMovement(saved.movement_data || {}); cleanSignature.value = signature.value; success.value = submit ? "Cut Panel Movement submitted." : "Draft movement saved."; emit("changed", saved)
+		editor.record = saved; replaceMovement(saved.movement_data || {}); cleanSignature.value = signature.value; success.value = submit ? "Cut Panel Movement submitted." : "Draft movement saved."; hasGenerated.value = true
+		if (submit) { savedDraft.value = null; emit("changed", saved) }
+		else savedDraft.value = saved
 		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) error.value = reason.message || "Unable to save the Cut Panel Movement."
@@ -190,7 +196,7 @@ async function performCancelMovement() {
 	try {
 		const changed = await changeMovementStatus(requestedCuttingPlan, requestedRecord, "cancel")
 		if (actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) return
-		editor.record = changed; emit("changed", changed); emit("update:visible", false)
+		savedDraft.value = null; editor.record = changed; emit("changed", changed); emit("update:visible", false)
 	} catch (reason) {
 		if (!actionIsStale(sequence, requestedMovement, requestedCuttingPlan, requestedLoadSequence)) error.value = reason.message || "Unable to cancel the Cut Panel Movement."
 	} finally {
@@ -202,6 +208,7 @@ function replaceMovement(value) { Object.assign(movementData, emptyMovement(), c
 function emptyMovement() { return { panels: [], data: {}, accessory_data: [], collapsed_details: [], is_set_item: 0 } }
 function clone(value) { return JSON.parse(JSON.stringify(value || {})) }
 function documentDeleted() {
+	savedDraft.value = null
 	emit("update:visible", false)
 	emit("changed")
 }

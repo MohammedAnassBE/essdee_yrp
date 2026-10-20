@@ -19,6 +19,7 @@
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="busy" @click="emit('update:visible', false)" />
+			<Button v-if="error" label="Retry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="loadPrinters" />
 			<Button :label="confirmLabel" icon="pi pi-print" :loading="busy" :disabled="loading || !selected || (showResolution && !selectedResolution)" @click="confirm" />
 		</template>
 	</Dialog>

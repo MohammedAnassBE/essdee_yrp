@@ -15,7 +15,6 @@ CUT_BUNDLE_REPORT = "SD YRP Cut Bundle Balance"
 CUT_BUNDLE_LEDGER = "SD YRP Cut Bundle Movement Ledger"
 ALLOWED_FILTERS = {"lot", "supplier"}
 CUT_BUNDLE_COLUMNS = (
-	{"fieldname": "name", "fieldtype": "Link", "options": CUT_BUNDLE_LEDGER, "label": _("Name")},
 	{"fieldname": "lot", "fieldtype": "Link", "options": "SD YRP Lot", "label": _("Lot")},
 	{"fieldname": "supplier", "fieldtype": "Link", "options": "Supplier", "label": _("Supplier")},
 	{"fieldname": "supplier_name", "fieldtype": "Data", "label": _("Supplier Name")},
@@ -57,7 +56,7 @@ def _report_filters(filters=None) -> dict:
 
 
 def _safe_result(rows) -> list[dict]:
-	fieldnames = [column["fieldname"] for column in CUT_BUNDLE_COLUMNS]
+	fieldnames = ["name", *[column["fieldname"] for column in CUT_BUNDLE_COLUMNS]]
 	result = []
 	for source in rows or []:
 		getter = source.get if hasattr(source, "get") else lambda fieldname: getattr(source, fieldname, None)

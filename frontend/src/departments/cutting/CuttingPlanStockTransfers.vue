@@ -37,7 +37,7 @@
 
 		<CpmStockOperationDialog v-model:visible="stockOperationOpen" :cutting-plan="cuttingPlan" :operation="selectedOperation" :permissions="workspace.permissions?.[selectedOperation] || {}" @changed="changed" />
 		<CpmMovementTransactionDialog v-model:visible="movementTransactionOpen" :cutting-plan="cuttingPlan" :movement="movementTransactionSource" :movements="eligibleMovements" :operation="movementTransactionOperation" :context="workspace.context || {}" :permissions="workspace.permissions?.[movementTransactionOperation] || {}" @changed="changed" />
-		<WorkOrderDeliveryDialog v-model:visible="workOrderDeliveryOpen" :cutting-plan="cuttingPlan" :permissions="workspace.permissions?.delivery_challan || {}" @changed="changed" />
+		<WorkOrderDeliveryDialog v-model:visible="workOrderDeliveryOpen" :cutting-plan="cuttingPlan" :permissions="workspace.permissions?.delivery_challan || {}" @created="openTransaction" @changed="changed" />
 		<CpmTransactionDialog v-model:visible="transactionOpen" :cutting-plan="cuttingPlan" :transaction="selectedTransaction" @changed="changed" />
 	</section>
 </template>

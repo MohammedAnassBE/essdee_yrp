@@ -50,6 +50,7 @@
 					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Bundle Edit" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Cut Bundle Edit" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="record?.permissions?.can_print" label="Print Labels" icon="pi pi-print" severity="secondary" outlined :disabled="busy" @click="printerVisible = true" />
+					<Button v-if="record?.docstatus === 2 && record?.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :disabled="busy" @click="requestCommand('amend')" />
 					<Button v-if="record?.permissions?.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
 					<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !inputs.length || !outputs.length" @click="requestCommand('submit')" />
 					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !inputs.length || !outputs.length" @click="save" />
@@ -63,7 +64,7 @@
 		v-model:visible="confirmationVisible"
 		:title="confirmationTitle"
 		:message="confirmationMessage"
-		:confirm-label="pendingCommand === 'close' ? 'Discard Changes' : pendingCommand === 'cancel' ? 'Cancel Document' : 'Submit'"
+		:confirm-label="pendingCommand === 'close' ? 'Discard Changes' : pendingCommand === 'cancel' ? 'Cancel Document' : pendingCommand === 'amend' ? 'Create Amendment' : 'Submit'"
 		:severity="pendingCommand === 'cancel' || pendingCommand === 'close' ? 'danger' : 'success'"
 		:busy="acting === pendingCommand"
 		@confirm="confirmCommand"
@@ -141,8 +142,8 @@ const formattedPrintedTime = computed(() => formatDateTime(record.value?.printed
 const availableRows = computed(() => flattenAvailable(available.value))
 const panelOptions = computed(() => Array.isArray(choices.panels) ? choices.panels : Object.values(choices.panels || {}).flat())
 const quantitySummary = computed(() => `Input ${formatNumber(totalQty(inputs.value))} · Output ${formatNumber(totalQty(outputs.value))}`)
-const confirmationTitle = computed(() => pendingCommand.value === "close" ? "Discard unsaved changes?" : pendingCommand.value === "cancel" ? "Cancel Cut Bundle Edit?" : "Submit Cut Bundle Edit?")
-const confirmationMessage = computed(() => pendingCommand.value === "close" ? "Your unsaved bundle changes will be lost." : pendingCommand.value === "cancel" ? `Cancel ${record.value?.name}?` : `Submit ${record.value?.name}? Bundle stock will be checked again.`)
+const confirmationTitle = computed(() => pendingCommand.value === "close" ? "Discard unsaved changes?" : pendingCommand.value === "cancel" ? "Cancel Cut Bundle Edit?" : pendingCommand.value === "amend" ? "Amend Cut Bundle Edit?" : "Submit Cut Bundle Edit?")
+const confirmationMessage = computed(() => pendingCommand.value === "close" ? "Your unsaved bundle changes will be lost." : pendingCommand.value === "cancel" ? `Cancel ${record.value?.name}?` : pendingCommand.value === "amend" ? `Create a new draft amendment from ${record.value?.name}?` : `Submit ${record.value?.name}? Bundle stock will be checked again.`)
 
 watch(() => [props.visible, props.documentName], ([visible]) => {
 	if (visible) load()
@@ -170,7 +171,10 @@ async function load() {
 		form.selected_colour = payload?.record?.colour || payload?.defaults?.selected_colour || ""
 		inputs.value = clone(payload?.record?.inputs || [])
 		outputs.value = clone(payload?.record?.outputs || [])
-		if (payload?.record?.docstatus === 0) await preview(sequence, requestedDocumentName)
+		if (payload?.record?.docstatus === 0) {
+			if (form.selected_colour) await preview(sequence, requestedDocumentName)
+			else await preview(sequence, requestedDocumentName, true)
+		}
 		if (!loadIsStale(sequence, requestedDocumentName)) dirty.value = false
 	} catch (reason) {
 		if (!loadIsStale(sequence, requestedDocumentName)) error.value = reason.message || "Unable to load the Cut Bundle Edit."
@@ -201,10 +205,14 @@ function resetLoadedState() {
 }
 
 function invalidatePreview() { previewSequence += 1; if (acting.value === "preview") acting.value = "" }
-function sourceChanged() { invalidatePreview(); dirty.value = true; form.selected_colour = ""; Object.assign(choices, { colours: [], sizes: [], panels: [] }); available.value = {}; inputs.value = []; outputs.value = []; selectedKeys.value = new Set(); previewed.value = false }
+function sourceChanged() { invalidatePreview(); dirty.value = true; form.selected_colour = ""; Object.assign(choices, { colours: [], sizes: [], panels: [] }); available.value = {}; inputs.value = []; outputs.value = []; selectedKeys.value = new Set(); previewed.value = false; if (form.lot && form.warehouse) preview(loadSequence, props.documentName, true) }
 function colourChanged() { invalidatePreview(); dirty.value = true; available.value = {}; selectedKeys.value = new Set(); inputs.value = []; outputs.value = []; if (form.selected_colour) preview() }
 
-async function preview(parentLoadSequence = loadSequence, requestedDocumentName = props.documentName) {
+async function preview(parentLoadSequence = loadSequence, requestedDocumentName = props.documentName, choicesOnly = false) {
+	if (!choicesOnly && !form.selected_colour) {
+		error.value = "Select a Colour to fetch bundles."
+		return
+	}
 	const sequence = ++previewSequence
 	const request = { lot: form.lot, warehouse: form.warehouse, posting_date: form.posting_date, posting_time: form.posting_time, selected_colour: form.selected_colour, record: record.value?.name }
 	acting.value = "preview"; error.value = ""
@@ -214,7 +222,7 @@ async function preview(parentLoadSequence = loadSequence, requestedDocumentName 
 		Object.assign(editor.context, payload?.context || {})
 		Object.assign(choices, payload?.choices || {})
 		available.value = payload?.available || {}
-		previewed.value = true
+		previewed.value = !choicesOnly
 	} catch (reason) {
 		if (sequence === previewSequence && !loadIsStale(parentLoadSequence, requestedDocumentName)) error.value = reason.message || "Unable to fetch available bundles."
 	} finally {

@@ -1316,6 +1316,19 @@ table td.erp-number {
 	font-weight: var(--erp-font-weight-semibold);
 }
 
+/* Keep reason-disabled controls focusable without their active button treatment. */
+:is(.app-shell, .p-dialog) .p-button[aria-disabled="true"],
+:is(.app-shell, .p-dialog) .p-button[aria-disabled="true"]:hover,
+:is(.app-shell, .p-dialog) .p-button[aria-disabled="true"]:active {
+	background: var(--erp-surface-muted) !important;
+	border-color: var(--erp-border) !important;
+	color: var(--erp-text-muted) !important;
+	cursor: not-allowed;
+	opacity: 1;
+	transform: none;
+	box-shadow: none;
+}
+
 :is(.app-shell, .p-dialog) .p-button:not(.p-button-secondary):not(.p-button-success):not(.p-button-warn):not(.p-button-danger):not(.p-button-outlined):not(.p-button-text):not(.p-button-link) {
 	color: var(--erp-on-accent);
 	background: var(--erp-accent);

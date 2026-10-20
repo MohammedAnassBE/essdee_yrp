@@ -24,6 +24,8 @@ const loading = ref(true)
 const error = ref("")
 const sections = ref({})
 const workspaces = [
+	{ key: "delivery_challans", label: "Delivery Challans", description: "Review deliveries linked to Cut Panel Movements.", icon: "pi pi-truck", to: "/cut-panel-store/delivery-challans" },
+	{ key: "goods_received_notes", label: "Goods Received Notes", description: "Review receipts linked to Cut Panel Movements.", icon: "pi pi-inbox", to: "/cut-panel-store/goods-received-notes" },
 	{ key: "movements", label: "Cut Panel Movement", description: "Move bundles and create linked stock documents in one workspace.", icon: "pi pi-arrow-right-arrow-left", to: "/cut-panel-store/movements" },
 	{ key: "work_orders", label: "Work Orders", description: "Review production requirements, deliveries and receipts.", icon: "pi pi-briefcase", to: "/cut-panel-store/work-orders" },
 	{ key: "cut_bundle_edits", label: "Cut Bundle Edit", description: "Correct bundle composition using authoritative stock data.", icon: "pi pi-pencil", to: "/cut-panel-store/cut-bundle-edits" },

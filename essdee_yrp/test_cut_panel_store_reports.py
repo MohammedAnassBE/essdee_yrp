@@ -78,10 +78,30 @@ class TestCutPanelStoreReports(UnitTestCase):
 
 		self.assertEqual(
 			[column["fieldname"] for column in payload["columns"]],
-			["name", "lot", "supplier", "supplier_name", "item", "lay_no", "bundle_no", "size", "colour", "shade", "panel", "qty"],
+			[
+				"lot",
+				"supplier",
+				"supplier_name",
+				"item",
+				"lay_no",
+				"bundle_no",
+				"size",
+				"colour",
+				"shade",
+				"panel",
+				"qty",
+			],
 		)
 		self.assertEqual(payload["columns"][0]["fieldtype"], "Link")
-		self.assertEqual(payload["columns"][0]["options"], "SD YRP Cut Bundle Movement Ledger")
-		self.assertEqual(payload["result"], [{key: rows[0].get(key) for key in [column["fieldname"] for column in payload["columns"]]}])
+		self.assertEqual(payload["columns"][0]["options"], "SD YRP Lot")
+		self.assertEqual(
+			payload["result"],
+			[
+				{
+					key: rows[0].get(key)
+					for key in ["name", *[column["fieldname"] for column in payload["columns"]]]
+				}
+			],
+		)
 		self.assertNotIn("private_value", payload["result"][0])
 		self.assertEqual(payload["summary"], {"rows": 1, "quantity": 8})

@@ -390,6 +390,32 @@ const routes = [
 		component: FabricPurchaseOrder,
 	},
 	{
+		path: "/cut-panel-store/delivery-challans",
+		name: "cut-panel-delivery-challans",
+		component: CutPanelStoreSection,
+		props: { section: "delivery_challans" },
+	},
+	{
+		path: "/cut-panel-store/delivery-challans/:deliveryChallanId",
+		name: "cut-panel-delivery-challan",
+		component: FabricDeliveryChallan,
+		props: { backTo: "/cut-panel-store/delivery-challans", backLabel: "Delivery Challans", viewRouteName: "cut-panel-delivery-challan" },
+	},
+
+	{
+		path: "/cut-panel-store/goods-received-notes",
+		name: "cut-panel-goods-received-notes",
+		component: CutPanelStoreSection,
+		props: { section: "goods_received_notes" },
+	},
+	{
+		path: "/cut-panel-store/goods-received-notes/:goodsReceivedNoteId",
+		name: "cut-panel-goods-received-note",
+		component: FabricGoodsReceivedNote,
+		props: { backTo: "/cut-panel-store/goods-received-notes", backLabel: "Goods Received Notes", viewRouteName: "cut-panel-goods-received-note" },
+	},
+
+	{
 		path: "/fabric-store/delivery-challans/new",
 		name: "fabric-delivery-challan-new",
 		component: FabricDeliveryChallan,

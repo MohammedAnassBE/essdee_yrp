@@ -70,11 +70,12 @@ const {
 	generate: generateReport, filtersChanged, clear, download,
 } = useWebReport({ reportKey: "cut-bundle-balance" })
 const {
-	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	columns: allColumns, displayColumns: reportColumns, rows, linkSources, fieldsBySource,
 	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "cut-bundle-balance", sourceColumns, sourceRows })
 
+const columns = computed(() => reportColumns.value.filter(column => column.fieldname !== "name"))
 const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
 const totalQuantity = computed(() => dataRows.value.reduce((total, row) => total + Number(row.qty || 0), 0))
 const uniqueLots = computed(() => new Set(dataRows.value.map((row) => row.lot).filter(Boolean)).size)

@@ -5,7 +5,7 @@ from essdee_yrp.cut_panel_store.web_workspace import get_capabilities
 
 
 class TestCutPanelStoreCapabilities(TestCase):
-	def test_capabilities_expose_exact_six_sections_when_permitted(self):
+	def test_capabilities_expose_document_sections_when_permitted(self):
 		with patch(
 			"essdee_yrp.cut_panel_store.web_workspace.frappe.has_permission",
 			return_value=True,
@@ -17,6 +17,8 @@ class TestCutPanelStoreCapabilities(TestCase):
 			{
 				"movements",
 				"work_orders",
+				"delivery_challans",
+				"goods_received_notes",
 				"cut_bundle_edits",
 				"box_stickers",
 				"excel_stickers",

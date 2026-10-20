@@ -35,7 +35,7 @@ const props = defineProps({
 	cuttingPlan: { type: String, required: true },
 	permissions: { type: Object, default: () => ({}) },
 })
-const emit = defineEmits(["update:visible", "changed"])
+const emit = defineEmits(["update:visible", "changed", "created"])
 const editor = reactive({ context: {}, item_details: [], correction_item_details: [] })
 const quantities = reactive({})
 const correctionQuantities = reactive({})
@@ -85,6 +85,7 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
+		const creating = !currentName.value
 		const saved = currentName.value
 			? await saveDeliveryChallan({
 				...savedEditor.value.values,
@@ -92,12 +93,13 @@ async function save(submit) {
 				correction_item_details: editor.correction_item_details.map(block => ({ ...block, item_details: applyQuantities(block.item_details, correctionQuantities) })),
 			}, { name: currentName.value, submit, expectedModified: savedEditor.value.record?.modified })
 			: await createWorkOrderDeliveryChallan(props.cuttingPlan, {
-			quantities: { ...quantities },
-			correction_quantities: { ...correctionQuantities },
+			quantities: positiveQuantities(quantities),
+			correction_quantities: positiveQuantities(correctionQuantities),
 		}, submit)
 		currentName.value = saved.record?.name || saved.name
 		if (!submit) await load()
 		emit("changed", saved)
+		if (creating && submit) emit("created", { doctype: "YRP Delivery Challan", name: currentName.value })
 		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		error.value = reason.message || "Unable to create the Delivery Challan."
@@ -107,6 +109,9 @@ async function save(submit) {
 	}
 }
 
+function positiveQuantities(values) {
+	return Object.fromEntries(Object.entries(values).filter(([, quantity]) => Number(quantity) > 0))
+}
 function readQuantities(groups, target) {
 	for (const group of groups || []) for (const row of group.items || []) for (const cell of Object.values(row.values || {})) {
 		if (cell?.ref_docname) target[cell.ref_docname] = Number(cell.qty || 0)

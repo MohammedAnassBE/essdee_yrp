@@ -531,6 +531,13 @@ def build_goods_received_note_defaults(doc_name, work_order, return_items=False,
 	if wo.docstatus != 1 or wo.open_status == "Close" or wo.lot != cpm.lot:
 		frappe.throw(_("Select an open, submitted Work Order for Lot {0}.").format(cpm.lot))
 
+	if not cint(return_items) and wo.supplier != cpm.from_warehouse:
+		frappe.throw(
+			_("Work Order {0} is with {1}, but this Cut Panel Movement is from {2}.").format(
+				wo.name, wo.supplier, cpm.from_warehouse
+			)
+		)
+
 	if cint(return_items):
 		source_rows = []
 		for row in wo.get("deliverables") or []:

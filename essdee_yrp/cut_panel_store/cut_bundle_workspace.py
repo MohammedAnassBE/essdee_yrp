@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import frappe
 from frappe import _
@@ -19,7 +19,6 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_edit.sd_yrp_cut_bundle_edit
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
 	_get_cut_bundle_unmoved_data as get_cut_bundle_unmoved_data,
 )
-
 
 CUT_BUNDLE_DOCTYPE = "SD YRP Cut Bundle Edit"
 
@@ -65,6 +64,7 @@ def _permissions(doc=None) -> dict:
 		"can_write": bool(doc and cint(doc.docstatus) == 0 and _document_permission(doc, "write")),
 		"can_submit": bool(doc and cint(doc.docstatus) == 0 and _document_permission(doc, "submit")),
 		"can_cancel": bool(doc and cint(doc.docstatus) == 1 and _document_permission(doc, "cancel")),
+		"can_amend": bool(doc and cint(doc.docstatus) == 2 and _document_permission(doc, "amend")),
 		"can_print": bool(doc and cint(doc.docstatus) == 1 and not doc.printed_time and _document_permission(doc, "print")),
 	}
 
@@ -461,6 +461,16 @@ def execute_cut_bundle_command(name, command, expected_modified=None) -> dict:
 		if cint(doc.docstatus) != 1:
 			frappe.throw(_("Only a Submitted Cut Bundle Edit can be cancelled."))
 		doc.cancel()
+	elif command == "amend":
+		doc.check_permission("amend")
+		if cint(doc.docstatus) != 2:
+			frappe.throw(_("Only a Cancelled Cut Bundle Edit can be amended."))
+		amended = frappe.copy_doc(doc)
+		amended.docstatus = 0
+		amended.amended_from = doc.name
+		amended.printed_time = None
+		amended.insert()
+		doc = amended
 	else:
 		frappe.throw(_("Unsupported Cut Bundle Edit command."))
 	return _record_payload(doc)

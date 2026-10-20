@@ -405,7 +405,7 @@ def get_movement_work_orders(name: str, txt: str = "") -> list[dict]:
 		for row in frappe.get_list(
 			"YRP Work Order",
 			filters=filters,
-			fields=["name", "supplier", "process", "item", "production_detail", "lot", "modified"],
+			fields=["name", "supplier", "process_name", "item", "production_detail", "lot", "modified"],
 			order_by="modified desc",
 			limit_page_length=50,
 		)
@@ -454,6 +454,7 @@ def create_movement_transaction(name: str, operation: str, values=None, submit=F
 	doc = new_transaction_from_defaults(doctype, defaults)
 	if operation == "stock_entry":
 		doc.to_warehouse = to_warehouse
+		doc.skip_transit = cint(values.get("skip_transit"))
 	if values.get("comments") is not None and doc.meta.get_field("comments"):
 		doc.comments = values.get("comments")
 	doc.insert()

@@ -18,6 +18,7 @@ from essdee_yrp.cutting.web_workspace import (
 	_movement_totals,
 	_normalize_stock_item_details,
 	_plan_stock_item_groups,
+	_positive_delivery_groups,
 	_resolve_stock_rows,
 	_stock_editor_dimensions,
 	_transaction_item_groups,
@@ -174,6 +175,7 @@ class TestCuttingWebWorkspace(UnitTestCase):
 	@patch("essdee_yrp.cutting.web_workspace._require_active_plan")
 	@patch("essdee_yrp.cutting.web_workspace._get_plan")
 	@patch("essdee_yrp.cutting.web_workspace.get_cut_bundle_unmoved_data")
+	@patch("essdee_yrp.cutting.web_workspace._draft_movement_message", new=lambda *_: "")
 	def test_generate_action_uses_server_derived_identity(
 		self,
 		generator,
@@ -617,6 +619,19 @@ class TestCuttingWebWorkspace(UnitTestCase):
 		self.assertEqual(doc.warehouse, "CUTTING-WH")
 		self.assertEqual(doc.supplier, "CUTTING")
 		self.assertEqual(json.loads(doc.item_details), normalize.return_value)
+
+	def test_work_order_delivery_omits_zero_cells_rows_and_empty_groups(self):
+		groups = [
+			{"items": [
+				{"name": "SHIRT", "values": {"S": {"qty": 0}, "M": {"qty": 2, "ref_docname": "ROW-M"}}},
+				{"name": "EMPTY", "values": {"default": {"qty": 0}}},
+			]},
+			{"items": [{"name": "EMPTY-GROUP", "values": {"default": {"qty": 0}}}]},
+		]
+		self.assertEqual(_positive_delivery_groups(groups), [{"items": [
+			{"name": "SHIRT", "values": {"M": {"qty": 2, "ref_docname": "ROW-M"}}},
+		]}])
+		self.assertIn("S", groups[0]["items"][0]["values"])
 
 	def test_work_order_delivery_editor_starts_at_zero_and_applies_only_known_rows(self):
 		groups = [

@@ -77,7 +77,7 @@ class SDYRPCuttingMarker(Document):
 					if "." in str_num:
 						precision = int(str_num.split(".")[1]) % 10
 						if not (precision == 5 or precision == 0):
-							frappe.throw("Only 0.5 addition is acceptable")
+							frappe.throw(f"Size {_attribute_value(item['size'])}: only 0.5 increments are allowed.")
 					items.append(
 						{
 							"size": _attribute_value(item["size"]),
@@ -94,7 +94,7 @@ class SDYRPCuttingMarker(Document):
 						if "." in str_num:
 							precision = int(str_num.split(".")[1]) % 10
 							if not (precision == 5 or precision == 0):
-								frappe.throw("Only 0.5 increment is acceptable")
+								frappe.throw(f"Size {_attribute_value(item['size'])}: only 0.5 increments are allowed.")
 						for panel in panels:
 							items.append(
 								{"size": _attribute_value(item["size"]), "panel": panel, "ratio": ratio}

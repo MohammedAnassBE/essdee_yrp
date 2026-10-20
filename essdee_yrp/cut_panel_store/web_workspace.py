@@ -5,10 +5,11 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-
 SECTION_DOCTYPES = {
 	"movements": "SD YRP Cut Panel Movement",
 	"work_orders": "YRP Work Order",
+	"delivery_challans": "YRP Delivery Challan",
+	"goods_received_notes": "YRP Goods Received Note",
 	"cut_bundle_edits": "SD YRP Cut Bundle Edit",
 	"box_stickers": "SD YRP Box Sticker Print",
 	"excel_stickers": "YRP Excel Sticker Print",
@@ -17,6 +18,8 @@ SECTION_DOCTYPES = {
 SECTION_LABELS = {
 	"movements": _("Cut Panel Movement"),
 	"work_orders": _("Work Orders"),
+	"delivery_challans": _("Delivery Challans"),
+	"goods_received_notes": _("Goods Received Notes"),
 	"cut_bundle_edits": _("Cut Bundle Edit"),
 	"box_stickers": _("Box Sticker Print"),
 	"excel_stickers": _("Excel Sticker Print"),
@@ -63,7 +66,7 @@ def _readable_reports() -> dict:
 
 @frappe.whitelist()
 def get_capabilities() -> dict:
-	"""Return independent capabilities for the six approved destinations."""
+	"""Return independent capabilities for the Cut Panel Store destinations."""
 
 	sections = {}
 	for key, doctype in SECTION_DOCTYPES.items():

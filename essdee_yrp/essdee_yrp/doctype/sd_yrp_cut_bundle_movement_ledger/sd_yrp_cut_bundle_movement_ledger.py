@@ -251,7 +251,7 @@ def make_cut_bundle_ledger(entries, _collapsed_entries=None):
 				entry["quantity_after_transaction"] = entry["quantity"]
 
 			if entry["quantity_after_transaction"] < 0:
-				frappe.throw("Stock is not Avaliable in Source")
+				frappe.throw("Stock is not available in Source")
 
 			make_cut_bundle_entry(entry)
 

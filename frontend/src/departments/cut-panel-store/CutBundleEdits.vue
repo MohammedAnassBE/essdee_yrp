@@ -40,7 +40,7 @@ const defaultColumns = ["lot", "item", "warehouse", "posting_date", "printed_tim
 
 function createEdit() { selectedName.value = ""; dialogVisible.value = true }
 function openEdit(row) { if (!row?.name) return; selectedName.value = row.name; dialogVisible.value = true }
-async function changed() { await listView.value?.refresh?.() }
+async function changed(record) { if (record?.name) selectedName.value = record.name; await listView.value?.refresh?.() }
 </script>
 
 <style scoped>

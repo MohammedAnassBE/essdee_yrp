@@ -24,7 +24,9 @@ for (const path of dialogs) test(`${path}: deletion closes and notifies the pare
 	assert.match(button, /@deleted="documentDeleted"/)
 	const events = []
 	const handler = text.match(/function documentDeleted\(\) \{([\s\S]*?)\n\}/)[1]
-	new Function("emit", handler)((...event) => events.push(event))
+	const savedDraft = { value: { name: "CPM-1" } }
+	new Function("emit", "savedDraft", handler)((...event) => events.push(event), savedDraft)
+	if (path === "departments/cutting/CpmMovementDialog") assert.equal(savedDraft.value, null)
 	assert.deepEqual(events, [["update:visible", false], ["changed"]])
 })
 

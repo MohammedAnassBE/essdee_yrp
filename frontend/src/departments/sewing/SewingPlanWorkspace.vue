@@ -53,12 +53,13 @@ const active = computed({
 	get: () => tabs.some(tab => tab.value === route.query.tab) ? route.query.tab : "dashboard",
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
 })
-const entryFilters = reactive({ lot: typeof route.query.lot === "string" ? route.query.lot : "", plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
+const routeLot = typeof route.query.lot === "string" ? route.query.lot : ""
+const entryFilters = reactive({ lot: routeLot, plan: "", inputType: "", workStation: "", receivedType: "", date: "", time: "", inspectionType: "pre_final" })
 const entryState = reactive({ response: {}, loaded: false, entryDrafts: {}, inspectionDrafts: {}, attempted: false, success: "", error: "", loadError: "", busy: false, refreshRequired: false, operationVersion: 0, operation: null })
 // The Supplier-keyed shell retains local filters and consumption drafts without
 // mounting inactive tabs. Mutation locks and recovery survive a tab switch too.
-const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: "" }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
-const consumptionState = reactive({ lot: "", data: null, busy: false, refreshRequired: false, loadError: "", operationVersion: 0, operation: null })
+const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: routeLot }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
+const consumptionState = reactive({ lot: routeLot, data: null, busy: false, refreshRequired: false, loadError: "", operationVersion: 0, operation: null })
 const closedGrnState = reactive({ workOrder: "", data: null, values: {}, namingField: null, busy: false, refreshRequired: false, loadError: "", result: null, operationVersion: 0, operation: null })
 
 // The Supplier-keyed shell owns the entire write lifetime. Tab unmounts may

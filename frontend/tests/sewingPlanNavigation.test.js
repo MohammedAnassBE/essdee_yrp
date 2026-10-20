@@ -10,7 +10,10 @@ test("Open Sewing Plan goes to the Sewing data entry for the Work Order's unit a
 	assert.doesNotMatch(workOrder, /webDocumentPath\("SD YRP Sewing Plan"/)
 })
 
-test("Sewing data entry starts on the Lot named in the URL", () => {
+test("Sewing data entry, entries and consumption start on the Lot named in the URL", () => {
 	const workspace = read("departments/sewing/SewingPlanWorkspace.vue")
-	assert.match(workspace, /entryFilters = reactive\(\{ lot: typeof route\.query\.lot === "string" \? route\.query\.lot : ""/)
+	assert.match(workspace, /const routeLot = typeof route\.query\.lot === "string" \? route\.query\.lot : ""/)
+	assert.match(workspace, /entryFilters = reactive\(\{ lot: routeLot,/)
+	assert.match(workspace, /entriesState = reactive\(\{ filters: \{ workStation: "", inputType: "", lot: routeLot \}/)
+	assert.match(workspace, /consumptionState = reactive\(\{ lot: routeLot,/)
 })

@@ -661,7 +661,7 @@ def validate_movement_required(doc, method=None):
 		return
 	rows = [
 		row
-		for row in doc.get("items") or []
+		for row in [*(doc.get("items") or []), *(doc.get("correction_items") or [])]
 		if flt(row.get("delivered_quantity") or row.get("qty") or row.get("quantity")) > 0
 	]
 	if has_cut_stage_items(rows, lot):

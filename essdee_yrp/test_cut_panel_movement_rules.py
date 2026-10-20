@@ -53,6 +53,13 @@ class TestCutPanelMovementRequired(UnitTestCase):
 		has_cut_stage = self.check(doc, cut_stage=False)
 		self.assertEqual(has_cut_stage.call_args.args[0], [])
 
+	def test_correction_rows_are_checked_too(self):
+		doc = transaction(
+			items=[], correction_items=[frappe._dict(item_variant="TB-S", delivered_quantity=1)]
+		)
+		with self.assertRaisesRegex(frappe.ValidationError, "must move through a Cut Panel Movement"):
+			self.check(doc)
+
 	def test_cut_stage_is_the_ipd_stitching_in_stage(self):
 		with (
 			patch(f"{MODULE}.attribute_db.get_value", side_effect=["IPD-1", ("Cut", "Stage")]),

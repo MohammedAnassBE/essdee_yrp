@@ -253,6 +253,8 @@ RULES = {
 	"Work Order": DocTypeRule(field_map={"close_reason": "sd_close_reason"}),
 	"Work Order Deliverables": DocTypeRule(field_map={"item_type": "received_type"}),
 	"Work Order Receivables": DocTypeRule(),
+	# against_id is Data, not a Dynamic Link, so the engine does not rename this doctype value.
+	"Work Order Track Piece": DocTypeRule(value_transformers={"against": "doctype_reference_to_target"}),
 	"Work Station": DocTypeRule(post_transformer="derive_workstation_fields"),
 }
 

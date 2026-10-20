@@ -114,6 +114,26 @@ class ReviewedTransformerTest(unittest.TestCase):
 				self.plan,
 			)
 
+	def test_work_order_track_piece_names_the_migrated_voucher_doctype(self):
+		for source, target in (
+			("Delivery Challan", "YRP Delivery Challan"),
+			("Goods Received Note", "YRP Goods Received Note"),
+			("", ""),
+		):
+			with self.subTest(source=source):
+				row = transform_document(
+					{
+						"doctype": "Work Order Track Piece",
+						"name": "WOTP-1",
+						"against": source,
+						"against_id": "DOC-1",
+					},
+					self.plan,
+				)
+				self.assertEqual(row["doctype"], "YRP Work Order Track Piece")
+				self.assertEqual(row["against"], target)
+				self.assertEqual(row["against_id"], "DOC-1")
+
 	def test_purchase_order_derives_f16_fields_and_status(self):
 		row = transform_document(
 			{

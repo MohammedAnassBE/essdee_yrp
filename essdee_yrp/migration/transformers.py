@@ -58,6 +58,18 @@ def purchase_order_open_status(
 	return "Close" if value == "Closed" else value
 
 
+def doctype_reference_to_target(
+	value: Any,
+	document: Mapping[str, Any],
+	spec: MigrationSpec,
+	fieldname: str,
+) -> Any:
+	"""Rename a stored source DocType name to its migrated target DocType."""
+	from essdee_yrp.migration.rules import DOCTYPE_RENAMES
+
+	return DOCTYPE_RENAMES.get(value, value) if value else value
+
+
 def attribute_value_link_to_data(
 	value: Any,
 	document: Mapping[str, Any],
@@ -733,6 +745,7 @@ TRANSFORMERS = {
 
 VALUE_TRANSFORMERS = {
 	"attribute_value_link_to_data": attribute_value_link_to_data,
+	"doctype_reference_to_target": doctype_reference_to_target,
 	"supplier_to_warehouse": supplier_to_warehouse,
 	"purchase_order_status": purchase_order_status,
 	"purchase_order_open_status": purchase_order_open_status,

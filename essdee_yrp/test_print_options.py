@@ -64,11 +64,30 @@ class TestPrintOptions(TestCase):
 		self.assertEqual(get_print_options("Test Doc", "DOC-1"), {
 			"formats": ["Zebra", "Standard", "Alpha"], "default_format": "Zebra",
 			"letter_heads": ["Default Head", "Doc Head"], "default_letter_head": "Doc Head",
+			"raw_formats": [],
 		})
 		self.get_doc.assert_called_once_with("Test Doc", "DOC-1")
 		self.has_permission.assert_called_once_with("Test Doc", "print", self.doc, throw=True)
 		self.get_all.assert_any_call("Print Format", filters={"doc_type": "Test Doc", "disabled": 0}, fields=["name", "print_format_type", "raw_printing", "disabled"], order_by="name asc")
 		self.get_all.assert_any_call("Letter Head", filters={"disabled": 0}, pluck="name", order_by="name asc")
+
+	def test_raw_format_metadata_only_includes_available_formats(self):
+		self.meta.default_print_format = "Raw"
+		self.get_all.side_effect = lambda doctype, **kwargs: (
+			[{"name": "Raw", "raw_printing": "1"}, {"name": "HTML", "raw_printing": "0"},
+			 {"name": "Disabled Raw", "raw_printing": 1, "disabled": 1}]
+			if doctype == "Print Format" else []
+		)
+		self.db.get_single_value.return_value = 1
+		options = get_print_options("Test Doc", "DOC-1")
+		self.assertEqual(options["formats"], ["Raw", "Standard", "HTML"])
+		self.assertEqual(options["raw_formats"], ["Raw"])
+		self.assertEqual(options["default_format"], "Raw")
+		self.db.get_single_value.return_value = 0
+		options = get_print_options("Test Doc", "DOC-1")
+		self.assertEqual(options["formats"], ["Standard", "HTML"])
+		self.assertEqual(options["raw_formats"], [])
+		self.assertEqual(options["default_format"], "Standard")
 
 	def test_permission_denial_stops_option_queries(self):
 		self.has_permission.side_effect = frappe.PermissionError

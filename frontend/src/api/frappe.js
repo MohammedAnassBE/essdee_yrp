@@ -237,6 +237,10 @@ export async function getPrintOptions(doctype, name) {
 	return payload.message
 }
 
+export function getRawPrintCommands(doctype, name, format) {
+	return callMethod("frappe.www.printview.get_rendered_raw_commands", { doc: doctype, name, print_format: format })
+}
+
 export async function getDocPermissions(doctype, name) {
 	const payload = await request(`/api/method/frappe.client.get_doc_permissions${queryString({ doctype, docname: name })}`, { method: "GET" })
 	return payload.message.permissions

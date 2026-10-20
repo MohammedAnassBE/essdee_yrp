@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { readFileSync } from "node:fs"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+import { getRawPrintCommands } from "../src/api/frappe.js"
 import * as printUrl from "../src/utils/printUrl.js"
 import * as productionOrderPrint from "../src/utils/productionOrderPrint.js"
 import { getCustomPrintButtons } from "../src/utils/customPrintButtons.js"
@@ -28,10 +29,11 @@ const tick = async () => { await new Promise(resolve => setImmediate(resolve)); 
 const nodes = (root, type) => findNodes(root, node => node.type === type)
 const options = { formats: ["Standard", "Custom"], default_format: "Custom", letter_heads: ["Company"], default_letter_head: "Company" }
 
-function mountPrint(api, props = {}) {
+function mountPrint(api, props = {}, rawApi = {}) {
 	return mountComponent(component("components/documents/DocumentPrintDialog", {
 		"primevue/button": Button, "primevue/dialog": Dialog, "primevue/select": Select,
-		"../../api/frappe.js": { getPrintOptions: api }, "../../utils/printUrl.js": printUrl,
+		"../../api/frappe.js": { getPrintOptions: api, getRawPrintCommands: rawApi.getRawPrintCommands },
+		"../../api/qzPrinter.js": rawApi, "../../utils/printUrl.js": printUrl,
 	}), Vue.reactive({ visible: true, doctype: "Test Doc", name: "DOC/1", ...props }))
 }
 
@@ -72,6 +74,70 @@ test("print dialog shows server errors and blocked popup messages", async () => 
 		assert.deepEqual(visibility, [])
 	} finally { globalThis.window = oldWindow }
 })
+test("raw print requests use Desk's rendered-command endpoint", async () => {
+	const oldWindow = globalThis.window, oldFetch = globalThis.fetch
+	globalThis.window = { csrf_token: "test-token" }
+	globalThis.fetch = async (url, request) => {
+		assert.equal(url, "/api/method/frappe.www.printview.get_rendered_raw_commands")
+		assert.equal(request.method, "POST")
+		assert.deepEqual(JSON.parse(request.body), { doc: "Test Doc", name: "DOC/1", print_format: "Raw" })
+		return { status: 200, ok: true, json: async () => ({ message: { raw_commands: "^XA^XZ" } }) }
+	}
+	try {
+		assert.deepEqual(await getRawPrintCommands("Test Doc", "DOC/1", "Raw"), { raw_commands: "^XA^XZ" })
+	} finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch }
+})
+
+test("selecting a raw format sends rendered commands to the selected QZ printer", async () => {
+	const oldWindow = globalThis.window
+	const opened = [], printed = [], visibility = []
+	globalThis.window = { open: (...args) => { opened.push(args); return {} } }
+	try {
+		const root = mountPrint(async () => ({ ...options, formats: ["Standard", "Raw"], default_format: "Standard", raw_formats: ["Raw"] }), {
+			"onUpdate:visible": value => visibility.push(value),
+		}, {
+			getQzPrinters: async () => ["Label Printer", "Other Printer"],
+			getRawPrintCommands: async (...args) => {
+				assert.deepEqual(args, ["Test Doc", "DOC/1", "Raw"])
+				return { raw_commands: "^XA^FDLabel^FS^XZ" }
+			},
+			printQzRaw: async (...args) => printed.push(args),
+		})
+		await tick()
+		nodes(root, "select")[0].props["onUpdate:modelValue"]("Raw")
+		await tick()
+		const printer = nodes(root, "select").find(node => node.props.options?.includes("Label Printer"))
+		assert.ok(printer, "Raw formats must offer a QZ printer selection")
+		printer.props["onUpdate:modelValue"]("Other Printer")
+		await tick()
+		await nodes(root, "button")[0].props.onClick()
+		assert.deepEqual(printed, [["Other Printer", "^XA^FDLabel^FS^XZ"]])
+		assert.deepEqual(opened, [])
+		assert.deepEqual(visibility, [false])
+		root.__vue_app__.unmount()
+	} finally { globalThis.window = oldWindow }
+})
+
+test("raw print errors keep the dialog open without falling back to printview", async () => {
+	const visibility = []
+	const root = mountPrint(async () => ({ ...options, formats: ["Raw", "Standard"], default_format: "Raw", raw_formats: ["Raw"] }), {
+		"onUpdate:visible": value => visibility.push(value),
+	}, {
+		getQzPrinters: async () => ["Label Printer"],
+		getRawPrintCommands: async () => ({ raw_commands: "raw data" }),
+		printQzRaw: async () => { throw new Error("Printer disconnected") },
+	})
+	await tick()
+	await nodes(root, "button")[0].props.onClick()
+	await tick()
+	assert.ok(findNodes(root, n => n.text.includes("Printer disconnected")).length)
+	assert.deepEqual(visibility, [])
+	nodes(root, "select")[0].props["onUpdate:modelValue"]("Standard")
+	await tick()
+	assert.equal(findNodes(root, n => n.text.includes("Printer disconnected")).length, 0)
+	root.__vue_app__.unmount()
+})
+
 test("print button opens the dialog only when enabled with formats", async () => {
 	const props = Vue.reactive({ doctype: "Test Doc", name: "DOC/1", formats: [] })
 	const root = mountComponent(component("components/documents/DocumentPrintButton", {

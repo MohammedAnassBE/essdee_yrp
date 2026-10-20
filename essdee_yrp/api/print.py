@@ -24,6 +24,10 @@ def order_print_formats(records, default_format="", enable_raw_printing=False):
 
 
 def get_desk_print_formats(doctype):
+	return _get_print_format_options(doctype)["formats"]
+
+
+def _get_print_format_options(doctype):
 	meta = frappe.get_meta(doctype)
 	records = frappe.get_all(
 		"Print Format",
@@ -31,11 +35,15 @@ def get_desk_print_formats(doctype):
 		fields=["name", "print_format_type", "raw_printing", "disabled"],
 		order_by="name asc",
 	)
-	return order_print_formats(
+	formats = order_print_formats(
 		records,
 		meta.default_print_format,
 		frappe.db.get_single_value("Print Settings", "enable_raw_printing"),
 	)
+	return {
+		"formats": formats,
+		"raw_formats": [row["name"] for row in records if row["name"] in formats and cint(row.get("raw_printing"))],
+	}
 
 
 def get_print_restriction(doc):
@@ -61,7 +69,8 @@ def get_print_options(doctype, name):
 	if restriction := get_print_restriction(doc):
 		frappe.throw(restriction)
 
-	formats = get_desk_print_formats(doctype)
+	format_options = _get_print_format_options(doctype)
+	formats = format_options["formats"]
 	default_format = frappe.get_meta(doctype).default_print_format
 	letter_heads = frappe.get_all(
 		"Letter Head", filters={"disabled": 0}, pluck="name", order_by="name asc"
@@ -71,7 +80,7 @@ def get_print_options(doctype, name):
 	if document_letter_head not in letter_heads:
 		default_letter_head = frappe.db.get_value("Letter Head", {"disabled": 0, "is_default": 1}, "name")
 	return {
-		"formats": formats,
+		**format_options,
 		"default_format": default_format if default_format in formats else "Standard",
 		"letter_heads": letter_heads,
 		"default_letter_head": resolve_default_letter_head(letter_heads, document_letter_head, default_letter_head),

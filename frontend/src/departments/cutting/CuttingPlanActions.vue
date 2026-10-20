@@ -196,14 +196,15 @@ const moreActionItems = computed(() => {
 })
 const hasActions = computed(() => moreActionItems.value.some((item) => !item.separator))
 
-const methods = {
-	generate: ["get_cloth1", { cutting_plan: props.doc.name }, "Cloth details generated."],
-	fetch: ["fetch_received_cloth", { docname: props.doc.name }, "Received cloth refreshed."],
-	calculate: ["calculate_laysheets", { cutting_plan: props.doc.name }, "LaySheet calculation queued."],
+const planActions = {
+	generate: ["get_cloth1", "cutting_plan", "Cloth details generated."],
+	fetch: ["fetch_received_cloth", "docname", "Received cloth refreshed."],
+	calculate: ["calculate_laysheets", "cutting_plan", "LaySheet calculation queued."],
 }
 
 async function runPlanAction(action) {
-	const [method, args, success] = methods[action]
+	const [method, nameArgument, success] = planActions[action]
+	const args = { [nameArgument]: props.doc.name }
 	busy.value = action
 	clearFeedback()
 	try {

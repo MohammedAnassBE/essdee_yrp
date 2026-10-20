@@ -29,7 +29,7 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
-import { computed, defineAsyncComponent, reactive } from "vue"
+import { computed, defineAsyncComponent, reactive, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { cancelSewingEntry, createClosedWorkOrderGrn, saveSewingConsumption, submitSewingDataEntry, updateSewingInspection } from "../../api/sewing.js"
 import { useSewingContext } from "./useSewingContext.js"
@@ -61,6 +61,13 @@ const entryState = reactive({ response: {}, loaded: false, entryDrafts: {}, insp
 const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: routeLot }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
 const consumptionState = reactive({ lot: routeLot, data: null, busy: false, refreshRequired: false, loadError: "", operationVersion: 0, operation: null })
 const closedGrnState = reactive({ workOrder: "", data: null, values: {}, namingField: null, busy: false, refreshRequired: false, loadError: "", result: null, operationVersion: 0, operation: null })
+// A same-unit link to another Lot reuses this workspace; follow the URL Lot.
+watch(() => route.query.lot, (lot) => {
+	const next = typeof lot === "string" ? lot : ""
+	entryFilters.lot = next
+	entriesState.filters.lot = next
+	consumptionState.lot = next
+})
 
 // The Supplier-keyed shell owns the entire write lifetime. Tab unmounts may
 // invalidate reads, but must not discard a write's acknowledgement or failure.

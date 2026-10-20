@@ -520,7 +520,7 @@ def _cutting_inputs(ipd, process_name, demands):
 	]
 
 
-def _cutting_accessory_outputs(ipd, demands):
+def _cutting_accessory_outputs(ipd, demands, precision=3):
 	"""Return the legacy Cutting receivable rows for cut cloth accessories."""
 	accessory_types = update_if_string_instance(ipd.get("accessory_clothtype_json")) or {}
 	if not accessory_types:
@@ -555,7 +555,7 @@ def _cutting_accessory_outputs(ipd, demands):
 			rows.append(
 				{
 					"item_variant": variant,
-					"qty": flt(requirement["quantity"], 3),
+					"qty": flt(requirement["quantity"], precision),
 					"uom": frappe.db.get_value("Item", cloth_item, "stock_uom"),
 					"set_combination": "{}",
 					"table_index": demand["table_index"],
@@ -569,7 +569,7 @@ def _cutting_accessory_outputs(ipd, demands):
 def _stitching_cloth_accessory_deliverables(ipd, demands):
 	"""Return one cloth accessory row per variant, like Production API's Stitching calculation."""
 	totals = {}
-	for row in _cutting_accessory_outputs(ipd, demands):
+	for row in _cutting_accessory_outputs(ipd, demands, precision=None):
 		total = totals.setdefault(row["item_variant"], {**row, "qty": 0})
 		total["qty"] += flt(row["qty"])
 	return [{**row, "qty": flt(row["qty"], 3)} for row in totals.values()]

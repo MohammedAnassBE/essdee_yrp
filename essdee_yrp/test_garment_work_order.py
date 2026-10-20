@@ -232,3 +232,15 @@ class TestGarmentWorkOrderPlannedQuantity(TestCase):
 
 		self.assertEqual(work_order.planned_quantity, 637)
 		work_order.save.assert_called_once()
+
+
+class TestStitchingClothAccessoryRounding(TestCase):
+	def test_cloth_accessory_quantities_are_summed_before_rounding(self):
+		from essdee_yrp.garment_work_order import _stitching_cloth_accessory_deliverables
+
+		rows = [{"item_variant": "FOLD-Red", "qty": 0.0006}, {"item_variant": "FOLD-Red", "qty": 0.0006}]
+		with patch("essdee_yrp.garment_work_order._cutting_accessory_outputs", return_value=rows) as outputs:
+			result = _stitching_cloth_accessory_deliverables("IPD", [])
+
+		self.assertEqual(outputs.call_args.kwargs, {"precision": None})
+		self.assertEqual([(row["item_variant"], row["qty"]) for row in result], [("FOLD-Red", 0.001)])

@@ -59,3 +59,11 @@ class TestGrnQualityInspection(TestCase):
 	def test_returns_and_work_orders_without_a_sewing_plan_are_exempt(self):
 		self.assertFalse(self.validate(self.grn(is_return=1), []).called)
 		self.assertFalse(self.validate(self.grn(), [], has_plan=False).called)
+
+	def test_colour_falls_back_to_the_variant_when_the_row_has_no_major_colour(self):
+		grn = self.grn()
+		grn["items"][0].set_combination = "{}"
+		with self.assertRaises(frappe.ValidationError) as raised:
+			self.validate(grn, [])
+
+		self.assertIn("Red / M", str(raised.exception))

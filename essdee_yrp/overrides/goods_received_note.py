@@ -1203,6 +1203,8 @@ def _received_colour_sizes(grn):
 		attributes = get_variant_attr_details(item.get("item_variant"))
 		size = attributes.get(ipd.primary_item_attribute)
 		colour = (update_if_string_instance(item.get("set_combination")) or {}).get("major_colour")
+		if not colour and not cint(ipd.is_set_item):
+			colour = attributes.get(ipd.packing_attribute)
 		if cint(ipd.is_set_item) and attributes.get(ipd.set_item_attribute) != _attribute_value(
 			ipd.major_attribute_value
 		):

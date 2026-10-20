@@ -17,3 +17,10 @@ test("Sewing data entry, entries and consumption start on the Lot named in the U
 	assert.match(workspace, /entriesState = reactive\(\{ filters: \{ workStation: "", inputType: "", lot: routeLot \}/)
 	assert.match(workspace, /consumptionState = reactive\(\{ lot: routeLot,/)
 })
+
+test("Sewing tabs follow a later change of the URL Lot", () => {
+	const workspace = read("departments/sewing/SewingPlanWorkspace.vue")
+	assert.match(workspace, /watch\(\(\) => route\.query\.lot, \(lot\) => \{/)
+	assert.match(workspace, /entriesState\.filters\.lot = next/)
+})
+

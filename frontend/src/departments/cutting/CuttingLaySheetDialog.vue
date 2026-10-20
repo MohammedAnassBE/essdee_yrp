@@ -654,7 +654,7 @@ async function runStatusAction(method, action) {
 	busy.value = action
 	error.value = ""
 	try {
-		await callMethod(laysheetMethod(method), { doc_name: sheet.value.name })
+		await callMethod(laysheetMethod(method), { doc_name: sheet.value.name }, { silent: true })
 		success.value = action === "approve" ? "Grammage approved." : "LaySheet status updated."
 		await reloadChanged()
 	} catch (reason) {

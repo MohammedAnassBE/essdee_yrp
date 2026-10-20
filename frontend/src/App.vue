@@ -44,6 +44,7 @@
 
 		<Toast position="bottom-center" />
 		<ConfirmDialog />
+		<ServerMessageDialog />
 	</div>
 </template>
 
@@ -53,6 +54,7 @@ import Toast from "primevue/toast"
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
+import ServerMessageDialog from "./components/common/ServerMessageDialog.vue"
 import { departments } from "./departments/registry.js"
 import { getHomePath, lockedDepartment } from "./router/departmentLock.js"
 import { currentTheme, toggleTheme } from "./utils/themePreference.js"

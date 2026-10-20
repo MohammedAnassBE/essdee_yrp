@@ -3,8 +3,8 @@ import { callMethod } from "./frappe.js"
 const METHOD = "essdee_yrp.cutting.bulk_laysheets_workspace"
 const LAYSHEET_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet"
 
-function call(name, args = {}) {
-	return callMethod(`${METHOD}.${name}`, args)
+function call(name, args = {}, options = {}) {
+	return callMethod(`${METHOD}.${name}`, args, options)
 }
 
 export function getBulkLaySheetsEditor(name = "") {
@@ -81,7 +81,7 @@ export function submitBulkRowDelivery(name, detailName) {
 }
 
 export function approveBulkGrammage(name, detailName) {
-	return call("approve_grammage", { doc_name: name, detail_name: detailName })
+	return call("approve_grammage", { doc_name: name, detail_name: detailName }, { silent: true })
 }
 
 export function getBulkPrintContext(name, detailName) {

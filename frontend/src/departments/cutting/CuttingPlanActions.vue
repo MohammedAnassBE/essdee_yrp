@@ -386,7 +386,7 @@ async function saveApproval() {
 		await callMethod(planMethod("change_approval_grammage"), {
 			doc_name: props.doc.name,
 			piece_weight_tolerance: approvalTolerance.value,
-		})
+		}, { silent: true })
 		approvalOpen.value = false
 		showFeedback("Approval grammage updated.")
 		emit("refresh")

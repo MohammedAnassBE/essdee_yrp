@@ -1,4 +1,5 @@
 import { extractServerMessage } from "./errorMessages.js"
+import { announceServerMessages } from "./serverMessages.js"
 
 const pendingReads = new Map()
 const pendingMetadata = new Map()
@@ -44,7 +45,7 @@ async function request(url, options = {}) {
 	}
 }
 
-async function sendRequest(url, options = {}) {
+async function sendRequest(url, { silent = false, ...options } = {}) {
 	const response = await fetch(url, {
 		credentials: "include",
 		...options,
@@ -69,6 +70,7 @@ async function sendRequest(url, options = {}) {
 			payload,
 		)
 	}
+	if (!silent) announceServerMessages(payload)
 	return payload
 }
 

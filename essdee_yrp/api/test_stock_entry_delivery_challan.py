@@ -232,6 +232,11 @@ class TestStockEntryDeliveryChallanMapping(UnitTestCase):
 			patch.object(stock_entry_api.frappe, "new_doc", return_value=delivery_challan),
 			patch.object(stock_entry_api, "nowdate", return_value="2026-09-19"),
 			patch.object(stock_entry_api, "nowtime", return_value="12:00:00"),
+			patch.object(
+				stock_entry_api,
+				"get_location_address",
+				side_effect=lambda location, preferred: f"{location}-Address",
+			),
 			patch("yrp.stock.dimensions.get_dimension_fieldnames", return_value=["lot"]),
 			patch(
 				"yrp.stock.dimensions.get_stock_dimensions",
@@ -249,5 +254,7 @@ class TestStockEntryDeliveryChallanMapping(UnitTestCase):
 		self.assertEqual(delivery_challan.supplier, "DYEING")
 		self.assertEqual(delivery_challan.from_warehouse, "DYEING-WH")
 		self.assertEqual(delivery_challan.to_warehouse, "DYEING-WH")
+		self.assertEqual(delivery_challan.from_address, "DYEING-Address")
+		self.assertEqual(delivery_challan.supplier_address, "DYEING-Address")
 		self.assertEqual(delivery_challan.get("items")[0].qty, 3)
 		self.assertEqual(delivery_challan.get("items")[0].ref_docname, "WOD-1")

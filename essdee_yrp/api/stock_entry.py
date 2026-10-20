@@ -4,6 +4,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate, nowtime
 
+from essdee_yrp.cutting.movement import get_location_address
+
 
 def _row_dict(row):
 	as_dict = getattr(row, "as_dict", None)
@@ -228,6 +230,8 @@ def make_delivery_challan(stock_entry, work_order, from_location, to_location):
 			"supplier": to_location,
 			"from_warehouse": from_warehouse,
 			"to_warehouse": to_warehouse,
+			"from_address": get_location_address(from_location, order.get("delivery_address")),
+			"supplier_address": get_location_address(to_location, order.get("supplier_address")),
 			"comments": _("Created from Stock Entry {0}").format(entry.name),
 		}
 	)

@@ -521,6 +521,7 @@ def get_goods_received_note_workspace(name: str | None = None, source=None) -> d
 			if fieldname in readable_fields
 		}
 	)
+	workspace["record"]["cut_panel_movement"] = doc.get("cut_panel_movement")
 	workspace.update(
 		{
 			"values": _document_values(doc, readable_fields),

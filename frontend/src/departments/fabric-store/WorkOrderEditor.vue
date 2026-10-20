@@ -111,7 +111,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { onBeforeRouteLeave } from "vue-router"
 
 import { getWorkOrderEditor, getWorkOrderSelectionContext, saveWorkOrder } from "../../api/fabricStore.js"
-import { searchLinkedDocument } from "../../api/frappe.js"
+import { getDoc, searchLinkedDocument } from "../../api/frappe.js"
+import { defaultOption, fillSupplierDefaults } from "../../utils/supplierDefaults.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -216,8 +217,20 @@ async function load() {
 	finally { loading.value = false }
 }
 function markDirty() { if (!loading.value) dirty.value = true }
-function changeSupplier(value) { if (value === form.supplier) return; form.supplier = value || ""; form.supplier_address = ""; markDirty() }
-function changeDeliveryLocation(value) { if (value === form.delivery_location) return; form.delivery_location = value || ""; form.delivery_address = ""; markDirty() }
+async function changeSupplier(value) {
+	if (value === form.supplier) return
+	form.supplier = value || ""; form.supplier_address = ""; markDirty()
+	await fillAddress("supplier", "supplier_address")
+}
+async function changeDeliveryLocation(value) {
+	if (value === form.delivery_location) return
+	form.delivery_location = value || ""; form.delivery_address = ""; markDirty()
+	await fillAddress("delivery_location", "delivery_address")
+}
+async function fillAddress(partyField, addressField) {
+	try { await fillSupplierDefaults(form, { partyField, addressField }) }
+	catch (reason) { error.value = reason?.message || "Unable to load supplier addresses." }
+}
 function searchSupplierAddresses(text) { return searchLinkedDocument("Address", "Supplier", form.supplier, text) }
 function searchDeliveryAddresses(text) { return searchLinkedDocument("Address", "Supplier", form.delivery_location, text) }
 function hasCalculatedWork() { return Boolean(editor.value.calculated_items?.length || deliverableDetails.value.some((group) => group.items?.length) || receivableDetails.value.some((group) => group.items?.length)) }
@@ -235,10 +248,20 @@ async function applySourceChange(fieldname, value) {
 	const candidate = { lot: form.lot, process_name: form.process_name, [fieldname]: value }
 	saving.value = "source"; error.value = ""
 	try {
-		const context = candidate.lot && candidate.process_name ? await getWorkOrderSelectionContext(candidate.lot, candidate.process_name) : { options: [], item_options: [] }
+		let context = { options: [], item_options: [] }
+		if (candidate.lot && candidate.process_name) context = await getWorkOrderSelectionContext(candidate.lot, candidate.process_name)
+		else if (candidate.lot) {
+			const lot = await getDoc("SD YRP Lot", candidate.lot)
+			if (lot.item) context = { options: [{ item: lot.item, production_detail: lot.production_detail }], item_options: [lot.item] }
+		}
 		form[fieldname] = value
 		selectionContext.value = context || {}
 		if (!(context.options || []).some((row) => row.item === form.item && row.production_detail === form.production_detail)) { form.item = ""; form.production_detail = "" }
+		const item = defaultOption(form.item, context.item_options || [])
+		if (!form.item && item) {
+			form.item = item
+			form.production_detail = (context.options || []).find((option) => option.item === item)?.production_detail || ""
+		}
 		clearCalculatedRows(); markDirty(); sourceRevision.value += 1
 	} catch (reason) { error.value = reason?.message || "Unable to validate this Work Order source."; sourceRevision.value += 1 }
 	finally { saving.value = ""; await applyNextSourceChange() }

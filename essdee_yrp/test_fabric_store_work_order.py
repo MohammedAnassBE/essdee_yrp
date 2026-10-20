@@ -555,6 +555,8 @@ class TestFabricStoreWorkOrder(TestCase):
 	def test_close_context_reports_debit_creation_and_approval_permissions(self):
 		doc = self.make_document(docstatus=1)
 		with (
+			patch("essdee_yrp.fabric_store.documents.work_order.fetch_summary_details", return_value={}),
+			patch("essdee_yrp.fabric_store.documents.work_order._close_recuts", return_value=[]),
 			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
 			patch("essdee_yrp.fabric_store.documents.work_order._target_read_permission", return_value=True),
 			patch("essdee_yrp.fabric_store.documents.work_order._target_create_permission", return_value=True),

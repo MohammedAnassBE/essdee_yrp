@@ -566,6 +566,7 @@ def get_delivery_challan_workspace(
 			if fieldname in readable_fields
 		}
 	)
+	workspace["record"]["cut_panel_movement"] = doc.get("cut_panel_movement")
 	workspace.update(
 		{
 			"values": _document_values(doc, readable_fields),

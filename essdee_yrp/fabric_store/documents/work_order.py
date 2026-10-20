@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from collections.abc import Mapping
 
 import frappe
@@ -256,6 +255,39 @@ def _selection_context(doc, loader=get_work_order_selection_context) -> dict:
 	if not doc.get("lot") or not doc.get("process_name"):
 		return {}
 	return loader(doc.lot, doc.process_name)
+
+
+def _close_recuts(work_order: str) -> list[dict]:
+	if not frappe.has_permission("SD YRP WO Recut", ptype="read"):
+		return []
+	recuts = frappe.get_list(
+		"SD YRP WO Recut",
+		filters={"work_order": work_order, "docstatus": 1},
+		fields=["name"],
+		order_by="creation asc",
+		limit_page_length=0,
+	)
+	if not recuts:
+		return []
+	details = {row.name: [] for row in recuts}
+	for row in frappe.get_all(
+		"SD YRP WO Recut Detail",
+		filters={
+			"parent": ["in", list(details)],
+			"parenttype": "SD YRP WO Recut",
+			"parentfield": "wo_recut_details",
+		},
+		fields=["*"],
+		order_by="parent asc, idx asc",
+	):
+		details[row.parent].append(row)
+	return [
+		{
+			"name": row.name,
+			"items": group_items_for_ui(details[row.name], "YRP Work Order Deliverables"),
+		}
+		for row in recuts
+	]
 
 
 def _summary(doc, loader=fetch_summary_details) -> dict:
@@ -793,6 +825,8 @@ def execute_work_order_command(
 		can_read_debits = _target_read_permission("YRP Debit")
 		permission = get_close_permission()
 		return {
+			"summary": _summary(doc, fetch_summary_details),
+			"recuts": _close_recuts(doc.name),
 			"permission": permission,
 			"debits": get_debits(name) if can_read_debits else [],
 			"reason_options": list(SD_CLOSE_REASONS),

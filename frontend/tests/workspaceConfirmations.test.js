@@ -14,7 +14,7 @@ function declaration(source, name) {
 function workspace(path, isWorkOrder) {
 	const source = read(path), calls = []
 	const script = source.split("<script setup>")[1].split("</script>")[0]
-	const declarations = script.split("\n").filter(line => /^const lifecycleConfirm(Title|Label|Message) =/.test(line)).join("\n")
+	const declarations = script.split("\n").filter(line => /^const (lifecycleConfirm(Title|Label|Message)|completionCancellationMessage) =/.test(line)).join("\n")
 	const functions = ["runWorkspaceAction", "requestLifecycleAction", "confirmLifecycleAction"].map(name => declaration(script, name)).join("\n")
 	const api = new Function("computed", "ref", "calls", `
 		const workspace = ref({ record: { name: "WO-1" } }), currentName = ref("DC-1")

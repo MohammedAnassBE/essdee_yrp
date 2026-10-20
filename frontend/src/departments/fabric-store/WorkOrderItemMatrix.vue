@@ -177,6 +177,7 @@ function stageTotal(stage) { return stage.total === null ? "—" : ["cost", "tot
 
 function stageDefinitions() {
 	if (props.mode === "additional") return [["additional", "Additional"]]
+	if (props.mode === "recut") return [["planned", "Quantity"]]
 	return props.mode === "summary"
 		? [["planned", "Planned"], ["delivered", "Delivered"], ["received", "Received"], ["pending", "Pending"]]
 		: [["planned", "Quantity"], ["pending", "Pending"]]

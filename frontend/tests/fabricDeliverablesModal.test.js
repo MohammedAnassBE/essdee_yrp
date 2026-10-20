@@ -18,7 +18,7 @@ async function renderPanel(row, sourceProcess = {}) {
 	const Root = {
 		render,
 		data: () => ({
-			busy: false, canSubmit: true, submitLabel: "Apply", visible: true, title: "Calculate Fabric Deliverables", largePanel: true,
+			workOrder: {}, closeConfirmVisible: false, confirmClose() {}, busy: false, canSubmit: true, submitLabel: "Apply", visible: true, title: "Calculate Fabric Deliverables", largePanel: true,
 			mode: "calculate_fabric", loading: false, acting: "", error: "", draft: {},
 			fabricContext: { source_process: sourceProcess, warnings: [], source_process_options: [] },
 			fabricRows: hydrateFabricRows({ rows: [row] }), isCloseMode: false, canApply: true, discardVisible: false,

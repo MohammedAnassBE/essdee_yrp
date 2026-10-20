@@ -70,6 +70,13 @@
 			</template>
 
 			<template v-else-if="isCloseMode">
+				<h3>Pending Items - Close Work Order</h3>
+				<WorkOrderItemMatrix v-if="pendingGroups.length" :groups="pendingGroups" mode="summary" />
+				<Message v-else severity="secondary" :closable="false">All items fully received</Message>
+				<section v-for="recut in closeContext.recuts || []" :key="recut.name">
+					<h3>WO Recut · <DocumentLink doctype="SD YRP WO Recut" :name="recut.name" /></h3>
+					<WorkOrderItemMatrix :groups="recut.items" mode="recut" />
+				</section>
 				<div class="work-order-action-panel__fields">
 					<label><span>Close reason *</span><Select v-model="draft.close_reason" :options="closeContext.reason_options || []" fluid /></label>
 					<label v-if="draft.close_reason === 'Others'"><span>Other reason *</span><InputText v-model="draft.close_other_reason" fluid /></label>
@@ -107,7 +114,7 @@
 				<Message v-if="!recutGroups.length" severity="secondary" :closable="false">This Work Order has no calculated SKU rows available for recut.</Message>
 				<div v-else class="work-order-recut-groups">
 					<section v-for="(group, groupIndex) in recutGroups" :key="groupIndex" class="work-order-recut-group">
-						<div v-for="(row, rowIndex) in group.items || []" :key="row.item_variant || row.name || rowIndex" class="work-order-recut-row">
+						<div v-for="(row, rowIndex) in group.items || []" :key="row.item_variant || row.name || rowIndex" class="work-order-recut-row" :style="{ '--recut-size-count': primaryValues(group).length }">
 							<div><strong>{{ row.item_variant || row.name }}</strong><small>{{ attributeText(row.attributes) }}</small></div>
 							<label v-for="value in primaryValues(group)" :key="value"><span>{{ value === 'default' ? 'Quantity' : value }}</span><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${row.item_variant || row.name || `recut row ${rowIndex + 1}`}`" :min="0" :max-fraction-digits="3" fluid /></label>
 						</div>
@@ -142,6 +149,7 @@
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" :title="`${title} could not be completed`" @dismiss="error = ''" />
+	<DocumentConfirmationDialog v-model:visible="closeConfirmVisible" title="Close Work Order?" :message="`Are you sure want to close this work order ${workOrder.name}?`" confirm-label="Yes" cancel-label="No" :busy="busy" @confirm="confirmClose" />
 	<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" modal header="Discard action changes?" :closable="false">
 		<p class="work-order-action-panel__copy">This action has unsaved changes. Close it and discard those values?</p>
 		<template #footer><Button label="Keep Editing" severity="secondary" text @click="discardVisible = false" /><Button label="Discard Changes" severity="danger" @click="discardAction" /></template>
@@ -162,6 +170,10 @@ import { computed, reactive, ref, watch } from "vue"
 
 import { executeWorkOrderCommand, getWorkOrderFabricCalculationContext } from "../../api/fabricStore.js"
 import { uploadFile } from "../../api/frappe.js"
+import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
+import DocumentLink from "../../components/common/DocumentLink.vue"
+import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
+import { pendingWorkOrderGroups } from "./workOrderClose.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -194,6 +206,8 @@ const fabricContext = ref({})
 const fabricUnavailable = computed(() => fabricUnavailableMessage(fabricContext.value))
 const fabricQuantityWarnings = computed(() => fabricWarnings(fabricRows.value))
 const closeContext = ref({})
+const closeConfirmVisible = ref(false)
+const pendingGroups = computed(() => pendingWorkOrderGroups(closeContext.value.summary?.item_detail))
 const reworkRows = ref([])
 const recutGroups = ref([])
 const recutCanSubmit = ref(false)
@@ -214,7 +228,7 @@ const titles = {
 	change_delivery_date: "Change Delivery Date", change_item: "Change Item",
 }
 const title = computed(() => titles[props.mode] || "Work Order Action")
-const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item"].includes(props.mode))
+const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item", "close", "request_close", "approve_close"].includes(props.mode))
 const busy = computed(() => loading.value || uploading.value || Boolean(acting.value))
 const isCloseMode = computed(() => ["close", "request_close", "approve_close"].includes(props.mode))
 const actionLabels = {
@@ -315,8 +329,13 @@ async function approveDebit(debit) {
 	catch (reason) { error.value = reason?.message || `Unable to approve ${debit}.` }
 	finally { acting.value = "" }
 }
-async function submit() {
+async function confirmClose() {
+	closeConfirmVisible.value = false
+	await submit(true)
+}
+async function submit(confirmed = false) {
 	if (!canSubmit.value || busy.value) return
+	if (["close", "approve_close"].includes(props.mode) && confirmed !== true) { closeConfirmVisible.value = true; return }
 	acting.value = props.mode; error.value = ""
 	try {
 		const result = await executeWorkOrderCommand(props.workOrder.name, props.mode, buildPayload(), props.workOrder.modified)
@@ -343,7 +362,7 @@ function sourcePreview(entry) {
 	const demand = Number(entry.qty || 0) * Number(entry.source_stock_per_output || 1)
 	return `${entry.source_grn || "Shared source"} · Required ${number(demand)} · Available ${number(entry.source_stock_available)}${entry.source_shared ? " · Shared availability: allocate across rows" : ""}`
 }
-function attributeText(attributes) { return Object.entries(attributes || {}).map(([key, value]) => `${key}: ${value}`).join(" · ") || "—" }
+function attributeText(attributes) { return Object.entries(attributes || {}).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").map(([key, value]) => `${key}: ${value}`).join(" · ") || "—" }
 function reworkContext(row) { return [...new Set([row.role, row.received_type, ...Object.values(row.dimensions || {})].filter(Boolean))].join(" · ") || "—" }
 function primaryValues(group) { return group.primary_attribute_values?.length ? group.primary_attribute_values : ["default"] }
 function number(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
@@ -370,8 +389,8 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-calculation-table__row--disabled { opacity: .55; }
 .work-order-calculation-table__total { color: var(--erp-accent-dark); font-weight: 800; }
 .work-order-recut-groups { display: grid; gap: var(--erp-space-3); }
-.work-order-recut-group { display: grid; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 4px 14px rgb(28 61 45 / 3%); }
-.work-order-recut-row { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(auto-fit, minmax(110px, 150px)); align-items: end; gap: var(--erp-space-3); padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
+.work-order-recut-group { display: grid; overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 4px 14px rgb(28 61 45 / 3%); }
+.work-order-recut-row { display: grid; grid-template-columns: minmax(150px, 2fr) repeat(var(--recut-size-count), minmax(64px, 1fr)); align-items: end; gap: var(--erp-space-3); padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
 .work-order-recut-row:last-child { border-bottom: 0; }
 .work-order-recut-row > div, .work-order-recut-row label { display: grid; gap: 4px; }
 .work-order-recut-row small, .work-order-recut-row label span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }

@@ -18,3 +18,9 @@ test("List Time filters parse values with the shared Frappe time normaliser", as
 	const source = readFileSync(new URL("../src/components/common/ListviewFilters.vue", import.meta.url), "utf8")
 	assert.match(source, /const match = normaliseFrappeTime\(value\)\.match\(/)
 })
+
+test("F-G15 document overview shows Time fields without microseconds", async () => {
+	const { formatDocumentOverviewValue } = await import("../src/utils/documentOverview.js")
+	assert.equal(formatDocumentOverviewValue({ fieldtype: "Time", value: "23:04:19.619135" }), "23:04:19")
+	assert.equal(formatDocumentOverviewValue({ fieldtype: "Time", value: "4:05:09" }), "04:05:09")
+})

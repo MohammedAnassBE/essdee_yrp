@@ -122,7 +122,7 @@
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
 									<template v-if="hasPrimaryAttribute(section.group)"><th v-for="value in primaryValues(section.group)" :key="value" class="erp-number delivery-challan-matrix__quantity-heading">{{ value }}</th></template>
 									<template v-else><th class="erp-number delivery-challan-matrix__pending-heading">Pending</th><th class="erp-number delivery-challan-matrix__quantity-heading">Deliver</th><th v-if="hasSecondaryQuantity(section.group)" class="erp-number">Secondary</th></template>
-										<th class="erp-number">Total</th><th>UOM</th>
+										<th>Comments</th><th class="erp-number">Total</th><th>UOM</th>
 									</tr></thead>
 									<tbody>
 										<tr v-for="(row, rowIndex) in section.items" :key="rowKey(row, rowIndex)">
@@ -225,6 +225,7 @@ import {
 	saveDeliveryChallan,
 } from "../../api/fabricStore.js"
 import { searchLinkedDocument } from "../../api/frappe.js"
+import { fillSupplierDefaults } from "../../utils/supplierDefaults.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -397,6 +398,7 @@ const matrixBlocks = computed(() => {
 	return blocks
 })
 const headerFacts = computed(() => [
+	["Cut Panel Movement", workspace.value.record?.cut_panel_movement || form.cut_panel_movement, "SD YRP Cut Panel Movement"],
 	["Source", workspace.value.record?.work_order || form.work_order, "YRP Work Order"],
 	["Process", workspace.value.record?.process_name || form.process_name, "YRP Process"],
 	["Item", workspace.value.record?.item || form.item, "Item"],
@@ -519,6 +521,13 @@ async function setField(fieldname, value) {
 	}
 	if (["posting_date", "posting_time"].includes(fieldname)) form.edit_posting_date_and_time = 1
 	markDirty()
+	if (["supplier", "from_location"].includes(fieldname)) {
+		const fields = fieldname === "supplier"
+			? { addressField: "supplier_address", warehouseField: "to_warehouse" }
+			: { addressField: "from_address", warehouseField: "from_warehouse" }
+		try { await fillSupplierDefaults(form, { partyField: fieldname, ...fields, preferPrimary: true }) }
+		catch (reason) { error.value = reason?.message || "Unable to load location defaults." }
+	}
 }
 async function applySourceChange(value) {
 	if (value) {
@@ -675,7 +684,8 @@ async function runCommand(command, payload = {}, destructive = false) {
 }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit Delivery Challan?" : pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan?" : "Amend Delivery Challan?")
 const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit" : pendingLifecycleCommand.value === "cancel" ? "Cancel Delivery Challan" : "Create Amendment")
-const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "submit" ? `Permanently submit ${currentName.value}?` : pendingLifecycleCommand.value === "cancel" ? `Cancel ${currentName.value}? This keeps the document for audit and reverses its submitted effect.` : `Create a new draft amendment from ${currentName.value}?`)
+const completionCancellationMessage = computed(() => (workspace.value?.related?.completion_entries || []).filter(entry => Number(entry.docstatus) === 1).map(entry => ` This also cancels DC Completion ${entry.name}.`).join(""))
+const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "submit" ? `Permanently submit ${currentName.value}?` : pendingLifecycleCommand.value === "cancel" ? `Cancel ${currentName.value}? This keeps the document for audit and reverses its submitted effect.${completionCancellationMessage.value}` : `Create a new draft amendment from ${currentName.value}?`)
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "submit") await save(true); else if (command) await runCommand(command) }
 

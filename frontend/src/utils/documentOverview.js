@@ -1,4 +1,4 @@
-import { plainTextFromHtml } from "./documentValues.js"
+import { normaliseFrappeTime, plainTextFromHtml } from "./documentValues.js"
 
 export function documentOverviewHasValue(value) {
 	if (value === null || value === undefined) return false
@@ -39,6 +39,7 @@ export function formatDocumentOverviewValue(field = {}) {
 		const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/)
 		if (match) return `${match[3]}-${match[2]}-${match[1]}${field.fieldtype === "Datetime" && match[4] ? ` · ${match[4]}:${match[5]}${match[6] ? `:${match[6]}` : ""}` : ""}`
 	}
+	if (field.fieldtype === "Time" && documentOverviewHasValue(value)) return normaliseFrappeTime(value) || String(value)
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) {
 		if (!documentOverviewHasValue(value)) return "—"

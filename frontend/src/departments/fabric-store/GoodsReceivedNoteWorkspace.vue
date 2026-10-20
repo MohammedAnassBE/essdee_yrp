@@ -274,7 +274,7 @@ import DocumentFieldGroupGrid from "../../components/documents/DocumentFieldGrou
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
-import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
+import { normaliseFrappeTime, hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
@@ -451,6 +451,7 @@ const matrixBlocks = computed(() => {
 	return blocks
 })
 const headerFacts = computed(() => [
+	["Cut Panel Movement", workspace.value.record?.cut_panel_movement || form.cut_panel_movement, "SD YRP Cut Panel Movement"],
 	["Source", workspace.value.record?.against_id || form.against_id, workspace.value.record?.against || form.against],
 	["Process", workspace.value.record?.process_name || form.process_name, "YRP Process"],
 	["Item", workspace.value.record?.item || form.item, "Item"],
@@ -811,6 +812,7 @@ function formatTotal(total) { return Number(total.value || 0).toLocaleString("en
 function totalIsPositive(total) { return Number(total?.value || 0) > 0 }
 function formatFieldValue(field) {
 	const value = form[field.fieldname] ?? field.value
+	if (field.fieldtype === "Time") return normaliseFrappeTime(value) || "—"
 	if (["Date", "Datetime"].includes(field.fieldtype)) {
 		const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(.*)$/)
 		if (match) return `${match[3]}-${match[2]}-${match[1]}${field.fieldtype === "Datetime" ? match[4] : ""}`

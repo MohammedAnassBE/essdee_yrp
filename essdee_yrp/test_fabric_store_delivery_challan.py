@@ -992,3 +992,26 @@ class TestFabricStoreDeliveryChallan(TestCase):
 			[{"delivery_challan_item": "DCI-1", "return_quantity": 1}],
 			None,
 		)
+
+
+class TestCutPanelMovementHeaderLink(TestCase):
+	def test_dc_and_grn_workspaces_carry_their_cut_panel_movement(self):
+		from essdee_yrp.fabric_store.web_workspace import (
+			get_delivery_challan_workspace,
+			get_goods_received_note_workspace,
+		)
+
+		for doctype, reader in (
+			("YRP Delivery Challan", get_delivery_challan_workspace),
+			("YRP Goods Received Note", get_goods_received_note_workspace),
+		):
+			linked = frappe.get_all(
+				doctype,
+				filters={"cut_panel_movement": ["is", "set"], "docstatus": 1},
+				fields=["name", "cut_panel_movement"],
+				limit=1,
+			)
+			if not linked:
+				continue
+			workspace = reader(name=linked[0].name)
+			self.assertEqual(workspace["record"]["cut_panel_movement"], linked[0].cut_panel_movement)

@@ -47,6 +47,12 @@
 .quality-page__fact dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .quality-page__fact dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .quality-page__preview { display: flex; flex-wrap: wrap; gap: var(--erp-space-2); align-items: center; margin-top: var(--erp-space-4); }
+.quality-page__recalculation { color: var(--erp-text-muted); }
+.quality-manual-override { display: inline-flex; align-items: center; width: fit-content; padding: var(--erp-space-1) var(--erp-space-2); border-radius: var(--erp-pill-radius); color: var(--erp-warning); background: var(--erp-warning-soft); font-size: var(--erp-font-size-table); font-weight: 600; }
+.quality-calculated-result,
+.quality-rail-metric .quality-calculated-result { color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 600; }
+.quality-result-details { display: flex; flex-wrap: wrap; align-items: center; gap: var(--erp-space-2); }
+.quality-calculation-notes { display: grid; gap: var(--erp-space-2); }
 .quality-page__footer { display: flex; justify-content: flex-end; gap: var(--erp-space-2); }
 @media (min-width: 641px) {
 	.quality-page__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -73,6 +79,17 @@
 .quality-inspection-header { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .quality-inspection-header__title { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--erp-space-3); }
 .quality-inspection-header h1 { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.quality-inspection-frame .fabric-document-workspace__header { align-items: flex-start; }
+.quality-key-facts { display: grid; min-width: 0; gap: var(--erp-space-3); padding: var(--erp-space-4); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface-soft); }
+.quality-key-facts h2,
+.quality-key-facts dt { margin: 0; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.quality-key-facts__grid { display: flex; min-width: 0; flex-wrap: wrap; gap: 14px 28px; margin: 0; }
+.quality-key-facts__grid > div { display: grid; min-width: 0; max-width: 100%; flex: 0 1 180px; align-content: start; gap: var(--erp-space-1); }
+.quality-key-facts__grid > .quality-key-fact--item { flex-basis: 320px; }
+.quality-key-facts dd { min-width: 0; margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 600; line-height: var(--erp-line-height-body); overflow-wrap: anywhere; white-space: normal; }
+.quality-key-facts dd .document-link { font-size: inherit; font-weight: inherit; overflow-wrap: anywhere; white-space: normal; }
+.quality-key-fact--secondary dd { color: var(--erp-text-secondary); font-size: var(--erp-font-size-table); }
+.quality-inspection-type-chip { display: inline-block; max-width: 100%; padding: var(--erp-space-1) var(--erp-space-3); border: 1px solid var(--erp-accent-border); border-radius: var(--erp-pill-radius); background: var(--erp-accent-soft); color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 600; overflow-wrap: anywhere; white-space: normal; }
 .quality-header-facts { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--erp-space-2) var(--erp-space-4); margin: 0; font-size: var(--erp-font-size-caption); }
 .quality-header-facts > div { display: flex; min-width: 0; max-width: 100%; flex-wrap: wrap; align-items: baseline; gap: var(--erp-space-1); }
 .quality-header-facts dt { color: var(--erp-text-muted); }
@@ -150,6 +167,8 @@
 	.quality-inspection-frame .fabric-document-workspace__heading, .quality-inspection-header { display: contents; }
 	.quality-inspection-frame .fabric-document-workspace__header-actions:empty { display: none; }
 	.quality-inspection-header__title { grid-column: 2; gap: var(--erp-space-2); }
-	.quality-header-facts { grid-column: 1 / -1; }
+	.quality-inspection-header > .quality-key-facts { grid-column: 1 / -1; }
+	.quality-key-facts__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.quality-key-facts__grid > .quality-key-fact--wide { grid-column: 1 / -1; }
 	.quality-inspection-frame .p-button { min-width: 44px; min-height: 44px; }
 }

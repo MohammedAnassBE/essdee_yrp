@@ -9,6 +9,8 @@
 							<h1 class="erp-doc-title" :id="headingId">{{ record.name }}</h1>
 							<DocumentStatusBadge :docstatus="record.docstatus" />
 							<InspectionResultBadge :result="record.result" />
+							<span v-if="resultSummary.isManual" class="quality-manual-override" :title="resultSummary.note">Manual override</span>
+							<small v-if="resultSummary.isManual || resultSummary.calculated !== resultSummary.result" class="quality-calculated-result">Calculated: {{ resultSummary.calculated || '—' }}</small>
 						</div>
 						<InspectionSummary :record="record" header />
 					</div>
@@ -39,7 +41,10 @@
 				<template #rail>
 					<div class="quality-rail-metric quality-result-metric">
 						<span>Result</span><InspectionResultBadge :result="record.result" />
-						<small v-if="record.calculated_result && record.calculated_result !== record.result">Calculated: {{ record.calculated_result }}</small>
+						<div class="quality-result-details">
+							<span v-if="resultSummary.isManual" class="quality-manual-override" :title="resultSummary.note">Manual override</span>
+							<small class="quality-calculated-result">Calculated: {{ resultSummary.calculated || '—' }}</small>
+						</div>
 					</div>
 					<div v-if="record.inspector_name || record.inspector" class="quality-rail-metric"><span>Inspector</span><strong>{{ record.inspector_name || record.inspector }}</strong></div>
 					<InspectionApprovalSheet :key="currentName" :src="record.upload_quality_approval_sheet" />
@@ -81,7 +86,7 @@ import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue
 import InspectionApprovalSheet from "./components/InspectionApprovalSheet.vue"
 import InspectionResultBadge from "./components/InspectionResultBadge.vue"
 import InspectionSummary from "./components/InspectionSummary.vue"
-import { INSPECTION_DOCTYPE, INSPECTION_TABS, INSPECTION_DETAIL_SECTIONS, copyText, inspectionActionItems, inspectionDetailFields, inspectionShareCaption } from "./qualityViews.js"
+import { INSPECTION_DOCTYPE, INSPECTION_TABS, INSPECTION_DETAIL_SECTIONS, copyText, inspectionActionItems, inspectionDetailFields, inspectionResultSummary, inspectionShareCaption } from "./qualityViews.js"
 import "../purchase/lot/lot.css"
 import "../merch/lot/merchLot.css"
 import "./quality.css"
@@ -101,6 +106,7 @@ const cancelVisible = ref(false)
 const deleteControl = ref(null)
 const currentName = computed(() => props.inspectionId || String(route.params.inspectionId || ""))
 const record = computed(() => workspace.value.record || {})
+const resultSummary = computed(() => inspectionResultSummary(record.value))
 const detailFields = computed(() => inspectionDetailFields(record.value))
 const activeTab = computed({
 	get: () => INSPECTION_TABS.some((tab) => tab.key === route.query.tab) ? route.query.tab : "inspection",

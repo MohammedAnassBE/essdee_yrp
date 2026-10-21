@@ -19,11 +19,17 @@
 							<FormField v-else v-model="form[field.fieldname]" :field="field" :form="form" :required="Boolean(field.reqd)" :disabled="busy" />
 						</template>
 					</div>
-					<InspectionStatTiles v-if="group.key === 'quantities'" :record="form" :only="['sample_piece_count', 'major', 'minor']" />
+					<InspectionCalculationNotes v-if="group.key === 'quantities'" :notes="calculationNotes" />
+					<InspectionStatTiles v-if="group.key === 'quantities'" :record="form" :selection="selection" :only="['sample_piece_count', 'major', 'minor']" />
 					<p v-if="group.key === 'work_order' && fetchingWorkOrder" role="status">Loading Work Order…</p>
 					<p v-if="group.key === 'quantities' && fetchingAql" role="status">Calculating AQL limits…</p>
 					<div v-if="group.key === 'defects' && preview" class="quality-page__preview">
 						<span>Calculated result preview</span><InspectionResultBadge :result="preview" />
+						<template v-if="editorResultState.showOverride">
+							<span class="quality-manual-override">Manual override</span>
+							<span>{{ editorResultState.message }}</span>
+						</template>
+						<span v-else-if="editorResultState.message" class="quality-page__recalculation">{{ editorResultState.message }}</span>
 					</div>
 				</section>
 				<footer class="quality-page__footer">
@@ -58,11 +64,12 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
 import InspectionColourSizePicker from "./components/InspectionColourSizePicker.vue"
+import InspectionCalculationNotes from "./components/InspectionCalculationNotes.vue"
 import InspectionImageUpload from "./components/InspectionImageUpload.vue"
 import InspectionResultBadge from "./components/InspectionResultBadge.vue"
 import InspectionStatTiles from "./components/InspectionStatTiles.vue"
 import { INSPECTION_GROUPS, visibleInspectionFields } from "./inspectionFields.js"
-import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionPayload, linkLabel, inspectionResultPreview, validAqlInputs } from "./qualityViews.js"
+import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionCalculationNotes, inspectionEditorResultState, inspectionPayload, linkLabel, inspectionResultPreview, validAqlInputs } from "./qualityViews.js"
 import "./quality.css"
 
 const props = defineProps({ inspectionId: { type: String, default: "" } })
@@ -96,6 +103,10 @@ const signature = computed(() => JSON.stringify(inspectionPayload(form, selectio
 const dirty = computed(() => !loading.value && !loadError.value && signature.value !== cleanSignature.value)
 const busy = computed(() => loading.value || saving.value || uploading.value || fetchingWorkOrder.value || fetchingAql.value)
 const preview = computed(() => aqlReady.value ? inspectionResultPreview(form) : "")
+const editorResultState = computed(() => inspectionEditorResultState(form, workspace.value.record?.calculated_result, preview.value))
+const calculationNotes = computed(() => inspectionCalculationNotes({ ...form,
+	...(!aqlReady.value ? { major_aql_level: null, major_defect_maximum_allowed: null, minor_defect_maximum_allowed: null } : {}),
+}, workOrderReady.value ? selection.value : undefined))
 const canSave = computed(() => workOrderReady.value && aqlReady.value && validAqlInputs(form)
 	&& Boolean(form.against_id && form.inspection_type)
 	&& (!Number(form.is_third_party) || Boolean(form.third_party_supplier)))

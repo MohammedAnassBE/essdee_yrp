@@ -9,6 +9,6 @@
 <script setup>
 import { computed } from "vue"
 import { inspectionStatTiles } from "../qualityViews.js"
-const props = defineProps({ record: { type: Object, default: () => ({}) }, only: { type: Array, default: () => [] } })
-const tiles = computed(() => inspectionStatTiles(props.record).filter((tile) => !props.only.length || props.only.includes(tile.key)))
+const props = defineProps({ record: { type: Object, default: () => ({}) }, selection: Object, only: { type: Array, default: () => [] } })
+const tiles = computed(() => inspectionStatTiles(props.record, props.selection).filter((tile) => !props.only.length || props.only.includes(tile.key)))
 </script>

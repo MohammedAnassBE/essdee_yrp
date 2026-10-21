@@ -85,10 +85,16 @@ export function inspectionSelectedChips(selection = {}) {
 	})
 }
 
-export function inspectionStatTiles(record = {}) {
+export function inspectionStatTiles(record = {}, selection) {
 	const number = (value) => formatDocumentOverviewValue({ fieldtype: "Int", value })
 	const tiles = [["order_qty", "Order Qty"], ["offer_qty", "Offer Qty"], ["sample_piece_count", "Sample Size"]]
 		.map(([key, label]) => ({ key, label, value: number(record[key]), hint: "", tone: "neutral" }))
+	if (Number(record.offer_qty) > 0 && documentOverviewHasValue(record.sample_piece_count) && Number(record.sample_piece_count) === 0) {
+		Object.assign(tiles[2], { value: "—", hint: "Outside AQL range" })
+	}
+	if (selection && Number(record.order_qty) === 0 && !hasSelectedColourAndSize(selection)) {
+		Object.assign(tiles[0], { value: "—", hint: "Select colours and sizes" })
+	}
 	for (const [key, label] of [["major", "Major"], ["minor", "Minor"]]) {
 		const allowed = record[`${key}_defect_maximum_allowed`]
 		const found = record[`${key}_defect_found`] ?? 0
@@ -152,9 +158,66 @@ export function inspectionPayload(values, selection) {
 }
 
 export function inspectionResultPreview(values) {
-	if (values.major_defect_maximum_allowed == null || values.minor_defect_maximum_allowed == null) return ""
+	if (!hasAllowedLimits(values)) return ""
 	return Number(values.major_defect_found || 0) <= Number(values.major_defect_maximum_allowed)
 		&& Number(values.minor_defect_found || 0) <= Number(values.minor_defect_maximum_allowed) ? "Pass" : "Fail"
+}
+
+export function inspectionEditorResultState(form = {}, storedCalculated, preview) {
+	const isManual = Boolean(form.result) && form.result !== (storedCalculated || "")
+	const differs = Boolean(form.result && preview && preview !== form.result)
+	return {
+		isManual,
+		showOverride: isManual && differs,
+		message: !differs ? "" : isManual
+			? `Result ${form.result} will be kept instead of the calculated ${preview}.`
+			: `Result will be recalculated to ${preview} on save.`,
+	}
+}
+
+function hasAllowedLimits(record) {
+	return ["major", "minor"].every((key) => {
+		const value = record[`${key}_defect_maximum_allowed`]
+		return documentOverviewHasValue(value) && Number.isFinite(Number(value))
+	})
+}
+
+function hasSelectedColourAndSize(selection) {
+	return ["colours", "sizes"].every((key) => (selection[key] || []).some((row) => Number(row.selected) === 1))
+}
+
+export function inspectionResultSummary(record = {}) {
+	const result = record.result || ""
+	const calculated = record.calculated_result || ""
+	const isManual = Boolean(result) && result !== record.calculated_result
+	const limitResult = inspectionResultPreview(record)
+	const notes = []
+	if (isManual) {
+		notes.push(calculated ? "Manual override" : "Entered manually, not calculated")
+		if (limitResult && limitResult !== result) notes.push(`Found defects give ${limitResult} against the allowed limits`)
+	}
+	return { result, calculated, isManual, limitResult, note: notes.join(". ") }
+}
+
+export function inspectionCalculationNotes(record = {}, selection) {
+	const notes = []
+	const add = (key, text) => notes.push({ key, severity: "warn", text })
+	if (Number(record.offer_qty) > 0 && record.major_aql_level && record.minor_aql_level
+		&& Number(record.sample_piece_count) === 0) {
+		add("aql_range", `Offer Qty ${record.offer_qty} is outside the ${record.major_aql_level} AQL table range, so the sample size is 0.`)
+	}
+	if (selection) {
+		if (!(selection.colours?.length || selection.sizes?.length)) {
+			add("no_delivery", "No colours or sizes are recorded on this inspection, so Order Qty is 0.")
+		} else if (!hasSelectedColourAndSize(selection)) {
+			add("no_selection", "Select colours and sizes to calculate Order Qty.")
+		}
+	}
+	const { result, isManual, limitResult } = inspectionResultSummary(record)
+	if (isManual && limitResult && limitResult !== result) {
+		add("manual_mismatch", `Result ${result} was entered manually; the found defects give ${limitResult}.`)
+	}
+	return notes
 }
 
 export function validAqlInputs(values) {

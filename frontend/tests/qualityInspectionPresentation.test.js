@@ -12,6 +12,7 @@ const nodes = (root, type) => findNodes(root, (node) => node.type === type)
 const tick = () => Vue.nextTick()
 const read = (file) => readFileSync(resolve(`frontend/src/departments/quality/${file}`), "utf8")
 const component = (name, modules = {}) => loadComponent(resolve(`frontend/src/departments/quality/components/${name}.vue`), {
+	"primevue/message": (props, { slots }) => Vue.h("message", props, slots.default?.()),
 	"../qualityViews.js": views,
 	"../inspectionFields.js": fields,
 	"../../../utils/documentOverview.js": overview,
@@ -67,6 +68,9 @@ test("selected chip groups contain selected nonempty values only and omit empty 
 })
 
 test("header facts format dates, show supplier names, and omit empty values", () => {
+	const full = views.inspectionHeaderFacts({ against_id: "WO", item: "Full item name with a long description", lot: "LOT", supplier: "SUP", supplier_name: "Supplier Name", inspection_type: "Pre-FInal", posting_date: "2026-10-21" })
+	assert.deepEqual(full.map(({ fieldname }) => fieldname), ["against_id", "item", "lot", "supplier", "inspection_type", "posting_date"])
+	assert.deepEqual(full.map(({ display }) => display), ["WO", "Full item name with a long description", "LOT", "Supplier Name", "Pre-FInal", "21-10-2026"])
 	const facts = views.inspectionHeaderFacts({ against_id: "WO", supplier: "SUP", supplier_name: "Supplier Name", posting_date: "2026-10-21", lot: "", item: null })
 	assert.deepEqual(facts.map(({ fieldname }) => fieldname), ["against_id", "supplier", "posting_date"])
 	assert.equal(facts[0].doctype, "YRP Work Order")
@@ -110,6 +114,21 @@ test("summary renders compact selected chips, set notes, and linked header facts
 	const header = mountComponent(summary, { record, header: true })
 	assert.equal(nodes(header, "document-link")[0].props.label, "Unit A")
 	assert.equal(nodes(header, "document-link")[0].props.name, "SUP")
+})
+
+test("key facts render full linked names in order and preserve inspection type text in a chip", () => {
+	const summary = component("InspectionSummary")
+	const item = "Full item name with a long description and an unbroken-identifier-1234567890"
+	const supplier_name = "Supplier Name — Full Sewing and Finishing Unit"
+	for (const inspection_type of ["Final", "Pre-FInal", "Re-Final", "Inline"]) {
+		const root = mountComponent(summary, { header: true, record: { against_id: "WO-1", item, lot: "LOT-1", supplier: "SUP-1", supplier_name, inspection_type, posting_date: "2026-10-21" } })
+		assert.equal(nodes(root, "section")[0].props["aria-label"], "Key facts")
+		assert.deepEqual(nodes(root, "dt").map(({ text }) => text), ["Work Order", "Item", "Lot", "Supplier", "Inspection Type", "Posting Date"])
+		assert.deepEqual(nodes(root, "document-link").map(({ props }) => [props.doctype, props.name, props.label]), [
+			["YRP Work Order", "WO-1", "WO-1"], ["Item", item, item], ["SD YRP Lot", "LOT-1", "LOT-1"], ["Supplier", "SUP-1", supplier_name],
+		])
+		assert.deepEqual(nodes(root, "span").filter(({ props }) => props.class === "quality-inspection-type-chip").map(({ text }) => text), [inspection_type])
+	}
 })
 
 test("shared stat tiles update their tone as the editor changes defects", async () => {
@@ -176,6 +195,20 @@ test("mobile inspection header keeps the back button on the title row, scoped to
 	const mobile = read("quality.css").split("@media (max-width: 620px)").pop()
 	assert.match(mobile, /\.quality-inspection-frame \.fabric-document-workspace__header \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)/)
 	assert.match(mobile, /\.quality-inspection-header__title \{ grid-column: 2;/)
-	assert.match(mobile, /\.quality-header-facts \{ grid-column: 1 \/ -1; \}/)
+	assert.match(mobile, /\.quality-inspection-header > \.quality-key-facts \{ grid-column: 1 \/ -1; \}/)
+	assert.match(mobile, /\.quality-key-facts__grid \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/)
+	assert.match(mobile, /\.quality-key-facts__grid > \.quality-key-fact--wide \{ grid-column: 1 \/ -1; \}/)
 	assert.doesNotMatch(read("quality.css"), /^\.fabric-document-workspace__header/m)
+})
+
+test("key facts and calculated results use readable sizes, full contrast and wrapping", () => {
+	const css = read("quality.css")
+	assert.match(css, /\.quality-key-facts__grid \{[^}]*flex-wrap: wrap;[^}]*gap: 14px 28px;/)
+	assert.match(css, /\.quality-key-facts dt \{[^}]*color: var\(--erp-text-secondary\);[^}]*font-size: var\(--erp-font-size-caption\);[^}]*font-weight: 700;[^}]*text-transform: uppercase;/)
+	assert.match(css, /\.quality-key-facts dd \{[^}]*color: var\(--erp-text\);[^}]*font-size: var\(--erp-font-size-section\);[^}]*font-weight: 600;[^}]*overflow-wrap: anywhere; white-space: normal;/)
+	assert.match(css, /\.quality-key-facts dd \.document-link \{ font-size: inherit; font-weight: inherit; overflow-wrap: anywhere; white-space: normal;/)
+	assert.match(css, /\.quality-inspection-type-chip \{[^}]*border: 1px solid var\(--erp-accent-border\);[^}]*border-radius: var\(--erp-pill-radius\);[^}]*background: var\(--erp-accent-soft\);[^}]*font-size: var\(--erp-font-size-section\); font-weight: 600;/)
+	assert.match(css, /\.quality-calculated-result,\s*\.quality-rail-metric \.quality-calculated-result \{ color: var\(--erp-text\); font-size: var\(--erp-font-size-section\); font-weight: 600;/)
+	assert.match(css, /\.quality-manual-override \{[^}]*color: var\(--erp-warning\); background: var\(--erp-warning-soft\); font-size: var\(--erp-font-size-table\); font-weight: 600;/)
+	assert.doesNotMatch(css, /text-overflow:\s*ellipsis|white-space:\s*nowrap/)
 })

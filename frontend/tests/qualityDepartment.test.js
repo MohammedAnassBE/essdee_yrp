@@ -151,6 +151,7 @@ async function editor(api = {}, props = {}, query = {}) {
 	const navigations = [], guards = [], toasts = [], calls = []
 	const route = Vue.reactive({ params: {}, query })
 	const root = mountComponent(component("QualityInspectionEditorPage", {
+		"primevue/message": (props, { slots }) => Vue.h("message", props, slots.default?.()),
 		"primevue/button": Button, "primevue/usetoast": { useToast: () => ({ add: (message) => toasts.push(message) }) },
 		"vue-router": { useRoute: () => route, useRouter: () => ({ replace: async (target) => navigations.push(target), push: async (target) => navigations.push(target) }), onBeforeRouteLeave: (guard) => guards.push(guard), onBeforeRouteUpdate: () => {} },
 		"../../api/frappe.js": { submitDoc: async (...args) => calls.push(["submit", ...args]) },
@@ -300,6 +301,7 @@ async function inspectionView(payload, api = {}) {
 	const root = mountComponent(component("QualityInspection", {
 		...Object.fromEntries(["tab", "tablist", "tabpanel", "tabpanels", "tabs"].map((name) => [`primevue/${name}`, (props, { slots }) => Vue.h(name, props, slots.default?.())])),
 		"primevue/dialog": (props, { slots }) => props.visible ? Vue.h("dialog", props, [slots.default?.(), slots.footer?.()]) : null,
+		"primevue/message": (props, { slots }) => Vue.h("message", props, slots.default?.()),
 		"primevue/usetoast": { useToast: () => ({ add: (value) => toasts.push(value) }) },
 		"vue-router": { useRoute: () => route, useRouter: () => ({ push: (target) => navigations.push(target), replace: (target) => { navigations.push(target); route.query = target.query } }) },
 		"../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({ listNavigation: "preserved" }) },
@@ -357,7 +359,7 @@ test("inspection tabs hide empty notes and selection groups and show the debit e
 	const ui = await inspectionView({ record: { name: "EQI-1", docstatus: 0 }, actions: {} })
 	assert.equal(nodes(ui.root, "picker").length, 0)
 	assert.equal(nodes(ui.root, "img").length, 0)
-	assert.equal(nodes(ui.root, "h2").length, 0)
+	assert.deepEqual(nodes(ui.root, "h2").map(({ text }) => text), ["Key facts"])
 	ui.route.query.tab = "debits"; await tick()
 	assert.equal(nodes(ui.root, "p")[0].text, "No debits raised for this inspection.")
 })

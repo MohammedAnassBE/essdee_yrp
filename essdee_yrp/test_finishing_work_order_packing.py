@@ -21,6 +21,7 @@ from essdee_yrp.finishing.work_order import (
 from essdee_yrp.finishing.work_order_packing import _packing_receivables, build_packing_work_order_rows
 from essdee_yrp.garment_work_order import _packing_rows
 from essdee_yrp.overrides.work_order import EssdeeWorkOrder
+from essdee_yrp.production_order_alternative import get_rows_by_size
 
 
 class TestFinishingWorkOrderPacking(FrappeTestCase):
@@ -242,6 +243,14 @@ class TestFinishingWorkOrderPacking(FrappeTestCase):
 		process_cost = apply_workflow(process_cost, "Approve")
 		self.assertEqual(process_cost.docstatus, 1)
 
+		# Like production_api, a packing Work Order needs a deliberate Lot-wise
+		# price; the MRP inherited from the cloned Production Order does not count.
+		production_order.reload()
+		size_row = get_rows_by_size(production_order)["110 cm"]
+		production_order.append(
+			"lot_price_overrides", {"lot": lot.name, "size": "110 cm", "mrp": size_row.mrp}
+		).db_insert()
+
 		work_order.flags.ignore_permissions = True
 		work_order.submit()
 		self.assertTrue(
@@ -372,9 +381,7 @@ class TestPackingWorkOrderSubmitRestriction(FrappeTestCase):
 
 	@patch("essdee_yrp.overrides.work_order.WorkOrder.get_submit_readiness_issues", return_value=[])
 	def test_non_packing_work_order_does_not_query_or_lock(self, base_issues):
-		doc = EssdeeWorkOrder(
-			{"doctype": "YRP Work Order", "lot": self.lot, "includes_packing": 0}
-		)
+		doc = EssdeeWorkOrder({"doctype": "YRP Work Order", "lot": self.lot, "includes_packing": 0})
 
 		with (
 			patch("essdee_yrp.overrides.work_order.frappe.db.sql") as sql,

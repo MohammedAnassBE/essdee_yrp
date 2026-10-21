@@ -8,6 +8,7 @@ from frappe.model.document import Document
 from frappe.model.workflow import get_transitions
 
 from essdee_yrp.merch import process_cost_workspace as workspace
+from essdee_yrp.mrp_role_permissions import WORKFLOW_ROLE_MAP
 
 MODULE = "essdee_yrp.merch.process_cost_workspace"
 
@@ -21,7 +22,10 @@ def workflow_fixture():
 	workflow.states = [frappe._dict(row) for row in workflow.states]
 	workflow.transitions = [frappe._dict(row) for row in workflow.transitions]
 	for row in workflow.transitions:
+		row.allowed = WORKFLOW_ROLE_MAP.get(row.allowed, row.allowed)
 		row.as_dict = lambda row=row: row
+	for row in workflow.states:
+		row.allow_edit = WORKFLOW_ROLE_MAP.get(row.allow_edit, row.allow_edit)
 	return workflow
 
 
@@ -60,29 +64,29 @@ class TestProcessCostWorkspace(TestCase):
 
 	def test_state_and_role_matrix(self):
 		cases = [
-			("Draft", 0, "Purchase User", ["Submit"], True),
-			("Draft", 0, "Purchase Manager", [], False),
-			("Approval Pending", 0, "Purchase User", [], False),
-			("Approval Pending", 0, "Purchase Manager", ["Approve", "Reject"], True),
-			("Approved", 1, "Purchase Manager", ["Expired"], False),
-			("Rejected", 0, "Purchase User", ["Revise"], True),
-			("Rejected", 0, "Purchase Manager", ["Revise"], False),
-			("Expired", 2, "Purchase Manager", [], False),
-			("Draft", 0, "Merch User", [], False),
+			("Draft", 0, "Merch User", ["Submit"], True),
 			("Draft", 0, "Merch Manager", [], False),
+			("Approval Pending", 0, "Merch User", [], False),
+			("Approval Pending", 0, "Merch Manager", ["Approve", "Reject"], True),
+			("Approved", 1, "Merch Manager", ["Expired"], False),
+			("Rejected", 0, "Merch User", ["Revise"], True),
+			("Rejected", 0, "Merch Manager", ["Revise"], False),
+			("Expired", 2, "Merch Manager", [], False),
+			("Draft", 0, "Purchase User", [], False),
+			("Draft", 0, "Purchase Manager", [], False),
 			("Draft", 0, "Production Planner", [], False),
 			("Approval Pending", 0, "Brand QA Manager", [], False),
 		]
 		for case in cases:
 			with self.subTest(case=case):
 				self.assert_actions(*case)
-		for role in ("Merch User", "Merch Manager", "Production Planner", "Brand QA Manager"):
+		for role in ("Purchase User", "Purchase Manager", "Production Planner", "Brand QA Manager"):
 			for state, status in (("Draft", 0), ("Approval Pending", 0), ("Approved", 1), ("Rejected", 0), ("Expired", 2)):
 				with self.subTest(role=role, state=state):
 					self.assert_actions(state, status, role, [], False)
 
 	def test_self_approval_uses_existing_transition(self):
-		self.roles = ["Purchase User", "Purchase Manager"]
+		self.roles = ["Merch User", "Merch Manager"]
 		self.assertEqual([row["action"] for row in workspace._actions(cost_document())], ["Submit"])
 		self.assertEqual([row["action"] for row in workspace._actions(cost_document("Approval Pending"))], ["Approve", "Reject"])
 
@@ -93,8 +97,8 @@ class TestProcessCostWorkspace(TestCase):
 		get_doc.assert_any_call(workspace.DOCTYPE, doc.name, for_update=True)
 		self.assertEqual(doc.check_permission.call_args_list, [(("read",),), (("write",),)] * 2)
 
-	def test_save_refuses_merch_user_after_creation(self):
-		self.roles = ["Merch User"]
+	def test_save_refuses_purchase_user_after_creation(self):
+		self.roles = ["Purchase User"]
 		with patch(f"{MODULE}._load_locked", return_value=cost_document()), patch(f"{MODULE}._apply_values") as apply_values:
 			with self.assertRaisesRegex(frappe.PermissionError, "not editable"):
 				workspace.save_process_cost({}, "ZZ TEST PC", "old")
@@ -111,7 +115,7 @@ class TestProcessCostWorkspace(TestCase):
 					callback()
 
 	def test_delete_permission_does_not_require_edit_role(self):
-		self.roles = ["Purchase Manager"]
+		self.roles = ["Merch Manager"]
 		doc = cost_document()
 		self.assertFalse(workspace.is_editable_by_user(doc))
 		self.assertTrue(workspace.is_deletable_by_user(doc))
@@ -121,8 +125,8 @@ class TestProcessCostWorkspace(TestCase):
 		self.assertFalse(workspace.is_deletable_by_user(cost_document("Expired", 2)))
 
 	def test_waiting_notes(self):
-		self.assertEqual(workspace._waiting_note(cost_document(), [], False), "Waiting for a Purchase User to submit")
-		self.assertEqual(workspace._waiting_note(cost_document("Approval Pending"), [], False), "Waiting for Purchase Manager approval")
+		self.assertEqual(workspace._waiting_note(cost_document(), [], False), "Waiting for a Merch User to submit")
+		self.assertEqual(workspace._waiting_note(cost_document("Approval Pending"), [], False), "Waiting for Merch Manager approval")
 
 	def test_workspace_includes_readable_work_orders_with_permission_filtered_count(self):
 		doc = cost_document()
@@ -192,7 +196,7 @@ class TestProcessCostWorkspace(TestCase):
 		apply.assert_not_called()
 
 	def test_action_executes_through_workflow(self):
-		self.roles = ["Purchase User"]
+		self.roles = ["Merch User"]
 		doc = cost_document()
 		with patch(f"{MODULE}._load_locked", return_value=doc), patch(f"{MODULE}.apply_workflow") as apply, patch(f"{MODULE}.get_process_cost_workspace", return_value={"saved": True}):
 			self.assertEqual(workspace.execute_process_cost_command(doc.name, "Submit", doc.modified), {"saved": True})
@@ -221,7 +225,7 @@ class TestProcessCostWorkspace(TestCase):
 		new.assert_not_called()
 
 	def test_editor_refuses_read_only_workflow_state(self):
-		self.roles = ["Merch User"]
+		self.roles = ["Purchase User"]
 		with patch(f"{MODULE}.frappe.get_doc", return_value=cost_document()):
 			with self.assertRaisesRegex(frappe.PermissionError, "not editable"):
 				workspace.get_process_cost_editor("ZZ TEST PC")

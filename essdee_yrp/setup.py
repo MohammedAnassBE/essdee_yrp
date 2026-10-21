@@ -15,6 +15,7 @@ from frappe.contacts.doctype.address_template.address_template import (
 from frappe.permissions import add_permission
 from yrp.attribute_links import value as _attribute_value
 
+from essdee_yrp.mrp_role_permissions import ensure_mrp_role_permissions
 from essdee_yrp.patches.restore_web_read_indexes import execute as ensure_web_read_indexes
 from essdee_yrp.report_permissions import ensure_report_permissions
 from essdee_yrp.web_build import build_web_spa
@@ -99,6 +100,7 @@ def after_install():
 	ensure_mrp_cancel_permissions()
 	ensure_production_planner_read_permissions()
 	ensure_report_permissions()
+	ensure_mrp_role_permissions()
 	ensure_yrp_production_order_settings()
 	from essdee_yrp.patches import (
 		grant_accounts_user_report_access,
@@ -135,6 +137,7 @@ def after_migrate():
 	ensure_mrp_cancel_permissions()
 	ensure_production_planner_read_permissions()
 	ensure_report_permissions()
+	ensure_mrp_role_permissions()
 	ensure_sd_yrp_consumer_config()
 	ensure_yrp_production_order_settings()
 	ensure_lot_packing_boundary()

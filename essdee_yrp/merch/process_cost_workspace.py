@@ -115,11 +115,16 @@ def _attribute_options(rows, attribute):
 
 
 def _waiting_note(doc, actions, can_edit):
-	if _state(doc) == "Approval Pending" and not actions:
-		return _("Waiting for Purchase Manager approval")
-	if _state(doc) == "Draft" and not can_edit and not actions:
-		return _("Waiting for a Purchase User to submit")
+	state = _state(doc)
+	if state == "Approval Pending" and not actions:
+		return _("Waiting for {0} approval").format(get_transition_role(state))
+	if state == "Draft" and not can_edit and not actions:
+		return _("Waiting for a {0} to submit").format(get_transition_role(state))
 	return ""
+
+
+def get_transition_role(state):
+	return next((row.allowed for row in get_workflow(DOCTYPE).transitions if row.state == state), "")
 
 
 @frappe.whitelist()

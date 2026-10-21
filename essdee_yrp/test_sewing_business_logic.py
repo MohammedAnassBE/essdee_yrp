@@ -1,7 +1,8 @@
 import copy
 import threading
+import unittest
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import frappe
 from frappe.share import add_docshare
@@ -41,12 +42,132 @@ from essdee_yrp.sewing.read_models import (
 	get_sewing_plan_dpr_data,
 	get_sewing_plan_entries,
 	get_sewing_plan_entry_page,
+	get_sewing_work_order_processes,
 	get_sp_status_summary,
 	get_supplier_lots,
 	get_the_lot,
 	save_consumption_data,
 	update_fi_dates,
 )
+
+
+class TestSewingWorkOrderProcesses(unittest.TestCase):
+	def test_sewing_processes_include_only_stitching_and_parent_groups(self):
+		with (
+			patch("frappe.db", Mock()) as db,
+			patch("frappe.has_permission") as permission,
+			patch("frappe.get_all", side_effect=[["Group", "Group", "Not a group"], ["Group"]]) as get_all,
+		):
+			db.get_single_value.side_effect = ["Stitching", "Stitching"]
+			self.assertEqual(get_sewing_work_order_processes(), ["Stitching", "Group"])
+		permission.assert_called_once_with("YRP Work Order", "read", throw=True)
+		self.assertEqual(
+			[call.args for call in db.get_single_value.call_args_list],
+			[
+				("SD YRP IPD Settings", "default_stitching_process"),
+				("SD YRP MRP Settings", "finishing_inward_process"),
+			],
+		)
+		self.assertEqual(get_all.call_args_list[0].args, ("YRP Process Details",))
+		self.assertEqual(
+			get_all.call_args_list[0].kwargs["filters"],
+			{"parenttype": "YRP Process", "process_name": ["in", ["Stitching"]]},
+		)
+		self.assertEqual(get_all.call_args_list[1].args, ("YRP Process",))
+		self.assertEqual(get_all.call_args_list[1].kwargs["filters"]["is_group"], 1)
+		self.assertEqual(
+			get_all.call_args_list[1].kwargs["filters"]["name"], ["in", ["Group", "Group", "Not a group"]]
+		)
+
+	def test_sewing_processes_include_a_different_sewing_plan_process(self):
+		with (
+			patch("frappe.db", Mock()) as db,
+			patch("frappe.has_permission"),
+			patch("frappe.get_all", side_effect=[["Group"], ["Group"]]) as get_all,
+		):
+			db.get_single_value.side_effect = ["Stitching", "Sewing"]
+			self.assertEqual(get_sewing_work_order_processes(), ["Stitching", "Sewing", "Group"])
+		self.assertEqual(
+			get_all.call_args_list[0].kwargs["filters"]["process_name"], ["in", ["Stitching", "Sewing"]]
+		)
+
+	def test_sewing_processes_require_work_order_read_permission(self):
+		with (
+			patch("frappe.db", Mock()) as db,
+			patch("frappe.has_permission", side_effect=frappe.PermissionError),
+			self.assertRaises(frappe.PermissionError),
+		):
+			get_sewing_work_order_processes()
+		db.get_single_value.assert_not_called()
+
+	def test_sewing_processes_handle_missing_setting_and_no_parent_groups(self):
+		for process, expected in [(None, []), ("Stitching", ["Stitching"])]:
+			with (
+				self.subTest(process=process),
+				patch("frappe.db", Mock()) as db,
+				patch("frappe.has_permission"),
+				patch("frappe.get_all", return_value=[]) as get_all,
+			):
+				db.get_single_value.return_value = process
+				self.assertEqual(get_sewing_work_order_processes(), expected)
+				self.assertEqual(get_all.call_count, int(bool(process)))
+
+
+class TestClosedWorkOrderReceiptLimits(unittest.TestCase):
+	def _rows(self, remaining):
+		from essdee_yrp.sewing import closed_work_order as service
+
+		rows = [
+			{
+				"item_variant": variant,
+				"received_type": received_type,
+				"max_receivable_quantity": limit,
+				"quantity": limit,
+			}
+			for variant, received_type, limit in [
+				("Red", "Good", 20),
+				("Red", "Reject", 20),
+				("Blue", "Good", 2),
+				("Missing", "Good", 10),
+			]
+		]
+		with (
+			patch.object(service, "_pending_receivable_rows", return_value=rows),
+			patch.object(service, "_get_production_group_dimensions", return_value=[]),
+			patch.object(service, "_apply_dimension_values_to_rows"),
+			patch.object(service, "apply_dimension_defaults"),
+			patch.object(service, "get_sewing_plan_remaining_quantities", return_value=remaining) as lookup,
+		):
+			result = service._closed_work_order_receivable_rows(
+				frappe._dict(name="WO-1", supplier="Unit", lot="Lot")
+			)
+		lookup.assert_called_once_with("WO-1", "Unit")
+		return result
+
+	def test_closed_grn_limits_share_variant_balance_across_received_types(self):
+		rows = self._rows({"Red": 6, "Blue": 8})
+		self.assertEqual([row["max_receivable_quantity"] for row in rows], [6, 6, 2, 0])
+		self.assertTrue(all(row["quantity"] == 0 and row["lot"] == "Lot" for row in rows))
+
+	def test_closed_grn_limits_preserve_exempt_work_order_allowances(self):
+		self.assertEqual([row["max_receivable_quantity"] for row in self._rows(None)], [20, 20, 2, 10])
+
+	def test_closed_grn_pending_flag_uses_capped_quantities(self):
+		from essdee_yrp.sewing import closed_work_order as service
+
+		for remaining, pending in [({"Red": 0, "Blue": -2}, False), ({"Red": 1}, True)]:
+			rows = self._rows(remaining)
+			with (
+				self.subTest(remaining=remaining),
+				patch.object(
+					service, "_get_closed_sewing_work_order", return_value=frappe._dict(name="WO-1")
+				),
+				patch.object(service, "_closed_work_order_receivable_rows", return_value=rows),
+				patch.object(service, "group_items_for_ui", return_value=[]),
+			):
+				self.assertEqual(
+					service.get_closed_work_order_grn_details("WO-1", "Unit")["has_pending_items"], pending
+				)
 
 
 class TestSewingBusinessLogic(IntegrationTestCase):

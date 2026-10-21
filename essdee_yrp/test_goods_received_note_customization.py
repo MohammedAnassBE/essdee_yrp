@@ -15,10 +15,130 @@ from essdee_yrp.overrides.goods_received_note import (
 	_only_default_received_type,
 	_selected_draft_receivable_rows,
 	aggregate_packing_grn_rows_for_ui,
+	get_sewing_plan_remaining_quantities,
 	get_work_order_defaults,
 	normalize_cutting_grn_row_indexes,
 	validate_sewing_plan_quantity,
 )
+
+
+class TestSewingPlanReceiptQuantities(unittest.TestCase):
+	def setUp(self):
+		self.enterContext(patch("frappe.get_system_settings", return_value="Banker's Rounding (legacy)"))
+		self.enterContext(
+			patch("essdee_yrp.overrides.goods_received_note._", side_effect=lambda message: message)
+		)
+
+	def test_remaining_quantities_include_returns_and_exclude_current_grn(self):
+		with patch("frappe.db", Mock()) as db:
+			db.exists.side_effect = [True, False]
+			db.get_single_value.return_value = "Checking Output"
+			db.sql.side_effect = [
+				[frappe._dict(variant="Red", qty=10), frappe._dict(variant="Blue", qty=5)],
+				[
+					frappe._dict(variant="Red", qty=4),
+					frappe._dict(variant="Blue", qty=-2),
+					frappe._dict(variant="Other", qty=3),
+				],
+			]
+			self.assertEqual(
+				get_sewing_plan_remaining_quantities("WO-1", "Unit", "GRN-1"),
+				{"Red": 6, "Blue": 7, "Other": -3},
+			)
+		self.assertEqual(
+			db.sql.call_args_list[0].args[1], {"work_order": "WO-1", "checking_type": "Checking Output"}
+		)
+		query, params = db.sql.call_args_list[1].args
+		self.assertEqual(params, {"work_order": "WO-1", "grn_name": "GRN-1"})
+		for clause in [
+			"item.parent = grn.name",
+			"grn.against_id = %(work_order)s",
+			"grn.docstatus = 1",
+			"grn.name != %(grn_name)s",
+			"if(grn.is_return, -1, 1)",
+			"group by item.item_variant",
+		]:
+			self.assertIn(clause, query)
+		self.assertNotIn("received_type", query)
+
+	def test_remaining_quantities_return_none_for_exempt_or_unplanned_work_orders(self):
+		for exists, checking in [
+			([False], "Checking Output"),
+			([True, True], "Checking Output"),
+			([True, False], None),
+		]:
+			with self.subTest(exists=exists, checking=checking), patch("frappe.db", Mock()) as db:
+				db.exists.side_effect = exists
+				db.get_single_value.return_value = checking
+				self.assertIsNone(get_sewing_plan_remaining_quantities("WO-1", "Unit"))
+				db.sql.assert_not_called()
+
+	def test_no_checking_output_means_zero_remaining_and_new_grn_is_not_excluded(self):
+		with patch("frappe.db", Mock()) as db:
+			db.exists.return_value = True
+			db.get_single_value.return_value = "Checking Output"
+			db.sql.side_effect = [[], []]
+			self.assertEqual(get_sewing_plan_remaining_quantities("WO-1", None), {})
+			self.assertEqual(db.sql.call_args_list[1].args[1]["grn_name"], "")
+
+	def test_submit_combines_received_types_and_preserves_mismatch_message(self):
+		grn = frappe._dict(
+			against="YRP Work Order",
+			against_id="WO-1",
+			name="GRN-1",
+			items=[
+				frappe._dict(item_variant="Red", received_type="Good", quantity=3),
+				frappe._dict(item_variant="Red", received_type="Reject", quantity=4),
+			],
+		)
+		allowed = [frappe._dict(variant="Red", qty=10)]
+		with (
+			patch("frappe.db", Mock()) as db,
+			patch("frappe.throw", side_effect=frappe.ValidationError) as throw,
+			self.assertRaises(frappe.ValidationError),
+		):
+			db.exists.return_value = True
+			db.get_single_value.return_value = "Checking Output"
+			db.sql.side_effect = [allowed, [frappe._dict(variant="Red", qty=4)], allowed]
+			validate_sewing_plan_quantity(grn)
+		throw.assert_called_once_with(
+			"Red &mdash; Checking Output: 10, Already received: 4, This GRN: 7, Over by: 1",
+			title="Sewing Plan Qty Mismatch",
+		)
+
+	def test_submit_preserves_three_decimal_comparison(self):
+		for received, quantity, rejected in [(4, 6, False), (4.0008, 6, True), (4, 6.0004, False)]:
+			allowed = [frappe._dict(variant="Red", qty=10.0004)]
+			with (
+				self.subTest(received=received, quantity=quantity),
+				patch("frappe.db", Mock()) as db,
+				patch("frappe.throw") as throw,
+			):
+				db.exists.return_value = True
+				db.get_single_value.return_value = "Checking Output"
+				db.sql.side_effect = [allowed, [frappe._dict(variant="Red", qty=received)], allowed]
+				validate_sewing_plan_quantity(
+					frappe._dict(
+						against="YRP Work Order",
+						against_id="WO-1",
+						name="GRN-1",
+						items=[frappe._dict(item_variant="Red", quantity=quantity)],
+					)
+				)
+				self.assertEqual(throw.called, rejected)
+
+	def test_submit_skips_returns_bypass_and_other_sources(self):
+		for values in [
+			{"is_return": 1},
+			{"avoid_sewing_plan_qty": 1},
+			{"against": "Purchase Order"},
+			{"against_id": None},
+		]:
+			grn = frappe._dict(against="YRP Work Order", against_id="WO-1")
+			grn.update(values)
+			with self.subTest(values=values), patch("frappe.db", Mock()) as db:
+				validate_sewing_plan_quantity(grn)
+				db.exists.assert_not_called()
 
 
 class TestGoodsReceivedNoteCustomization(FrappeTestCase):
@@ -295,7 +415,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 		with (
 			patch.object(frappe.db, "exists", return_value=True),
 			patch.object(frappe.db, "get_single_value", return_value="Checking Output"),
-			patch.object(frappe.db, "sql", side_effect=[[], []]),
+			patch.object(frappe.db, "sql", side_effect=[[], [], []]),
 			self.assertRaisesRegex(frappe.ValidationError, "Checking Output: 0"),
 		):
 			validate_sewing_plan_quantity(grn)
@@ -316,6 +436,7 @@ class TestGoodsReceivedNoteCustomization(FrappeTestCase):
 				side_effect=[
 					[frappe._dict(variant="PIECE-RED-45", qty=10)],
 					[frappe._dict(variant="PIECE-RED-45", qty=4)],
+					[frappe._dict(variant="PIECE-RED-45", qty=10)],
 				],
 			),
 		):

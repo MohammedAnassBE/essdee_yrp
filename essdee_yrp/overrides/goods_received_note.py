@@ -1052,31 +1052,23 @@ def aggregate_packing_grn_rows_for_ui(rows):
 	return result
 
 
-def validate_sewing_plan_quantity(grn):
-	"""Cap stitching receipts at committed Checking Output, per variant."""
-	if (
-		grn.get("against") != "YRP Work Order"
-		or grn.get("is_return")
-		or grn.get("avoid_sewing_plan_qty")
-		or not grn.get("against_id")
-	):
-		return
-	if not frappe.db.exists("SD YRP Sewing Plan", {"work_order": grn.against_id}):
-		return
-	if grn.get("supplier") and frappe.db.exists(
+def get_sewing_plan_receipt_quantities(work_order, supplier, exclude_grn=None):
+	"""Return Checking Output allowed and already received quantities, or None when uncapped."""
+	if not work_order or not frappe.db.exists("SD YRP Sewing Plan", {"work_order": work_order}):
+		return None
+	if supplier and frappe.db.exists(
 		"SD YRP GRN Quantity Validation Exempt Supplier",
 		{
 			"parent": "SD YRP MRP Settings",
 			"parenttype": "SD YRP MRP Settings",
 			"parentfield": "grn_quantity_validation_exempt_suppliers",
-			"supplier": grn.supplier,
+			"supplier": supplier,
 		},
 	):
-		return
-
+		return None
 	checking_type = frappe.db.get_single_value("SD YRP MRP Settings", "type_wise_diff_summary")
 	if not checking_type:
-		return
+		return None
 
 	allowed = {
 		row.variant: flt(row.qty)
@@ -1090,11 +1082,11 @@ def validate_sewing_plan_quantity(grn):
 				  and entry.input_type = %(checking_type)s
 				group by detail.item_variant
 			""",
-			{"work_order": grn.against_id, "checking_type": checking_type},
+			{"work_order": work_order, "checking_type": checking_type},
 			as_dict=True,
 		)
 	}
-	already_received = {
+	received = {
 		row.variant: flt(row.qty)
 		for row in frappe.db.sql(
 			"""
@@ -1108,10 +1100,38 @@ def validate_sewing_plan_quantity(grn):
 				  and grn.name != %(grn_name)s
 				group by item.item_variant
 			""",
-			{"work_order": grn.against_id, "grn_name": grn.name},
+			{"work_order": work_order, "grn_name": exclude_grn or ""},
 			as_dict=True,
 		)
 	}
+	return allowed, received
+
+
+def get_sewing_plan_remaining_quantities(work_order, supplier, exclude_grn=None):
+	"""Return remaining Checking Output per variant, or None when the Work Order is uncapped."""
+	quantities = get_sewing_plan_receipt_quantities(work_order, supplier, exclude_grn)
+	if quantities is None:
+		return None
+	allowed, received = quantities
+	return {
+		variant: allowed.get(variant, 0) - received.get(variant, 0)
+		for variant in allowed.keys() | received.keys()
+	}
+
+
+def validate_sewing_plan_quantity(grn):
+	"""Cap stitching receipts at committed Checking Output, per variant."""
+	if (
+		grn.get("against") != "YRP Work Order"
+		or grn.get("is_return")
+		or grn.get("avoid_sewing_plan_qty")
+		or not grn.get("against_id")
+	):
+		return
+	quantities = get_sewing_plan_receipt_quantities(grn.against_id, grn.get("supplier"), grn.name)
+	if quantities is None:
+		return
+	allowed, already_received = quantities
 
 	this_grn = defaultdict(float)
 	for item in grn.get("items") or []:

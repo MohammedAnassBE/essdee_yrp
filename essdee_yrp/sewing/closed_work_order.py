@@ -16,6 +16,8 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	_pending_receivable_rows,
 )
 
+from essdee_yrp.overrides.goods_received_note import get_sewing_plan_remaining_quantities
+
 
 def is_closed_sewing_grn(doc) -> bool:
 	return bool(
@@ -97,7 +99,7 @@ def get_closed_work_order_grn_details(work_order: str, supplier: str) -> dict:
 		"supplier_address": doc.supplier_address,
 		"delivery_location": doc.delivery_location,
 		"delivery_address": doc.delivery_address,
-		"has_pending_items": bool(rows),
+		"has_pending_items": any(flt(row.get("max_receivable_quantity")) > 0 for row in rows),
 		"items": rows,
 		"item_details": group_items_for_ui(rows, "YRP Goods Received Note"),
 	}
@@ -206,10 +208,15 @@ def _get_closed_sewing_work_order(
 
 def _closed_work_order_receivable_rows(work_order) -> list[dict]:
 	rows = _pending_receivable_rows(work_order)
+	remaining = get_sewing_plan_remaining_quantities(work_order.name, work_order.supplier)
 	dimensions = _get_production_group_dimensions(work_order)
 	_apply_dimension_values_to_rows(rows, dimensions)
 	apply_dimension_defaults(rows)
 	for row in rows:
+		if remaining is not None:
+			row["max_receivable_quantity"] = min(
+				flt(row.get("max_receivable_quantity")), max(0, remaining.get(row.get("item_variant"), 0))
+			)
 		# Unlike the ordinary GRN form, this recovery route must require an
 		# intentional entry. Opening the dialog must never pre-receive every
 		# pending piece from a closed Work Order.

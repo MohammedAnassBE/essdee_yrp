@@ -11,7 +11,7 @@
 					<tbody><tr v-for="(row, index) in group.items || []" :key="index">
 						<td>{{ row.name }}</td><td>{{ row.dimensions?.received_type || 'Default' }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ row.attributes?.[attribute] }}</td>
 						<td v-for="key in primaryValues(group)" :key="key" class="closed-grn-editor__quantity">
-							<input v-if="row.values?.[key]?.ref_docname" v-model.number="row.values[key].qty" type="number" min="0" step="0.001" :aria-label="`${row.dimensions?.received_type || 'Default'} row ${index + 1} ${key} received quantity`" :disabled="disabled" />
+							<input v-if="row.values?.[key]?.ref_docname" v-model.number="row.values[key].qty" type="number" min="0" :max="row.values[key].max_receivable_quantity" step="0.001" :aria-label="`${row.dimensions?.received_type || 'Default'} row ${index + 1} ${key} received quantity`" :disabled="disabled" />
 							<span v-else>0</span>
 							<small v-if="row.values?.[key]?.ref_docname">Pending {{ row.values[key].pending_quantity }}<br />Limit {{ row.values[key].max_receivable_quantity }}</small>
 						</td><td>{{ row.default_uom }}</td>

@@ -155,7 +155,9 @@ def save_inspection(values, name: str | None = None, expected_modified: str | No
 		doc = frappe.new_doc(DOCTYPE)
 		doc.against = WORK_ORDER
 		if values.get("amended_from"):
-			doc.amended_from = _get_amendable(values["amended_from"]).name
+			source = _get_amendable(values["amended_from"])
+			# Desk amend copies both result fields, so an untouched result recalculates.
+			doc.amended_from, doc.calculated_result = source.name, source.calculated_result
 	doc.update({fieldname: values[fieldname] for fieldname in EDITABLE_FIELDS if fieldname in values})
 	if "colour_and_size_data" in values:
 		doc.colour_and_size_data = _clean_selection(values["colour_and_size_data"], doc.against_id)
@@ -197,8 +199,6 @@ def _amendment_defaults(source) -> dict:
 	return {
 		**{fieldname: source.get(fieldname) for fieldname in EDITABLE_FIELDS},
 		"against": WORK_ORDER,
-		# Desk copies result and calculated_result; only a manual override should stay frozen.
-		"result": source.result if source.result != source.calculated_result else "",
 		"amended_from": source.name,
 		"posting_date": nowdate(),
 		"against_details": details,

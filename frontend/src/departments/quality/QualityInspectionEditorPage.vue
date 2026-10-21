@@ -13,7 +13,7 @@
 					<div v-else class="quality-page__grid">
 						<template v-for="field in visibleInspectionFields(group, form)" :key="field.fieldname">
 							<dl v-if="field.read_only" class="quality-page__fact">
-								<dt>{{ field.label }}</dt><dd><DocumentLink v-if="field.fieldtype === 'Link'" :doctype="field.options" :name="form[field.fieldname]" />
+								<dt>{{ field.label }}</dt><dd><DocumentLink v-if="field.fieldtype === 'Link'" :doctype="field.options" :name="form[field.fieldname]" :label="linkLabel(field.fieldname, form)" />
 									<template v-else>{{ formatDocumentOverviewValue({ ...field, value: form[field.fieldname] }) }}</template></dd>
 							</dl>
 							<FormField v-else v-model="form[field.fieldname]" :field="field" :form="form" :required="Boolean(field.reqd)" :disabled="busy" />
@@ -60,7 +60,7 @@ import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
 import InspectionColourSizePicker from "./components/InspectionColourSizePicker.vue"
 import InspectionImageUpload from "./components/InspectionImageUpload.vue"
 import { INSPECTION_GROUPS, visibleInspectionFields } from "./inspectionFields.js"
-import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionPayload, inspectionResultPreview, resultTone, validAqlInputs } from "./qualityViews.js"
+import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionPayload, linkLabel, inspectionResultPreview, resultTone, validAqlInputs } from "./qualityViews.js"
 import "./quality.css"
 
 const props = defineProps({ inspectionId: { type: String, default: "" } })
@@ -137,7 +137,7 @@ async function load() {
 }
 
 function applyAgainstDetails(details = {}) {
-	for (const key of ["item", "lot", "supplier", "order_qty"]) form[key] = details[key] ?? ""
+	for (const key of ["item", "lot", "supplier", "supplier_name", "order_qty"]) form[key] = details[key] ?? ""
 	selection.value = cleanSelection(details)
 }
 

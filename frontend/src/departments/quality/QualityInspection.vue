@@ -21,7 +21,7 @@
 				<div v-else class="quality-page__grid">
 					<dl v-for="field in visibleInspectionFields(group, record, true)" :key="field.fieldname" class="quality-page__fact">
 						<dt>{{ field.label }}</dt>
-						<dd><DocumentLink v-if="['Link', 'Dynamic Link'].includes(field.fieldtype)" :doctype="field.fieldtype === 'Dynamic Link' ? record[field.options] : field.options" :name="record[field.fieldname]" current-path="/web/quality/inspections" />
+						<dd><DocumentLink v-if="['Link', 'Dynamic Link'].includes(field.fieldtype)" :doctype="field.fieldtype === 'Dynamic Link' ? record[field.options] : field.options" :name="record[field.fieldname]" :label="linkLabel(field.fieldname, record)" current-path="/web/quality/inspections" />
 							<DocumentStatusBadge v-else-if="['result', 'calculated_result'].includes(field.fieldname) && record[field.fieldname]" :label="record[field.fieldname]" :tone="resultTone(record[field.fieldname])" />
 							<template v-else>{{ formatDocumentOverviewValue({ ...field, value: record[field.fieldname] }) }}</template>
 						</dd>
@@ -70,7 +70,7 @@ import InspectionDebitDialog from "./components/InspectionDebitDialog.vue"
 import InspectionResultDialog from "./components/InspectionResultDialog.vue"
 import { INSPECTION_GROUPS, visibleInspectionFields } from "./inspectionFields.js"
 import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
-import { INSPECTION_DOCTYPE, copyText, inspectionActionItems, inspectionShareCaption, resultTone } from "./qualityViews.js"
+import { INSPECTION_DOCTYPE, copyText, inspectionActionItems, linkLabel, inspectionShareCaption, resultTone } from "./qualityViews.js"
 import "./quality.css"
 
 const props = defineProps({ inspectionId: { type: String, default: "" } })

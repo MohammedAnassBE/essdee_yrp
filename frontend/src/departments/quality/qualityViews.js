@@ -100,8 +100,12 @@ export function validAqlInputs(values) {
 /** Clipboard API needs a secure context; fall back to execCommand on plain http. */
 export async function copyText(text, doc = globalThis.document, clipboard = globalThis.navigator?.clipboard) {
 	if (clipboard?.writeText) {
-		await clipboard.writeText(text)
-		return true
+		try {
+			await clipboard.writeText(text)
+			return true
+		} catch {
+			// Permission denied or document not focused: try the legacy path.
+		}
 	}
 	const area = doc.createElement("textarea")
 	area.value = text
@@ -110,5 +114,12 @@ export async function copyText(text, doc = globalThis.document, clipboard = glob
 	area.style.opacity = "0"
 	doc.body.appendChild(area)
 	area.select()
-	try { return doc.execCommand("copy") } finally { area.remove() }
+	try { return Boolean(doc.execCommand("copy")) } catch { return false } finally { area.remove() }
+}
+
+const LINK_LABEL_FIELDS = { supplier: "supplier_name", third_party_supplier: "third_party_supplier_name" }
+
+/** Show the party name rather than its code on Supplier links. */
+export function linkLabel(fieldname, values = {}) {
+	return values[LINK_LABEL_FIELDS[fieldname]] || undefined
 }

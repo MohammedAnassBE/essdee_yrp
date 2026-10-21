@@ -13,6 +13,8 @@ from yrp.utils import get_variant_attr_details, update_if_string_instance
 
 VALID_RESULTS = {"Pass", "Fail", "Hold"}
 VALID_CHECKING_LEVELS = {"Level 1", "Level 2"}
+# production_api Essdee Debit DocPerm rows with create + submit.
+INSPECTION_DEBIT_ROLES = ("System Manager", "Merch User", "Merch Manager", "Brand QA User")
 
 
 class SDYRPEssdeeQualityInspection(Document):
@@ -143,6 +145,7 @@ def get_against_details(against: str, against_id: str) -> dict:
 		"colours": colours,
 		"sizes": sizes,
 		"supplier": work_order.supplier,
+		"supplier_name": frappe.db.get_value("Supplier", work_order.supplier, "supplier_name"),
 		"lot": work_order.lot,
 		"item": work_order.item,
 		"order_qty": sum(
@@ -203,11 +206,11 @@ def create_inspection_debit(
 
 
 def can_request_inspection_debit(inspection) -> bool:
-	"""Debit request role, or the inspector rights to submit the inspection (production's Brand QA grant)."""
-	request_role = attribute_db.get_single_value("YRP Settings", "debit_request_role")
-	if request_role and request_role in frappe.get_roles(frappe.session.user):
-		return True
-	return bool(frappe.has_permission("SD YRP Essdee Quality Inspection", "submit", doc=inspection))
+	"""Roles production granted Essdee Debit create + submit; the inspection must be readable."""
+	return bool(
+		set(frappe.get_roles(frappe.session.user)) & set(INSPECTION_DEBIT_ROLES)
+		and frappe.has_permission("SD YRP Essdee Quality Inspection", "read", doc=inspection)
+	)
 
 
 def _require_quality_access() -> None:

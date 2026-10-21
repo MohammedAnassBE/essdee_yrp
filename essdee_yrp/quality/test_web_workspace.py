@@ -130,14 +130,25 @@ class TestQualityWebWorkspace(IntegrationTestCase):
 		selected = [row["colour"] for row in defaults["against_details"]["colours"] if row["selected"]]
 		self.assertEqual(selected, [row.colour for row in doc.essdee_quality_inspection_colours if row.selected])
 		selection = {key: defaults["against_details"][key] for key in ("colours", "sizes")}
-		values = {key: defaults[key] for key in ("against_id", "inspection_type", "offer_qty", "checking_level", "major_aql_level", "minor_aql_level")}
-		self.assertEqual(defaults["result"], "")
+		values = {key: defaults[key] for key in ("against_id", "inspection_type", "offer_qty", "checking_level", "major_aql_level", "minor_aql_level", "result")}
+		self.assertEqual(defaults["result"], "Pass")
 		amended = save_inspection(
 			{**values, "amended_from": doc.name, "colour_and_size_data": selection, "major_defect_found": 99}
 		)["record"]
 		self.assertEqual((amended["amended_from"], amended["description"]), (doc.name, None))
 		self.assertEqual((amended["result"], amended["calculated_result"]), ("Fail", "Fail"))
 		self.assertTrue(amended["name"].startswith(doc.name))
+
+	def test_amended_manual_override_keeps_both_result_fields(self):
+		record = self.new_draft(result="Hold")["record"]
+		doc = frappe.get_doc(DOCTYPE, record["name"])
+		doc.submit()
+		doc.cancel()
+		defaults = get_new_inspection_defaults(amend_from=doc.name)
+		selection = {key: defaults["against_details"][key] for key in ("colours", "sizes")}
+		values = {key: defaults[key] for key in ("against_id", "inspection_type", "offer_qty", "checking_level", "major_aql_level", "minor_aql_level", "result")}
+		amended = save_inspection({**values, "amended_from": doc.name, "colour_and_size_data": selection})["record"]
+		self.assertEqual((amended["result"], amended["calculated_result"]), ("Hold", doc.calculated_result))
 
 	def test_uploaded_file_is_attached_to_the_saved_inspection(self):
 		file = frappe.get_doc({"doctype": "File", "file_name": "qa-web-test.txt", "content": b"qa", "is_private": 0}).insert()
@@ -146,7 +157,6 @@ class TestQualityWebWorkspace(IntegrationTestCase):
 		self.assertEqual(attached, (DOCTYPE, record["name"], "upload_quality_approval_sheet"))
 
 	def test_brand_qa_user_creates_and_sees_inspection_debit(self):
-		frappe.db.set_single_value("YRP Settings", "debit_request_role", "Merch User")
 		user = _qa_user()
 		frappe.set_user(user.name)
 		self.assertTrue(get_inspection_workspace(self.source.name)["actions"]["create_debit"]["allowed"])
@@ -163,13 +173,13 @@ class TestQualityWebWorkspace(IntegrationTestCase):
 		self.assertEqual((debit.docstatus, debit.work_order, debit.inspection), (1, self.source.against_id, 1))
 		self.assertEqual(debit.quality_inspection, self.source.name)
 
-	def test_user_without_inspection_rights_cannot_create_debit(self):
-		frappe.db.set_single_value("YRP Settings", "debit_request_role", "Merch User")
-		user = _qa_user(role="Stock User")
-		frappe.set_user(user.name)
-		with self.assertRaises(frappe.PermissionError):
-			create_inspection_debit(self.source.name, 75, "Quality web test", "/files/quality-web-test.jpg")
-
+	def test_only_production_debit_roles_can_create_inspection_debit(self):
+		for role in ("Brand QA Manager", "Stock User"):
+			frappe.set_user("Administrator")
+			user = _qa_user(role=role)
+			frappe.set_user(user.name)
+			with self.assertRaises(frappe.PermissionError, msg=role):
+				create_inspection_debit(self.source.name, 75, "Quality web test", "/files/quality-web-test.jpg")
 
 def _qa_user(role="Brand QA User"):
 	if frappe.db.exists("User", QA_USER):

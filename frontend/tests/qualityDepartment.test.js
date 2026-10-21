@@ -807,3 +807,26 @@ test("copyText falls back to execCommand without the Clipboard API", async () =>
 	assert.equal(await copyText("secure", doc, { writeText: async (text) => { written = text } }), true)
 	assert.equal(written, "secure")
 })
+
+test("Supplier links show the party name", async () => {
+	const { linkLabel } = await import("../src/departments/quality/qualityViews.js")
+	assert.equal(linkLabel("supplier", { supplier: "S-0172", supplier_name: "Essdee Sewing Unit - Tirupur" }), "Essdee Sewing Unit - Tirupur")
+	assert.equal(linkLabel("third_party_supplier", { third_party_supplier_name: "Checker" }), "Checker")
+	assert.equal(linkLabel("supplier", { supplier: "S-0172" }), undefined)
+	assert.equal(linkLabel("lot", { lot: "L1" }), undefined)
+})
+
+test("Quality Work Order page hides DC and GRN creation", () => {
+	const source = readFileSync(resolve("frontend/src/departments/FabricWorkOrder.vue"), "utf8")
+	assert.match(source, /QUALITY_HIDDEN_ACTIONS = \["create_delivery_challan", "create_goods_received_note"\]/)
+	assert.match(source, /if \(props\.quality && QUALITY_HIDDEN_ACTIONS\.includes\(key\)\) return/)
+	assert.match(source, /\[key, \{ \.\.\.value, can_create: false \}\]/)
+})
+
+test("copyText falls back when the Clipboard API rejects", async () => {
+	const { copyText } = await import("../src/departments/quality/qualityViews.js")
+	const area = { style: {}, setAttribute() {}, select() {}, remove() {} }
+	const doc = { createElement: () => area, body: { appendChild() {} }, execCommand: () => true }
+	assert.equal(await copyText("caption", doc, { writeText: async () => { throw new Error("denied") } }), true)
+	assert.equal(await copyText("caption", { ...doc, execCommand: () => { throw new Error("blocked") } }, undefined), false)
+})

@@ -45,7 +45,7 @@
 				<template #rail>
 					<QualityWorkOrderInspections v-if="quality && workspace.record?.name" :work-order="workspace.record.name" @can-create="canCreateQualityInspection = $event" />
 					<div v-if="railTotals.length" class="work-order-page__totals"><div v-for="total in railTotals" :key="total.fieldname" class="work-order-page__total"><span>{{ total.label }}</span><strong>{{ formatNumber(total.value) }}</strong></div></div>
-					<WorkOrderActivityRail ref="activityRail" :work-order="workspace.record?.name || ''" :delivery-challans="deliveryChallans" :goods-received-notes="goodsReceivedNotes" :permissions="workspace.related_permissions || {}" @create="createRelated" @open="openRelatedRow" />
+					<WorkOrderActivityRail ref="activityRail" :work-order="workspace.record?.name || ''" :delivery-challans="deliveryChallans" :goods-received-notes="goodsReceivedNotes" :permissions="relatedPermissions" @create="createRelated" @open="openRelatedRow" />
 				</template>
 
 			</FabricDocumentWorkspace>
@@ -167,6 +167,12 @@ const showSummary = computed(() => Boolean(
 	&& !workspace.value.record?.is_rework
 	&& (workspace.value.summary?.item_detail?.length || workspace.value.summary?.deliverables?.length),
 ))
+const QUALITY_HIDDEN_ACTIONS = ["create_delivery_challan", "create_goods_received_note"]
+const relatedPermissions = computed(() => {
+	const permissions = workspace.value.related_permissions || {}
+	if (!props.quality) return permissions
+	return Object.fromEntries(Object.entries(permissions).map(([key, value]) => [key, { ...value, can_create: false }]))
+})
 const workOrderActions = computed(() => {
 	const busy = Boolean(acting.value)
 	const actions = []
@@ -177,6 +183,7 @@ const workOrderActions = computed(() => {
 	}
 	const add = (key, fallback, icon, command, options = {}) => {
 		if (!props.showEditorActions && ["save", "amend"].includes(key)) return
+		if (props.quality && QUALITY_HIDDEN_ACTIONS.includes(key)) return
 		if (!capabilities.value[key]) return
 		actions.push({
 			key,

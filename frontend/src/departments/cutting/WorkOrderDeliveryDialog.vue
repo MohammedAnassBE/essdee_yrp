@@ -85,7 +85,6 @@ async function save(submit) {
 	saveMode.value = submit ? "submit" : "draft"
 	error.value = ""
 	try {
-		const creating = !currentName.value
 		const saved = currentName.value
 			? await saveDeliveryChallan({
 				...savedEditor.value.values,
@@ -99,7 +98,7 @@ async function save(submit) {
 		currentName.value = saved.record?.name || saved.name
 		if (!submit) await load()
 		emit("changed", saved)
-		if (creating && submit) emit("created", { doctype: "YRP Delivery Challan", name: currentName.value })
+		if (submit) emit("created", { doctype: "YRP Delivery Challan", name: currentName.value })
 		if (submit) emit("update:visible", false)
 	} catch (reason) {
 		error.value = reason.message || "Unable to create the Delivery Challan."

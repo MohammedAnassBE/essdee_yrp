@@ -221,6 +221,20 @@ test("F-B18 DC creation handoff", async () => {
 	assert.match(read("departments/cutting/WorkOrderDeliveryDialog.vue"), /if \(!submit\) await load\(\)/)
 })
 
+test("F-B18 submitting a saved draft opens the submitted DC", async () => {
+	const events = []
+	const state = setup("departments/cutting/WorkOrderDeliveryDialog.vue", {
+		defineProps: () => ({ cuttingPlan: "CP", permissions: { can_create: true } }), defineEmits: () => (...args) => events.push(args),
+		saveDeliveryChallan: async () => ({ record: { name: "DC-2", docstatus: 1 } }),
+	}, "save, quantities, currentName, savedEditor, editor")
+	state.currentName.value = "DC-2"
+	Object.assign(state.editor, { item_details: [], correction_item_details: [] })
+	state.savedEditor.value = { values: {}, record: { modified: "m" }, permissions: { can_write: true } }
+	state.quantities.YES = 2
+	await state.save(true)
+	assert.deepEqual(events.filter(([name]) => name !== "changed"), [["created", { doctype: "YRP Delivery Challan", name: "DC-2" }], ["update:visible", false]])
+})
+
 test("F-B18 quantity input labels", () => {
 	const component = loadComponent(resolve("frontend/src/departments/cutting/WorkOrderDeliveryMatrix.vue"), {})
 	const row = { name: "SHIRT", values: { S: { ref_docname: "ROW-S" }, M: { ref_docname: "ROW-M" } } }
@@ -230,4 +244,9 @@ test("F-B18 quantity input labels", () => {
 	assert.equal(new Set(labels).size, 4)
 	assert.match(labels[0], /SHIRT · S/)
 	assert.match(labels[1], /SHIRT · M/)
+	const fabric = { name: "FABRIC", attributes: { Colour: "Liver", Dia: "60 Dia" }, values: { default: { ref_docname: "ROW-1" } } }
+	const fabricRoot = mountComponent(component, { groups: [{ attributes: ["Colour", "Dia"], primary_attribute_values: [], items: [fabric] }], quantities: {} })
+	const fabricLabel = nodes(fabricRoot, "input")[0].props["aria-label"]
+	assert.match(fabricLabel, /FABRIC · Liver · 60 Dia · Quantity/)
+	assert.doesNotMatch(fabricLabel, /ROW-1/)
 })

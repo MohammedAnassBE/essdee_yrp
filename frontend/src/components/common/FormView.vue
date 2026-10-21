@@ -313,9 +313,9 @@ watch(
 	{ immediate: true },
 )
 
-async function load() {
+async function load(options) {
 	const sequence = ++loadSequence
-	loading.value = true
+	loading.value = !(options?.background && documentName.value)
 	loadFailed.value = false
 	error.value = ""
 	success.value = ""

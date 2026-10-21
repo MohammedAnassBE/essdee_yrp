@@ -23,7 +23,7 @@
 								<td v-for="value in valueColumns(group)" :key="value" class="wo-delivery-matrix__qty">
 									<div v-if="cell(row, value)?.ref_docname && !['0', 0].includes(cell(row, value)?.ref_docname)" class="wo-delivery-matrix__cell">
 										<small>Pending {{ formatQty(cell(row, value)?.pending_quantity) }}</small>
-										<input :value="quantity(cell(row, value)?.ref_docname)" type="number" min="0" step="0.001" :aria-label="`Delivery Quantity for ${row.name || row.item_variant || 'item'} · ${value === 'default' ? 'Quantity' : value} · ${groupIndex + 1}/${rowIndex + 1} · ${cell(row, value)?.ref_docname}`" @input="update(cell(row, value)?.ref_docname, $event.target.value)" />
+										<input :value="quantity(cell(row, value)?.ref_docname)" type="number" min="0" step="0.001" :aria-label="`Delivery Quantity for ${[row.name || row.item_variant || 'item', attributeText(row, group)].filter(Boolean).join(' · ')} · ${value === 'default' ? 'Quantity' : value} · ${groupIndex + 1}/${rowIndex + 1}`" @input="update(cell(row, value)?.ref_docname, $event.target.value)" />
 									</div>
 									<span v-else>—</span>
 								</td>

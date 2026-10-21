@@ -272,7 +272,7 @@ async function confirmLifecycleAction() {
 }
 
 function refreshPage() {
-	formView.value?.reload()
+	formView.value?.reload({ background: true })
 }
 
 async function probeEditor() {

@@ -103,6 +103,7 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Commercial Group Key",
+   "print_hide": 1,
    "read_only": 1,
    "reqd": 1
   }
@@ -111,7 +112,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-10-21 00:35:05.634000",
+ "modified": "2026-10-21 06:10:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Essdee Purchase Invoice Item",

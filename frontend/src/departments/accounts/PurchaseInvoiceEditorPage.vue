@@ -434,7 +434,7 @@ watch(grns, () => {
 </script>
 
 <style scoped>
-.purchase-invoice-editor { --purchase-invoice-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--purchase-invoice-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface)); background: color-mix(in srgb, var(--erp-bg) 72%, var(--erp-surface)); }
+.purchase-invoice-editor { --purchase-invoice-editor-inline: clamp(14px, 1.5vw, 24px); display: flex; width: 100%; min-height: calc(100dvh - var(--erp-shell-header-height) - 78px); flex-direction: column; gap: var(--erp-space-3); padding: 0 var(--purchase-invoice-editor-inline) var(--erp-space-4); border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface)); background: var(--erp-bg); }
 .purchase-invoice-editor__loading { display: grid; min-width: 0; gap: var(--erp-space-3); }
 @media (max-width: 700px) { .purchase-invoice-editor { padding: 0 var(--erp-space-3) var(--erp-space-3); } }
 </style>

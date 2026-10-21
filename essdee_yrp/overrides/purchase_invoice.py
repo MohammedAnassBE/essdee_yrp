@@ -47,6 +47,12 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			is_erp_purchase_invoice_available(),
 		)
 
+	def is_print_hide(self, fieldname, df=None, for_print=True):
+		"""Print only the commercial rows when grouped Essdee items exist."""
+		if fieldname == "items" and self.get("essdee_items"):
+			return True
+		return super().is_print_hide(fieldname, df, for_print)
+
 	def before_validate(self):
 		self._validate_legacy_projection_inputs()
 		# Reject Bill Tracking identity changes before rebuilding the grouped

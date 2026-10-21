@@ -26,6 +26,13 @@ CANDIDATES = (
 	("YRP Stock Entry", ("cut_panel_movement",)),
 	("YRP Goods Received Note", ("cut_panel_movement",)),
 	("YRP Delivery Challan", ("cut_panel_movement",)),
+	# Cancel/delete link checks run SELECT DISTINCT on every Dynamic Link options
+	# column when Frappe's 12-hour dynamic_link_map cache is cold (F-B37).
+	("e-Invoice Log", ("reference_doctype",)),
+	("e-Waybill Log", ("reference_doctype",)),
+	("Integration Request", ("reference_doctype",)),
+	("Payment Entry", ("source_doctype",)),
+	("Payment Entry Reference", ("advance_voucher_type",)),
 )
 
 

@@ -84,3 +84,22 @@ class TestWebReadIndexes(TestCase):
 			self.assertEqual(len(created), 3)
 			indexes.execute()
 			self.assertEqual(len(created), 3)
+
+
+class TestCancelLinkCheckIndexes(TestCase):
+	def test_large_link_and_dynamic_link_option_columns_are_indexed(self):
+		for doctype, fieldname in (
+			("YRP Stock Entry Detail", "against_stock_entry"),
+			("YRP Stock Entry Detail", "against"),
+			("YRP Stock Reservation Entry", "stock_entry"),
+			("YRP Goods Received Note Item", "ref_doctype"),
+			("YRP Delivery Challan Item", "ref_doctype"),
+			("YRP Work Order Deliverables", "source_grn"),
+		):
+			with self.subTest(doctype=doctype, fieldname=fieldname):
+				self.assertTrue(frappe.get_meta(doctype).get_field(fieldname).search_index)
+		for doctype, column in (
+			("e-Invoice Log", "reference_doctype"),
+			("Payment Entry", "source_doctype"),
+		):
+			self.assertIn((doctype, (column,)), indexes.CANDIDATES)

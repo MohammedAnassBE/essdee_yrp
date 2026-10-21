@@ -69,17 +69,20 @@ class SDYRPEssdeeQualityInspection(Document):
 				],
 			)
 
-		calculated_result = (
-			"Pass"
-			if cint(self.major_defect_found) <= cint(self.major_defect_maximum_allowed)
-			and cint(self.minor_defect_found) <= cint(self.minor_defect_maximum_allowed)
-			else "Fail"
-		)
+		# Production parity: a manual result override freezes both result fields.
 		if not self.result or self.result == self.calculated_result:
-			self.result = calculated_result
-		self.calculated_result = calculated_result
+			self.result = self.calculated_result = (
+				"Pass"
+				if cint(self.major_defect_found) <= cint(self.major_defect_maximum_allowed)
+				and cint(self.minor_defect_found) <= cint(self.minor_defect_maximum_allowed)
+				else "Fail"
+			)
 
 		work_order = _get_work_order(self.against, self.against_id)
+		if self.docstatus == 0:
+			# Link fetches already ran (v16 validates links before before_validate).
+			self.item, self.lot, self.supplier = work_order.item, work_order.lot, work_order.supplier
+			self.supplier_name = frappe.db.get_value("Supplier", self.supplier, "supplier_name")
 		self.order_qty = _selected_order_quantity(work_order, self)
 
 	def before_submit(self):
@@ -95,10 +98,11 @@ def get_debit_details(quality_inspection: str) -> list[dict]:
 
 	if not frappe.get_meta("YRP Debit").has_field("quality_inspection"):
 		return []
-	if not frappe.has_permission("YRP Debit", "read"):
+	# Readers of the inspection see its debits, as production's Desk tab does.
+	if not frappe.has_permission("SD YRP Essdee Quality Inspection", "read", doc=quality_inspection):
 		return []
 
-	return frappe.get_list(
+	return frappe.get_all(
 		"YRP Debit",
 		filters={
 			"quality_inspection": quality_inspection,
@@ -170,9 +174,8 @@ def create_inspection_debit(
 	if inspection.docstatus != 1:
 		frappe.throw(_("Submit the Quality Inspection before creating a Debit."))
 
-	request_role = attribute_db.get_single_value("YRP Settings", "debit_request_role")
-	if not request_role or request_role not in frappe.get_roles(frappe.session.user):
-		frappe.throw(_("You do not have permission to request a Debit."))
+	if not can_request_inspection_debit(inspection):
+		frappe.throw(_("You do not have permission to request a Debit."), frappe.PermissionError)
 
 	if flt(debit_value) <= 0:
 		frappe.throw(_("Debit Value must be greater than zero."))
@@ -193,11 +196,18 @@ def create_inspection_debit(
 			"quality_inspection": inspection.name,
 		}
 	)
-	# The configured request role is the authoritative permission, matching the
-	# base Debit.create_debit endpoint. Document validation and submission still run.
+	# can_request_inspection_debit is the authorization; validation and submit still run.
 	debit.insert(ignore_permissions=True)
 	debit.submit()
 	return debit.as_dict()
+
+
+def can_request_inspection_debit(inspection) -> bool:
+	"""Debit request role, or the inspector rights to submit the inspection (production's Brand QA grant)."""
+	request_role = attribute_db.get_single_value("YRP Settings", "debit_request_role")
+	if request_role and request_role in frappe.get_roles(frappe.session.user):
+		return True
+	return bool(frappe.has_permission("SD YRP Essdee Quality Inspection", "submit", doc=inspection))
 
 
 def _require_quality_access() -> None:

@@ -203,6 +203,7 @@ yrp_registered_experiences = {
 	"accounts": ["workspaces"],
 	"hr": ["workspaces"],
 	"merch": ["workspaces"],
+	"quality": ["workspaces"],
 }
 
 # Post-login landing: ordinary users land on the custom /web work hub;

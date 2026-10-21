@@ -31,6 +31,8 @@ DESK_REPORTS = {
 	"purchase_order_itemwise": ("Purchase Order Itemwise", "SD YRP Purchase Order Itemwise"),
 	"lot_consumption_report": ("Lot Consumption Report", "SD YRP Lot Consumption Report"),
 }
+# Base columns for saved layouts; the report pivots one Date/Result pair per inspection.
+RFT_MAX_INSPECTIONS = 50
 FI_COLUMNS = [
 	{"fieldname": "lot", "label": "Lot", "fieldtype": "Link", "options": "SD YRP Lot", "width": 160},
 	{"fieldname": "item", "label": "Item", "fieldtype": "Link", "options": "Item", "width": 180},
@@ -132,6 +134,9 @@ def get_reports():
 	from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_order_log.sd_yrp_purchase_order_log import (
 		get_columns as log_columns,
 	)
+	from essdee_yrp.essdee_yrp.report.sd_yrp_qualily_inspection_rft.sd_yrp_qualily_inspection_rft import (
+		get_columns as rft_columns,
+	)
 	from essdee_yrp.essdee_yrp.report.sd_yrp_stock_entry_report.sd_yrp_stock_entry_report import (
 		get_columns as stock_entry_columns,
 	)
@@ -213,6 +218,10 @@ def get_reports():
 			"from_date": "Date", "to_date": "Date", "lot": ("Link", "SD YRP Lot"),
 			"from_item": ("Link", "Item"), "to_item": ("Link", "Item"),
 		}, conversion_columns()),
+		_desk_entry("quality-inspection-rft", "SD YRP Qualily Inspection RFT", {
+			"lot": ("Link", "SD YRP Lot"), "item": ("Link", "Item"), "supplier": ("Link", "Supplier"),
+			"result": "Select", "from_date": "Date", "to_date": "Date",
+		}, rft_columns(RFT_MAX_INSPECTIONS), permission_doctypes=("SD YRP Essdee Quality Inspection",)),
 		WebReport(
 			key="finishing-inward-updates", kind="callable",
 			runner="essdee_yrp.desk_web_reports.run_fi_updates",

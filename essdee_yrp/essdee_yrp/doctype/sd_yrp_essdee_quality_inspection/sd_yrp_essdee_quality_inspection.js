@@ -208,7 +208,7 @@ async function share_inspection(frm) {
 			return;
 		}
 
-		const url = `/api/method/frappe.utils.file_manager.download_file?file_url=${encodeURIComponent(
+		const url = `/api/method/frappe.handler.download_file?file_url=${encodeURIComponent(
 			frm.doc.upload_quality_approval_sheet,
 		)}`;
 		const response = await fetch(url, { credentials: "include" });

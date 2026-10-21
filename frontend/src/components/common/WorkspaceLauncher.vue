@@ -49,6 +49,7 @@ import Skeleton from "primevue/skeleton"
 import { computed } from "vue"
 import { RouterLink } from "vue-router"
 import { isWorkspaceInLayout } from "../../router/departmentLock.js"
+import { canOpenList } from "../../router/listPermission.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 
 const props = defineProps({
@@ -61,7 +62,7 @@ const props = defineProps({
 	eyebrow: { type: String, default: "Department workspace" },
 })
 
-const visibleItems = computed(() => props.items.filter((item) => isWorkspaceInLayout(item)))
+const visibleItems = computed(() => props.items.filter((item) => isWorkspaceInLayout(item) && canOpenList(item.to)))
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
 </script>
 

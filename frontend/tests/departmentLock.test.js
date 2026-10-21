@@ -134,7 +134,7 @@ test("the real route table decides which pages are documents", () => {
 	const routerSource = source("../src/router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
 	const context = { departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
-		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined }
+		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined, getPermissionRedirect: () => undefined, NO_PERMISSION_PATH: "/no-permission" }
 	vm.runInNewContext(routerSource, context)
 	const guard = (path, department) => getLockedRedirect(context.router.resolve(path), department)
 	const sewingReports = getLockedDepartment(registered("sewing", ["reports"]))

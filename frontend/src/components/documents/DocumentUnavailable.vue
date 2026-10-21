@@ -1,9 +1,15 @@
 <template>
-	<DepartmentPage :title="isLayoutUnavailable ? 'Not in your layout' : 'Page unavailable'" :back-to="getHomePath()" :back-label="lockedDepartment?.label || 'Workspaces'" :show-title="false" flat full-width>
+	<DepartmentPage :title="isPermissionDenied ? 'No permission' : isLayoutUnavailable ? 'Not in your layout' : 'Page unavailable'" :back-to="getHomePath()" :back-label="lockedDepartment?.label || 'Workspaces'" :show-title="false" flat full-width>
 		<section class="document-unavailable erp-card" role="status">
-			<span class="document-unavailable__mark"><i :class="isLayoutUnavailable ? 'pi pi-lock' : 'pi pi-file-excel'" /></span>
+			<span class="document-unavailable__mark"><i :class="isLayoutUnavailable || isPermissionDenied ? 'pi pi-lock' : 'pi pi-file-excel'" /></span>
 			<div>
-				<template v-if="isLayoutUnavailable">
+				<template v-if="isPermissionDenied">
+					<small>NO PERMISSION</small>
+					<h1>You don't have permission to view {{ doctype }}</h1>
+					<strong v-if="from">{{ from }}</strong>
+					<p>Ask an administrator for read access to {{ doctype }} if you need this list.</p>
+				</template>
+				<template v-else-if="isLayoutUnavailable">
 					<small>NOT IN YOUR LAYOUT</small>
 					<h1>{{ pageLabel }}</h1>
 					<strong v-if="from">{{ from }}</strong>
@@ -36,6 +42,7 @@ const router = useRouter()
 const doctype = computed(() => String(route.query.doctype || ""))
 const name = computed(() => String(route.query.name || ""))
 const isLayoutUnavailable = computed(() => Boolean(route.meta.layoutUnavailable))
+const isPermissionDenied = computed(() => Boolean(route.meta.permissionDenied))
 const from = computed(() => String(route.query.from || ""))
 const pageLabel = computed(() => departments.find((item) => `${from.value.toLowerCase().split(/[?#]/)[0]}/`.startsWith(`${item.path}/`))?.label || "Page")
 

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
 import { getLockedRedirect, LAYOUT_UNAVAILABLE_PATH } from "./departmentLock.js"
+import { getPermissionRedirect, NO_PERMISSION_PATH } from "./listPermission.js"
 import { isChunkLoadError, reloadChunkTarget } from "./chunkReload.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
@@ -958,6 +959,12 @@ const routes = [
 		meta: { layoutUnavailable: true },
 	},
 	{
+		path: NO_PERMISSION_PATH,
+		name: "no-permission",
+		component: DocumentUnavailable,
+		meta: { permissionDenied: true },
+	},
+	{
 		path: "/:pathMatch(.*)*",
 		component: DocumentUnavailable,
 	},
@@ -971,7 +978,7 @@ const router = createRouter({
 let chunkReloadTarget = null
 router.beforeEach((to) => {
 	chunkReloadTarget = to
-	return getLockedRedirect(to)
+	return getLockedRedirect(to) || getPermissionRedirect(to)
 })
 router.afterEach(() => { chunkReloadTarget = null })
 

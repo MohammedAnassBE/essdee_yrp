@@ -46,7 +46,7 @@ test("router and Vite recover the intended route with one shared reload guard", 
 	}
 	const source = readFileSync(new URL("../src/router/index.js", import.meta.url), "utf8")
 	const registration = source.slice(source.indexOf("let chunkReloadTarget = null")).replace("export function", "function").replace("export default router", "return reloadRouteChunk")
-	const reloadRouteChunk = new Function("router", "getLockedRedirect", "isChunkLoadError", "reloadChunkTarget", registration)(router, () => {}, isChunkLoadError, path => reloadChunkTarget(path, tab, 5000))
+	const reloadRouteChunk = new Function("router", "getLockedRedirect", "getPermissionRedirect", "isChunkLoadError", "reloadChunkTarget", registration)(router, () => {}, () => {}, isChunkLoadError, path => reloadChunkTarget(path, tab, 5000))
 	const main = readFileSync(new URL("../src/main.js", import.meta.url), "utf8")
 	const preload = main.match(/window.addEventListener\("vite:preloadError",[\s\S]*?\n\}\)/)[0]
 	new Function("window", "reloadRouteChunk", preload)({ addEventListener: (_name, handler) => { hooks.preload = handler } }, reloadRouteChunk)

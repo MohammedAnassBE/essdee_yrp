@@ -185,6 +185,15 @@ yrp_web_doctype_catalog = [
 	"SD YRP Lotwise Item Profit",
 	"YRP Purchase Invoice",
 	"YRP Bill Tracking",
+	"Purchase Order",
+	"SD YRP Cut Panel Movement",
+	"SD YRP Cut Bundle Edit",
+	"SD YRP Box Sticker Print",
+	"YRP Excel Sticker Print",
+	"SD YRP Cutting Order",
+	"SD YRP Cutting Bulk Lay Sheets",
+	"SD YRP Cutting Laysheet Planner",
+	"SD YRP Essdee Quality Inspection",
 ]
 
 # /web department workspaces a YRP UI Layout may select (Registered Experience).

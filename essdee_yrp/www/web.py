@@ -64,6 +64,15 @@ WEB_DOCTYPES = (
 	"SD YRP Lotwise Item Profit",
 	"YRP Purchase Invoice",
 	"YRP Bill Tracking",
+	"Purchase Order",
+	"SD YRP Cut Panel Movement",
+	"SD YRP Cut Bundle Edit",
+	"SD YRP Box Sticker Print",
+	"YRP Excel Sticker Print",
+	"SD YRP Cutting Order",
+	"SD YRP Cutting Bulk Lay Sheets",
+	"SD YRP Cutting Laysheet Planner",
+	"SD YRP Essdee Quality Inspection",
 )
 
 # boot.user key -> has_permission ptype used by the SPA's usePermissions composable.

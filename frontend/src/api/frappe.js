@@ -97,6 +97,12 @@ function requestError(message, status, payload = {}) {
 	return Object.assign(new Error(message), { status, exc_type: payload.exc_type, serverMessages: payload._server_messages })
 }
 
+/** Ends the Frappe session, then leaves /web for the login page. */
+export async function logOut() {
+	await invokeMethod("logout")
+	window.location.assign("/login")
+}
+
 export function uploadFile(file, options = {}) {
 	if (!(file instanceof File)) return Promise.reject(new Error("Choose a file to upload."))
 	const {

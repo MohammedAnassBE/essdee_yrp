@@ -1,3 +1,6 @@
+import { INSPECTION_FIELDS } from "./inspectionFields.js"
+import { documentOverviewHasValue, formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+
 export const INSPECTION_DOCTYPE = "SD YRP Essdee Quality Inspection"
 export const INSPECTION_LIST_COLUMNS = [
 	"inspection_type", "against_id", "lot", "item", "supplier", "result", "posting_date",
@@ -32,6 +35,69 @@ export function inspectionActionItems(actions = {}, handlers = {}) {
 
 export function resultTone(result) {
 	return { Pass: "success", Fail: "danger", Hold: "warning" }[result] || "neutral"
+}
+
+export const INSPECTION_TABS = [
+	{ key: "inspection", label: "Inspection" },
+	{ key: "details", label: "Details" },
+	{ key: "debits", label: "Debits" },
+]
+
+export const INSPECTION_DETAIL_SECTIONS = [
+	{ key: "work_order", label: "Work Order", icon: "pi pi-briefcase", fields: ["against_id", "item", "lot", "supplier", "supplier_name", "order_qty"] },
+	{ key: "aql", label: "AQL", icon: "pi pi-sliders-h", fields: ["checking_level", "major_aql_level", "minor_aql_level", "sample_piece_count", "major_defect_maximum_allowed", "minor_defect_maximum_allowed"] },
+	{ key: "inspection", label: "Inspection", icon: "pi pi-verified", fields: ["inspection_type", "unit_name", "posting_date", "description", "inspector", "calculated_result", "amended_from"] },
+	{ key: "third_party", label: "Third party", icon: "pi pi-building", fields: ["third_party_supplier", "third_party_supplier_name"] },
+]
+
+export function inspectionDetailFields(record = {}) {
+	return INSPECTION_DETAIL_SECTIONS.flatMap((section) => {
+		if (section.key === "third_party" && Number(record.is_third_party) !== 1) return []
+		return section.fields.filter((key) => documentOverviewHasValue(record[key])).map((key) => ({
+			...INSPECTION_FIELDS[key], value: record[key],
+			...(key === "against_id" ? { link_doctype: "YRP Work Order" } : {}),
+			...(linkLabel(key, record) ? { value: linkLabel(key, record), link_name: record[key] } : {}),
+		}))
+	})
+}
+
+export function inspectionHeaderFacts(record = {}, fieldnames = ["against_id", "item", "lot", "supplier", "inspection_type", "posting_date"]) {
+	return fieldnames
+		.filter((key) => documentOverviewHasValue(record[key]))
+		.map((key) => ({
+			...INSPECTION_FIELDS[key], value: record[key],
+			doctype: key === "against_id" ? "YRP Work Order" : INSPECTION_FIELDS[key].fieldtype === "Link" ? INSPECTION_FIELDS[key].options : "",
+			display: linkLabel(key, record) || formatDocumentOverviewValue({ ...INSPECTION_FIELDS[key], value: record[key] }),
+		}))
+}
+
+export function inspectionSummaryFacts(record = {}) {
+	return inspectionHeaderFacts(record, [
+		"checking_level", "major_aql_level", "minor_aql_level", "unit_name", "description",
+		...(Number(record.is_third_party) === 1 ? ["third_party_supplier"] : []),
+	])
+}
+
+export function inspectionSelectedChips(selection = {}) {
+	return [["colours", "colour", "Colours"], ["sizes", "size", "Sizes"]].flatMap(([key, field, label]) => {
+		const values = (selection[key] || []).filter((row) => Number(row.selected) === 1 && documentOverviewHasValue(row[field])).map((row) => row[field])
+		return values.length ? [{ key, label, values }] : []
+	})
+}
+
+export function inspectionStatTiles(record = {}) {
+	const number = (value) => formatDocumentOverviewValue({ fieldtype: "Int", value })
+	const tiles = [["order_qty", "Order Qty"], ["offer_qty", "Offer Qty"], ["sample_piece_count", "Sample Size"]]
+		.map(([key, label]) => ({ key, label, value: number(record[key]), hint: "", tone: "neutral" }))
+	for (const [key, label] of [["major", "Major"], ["minor", "Minor"]]) {
+		const allowed = record[`${key}_defect_maximum_allowed`]
+		const found = record[`${key}_defect_found`] ?? 0
+		const hasLimit = documentOverviewHasValue(allowed) && Number.isFinite(Number(allowed))
+		tiles.push({ key, label, value: number(found), hint: hasLimit ? `of ${number(allowed)} allowed` : "Limit not set",
+			tone: hasLimit ? Number(found) <= Number(allowed) ? "success" : "danger" : "neutral" })
+	}
+	if (Number(record.spi_found)) tiles.push({ key: "spi_found", label: "SPI Found", value: number(record.spi_found), hint: "", tone: "neutral" })
+	return tiles
 }
 
 export function selectedValues(rows = [], field) {

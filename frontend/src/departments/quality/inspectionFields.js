@@ -7,9 +7,11 @@ export const INSPECTION_FIELDS = {
 	item: link("item", "Item", "Item", readonly),
 	lot: link("lot", "Lot", "SD YRP Lot", readonly),
 	supplier: link("supplier", "Supplier", "Supplier", readonly),
+	supplier_name: field("supplier_name", "Supplier Name", "Data", readonly),
 	order_qty: field("order_qty", "Order Qty", "Int", readonly),
 	is_third_party: field("is_third_party", "Third party", "Check"),
 	third_party_supplier: link("third_party_supplier", "Third party supplier", "Supplier"),
+	third_party_supplier_name: field("third_party_supplier_name", "Third party supplier name", "Data", readonly),
 	inspection_type: field("inspection_type", "Inspection Type", "Select", { options: "\nPre-FInal\nFinal\nRe-Final", reqd: 1 }),
 	unit_name: link("unit_name", "Unit Name", "Supplier"),
 	posting_date: field("posting_date", "Posting Date", "Date", readonly),
@@ -27,19 +29,19 @@ export const INSPECTION_FIELDS = {
 	result: field("result", "Result", "Select", { options: "\nPass\nFail\nHold" }),
 	calculated_result: field("calculated_result", "Calculated Result", "Data", readonly),
 	inspector: link("inspector", "Inspector", "User", readonly),
+	amended_from: link("amended_from", "Amended From", "SD YRP Essdee Quality Inspection", readonly),
 	measurement_deviation: field("measurement_deviation", "Measurement Deviation", "Small Text"),
 	remarks_and_suggestions: field("remarks_and_suggestions", "Remarks and Suggestions", "Small Text"),
 }
 
 export const INSPECTION_GROUPS = [
-	{ key: "work_order", label: "Work Order", fields: ["against_id", "item", "lot", "supplier", "order_qty"] },
-	{ key: "third_party", label: "Third party", fields: ["is_third_party", "third_party_supplier"] },
-	{ key: "inspection", label: "Inspection", fields: ["inspection_type", "unit_name", "posting_date", "description"] },
-	{ key: "selection", label: "Colours & Sizes", fields: [] },
-	{ key: "quantities", label: "Quantities & AQL", fields: ["offer_qty", "checking_level", "major_aql_level", "minor_aql_level", "sample_piece_count", "major_defect_maximum_allowed", "minor_defect_maximum_allowed"] },
-	{ key: "defects", label: "Defects", fields: ["major_defect_found", "minor_defect_found", "spi_found", "result"] },
-	{ key: "notes", label: "Notes", fields: ["measurement_deviation", "remarks_and_suggestions"] },
-	{ key: "approval", label: "Approval sheet", fields: [] },
+	{ key: "work_order", label: "Work Order", icon: "pi pi-briefcase", fields: ["against_id", "item", "lot", "supplier", "order_qty"] },
+	{ key: "inspection", label: "Inspection", icon: "pi pi-verified", fields: ["inspection_type", "unit_name", "posting_date", "description", "is_third_party", "third_party_supplier"] },
+	{ key: "selection", label: "Colours & Sizes", icon: "pi pi-tags", fields: [] },
+	{ key: "quantities", label: "Quantities & AQL", icon: "pi pi-sliders-h", fields: ["offer_qty", "checking_level", "major_aql_level", "minor_aql_level", "sample_piece_count", "major_defect_maximum_allowed", "minor_defect_maximum_allowed"] },
+	{ key: "defects", label: "Defects", icon: "pi pi-search", fields: ["major_defect_found", "minor_defect_found", "spi_found", "result"] },
+	{ key: "notes", label: "Notes", icon: "pi pi-align-left", fields: ["measurement_deviation", "remarks_and_suggestions"] },
+	{ key: "approval", label: "Approval sheet", icon: "pi pi-image", fields: [] },
 ]
 
 export function visibleInspectionFields(group, values, view = false) {

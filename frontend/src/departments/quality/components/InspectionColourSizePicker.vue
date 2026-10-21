@@ -60,7 +60,7 @@ function setAll(group, selected) {
 .inspection-picker h3 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-body); }
 .inspection-picker header > div { display: flex; flex-wrap: wrap; }
 .inspection-picker :deep(.p-button) { min-height: 44px; }
-.inspection-picker__chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--erp-space-2); }
+.inspection-picker__chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr)); gap: var(--erp-space-2); margin-top: var(--erp-space-2); }
 .inspection-picker__chip { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: var(--erp-space-2); padding: var(--erp-space-2); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); color: var(--erp-text); background: var(--erp-surface); font: inherit; overflow-wrap: anywhere; cursor: pointer; text-align: left; }
 .inspection-picker__chip--selected { border-color: var(--erp-accent); color: var(--erp-accent-ink); background: var(--erp-accent-soft); }
 .inspection-picker__chip:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; }

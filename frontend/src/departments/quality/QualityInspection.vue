@@ -1,44 +1,51 @@
 <template>
-	<DepartmentPage title="Quality Inspection" back-to="/quality/inspections" back-label="Inspections" :show-title="false" flat full-width>
-		<ListPageSkeleton v-if="loading" />
-		<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
-		<section v-else class="quality-page" :aria-busy="Boolean(acting)">
-			<header class="quality-page__header">
-				<div><h1 class="erp-doc-title">{{ record.name }}</h1><div class="quality-page__badges">
-					<DocumentStatusBadge :docstatus="record.docstatus" />
-					<DocumentStatusBadge v-if="record.result" :label="record.result" :tone="resultTone(record.result)" />
-				</div></div>
-			</header>
-			<section v-for="group in INSPECTION_GROUPS" :key="group.key" class="quality-page__section" :aria-labelledby="`inspection-view-${group.key}`">
-				<h2 :id="`inspection-view-${group.key}`">{{ group.label }}</h2>
-				<InspectionColourSizePicker v-if="group.key === 'selection'" :model-value="workspace.colour_size_data || {}" readonly />
-				<template v-else-if="group.key === 'approval'">
-					<a v-if="record.upload_quality_approval_sheet" class="quality-page__image" :href="record.upload_quality_approval_sheet" target="_blank" rel="noopener" aria-label="Open approval sheet image">
-						<img :src="record.upload_quality_approval_sheet" alt="Quality approval sheet" />
-					</a>
-					<span v-else class="quality-page__muted">No approval sheet attached.</span>
+	<DepartmentPage title="Quality Inspection" back-to="/quality/inspections" back-label="Inspections" :show-title="false" flat full-width inline-navigation>
+		<section class="purchase-lot-frame merch-lot-frame quality-inspection-frame" :aria-busy="Boolean(acting)">
+			<FabricDocumentWorkspace :doctype="INSPECTION_DOCTYPE" title="Quality Inspection" :workspace="workspace" :loading="loading" :error="loadError"
+				:acting="acting" :show-lifecycle-actions="false" :show-delete="false" @reload="load">
+				<template #header="{ record, headingId }">
+					<div class="quality-inspection-header">
+						<div class="quality-inspection-header__title">
+							<h1 class="erp-doc-title" :id="headingId">{{ record.name }}</h1>
+							<DocumentStatusBadge :docstatus="record.docstatus" />
+							<InspectionResultBadge :result="record.result" />
+						</div>
+						<InspectionSummary :record="record" header />
+					</div>
 				</template>
-				<div v-else class="quality-page__grid">
-					<dl v-for="field in visibleInspectionFields(group, record, true)" :key="field.fieldname" class="quality-page__fact">
-						<dt>{{ field.label }}</dt>
-						<dd><DocumentLink v-if="['Link', 'Dynamic Link'].includes(field.fieldtype)" :doctype="field.fieldtype === 'Dynamic Link' ? record[field.options] : field.options" :name="record[field.fieldname]" :label="linkLabel(field.fieldname, record)" current-path="/web/quality/inspections" />
-							<DocumentStatusBadge v-else-if="['result', 'calculated_result'].includes(field.fieldname) && record[field.fieldname]" :label="record[field.fieldname]" :tone="resultTone(record[field.fieldname])" />
-							<template v-else>{{ formatDocumentOverviewValue({ ...field, value: record[field.fieldname] }) }}</template>
-						</dd>
-					</dl>
-				</div>
-			</section>
-			<InspectionDebitDetails :debits="workspace.debit_details || []" />
-			<footer class="quality-page__footer quality-page__actions">
-				<DocumentActionStrip :actions="actions">
-					<template v-if="workspace.actions?.submit?.allowed" #primary>
-						<DocumentSaveButton class="document-action-strip__primary" saved :dirty="false" :show-save="false" show-submit
-							:docstatus="Number(record.docstatus)" :document-label="`Quality Inspection ${record.name}`" :disabled="Boolean(acting)" :loading="acting === 'submit'" @submit="submit" />
-					</template>
-				</DocumentActionStrip>
-			</footer>
+				<template #header-actions>
+					<DocumentActionStrip :actions="actions">
+						<template v-if="workspace.actions?.submit?.allowed" #primary>
+							<DocumentSaveButton class="document-action-strip__primary" saved :dirty="false" :show-save="false" show-submit
+								:docstatus="Number(record.docstatus)" :document-label="`Quality Inspection ${record.name}`" :disabled="Boolean(acting)" :loading="acting === 'submit'" @submit="submit" />
+						</template>
+					</DocumentActionStrip>
+				</template>
+				<template #matrix>
+					<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
+						<TabList class="lot-tablist">
+							<Tab v-for="tab in INSPECTION_TABS" :key="tab.key" :value="tab.key">{{ tab.label }}<span v-if="tab.key === 'debits'">{{ workspace.debit_details?.length || 0 }}</span></Tab>
+						</TabList>
+						<TabPanels class="lot-panels">
+							<TabPanel v-if="activeTab === 'inspection'" value="inspection"><InspectionSummary :record="record" :selection="workspace.colour_size_data || {}" /></TabPanel>
+							<TabPanel v-if="activeTab === 'details'" value="details"><DocumentOverview :fields="detailFields" :definitions="INSPECTION_DETAIL_SECTIONS" id-prefix="quality-inspection" aria-label="Inspection details" /></TabPanel>
+							<TabPanel v-if="activeTab === 'debits'" value="debits">
+								<InspectionDebitDetails v-if="workspace.debit_details?.length" :debits="workspace.debit_details" />
+								<p v-else class="quality-empty-state">No debits raised for this inspection.</p>
+							</TabPanel>
+						</TabPanels>
+					</Tabs>
+				</template>
+				<template #rail>
+					<div class="quality-rail-metric quality-result-metric">
+						<span>Result</span><InspectionResultBadge :result="record.result" />
+						<small v-if="record.calculated_result && record.calculated_result !== record.result">Calculated: {{ record.calculated_result }}</small>
+					</div>
+					<div v-if="record.inspector_name || record.inspector" class="quality-rail-metric"><span>Inspector</span><strong>{{ record.inspector_name || record.inspector }}</strong></div>
+					<InspectionApprovalSheet :key="currentName" :src="record.upload_quality_approval_sheet" />
+				</template>
+			</FabricDocumentWorkspace>
 			<DocumentDeleteButton v-if="workspace.actions?.delete?.allowed" ref="deleteControl" :show-trigger="false" :doctype="INSPECTION_DOCTYPE" :name="record.name" :docstatus="record.docstatus" :disabled="Boolean(acting)" redirect-to="/quality/inspections" />
-			<DocumentPrintButton ref="printControl" :show-trigger="false" :doctype="INSPECTION_DOCTYPE" :name="record.name" :docstatus="record.docstatus" :formats="workspace.print_formats || []" :disabled="Boolean(acting)" />
 		</section>
 		<InspectionResultDialog :key="`result-${currentName}`" v-model:visible="resultVisible" :busy="acting === 'update_status'" @confirm="updateResult" />
 		<InspectionDebitDialog :key="`debit-${currentName}`" v-model:visible="debitVisible" :busy="acting === 'create_debit'" @confirm="createDebit" />
@@ -48,29 +55,35 @@
 </template>
 
 <script setup>
+import Tab from "primevue/tab"
+import TabList from "primevue/tablist"
+import TabPanel from "primevue/tabpanel"
+import TabPanels from "primevue/tabpanels"
+import Tabs from "primevue/tabs"
 import { useToast } from "primevue/usetoast"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { cancelDoc, submitDoc } from "../../api/frappe.js"
 import { createInspectionDebit, getInspectionWorkspace, updateInspectionResult } from "../../api/quality.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
-import DocumentLink from "../../components/common/DocumentLink.vue"
-import ListPageSkeleton from "../../components/common/ListPageSkeleton.vue"
-import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
-import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
-import InspectionColourSizePicker from "./components/InspectionColourSizePicker.vue"
 import InspectionDebitDetails from "./components/InspectionDebitDetails.vue"
 import InspectionDebitDialog from "./components/InspectionDebitDialog.vue"
 import InspectionResultDialog from "./components/InspectionResultDialog.vue"
-import { INSPECTION_GROUPS, visibleInspectionFields } from "./inspectionFields.js"
-import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
-import { INSPECTION_DOCTYPE, copyText, inspectionActionItems, linkLabel, inspectionShareCaption, resultTone } from "./qualityViews.js"
+import DocumentOverview from "../../components/documents/DocumentOverview.vue"
+import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
+import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
+import InspectionApprovalSheet from "./components/InspectionApprovalSheet.vue"
+import InspectionResultBadge from "./components/InspectionResultBadge.vue"
+import InspectionSummary from "./components/InspectionSummary.vue"
+import { INSPECTION_DOCTYPE, INSPECTION_TABS, INSPECTION_DETAIL_SECTIONS, copyText, inspectionActionItems, inspectionDetailFields, inspectionShareCaption } from "./qualityViews.js"
+import "../purchase/lot/lot.css"
+import "../merch/lot/merchLot.css"
 import "./quality.css"
 
 const props = defineProps({ inspectionId: { type: String, default: "" } })
@@ -86,9 +99,13 @@ const resultVisible = ref(false)
 const debitVisible = ref(false)
 const cancelVisible = ref(false)
 const deleteControl = ref(null)
-const printControl = ref(null)
 const currentName = computed(() => props.inspectionId || String(route.params.inspectionId || ""))
 const record = computed(() => workspace.value.record || {})
+const detailFields = computed(() => inspectionDetailFields(record.value))
+const activeTab = computed({
+	get: () => INSPECTION_TABS.some((tab) => tab.key === route.query.tab) ? route.query.tab : "inspection",
+	set: (tab) => router.replace({ query: { ...route.query, tab }, state: preserveListNavigationState() }),
+})
 let active = true
 let loadSequence = 0
 const actions = computed(() => {
@@ -101,10 +118,6 @@ const actions = computed(() => {
 		share,
 		cancel: () => { cancelVisible.value = true },
 		delete: () => deleteControl.value?.open(),
-	})
-	if (workspace.value.permissions?.can_print || workspace.value.print_formats?.length) items.push({
-		key: "print", label: "Print", icon: "pi pi-print", menuOnly: true,
-		command: () => printControl.value?.open(), disabled: !workspace.value.print_formats?.length,
 	})
 	return items.map((action) => ({ ...action, disabled: Boolean(acting.value) || Boolean(action.disabled) }))
 })
@@ -185,6 +198,7 @@ async function share() {
 }
 
 watch(currentName, () => {
+	workspace.value = {}
 	resultVisible.value = debitVisible.value = cancelVisible.value = false
 	acting.value = error.value = ""
 	load()

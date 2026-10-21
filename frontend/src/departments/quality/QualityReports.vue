@@ -76,7 +76,7 @@ onMounted(load)
 .quality-reports { display: grid; min-width: 0; gap: var(--erp-space-2); padding-top: 0; }
 .quality-reports__loading { display: grid; gap: var(--erp-space-3); }
 .quality-reports__tabs { min-width: 0; }
-.quality-reports__tabs :deep(.p-tab) { display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 9px 14px; font-size: 0.86rem; white-space: nowrap; }
+.quality-reports__tabs :deep(.p-tab) { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 9px 14px; font-size: var(--erp-font-size-table); white-space: nowrap; }
 .quality-reports__panels { padding: 12px 0 0; background: transparent; }
 .quality-reports__panels :deep(.p-tabpanel) { padding: 0; }
 .quality-reports__mobile { display: none; }

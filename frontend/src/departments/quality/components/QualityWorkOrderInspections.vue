@@ -1,6 +1,6 @@
 <template>
 	<section class="quality-wo-inspections" aria-label="Quality Inspections">
-		<h2>Quality Inspections</h2>
+		<header><i class="pi pi-verified" aria-hidden="true" /><h2>Quality Inspections</h2><span v-if="!loading && canRead" class="quality-wo-inspections__muted">{{ inspections.length }}</span></header>
 		<span v-if="loading" class="quality-wo-inspections__muted">Loading inspections…</span>
 		<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 		<template v-else-if="canRead">
@@ -10,7 +10,7 @@
 					<div class="quality-wo-inspections__meta"><span>{{ inspection.inspection_type }} · {{ formatDate(inspection.posting_date) }}</span><DocumentStatusBadge :docstatus="inspection.docstatus" /><DocumentStatusBadge v-if="inspection.result" :label="inspection.result" :tone="resultTone(inspection.result)" /></div>
 				</li>
 			</ul>
-			<span v-else class="quality-wo-inspections__muted">No inspections yet.</span>
+			<p v-else class="quality-wo-inspections__empty"><i class="pi pi-inbox" aria-hidden="true" /> No inspections yet.</p>
 		</template>
 		<span v-else class="quality-wo-inspections__muted">You do not have permission to view inspections.</span>
 	</section>
@@ -67,6 +67,9 @@ onBeforeUnmount(() => { ++loadSequence })
 
 <style scoped>
 .quality-wo-inspections { display: grid; grid-column: 1 / -1; min-width: 0; gap: var(--erp-space-2); padding: var(--erp-space-3); border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); }
+.quality-wo-inspections header { display: flex; align-items: center; gap: var(--erp-space-2); }
+.quality-wo-inspections header > i { color: var(--erp-accent-ink); }
+.quality-wo-inspections__empty { margin: 0; padding-block: var(--erp-space-3); color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .quality-wo-inspections h2 { margin: 0; font-size: var(--erp-font-size-body); }
 .quality-wo-inspections ul { display: grid; gap: var(--erp-space-2); max-height: 320px; overflow: auto; margin: 0; padding: 0; list-style: none; }
 .quality-wo-inspections li { display: grid; gap: var(--erp-space-1); padding-block: var(--erp-space-2); border-top: 1px solid var(--erp-border); overflow-wrap: anywhere; }

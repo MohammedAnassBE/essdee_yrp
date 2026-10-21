@@ -1,17 +1,17 @@
 <template>
 	<DepartmentPage title="Quality Inspection" :back-to="backTo" back-label="Inspections" :show-title="false" flat full-width>
-		<section class="quality-page" :aria-busy="busy" aria-label="Quality Inspection editor">
+		<section class="quality-page quality-editor" :aria-busy="busy" aria-label="Quality Inspection editor">
 			<header class="quality-page__header"><h1 class="erp-doc-title">{{ currentName ? `Edit ${currentName}` : amendFrom ? `Amend ${amendFrom}` : 'New Quality Inspection' }}</h1></header>
 			<ListPageSkeleton v-if="loading" />
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<template v-else>
-				<section v-for="group in INSPECTION_GROUPS" :key="group.key" class="quality-page__section" :aria-labelledby="`inspection-${group.key}`">
-					<h2 :id="`inspection-${group.key}`">{{ group.label }}</h2>
+				<section v-for="group in INSPECTION_GROUPS" :key="group.key" class="quality-page__section document-overview__section" :aria-labelledby="`inspection-${group.key}`">
+					<header class="quality-editor__section-header"><i :class="group.icon" aria-hidden="true" /><h2 :id="`inspection-${group.key}`">{{ group.label }}</h2></header>
 					<InspectionColourSizePicker v-if="group.key === 'selection'" v-model="selection" :disabled="busy" />
 					<InspectionImageUpload v-else-if="group.key === 'approval'" v-model="form.upload_quality_approval_sheet"
 						:docname="currentName" :disabled="busy && !uploading" @uploading-change="uploading = $event" />
 					<div v-else class="quality-page__grid">
-						<template v-for="field in visibleInspectionFields(group, form)" :key="field.fieldname">
+						<template v-for="field in editorFields(group)" :key="field.fieldname">
 							<dl v-if="field.read_only" class="quality-page__fact">
 								<dt>{{ field.label }}</dt><dd><DocumentLink v-if="field.fieldtype === 'Link'" :doctype="field.options" :name="form[field.fieldname]" :label="linkLabel(field.fieldname, form)" />
 									<template v-else>{{ formatDocumentOverviewValue({ ...field, value: form[field.fieldname] }) }}</template></dd>
@@ -19,10 +19,11 @@
 							<FormField v-else v-model="form[field.fieldname]" :field="field" :form="form" :required="Boolean(field.reqd)" :disabled="busy" />
 						</template>
 					</div>
+					<InspectionStatTiles v-if="group.key === 'quantities'" :record="form" :only="['sample_piece_count', 'major', 'minor']" />
 					<p v-if="group.key === 'work_order' && fetchingWorkOrder" role="status">Loading Work Order…</p>
 					<p v-if="group.key === 'quantities' && fetchingAql" role="status">Calculating AQL limits…</p>
 					<div v-if="group.key === 'defects' && preview" class="quality-page__preview">
-						<span>Calculated result preview</span><DocumentStatusBadge :label="preview" :tone="resultTone(preview)" />
+						<span>Calculated result preview</span><InspectionResultBadge :result="preview" />
 					</div>
 				</section>
 				<footer class="quality-page__footer">
@@ -54,13 +55,14 @@ import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
-import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
 import InspectionColourSizePicker from "./components/InspectionColourSizePicker.vue"
 import InspectionImageUpload from "./components/InspectionImageUpload.vue"
+import InspectionResultBadge from "./components/InspectionResultBadge.vue"
+import InspectionStatTiles from "./components/InspectionStatTiles.vue"
 import { INSPECTION_GROUPS, visibleInspectionFields } from "./inspectionFields.js"
-import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionPayload, linkLabel, inspectionResultPreview, resultTone, validAqlInputs } from "./qualityViews.js"
+import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionPayload, linkLabel, inspectionResultPreview, validAqlInputs } from "./qualityViews.js"
 import "./quality.css"
 
 const props = defineProps({ inspectionId: { type: String, default: "" } })
@@ -97,6 +99,12 @@ const preview = computed(() => aqlReady.value ? inspectionResultPreview(form) : 
 const canSave = computed(() => workOrderReady.value && aqlReady.value && validAqlInputs(form)
 	&& Boolean(form.against_id && form.inspection_type)
 	&& (!Number(form.is_third_party) || Boolean(form.third_party_supplier)))
+
+function editorFields(group) {
+	return visibleInspectionFields(group, form).filter((field) => ![
+		"sample_piece_count", "major_defect_maximum_allowed", "minor_defect_maximum_allowed",
+	].includes(field.fieldname))
+}
 
 async function load() {
 	const sequence = ++loadSequence

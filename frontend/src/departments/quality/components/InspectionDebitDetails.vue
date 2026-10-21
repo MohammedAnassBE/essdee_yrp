@@ -1,6 +1,6 @@
 <template>
-	<section v-if="debits.length" class="quality-page__section" aria-label="Debit Details">
-		<h2>Debit Details · {{ debits.length }} · Total {{ money(total) }}</h2>
+	<section v-if="debits.length" class="quality-debits" aria-label="Debit Details">
+		<p class="quality-debits__total">Total <strong>{{ money(total) }}</strong></p>
 		<div class="inspection-debits" role="region" aria-label="Inspection debits" tabindex="0">
 			<table>
 				<thead><tr><th>Debit</th><th>Type</th><th>Value</th><th>Reason</th><th>Document</th><th>Status</th><th>Approved by</th><th>Created</th></tr></thead>
@@ -30,6 +30,9 @@ const total = computed(() => props.debits.reduce((sum, debit) => sum + Number(de
 
 <style scoped>
 .inspection-debits { width: 100%; max-width: 100%; overflow-x: auto; }
+.quality-debits { min-width: 0; }
+.quality-debits__total { display: flex; justify-content: flex-end; gap: var(--erp-space-2); margin: 0 0 var(--erp-space-3); color: var(--erp-text-muted); }
+.quality-debits__total strong { color: var(--erp-text); }
 .inspection-debits table { width: 100%; border-collapse: collapse; text-align: left; }
 .inspection-debits th, .inspection-debits td { padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); vertical-align: top; }
 .inspection-debits th { color: var(--erp-text-muted); white-space: nowrap; }

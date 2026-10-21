@@ -250,3 +250,10 @@ test("F-B18 quantity input labels", () => {
 	assert.match(fabricLabel, /FABRIC · Liver · 60 Dia · Quantity/)
 	assert.doesNotMatch(fabricLabel, /ROW-1/)
 })
+
+test("F-B36 Cutting Plan From CPM Stock Entry offers Skip Transit", () => {
+	const source = read("departments/cutting/CpmMovementTransactionDialog.vue")
+	assert.match(source, /<Checkbox v-model="form.skip_transit" binary/)
+	assert.match(source, /skip_transit: false/)
+	assert.match(source, /skip_transit: form.skip_transit \? 1 : 0/)
+})

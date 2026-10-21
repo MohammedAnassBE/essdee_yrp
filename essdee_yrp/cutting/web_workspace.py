@@ -1533,6 +1533,7 @@ def create_movement_transaction(cutting_plan, movement, operation, values=None, 
 			frappe.throw(_("To Warehouse is required."))
 		doc = new_transaction_from_defaults("YRP Stock Entry", defaults)
 		doc.to_warehouse = to_warehouse
+		doc.skip_transit = cint(values.get("skip_transit"))
 		doc.comments = _("Cut panels from Cutting Plan {0}").format(plan.name)
 	else:
 		defaults = build_delivery_challan_defaults(cpm.name, plan.work_order)

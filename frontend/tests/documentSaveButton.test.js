@@ -146,7 +146,7 @@ for (const kind of ["WorkOrderDeliveryDialog", "CpmMovementTransactionDialog", "
 		const created = { name: "DRAFT-1", docstatus: 0, modified: "old" }
 		const dcEditor = { record: { ...created, modified: "latest" }, permissions: documentPermissions, values: { vehicle_no: "NA" }, matrices: { items: group, correction_items: [] } }
 		const root = mountComponent(component(`departments/cutting/${kind}`, {
-			"primevue/button": Button, "primevue/select": props => Vue.h("select", props), "primevue/skeleton": () => null,
+			"primevue/button": Button, "primevue/select": props => Vue.h("select", props), "primevue/checkbox": props => Vue.h("checkbox", props), "primevue/skeleton": () => null,
 			"primevue/dialog": (props, { slots }) => props.visible ? Vue.h("dialog", props, [slots.default?.(), slots.footer?.()]) : null,
 			"../../components/common/LinkField.vue": props => Vue.h("link", props),
 			"../../components/documents/DocumentErrorDialog.vue": () => null,

@@ -7,6 +7,7 @@ from yrp.yrp.doctype.yrp_purchase_invoice import yrp_purchase_invoice as purchas
 from essdee_yrp.accounts import purchase_invoice_workspace
 from essdee_yrp.cut_panel_store import movement_workspace, report_workspace
 from essdee_yrp.cutting import movement
+from essdee_yrp.cutting import web_workspace as cutting_workspace
 from essdee_yrp.erp_purchase_invoice import _create_local_erp_invoice, _validate_supplier_invoice_number
 from essdee_yrp.fabric_store.documents import work_order
 from essdee_yrp.finishing import grn
@@ -202,6 +203,29 @@ class TestCutPanelTransactionRecovery(TestCase):
 				)
 			self.assertEqual(doc.skip_transit, int(skip))
 			doc.insert.assert_called_once()
+
+	def test_cutting_plan_from_cpm_stock_entry_passes_skip_transit(self):
+		for skip in (False, True):
+			doc = MagicMock()
+			cpm = MagicMock(docstatus=1)
+			cpm.name = "CPM-1"
+			with (
+				patch.object(cutting_workspace, "_get_plan", return_value=frappe._dict(name="CP-1")),
+				patch.object(cutting_workspace, "_require_active_plan"),
+				patch.object(cutting_workspace, "_plan_context", return_value={}),
+				patch.object(frappe, "get_doc", return_value=cpm),
+				patch.object(cutting_workspace, "_assert_movement_belongs"),
+				patch.object(cutting_workspace, "build_stock_entry_defaults", return_value={}),
+				patch.object(cutting_workspace, "new_transaction_from_defaults", return_value=doc),
+				patch.object(cutting_workspace, "_submit_if_requested"),
+				patch.object(cutting_workspace, "_append_transaction_link"),
+				patch.object(cutting_workspace, "_transaction_payload", return_value={}),
+			):
+				cutting_workspace.create_movement_transaction(
+					"CP-1", "CPM-1", "stock_entry", {"to_warehouse": "WAREHOUSE-1", "skip_transit": skip}
+				)
+			self.assertEqual(doc.skip_transit, int(skip))
+			self.assertEqual(doc.to_warehouse, "WAREHOUSE-1")
 
 	def test_bundle_report_hides_name_but_keeps_internal_key(self):
 		self.assertNotIn("name", [column["fieldname"] for column in report_workspace.CUT_BUNDLE_COLUMNS])

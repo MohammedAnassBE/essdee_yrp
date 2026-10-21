@@ -37,6 +37,29 @@ yrp_job_worker_stock_variant = ["essdee_yrp.finishing.loose_piece.get_loose_piec
 yrp_attribute_link_context = {"lot": "SD YRP Lot", "cutting_plan": "SD YRP Cutting Plan"}
 
 fixtures = [
+	# Production MRP roles that no installed app's DocType permissions create.
+	{
+		"dt": "Role",
+		"prefix": "00",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Blogger",
+					"Custom User Dashboard Manager",
+					"DocType Reader",
+					"FG Item Manager",
+					"Factory Manager",
+					"Finishing User",
+					"Lot Planner",
+					"Scanner User",
+					"Senior Merch",
+					"Spine User",
+				],
+			]
+		],
+	},
 	# Export only fields explicitly owned by this customization app. A patch
 	# stamps the historical fields before this strict filter is used.
 	{

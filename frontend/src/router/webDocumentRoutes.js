@@ -1,4 +1,5 @@
 const recordRoutes = {
+	"SD YRP Essdee Quality Inspection": (name) => `/web/quality/inspections/${encodeURIComponent(name)}`,
 	"Item": (name) => `/web/purchase/items/${encodeURIComponent(name)}`,
 	"YRP Production Order": (name) => `/web/sales/production-orders/${encodeURIComponent(name)}`,
 	"SD YRP Cutting Order": (name) => `/web/cutting/orders/${encodeURIComponent(name)}`,
@@ -24,6 +25,10 @@ const recordRoutes = {
 }
 
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/quality": {
+		"YRP Work Order": (name) => `/web/quality/work-orders/${encodeURIComponent(name)}`,
+		"SD YRP Essdee Quality Inspection": recordRoutes["SD YRP Essdee Quality Inspection"],
+	},
 	"/sewing": {
 		"YRP Work Order": (name) => `/web/sewing/work-orders/${encodeURIComponent(name)}`,
 		"YRP Delivery Challan": (name) => `/web/sewing/delivery-challans/${encodeURIComponent(name)}`,

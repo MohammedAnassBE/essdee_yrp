@@ -1,6 +1,6 @@
 <template>
 	<Button
-		v-if="formats !== null || permissions?.print"
+		v-if="showTrigger && (formats !== null || permissions?.print)"
 		type="button"
 		class="document-print-button"
 		:label="label"
@@ -27,6 +27,7 @@ const props = defineProps({
 	docstatus: { type: [Number, String], default: 0 },
 	label: { type: String, default: "Print" },
 	disabled: { type: Boolean, default: false },
+	showTrigger: { type: Boolean, default: true },
 })
 
 const permissions = useDocumentPermissions(() => [props.doctype, props.name, props.docstatus], () => props.formats === null)
@@ -35,6 +36,7 @@ const dialogVisible = ref(false)
 function openDialog() {
 	if (!props.disabled && props.name && (props.formats === null ? permissions.value?.print : props.formats.length)) dialogVisible.value = true
 }
+defineExpose({ open: openDialog })
 </script>
 
 <style>

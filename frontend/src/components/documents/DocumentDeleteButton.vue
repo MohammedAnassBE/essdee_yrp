@@ -1,6 +1,6 @@
 <template>
 	<template v-if="canDelete">
-		<Button type="button" class="document-delete-button" label="Delete" icon="pi pi-trash" severity="danger" text :disabled="disabled || busy" @click="confirmVisible = true" />
+		<Button v-if="showTrigger" type="button" class="document-delete-button" label="Delete" icon="pi pi-trash" severity="danger" text :disabled="disabled || busy" @click="open" />
 		<DocumentConfirmationDialog v-model:visible="confirmVisible" title="Delete document?" :message="`Permanently delete ${documentLabel || doctype} ${name}?`" confirm-label="Delete" confirm-icon="pi pi-trash" :busy="busy" @confirm="remove" />
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 	</template>
@@ -26,6 +26,7 @@ const props = defineProps({
 	disabled: { type: Boolean, default: false },
 	redirectTo: { type: String, default: "" },
 	redirect: { type: Boolean, default: true },
+	showTrigger: { type: Boolean, default: true },
 })
 const emit = defineEmits(["deleted"])
 const router = useRouter()
@@ -37,6 +38,11 @@ const busy = ref(false)
 const error = ref("")
 const canDelete = computed(() => canDeleteDocument({ name: props.name, docstatus: props.docstatus, permissions: permissions.value }))
 let active = true
+
+function open() {
+	if (canDelete.value && !props.disabled && !busy.value) confirmVisible.value = true
+}
+defineExpose({ open })
 
 onBeforeUnmount(() => { active = false })
 

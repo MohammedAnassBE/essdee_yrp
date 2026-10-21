@@ -14,7 +14,7 @@
 		<div class="erp-table-wrap report-table-frame" role="region" :aria-label="`${config.title} results`" tabindex="0">
 			<table class="erp-data-table desk-report-table">
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr></thead>
-				<tbody><tr v-for="(row, index) in rows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ stockCellValue(cellValue(row, column), column) }}</td></tr></tbody>
+				<tbody><tr v-for="(row, index) in rows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellToneClass(row, column)]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr></tbody>
 			</table>
 		</div>
 	</ReportShell>
@@ -55,6 +55,11 @@ const {
 	layoutError, loadLayout, loadFieldOptions, applyLayout, saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: props.reportKey, sourceColumns, sourceRows })
 
+function cellToneClass(row, column) {
+	const tone = config.cellTone?.(column.fieldname, cellValue(row, column))
+	return ["success", "danger", "warning"].includes(tone) ? `desk-report-cell--${tone}` : ""
+}
+
 async function generate() {
 	const missing = config.filters.find(field => field.reqd && !filters[field.fieldname])
 	filterError.value = missing ? `${missing.label} is required.` : ""
@@ -85,4 +90,7 @@ onMounted(() => {
 .desk-report-check { display: flex; align-items: center; gap: 8px; font-size: var(--erp-font-size-caption); }
 .desk-report-table { width: max-content; min-width: 100%; }
 .desk-report-table td { white-space: pre-line; }
+.desk-report-table .desk-report-cell--success { color: var(--erp-success-text); font-weight: 650; }
+.desk-report-table .desk-report-cell--danger { color: var(--erp-danger); font-weight: 650; }
+.desk-report-table .desk-report-cell--warning { color: var(--erp-warning); font-weight: 650; }
 </style>

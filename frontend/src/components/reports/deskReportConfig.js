@@ -11,7 +11,18 @@ const purpose = values => ({ fieldname: "purpose", label: "Purpose", fieldtype: 
 	options: ["", ...values].map(value => ({ value, label: value || "All" })),
 })
 
+export function inspectionResultCellTone(fieldname, value) {
+	if (!String(fieldname).includes("result")) return ""
+	return { Pass: "success", Fail: "danger", Hold: "warning" }[value] || ""
+}
+
 export const deskReportConfig = {
+	"quality-inspection-rft": {
+		title: "Quality Inspection RFT", dateDefaults: "none", cellTone: inspectionResultCellTone,
+		filters: [link("lot", "Lot", "SD YRP Lot"), link("item", "Item", "Item"),
+			{ ...date("from_date", "From Date"), reqd: 0 }, { ...date("to_date", "To Date"), reqd: 0 },
+			link("supplier", "Supplier", "Supplier"), select("result", "Result", ["Pass", "Fail", "Hold"])],
+	},
 	"purchase-order-itemwise": {
 		title: "Purchase Order Itemwise", dateDefaults: "none",
 		filters: [link("item", "Item", "Item"), link("supplier", "Supplier", "Supplier"),

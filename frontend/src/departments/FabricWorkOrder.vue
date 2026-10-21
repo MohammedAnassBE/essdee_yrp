@@ -43,6 +43,7 @@
 				</template>
 
 				<template #rail>
+					<QualityWorkOrderInspections v-if="quality && workspace.record?.name" :work-order="workspace.record.name" @can-create="canCreateQualityInspection = $event" />
 					<div v-if="railTotals.length" class="work-order-page__totals"><div v-for="total in railTotals" :key="total.fieldname" class="work-order-page__total"><span>{{ total.label }}</span><strong>{{ formatNumber(total.value) }}</strong></div></div>
 					<WorkOrderActivityRail ref="activityRail" :work-order="workspace.record?.name || ''" :delivery-challans="deliveryChallans" :goods-received-notes="goodsReceivedNotes" :permissions="workspace.related_permissions || {}" @create="createRelated" @open="openRelatedRow" />
 				</template>
@@ -93,6 +94,7 @@ import WorkOrderActivityRail from "./fabric-store/WorkOrderActivityRail.vue"
 import WorkOrderDetails from "./fabric-store/WorkOrderDetails.vue"
 import WorkOrderOverview from "./fabric-store/WorkOrderOverview.vue"
 import WorkOrderSummary from "./fabric-store/WorkOrderSummary.vue"
+import QualityWorkOrderInspections from "./quality/components/QualityWorkOrderInspections.vue"
 
 const props = defineProps({
 	backTo: { type: String, default: "/fabric-store/work-orders" },
@@ -101,6 +103,8 @@ const props = defineProps({
 	newRouteName: { type: String, default: "fabric-work-order-new" },
 	editRouteName: { type: String, default: "fabric-work-order-edit" },
 	processCostViewRouteName: { type: String, default: "" },
+	showEditorActions: { type: Boolean, default: true },
+	quality: { type: Boolean, default: false },
 })
 
 const route = useRoute()
@@ -111,6 +115,7 @@ const error = ref("")
 const actionError = ref("")
 const activeTab = ref("overview")
 const workspace = ref({})
+const canCreateQualityInspection = ref(false)
 const actionVisible = ref(false)
 const actionMode = ref("")
 const actionEditor = ref({})
@@ -165,7 +170,13 @@ const showSummary = computed(() => Boolean(
 const workOrderActions = computed(() => {
 	const busy = Boolean(acting.value)
 	const actions = []
+	if (props.quality && Number(workspace.value.record?.docstatus) === 1 && canCreateQualityInspection.value) {
+		actions.push({ key: "new_quality_inspection", label: "New Quality Inspection", icon: "pi pi-verified", disabled: busy,
+			command: () => router.push({ path: "/quality/inspections/new", query: { against_id: workspace.value.record.name } }),
+		})
+	}
 	const add = (key, fallback, icon, command, options = {}) => {
+		if (!props.showEditorActions && ["save", "amend"].includes(key)) return
 		if (!capabilities.value[key]) return
 		actions.push({
 			key,
@@ -187,7 +198,7 @@ const workOrderActions = computed(() => {
 	add("submit", "Submit", "pi pi-check", () => requestLifecycleAction("submit"))
 	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true })
 	add("amend", "Amend", "pi pi-copy", () => requestLifecycleAction("amend"), { menuOnly: true })
-	if (workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateWorkOrder, disabled: busy, loading: false, menuOnly: true })
+	if (props.showEditorActions && workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateWorkOrder, disabled: busy, loading: false, menuOnly: true })
 	add("create_debit", "Create Debit", "pi pi-wallet", () => openAction("create_debit"), { menuOnly: true })
 	add("create_rework", "Create Rework", "pi pi-replay", () => openAction("create_rework"), { menuOnly: true })
 	add("calculate_pieces", "Calculate Pieces", "pi pi-calculator", () => openAction("calculate_pieces"), { menuOnly: true })
@@ -212,7 +223,8 @@ const workOrderActions = computed(() => {
 			: capabilities.value.create_delivery_challan
 				? "create_delivery_challan"
 				: capabilities.value.create_goods_received_note ? "create_goods_received_note" : capabilities.value.amend ? "amend" : ""
-	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
+	const preferredKey = actions.some(({ key }) => key === "new_quality_inspection") ? "new_quality_inspection" : primaryKey
+	return actions.map((action) => ({ ...action, primary: action.key === preferredKey }))
 })
 
 async function loadWorkspace(refresh = false) {
@@ -238,6 +250,7 @@ async function loadWorkspace(refresh = false) {
 	error.value = ""
 	if (!refresh) {
 		workspace.value = {}
+		canCreateQualityInspection.value = false
 		actionError.value = ""
 	}
 	try {
@@ -338,7 +351,7 @@ function openSewingPlan() {
 	if (capability.name) router.push({ path: "/sewing/plans", query: { ...(capability.source_context || {}), tab: "data-entry" } })
 }
 
-watch(() => route.params.workOrderId, () => loadWorkspace(false), { immediate: true })
+watch(() => [route.params.workOrderId, props.quality], () => loadWorkspace(false), { immediate: true })
 </script>
 
 <style scoped>

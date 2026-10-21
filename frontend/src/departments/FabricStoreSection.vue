@@ -17,6 +17,7 @@ import { computed, onMounted, ref, watch } from "vue"
 
 import { getFabricStoreCapabilities } from "../api/fabricStore.js"
 import { getSewingWorkOrderProcesses } from "../api/sewing.js"
+import { getQualityCapabilities } from "../api/quality.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import ListPageSkeleton from "../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
@@ -67,10 +68,14 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
-		const payload = await getFabricStoreCapabilities() || {}
-		const nextCapability = payload.sections?.[section] || null
-		const filters = section === "work_orders" && basePath === "/sewing" && nextCapability
-			? [["process_name", "in", await getSewingWorkOrderProcesses() || []]]
+		const quality = basePath === "/quality"
+		const payload = await (quality ? getQualityCapabilities() : getFabricStoreCapabilities()) || {}
+		const sectionCapability = payload.sections?.[section] || null
+		const nextCapability = quality
+			? (sectionCapability?.can_read ? { ...sectionCapability, can_create: false } : null)
+			: sectionCapability
+		const filters = section === "work_orders" && (basePath === "/sewing" || quality) && nextCapability
+			? [...(quality ? [["docstatus", "=", 1]] : []), ["process_name", "in", await getSewingWorkOrderProcesses() || []]]
 			: []
 		if (sequence !== loadSequence) return
 		capability.value = nextCapability

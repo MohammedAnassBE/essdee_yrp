@@ -57,6 +57,10 @@ const BillTrackings = () => import("../departments/hr/BillTrackings.vue")
 const BillTracking = () => import("../departments/hr/BillTracking.vue")
 const BillTrackingEditorPage = () => import("../departments/hr/BillTrackingEditorPage.vue")
 const HrReports = () => import("../departments/hr/HrReports.vue")
+const QualityInspections = () => import("../departments/quality/QualityInspections.vue")
+const QualityInspection = () => import("../departments/quality/QualityInspection.vue")
+const QualityInspectionEditorPage = () => import("../departments/quality/QualityInspectionEditorPage.vue")
+const QualityReports = () => import("../departments/quality/QualityReports.vue")
 const LotsList = () => import("../departments/purchase/lot/LotsList.vue")
 const LotPage = () => import("../departments/purchase/lot/LotPage.vue")
 const LotEditorPage = () => import("../departments/purchase/lot/LotEditorPage.vue")
@@ -86,6 +90,19 @@ const idProps = (param, extra) => (route) => ({ [param]: String(route.params[par
 const Debits = () => import("../departments/accounts/Debits.vue")
 
 const routes = [
+	{
+		path: "/quality/work-orders", name: "quality-work-orders", component: FabricStoreSection,
+		props: { section: "work_orders", storeName: "Quality", basePath: "/quality", workOrderViewRouteName: "quality-work-order" },
+	},
+	{
+		path: "/quality/work-orders/:workOrderId", name: "quality-work-order", component: FabricWorkOrder,
+		props: { backTo: "/quality/work-orders", backLabel: "Work Orders", viewRouteName: "quality-work-order", showEditorActions: false, quality: true },
+	},
+	{ path: "/quality/reports", name: "quality-reports", component: QualityReports },
+	{ path: "/quality/inspections", name: "quality-inspections", component: QualityInspections },
+	{ path: "/quality/inspections/new", name: "quality-inspection-new", component: QualityInspectionEditorPage },
+	{ path: "/quality/inspections/:inspectionId/edit", name: "quality-inspection-edit", component: QualityInspectionEditorPage, props: true },
+	{ path: "/quality/inspections/:inspectionId", name: "quality-inspection", component: QualityInspection, props: true },
 	{ path: "/accounts/debits", name: "accounts-debits", component: Debits },
 	{ path: "/accounts/debits/:debitId", name: "accounts-debit", component: Debits },
 	{

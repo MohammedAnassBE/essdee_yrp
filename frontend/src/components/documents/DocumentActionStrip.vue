@@ -1,21 +1,22 @@
 <template>
 	<div v-if="actions.length" class="document-action-strip" :class="{ 'document-action-strip--with-reason': reasonNotice }" role="group" aria-label="Available document actions">
-		<Button
-			v-if="primaryAction"
-			class="document-action-strip__primary"
-			:label="primaryAction.label"
-			:icon="primaryAction.icon"
-			:severity="primaryAction.severity"
-			:loading="Boolean(primaryAction.loading)"
-			:disabled="nativeDisabled(primaryAction)"
-			:aria-disabled="Boolean(primaryAction.disabled)"
-			:aria-label="actionAriaLabel(primaryAction)"
-			:aria-describedby="disabledReasonId(primaryAction)"
-			:class="{ 'document-action-strip__reason-disabled': primaryAction.disabled && primaryAction.disabledReason }"
-			:title="primaryAction.disabledReason || primaryAction.label"
-			@focus="showDisabledReason(primaryAction)"
-			@click="run(primaryAction)"
-		/>
+		<slot v-if="primaryAction" name="primary" :action="primaryAction">
+			<Button
+				class="document-action-strip__primary"
+				:label="primaryAction.label"
+				:icon="primaryAction.icon"
+				:severity="primaryAction.severity"
+				:loading="Boolean(primaryAction.loading)"
+				:disabled="nativeDisabled(primaryAction)"
+				:aria-disabled="Boolean(primaryAction.disabled)"
+				:aria-label="actionAriaLabel(primaryAction)"
+				:aria-describedby="disabledReasonId(primaryAction)"
+				:class="{ 'document-action-strip__reason-disabled': primaryAction.disabled && primaryAction.disabledReason }"
+				:title="primaryAction.disabledReason || primaryAction.label"
+				@focus="showDisabledReason(primaryAction)"
+				@click="run(primaryAction)"
+			/>
+		</slot>
 		<Button
 			v-for="(action, index) in visibleActions"
 			:key="action.key"

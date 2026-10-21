@@ -16,6 +16,7 @@ function setup(basePath, getProcesses) {
 		"primevue/message": stub("message"),
 		"../api/fabricStore.js": { getFabricStoreCapabilities: async () => ({ sections: { work_orders: { can_create: 1 } } }) },
 		"../api/sewing.js": { getSewingWorkOrderProcesses: getProcesses },
+		"../api/quality.js": { getQualityCapabilities: () => assert.fail("Existing departments must use Fabric Store capabilities") },
 		"../components/DepartmentPage.vue": stub("department"),
 		"../components/common/ListPageSkeleton.vue": stub("skeleton"),
 		"../components/common/WorkspaceLoadError.vue": stub("error"),

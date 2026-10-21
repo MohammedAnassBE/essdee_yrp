@@ -42,6 +42,13 @@ export const departments = [
 		component: () => import("./Finishing.vue"),
 	},
 	{
+		key: "quality",
+		label: "Quality",
+		shortLabel: "QA",
+		path: "/quality",
+		component: () => import("./Quality.vue"),
+	},
+	{
 		key: "merch",
 		label: "Merch",
 		shortLabel: "MR",

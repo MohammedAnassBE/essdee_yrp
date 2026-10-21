@@ -37,3 +37,13 @@ test("Cutting Plan tab refresh reloads in the background so open dialogs stay mo
 	const refresh = source.slice(source.indexOf("function refreshPage()"), source.indexOf("async function probeEditor"))
 	assert.match(refresh, /reload\(\{ background: true \}\)/)
 })
+
+test("a CPM or Stock Transfers change reloads both plan tabs", () => {
+	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingPlanTabs.vue", import.meta.url), "utf8")
+	assert.match(source, /<CuttingPlanCpm ref="cpmTab"[^>]*@changed="tabChanged"/)
+	assert.match(source, /<CuttingPlanStockTransfers ref="transfersTab"[^>]*@changed="tabChanged"/)
+	const body = source.slice(source.indexOf("function tabChanged()"), source.indexOf("function activate(tab)"))
+	assert.match(body, /emit\("refresh"\)/)
+	assert.match(body, /cpmTab\.value\?\.activate\(\)/)
+	assert.match(body, /transfersTab\.value\?\.activate\(\)/)
+})

@@ -628,6 +628,7 @@ async function loadPrinters() {
 	try {
 		printers.value = await getQzPrinters()
 	} catch (reason) {
+		printers.value = []
 		subdialogError.value = reason.message || "Unable to connect to QZ Tray."
 	} finally {
 		loadingPrinters.value = false

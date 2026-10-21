@@ -142,11 +142,11 @@
 			</TabPanel>
 
 			<TabPanel v-if="canReadMovement" value="cpm">
-				<CuttingPlanCpm :cutting-plan="doc.name" @changed="emit('refresh')" />
+				<CuttingPlanCpm ref="cpmTab" :cutting-plan="doc.name" @changed="tabChanged" />
 			</TabPanel>
 
 			<TabPanel v-if="canReadStockTransfers" value="stock-transfers">
-				<CuttingPlanStockTransfers :cutting-plan="doc.name" @changed="emit('refresh')" />
+				<CuttingPlanStockTransfers ref="transfersTab" :cutting-plan="doc.name" @changed="tabChanged" />
 			</TabPanel>
 		</TabPanels>
 	</Tabs>
@@ -178,6 +178,8 @@ const props = defineProps({
 const emit = defineEmits(["refresh"])
 
 const activeTab = ref("details")
+const cpmTab = ref(null)
+const transfersTab = ref(null)
 const tabPanels = ref(null)
 const detailFieldnames = computed(() => [
 	"is_manual_entry",
@@ -308,6 +310,12 @@ function decimal(value, precision) {
 
 function weight(value) {
 	return decimal(value, 3)
+}
+
+function tabChanged() {
+	emit("refresh")
+	cpmTab.value?.activate()
+	transfersTab.value?.activate()
 }
 
 function activate(tab) {

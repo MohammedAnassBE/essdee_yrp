@@ -128,6 +128,9 @@ test("F-B26 QZ Tray failure stays in the Print Labels dialog and Retry reloads p
 	await state.loadPrinters()
 	assert.equal(state.subdialogError.value, "")
 	assert.deepEqual(state.printers.value, ["ZEBRA"])
+	attempts = 0
+	await state.loadPrinters()
+	assert.deepEqual(state.printers.value, [])
 	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingLaySheetDialog.vue", import.meta.url), "utf8")
 	assert.match(source, /<Button v-if="subdialogError && !printers.length" label="Retry"[^>]*@click="loadPrinters"/)
 })

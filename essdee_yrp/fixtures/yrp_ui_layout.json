@@ -261,5 +261,17 @@
   "layout_name": "Merch",
   "name": "Merch",
   "render_mode": "Registered Experience"
+ },
+ {
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"inspections\",\n   \"work_orders\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Quality department workspace only: inspections, work_orders, reports.",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "YRP UI Layout",
+  "experience_key": "quality",
+  "layout_name": "Quality",
+  "modified": "2026-10-21 16:58:37.662801",
+  "name": "Quality",
+  "render_mode": "Registered Experience"
  }
 ]

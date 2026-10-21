@@ -212,6 +212,7 @@ yrp_registered_experiences = {
 	"accounts": ["workspaces"],
 	"hr": ["workspaces"],
 	"merch": ["workspaces"],
+	"merch-purchase": ["workspaces"],
 	"quality": ["workspaces"],
 }
 

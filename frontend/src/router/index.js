@@ -721,6 +721,7 @@ const routes = [
 	{ path: "/merch/lots/:lotId", name: MERCH_ROUTES.lot, component: MerchLotPage, props: true },
 	{ path: "/merch/lots/:lotId/edit", name: MERCH_ROUTES.lotEdit, component: MerchLotEditorPage, props: true },
 	{ path: "/merch/reports", name: MERCH_ROUTES.reports, component: MerchReports },
+	{ path: "/merch-purchase/reports", name: "merch-purchase-reports", component: MerchReports, props: { department: "merch-purchase" } },
 	{ path: "/merch/item-production-details/new", name: MERCH_ROUTES.ipdNew, component: IpdEditorPage },
 	{ path: "/merch/item-production-details/:ipdId", name: MERCH_ROUTES.ipd, component: IpdPage, props: true },
 	{ path: "/merch/item-production-details/:ipdId/edit", name: MERCH_ROUTES.ipdEdit, component: IpdEditorPage, props: true },

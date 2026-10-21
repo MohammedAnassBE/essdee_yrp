@@ -4,7 +4,7 @@ import test from "node:test"
 import vm from "node:vm"
 import { createMemoryHistory, createRouter } from "vue-router"
 
-import { departments } from "../src/departments/registry.js"
+import { departments, getWorkspacePaths } from "../src/departments/registry.js"
 import { MERCH_ROUTES } from "../src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
@@ -111,7 +111,7 @@ test("registry sections match the department layouts and real routes", () => {
 		const department = departments.find((item) => item.key === layout.experience_key)
 		assert.ok(department, layout.name)
 		for (const workspace of JSON.parse(layout.config).experience_props.workspaces) {
-			assert.ok(department.sections[workspace], `${layout.name}: ${workspace}`)
+			assert.ok(getWorkspacePaths(department)[workspace], `${layout.name}: ${workspace}`)
 		}
 	}
 
@@ -120,13 +120,12 @@ test("registry sections match the department layouts and real routes", () => {
 		.map((path) => source(`../src/departments/${path}`))
 	const routeSources = [source("../src/router/index.js"), ...viewSources].join("\n")
 	for (const department of departments) {
-		const owned = new Set(Object.values(department.sections).flat())
-		for (const segment of owned) {
-			const path = `${department.path}/${segment}`
+		const owned = new Set(Object.values(getWorkspacePaths(department)).flat())
+		for (const path of owned) {
 			assert.ok(routeSources.includes(`"${path}`) || routeSources.includes(`\`${path}`), path)
 		}
 		const routed = [...routeSources.matchAll(new RegExp(`["\`]${department.path}/([a-z-]+)`, "g"))].map((match) => match[1])
-		for (const segment of routed) assert.ok(owned.has(segment), `${department.path}/${segment} has no owning workspace`)
+		for (const segment of routed) assert.ok(owned.has(`${department.path}/${segment}`), `${department.path}/${segment} has no owning workspace`)
 	}
 })
 

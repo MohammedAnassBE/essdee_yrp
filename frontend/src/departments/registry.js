@@ -1,4 +1,4 @@
-/** /web departments. `sections` maps each launcher workspace key to the route segment(s) under `path` it owns. */
+/** /web departments. `sections` maps each launcher workspace key to the route segment(s) under `path` it owns; `combines` adds the sections of other departments. */
 export const departments = [
 	{
 		key: "cutting",
@@ -73,6 +73,15 @@ export const departments = [
 		component: () => import("./Purchase.vue"),
 	},
 	{
+		key: "merch-purchase",
+		label: "Merch & Purchase",
+		shortLabel: "MP",
+		path: "/merch-purchase",
+		combines: ["merch", "purchase"],
+		sections: { reports: "reports" },
+		component: () => import("./MerchPurchase.vue"),
+	},
+	{
 		key: "sales",
 		label: "Sales",
 		shortLabel: "SA",
@@ -113,3 +122,15 @@ export const departments = [
 		component: () => import("./HR.vue"),
 	},
 ]
+
+/** Route paths each workspace key of `department` owns, including the sections of the departments it combines. */
+export function getWorkspacePaths(department) {
+	const sources = [department, ...(department.combines || []).map((key) => departments.find((item) => item.key === key))]
+	const paths = {}
+	for (const source of sources) {
+		for (const [key, segments] of Object.entries(source.sections)) {
+			paths[key] = [...(paths[key] || []), ...[segments].flat().map((segment) => `${source.path}/${segment}`)]
+		}
+	}
+	return paths
+}

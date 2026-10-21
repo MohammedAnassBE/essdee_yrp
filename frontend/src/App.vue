@@ -61,7 +61,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 import { logOut } from "./api/frappe.js"
 import ServerMessageDialog from "./components/common/ServerMessageDialog.vue"
 import { departments } from "./departments/registry.js"
-import { getHomePath, lockedDepartment } from "./router/departmentLock.js"
+import { getHomePath, isOutsideLayout, lockedDepartment } from "./router/departmentLock.js"
 import { currentTheme, toggleTheme } from "./utils/themePreference.js"
 
 const route = useRoute()
@@ -96,12 +96,13 @@ onBeforeUnmount(() => {
 	removeOnError()
 })
 
-const activeDepartment = computed(() =>
-	departments.find(
+const activeDepartment = computed(() => {
+	const owner = departments.find(
 		(department) =>
 			route.path === department.path || route.path.startsWith(`${department.path}/`),
-	),
-)
+	)
+	return lockedDepartment?.combines?.includes(owner?.key) && !isOutsideLayout(route.path) ? lockedDepartment : owner
+})
 
 function routeTitle() {
 	if (route.name === "administrator") return "Workspaces"

@@ -1,13 +1,13 @@
 <template>
-	<DepartmentPage title="Merch" :show-title="false" flat inline-navigation>
+	<DepartmentPage :title="title" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 		<WorkspaceLauncher
 			v-else
-			title="Merch"
+			:title="title"
 			:items="visibleWorkspaces"
 			:loading="loading"
-			empty-text="No permitted Merch workspaces"
-			:skeleton-count="merchLauncherItems().length"
+			:empty-text="`No permitted ${title} workspaces`"
+			:skeleton-count="items.length"
 		/>
 	</DepartmentPage>
 </template>
@@ -21,19 +21,24 @@ import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import { merchLauncherItems, visibleMerchLauncherItems } from "./merch/merchViews.js"
 
+const props = defineProps({
+	title: { type: String, default: "Merch" },
+	items: { type: Array, default: merchLauncherItems },
+	loadCapabilities: { type: Function, default: getMerchCapabilities },
+})
 const loading = ref(true)
 const loadError = ref("")
 const sections = ref({})
-const visibleWorkspaces = computed(() => visibleMerchLauncherItems(sections.value))
+const visibleWorkspaces = computed(() => visibleMerchLauncherItems(sections.value, props.items))
 
 async function load() {
 	loading.value = true
 	loadError.value = ""
 	try {
-		sections.value = (await getMerchCapabilities())?.sections || {}
+		sections.value = (await props.loadCapabilities())?.sections || {}
 	} catch (reason) {
 		sections.value = {}
-		loadError.value = reason?.message || "Unable to load the Merch workspace."
+		loadError.value = reason?.message || `Unable to load the ${props.title} workspace.`
 	} finally {
 		loading.value = false
 	}

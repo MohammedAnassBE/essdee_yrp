@@ -2,8 +2,8 @@
 	<FabricStore
 		store-name="Purchase"
 		base-path="/purchase"
-		:workspace-keys="['purchase_orders', 'stock_transfers', 'box_stickers', 'reports']"
-		:report-keys="['stock_balance', 'purchase_order_itemwise', 'lot_cut_quantity']"
+		:workspace-keys="PURCHASE_STORE_WORKSPACE_KEYS"
+		:report-keys="PURCHASE_REPORT_KEYS"
 		:extra-workspaces="purchaseLauncherItems()"
 		:extra-capabilities-loader="getPurchaseCapabilities"
 	/>
@@ -12,5 +12,5 @@
 <script setup>
 import { getPurchaseCapabilities } from "../api/purchase.js"
 import FabricStore from "./FabricStore.vue"
-import { purchaseLauncherItems } from "./purchase/purchaseViews.js"
+import { PURCHASE_REPORT_KEYS, PURCHASE_STORE_WORKSPACE_KEYS, purchaseLauncherItems } from "./purchase/purchaseViews.js"
 </script>

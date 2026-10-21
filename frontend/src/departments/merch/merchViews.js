@@ -95,8 +95,8 @@ export function merchLauncherItems() {
 	].sort((left, right) => MERCH_SECTION_ORDER.indexOf(left.key) - MERCH_SECTION_ORDER.indexOf(right.key))
 }
 
-export function visibleMerchLauncherItems(sections) {
-	return merchLauncherItems().filter((item) => sections?.[item.key]?.can_read)
+export function visibleMerchLauncherItems(sections, items = merchLauncherItems()) {
+	return items.filter((item) => sections?.[item.key]?.can_read)
 }
 
 export const IPD_LIST_COLUMNS = [

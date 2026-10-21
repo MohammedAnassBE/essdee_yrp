@@ -1,4 +1,4 @@
-import { departments } from "../departments/registry.js"
+import { departments, getWorkspacePaths } from "../departments/registry.js"
 
 export const LAYOUT_UNAVAILABLE_PATH = "/not-in-your-layout"
 
@@ -13,7 +13,7 @@ export function getLockedDepartment(boot) {
 		return null
 	}
 	const workspaces = uiConfig.config?.experience_props?.workspaces
-	return { ...department, workspaces: Array.isArray(workspaces) ? workspaces : Object.keys(department.sections) }
+	return { ...department, workspaces: Array.isArray(workspaces) ? workspaces : Object.keys(getWorkspacePaths(department)) }
 }
 
 export const lockedDepartment = getLockedDepartment(globalThis.window?.frappe?.boot)
@@ -22,15 +22,19 @@ function getSegments(target) {
 	return String((typeof target === "string" ? target : target?.path) || "").toLowerCase().split(/[?#]/)[0].split("/").filter(Boolean)
 }
 
-/** Whether a navigation page at `path` (string or route location) is hidden by the layout: another department, or a segment no listed workspace owns. Document pages stay open so cross-department links work. */
+/** Whether a navigation page at `path` (string or route location) is hidden by the layout: another department, or a section no listed workspace owns. Document pages stay open so cross-department links work. */
 export function isOutsideLayout(path, department = lockedDepartment, isDocument = false) {
 	if (!department || isDocument) return false
 	const [first, segment] = getSegments(path)
-	const owner = departments.find((item) => item.path === `/${first}`)
-	if (!owner) return false
-	if (owner.key !== department.key) return true
-	if (!segment) return false
-	return !department.workspaces.some((key) => [department.sections[key]].flat().includes(segment))
+	if (!departments.some((item) => item.path === `/${first}`)) return false
+	if (!segment) return `/${first}` !== department.path
+	const paths = getWorkspacePaths(department)
+	return !department.workspaces.some((key) => paths[key]?.includes(`/${first}/${segment}`))
+}
+
+/** Whether `path` is the landing page of a department the layout's department combines. */
+function isCombinedLanding(path, department) {
+	return (department.combines || []).some((key) => departments.find((item) => item.key === key)?.path === path)
 }
 
 /** Whether a launcher card belongs to the user's layout. */
@@ -42,7 +46,7 @@ export function isWorkspaceInLayout(item, department = lockedDepartment) {
 export function getLockedRedirect(to, department = lockedDepartment) {
 	if (!department) return undefined
 	const path = to.path.toLowerCase().replace(/\/+$/, "") || "/"
-	if (path === "/") return { path: department.path, replace: true }
+	if (path === "/" || isCombinedLanding(path, department)) return { path: department.path, replace: true }
 	const isDocument = Object.keys(to.params || {}).some((key) => key !== "pathMatch")
 	if (!isOutsideLayout(path, department, isDocument)) return undefined
 	return { path: LAYOUT_UNAVAILABLE_PATH, query: { from: to.fullPath || to.path }, replace: true }
@@ -50,7 +54,7 @@ export function getLockedRedirect(to, department = lockedDepartment) {
 
 /** Whether a back link would leave the layout. */
 export function isLockedExit(path, department = lockedDepartment) {
-	return Boolean(department) && (path === "/" || isOutsideLayout(path, department))
+	return Boolean(department) && (path === "/" || isOutsideLayout(path, department)) && !isCombinedLanding(path, department)
 }
 
 export function getHomePath(department = lockedDepartment) {

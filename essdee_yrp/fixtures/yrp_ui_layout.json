@@ -273,5 +273,17 @@
   "modified": "2026-10-21 16:58:37.662801",
   "name": "Quality",
   "render_mode": "Registered Experience"
+ },
+ {
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"item_production_details\",\n   \"production_orders\",\n   \"work_orders\",\n   \"process_costs\",\n   \"bill_tracking\",\n   \"purchase_invoices\",\n   \"items\",\n   \"item_prices\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"box_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Merch & Purchase department workspace only: lots, item_production_details, production_orders, work_orders, process_costs, bill_tracking, purchase_invoices, items, item_prices, purchase_orders, stock_transfers, box_stickers, reports.",
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "YRP UI Layout",
+  "experience_key": "merch-purchase",
+  "layout_name": "Merch & Purchase",
+  "modified": "2026-10-21 19:22:40.588204",
+  "name": "Merch & Purchase",
+  "render_mode": "Registered Experience"
  }
 ]

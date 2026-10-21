@@ -207,6 +207,11 @@ PRESERVE_SOURCE_BLANK_FIELDS = {
 	# MRP saved these mapping rows blank; they migrate unchanged, as in MRP.
 	("Item Item Attribute Mapping", "attribute_name"),
 	("Item Item Attribute Mapping Value", "attribute_value"),
+	# Secrets and gateway settings: blank in sanitised copies; set by hand after migration.
+	("FG Item OMS Settings", "api_key"),
+	("FG Item OMS Settings", "api_secret"),
+	("SMS Parameter", "value"),
+	("SMS Settings", "sms_gateway_url"),
 }
 SOURCE_DOCTYPES_BY_TARGET: dict[str, set[str]] = {}
 for _source_doctype, _target_doctype in DOCTYPE_RENAMES.items():

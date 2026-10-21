@@ -69,6 +69,7 @@ class TestMerchLotWorkspace(TestCase):
 		self.demand = self.mock("cloth_program.compute_cloth_demand", return_value={"cloth": 1})
 		self.original_matrices = workspace.ipd_engine._get_process_matrices
 		self.matrices = self.mock("ipd_engine._get_process_matrices", return_value={"Cutting": [Row()]})
+		self.on_demand = self.mock("is_on_demand_garment_ipd", return_value=False)
 		self.response = {"name": self.doc.name, "modified": "new-modified"}
 		self.original_workspace = workspace.get_merch_lot_workspace
 		self.get_workspace = self.mock("get_merch_lot_workspace", return_value=self.response)
@@ -295,6 +296,13 @@ class TestMerchLotWorkspace(TestCase):
 		self.assertEqual(workspace.get_bom_block(self.doc), "")
 		self.matrices.assert_called_once_with("IPD-1")
 
+	def test_bom_allows_garment_ipd_that_builds_matrices_on_demand(self):
+		self.on_demand.return_value = True
+		self.matrices.return_value = {}
+		self.assertEqual(workspace.get_bom_block(self.doc), "")
+		self.on_demand.assert_called_once_with("IPD-1")
+		self.matrices.assert_not_called()
+
 	def test_additional_items_round_trip_and_remove(self):
 		row = {"item_name": "Label", "process_name": "Packing", "uom": "Nos", "required_qty": 20}
 		self.command("update_bom_additional_items", {"rows": [row]})
@@ -417,7 +425,9 @@ class TestMerchLotWorkspace(TestCase):
 		self.mock("lot_editor.load_writable_lot", return_value=self.doc)
 		self.mock("sd_yrp_lot.fetch_item_details", return_value=stored)
 		save = self.mock("lot_editor.save_lot", return_value={"name": self.doc.name})
-		workspace.save_merch_lot({"item_details": [stored], "order_item_details": [stored]}, self.doc.name, self.doc.modified)
+		workspace.save_merch_lot(
+			{"item_details": [stored], "order_item_details": [stored]}, self.doc.name, self.doc.modified
+		)
 		save.assert_called_once()
 		with self.assertRaisesRegex(frappe.ValidationError, "Locked"):
 			workspace.save_merch_lot(

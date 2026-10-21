@@ -7,6 +7,7 @@ from essdee_yrp import production_order_workflow
 from essdee_yrp.api import cloth_program
 from essdee_yrp.cloth_program_access import has_cloth_program_role
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot import sd_yrp_lot
+from essdee_yrp.garment_bom_matrix import is_on_demand_garment_ipd
 from essdee_yrp.purchase import lot_editor, lot_workspace
 from essdee_yrp.web_common import action, assert_expected_modified, parse_mapping, permission_flags
 
@@ -71,6 +72,8 @@ def get_bom_block(doc):
 		return _("Select an Item Production Detail first.")
 	if not any(flt(row.quantity) > 0 for row in doc.get("lot_order_details") or []):
 		return _("Run Calculate Order Items first.")
+	if is_on_demand_garment_ipd(doc.production_detail):
+		return ""
 	if not ipd_engine._get_process_matrices(doc.production_detail):
 		return _("No IPD Process Matrix found for IPD {0}.").format(doc.production_detail)
 	return ""

@@ -29,6 +29,9 @@ from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 from essdee_yrp.garment_bom_matrix import (
 	_delete_generated_matrices,
 	_get_variant_cloth_rows,
+	ensure_garment_bom_matrices,
+	get_unbuildable_variants,
+	is_on_demand_garment_ipd,
 	regenerate_garment_bom_matrices,
 )
 from essdee_yrp.item_matrix import normalize_item_matrix_row_indexes
@@ -42,7 +45,7 @@ def regenerate_ipd_process_matrices(ipd_name):
 	configuration remains immutable while missing generated child documents are
 	backfilled from that approved configuration.
 	"""
-	ipd = frappe.get_doc("YRP Item Production Detail", ipd_name)
+	ipd = frappe.get_doc("YRP Item Production Detail", ipd_name, for_update=True)
 	ipd.check_permission("write")
 
 	if _is_cloth_ipd(ipd):
@@ -59,24 +62,9 @@ def regenerate_ipd_process_matrices(ipd_name):
 					_attribute_value(ipd.get("pack_in_stage")) or "finished-stage", ipd.name
 				)
 			)
-		valid_variants = []
-		skipped = []
-		has_bom_cloth = any(row.is_bom_item for row in ipd.get("cloth_detail") or [])
-		for variant in variants:
-			try:
-				cloth_rows, _output_attrs = _get_variant_cloth_rows(ipd, variant)
-			except frappe.ValidationError as exc:
-				skipped.append({"item_variant": variant, "reason": cstr(exc)})
-				continue
-			if has_bom_cloth and not cloth_rows:
-				skipped.append(
-					{
-						"item_variant": variant,
-						"reason": _("No BOM cloth requirement was generated."),
-					}
-				)
-				continue
-			valid_variants.append(variant)
+		skipped = get_unbuildable_variants(ipd, variants)
+		skipped_variants = {row["item_variant"] for row in skipped}
+		valid_variants = [variant for variant in variants if variant not in skipped_variants]
 		_delete_generated_matrices(ipd.name, ipd.cutting_process, variants)
 		if valid_variants:
 			regenerate_garment_bom_matrices(ipd.name, valid_variants)
@@ -441,7 +429,10 @@ def _missing_matrix_variants(ipd, process_name, rows):
 			pluck="reference_item_variant",
 		)
 	)
-	return sorted(references.difference(found))
+	missing = sorted(references.difference(found))
+	if missing and is_on_demand_garment_ipd(ipd.name):
+		return [row["item_variant"] for row in get_unbuildable_variants(ipd, missing)]
+	return missing
 
 
 def _process_rows(ipd, lot, process_name, demands):
@@ -483,6 +474,7 @@ def _process_rows(ipd, lot, process_name, demands):
 
 
 def _cutting_inputs(ipd, process_name, demands):
+	ensure_garment_bom_matrices(ipd.name, [demand["item_variant"] for demand in demands])
 	missing = [
 		demand["item_variant"]
 		for demand in demands

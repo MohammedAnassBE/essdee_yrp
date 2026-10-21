@@ -35,6 +35,7 @@ from essdee_yrp.fabric_program import (
 	validate_unique_fabric_cloths,
 )
 from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
+from essdee_yrp.garment_bom_matrix import ensure_garment_bom_matrices
 
 
 def get_panel_colour_combination(ipd_doc):
@@ -1529,6 +1530,7 @@ def calculate_bom(lot_name):
 		variant_demands,
 		lot_doc,
 	)
+	ensure_garment_bom_matrices(lot_doc.production_detail, [row["item_variant"] for row in variant_demands])
 	calculation = calculate_bom_for_variant_demands(
 		lot_doc.production_detail,
 		variant_demands,

@@ -60,9 +60,64 @@ def regenerate_for_lots(lot_names):
 	return result
 
 
+def is_on_demand_garment_ipd(ipd_name):
+	"""Garment IPDs build their Cutting matrices on first use, like production_api's live cloth calculation."""
+	values = frappe.db.get_value(
+		"YRP Item Production Detail", ipd_name, ["item", "is_cloth_item", "cutting_process"], as_dict=True
+	)
+	if not values or not values.cutting_process or values.is_cloth_item:
+		return False
+	return not frappe.db.get_value("Item", values.item, "is_cloth_item")
+
+
+def ensure_garment_bom_matrices(ipd_name, item_variants):
+	"""Generate Cutting matrices only for the requested variants that have none; return the new names."""
+	if not is_on_demand_garment_ipd(ipd_name):
+		return []
+	cutting_process = frappe.db.get_value("YRP Item Production Detail", ipd_name, "cutting_process")
+	variants = list(dict.fromkeys(item_variants or []))
+	existing = set(
+		frappe.get_all(
+			"YRP IPD Process Matrix",
+			filters={
+				"ipd": ipd_name,
+				"process_name": cutting_process,
+				"reference_item_variant": ["in", variants or [""]],
+				"docstatus": ["<", 2],
+			},
+			pluck="reference_item_variant",
+		)
+	)
+	missing = [variant for variant in variants if variant not in existing]
+	return regenerate_garment_bom_matrices(ipd_name, missing) if missing else []
+
+
+def get_unbuildable_variants(ipd, item_variants):
+	"""Return {item_variant, reason} for the variants whose Cutting matrix cannot be generated."""
+	message_count = len(frappe.message_log)
+	try:
+		_validate_garment_ipd(ipd)
+	except frappe.ValidationError as exc:
+		del frappe.message_log[message_count:]
+		return [{"item_variant": variant, "reason": str(exc)} for variant in item_variants]
+	has_bom_cloth = any(row.is_bom_item for row in ipd.get("cloth_detail") or [])
+	skipped = []
+	for variant in item_variants:
+		message_count = len(frappe.message_log)
+		try:
+			cloth_rows, _output_attrs = _get_variant_cloth_rows(ipd, variant)
+		except frappe.ValidationError as exc:
+			del frappe.message_log[message_count:]
+			skipped.append({"item_variant": variant, "reason": str(exc)})
+			continue
+		if has_bom_cloth and not cloth_rows:
+			skipped.append({"item_variant": variant, "reason": _("No BOM cloth requirement was generated.")})
+	return skipped
+
+
 def regenerate_garment_bom_matrices(ipd_name, item_variants):
 	"""Replace generated Cutting matrices for the requested finished variants."""
-	ipd = frappe.get_doc("YRP Item Production Detail", ipd_name)
+	ipd = frappe.get_doc("YRP Item Production Detail", ipd_name, for_update=True)
 	if ipd.get("is_cloth_item") or frappe.db.get_value("Item", ipd.item, "is_cloth_item"):
 		frappe.throw(_("{0} is a cloth IPD; use the fabric-process generator.").format(ipd.name))
 	_validate_garment_ipd(ipd)
@@ -235,15 +290,33 @@ def _build_matrix(ipd, item_variant, output_attrs, cloth_item, cloth_rows):
 	return matrix
 
 
-def _delete_generated_matrices(ipd_name, process_name, item_variants):
-	names = frappe.get_all(
+def clear_generated_matrices(doc, method=None):
+	"""IPD on_update: drop a garment IPD's generated Cutting matrices so they rebuild from the saved IPD."""
+	if doc.get("is_cloth_item") or frappe.db.get_value("Item", doc.item, "is_cloth_item"):
+		return
+	variants_by_process = defaultdict(list)
+	for process_name, variant in frappe.db.get_values(
 		"YRP IPD Process Matrix",
-		filters={
+		{"ipd": doc.name, "reference_item_variant": ["is", "set"]},
+		["process_name", "reference_item_variant"],
+		for_update=True,
+	):
+		variants_by_process[process_name].append(variant)
+	for process_name, variants in variants_by_process.items():
+		_delete_generated_matrices(doc.name, process_name, variants)
+
+
+def _delete_generated_matrices(ipd_name, process_name, item_variants):
+	names = frappe.db.get_values(
+		"YRP IPD Process Matrix",
+		{
 			"ipd": ipd_name,
 			"process_name": process_name,
 			"reference_item_variant": ["in", item_variants],
 		},
-		pluck="name",
+		"name",
+		pluck=True,
+		for_update=True,
 	)
 	if not names:
 		return

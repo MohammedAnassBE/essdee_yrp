@@ -276,9 +276,11 @@ class TestLotPackingBoundary(FrappeTestCase):
 				return_value=[{"item": "CLOTH-1"}],
 			),
 			patch.object(lot_controller, "_build_bom_summary_json", return_value={}),
+			patch.object(lot_controller, "ensure_garment_bom_matrices") as ensure,
 		):
 			result = lot_controller.calculate_bom("LOT-1")
 
+		ensure.assert_called_once_with("IPD-1", ["ITEM-SAVED"])
 		calculate.assert_called_once_with(
 			"IPD-1",
 			[{"item_variant": "ITEM-SAVED", "qty": 4.0}],

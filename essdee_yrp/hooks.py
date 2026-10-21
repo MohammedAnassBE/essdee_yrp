@@ -468,6 +468,7 @@ doc_events = {
 		"validate": "essdee_yrp.ipd_validations.validate",
 		"on_update": [
 			"essdee_yrp.ipd_validations.on_update",
+			"essdee_yrp.garment_bom_matrix.clear_generated_matrices",
 			"essdee_yrp.fabric_ipd.sync_fabric_process_matrices",
 			# order matters: the plan solver reads the matrices rebuilt above
 			"essdee_yrp.fabric_plan.on_ipd_update",

@@ -2375,6 +2375,31 @@ class TestClothProgram(IntegrationTestCase):
 		self.assertEqual(flt(planned, 3), 15.05)
 		self.assertEqual(flt(program.weight), 16)
 
+	def test_rebuild_does_not_replan_its_own_lot_from_the_ipd_hook(self):
+		lot, sibling = (
+			frappe.get_doc({"doctype": "SD YRP Lot", "lot_name": name}).insert(ignore_permissions=True)
+			for name in ("_Test CPD Lot Rebuild Drift", "_Test CPD Lot Rebuild Sibling")
+		)
+		demand = {(self.cloth, _attribute_value(self.dia), self.red): 15.05}
+		with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
+			first = build_cloth_programs(sibling.name, [self.selection])
+			build_cloth_programs(lot.name, [self.selection])
+			with patch.object(
+				fabric_plan, "build_fabric_plan", wraps=fabric_plan.build_fabric_plan
+			) as build_plan:
+				second = build_cloth_programs(lot.name, [self.selection])
+		self.assertEqual(second["programs"][0]["cpd"], first["programs"][0]["cpd"])
+		hook_lots = [call.args[0].name for call in build_plan.call_args_list if call.kwargs.get("ipd_doc")]
+		lot_save_lots = [
+			call.args[0].name for call in build_plan.call_args_list if not call.kwargs.get("ipd_doc")
+		]
+		self.assertNotIn(lot.name, hook_lots)
+		self.assertIn(sibling.name, hook_lots)
+		self.assertIn(lot.name, lot_save_lots)
+		lot.reload()
+		program = next(r for r in lot.lot_fabric_programs if r.cloth_item == self.cloth)
+		self.assertEqual(flt(program.weight), 15)
+
 	def test_program_weight_rounding_matches_mrp_half_boundary(self):
 		self.assertEqual(_round_program_weight(10.49), 10)
 		self.assertEqual(_round_program_weight(10.5), 10)

@@ -219,6 +219,7 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
+import { useToast } from "primevue/usetoast"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { executeMerchLotCommand, getMerchLotWorkspace } from "../../../api/merch.js"
@@ -236,7 +237,7 @@ import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import LotOcrTable from "../../sales/LotOcrTable.vue"
 import { MERCH_ROUTES } from "../merchViews.js"
-import { MERCH_DETAIL_GROUPS, merchLotTabs, merchLotActions } from "./merchLotViews.js"
+import { MERCH_DETAIL_GROUPS, merchLotCommandSuccess, merchLotTabs, merchLotActions } from "./merchLotViews.js"
 import MerchClothProgramDialog from "./MerchClothProgramDialog.vue"
 import MerchLotBomTab from "./MerchLotBomTab.vue"
 import MerchLotDocuments from "./MerchLotDocuments.vue"
@@ -246,6 +247,7 @@ import "./merchLot.css"
 const props = defineProps({ lotId: { type: String, required: true } })
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const workspace = ref({})
 const loading = ref(true)
 const loadError = ref("")
@@ -339,6 +341,7 @@ async function execute(command, payload = {}) {
 		workspace.value = result
 		ppoVisible.value = false
 		clothVisible.value = false
+		toast.add(merchLotCommandSuccess(command, props.lotId))
 	} catch (error) {
 		if (request === sequence) actionError.value = error.message
 	} finally {

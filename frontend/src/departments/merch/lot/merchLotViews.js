@@ -32,6 +32,17 @@ const ACTION_ICONS = {
 	calculate_bom: "pi pi-calculator",
 	change_ppo: "pi pi-link",
 }
+const COMMAND_SUCCESS = {
+	build_cloth_programs: "Cloth Program built",
+	recalculate_cloth_program: "Cloth Program recalculated",
+	calculate_bom: "BOM calculated",
+	calculate_order_items: "Order Items calculated",
+	change_ppo: "PPO changed",
+	update_bom_additional_items: "BOM Additional Items updated",
+}
+export function merchLotCommandSuccess(command, lot) {
+	return { severity: "success", summary: COMMAND_SUCCESS[command] || "Lot updated", detail: lot, life: 3500 }
+}
 export const BOX_LABELS = { qty: "Qty", ratio: "Ratio", mrp: "MRP" }
 
 export function boxCellError(field, value) {

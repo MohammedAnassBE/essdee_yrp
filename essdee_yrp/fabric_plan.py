@@ -487,6 +487,8 @@ def rebuild_fabric_plans_for_ipd(ipd_doc):
 	)
 	built, failed = [], []
 	for ref in fabric_rows:
+		if ref.parent == ipd_doc.flags.get("rebuilding_lot"):
+			continue
 		lot_status = attribute_db.get_value("SD YRP Lot", ref.parent, "status")
 		if lot_status and lot_status != "Open":
 			continue

@@ -794,7 +794,7 @@ def _find_reusable_cpd(cloth_item, selection):
 	return frappe.get_doc("YRP Item Production Detail", blank_candidate) if blank_candidate else None
 
 
-def _find_or_create_cpd(cloth_item, selection, tuples):
+def _find_or_create_cpd(cloth_item, selection, tuples, rebuilding_lot=None):
 	"""Phase 2. selection: {yarns, yarn_item, knitting_process, dyeing_process,
 	compacting_process, cloth_per_kg_yarn,
 	knitting_output_colours:[{colour, knitting_output_colour}]}.
@@ -964,6 +964,8 @@ def _find_or_create_cpd(cloth_item, selection, tuples):
 
 	_persist_generic_fabric_rows(cpd)
 	cpd.approval_status = "Approved"  # base field is UI-read_only; set server-side
+	# The building Lot's own save rebuilds its plan after the program is reset.
+	cpd.flags.rebuilding_lot = rebuilding_lot
 	_save_generated_cpd(cpd)
 	return cpd.name
 
@@ -1365,7 +1367,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 					"the Finished Dia — select a Compacting/Dia-changing Process."
 				).format(cloth)
 			)
-		cpd_name = _find_or_create_cpd(cloth, selection, tuples)
+		cpd_name = _find_or_create_cpd(cloth, selection, tuples, rebuilding_lot=lot_doc.name)
 		_ensure_lot_fabric_detail(lot_doc, cloth, cpd_name)
 		payload[cloth] = tuples
 		built.append({"cloth_item": cloth, "cpd": cpd_name})

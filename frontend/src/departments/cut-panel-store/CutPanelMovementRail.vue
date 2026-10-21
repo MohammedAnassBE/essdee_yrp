@@ -72,6 +72,7 @@ import Skeleton from "primevue/skeleton"
 import { computed, reactive, ref } from "vue"
 
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import { normaliseFrappeTime } from "../../utils/documentValues.js"
 
 const props = defineProps({ linked: { type: Object, default: () => ({}) }, loading: Boolean, busy: Boolean })
 const emit = defineEmits(["refresh", "create", "open-document"])
@@ -100,7 +101,7 @@ function runAction(action) {
 
 function dateTime(row) {
 	const date = formatDate(row.posting_date)
-	const time = String(row.posting_time || "").slice(0, 5)
+	const time = normaliseFrappeTime(row.posting_time).slice(0, 5)
 	return [date, time].filter(Boolean).join(" · ") || "No posting time"
 }
 function formatDate(value) {

@@ -25,7 +25,7 @@
 						<span v-else>—</span>
 					</td>
 					<td><DocumentLink :doctype="log.source_doctype" :name="log.source_name" :label="log.source_name ? `${log.source_doctype || ''} ${log.source_name}`.trim() : '—'" /></td>
-					<td class="dispatch-history__date">{{ formatDate(log.posting_date) }} {{ (log.posting_time || "").slice(0, 8) }}</td>
+					<td class="dispatch-history__date">{{ formatDate(log.posting_date) }} {{ normaliseFrappeTime(log.posting_time) }}</td>
 					<td class="erp-number">{{ formatQuantity(log.dispatch_boxes) }}</td>
 					<td class="erp-number">{{ formatQuantity(log.dispatch_pieces) }}</td>
 					<td class="erp-number">{{ formatQuantity(log.total_dispatched_pieces_after) }}</td>
@@ -43,6 +43,7 @@
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { formatDate } from "../../../components/reports/reportUtils.js"
+import { normaliseFrappeTime } from "../../../utils/documentValues.js"
 import { formatQuantity } from "../finishingViews.js"
 
 defineProps({ logs: { type: Array, default: () => [] } })

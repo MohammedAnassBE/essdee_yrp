@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import { defaultOption } from "../src/utils/supplierDefaults.js"
+import { normaliseFrappeTime } from "../src/utils/documentValues.js"
 
 const read = path => readFileSync(resolve(`frontend/src/${path}`), "utf8")
 const script = path => read(path).split("<script setup>")[1].split("</script>")[0].replace(/^import[\s\S]*? from ["'][^"']+["'];?\n/gm, "")
@@ -25,6 +26,7 @@ test("F-C15 reason-disabled rail actions", async () => {
 	const creates = []
 	const component = loadComponent(resolve("frontend/src/departments/cut-panel-store/CutPanelMovementRail.vue"), {
 		"primevue/button": Button, "primevue/skeleton": () => null,
+		"../../utils/documentValues.js": { normaliseFrappeTime },
 		"../../components/documents/DocumentStatusBadge.vue": () => null,
 	})
 	const root = mountComponent(component, { linked: { sections: {}, actions: { stock_entry: { can_create: true, eligible: false, label: "Create Stock Entry", reason: "Already linked" } } }, onCreate: value => creates.push(value) })

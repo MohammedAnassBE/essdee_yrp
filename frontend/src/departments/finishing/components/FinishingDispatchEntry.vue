@@ -16,7 +16,7 @@
 					<tr v-for="batch in batches" :key="batch.batch_row">
 						<td>{{ batch.grn }}</td><td>{{ batch.colour }}</td><td>{{ ratioText(batch.ratio) }}</td>
 						<td class="erp-number">{{ formatQuantity(batch.box_quantity) }}</td><td class="erp-number">{{ formatQuantity(batch.dispatched_boxes) }}</td><td class="erp-number">{{ formatQuantity(batch.available_boxes) }}</td>
-						<td><input v-model="state.batchBoxes[batch.batch_row]" type="number" min="0" step="1" :max="batch.available_boxes" class="finishing-entry-input" :aria-label="`${label} ${batch.batch_row} Dispatch boxes ${batch.grn} ${batch.colour}`" :disabled="disabled" /></td>
+						<td><input v-model="state.batchBoxes[batch.batch_row]" type="number" min="0" step="1" :max="batch.available_boxes" class="finishing-entry-input" :aria-label="`${label} ${batch.batch_id || batch.batch_row} Dispatch boxes ${batch.grn} ${batch.colour}`" :disabled="disabled" /></td>
 						<td class="erp-number">{{ formatQuantity(Number(state.batchBoxes[batch.batch_row] || 0) * Number(batch.pieces_per_box || 0)) }}</td>
 					</tr>
 					<tr class="finishing-table__total-row"><td colspan="6">Total</td><td class="erp-number">{{ formatQuantity(totalBoxes) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>

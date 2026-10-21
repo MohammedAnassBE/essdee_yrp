@@ -24,3 +24,17 @@ test("F-G15 document overview shows Time fields without microseconds", async () 
 	assert.equal(formatDocumentOverviewValue({ fieldtype: "Time", value: "23:04:19.619135" }), "23:04:19")
 	assert.equal(formatDocumentOverviewValue({ fieldtype: "Time", value: "4:05:09" }), "04:05:09")
 })
+
+test("Dispatch History and the CPM rail show posting times through the shared normaliser", async () => {
+	const { readFileSync } = await import("node:fs")
+	const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8")
+	assert.match(read("../src/departments/finishing/plan/FinishingDispatchHistoryTab.vue"), /normaliseFrappeTime\(log\.posting_time\)/)
+	assert.match(read("../src/departments/cut-panel-store/CutPanelMovementRail.vue"), /normaliseFrappeTime\(row\.posting_time\)\.slice\(0, 5\)/)
+	assert.equal(normaliseFrappeTime("6:03:58.712204"), "06:03:58")
+})
+
+test("Dispatch Box batch inputs are labelled with the batch id, not the internal row name", async () => {
+	const { readFileSync } = await import("node:fs")
+	const source = readFileSync(new URL("../src/departments/finishing/components/FinishingDispatchEntry.vue", import.meta.url), "utf8")
+	assert.match(source, /\$\{batch\.batch_id \|\| batch\.batch_row\} Dispatch boxes/)
+})

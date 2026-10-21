@@ -122,7 +122,7 @@
 				<label><span>Print Order By</span><Select v-model="printOrder" :options="['Panel', 'Bundle No']" fluid /></label>
 			</template>
 		</div>
-		<template #footer><Button label="Close" severity="secondary" text @click="printerOpen = false" /><Button label="Print" icon="pi pi-print" :disabled="!selectedPrinter || loadingPrinters" :loading="busy === 'print'" @click="printLabels" /></template>
+		<template #footer><Button label="Close" severity="secondary" text @click="printerOpen = false" /><Button v-if="subdialogError && !printers.length" label="Retry" icon="pi pi-refresh" severity="secondary" :disabled="loadingPrinters" @click="loadPrinters" /><Button label="Print" icon="pi pi-print" :disabled="!selectedPrinter || loadingPrinters" :loading="busy === 'print'" @click="printLabels" /></template>
 	</Dialog>
 
 	<Dialog v-model:visible="clothEditorOpen" modal dismissable-mask :header="clothEditIndex < 0 ? 'Add Cloth Detail' : 'Edit Cloth Detail'" class="laysheet-detail-dialog">
@@ -618,13 +618,17 @@ async function openPrinter() {
 	}
 
 	printerOpen.value = true
+	await loadPrinters()
+}
+
+async function loadPrinters() {
 	loadingPrinters.value = true
 	subdialogError.value = ""
 	selectedPrinter.value = ""
-		try {
-			printers.value = await getQzPrinters()
-		} catch (reason) {
-			actionError.value = reason.message || "Unable to connect to QZ Tray."
+	try {
+		printers.value = await getQzPrinters()
+	} catch (reason) {
+		subdialogError.value = reason.message || "Unable to connect to QZ Tray."
 	} finally {
 		loadingPrinters.value = false
 	}

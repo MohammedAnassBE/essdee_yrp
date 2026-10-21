@@ -4,7 +4,7 @@ import fs from "node:fs"
 import { linkFieldTarget } from "../src/utils/linkTarget.js"
 import { computed, defineComponent, h, nextTick, reactive, ref, watch } from "vue"
 
-function setup(props, { createGate = null } = {}) {
+function setup(props, { createGate = null, qzPrinters = async () => [] } = {}) {
 	const calls = []
 	const confirmations = []
 	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingLaySheetDialog.vue", import.meta.url), "utf8").split("<script setup>")[1].split("</script>")[0].replace(/^import .*$/gm, "")
@@ -18,8 +18,8 @@ function setup(props, { createGate = null } = {}) {
 			return { name: args.cutting_laysheet, cutting_marker: "CM-1", status: "Bundles Generated", permissions: {} }
 		}
 	}
-	const api = new Function("computed", "defineComponent", "h", "reactive", "ref", "watch", "defineProps", "defineEmits", "callMethod", "getQzPrinters", "printQzRaw", "useActionConfirmation", `${source}\nreturn { createForm, createLaySheet, generateBundles, generationParts, runStatusAction, sheet, error, actionError, loading, success, revertLabels, laysheetOverviewFields }`)(
-		computed, defineComponent, h, reactive, ref, watch, () => props, () => () => {}, callMethod, async () => [], async () => {}, () => options => confirmations.push(options),
+	const api = new Function("computed", "defineComponent", "h", "reactive", "ref", "watch", "defineProps", "defineEmits", "callMethod", "getQzPrinters", "printQzRaw", "useActionConfirmation", `${source}\nreturn { createForm, createLaySheet, generateBundles, generationParts, runStatusAction, sheet, error, actionError, loading, success, revertLabels, laysheetOverviewFields, loadPrinters, printers, subdialogError }`)(
+		computed, defineComponent, h, reactive, ref, watch, () => props, () => () => {}, callMethod, qzPrinters, async () => {}, () => options => confirmations.push(options),
 	)
 	return { ...api, calls, confirmations }
 }
@@ -116,4 +116,18 @@ test("Lay Sheet overview links carry the target DocTypes", () => {
 		const field = state.laysheetOverviewFields.value.find(field => field.fieldname === fieldname)
 		assert.deepEqual(linkFieldTarget(field), { doctype, name: state.sheet.value[fieldname] })
 	}
+})
+
+test("F-B26 QZ Tray failure stays in the Print Labels dialog and Retry reloads printers", async () => {
+	let attempts = 0
+	const qzPrinters = async () => { attempts += 1; if (attempts === 1) throw new Error("Could not connect to QZ Tray."); return ["ZEBRA"] }
+	const state = setup(reactive({ visible: false, cuttingPlan: "CP-1", laysheetName: "" }), { qzPrinters })
+	await state.loadPrinters()
+	assert.equal(state.subdialogError.value, "Could not connect to QZ Tray.")
+	assert.equal(state.actionError.value, "")
+	await state.loadPrinters()
+	assert.equal(state.subdialogError.value, "")
+	assert.deepEqual(state.printers.value, ["ZEBRA"])
+	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingLaySheetDialog.vue", import.meta.url), "utf8")
+	assert.match(source, /<Button v-if="subdialogError && !printers.length" label="Retry"[^>]*@click="loadPrinters"/)
 })

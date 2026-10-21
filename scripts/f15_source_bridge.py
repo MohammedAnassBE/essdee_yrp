@@ -941,6 +941,8 @@ def emit_framework_rows(frappe, schemas, *, metadata_only=False):
 
 
 def emit_status(frappe, schemas, source_site, *, metadata_only=False):
+	from frappe.query_builder.functions import Max
+
 	physical_coverage = audit_physical_field_coverage(frappe, schemas)
 	approved_frappe_data = approved_frappe_census(frappe)
 	approved_frappe_exact_archive = approved_frappe_exact_archive_census(frappe)
@@ -985,7 +987,8 @@ def emit_status(frappe, schemas, source_site, *, metadata_only=False):
 		if schema.get("issingle"):
 			modified[doctype] = None
 		else:
-			modified[doctype] = frappe.db.get_value(doctype, {}, "max(modified)")
+			table = frappe.qb.DocType(doctype)
+			modified[doctype] = frappe.qb.from_(table).select(Max(table.modified)).run()[0][0]
 	schema_payload = json.dumps(schemas, sort_keys=True, separators=(",", ":"), default=_json_default)
 	snapshot_payload = {
 		"site": source_site,

@@ -535,6 +535,7 @@ doc_events = {
 			"essdee_yrp.purchase_order_lots.validate_grn_lots",
 			"essdee_yrp.cutting.movement.validate_transaction_link",
 		],
+		"validate": "essdee_yrp.cutting.movement.validate_return_movement",
 		"before_submit": "essdee_yrp.cutting.movement.validate_movement_required",
 		"before_cancel": [
 			"essdee_yrp.cutting.movement.before_cancel",

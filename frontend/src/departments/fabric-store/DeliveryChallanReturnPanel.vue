@@ -28,6 +28,7 @@
 				:disabled="Boolean(acting)"
 			/>
 		</div>
+		<p v-if="movementNotice" class="delivery-challan-return-panel__notice" :class="{ 'is-error': movementError }" role="status">{{ movementNotice }}</p>
 
 		<div v-if="rows.length" class="erp-table-wrap delivery-challan-return-panel__table" role="region" tabindex="0" aria-label="Delivery Challan return quantities">
 			<table class="erp-data-table">
@@ -53,7 +54,7 @@
 								:min="0"
 								:max="Number(row.returnable_quantity || 0)"
 								:max-fraction-digits="3"
-								:disabled="Boolean(acting)"
+								:disabled="Boolean(acting) || isLocked(row)"
 								fluid
 							/>
 						</td>
@@ -77,6 +78,7 @@ import InputNumber from "primevue/inputnumber"
 import ToggleSwitch from "primevue/toggleswitch"
 import { computed, ref, watch } from "vue"
 
+import { getDeliveryChallanReturnMovement } from "../../api/fabricStore.js"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
@@ -91,14 +93,53 @@ const rows = ref([])
 const receivedType = ref("")
 const returnWholeBundles = ref(false)
 const cutPanelMovement = ref("")
+const movementRows = ref(null)
+const movementError = ref("")
+const loadingMovement = ref(false)
 const variants = computed(() => props.context.variants || {})
 const selectedQuantity = computed(() => rows.value.reduce((total, row) => total + Number(row.return_quantity || 0), 0))
 const canCreate = computed(() => Boolean(
 	selectedQuantity.value > 0
 	&& (!props.context.has_received_type || receivedType.value)
-	&& (!returnWholeBundles.value || cutPanelMovement.value)
+	&& (!returnWholeBundles.value || (cutPanelMovement.value && movementRows.value && !movementError.value))
+	&& !loadingMovement.value
 	&& !props.acting,
 ))
+const movementNotice = computed(() => {
+	if (movementError.value) return movementError.value
+	if (returnWholeBundles.value && movementRows.value) return `Every panel of ${cutPanelMovement.value} is filled in and locked. A Cut Panel Movement return must take back the whole movement.`
+	if (returnWholeBundles.value) return "Select the Cut Panel Movement that holds the returned bundles. Its quantities fill in and lock."
+	if (variants.value.whole_bundle) return `Typed panel quantities come back as collapsed stock${props.context.return_location ? ` at ${props.context.return_location}` : ""}, not as bundles. Later moves of that stock need Allow Non Bundle or a collapsed Cut Panel Movement.`
+	return ""
+})
+
+function isLocked(row) {
+	return Boolean(returnWholeBundles.value && (movementRows.value?.panel_rows || []).includes(row.delivery_challan_item))
+}
+
+let movementRequest = 0
+watch([returnWholeBundles, cutPanelMovement], async ([wholeBundles, movement]) => {
+	const request = ++movementRequest
+	movementError.value = ""
+	loadingMovement.value = false
+	if (movementRows.value) rows.value.forEach((row) => { if (isLockedBy(movementRows.value, row)) row.return_quantity = 0 })
+	movementRows.value = null
+	if (!wholeBundles || !movement || !props.context.delivery_challan) return
+	loadingMovement.value = true
+	try {
+		const result = await getDeliveryChallanReturnMovement(props.context.delivery_challan, movement)
+		if (request !== movementRequest) return
+		movementRows.value = result
+		rows.value.forEach((row) => {
+			if (isLockedBy(result, row)) row.return_quantity = Number(result.quantities?.[row.delivery_challan_item] || 0)
+		})
+	} catch (failure) {
+		if (request === movementRequest) movementError.value = failure?.message || String(failure)
+	} finally {
+		if (request === movementRequest) loadingMovement.value = false
+	}
+})
+function isLockedBy(result, row) { return (result?.panel_rows || []).includes(row.delivery_challan_item) }
 
 watch(
 	() => props.context,
@@ -136,6 +177,8 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .delivery-challan-return-panel__toggle > span { display: grid; gap: 2px; }
 .delivery-challan-return-panel__toggle strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .delivery-challan-return-panel__toggle small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); line-height: 1.25; }
+.delivery-challan-return-panel__notice { white-space: pre-line; margin: 0 var(--erp-space-3) var(--erp-space-3); padding: 8px 10px; color: var(--erp-text); font-size: var(--erp-font-size-caption); border-left: 3px solid var(--erp-accent); background: var(--erp-accent-soft); }
+.delivery-challan-return-panel__notice.is-error { border-left-color: var(--erp-danger, #c0392b); background: color-mix(in srgb, var(--erp-danger, #c0392b) 10%, var(--erp-surface)); }
 .delivery-challan-return-panel__table { margin: 0 var(--erp-space-3); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .delivery-challan-return-panel__table table { min-width: 850px; }
 .delivery-challan-return-panel__table :deep(.p-inputnumber) { min-width: 96px; }

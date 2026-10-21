@@ -7,7 +7,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, nowdate, nowtime
+from frappe.utils import cint, flt, nowdate, nowtime
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.stock.utils import get_combine_datetime
@@ -180,6 +180,8 @@ def get_cut_bundle_entry(cpm_doc, doc, target_warehouse, multiplier, cancelled=0
 		for row in ipd_doc.get("stiching_item_details") or []
 	}
 	required = _transaction_bundle_quantities(doc, ipd_doc)
+	# A return must take back the whole movement; only forward DCs may split it.
+	is_return = doc.doctype == "YRP Goods Received Note" and cint(doc.get("is_return"))
 	selected = defaultdict(float)
 	for colour in x["data"].keys():
 		part = _attribute_value(x["data"][colour]["part"])
@@ -192,8 +194,25 @@ def get_cut_bundle_entry(cpm_doc, doc, target_warehouse, multiplier, cancelled=0
 				matched = [
 					panel for panel in group_panels if _bundle_key(doc, row, grouped_panel, panel) in required
 				]
-				if not matched:
+				if not matched and not is_return:
 					continue
+				if is_return and len(matched) != len(group_panels):
+					missing = next(panel for panel in group_panels if panel not in matched)
+					frappe.throw(
+						_(
+							"Return {0} must return every panel of Cut Panel Movement {1} in full. "
+							"{2} / {3} / {4} (Lay {5}, Bundle {6}) is not in the return."
+						).format(
+							doc.name,
+							cpm_doc.name,
+							missing,
+							row.get(grouped_panel + "_colour"),
+							_attribute_value(row.get("size")),
+							row.get("lay_no"),
+							row.get("bundle_no"),
+						),
+						title=_("Return the whole Cut Panel Movement"),
+					)
 				if len(matched) != len(group_panels):
 					frappe.throw(_("Move all panels in grouped bundle {0} together.").format(grouped_panel))
 				for panel in group_panels:
@@ -251,9 +270,76 @@ def make_cut_bundle_ledger(entries, _collapsed_entries=None):
 				entry["quantity_after_transaction"] = entry["quantity"]
 
 			if entry["quantity_after_transaction"] < 0:
+				if not previous and is_bundle_collapsed(entry):
+					_throw_collapsed_bundle(entry)
 				frappe.throw("Stock is not available in Source")
 
 			make_cut_bundle_entry(entry)
+
+
+def is_bundle_collapsed(entry):
+	"""Return True when this exact bundle now lives only in collapsed stock at its location."""
+	if get_previous_entry(dict(entry, posting_date="9999-12-31", posting_time="23:59:59")):
+		return False
+	rows = attribute_db.get_all(
+		"SD YRP Cut Bundle Movement Ledger",
+		filters={"cbm_key": get_cbm_key(entry), "is_cancelled": 0, "is_collapsed": 1, "collapsed_bundle": 0},
+		fields=["set_combination"],
+	)
+	return bool(_filter_set_combination(rows, entry.get("set_combination")))
+
+
+def _throw_collapsed_bundle(entry):
+	frappe.throw(
+		_(
+			"Bundle {0} / {1} / {2} (Lay {3}, Bundle {4}) at {5} is now collapsed stock, so it cannot "
+			"move as an exact bundle. Use a Cut Panel Movement with its collapsed quantity, or type the "
+			"quantity on the Delivery Challan / Goods Received Note with Allow Non Bundle ticked."
+		).format(
+			_attribute_value(entry["panel"]),
+			_attribute_value(entry["colour"]),
+			_attribute_value(entry["size"]),
+			entry["lay_no"],
+			entry["bundle_no"],
+			entry["supplier"],
+		),
+		title=_("Collapsed stock"),
+	)
+
+
+def iter_selected_exact_bundles(movement):
+	"""Yield (row, grouped_panel) for every exact bundle selected in a CPM JSON."""
+	for colour_data in (movement.get("data") or {}).values():
+		part = _attribute_value(colour_data.get("part"))
+		panels = (movement.get("panels") or {}).get(part, []) if part else movement.get("panels") or []
+		for row in colour_data.get("data") or []:
+			for grouped_panel in panels:
+				if row.get(grouped_panel) and row.get(grouped_panel + "_moved"):
+					yield row, grouped_panel
+
+
+def validate_exact_bundles_not_collapsed(cpm_doc):
+	"""Block a Cut Panel Movement whose selected exact bundles were collapsed at its source."""
+	movement = update_if_string_instance(cpm_doc.cut_panel_movement_json) or {}
+	bundles = list(iter_selected_exact_bundles(movement))
+	if not bundles:
+		return
+	item = attribute_db.get_value("SD YRP Lot", cpm_doc.lot, "item")
+	for row, grouped_panel in bundles:
+		entry = {
+			"lot": cpm_doc.lot,
+			"item": item,
+			"supplier": cpm_doc.from_warehouse,
+			"lay_no": row.get("lay_no"),
+			"bundle_no": row.get("bundle_no"),
+			"shade": row.get("shade"),
+			"size": _attribute_value(row.get("size")),
+			"colour": row.get(grouped_panel + "_colour"),
+			"panel": grouped_panel,
+			"set_combination": row.get("set_combination"),
+		}
+		if is_bundle_collapsed(entry):
+			_throw_collapsed_bundle(entry)
 
 
 def make_cut_bundle_entry(entry):

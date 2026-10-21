@@ -15,6 +15,10 @@ from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail impor
 	get_ipd_primary_values,
 )
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
+	validate_exact_bundles_not_collapsed,
+)
+
 
 def _tuple_attributes(value):
 	return {row[0]: row[1] for row in value}
@@ -120,6 +124,7 @@ class SDYRPCutPanelMovement(Document):
 		if not json_data["data"] and not json_data["accessory_data"] and not json_data["collapsed_details"]:
 			frappe.throw(_("Select at least one panel or accessory quantity."))
 		self.cut_panel_movement_json = json_data
+		validate_exact_bundles_not_collapsed(self)
 
 	def on_submit(self):
 		if self.movement_from_cutting:

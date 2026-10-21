@@ -17,6 +17,7 @@ from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import apply_dimension_defaults, get_dimension_fieldnames
 from yrp.stock.save_stock_items import group_items_for_ui
+from yrp.utils import get_variant_attr_details
 from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	_get_warehouse_for_supplier,
 )
@@ -31,6 +32,10 @@ from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_att
 	get_dependent_attribute_details,
 )
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
+	_collapsed_set_combination_key,
+	validate_exact_bundles_not_collapsed,
+)
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 
 _COMPLETION_PURPOSES = {"DC Completion", "GRN Completion", "Receive at Warehouse"}
@@ -131,12 +136,15 @@ def validate_transaction_link(doc, method=None):
 	cpm = frappe.db.get_value(
 		"SD YRP Cut Panel Movement",
 		cpm_name,
-		["docstatus", "against", "against_id"],
+		["docstatus", "against", "against_id", "cut_panel_movement_json"],
 		as_dict=True,
 		for_update=True,
 	)
 	if not cpm or cpm.docstatus != 1:
 		frappe.throw(_("Cut Panel Movement {0} must be submitted.").format(cpm_name))
+	if doc.doctype != "YRP Stock Entry":
+		# The CPM owns the stock type: collapsed quantities move as Allow Non Bundle.
+		doc.allow_non_bundle = cint(_movement_uses_collapsed(_json_dict(cpm.cut_panel_movement_json)))
 	if cpm.against_id and (cpm.against != doc.doctype or cpm.against_id != doc.name):
 		frappe.throw(
 			_("Cut Panel Movement {0} is already linked to {1} {2}.").format(
@@ -247,6 +255,8 @@ def get_grouped_movement_rows(doc_name, target_doctype, *, allow_linked=False):
 				"Create separate movements for the two stock types."
 			)
 		)
+	if selected_exact:
+		validate_exact_bundles_not_collapsed(doc)
 	for collapsed in movement.get("collapsed_details") or []:
 		if not cint(collapsed.get("moved")):
 			continue
@@ -695,6 +705,15 @@ def validate_movement_required(doc, method=None):
 		if flt(row.get("delivered_quantity") or row.get("qty") or row.get("quantity")) > 0
 	]
 	if has_cut_stage_items(rows, lot):
+		source = doc.get("from_location") if doc.doctype == "YRP Delivery Challan" else doc.get("supplier")
+		if get_collapsed_panels(lot, source):
+			frappe.throw(
+				_(
+					"Lot {0} cut panels at {1} are collapsed stock. Tick Allow Non Bundle to move them "
+					"by quantity, or create this {2} from a Cut Panel Movement using collapsed quantity."
+				).format(lot, source, _(doc.doctype.replace("YRP ", ""))),
+				title=_("Collapsed stock"),
+			)
 		frappe.throw(
 			_(
 				"Lot {0} tracks cut bundles, so its cut panels must move through a Cut Panel Movement. "
@@ -702,6 +721,88 @@ def validate_movement_required(doc, method=None):
 			).format(lot, _(doc.doctype.replace("YRP ", ""))),
 			title=_("Use Cut Panel Movement"),
 		)
+
+
+def get_panel_key(row, ipd_doc):
+	"""Return (variant, collapsed set combination) for a cut-panel row, else None."""
+	variant = row.get("item_variant")
+	if not variant or not get_variant_attr_details(variant).get(ipd_doc.stiching_attribute):
+		return None
+	return variant, _collapsed_set_combination_key(row.get("set_combination"))
+
+
+def get_panel_quantities(rows, ipd_doc, quantity_field):
+	quantities = defaultdict(float)
+	for row in rows:
+		quantity = flt(row.get(quantity_field), 3)
+		key = get_panel_key(row, ipd_doc) if quantity > 0 else None
+		if key:
+			quantities[key] += quantity
+	return quantities
+
+
+def validate_return_movement(doc, method=None):
+	"""Require a return GRN built from a CPM to return every panel of that CPM in full."""
+	del method
+	cpm_name = doc.get("cut_panel_movement")
+	if doc.doctype != "YRP Goods Received Note" or not cpm_name or not cint(doc.get("is_return")):
+		return
+	cpm, ipd_doc, movement_rows = get_grouped_movement_rows(cpm_name, doc.doctype, allow_linked=True)
+	selected = get_panel_quantities(movement_rows, ipd_doc, "quantity")
+	returned = get_panel_quantities(doc.get("items") or [], ipd_doc, "quantity")
+	mismatches = [
+		_("{0}: Cut Panel Movement {1}, return {2}").format(
+			key[0], selected.get(key, 0), returned.get(key, 0)
+		)
+		for key in sorted(set(selected) | set(returned))
+		if flt(selected.get(key), 3) != flt(returned.get(key), 3)
+	]
+	if mismatches:
+		frappe.throw(
+			_(
+				"A return made from Cut Panel Movement {0} must return every panel and bundle in it, "
+				"in full, and nothing else.<br>{1}"
+			).format(cpm.name, "<br>".join(mismatches)),
+			title=_("Return the whole Cut Panel Movement"),
+		)
+
+
+def get_collapsed_panels(lot, location):
+	"""Return the cut panels of a Lot held as collapsed stock at a location."""
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
+		_get_latest_available_bundle_rows,
+	)
+
+	if not lot or not location:
+		return []
+	rows = _get_latest_available_bundle_rows(
+		{
+			"is_cancelled": 0,
+			"collapsed_bundle": 1,
+			"transformed": 0,
+			"supplier": _as_supplier(location),
+			"lot": lot,
+		}
+	)
+	names = [row.name for row in rows]
+	if not names:
+		return []
+	details = attribute_db.get_all(
+		"SD YRP Cut Bundle Movement Ledger",
+		filters={"name": ["in", names]},
+		fields=["item_variant", "panel", "colour", "size", "quantity_after_transaction"],
+		order_by="panel asc, colour asc, size asc",
+	)
+	return [
+		{
+			"item_variant": row.item_variant,
+			"panel": _attribute_value(row.panel),
+			"colour": _attribute_value(row.colour),
+			"size": _attribute_value(row.size),
+			"quantity": flt(row.quantity_after_transaction),
+		}
+		for row in details
+	]
 
 
 def _as_supplier(location):
@@ -738,10 +839,6 @@ def _movement_locations(doc):
 
 
 def _cancel_exact_bundle_entries(doc):
-	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_bundle_movement_ledger import (
-		_collapsed_set_combination_key,
-	)
-
 	rows = attribute_db.get_all(
 		"SD YRP Cut Bundle Movement Ledger",
 		filters={

@@ -29,6 +29,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import apply_price_details
 
 from essdee_yrp.api.work_order import fetch_summary_details
+from essdee_yrp.cutting.movement import get_collapsed_panels
 from essdee_yrp.delivery_challan_hooks import create_return_grn
 from essdee_yrp.fabric_store.documents import delivery_challan as delivery_challan_service
 from essdee_yrp.fabric_store.documents import goods_received_note as goods_received_note_service
@@ -1280,6 +1281,25 @@ def get_delivery_challan_return_editor(delivery_challan: str) -> dict:
 		"variants": delivery_challan_service._return_variants(doc),
 		"permissions": {"can_create": True},
 	}
+
+
+@frappe.whitelist()
+def get_delivery_challan_return_movement(delivery_challan: str, cut_panel_movement: str) -> dict:
+	"""Return the locked per-row quantities a whole-bundle return must use."""
+
+	doc = _get_supported_document("YRP Delivery Challan", delivery_challan)
+	frappe.has_permission("YRP Goods Received Note", ptype="create", throw=True)
+	return delivery_challan_service.get_return_movement_quantities(doc, cut_panel_movement)
+
+
+@frappe.whitelist()
+def get_collapsed_stock(lot: str, location: str) -> dict:
+	"""Return a Lot's collapsed cut panels at a location for DC/GRN guidance."""
+
+	frappe.get_doc("SD YRP Lot", lot).check_permission("read")
+	frappe.get_doc("Supplier", location).check_permission("read")
+	frappe.has_permission("SD YRP Cut Bundle Movement Ledger", "read", throw=True)
+	return {"lot": lot, "location": location, "panels": get_collapsed_panels(lot, location)}
 
 
 @frappe.whitelist()

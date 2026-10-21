@@ -40,6 +40,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger.sd_yrp_cut_
 	get_collapsed_previous_cbm_list,
 	get_cut_bundle_entry,
 	get_latest_cbml_for_variant,
+	make_cut_bundle_ledger,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
 	CutPanelMovement,
@@ -292,6 +293,56 @@ class TestCutBundleMovementTransactionFiltering(UnitTestCase):
 		# Bottom Back requires two physical panels per garment bundle. The DC
 		# therefore carries 20 pieces while CBML keeps the whole-bundle count 10.
 		self.assertEqual(sum(abs(entry["quantity"]) for entry in later_entries), 10)
+
+	def _return_grn(self, name, items):
+		return frappe._dict(
+			doctype="YRP Goods Received Note",
+			name=name,
+			is_return=1,
+			posting_date="2026-08-24",
+			posting_time="12:00:00",
+			items=[
+				frappe._dict(item_variant=variant, quantity=quantity, set_combination=self.combination)
+				for variant, quantity in items
+			],
+		)
+
+	def test_return_must_carry_every_panel_of_its_movement(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "must return every panel of Cut Panel Movement"):
+			self._entries(self._return_grn("GRN-PARTIAL", [("VAR-BACK", 20)]))
+
+		entries = self._entries(
+			self._return_grn("GRN-WHOLE", [("VAR-LEFT", 10), ("VAR-RIGHT", 10), ("VAR-BACK", 20)])
+		)
+		self.assertEqual(
+			{entry["panel"] for entry in entries},
+			{"Bottom Front Left", "Bottom Front Right", "Bottom Back"},
+		)
+
+	def test_collapsed_bundle_cannot_move_as_an_exact_bundle(self):
+		module = (
+			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_bundle_movement_ledger."
+			"sd_yrp_cut_bundle_movement_ledger"
+		)
+		entry = {
+			"is_cancelled": 0,
+			"quantity": -10,
+			"panel": "Bottom Back",
+			"colour": "Dark Grey",
+			"size": "45 cm",
+			"lay_no": "1",
+			"bundle_no": "1",
+			"supplier": "S-STORE",
+		}
+		with (
+			patch(f"{module}.get_previous_entry", return_value=None),
+			patch(f"{module}.get_future_entry", return_value=None),
+			patch(f"{module}.is_bundle_collapsed", return_value=True),
+			patch(f"{module}.make_cut_bundle_entry") as make_entry,
+			self.assertRaisesRegex(frappe.ValidationError, "at S-STORE is now collapsed stock"),
+		):
+			make_cut_bundle_ledger([entry])
+		make_entry.assert_not_called()
 
 	def test_grouped_panel_keeps_one_ledger_identity(self):
 		movement = json.loads(self.cpm.cut_panel_movement_json)

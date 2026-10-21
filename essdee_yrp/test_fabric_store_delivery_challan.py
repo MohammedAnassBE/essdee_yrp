@@ -8,6 +8,7 @@ from essdee_yrp.fabric_store.documents.delivery_challan import (
 	_validate_and_sync_party_dependencies,
 	execute_delivery_challan_command,
 	get_delivery_challan_workspace,
+	get_return_movement_quantities,
 	preview_delivery_challan_source,
 	save_delivery_challan,
 )
@@ -680,7 +681,7 @@ class TestFabricStoreDeliveryChallan(TestCase):
 			patch("essdee_yrp.fabric_store.documents.delivery_challan._target_create_permission", return_value=True),
 			patch(
 				"essdee_yrp.fabric_store.documents.delivery_challan._load_return_movement",
-				return_value=frappe._dict(name="CPM-RETURN-1", lot=doc.lot),
+				return_value=frappe._dict(name="CPM-RETURN-1", lot=doc.lot, from_warehouse=doc.supplier),
 			),
 			patch(
 				"essdee_yrp.fabric_store.documents.delivery_challan.create_essdee_return_grn",
@@ -791,6 +792,36 @@ class TestFabricStoreDeliveryChallan(TestCase):
 				)
 
 		create_return.assert_not_called()
+
+	def test_whole_bundle_return_rejects_a_movement_from_another_location(self):
+		doc = self.make_document(docstatus=1)
+		movement = frappe._dict(name="CPM-ELSEWHERE", lot=doc.lot, from_warehouse="S-OTHER")
+		with patch("essdee_yrp.fabric_store.documents.delivery_challan._load_return_movement", return_value=movement):
+			with self.assertRaisesRegex(frappe.ValidationError, "is from S-OTHER"):
+				get_return_movement_quantities(doc, movement.name)
+
+	def _movement_quantities(self, movement_qty, returnable):
+		doc = self.make_document(docstatus=1)
+		doc["items"][0].set_combination = {"major_colour": "Green"}
+		movement = frappe._dict(name="CPM-RET", lot=doc.lot, from_warehouse=doc.supplier)
+		rows = [{"item_variant": "RAW-S", "quantity": movement_qty, "set_combination": {"major_colour": "Green"}}]
+		with (
+			patch("essdee_yrp.fabric_store.documents.delivery_challan._load_return_movement", return_value=movement),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_grouped_movement_rows", return_value=(movement, frappe._dict(stiching_attribute="Panel"), rows)),
+			patch("essdee_yrp.cutting.movement.get_variant_attr_details", return_value={"Panel": "Sleeve"}),
+			patch(
+				"essdee_yrp.fabric_store.documents.delivery_challan.get_return_delivery_items",
+				return_value={"items": [{"delivery_challan_item": "DCI-1", "returnable_quantity": returnable}]},
+			),
+		):
+			return get_return_movement_quantities(doc, movement.name)
+
+	def test_whole_bundle_return_prefills_every_movement_quantity(self):
+		self.assertEqual(self._movement_quantities(4, 5)["quantities"], {"DCI-1": 4})
+
+	def test_whole_bundle_return_blocks_a_movement_larger_than_the_returnable_quantity(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Cut Panel Movement has 6.0, this Delivery Challan can return 5.0"):
+			self._movement_quantities(6, 5)
 
 	def test_whole_bundle_return_rejects_a_linked_movement(self):
 		doc = self.make_document(docstatus=1)

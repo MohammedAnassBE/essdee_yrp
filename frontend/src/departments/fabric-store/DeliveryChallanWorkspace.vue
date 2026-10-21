@@ -31,6 +31,7 @@
 			</template>
 
 			<template #fields>
+				<p v-if="collapsedStockNotice" class="collapsed-stock-notice" :class="{ 'is-ticked': Number(form.allow_non_bundle || 0) }" role="status">{{ collapsedStockNotice }}</p>
 				<DocumentFieldGroupGrid
 					v-if="canEdit && visibleFields.length"
 					:groups="primaryFieldGroups"
@@ -238,6 +239,7 @@ import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import DeliveryChallanReturnPanel from "./DeliveryChallanReturnPanel.vue"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
+import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
 
@@ -329,6 +331,16 @@ const canOfferSubmittedEdit = computed(() => Boolean(
 	&& !workspace.value.special_source?.read_only,
 ))
 const canEdit = computed(() => canEditDraft.value || editingSubmitted.value)
+const { collapsedStockNotice } = useCollapsedStockGuard({
+	enabled: () => canEditDraft.value,
+	lot: () => form.lot,
+	location: () => form.from_location,
+	movement: () => form.cut_panel_movement || workspace.value.record?.cut_panel_movement,
+	allowNonBundle: () => form.allow_non_bundle,
+	setAllowNonBundle: (value) => setField("allow_non_bundle", value),
+	doctypeLabel: "Delivery Challan",
+	autoTick: true,
+})
 function canEditMatrixBlock(kind) {
 	if (!canEdit.value || workspace.value.special_source?.read_only) return false
 	if (!editingSubmitted.value) return true
@@ -957,4 +969,6 @@ function documentDeleted() {
 @media (max-width: 620px) { .delivery-challan-field-fact { min-height: 46px; padding: 6px 8px; } .delivery-challan-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
+.collapsed-stock-notice { margin: 0 0 var(--erp-space-3); padding: 8px 10px; color: var(--erp-text); font-size: var(--erp-font-size-caption); border-left: 3px solid var(--erp-warning, #d97706); background: color-mix(in srgb, var(--erp-warning, #d97706) 10%, var(--erp-surface)); }
+.collapsed-stock-notice.is-ticked { border-left-color: var(--erp-accent); background: var(--erp-accent-soft); }
 </style>

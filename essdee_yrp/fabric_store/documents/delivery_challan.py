@@ -26,6 +26,7 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 )
 
 from essdee_yrp.cutting.movement import _load_movement as _load_return_movement
+from essdee_yrp.cutting.movement import get_grouped_movement_rows, get_panel_key, get_panel_quantities
 from essdee_yrp.delivery_challan_hooks import create_return_grn as create_essdee_return_grn
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
@@ -381,6 +382,7 @@ def _return_variants(doc) -> dict:
 		"cut_panel_movement_filters": {
 			"docstatus": 1,
 			"lot": doc.get("lot"),
+			"from_warehouse": doc.get("supplier"),
 			"against_id": ["is", "not set"],
 		},
 	}
@@ -394,6 +396,8 @@ def _return_context(doc) -> dict:
 	except (frappe.ValidationError, frappe.PermissionError) as error:
 		context = {"items": [], "reason": str(error)}
 	context["variants"] = _return_variants(doc)
+	context["delivery_challan"] = doc.name
+	context["return_location"] = doc.get("from_location")
 	return context
 
 
@@ -832,7 +836,57 @@ def _validate_return_variant(
 				doc.get("lot") or _("an unspecified Lot"),
 			)
 		)
+	if movement.get("from_warehouse") != doc.get("supplier"):
+		frappe.throw(
+			_("Cut Panel Movement {0} is from {1}, but this return comes back from {2}.").format(
+				movement.name, movement.get("from_warehouse"), doc.get("supplier")
+			)
+		)
 	return movement.name
+
+
+def get_return_movement_quantities(doc, cut_panel_movement: str) -> dict:
+	"""Map every panel of a return CPM onto this DC's returnable rows, or explain why it cannot."""
+	cut_panel_movement = _validate_return_variant(
+		doc, return_whole_bundles=True, cut_panel_movement=cut_panel_movement
+	)
+	_movement, ipd_doc, movement_rows = get_grouped_movement_rows(
+		cut_panel_movement, "YRP Goods Received Note"
+	)
+	returnable = {
+		row["delivery_challan_item"]: flt(row.get("returnable_quantity"))
+		for row in (get_return_delivery_items(doc.name) or {}).get("items") or []
+	}
+	dc_rows = [(row, get_panel_key(row, ipd_doc)) for row in doc.get("items") or [] if row.name in returnable]
+	quantities = {}
+	problems = []
+	for key, quantity in get_panel_quantities(movement_rows, ipd_doc, "quantity").items():
+		variant, remaining = key[0], quantity
+		for row, row_key in dc_rows:
+			if remaining <= 0 or row_key != key:
+				continue
+			allocated = min(remaining, returnable[row.name])
+			if allocated > 0:
+				quantities[row.name] = allocated
+				remaining = flt(remaining - allocated, 3)
+		if remaining > 0:
+			problems.append(
+				_("{0}: Cut Panel Movement has {1}, this Delivery Challan can return {2}").format(
+					variant, quantity, flt(quantity - remaining, 3)
+				)
+			)
+	if problems:
+		frappe.throw(
+			_(
+				"Cut Panel Movement {0} cannot be returned in full against Delivery Challan {1}.<br>{2}"
+			).format(cut_panel_movement, doc.name, "<br>".join(problems)),
+			title=_("Return the whole Cut Panel Movement"),
+		)
+	return {
+		"cut_panel_movement": cut_panel_movement,
+		"quantities": quantities,
+		"panel_rows": [row.name for row, row_key in dc_rows if row_key],
+	}
 
 
 def _prepare_notification(doc, payload: Mapping) -> dict:

@@ -31,6 +31,7 @@
 			</template>
 
 			<template #fields>
+				<p v-if="collapsedStockNotice" class="collapsed-stock-notice" :class="{ 'is-ticked': Number(form.allow_non_bundle || 0) }" role="status">{{ collapsedStockNotice }}</p>
 				<DocumentFieldGroupGrid
 					v-if="canEdit && visibleFields.length"
 					:groups="primaryFieldGroups"
@@ -276,6 +277,7 @@ import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { normaliseFrappeTime, hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
+import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
 import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, unusedLotsForEntry } from "./grnLotOptions.js"
@@ -375,6 +377,16 @@ const canOfferSubmittedEdit = computed(() => Boolean(
 	&& !workspace.value.special_source?.read_only,
 ))
 const canEdit = computed(() => canEditDraft.value || editingSubmitted.value)
+const { collapsedStockNotice } = useCollapsedStockGuard({
+	enabled: () => canEditDraft.value && !Number(form.is_return || 0),
+	lot: () => form.lot,
+	location: () => form.supplier,
+	movement: () => form.cut_panel_movement || workspace.value.record?.cut_panel_movement,
+	allowNonBundle: () => form.allow_non_bundle,
+	setAllowNonBundle: (value) => setField("allow_non_bundle", value),
+	doctypeLabel: "Goods Received Note",
+	autoTick: false,
+})
 const actualDia = computed(() => workspace.value.actual_dia || { enabled: false, dia_options: [] })
 const hasActualDia = computed(() => canEditDraft.value && actualDia.value.enabled)
 const lotFieldname = computed(() => workspace.value.lot_fieldname || "lot")
@@ -1005,4 +1017,6 @@ function documentDeleted() {
 @media (max-width: 620px) { .goods-received-note-field-fact { min-height: 46px; padding: 6px 8px; } .goods-received-note-matrix__stack { padding: var(--erp-space-2); } }
 :global(.fabric-action-dialog .p-dialog-content) { min-height: 0; }
 @media (max-width: 620px) { :global(.fabric-action-dialog) { width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; margin: 0; border-radius: 0; } :global(.fabric-action-dialog .p-dialog-content) { flex: 1; overflow-y: auto; } }
+.collapsed-stock-notice { margin: 0 0 var(--erp-space-3); padding: 8px 10px; color: var(--erp-text); font-size: var(--erp-font-size-caption); border-left: 3px solid var(--erp-warning, #d97706); background: color-mix(in srgb, var(--erp-warning, #d97706) 10%, var(--erp-surface)); }
+.collapsed-stock-notice.is-ticked { border-left-color: var(--erp-accent); background: var(--erp-accent-soft); }
 </style>

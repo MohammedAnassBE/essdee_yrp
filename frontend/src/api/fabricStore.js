@@ -160,6 +160,17 @@ export function getDeliveryChallanReturnEditor(deliveryChallan) {
 	})
 }
 
+export function getDeliveryChallanReturnMovement(deliveryChallan, cutPanelMovement) {
+	return callMethod(`${WORKSPACE_METHOD}.get_delivery_challan_return_movement`, {
+		delivery_challan: deliveryChallan,
+		cut_panel_movement: cutPanelMovement,
+	})
+}
+
+export function getCollapsedStock(lot, location) {
+	return callMethod(`${WORKSPACE_METHOD}.get_collapsed_stock`, { lot, location })
+}
+
 export function createDeliveryChallanReturn(deliveryChallan, items, receivedType = "") {
 	return callMethod(`${WORKSPACE_METHOD}.create_delivery_challan_return`, {
 		delivery_challan: deliveryChallan,

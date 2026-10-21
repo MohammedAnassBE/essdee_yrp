@@ -644,11 +644,18 @@ class FrappeBulkTarget:
 			row = {
 				key: value
 				for key, value in document.items()
-				if key not in table_fields and key not in {"doctype", "__migration_passwords"}
+				if key not in table_fields
+				and key not in {"doctype", "__migration_passwords", "__migration_login_hash"}
 			}
 			parent_rows.append(row)
 			for fieldname, value in (document.get("__migration_passwords") or {}).items():
 				passwords.append((document["name"], fieldname, value))
+			if document.get("__migration_login_hash"):
+				frappe.db.sql(
+					"INSERT INTO __Auth (doctype,name,fieldname,password,encrypted) VALUES (%s,%s,'password',%s,0) "
+					"ON DUPLICATE KEY UPDATE password=VALUES(password),encrypted=VALUES(encrypted)",
+					(target_doctype, document["name"], document["__migration_login_hash"]),
+				)
 
 		self._bulk_upsert(target_doctype, parent_rows)
 		self._replace_child_tables(meta, documents)
@@ -3345,6 +3352,16 @@ def _verify_approved_frappe_data(
 				failures.append(
 					f"Approved Frappe credential mismatch: {doctype} {document['name']}.{fieldname}"
 				)
+		if document.get("__migration_login_hash"):
+			actual = frappe.db.sql(
+				"SELECT password FROM __Auth WHERE doctype=%s AND name=%s AND fieldname='password' AND encrypted=0",
+				(doctype, document["name"]),
+			)
+			verified_password_values += 1
+			if not actual or not compare_digest(
+				str(actual[0][0]).encode(), str(document["__migration_login_hash"]).encode()
+			):
+				failures.append(f"Approved Frappe login hash mismatch: {doctype} {document['name']}")
 		if len(batch) >= batch_size:
 			flush()
 		if failures:
@@ -3416,7 +3433,12 @@ def _transform_supporting_document(
 	output: dict[str, Any] = {"doctype": target_doctype}
 	table_fields = {field.fieldname for field in meta.fields if field.fieldtype in TABLE_FIELD_TYPES}
 	meta_fields = {field.fieldname for field in meta.fields if field.fieldname}
-	known = columns | table_fields | set(SYSTEM_FIELDS) | {"doctype", "__migration_passwords"}
+	known = (
+		columns
+		| table_fields
+		| set(SYSTEM_FIELDS)
+		| {"doctype", "__migration_passwords", "__migration_login_hash"}
+	)
 	if meta.issingle:
 		# Singles live in tabSingles rather than physical per-DocType columns.
 		known.update(meta_fields)
@@ -3466,6 +3488,8 @@ def _transform_supporting_document(
 	}
 	if passwords:
 		output["__migration_passwords"] = passwords
+	if document.get("__migration_login_hash"):
+		output["__migration_login_hash"] = document["__migration_login_hash"]
 	return output
 
 
@@ -5320,7 +5344,7 @@ def _collect_expected_value_rows(
 		fieldname: value
 		for fieldname, value in document.items()
 		if fieldname not in table_fields
-		and fieldname not in {"doctype", "__migration_passwords"}
+		and fieldname not in {"doctype", "__migration_passwords", "__migration_login_hash"}
 		and fieldname not in VOLATILE_VERIFICATION_FIELDS.get(doctype, ())
 	}
 	if parent:

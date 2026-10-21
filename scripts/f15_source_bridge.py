@@ -647,6 +647,18 @@ def _add_runtime_passwords(frappe, doctype, name, row):
 		row["__migration_passwords"] = passwords
 
 
+def _add_login_password_hash(frappe, name, row):
+	"""Carry the unencrypted User login hash; the target writes it raw."""
+	if name in ("Administrator", "Guest"):
+		return
+	result = frappe.db.sql(
+		"SELECT password FROM __Auth WHERE doctype='User' AND name=%s AND fieldname='password' AND encrypted=0",
+		(name,),
+	)
+	if result and result[0][0]:
+		row["__migration_login_hash"] = result[0][0]
+
+
 def _finishing_plan_versions(frappe, names=None):
 	filters = {"ref_doctype": "Finishing Plan"}
 	if names is not None:
@@ -1854,6 +1866,8 @@ def _approved_frappe_document(frappe, doctype, name, spine_doctypes, *, password
 
 	if passwords:
 		_add_runtime_passwords(frappe, doctype, name, document)
+		if doctype == "User":
+			_add_login_password_hash(frappe, name, document)
 	return document
 
 

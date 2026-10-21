@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import runpy
 import unittest
 from contextlib import ExitStack
 from dataclasses import replace
@@ -66,6 +67,7 @@ from essdee_yrp.migration.live import (
 	_target_reset_counts,
 	_target_reset_file_names,
 	_transform_source_document,
+	_transform_supporting_document,
 	_validate_configured_default_contract,
 	_validate_external_references,
 	_validate_required_target_values,
@@ -711,6 +713,81 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			result = _verify_approved_frappe_data(SimpleNamespace(), source)
 		self.assertEqual(result["status"], "Failed")
 		self.assertNotIn("source-secret", str(result))
+
+	def test_bridge_carries_raw_user_login_hash_except_system_users(self):
+		bridge = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts/f15_source_bridge.py"))
+		add_hash = bridge["_add_login_password_hash"]
+		source = SimpleNamespace(db=SimpleNamespace(sql=Mock(return_value=[("$pbkdf2-sha256$hash",)])))
+		row = {}
+		add_hash(source, "user@example.test", row)
+		self.assertEqual(row["__migration_login_hash"], "$pbkdf2-sha256$hash")
+		self.assertIn("encrypted=0", source.db.sql.call_args.args[0])
+
+		for system_user in ("Administrator", "Guest"):
+			row = {}
+			add_hash(source, system_user, row)
+			self.assertNotIn("__migration_login_hash", row)
+
+		source.db.sql.return_value = []
+		row = {}
+		add_hash(source, "no-hash@example.test", row)
+		self.assertNotIn("__migration_login_hash", row)
+
+	def test_supporting_transform_keeps_user_login_hash(self):
+		document = {"doctype": "User", "name": "user@example.test", "__migration_login_hash": "hash"}
+		output = _transform_supporting_document(document, "User", {})
+		self.assertEqual(output["__migration_login_hash"], "hash")
+
+	def test_bulk_target_writes_login_hash_raw_and_encrypts_password_fields(self):
+		from frappe.utils.password import check_password, passlibctx
+
+		name = "login-hash-migration@example.test"
+		source_hash = passlibctx.hash("mrp-login")
+		document = {
+			"doctype": "User",
+			"name": name,
+			"__migration_passwords": {"api_secret": "decrypted-secret"},
+			"__migration_login_hash": source_hash,
+		}
+		frappe.db.savepoint("login_hash_test")
+		try:
+			frappe.db.sql(
+				"INSERT INTO __Auth (doctype,name,fieldname,password,encrypted) "
+				"VALUES ('User',%s,'password','erp-hash',0)",
+				(name,),
+			)
+			with (
+				patch.object(FrappeBulkTarget, "_bulk_upsert") as bulk_upsert,
+				patch.object(FrappeBulkTarget, "_replace_child_tables"),
+				patch("essdee_yrp.migration.live.set_encrypted_password") as set_password,
+			):
+				FrappeBulkTarget().upsert_batch("User", [document])
+			stored = frappe.db.sql(
+				"SELECT password, encrypted FROM __Auth WHERE doctype='User' AND name=%s AND fieldname='password'",
+				(name,),
+			)
+			self.assertEqual(stored, ((source_hash, 0),))
+			self.assertEqual(check_password(name, "mrp-login", delete_tracker_cache=False), name)
+			set_password.assert_called_once_with("User", name, "decrypted-secret", fieldname="api_secret")
+			self.assertNotIn("__migration_login_hash", bulk_upsert.call_args.args[1][0])
+		finally:
+			frappe.db.rollback(save_point="login_hash_test")
+
+	def test_approved_frappe_verifier_compares_raw_login_hash(self):
+		document = {"doctype": "User", "name": "user@example.test", "__migration_login_hash": "source-hash"}
+		source = SimpleNamespace(iter_approved_frappe_documents=lambda: iter([document]))
+		verification = {"documents": 1, "values": 1, "skipped_password_values": 0, "failures": []}
+		cases = [((("source-hash",),), "Pass"), ((("other-hash",),), "Failed"), ((), "Failed")]
+		for stored, status in cases:
+			with (
+				patch("essdee_yrp.migration.live._prepare_approved_frappe_document", return_value=document),
+				patch("essdee_yrp.migration.live._verify_transformed_value_batch", return_value=verification),
+				patch("essdee_yrp.migration.live._reconcile_approved_user_unique_values", return_value={}),
+				patch("essdee_yrp.migration.live.frappe.db.sql", return_value=stored),
+			):
+				result = _verify_approved_frappe_data(SimpleNamespace(), source)
+			self.assertEqual(result["status"], status)
+			self.assertNotIn("source-hash", str(result["failures"]))
 
 	def test_purchase_invoice_flush_projects_rows_before_upsert(self):
 		target = Mock()

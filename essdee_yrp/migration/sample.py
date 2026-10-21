@@ -1491,6 +1491,7 @@ def _do_percentage_approved_frappe_data(
 
 def _strip_password_values(document: dict[str, Any]) -> int:
 	passwords = document.pop("__migration_passwords", {}) or {}
+	document.pop("__migration_login_hash", None)
 	meta = frappe.get_meta(str(document["doctype"]))
 	password_fieldnames = {
 		field.fieldname for field in meta.fields if field.fieldname and field.fieldtype == "Password"

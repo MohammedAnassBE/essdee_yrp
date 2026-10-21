@@ -1,7 +1,34 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { readFileSync } from "node:fs"
 import { canReadDoctype, deskDocumentPath, documentLinkTarget, linkFieldTarget } from "../src/utils/linkTarget.js"
 import { hasWebDocumentPage, webDocumentPath, webDocumentRoute } from "../src/router/webDocumentRoutes.js"
+
+test("F-B38 Work Order links use existing department detail routes and masters stay on Desk", () => {
+	const routes = readFileSync(new URL("../src/router/index.js", import.meta.url), "utf8")
+	for (const department of ["sewing", "cut-panel-store", "accessory-store"]) {
+		for (const path of [`/web/${department}`, `/web/${department}/work-orders/WO-1`]) {
+			assert.equal(documentLinkTarget("YRP Work Order", "WO/1", path).route, `/${department}/work-orders/WO%2F1`)
+			for (const doctype of ["YRP Process", "Supplier", "Address"]) {
+				assert.deepEqual(documentLinkTarget(doctype, "A/B", path), { href: deskDocumentPath(doctype, "A/B"), route: null })
+			}
+		}
+		assert.ok(routes.includes(`path: "/${department}/work-orders/:workOrderId"`))
+	}
+	for (const path of ["/web/fabric-store", "/web/cutting", "/web/sewing-other"]) {
+		assert.equal(webDocumentPath("YRP Work Order", "WO/1", path), "/web/fabric-store/work-orders/WO%2F1")
+	}
+	assert.doesNotMatch(routes, /path: "\/cutting\/work-orders\//)
+})
+
+test("F-D24 Sewing DC and GRN links use registered Sewing detail routes", () => {
+	const routes = readFileSync(new URL("../src/router/index.js", import.meta.url), "utf8")
+	for (const [doctype, slug, param] of [["YRP Delivery Challan", "delivery-challans", "deliveryChallanId"], ["YRP Goods Received Note", "goods-received-notes", "goodsReceivedNoteId"]]) {
+		assert.equal(webDocumentPath(doctype, "DOC/1", "/web/sewing/work-orders/WO-1"), `/web/sewing/${slug}/DOC%2F1`)
+		assert.ok(routes.includes(`path: "/sewing/${slug}/:${param}"`))
+		assert.equal(webDocumentPath(doctype, "DOC/1", "/web/fabric-store"), `/web/fabric-store/${slug}/DOC%2F1`)
+	}
+})
 
 test("read permission uses boot can_read and both Administrator identities", () => {
 	const previous = globalThis.window
@@ -68,4 +95,14 @@ test("F-A18 Sales PPO linked lots open the Merch Lot page while other department
 	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/merch/production-orders/PPO-1"), "/web/merch/lots/LOT%2F1")
 	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/purchase"), "/web/purchase/lots/LOT%2F1")
 	assert.equal(webDocumentPath("SD YRP Lot", "LOT/1", "/web/sales-other"), "/web/purchase/lots/LOT%2F1")
+})
+
+test("F-D24 Sewing DC and GRN pages duplicate into Sewing creation routes", async () => {
+	const { readFileSync } = await import("node:fs")
+	const routes = readFileSync(new URL("../src/router/index.js", import.meta.url), "utf8")
+	for (const slug of ["delivery-challans", "goods-received-notes"]) {
+		assert.ok(routes.includes(`path: "/sewing/${slug}/new"`))
+	}
+	assert.ok(routes.includes('duplicateRouteName: "sewing-delivery-challan-new"'))
+	assert.ok(routes.includes('duplicateRouteName: "sewing-goods-received-note-new"'))
 })

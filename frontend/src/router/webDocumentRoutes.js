@@ -24,7 +24,16 @@ const recordRoutes = {
 }
 
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/sewing": {
+		"YRP Work Order": (name) => `/web/sewing/work-orders/${encodeURIComponent(name)}`,
+		"YRP Delivery Challan": (name) => `/web/sewing/delivery-challans/${encodeURIComponent(name)}`,
+		"YRP Goods Received Note": (name) => `/web/sewing/goods-received-notes/${encodeURIComponent(name)}`,
+	},
+	"/accessory-store": {
+		"YRP Work Order": (name) => `/web/accessory-store/work-orders/${encodeURIComponent(name)}`,
+	},
 	"/cut-panel-store": {
+		"YRP Work Order": (name) => `/web/cut-panel-store/work-orders/${encodeURIComponent(name)}`,
 		"YRP Delivery Challan": (name) => `/web/cut-panel-store/delivery-challans/${encodeURIComponent(name)}`,
 		"YRP Goods Received Note": (name) => `/web/cut-panel-store/goods-received-notes/${encodeURIComponent(name)}`,
 	},

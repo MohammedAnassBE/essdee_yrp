@@ -4,6 +4,10 @@ const WORKSPACE_METHOD = "essdee_yrp.sewing.web_workspace"
 const PLAN_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan"
 const CLOSED_WO_METHOD = "essdee_yrp.sewing.closed_work_order"
 
+export function getSewingWorkOrderProcesses() {
+	return callMethod("essdee_yrp.sewing.read_models.get_sewing_work_order_processes")
+}
+
 export function getSewingCapabilities() {
 	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
 }

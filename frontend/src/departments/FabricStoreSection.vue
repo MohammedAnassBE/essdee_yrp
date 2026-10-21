@@ -16,6 +16,7 @@ import Message from "primevue/message"
 import { computed, onMounted, ref, watch } from "vue"
 
 import { getFabricStoreCapabilities } from "../api/fabricStore.js"
+import { getSewingWorkOrderProcesses } from "../api/sewing.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import ListPageSkeleton from "../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
@@ -42,9 +43,11 @@ const definitions = {
 }
 const definition = computed(() => definitions[props.section] || definitions.work_orders)
 const capability = ref(null)
+const workOrderFilters = ref([])
 const sectionProps = computed(() => ({
 	capability: capability.value,
 	...(props.section === "work_orders" ? {
+		filters: workOrderFilters.value,
 		viewRouteName: props.workOrderViewRouteName,
 		newRouteName: props.workOrderNewRouteName,
 	} : {}),
@@ -56,22 +59,32 @@ const sectionProps = computed(() => ({
 }))
 const loading = ref(true)
 const error = ref("")
+let loadSequence = 0
 
 async function load() {
+	const sequence = ++loadSequence
+	const section = props.section, basePath = props.basePath
 	loading.value = true
 	error.value = ""
 	try {
 		const payload = await getFabricStoreCapabilities() || {}
-		capability.value = payload.sections?.[props.section] || null
+		const nextCapability = payload.sections?.[section] || null
+		const filters = section === "work_orders" && basePath === "/sewing" && nextCapability
+			? [["process_name", "in", await getSewingWorkOrderProcesses() || []]]
+			: []
+		if (sequence !== loadSequence) return
+		capability.value = nextCapability
+		workOrderFilters.value = filters
 	} catch (reason) {
+		if (sequence !== loadSequence) return
 		error.value = reason?.message || `Unable to load ${definition.value.label}.`
 	} finally {
-		loading.value = false
+		if (sequence === loadSequence) loading.value = false
 	}
 }
 
 onMounted(load)
-watch(() => props.section, load)
+watch(() => [props.section, props.basePath], load)
 </script>
 
 <style scoped>

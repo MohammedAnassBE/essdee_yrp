@@ -11,6 +11,7 @@
 			:status-options="statusOptions"
 			:default-columns="defaultColumns"
 			:column-labels="columnLabels"
+			:filters="filters"
 			viewport-bounded
 			clickable
 			@row-click="openWorkOrder"
@@ -35,6 +36,7 @@ import { openListDocument } from "../../router/listDocumentNavigation.js"
 
 const props = defineProps({
 	capability: { type: Object, required: true },
+	filters: { type: Array, default: () => [] },
 	viewRouteName: { type: String, default: "fabric-work-order" },
 	newRouteName: { type: String, default: "fabric-work-order-new" },
 })

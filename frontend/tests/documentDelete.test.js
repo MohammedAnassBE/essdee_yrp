@@ -1,6 +1,17 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { readFileSync } from "node:fs"
 import { canDeleteDocument, documentDeletedToast, getDeleteRedirectTarget } from "../src/utils/documentDelete.js"
+
+test("F-D24 Sewing DC and GRN delete redirects return to Sewing Work Orders", () => {
+	const routes = readFileSync(new URL("../src/router/index.js", import.meta.url), "utf8")
+	for (const slug of ["delivery-challans", "goods-received-notes"]) {
+		const route = routes.split(`path: "/sewing/${slug}/:`)[1]?.split("\n\t},")[0]
+		assert.ok(route, slug)
+		const backTo = route.match(/backTo: "([^"]+)"/)[1]
+		assert.equal(getDeleteRedirectTarget("", backTo), "/sewing/work-orders")
+	}
+})
 
 test("only named drafts and cancelled documents with delete permission can be deleted", () => {
 	for (const docstatus of [0, "0", 2, "2"]) assert.equal(canDeleteDocument({ name: "DOC-1", docstatus, permissions: { delete: 1 } }), true)

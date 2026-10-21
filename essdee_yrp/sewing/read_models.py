@@ -20,6 +20,36 @@ from essdee_yrp.sewing.config import get_sewing_input_configuration
 from essdee_yrp.sewing.entry import _entry_bucket, _variant_attributes, get_data_entry_data
 
 
+@frappe.whitelist()
+def get_sewing_work_order_processes():
+	"""Return the stitching processes, including the Sewing Plan process, and their parent groups."""
+	frappe.has_permission("YRP Work Order", "read", throw=True)
+	processes = list(
+		dict.fromkeys(
+			filter(
+				None,
+				[
+					frappe.db.get_single_value("SD YRP IPD Settings", "default_stitching_process"),
+					frappe.db.get_single_value("SD YRP MRP Settings", "finishing_inward_process"),
+				],
+			)
+		)
+	)
+	if not processes:
+		return []
+	parents = frappe.get_all(
+		"YRP Process Details",
+		filters={"parenttype": "YRP Process", "process_name": ["in", processes]},
+		pluck="parent",
+	)
+	groups = (
+		frappe.get_all("YRP Process", filters={"name": ["in", parents], "is_group": 1}, pluck="name")
+		if parents
+		else []
+	)
+	return list(dict.fromkeys([*processes, *groups]))
+
+
 def _plans(supplier, *, lots=None, items=None):
 	supplier = cstr(supplier).strip()
 	if not supplier:

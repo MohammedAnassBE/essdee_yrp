@@ -41,7 +41,7 @@ class SDYRPFGStockEntry(Document):
 			)[1]
 			if not flt(row.rate):
 				row.rate = get_item_variant_price(row.item_variant, variant_uom=row.uom)
-		if not self.consumed and flt(row.rate) <= 0:
+		if not self.consumed and flt(row.rate) <= 0 and not row.allow_zero_valuation_rate:
 			frappe.throw(
 				_("Row {0}: A positive valuation rate is required for stock receipt.").format(row.idx)
 			)
@@ -106,16 +106,18 @@ class SDYRPFGStockEntry(Document):
 			doc.to_warehouse = self.warehouse
 
 		detail_meta = frappe.get_meta("YRP Stock Entry Detail")
+		fg_lot = get_default_fg_lot()
 		for source in self.items:
 			values = {
 				"item": source.item_variant,
 				"qty": source.qty,
 				"uom": source.uom,
 				"rate": flt(source.rate) / (flt(source.conversion_factor) or 1),
+				"allow_zero_valuation_rate": source.allow_zero_valuation_rate,
 			}
-			for fieldname in get_dimension_fieldnames():
+			for fieldname, value in get_stock_dimensions(source, fg_lot).items():
 				if detail_meta.get_field(fieldname):
-					values[fieldname] = source.get(fieldname)
+					values[fieldname] = value
 			doc.append("items", values)
 		return doc
 
@@ -123,6 +125,7 @@ class SDYRPFGStockEntry(Document):
 		from yrp.stock.stock_ledger import make_sl_entries
 
 		entries = []
+		fg_lot = get_default_fg_lot()
 		for row in self.items:
 			entry = frappe._dict(
 				item=row.item_variant,
@@ -137,11 +140,23 @@ class SDYRPFGStockEntry(Document):
 				rate=(flt(row.rate) / (flt(row.conversion_factor) or 1)) if not self.consumed else 0,
 				outgoing_rate=(flt(row.rate) / (flt(row.conversion_factor) or 1)) if self.consumed else 0,
 			)
-			for fieldname in get_dimension_fieldnames():
-				entry[fieldname] = row.get(fieldname)
+			entry.update(get_stock_dimensions(row, fg_lot))
 			entries.append(entry)
 		entries.reverse()
 		make_sl_entries(entries, cancel=True)
+
+
+def get_default_fg_lot() -> str:
+	"""All FG stock moves on the Default FG Lot of YRP Stock Settings, as in the old MRP."""
+	fg_lot = frappe.db.get_single_value("YRP Stock Settings", "default_fg_lot")
+	if not fg_lot:
+		frappe.throw(_("Set Default FG Lot in YRP Stock Settings."))
+	return fg_lot
+
+
+def get_stock_dimensions(row, fg_lot: str) -> dict:
+	"""The row's stock dimensions with the lot replaced by the FG lot; the row keeps its own lot."""
+	return {fieldname: row.get(fieldname) for fieldname in get_dimension_fieldnames()} | {"lot": fg_lot}
 
 
 def _validate_warehouse_user(warehouse: str):

@@ -128,13 +128,28 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		self.assertEqual(linked.docstatus, 1)
 		self.assertEqual(linked.against, "SD YRP FG Stock Entry")
 		self.assertEqual(linked.against_id, doc.name)
-		self.assertEqual(linked.items[0].lot, "Open Lot")
+		self.assertEqual(linked.items[0].lot, frappe.db.get_single_value("YRP Stock Settings", "default_fg_lot"))
+		self.assertEqual(doc.items[0].lot, "Open Lot")
 		self.assertEqual(linked.items[0].received_type, "Accepted")
 
 		doc.cancel()
 		linked.reload()
 		self.assertEqual(doc.docstatus, 2)
 		self.assertEqual(linked.docstatus, 2)
+
+	def test_fg_stock_moves_on_the_default_fg_lot(self):
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry import (
+			get_default_fg_lot,
+			get_stock_dimensions,
+		)
+
+		row = frappe._dict(lot="F1024-31", received_type="Accepted")
+		with patch("frappe.db.get_single_value", return_value="FG Lot"):
+			self.assertEqual(get_stock_dimensions(row, get_default_fg_lot())["lot"], "FG Lot")
+		self.assertEqual(row.lot, "F1024-31")
+
+		with patch("frappe.db.get_single_value", return_value=None):
+			self.assertRaises(frappe.ValidationError, get_default_fg_lot)
 
 	def test_item_conversion_valid_transfer_submit_and_cancel(self):
 		variant = "Fusing Sticker-REGULAR-White-Move Air"
@@ -250,6 +265,7 @@ class TestStockBusinessLogic(IntegrationTestCase):
 				uom="Box",
 				conversion_factor=5,
 				rate=100,
+				allow_zero_valuation_rate=1,
 				lot="LOT-1",
 				quality_grade="A",
 			)
@@ -273,6 +289,10 @@ class TestStockBusinessLogic(IntegrationTestCase):
 				"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.get_dimension_fieldnames",
 				return_value=["lot", "quality_grade"],
 			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry.get_default_fg_lot",
+				return_value="FG Lot",
+			),
 		):
 			result = FGStockEntry._make_yrp_stock_entry(doc)
 
@@ -281,8 +301,29 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		self.assertEqual(stock_entry.to_warehouse, "Main Warehouse")
 		self.assertEqual(stock_entry.against, "SD YRP FG Stock Entry")
 		self.assertEqual(stock_entry.items[0].rate, 20)
-		self.assertEqual(stock_entry.items[0].lot, "LOT-1")
+		self.assertEqual(stock_entry.items[0].allow_zero_valuation_rate, 1)
+		self.assertEqual(stock_entry.items[0].lot, "FG Lot")
 		self.assertEqual(stock_entry.items[0].quality_grade, "A")
+
+	def test_fg_stock_entry_receipt_allows_zero_rate_by_default(self):
+		doc = frappe.new_doc("SD YRP FG Stock Entry")
+		doc.warehouse = "Main Warehouse"
+		doc.consumed = 0
+		row = frappe.new_doc("SD YRP FG Stock Entry Detail")
+		row.update({"item_variant": "VAR-1", "qty": 2, "conversion_factor": 1})
+		self.assertEqual(row.allow_zero_valuation_rate, 1)
+
+		module = "essdee_yrp.essdee_yrp.doctype.sd_yrp_fg_stock_entry.sd_yrp_fg_stock_entry"
+		with (
+			patch(f"{module}.apply_item_uom"),
+			patch(f"{module}.get_stock_balance", return_value=(0, 0)),
+			patch(f"{module}.get_item_variant_price", return_value=0),
+		):
+			doc._prepare_row(row)
+			self.assertEqual(row.rate, 0)
+
+			row.allow_zero_valuation_rate = 0
+			self.assertRaises(frappe.ValidationError, doc._prepare_row, row)
 
 	def test_item_conversion_preserves_total_value_when_quantities_differ(self):
 		doc = frappe.new_doc("SD YRP Item Conversion")

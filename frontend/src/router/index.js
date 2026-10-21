@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router"
 
 import { departments } from "../departments/registry.js"
-import { getLockedRedirect } from "./departmentLock.js"
+import { getLockedRedirect, LAYOUT_UNAVAILABLE_PATH } from "./departmentLock.js"
 import { isChunkLoadError, reloadChunkTarget } from "./chunkReload.js"
 import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
@@ -952,6 +952,12 @@ const routes = [
 		component: HrReports,
 	},
 	{
+		path: LAYOUT_UNAVAILABLE_PATH,
+		name: "not-in-your-layout",
+		component: DocumentUnavailable,
+		meta: { layoutUnavailable: true },
+	},
+	{
 		path: "/:pathMatch(.*)*",
 		component: DocumentUnavailable,
 	},
@@ -965,7 +971,7 @@ const router = createRouter({
 let chunkReloadTarget = null
 router.beforeEach((to) => {
 	chunkReloadTarget = to
-	return getLockedRedirect(to.path)
+	return getLockedRedirect(to)
 })
 router.afterEach(() => { chunkReloadTarget = null })
 

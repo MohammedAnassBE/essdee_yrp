@@ -4,6 +4,8 @@ The base YRP engine deliberately owns a generic layout resolver whose fallback
 record is named ``Default``.  Essdee ships one opinionated experience instead:
 ``Premium White``.  Resolve that layout explicitly for every /web boot while
 still applying the bounded personal overrides supported by the base engine.
+A preference that selects a Registered Experience layout additionally narrows
+/web to that department and its listed workspaces.
 """
 
 import frappe
@@ -26,7 +28,7 @@ def resolve_config(user):
 	pref = None
 	if user and isinstance(user, str):
 		pref = frappe.db.get_value(
-			"YRP UI Preference", user, ["overrides"], as_dict=True
+			"YRP UI Preference", user, ["layout", "overrides"], as_dict=True
 		)
 
 	warnings = meta.setdefault("warnings", [])
@@ -41,8 +43,41 @@ def resolve_config(user):
 			config, overrides, base_ui_config.OVERRIDABLE_KEYS
 		)
 
+	if pref and pref.layout and pref.layout != PREMIUM_LAYOUT_NAME:
+		apply_department_layout(config, meta, pref.layout)
+
 	meta["has_preference"] = bool(pref)
 	return config, meta
+
+
+def apply_department_layout(config, meta, layout):
+	"""Narrow ``config``/``meta`` to ``layout`` when it is a Registered Experience."""
+	try:
+		layout_config, layout_meta = base_ui_config._resolve_layout_preview(layout)
+	except frappe.ValidationError:
+		frappe.clear_last_message()
+		frappe.log_error(
+			message=frappe.get_traceback(),
+			title=f"Essdee UI config: layout {layout} unavailable",
+		)
+		meta["warnings"].append(
+			_("layout '{0}' is unavailable; showing the permission-based view").format(layout)
+		)
+		return
+
+	if layout_meta["render_mode"] != base_ui_config.REGISTERED_EXPERIENCE:
+		return
+	meta["department_layout"] = layout
+	meta["render_mode"] = layout_meta["render_mode"]
+	meta["experience_key"] = layout_meta["experience_key"]
+	config["experience_props"] = layout_config.get("experience_props") or {}
+
+
+def is_department_layout(layout):
+	return bool(layout) and (
+		frappe.db.get_value("YRP UI Layout", layout, "render_mode")
+		== base_ui_config.REGISTERED_EXPERIENCE
+	)
 
 
 @frappe.whitelist()
@@ -57,13 +92,14 @@ def save_my_ui_overrides(overrides=None):
 	"""Reuse base validation/storage, then resolve against Premium White."""
 	base_payload = base_ui_config.save_my_ui_overrides(overrides)
 	user = frappe.session.user
-	frappe.db.set_value(
-		"YRP UI Preference",
-		user,
-		"layout",
-		PREMIUM_LAYOUT_NAME,
-		update_modified=False,
-	)
+	if not is_department_layout(frappe.db.get_value("YRP UI Preference", user, "layout")):
+		frappe.db.set_value(
+			"YRP UI Preference",
+			user,
+			"layout",
+			PREMIUM_LAYOUT_NAME,
+			update_modified=False,
+		)
 
 	# The base response prepends save-time warnings to its resolver warnings.
 	# Preserve that useful validation feedback while dropping only the base

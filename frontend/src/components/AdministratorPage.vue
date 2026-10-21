@@ -16,7 +16,7 @@
 			</header>
 			<div class="department-grid">
 				<DepartmentCard
-					v-for="department in departments"
+					v-for="department in visibleDepartments"
 					:key="department.key"
 					:department="department"
 				/>
@@ -28,4 +28,7 @@
 <script setup>
 import DepartmentCard from "./DepartmentCard.vue"
 import { departments } from "../departments/registry.js"
+import { isOutsideLayout } from "../router/departmentLock.js"
+
+const visibleDepartments = departments.filter((department) => !isOutsideLayout(department.path))
 </script>

@@ -22,9 +22,9 @@
 				<Skeleton height="124px" border-radius="14px" />
 			</div>
 		</div>
-		<div v-else-if="items.length" class="workspace-launcher__grid">
+		<div v-else-if="visibleItems.length" class="workspace-launcher__grid">
 			<RouterLink
-				v-for="item in items"
+				v-for="item in visibleItems"
 				:key="item.key"
 				class="workspace-launcher__card erp-card"
 				:to="item.to"
@@ -48,6 +48,7 @@
 import Skeleton from "primevue/skeleton"
 import { computed } from "vue"
 import { RouterLink } from "vue-router"
+import { isWorkspaceInLayout } from "../../router/departmentLock.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 
 const props = defineProps({
@@ -60,6 +61,7 @@ const props = defineProps({
 	eyebrow: { type: String, default: "Department workspace" },
 })
 
+const visibleItems = computed(() => props.items.filter((item) => isWorkspaceInLayout(item)))
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
 </script>
 

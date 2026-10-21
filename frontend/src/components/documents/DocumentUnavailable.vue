@@ -1,14 +1,23 @@
 <template>
-	<DepartmentPage title="Page unavailable" :back-to="getHomePath()" :back-label="lockedDepartment?.label || 'Workspaces'" :show-title="false" flat full-width>
+	<DepartmentPage :title="isLayoutUnavailable ? 'Not in your layout' : 'Page unavailable'" :back-to="getHomePath()" :back-label="lockedDepartment?.label || 'Workspaces'" :show-title="false" flat full-width>
 		<section class="document-unavailable erp-card" role="status">
-			<span class="document-unavailable__mark"><i class="pi pi-file-excel" /></span>
+			<span class="document-unavailable__mark"><i :class="isLayoutUnavailable ? 'pi pi-lock' : 'pi pi-file-excel'" /></span>
 			<div>
-				<small>WEB PAGE NOT AVAILABLE</small>
-				<h1>{{ doctype || "Document" }}</h1>
-				<strong v-if="name">{{ name }}</strong>
-				<p>This document does not have a page in the web workspace yet. You have not been redirected to Desk.</p>
+				<template v-if="isLayoutUnavailable">
+					<small>NOT IN YOUR LAYOUT</small>
+					<h1>{{ pageLabel }}</h1>
+					<strong v-if="from">{{ from }}</strong>
+					<p>This page is not part of your {{ lockedDepartment?.label }} layout, so it was not opened. Ask an administrator to change your YRP UI Layout if you need it.</p>
+				</template>
+				<template v-else>
+					<small>WEB PAGE NOT AVAILABLE</small>
+					<h1>{{ doctype || "Document" }}</h1>
+					<strong v-if="name">{{ name }}</strong>
+					<p>This document does not have a page in the web workspace yet. You have not been redirected to Desk.</p>
+				</template>
 			</div>
-			<Button label="Go Back" icon="pi pi-arrow-left" severity="secondary" outlined @click="goBack" />
+			<Button v-if="isLayoutUnavailable" :label="`Go to ${lockedDepartment?.label}`" icon="pi pi-arrow-left" severity="secondary" outlined @click="router.replace(getHomePath())" />
+			<Button v-else label="Go Back" icon="pi pi-arrow-left" severity="secondary" outlined @click="goBack" />
 		</section>
 	</DepartmentPage>
 </template>
@@ -19,12 +28,16 @@ import { computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../DepartmentPage.vue"
+import { departments } from "../../departments/registry.js"
 import { getHomePath, lockedDepartment } from "../../router/departmentLock.js"
 
 const route = useRoute()
 const router = useRouter()
 const doctype = computed(() => String(route.query.doctype || ""))
 const name = computed(() => String(route.query.name || ""))
+const isLayoutUnavailable = computed(() => Boolean(route.meta.layoutUnavailable))
+const from = computed(() => String(route.query.from || ""))
+const pageLabel = computed(() => departments.find((item) => `${from.value.toLowerCase().split(/[?#]/)[0]}/`.startsWith(`${item.path}/`))?.label || "Page")
 
 function goBack() {
 	if (window.history.length > 1) router.back()

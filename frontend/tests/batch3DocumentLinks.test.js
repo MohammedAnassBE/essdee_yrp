@@ -137,6 +137,7 @@ test('D13 Debits resolves only Link metadata and leaves Data and Check values pl
   ...modules, 'vue-router':{useRoute:()=>route,useRouter:()=>({push(){}})},
   '../../utils/linkTarget.js':targets,
   '../../config/fields/debit.js': {detailGroups:[{fields:fields.map(field=>field.fieldname)}]},
+  '../../router/departmentLock.js':{isOutsideLayout:()=>false,getHomePath:()=>'/'},
   '../../api/frappe.js':{getDoc:async()=>({work_order:'WO/1',approved_by:'USER/1',amended_from:'DEBIT/0',debit_no:'Plain',inspection:1}),getMeta:async()=>[{name:'YRP Debit',fields}]},
   ...Object.fromEntries(['../../components/DepartmentPage.vue','../../components/common/ListView.vue','../../components/documents/DocumentStatusBadge.vue','../../components/documents/DocumentErrorDialog.vue','primevue/button','primevue/dialog'].map(path=>[path,control])),
  })
@@ -144,6 +145,30 @@ test('D13 Debits resolves only Link metadata and leaves Data and Check values pl
  await new Promise(resolve=>setImmediate(resolve)); await Vue.nextTick()
  check(root,[['WO/1','/web/planning/work-orders/WO%2F1'],pair('USER/1','user'),['DEBIT/0','/web/accounts/debits/DEBIT%2F0']])
  assert.ok(text(root).includes('Plain'))
+}))
+
+test('D13b Debits outside the layout loads only the linked debit and closes to the layout home', () => readable(async () => {
+ const route = {params:{debitId:'DEBIT/1'}}
+ const pushes = []
+ const dialog = {}
+ const fields = [{fieldname:'debit_no',fieldtype:'Data'}]
+ const named = tag => (props,{slots}) => Vue.h(tag,props,slots.default?.())
+ const component = loadComponent(resolve('frontend/src/departments/accounts/Debits.vue'), {
+  ...modules, 'vue-router':{useRoute:()=>route,useRouter:()=>({push:path=>pushes.push(path)})},
+  '../../utils/linkTarget.js':targets,
+  '../../router/departmentLock.js':{isOutsideLayout:path=>path==='/accounts/debits',getHomePath:()=>'/sales'},
+  '../../config/fields/debit.js': {detailGroups:[{fields:['debit_no']}]},
+  '../../api/frappe.js':{getDoc:async()=>({debit_no:'Plain'}),getMeta:async()=>[{name:'YRP Debit',fields}]},
+  '../../components/common/ListView.vue':named('listview'),
+  'primevue/dialog':(props,{slots})=>{Object.assign(dialog,props);return Vue.h('dialog',props,slots.default?.())},
+  ...Object.fromEntries(['../../components/DepartmentPage.vue','../../components/documents/DocumentStatusBadge.vue','../../components/documents/DocumentErrorDialog.vue','primevue/button'].map(path=>[path,named('control')])),
+ })
+ const root = mountComponent(component,{})
+ await new Promise(resolve=>setImmediate(resolve)); await Vue.nextTick()
+ assert.equal(findNodes(root,node=>node.type==='listview').length,0)
+ assert.ok(text(root).includes('Plain'))
+ dialog['onUpdate:visible'](false); await Vue.nextTick()
+ assert.deepEqual(pushes,['/sales'])
 }))
 
 test('D11 LotwiseWorkspaceHeader uses raw product or FG item and leaves fallback title plain', () => readable(() => {

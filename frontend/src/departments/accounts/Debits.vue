@@ -1,6 +1,6 @@
 <template>
 	<DepartmentPage title="Debits" back-to="/accounts" back-label="Accounts" flat full-width>
-		<ListView doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" clickable @row-click="openDebit" />
+		<ListView v-if="isListInLayout" doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" clickable @row-click="openDebit" />
 		<Dialog v-model:visible="visible" modal header="Debit" class="erp-dialog--md">
 			<div v-if="loading">Loading debit…</div>
 			<template v-else-if="record"><DocumentStatusBadge :label="record.status" :docstatus="record.docstatus" /><dl><template v-for="field in fields" :key="field"><dt>{{ field.replaceAll('_', ' ') }}</dt><dd><DocumentLink v-if="fieldTarget(field)" v-bind="fieldTarget(field)" :label="record[field] || '—'" /><template v-else>{{ record[field] || '—' }}</template></dd></template></dl><Button v-if="record.work_order" label="Open Work Order" severity="secondary" @click="openWorkOrder" /></template>
@@ -22,6 +22,7 @@ import DepartmentPage from "../../components/DepartmentPage.vue"
 import ListView from "../../components/common/ListView.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import { getHomePath, isOutsideLayout } from "../../router/departmentLock.js"
 const route = useRoute()
 const router = useRouter()
 const visible = ref(false)
@@ -29,6 +30,7 @@ const loading = ref(false)
 const record = ref(null)
 const metadata = ref({})
 const error = ref("")
+const isListInLayout = !isOutsideLayout("/accounts/debits")
 const fields = ["name", ...debitFields.detailGroups.flatMap((group) => group.fields)]
 function fieldTarget(fieldname) {
 	return linkFieldTarget({ ...metadata.value[fieldname], value: record.value?.[fieldname] }, record.value || {})
@@ -50,5 +52,5 @@ watch(() => route.params.debitId, async (name) => {
 	catch (reason) { error.value = reason.message }
 	finally { loading.value = false }
 }, { immediate: true })
-watch(visible, (value) => { if (!value && route.params.debitId) router.push("/accounts/debits") })
+watch(visible, (value) => { if (!value && route.params.debitId) router.push(isListInLayout ? "/accounts/debits" : getHomePath()) })
 </script>

@@ -37,8 +37,9 @@ test("Quality registry follows Finishing and automatically feeds the landing car
 	assert.equal(departments[index - 1].key, "finishing")
 	assert.deepEqual({ ...departments[index], component: undefined }, {
 		key: "quality", label: "Quality", shortLabel: "QA", path: "/quality", component: undefined,
+		sections: { inspections: "inspections", work_orders: "work-orders", reports: "reports" },
 	})
-	assert.match(read("components/AdministratorPage.vue"), /v-for="department in departments"/)
+	assert.match(read("components/AdministratorPage.vue"), /v-for="department in visibleDepartments"/)
 	assert.match(String(departments[index].component), /Quality.vue/)
 })
 
@@ -46,7 +47,8 @@ test("actual router resolves the Quality launcher, list, create, edit and view",
 	const source = read("router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
 	const context = { departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES,
-		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => null }
+		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => null,
+		LAYOUT_UNAVAILABLE_PATH: "/not-in-your-layout" }
 	vm.runInNewContext(source, context)
 	for (const [path, name] of [
 		["/quality", "quality"], ["/quality/inspections", "quality-inspections"],

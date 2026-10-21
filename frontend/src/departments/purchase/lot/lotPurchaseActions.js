@@ -1,12 +1,25 @@
 export function purchaseLotActions(workspace, execute, acting = "") {
-	if (!workspace.name) return []
 	const canWrite = Boolean(workspace.permissions?.can_write)
 	return [
-		{ key: "edit", label: "Edit", icon: "pi pi-pencil", primary: true, visible: canWrite },
-		{ key: "purchase_summary", label: "Purchase Summary", icon: "pi pi-table", visible: true },
+		...lotActionRows(workspace, execute, acting, [
+			{ key: "edit", label: "Edit", icon: "pi pi-pencil", primary: true, visible: canWrite },
+			{ key: "purchase_summary", label: "Purchase Summary", icon: "pi pi-table", visible: true },
+		]),
+		...purchaseOrderLinkActions(workspace, execute, acting),
+	]
+}
+
+export function purchaseOrderLinkActions(workspace, execute, acting = "") {
+	const canWrite = Boolean(workspace.permissions?.can_write)
+	return lotActionRows(workspace, execute, acting, [
 		{ key: "link_po", label: "Link to PO", icon: "pi pi-link", visible: canWrite },
 		{ key: "unlink_po", label: "Unlink from PO", icon: "pi pi-unlink", visible: canWrite },
-	].filter(action => action.visible).map(action => ({ ...action, disabled: Boolean(acting), command: () => execute(action.key) }))
+	])
+}
+
+function lotActionRows(workspace, execute, acting, actions) {
+	if (!workspace.name) return []
+	return actions.filter(action => action.visible).map(action => ({ ...action, disabled: Boolean(acting), command: () => execute(action.key) }))
 }
 
 export function lotPurchaseSummaryRoute(lot) {

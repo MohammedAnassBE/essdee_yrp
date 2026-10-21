@@ -196,6 +196,12 @@
 			@build="execute('build_cloth_programs', $event)"
 			@error="actionError = $event"
 		/>
+		<LotPurchaseOrderDialog
+			v-model:visible="purchaseOrderVisible"
+			:lot="lotId"
+			:mode="purchaseOrderMode"
+			@changed="load"
+		/>
 		<DocumentConfirmationDialog
 			v-model:visible="confirmationVisible"
 			:title="confirmationLabel"
@@ -235,6 +241,8 @@ import LotOrderItemsTab from "../../purchase/lot/LotOrderItemsTab.vue"
 import LotOrderDetailsTab from "../../purchase/lot/LotOrderDetailsTab.vue"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
+import LotPurchaseOrderDialog from "../../purchase/lot/LotPurchaseOrderDialog.vue"
+import { purchaseOrderLinkActions } from "../../purchase/lot/lotPurchaseActions.js"
 import LotOcrTable from "../../sales/LotOcrTable.vue"
 import { MERCH_ROUTES } from "../merchViews.js"
 import { MERCH_DETAIL_GROUPS, merchLotCommandSuccess, merchLotTabs, merchLotActions } from "./merchLotViews.js"
@@ -255,6 +263,8 @@ const actionError = ref("")
 const acting = ref("")
 const ppoVisible = ref(false)
 const clothVisible = ref(false)
+const purchaseOrderVisible = ref(false)
+const purchaseOrderMode = ref("link")
 const confirmationVisible = ref(false)
 const pendingCommand = ref("")
 let sequence = 0
@@ -278,7 +288,10 @@ const activeTab = computed({
 	set: (tab) =>
 		router.replace({ query: { ...route.query, tab }, state: preserveListNavigationState() }),
 })
-const actions = computed(() => merchLotActions(workspace.value, selectAction, acting.value))
+const actions = computed(() => [
+	...merchLotActions(workspace.value, selectAction, acting.value),
+	...purchaseOrderLinkActions(workspace.value, selectAction, acting.value),
+])
 const confirmationLabel = computed(
 	() => workspace.value.capabilities?.[pendingCommand.value]?.label || "Confirm",
 )
@@ -298,6 +311,11 @@ function selectAction(command) {
 	}
 	if (command === "build_cloth_programs") {
 		clothVisible.value = true
+		return
+	}
+	if (["link_po", "unlink_po"].includes(command)) {
+		purchaseOrderMode.value = command === "link_po" ? "link" : "unlink"
+		purchaseOrderVisible.value = true
 		return
 	}
 	pendingCommand.value = command
@@ -353,6 +371,7 @@ watch(
 	() => {
 		ppoVisible.value = false
 		clothVisible.value = false
+		purchaseOrderVisible.value = false
 		load()
 	},
 	{ immediate: true },

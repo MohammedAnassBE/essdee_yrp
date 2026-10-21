@@ -174,6 +174,7 @@
 					:class="{ 'delivery-challan-total--primary': primaryTotals.has(total.fieldname) && totalIsPositive(total) }"
 				>
 					<span>{{ total.label }}</span><strong>{{ formatTotal(total) }}</strong>
+					<small v-if="dirty && serverValueTotals.has(total.fieldname)" class="delivery-challan-total__hint">Updates on save</small>
 				</div>
 				</div>
 				<div v-if="workspace.record?.is_internal_unit" class="delivery-challan-transfer-progress">
@@ -225,6 +226,7 @@ import {
 	saveDeliveryChallan,
 } from "../../api/fabricStore.js"
 import { searchLinkedDocument } from "../../api/frappe.js"
+import { deliveredQuantity, rowTotal } from "../../engine/stock/deliveryChallanTotals.js"
 import { fillSupplierDefaults } from "../../utils/supplierDefaults.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
@@ -275,6 +277,7 @@ const form = reactive({})
 let loadSequence = 0
 let actionSequence = 0
 const primaryTotals = new Set(["total_delivered_qty", "stock_value", "total_value"])
+const serverValueTotals = new Set(["stock_value", "total_value"])
 const headerFieldnames = new Set(["process_name", "item", "lot", "supplier_name", "from_location_name"])
 const sourceOwnedFieldnames = new Set(["from_finishing", "cutting_bulk_lay_sheet", "cutting_bulk_lay_sheet_detail", "cut_panel_movement", "loose_piece_dc", "pack_piece_dc"])
 const presentationHiddenFieldnames = new Set(["received_type"])
@@ -308,7 +311,12 @@ const deliveryChallanActions = computed(() => {
 })
 const hasWorkspace = computed(() => Boolean(Object.keys(workspace.value || {}).length))
 const duplicateLabel = computed(() => props.sourceContext?.duplicate_from ? `Duplicate of ${props.sourceContext.duplicate_from}` : "")
-const visibleTotals = computed(() => (workspace.value.totals || []).filter((total) => primaryTotals.has(total.fieldname) || totalIsPositive(total)))
+const visibleTotals = computed(() => (workspace.value.totals || []).map((total) => {
+	if (!canEdit.value) return total
+	if (total.fieldname === "total_delivered_qty") return { ...total, value: deliveredQuantity(matrixBlocks.value) }
+	if (total.fieldname === "additional_goods_value") return { ...total, value: form.additional_goods_value }
+	return total
+}).filter((total) => primaryTotals.has(total.fieldname) || totalIsPositive(total)))
 const canEditDraft = computed(() => Boolean(
 	Number(workspace.value.record?.docstatus || 0) === 0
 	&& (currentName.value ? workspace.value.permissions?.can_write : workspace.value.permissions?.can_create),
@@ -785,7 +793,6 @@ function pendingQuantity(value) { return value?.pending_qty ?? value?.pending_qu
 function secondaryUom(row, value) { return String(row.values?.[value]?.secondary_uom || row.secondary_uom || "").trim() }
 function hasSecondaryQuantity(group) { return (group.items || []).some((row) => primaryValues(group).some((value) => Boolean(secondaryUom(row, value)))) }
 function logicalRowCount(groups) { return (groups || []).reduce((total, group) => total + (group.items?.length || 0), 0) }
-function rowTotal(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.qty || 0), 0) }
 function rowKey(row, index) { return [row.item_variant || row.name, row.row_index, row.received_type, row.delivery_challan_item, index].filter((value) => value !== undefined && value !== "").join("-") }
 function matrixInputLabel(action, section, row, value, uom = "") {
 	const item = section.name || row.item_variant || row.name || "item"
@@ -933,6 +940,7 @@ function documentDeleted() {
 .delivery-challan-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--erp-border); }
 .delivery-challan-totals .delivery-challan-total { min-height: 56px; border-bottom: 0; }
 .delivery-challan-total:last-child, .delivery-challan-transfer-progress:last-child { border-bottom: 0; }
+.delivery-challan-total__hint { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .delivery-challan-total strong, .delivery-challan-transfer-progress strong { color: var(--erp-text); font-size: 18px; font-weight: 780; font-variant-numeric: tabular-nums; }
 .delivery-challan-total--primary { background: color-mix(in srgb, var(--erp-accent-soft) 76%, var(--erp-surface)); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--erp-accent) 76%, var(--erp-surface)); }
 .delivery-challan-total--primary strong { color: var(--erp-accent-hover); font-size: 21px; }

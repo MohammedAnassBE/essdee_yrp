@@ -171,3 +171,11 @@ test("quality presentation uses existing tokens, two mobile stat columns and ful
 	const picker = read("components/InspectionColourSizePicker.vue")
 	assert.match(picker, /repeat\(auto-fill, minmax\(min\(120px, 100%\), 1fr\)\)/)
 })
+
+test("mobile inspection header keeps the back button on the title row, scoped to the quality frame", () => {
+	const mobile = read("quality.css").split("@media (max-width: 620px)").pop()
+	assert.match(mobile, /\.quality-inspection-frame \.fabric-document-workspace__header \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)/)
+	assert.match(mobile, /\.quality-inspection-header__title \{ grid-column: 2;/)
+	assert.match(mobile, /\.quality-header-facts \{ grid-column: 1 \/ -1; \}/)
+	assert.doesNotMatch(read("quality.css"), /^\.fabric-document-workspace__header/m)
+})

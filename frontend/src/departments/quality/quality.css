@@ -146,6 +146,10 @@
 .quality-editor .quality-page__fact dd { font-weight: 600; }
 @media (max-width: 620px) {
 	.quality-stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.quality-inspection-header__title h1 { flex: 1 0 100%; }
+	.quality-inspection-frame .fabric-document-workspace__header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--erp-space-2) var(--erp-space-3); }
+	.quality-inspection-frame .fabric-document-workspace__heading, .quality-inspection-header { display: contents; }
+	.quality-inspection-frame .fabric-document-workspace__header-actions:empty { display: none; }
+	.quality-inspection-header__title { grid-column: 2; gap: var(--erp-space-2); }
+	.quality-header-facts { grid-column: 1 / -1; }
 	.quality-inspection-frame .p-button { min-width: 44px; min-height: 44px; }
 }

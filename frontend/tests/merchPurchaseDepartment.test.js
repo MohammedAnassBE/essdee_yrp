@@ -14,6 +14,7 @@ import { PURCHASE_ROUTES, PURCHASE_STORE_WORKSPACE_KEYS, purchaseLauncherItems }
 import { departments, getWorkspacePaths } from "../src/departments/registry.js"
 import { getLockedDepartment, getLockedRedirect, isLockedExit, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
 import { canOpenList, getPermissionRedirect, NO_PERMISSION_PATH } from "../src/router/listPermission.js"
+import { webDocumentPath } from "../src/router/webDocumentRoutes.js"
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8")
 const layout = JSON.parse(source("../../essdee_yrp/fixtures/yrp_ui_layout.json")).find((row) => row.experience_key === "merch-purchase")
@@ -106,4 +107,22 @@ test("the combined Reports page lists Merch and Purchase desk reports once each"
 	assert.match(page, /key: "stock_balance"/)
 	assert.match(page, /key: "lot_cut_quantity"/)
 	assert.match(page, /reports\.value\[report\.key\]\?\.can_read/)
+})
+
+test("Purchase shows Vendor Bill Tracking once, with routes and record links kept inside Purchase", () => {
+	const card = purchaseLauncherItems().find((item) => item.key === "bill_tracking")
+	assert.deepEqual([card.label, card.to], ["Vendor Bill Tracking", "/purchase/bill-tracking"])
+	assert.deepEqual(items.filter((item) => item.key === "bill_tracking").map((item) => item.to), ["/merch/bill-tracking"])
+	const router = loadRouter()
+	for (const [path, name] of [["/purchase/bill-tracking", PURCHASE_ROUTES.billTrackings], ["/purchase/bill-tracking/new", PURCHASE_ROUTES.billTrackingNew], ["/purchase/bill-tracking/BT-1", PURCHASE_ROUTES.billTracking], ["/purchase/bill-tracking/BT-1/edit", PURCHASE_ROUTES.billTrackingEdit]]) {
+		assert.equal(router.resolve(path).name, name, path)
+	}
+	assert.equal(webDocumentPath("YRP Bill Tracking", "BT/1", "/web/purchase/bill-tracking"), "/web/purchase/bill-tracking/BT%2F1")
+	const boot = { user: { name: "purchase@example.com", can_read: ["SD YRP Lot"] } }
+	assert.equal(canOpenList(card.to, boot), false)
+	assert.equal(canOpenList(card.to, { user: { name: "purchase@example.com", can_read: ["YRP Bill Tracking"] } }), true)
+	const purchaseLayout = JSON.parse(JSON.parse(source("../../essdee_yrp/fixtures/yrp_ui_layout.json")).find((row) => row.experience_key === "purchase").config).experience_props.workspaces
+	const purchaseLocked = getLockedDepartment({ ui_config: { meta: { render_mode: "Registered Experience", experience_key: "purchase" }, config: { experience_props: { workspaces: purchaseLayout } } } })
+	assert.ok(purchaseLayout.includes("bill_tracking"))
+	assert.equal(getLockedRedirect(router.resolve("/purchase/bill-tracking/BT-1"), purchaseLocked), undefined)
 })

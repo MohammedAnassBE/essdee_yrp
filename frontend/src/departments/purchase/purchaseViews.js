@@ -13,6 +13,10 @@ export const PURCHASE_ROUTES = {
 	itemPriceNew: "purchase-item-price-new",
 	itemPrice: "purchase-item-price",
 	itemPriceEdit: "purchase-item-price-edit",
+	billTrackings: "purchase-bill-trackings",
+	billTrackingNew: "purchase-bill-tracking-new",
+	billTracking: "purchase-bill-tracking",
+	billTrackingEdit: "purchase-bill-tracking-edit",
 }
 
 export const PURCHASE_STORE_WORKSPACE_KEYS = ["purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"]
@@ -40,6 +44,13 @@ export function purchaseLauncherItems() {
 			description: "Supplier prices, quantity slabs and approval.",
 			icon: "pi pi-indian-rupee",
 			to: "/purchase/item-prices",
+		},
+		{
+			key: "bill_tracking",
+			label: "Vendor Bill Tracking",
+			description: "Assign and follow supplier bills from receipt to invoice.",
+			icon: "pi pi-receipt",
+			to: "/purchase/bill-tracking",
 		},
 	]
 }

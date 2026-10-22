@@ -180,14 +180,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"items\",\n   \"item_prices\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"items\",\n   \"item_prices\",\n   \"bill_tracking\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
   "description": "/web Purchase department workspace only: lots, items, item_prices, purchase_orders, stock_transfers, box_stickers, excel_stickers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "purchase",
   "layout_name": "Purchase",
-  "modified": "2026-10-22 09:55:06.688014",
+  "modified": "2026-10-22 12:44:37.982947",
   "name": "Purchase",
   "render_mode": "Registered Experience"
  },

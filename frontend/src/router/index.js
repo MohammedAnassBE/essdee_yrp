@@ -861,6 +861,22 @@ const routes = [
 		props: true,
 	},
 	{
+		path: "/purchase/bill-tracking", name: PURCHASE_ROUTES.billTrackings, component: BillTrackings,
+		props: { backTo: "/purchase", backLabel: "Purchase", eyebrow: "Purchase", viewRouteName: PURCHASE_ROUTES.billTracking, newRouteName: PURCHASE_ROUTES.billTrackingNew },
+	},
+	{
+		path: "/purchase/bill-tracking/new", name: PURCHASE_ROUTES.billTrackingNew, component: BillTrackingEditorPage,
+		props: { basePath: "/purchase/bill-tracking", viewRouteName: PURCHASE_ROUTES.billTracking, listRouteName: PURCHASE_ROUTES.billTrackings },
+	},
+	{
+		path: "/purchase/bill-tracking/:billTrackingId/edit", name: PURCHASE_ROUTES.billTrackingEdit, component: BillTrackingEditorPage,
+		props: idProps("billTrackingId", { basePath: "/purchase/bill-tracking", viewRouteName: PURCHASE_ROUTES.billTracking, listRouteName: PURCHASE_ROUTES.billTrackings }),
+	},
+	{
+		path: "/purchase/bill-tracking/:billTrackingId", name: PURCHASE_ROUTES.billTracking, component: BillTracking,
+		props: idProps("billTrackingId", { backTo: "/purchase/bill-tracking", backLabel: "Bill Tracking", listRouteName: PURCHASE_ROUTES.billTrackings, editRouteName: PURCHASE_ROUTES.billTrackingEdit }),
+	},
+	{
 		path: "/purchase/stock-transfers",
 		name: "purchase-stock-transfers",
 		component: FabricStoreSection,

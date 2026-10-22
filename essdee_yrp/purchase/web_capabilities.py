@@ -12,6 +12,11 @@ SECTIONS = {
 		_("Item Prices"),
 		("read", "create", "write", "submit"),
 	),
+	"bill_tracking": (
+		"YRP Bill Tracking",
+		_("Vendor Bill Tracking"),
+		("read", "create", "write", "submit"),
+	),
 }
 
 

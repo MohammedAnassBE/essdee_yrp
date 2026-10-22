@@ -60,6 +60,11 @@ class TestPurchaseWebCapabilities(TestCase):
 						"YRP Item Price",
 						("read", "create", "write", "submit"),
 					),
+					(
+						"bill_tracking",
+						"YRP Bill Tracking",
+						("read", "create", "write", "submit"),
+					),
 				):
 					can_read = bool(frappe.has_permission(doctype, "read"))
 					self.assertEqual(key in payload["sections"], can_read)

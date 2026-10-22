@@ -58,6 +58,9 @@ export const DEPARTMENT_RECORD_ROUTES = {
 		"SD YRP Cutting Plan": (name) => `/web/planning/cutting-plans/${encodeURIComponent(name)}`,
 		"SD YRP Finishing Plan": (name) => `/web/planning/finishing-plans/${encodeURIComponent(name)}`,
 	},
+	"/purchase": {
+		"YRP Bill Tracking": (name) => `/web/purchase/bill-tracking/${encodeURIComponent(name)}`,
+	},
 	"/merch": {
 		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
 		"YRP Work Order": (name) => `/web/merch/work-orders/${encodeURIComponent(name)}`,

@@ -69,7 +69,7 @@ export const departments = [
 		label: "Purchase",
 		shortLabel: "PU",
 		path: "/purchase",
-		sections: { lots: "lots", items: "items", item_prices: "item-prices", purchase_orders: "purchase-orders", stock_transfers: "stock-transfers", box_stickers: "box-sticker-prints", excel_stickers: "excel-sticker-prints", reports: "reports" },
+		sections: { lots: "lots", items: "items", item_prices: "item-prices", bill_tracking: "bill-tracking", purchase_orders: "purchase-orders", stock_transfers: "stock-transfers", box_stickers: "box-sticker-prints", excel_stickers: "excel-sticker-prints", reports: "reports" },
 		component: () => import("./Purchase.vue"),
 	},
 	{

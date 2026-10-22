@@ -1,19 +1,17 @@
-export const REACH_TIMEOUT_MS = 20000
 export const APPROVAL_TIMEOUT_MS = 120000
 
 export const QZ_MESSAGES = {
 	assets: "Could not load QZ Tray printing support from this site. Reload the page and try again.",
-	blocked: "This browser is blocking this site from reaching QZ Tray. Click the site settings icon left of the address bar, set Local network access and Apps on this device (whichever are listed) to Allow, reload the page and try again. If they already allow it, make sure QZ Tray is running.",
-	unreached: "The browser did not reach QZ Tray. If the browser asks to let this site access apps on this device, click Allow (or allow Local network access in the site settings left of the address bar). Make sure QZ Tray is running, then try again.",
-	unreachable: "Could not connect to QZ Tray. Start QZ Tray on this computer and try again.",
+	insecure: "Chrome blocks QZ Tray on sites that are not opened over HTTPS, and this site is open over http://. Use Microsoft Edge, or open the site over HTTPS, then try again.",
+	unreachable: "Could not connect to QZ Tray. Make sure QZ Tray is running on this computer. If the browser asks to let this site access apps on this device, click Allow, then try again.",
 	connectApproval: "QZ Tray did not answer the connection request. Find the QZ Tray Allow window (it may be behind other windows or on another screen), click Allow, then try again.",
 	printerApproval: "QZ Tray did not return the printer list. Find the QZ Tray Allow window (it may be behind other windows or on another screen), click Allow, then try again.",
 }
 
 const SCRIPTS = ["/assets/frappe/node_modules/js-sha256/build/sha256.min.js", "/assets/frappe/node_modules/qz-tray/qz-tray.js"]
 const UNREACHABLE = "Unable to establish connection with QZ"
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 const TIMED_OUT = Symbol("timed out")
-const socketOpened = { notify: null }
 let configured = null
 let connecting = null
 
@@ -48,16 +46,7 @@ function loadScript(src) {
 	})
 }
 
-/** Lets the connect stage tell "browser never reached QZ Tray" apart from "waiting for the QZ Allow prompt". */
-function trackedWebSocket(Base) {
-	return class TrackedWebSocket extends Base {
-		constructor(...args) {
-			super(...args)
-			this.addEventListener("open", () => socketOpened.notify?.())
-		}
-	}
-}
-
+/** Same setup as Frappe Desk's qz_init: plain qz-tray.js with its own WebSocket. */
 async function initialise() {
 	if (configured === window.qz && window.qz) return window.qz
 	try {
@@ -69,20 +58,8 @@ async function initialise() {
 	if (!window.qz?.api || typeof window.sha256 !== "function") throw new Error(QZ_MESSAGES.assets)
 	window.qz.api.setPromiseType((resolver) => new Promise(resolver))
 	window.qz.api.setSha256Type((data) => window.sha256(data))
-	if (typeof WebSocket === "function") window.qz.api.setWebSocketType?.(trackedWebSocket(WebSocket))
 	configured = window.qz
 	return window.qz
-}
-
-export async function getLocalNetworkAccess() {
-	for (const name of ["loopback-network", "local-network-access"]) {
-		try {
-			return (await navigator.permissions.query({ name })).state
-		} catch {
-			// Older browsers do not know this permission name.
-		}
-	}
-	return "unsupported"
 }
 
 function within(promise, milliseconds) {
@@ -96,20 +73,24 @@ function abandon(qz, message) {
 	return new Error(message)
 }
 
+function reasonText(reason) {
+	return String(reason?.message || reason || "")
+}
+
 function isUnreachable(reason) {
-	return String(reason?.message || reason || "").startsWith(UNREACHABLE)
+	return reasonText(reason).startsWith(UNREACHABLE)
 }
 
+export function isInsecurePage() {
+	const location = window.location
+	return Boolean(location?.protocol) && location.protocol !== "https:" && !LOOPBACK_HOSTS.includes(location.hostname)
+}
+
+/** Keeps QZ Tray's own error text so a failure can be diagnosed from the dialog. */
 function qzError(reason) {
-	const message = String(reason?.message || reason || "")
-	if (isUnreachable(reason)) return new Error(QZ_MESSAGES.unreachable)
-	return new Error(`QZ Tray: ${message || "the request was not completed."}`)
-}
-
-/** Blames the browser only when QZ Tray was unreachable and the site's local network permission is denied. */
-async function connectionError(reason) {
-	if (isUnreachable(reason) && await getLocalNetworkAccess() === "denied") return new Error(QZ_MESSAGES.blocked)
-	return qzError(reason)
+	const detail = `QZ Tray: ${reasonText(reason) || "the request was not completed."}`
+	if (!isUnreachable(reason)) return new Error(detail)
+	return new Error(`${isInsecurePage() ? QZ_MESSAGES.insecure : QZ_MESSAGES.unreachable} (${detail})`)
 }
 
 /** Same sequence as Frappe Desk's qz_connect: one attempt, then launch QZ Tray and retry three times. */
@@ -122,17 +103,11 @@ function connectLikeDesk(qz) {
 }
 
 async function openConnection(qz, onStatus) {
-	const access = await getLocalNetworkAccess()
-	onStatus?.(access === "prompt" ? "browser-permission" : "connecting")
-	const reached = new Promise((resolve) => { socketOpened.notify = resolve })
-	const connected = connectLikeDesk(qz).then(() => true, async (reason) => { throw await connectionError(reason) })
-	try {
-		if (await within(Promise.race([reached, connected]), REACH_TIMEOUT_MS) === TIMED_OUT) throw abandon(qz, QZ_MESSAGES.unreached)
-		onStatus?.("approve-connection")
-		if (await within(connected, APPROVAL_TIMEOUT_MS) === TIMED_OUT) throw abandon(qz, QZ_MESSAGES.connectApproval)
-	} finally {
-		socketOpened.notify = null
+	onStatus?.("connecting")
+	const connected = connectLikeDesk(qz).catch((reason) => { throw qzError(reason) })
+	if (await within(connected, APPROVAL_TIMEOUT_MS) === TIMED_OUT) {
 		connected.catch(() => {})
+		throw abandon(qz, QZ_MESSAGES.connectApproval)
 	}
 }
 

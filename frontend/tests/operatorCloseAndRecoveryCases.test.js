@@ -149,7 +149,7 @@ test("F-B26: an unreachable QZ Tray gives an actionable error and permits retry"
 	const qz = { api: { setPromiseType() {}, setSha256Type() {} }, websocket: { isActive: () => false, connect: async () => { throw new Error("Unable to establish connection with QZ") } }, printers: { find: async () => ["Printer"] } }
 	globalThis.window = { qz, sha256() {} }
 	t.after(() => { globalThis.window = previous })
-	await assert.rejects(getQzPrinters(), /Could not connect to QZ Tray\. Start QZ Tray on this computer and try again\./)
+	await assert.rejects(getQzPrinters(), /Could not connect to QZ Tray\. Make sure QZ Tray is running on this computer\./)
 	qz.websocket.connect = async () => {}
 	assert.deepEqual(await getQzPrinters(), ["Printer"])
 	assert.match(read("departments/cut-panel-store/PrinterDialog.vue"), /label="Retry"[^>]*@click="loadPrinters"/)

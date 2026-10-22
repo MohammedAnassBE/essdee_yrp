@@ -51,9 +51,7 @@ const error = ref("")
 let loadSequence = 0
 const status = ref("connecting")
 const STATUS_TEXT = {
-	"connecting": "Connecting to QZ Tray…",
-	"browser-permission": "Connecting to QZ Tray… If the browser asks to let this site access apps on this device, click Allow.",
-	"approve-connection": "Approve the QZ Tray connection prompt on this computer (it may be behind other windows).",
+	"connecting": "Connecting to QZ Tray… If the browser or QZ Tray asks for permission, click Allow (the QZ Tray window may be behind other windows).",
 	"approve-printers": "Finding printers… Approve the QZ Tray prompt on this computer if it asks.",
 }
 const statusText = computed(() => STATUS_TEXT[status.value] || STATUS_TEXT.connecting)

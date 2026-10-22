@@ -40,13 +40,15 @@ function configure_purchase_invoice_actions(frm, permissions) {
 	frm.remove_custom_button(__("Create ERP Purchase Invoice"));
 
 	if (!has_yrp_invoice && !has_erp_invoice && permissions.can_create_invoice) {
-		frm.add_custom_button(__("Create ERP Purchase Invoice"), async () => {
-			const defaults = await frappe.xcall(
-				"essdee_yrp.erp_purchase_invoice.get_bill_tracking_invoice_defaults",
-				{ name: frm.doc.name }
-			);
-			return frappe.new_doc("Purchase Invoice", {}, (invoice) => Object.assign(invoice, defaults));
-		});
+		if (frappe.model.can_create("Purchase Invoice")) {
+			frm.add_custom_button(__("Create ERP Purchase Invoice"), async () => {
+				const defaults = await frappe.xcall(
+					"essdee_yrp.erp_purchase_invoice.get_bill_tracking_invoice_defaults",
+					{ name: frm.doc.name }
+				);
+				return frappe.new_doc("Purchase Invoice", {}, (invoice) => Object.assign(invoice, defaults));
+			});
+		}
 		frm.add_custom_button(__("Create YRP Purchase Invoice"), () => {
 			const invoice = frappe.model.get_new_doc("YRP Purchase Invoice");
 			invoice.supplier = frm.doc.supplier;

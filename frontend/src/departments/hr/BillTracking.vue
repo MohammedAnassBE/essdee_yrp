@@ -181,6 +181,7 @@ const handlers = {
 	approve_cancel: () => requestConfirmation("approve_cancel"),
 	cancel: () => { cancelVisible.value = true },
 	create_purchase_invoice: createPurchaseInvoice,
+	create_erp_purchase_invoice: createErpPurchaseInvoice,
 	show_purchase_invoice: showPurchaseInvoice,
 	show_erp_purchase_invoice: showErpPurchaseInvoice,
 	submit: () => requestConfirmation("submit"),
@@ -399,6 +400,13 @@ function createPurchaseInvoice() {
 		name: props.purchaseInvoiceNewRouteName,
 		query: { bill_tracking: recordName() },
 	})
+}
+
+function createErpPurchaseInvoice() {
+	const name = workspace.value.record?.name
+	if (!name) return
+	const query = new URLSearchParams({ vendor_bill_tracking: name })
+	window.open(`/app/purchase-invoice/new?${query}`, "_blank", "noopener")
 }
 
 function showPurchaseInvoice() {

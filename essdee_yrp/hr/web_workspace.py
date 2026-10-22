@@ -9,6 +9,7 @@ from yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking import (
 )
 
 from essdee_yrp.api.duplicate import build_duplicate_values
+from essdee_yrp.erp_purchase_invoice import is_same_site_erp_available
 from essdee_yrp.overrides.bill_tracking import (
 	CANCEL_APPROVED_STATUS,
 	CANCEL_PENDING_STATUS,
@@ -67,6 +68,7 @@ ACTION_LABELS = {
 	"approve_cancel": _("Approve Cancel Request"),
 	"cancel": _("Cancel"),
 	"create_purchase_invoice": _("Create YRP Purchase Invoice"),
+	"create_erp_purchase_invoice": _("Create ERP Purchase Invoice"),
 	"show_purchase_invoice": _("Show YRP Purchase Invoice"),
 	"show_erp_purchase_invoice": _("Show ERP Purchase Invoice"),
 	"edit": _("Edit"),
@@ -138,6 +140,17 @@ def _can_create_purchase_invoice(doc, role_permissions) -> bool:
 	)
 
 
+def _can_create_erp_purchase_invoice(doc, role_permissions) -> bool:
+	return bool(
+		cint(doc.docstatus) == 1
+		and doc.get("form_status") in CANCEL_REQUESTABLE_STATUSES
+		and not _has_purchase_invoice(doc)
+		and role_permissions.get("can_create_invoice")
+		and frappe.has_permission("Purchase Invoice", ptype="create")
+		and is_same_site_erp_available()
+	)
+
+
 def bill_tracking_actions(doc, permissions, role_permissions, can_acknowledge) -> dict:
 	docstatus = cint(doc.docstatus)
 	status = doc.get("form_status")
@@ -155,6 +168,7 @@ def bill_tracking_actions(doc, permissions, role_permissions, can_acknowledge) -
 		"cancel": status == CANCEL_APPROVED_STATUS and not has_invoice
 		and role_permissions.get("can_request_cancel"),
 		"create_purchase_invoice": _can_create_purchase_invoice(doc, role_permissions),
+		"create_erp_purchase_invoice": _can_create_erp_purchase_invoice(doc, role_permissions),
 		"show_purchase_invoice": bool(doc.get("purchase_invoice")),
 		"show_erp_purchase_invoice": bool(doc.get("erp_purchase_invoice")),
 		"edit": docstatus == 0 and permissions.get("can_write"),

@@ -165,6 +165,52 @@ class TestBillTrackingActions(TestCase):
 		self.assertTrue(allowed["create_purchase_invoice"]["allowed"])
 
 
+class TestCreateErpPurchaseInvoiceAction(TestCase):
+	def get_actions(self, doc, *, can_create_erp_invoice=True, is_erp_available=True, roles=None):
+		def has_permission(doctype, ptype=None, **kwargs):
+			return doctype != "Purchase Invoice" or can_create_erp_invoice
+
+		with (
+			patch.object(frappe, "has_permission", side_effect=has_permission),
+			patch.object(web_workspace, "is_same_site_erp_available", return_value=is_erp_available),
+		):
+			return web_workspace.bill_tracking_actions(
+				doc, action_permissions(), roles or role_permissions(), can_acknowledge=False
+			)
+
+	def test_open_bill_offers_erp_invoice_beside_yrp_invoice(self):
+		actions = self.get_actions(FakeBillTracking(form_status="Open"))
+		self.assertTrue(actions["create_erp_purchase_invoice"]["allowed"])
+		self.assertEqual(actions["create_erp_purchase_invoice"]["label"], "Create ERP Purchase Invoice")
+		self.assertTrue(actions["create_purchase_invoice"]["allowed"])
+
+	def test_requires_erp_purchase_invoice_create_permission(self):
+		actions = self.get_actions(FakeBillTracking(), can_create_erp_invoice=False)
+		self.assertFalse(actions["create_erp_purchase_invoice"]["allowed"])
+		self.assertTrue(actions["create_purchase_invoice"]["allowed"])
+
+	def test_requires_configured_invoice_role(self):
+		actions = self.get_actions(FakeBillTracking(), roles=role_permissions(can_create_invoice=False))
+		self.assertFalse(actions["create_erp_purchase_invoice"]["allowed"])
+
+	def test_requires_same_site_erpnext(self):
+		actions = self.get_actions(FakeBillTracking(), is_erp_available=False)
+		self.assertFalse(actions["create_erp_purchase_invoice"]["allowed"])
+
+	def test_hidden_once_either_invoice_is_linked_or_bill_is_not_open(self):
+		for values in (
+			{"purchase_invoice": "PI-YRP-1"},
+			{"erp_purchase_invoice": "PI-ERP-1"},
+			{"docstatus": 0},
+			{"form_status": "Closed"},
+			{"form_status": CANCEL_PENDING_STATUS},
+			{"form_status": "Cancel Request Approved"},
+		):
+			with self.subTest(values=values):
+				actions = self.get_actions(FakeBillTracking(**values))
+				self.assertFalse(actions["create_erp_purchase_invoice"]["allowed"])
+
+
 class TestBillTrackingWorkspace(TestCase):
 	def setUp(self):
 		formats = patch.object(web_workspace, "get_document_print_formats", return_value=[{"label": "Standard", "format": "Standard"}])

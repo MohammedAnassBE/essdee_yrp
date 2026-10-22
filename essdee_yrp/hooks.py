@@ -286,6 +286,7 @@ doctype_js = {
 	],
 	"YRP Work Order": "public/js/work_order.js",
 	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Invoice": "public/js/erp_purchase_invoice.js",
 	"Supplier": "public/js/supplier.js",
 	"YRP Delivery Challan": "public/js/delivery_challan.js",
 	"YRP Goods Received Note": "public/js/goods_received_note.js",

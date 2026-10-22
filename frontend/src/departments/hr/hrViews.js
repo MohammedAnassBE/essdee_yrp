@@ -26,6 +26,7 @@ const BILL_TRACKING_ACTIONS = [
 	{ key: "edit", label: "Edit", icon: "pi pi-pencil" },
 	{ key: "request_cancel", label: "Request for Cancel", icon: "pi pi-times-circle" },
 	{ key: "create_purchase_invoice", label: "Create YRP Purchase Invoice", icon: "pi pi-plus" },
+	{ key: "create_erp_purchase_invoice", label: "Create ERP Purchase Invoice", icon: "pi pi-external-link" },
 	{ key: "show_purchase_invoice", label: "Show YRP Purchase Invoice", icon: "pi pi-external-link" },
 	{
 		key: "show_erp_purchase_invoice",

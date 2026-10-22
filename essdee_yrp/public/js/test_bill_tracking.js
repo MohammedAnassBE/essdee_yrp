@@ -6,7 +6,7 @@ const scriptPath = __dirname + "/bill_tracking.js";
 
 const PERMISSIONS_METHOD = "yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.get_role_permissions";
 
-function loadFormScript(permissions = {}, defaults = {}) {
+function loadFormScript(permissions = {}, defaults = {}, canCreateErpInvoice = true) {
 	let handlers;
 	const calls = [];
 	const xcalls = [];
@@ -46,7 +46,10 @@ function loadFormScript(permissions = {}, defaults = {}) {
 				calls.push(options);
 				if (options.callback) options.callback({ message: true });
 			},
-			model: { get_new_doc: () => ({}) },
+			model: {
+				get_new_doc: () => ({}),
+				can_create: (doctype) => doctype !== "Purchase Invoice" || canCreateErpInvoice,
+			},
 			async new_doc(doctype, options, initialize) {
 				await Promise.resolve();
 				const doc = { doctype, name: "new-invoice", company: "Configured Company" };
@@ -86,8 +89,8 @@ function makeForm(formStatus) {
 	};
 }
 
-async function render(status, permissions, defaults) {
-	const runtime = loadFormScript(permissions, defaults);
+async function render(status, permissions, defaults, canCreateErpInvoice) {
+	const runtime = loadFormScript(permissions, defaults, canCreateErpInvoice);
 	const frm = makeForm(status);
 	await runtime.handlers.refresh(frm);
 	return { ...runtime, frm };
@@ -140,6 +143,15 @@ async function render(status, permissions, defaults) {
 		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
 			"Assign",
 			"Create ERP Purchase Invoice",
+			"Bill Received",
+			"Create YRP Purchase Invoice",
+		]));
+	}
+
+	{
+		const { frm } = await render("Open", { can_create_invoice: true }, {}, false);
+		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
+			"Assign",
 			"Bill Received",
 			"Create YRP Purchase Invoice",
 		]));

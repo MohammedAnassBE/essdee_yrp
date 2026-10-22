@@ -726,8 +726,9 @@ function render_garment_calculate_dialog(frm, context) {
 			if (!cell) return '<td class="text-muted text-center">—</td>';
 			return `<td style="min-width:92px;">
 				<input class="form-control input-sm essdee-wo-calc-qty"
-					type="number" min="0" step="1"
+					type="number" min="0" step="any"
 					value="${escape(flt(cell.qty))}"
+					data-lot-qty="${escape(flt(cell.qty))}"
 					data-source-row="${escape(cell.source_row)}"
 					data-primary-value="${escape(value)}"
 					title="${escape(cell.item_variant)}">
@@ -820,7 +821,7 @@ function render_garment_calculate_dialog(frm, context) {
 	const setRowSelected = (row, selected) => {
 		row.find(".essdee-wo-row-toggle").prop("checked", selected);
 		row.find(".essdee-wo-calc-qty").each(function () {
-			$(this).val(selected ? $(this).attr("max") : 0);
+			$(this).val(selected ? $(this).data("lot-qty") : 0);
 		});
 	};
 	wrapper.on("input", ".essdee-wo-calc-qty", updateTotals);

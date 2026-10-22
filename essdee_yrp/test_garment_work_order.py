@@ -234,6 +234,24 @@ class TestGarmentWorkOrderPlannedQuantity(TestCase):
 		work_order.save.assert_called_once()
 
 
+class TestGarmentCalculateQuantity(TestCase):
+	def test_entered_quantity_above_the_lot_cut_quantity_is_used_as_entered(self):
+		module = "essdee_yrp.garment_work_order"
+		source = frappe._dict(
+			name="ROW-1", item_variant="V-S", cut_qty=100, table_index=0, row_index=0, set_combination="{}"
+		)
+		lot = frappe._dict(lot_order_details=[source])
+		lot.get = lambda key, default=None: lot[key] if key in lot else default
+		ipd = frappe._dict(name="IPD-1", item="TEE")
+		with (
+			patch(f"{module}.get_variant_attr_details", return_value={"Size": "S"}),
+			patch(f"{module}.get_parent_item", return_value="TEE"),
+		):
+			demands = _validated_demands(lot, ipd, [{"source_row": "ROW-1", "qty": 1234.5}])
+
+		self.assertEqual([demand["qty"] for demand in demands], [1234.5])
+
+
 class TestStitchingClothAccessoryRounding(TestCase):
 	def test_cloth_accessory_quantities_are_summed_before_rounding(self):
 		from essdee_yrp.garment_work_order import _stitching_cloth_accessory_deliverables

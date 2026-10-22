@@ -130,8 +130,27 @@ def _group_items(rows, parent_doctype, *, lot=None):
 
 
 def fetch_stock_entry_items(items, ipd=None):
-	"""Return the F15 print shape from F16 Stock Entry rows."""
-	return _group_items(items, "YRP Stock Entry")
+	"""Group Stock Entry rows like F15: one table per item, or per attribute set for items without sizes."""
+	groups = []
+	group_by_key = {}
+	source_groups = _group_items(items, "YRP Stock Entry")
+	sort_attributes = sum(len(group.get("items") or []) for group in source_groups) > 1
+	for source in source_groups:
+		attributes = list(source.get("attributes") or [])
+		if sort_attributes:
+			# F15's get_item_group_index sorted attribute lists in place once a second row was grouped.
+			attributes.sort()
+		for item in source.get("items") or []:
+			key = (
+				item.get("name")
+				if source.get("primary_attribute")
+				else (tuple(sorted(attributes)), source.get("dependent_attribute"))
+			)
+			if key not in group_by_key:
+				group_by_key[key] = {**source, "attributes": attributes, "items": []}
+				groups.append(group_by_key[key])
+			group_by_key[key]["items"].append(item)
+	return groups
 
 
 def fetch_grn_purchase_item_details(items, docstatus=0):
@@ -453,6 +472,31 @@ def prepare_delivery_challan_print(doc):
 		)
 
 
+def get_stock_entry_locations(doc):
+	"""F15's From/To parties: the warehouse's supplier on its own side, else the transfer supplier."""
+	transfer_supplier = doc.get("transfer_supplier")
+	from_location = transfer_supplier or doc.get("from_supplier")
+	to_location = transfer_supplier or doc.get("to_supplier")
+	if doc.get("purpose") in ("Send to Warehouse", "Material Issue"):
+		from_location = doc.get("from_supplier") or _warehouse_supplier(doc.get("from_warehouse"))
+	if doc.get("purpose") in ("Send to Warehouse", "Material Receipt"):
+		to_location = doc.get("to_supplier") or _warehouse_supplier(doc.get("to_warehouse"))
+	return from_location, to_location
+
+
+def _warehouse_supplier(warehouse):
+	return frappe.db.get_value("Warehouse", warehouse, "supplier") if warehouse else None
+
+
+def prepare_stock_entry_print(doc):
+	doc.from_location, doc.to_location = get_stock_entry_locations(doc)
+	for side in ("from", "to"):
+		location = doc.get(f"{side}_location")
+		name = frappe.db.get_value("Supplier", location, "supplier_name") if location else ""
+		doc.set(f"{side}_location_name", name)
+		doc.set(f"{side}_address_details", get_supplier_address_display(location))
+
+
 def prepare_print_document(doc, method=None, settings=None):
 	"""Add transient F15 layout aliases to the F16 YRP documents.
 
@@ -490,6 +534,7 @@ def prepare_print_document(doc, method=None, settings=None):
 				if row.get("item_variant") and flt(row.get("qty")) > 0
 			]
 	elif doc.doctype == "YRP Stock Entry":
+		prepare_stock_entry_print(doc)
 		doc.transfer_supplier = (
 			doc.get("transfer_supplier") or doc.get("from_supplier") or doc.get("to_supplier")
 		)

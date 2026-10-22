@@ -1,3 +1,5 @@
+import { documentWorkspaces } from "../fabric-store/storeWorkspaces.js"
+
 export const PLANNING_ROUTES = {
 	cuttingPlans: "planning-cutting-plans",
 	cuttingPlanNew: "planning-cutting-plan-new",
@@ -63,6 +65,7 @@ export const PLANNING_WORKSPACES = [
 		icon: "pi pi-briefcase",
 		to: "/planning/work-orders",
 	},
+	...documentWorkspaces("/planning"),
 	{
 		key: "box_stickers",
 		label: "Box Sticker Print",

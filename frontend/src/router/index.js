@@ -91,6 +91,28 @@ const idProps = (param, extra) => (route) => ({ [param]: String(route.params[par
 
 const Debits = () => import("../departments/accounts/Debits.vue")
 
+/** Delivery Challan and GRN lists of a Work Orders department at `listPaths`; `pages` adds the document pages, `editable` their new and edit pages. */
+function departmentDocumentRoutes(prefix, storeName, listPaths, { pages = true, editable = true } = {}) {
+	const basePath = listPaths[0].slice(0, listPaths[0].lastIndexOf("/"))
+	const viewRoutes = { deliveryChallanViewRouteName: `${prefix}-delivery-challan`, goodsReceivedNoteViewRouteName: `${prefix}-goods-received-note` }
+	const documents = [
+		["delivery-challans", "delivery-challan", "deliveryChallanId", FabricDeliveryChallan, "Delivery Challans"],
+		["goods-received-notes", "goods-received-note", "goodsReceivedNoteId", FabricGoodsReceivedNote, "Goods Received Notes"],
+	]
+	return documents.flatMap(([segment, single, param, component, label], index) => {
+		const listPath = listPaths[index]
+		const list = { path: listPath, name: `${prefix}-${segment}`, component: FabricStoreSection, props: { section: segment.replaceAll("-", "_"), storeName, basePath, ...viewRoutes } }
+		if (!pages) return [list]
+		const pageProps = { backTo: listPath, backLabel: label, viewRouteName: `${prefix}-${single}`, ...(editable ? { duplicateRouteName: `${prefix}-${single}-new` } : {}) }
+		const page = (path, name) => ({ path, name, component, props: pageProps })
+		return [
+			list,
+			page(`${listPath}/:${param}`, `${prefix}-${single}`),
+			...(editable ? [page(`${listPath}/new`, `${prefix}-${single}-new`), page(`${listPath}/:${param}/edit`, `${prefix}-${single}-edit`)] : []),
+		]
+	})
+}
+
 const routes = [
 	{
 		path: "/quality/work-orders", name: "quality-work-orders", component: FabricStoreSection,
@@ -100,6 +122,7 @@ const routes = [
 		path: "/quality/work-orders/:workOrderId", name: "quality-work-order", component: FabricWorkOrder,
 		props: { backTo: "/quality/work-orders", backLabel: "Work Orders", viewRouteName: "quality-work-order", showEditorActions: false, quality: true },
 	},
+	...departmentDocumentRoutes("quality", "Quality", ["/quality/delivery-challans", "/quality/goods-received-notes"], { editable: false }),
 	{ path: "/quality/reports", name: "quality-reports", component: QualityReports },
 	{ path: "/quality/inspections", name: "quality-inspections", component: QualityInspections },
 	{ path: "/quality/inspections/new", name: "quality-inspection-new", component: QualityInspectionEditorPage },
@@ -200,6 +223,7 @@ const routes = [
 		component: FabricGoodsReceivedNote,
 		props: { backTo: "/sewing/work-orders", backLabel: "Work Orders", viewRouteName: "sewing-goods-received-note", duplicateRouteName: "sewing-goods-received-note-new" },
 	},
+	...departmentDocumentRoutes("sewing", "Sewing", ["/sewing/delivery-challans", "/sewing/goods-received-notes"], { pages: false }),
 	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
 	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
 	{ path: "/finishing/plans", name: "finishing-plans", component: FinishingPlans },
@@ -219,6 +243,7 @@ const routes = [
 		path: "/finishing/work-orders/:workOrderId", name: "finishing-work-order", component: FabricWorkOrder,
 		props: { backTo: "/finishing/work-orders", backLabel: "Work Orders", viewRouteName: "finishing-work-order", newRouteName: "finishing-work-order-new", editRouteName: "finishing-work-order-edit" },
 	},
+	...departmentDocumentRoutes("finishing", "Finishing", ["/finishing/delivery-challans", "/finishing/goods-received-notes"]),
 	{ path: "/finishing/plans/:finishingPlanId", name: "finishing-plan", component: FinishingPlan },
 	{ path: "/finishing/reports", name: "finishing-reports", component: FinishingReports },
 	{ path: "/finishing/rework-details", name: "finishing-rework-details", component: FinishingReworkDetails },
@@ -486,6 +511,7 @@ const routes = [
 		props: { backTo: "/cut-panel-store/goods-received-notes", backLabel: "Goods Received Notes", viewRouteName: "cut-panel-goods-received-note" },
 	},
 
+	...departmentDocumentRoutes("fabric", "Fabric Store", ["/fabric-store/delivery-challans", "/fabric-store/goods-received-notes"], { pages: false }),
 	{
 		path: "/fabric-store/delivery-challans/new",
 		name: "fabric-delivery-challan-new",
@@ -626,6 +652,7 @@ const routes = [
 			editRouteName: "accessory-purchase-order-edit",
 		},
 	},
+	...departmentDocumentRoutes("accessory", "Accessory Store", ["/accessory-store/delivery-challans", "/accessory-store/goods-received-notes"], { pages: false }),
 	{
 		path: "/accessory-store/delivery-challans/new",
 		name: "accessory-delivery-challan-new",
@@ -737,6 +764,7 @@ const routes = [
 		path: "/planning/work-orders/:workOrderId", name: PLANNING_ROUTES.workOrder, component: FabricWorkOrder,
 		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", viewRouteName: PLANNING_ROUTES.workOrder, newRouteName: PLANNING_ROUTES.workOrderNew, editRouteName: PLANNING_ROUTES.workOrderEdit },
 	},
+	...departmentDocumentRoutes("planning", "Planning", ["/planning/delivery-challans", "/planning/goods-received-notes"]),
 	{
 		path: "/planning/box-sticker-prints", name: PLANNING_ROUTES.boxStickers, component: CutPanelStoreSection,
 		props: { section: "box_stickers", backTo: "/planning", backLabel: "Planning" },
@@ -784,6 +812,7 @@ const routes = [
 		path: "/merch/work-orders/:workOrderId", name: MERCH_ROUTES.workOrder, component: FabricWorkOrder,
 		props: { backTo: "/merch/work-orders", backLabel: "Work Orders", viewRouteName: MERCH_ROUTES.workOrder, newRouteName: MERCH_ROUTES.workOrderNew, editRouteName: MERCH_ROUTES.workOrderEdit, processCostViewRouteName: MERCH_ROUTES.processCost },
 	},
+	...departmentDocumentRoutes("merch", "Merch", ["/merch/delivery-challans", "/merch/goods-received-notes"]),
 	{
 		path: "/merch/bill-tracking", name: MERCH_ROUTES.billTrackings, component: BillTrackings,
 		props: { backTo: "/merch", backLabel: "Merch", eyebrow: "Merch", viewRouteName: MERCH_ROUTES.billTracking, newRouteName: MERCH_ROUTES.billTrackingNew },

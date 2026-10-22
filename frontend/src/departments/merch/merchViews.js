@@ -1,3 +1,5 @@
+import { documentWorkspaces } from "../fabric-store/storeWorkspaces.js"
+
 export const MERCH_ROUTES = {
 	lots: "merch-lots",
 	lotNew: "merch-lot-new",
@@ -30,7 +32,7 @@ export const MERCH_ROUTES = {
 	purchaseInvoiceEdit: "merch-purchase-invoice-edit",
 }
 
-export const MERCH_SECTION_ORDER = ["lots", "item_production_details", "production_orders", "work_orders", "process_costs", "bill_tracking", "purchase_invoices", "reports"]
+export const MERCH_SECTION_ORDER = ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "process_costs", "bill_tracking", "purchase_invoices", "reports"]
 
 export const IPD_LIST_PATH = "/merch/item-production-details"
 
@@ -64,6 +66,7 @@ export function merchLauncherItems() {
 			icon: "pi pi-briefcase",
 			to: "/merch/work-orders",
 		},
+		...documentWorkspaces("/merch"),
 		{
 			key: "process_costs",
 			label: "Process Cost",

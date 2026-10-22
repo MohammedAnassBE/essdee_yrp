@@ -14,6 +14,10 @@ from essdee_yrp.web_common import action, assert_expected_modified, parse_mappin
 
 DOCTYPE = "SD YRP Essdee Quality Inspection"
 WORK_ORDER = "YRP Work Order"
+DOCUMENT_SECTIONS = {
+	"delivery_challans": ("Delivery Challans", "YRP Delivery Challan"),
+	"goods_received_notes": ("Goods Received Notes", "YRP Goods Received Note"),
+}
 RFT_REPORT = "SD YRP Qualily Inspection RFT"
 PERMISSION_TYPES = ("read", "write", "create", "submit", "cancel", "amend", "delete", "print")
 EDITABLE_FIELDS = (
@@ -76,6 +80,15 @@ def get_capabilities() -> dict:
 				"label": _("Work Orders"),
 				"can_read": can_read_inspections and bool(frappe.has_permission(WORK_ORDER, ptype="read")),
 				"can_create": False,
+			},
+			**{
+				key: {
+					"label": _(label),
+					"doctype": doctype,
+					"can_read": can_read_inspections and bool(frappe.has_permission(doctype, ptype="read")),
+					"can_create": False,
+				}
+				for key, (label, doctype) in DOCUMENT_SECTIONS.items()
 			},
 			"reports": {"label": _("Reports"), "can_read": bool(reports)},
 		},

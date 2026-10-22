@@ -28,7 +28,7 @@ const props = defineProps({
 	basePath: { type: String, default: "/fabric-store" },
 	workspaceKeys: {
 		type: Array,
-		default: () => ["work_orders", "purchase_orders", "stock_transfers", "reports"],
+		default: () => ["work_orders", "delivery_challans", "goods_received_notes", "purchase_orders", "stock_transfers", "reports"],
 	},
 	reportKeys: { type: Array, default: () => ["stock_balance"] },
 	extraWorkspaces: { type: Array, default: () => [] },

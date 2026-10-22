@@ -94,12 +94,21 @@ class TestFinishingWebWorkspace(TestCase):
 		with self._permissions(denied=denied), roles_patch, settings_patch:
 			return workspace.get_plan_actions(plan)
 
-	def test_capabilities_expose_the_six_finishing_cards(self):
+	def test_capabilities_expose_the_finishing_cards(self):
 		with self._permissions():
 			payload = self._workspace().get_capabilities()
 		self.assertEqual(
 			list(payload["sections"]),
-			["plans", "reports", "rework_details", "rework_groups", "dispatches", "work_orders"],
+			[
+				"plans",
+				"reports",
+				"rework_details",
+				"rework_groups",
+				"dispatches",
+				"work_orders",
+				"delivery_challans",
+				"goods_received_notes",
+			],
 		)
 		self.assertEqual(payload["sections"]["plans"]["doctype"], DOCTYPE)
 		self.assertEqual(payload["sections"]["dispatches"]["doctype"], "SD YRP Finishing Plan Dispatch")

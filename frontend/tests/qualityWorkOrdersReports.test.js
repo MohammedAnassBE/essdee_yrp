@@ -31,6 +31,7 @@ function workOrderList(basePath, { processes = async () => ["Stitching", "Finish
 	})
 	const section = loadComponent(resolve("frontend/src/departments/FabricStoreSection.vue"), {
 		"primevue/message": stub("message"),
+		"./cut-panel-store/CutPanelDocuments.vue": stub("documents"),
 		"../api/fabricStore.js": { getFabricStoreCapabilities: async () => { requests.push("fabric"); return { sections: { work_orders: { can_read: true, can_create: true } } } } },
 		"../api/quality.js": { getQualityCapabilities: async () => { requests.push("quality"); return { sections: { work_orders: qualityCapability } } } },
 		"../api/sewing.js": { getSewingWorkOrderProcesses: () => { requests.push("processes"); return processes() } },

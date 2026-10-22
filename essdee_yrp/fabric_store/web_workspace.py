@@ -48,6 +48,8 @@ from essdee_yrp.purchase.lot_cut_quantity import can_view_lot_cut_quantity
 
 DOCUMENT_KEYS = {
 	"work_orders": "YRP Work Order",
+	"delivery_challans": "YRP Delivery Challan",
+	"goods_received_notes": "YRP Goods Received Note",
 	"purchase_orders": "Purchase Order",
 }
 
@@ -73,6 +75,8 @@ SUPPORTED_DOCTYPES = set(
 
 SECTION_LABELS = {
 	"work_orders": _("Work Orders"),
+	"delivery_challans": _("Delivery Challans"),
+	"goods_received_notes": _("Goods Received Notes"),
 	"purchase_orders": _("Purchase Orders"),
 	"stock_transfers": _("Stock Transfers"),
 	"reports": _("Reports"),

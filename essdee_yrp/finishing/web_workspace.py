@@ -79,6 +79,10 @@ DISPATCH_LOG_FIELDS = (
 )
 
 
+DOCUMENT_SECTIONS = {
+	"delivery_challans": ("Delivery Challans", "YRP Delivery Challan"),
+	"goods_received_notes": ("Goods Received Notes", "YRP Goods Received Note"),
+}
 REWORK_DOCTYPE = "SD YRP GRN Rework Item"
 DISPATCH_DOCTYPE = "SD YRP Finishing Plan Dispatch"
 WORK_ORDER_DOCTYPE = "YRP Work Order"
@@ -151,6 +155,10 @@ def get_capabilities() -> dict:
 	work_orders = _permission_flags(WORK_ORDER_DOCTYPE, ("read", "create"))
 	if work_orders["can_read"]:
 		sections["work_orders"] = _section("Work Orders", WORK_ORDER_DOCTYPE, work_orders)
+	for key, (label, doctype) in DOCUMENT_SECTIONS.items():
+		flags = _permission_flags(doctype, ("read", "create"))
+		if flags["can_read"]:
+			sections[key] = _section(label, doctype, flags)
 	return {"sections": sections}
 
 

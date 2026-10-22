@@ -13,6 +13,8 @@ SECTIONS = {
 	"item_production_details": ("Item Production Detail", DOCTYPE),
 	"production_orders": ("Production Order", "YRP Production Order"),
 	"work_orders": ("Work Order", "YRP Work Order"),
+	"delivery_challans": ("Delivery Challans", "YRP Delivery Challan"),
+	"goods_received_notes": ("Goods Received Notes", "YRP Goods Received Note"),
 	"process_costs": ("Process Cost", "YRP Process Cost"),
 	"bill_tracking": ("Vendor Bill Tracking", "YRP Bill Tracking"),
 	"purchase_invoices": ("Purchase Invoice", "YRP Purchase Invoice"),

@@ -13,7 +13,7 @@ export const departments = [
 		label: "Fabric Store",
 		shortLabel: "FS",
 		path: "/fabric-store",
-		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", reports: "reports" },
+		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", reports: "reports" },
 		component: () => import("./FabricStore.vue"),
 	},
 	{
@@ -29,7 +29,7 @@ export const departments = [
 		label: "Accessory Store",
 		shortLabel: "AS",
 		path: "/accessory-store",
-		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", excel_stickers: "excel-sticker-prints", reports: "reports" },
+		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", excel_stickers: "excel-sticker-prints", reports: "reports" },
 		component: () => import("./AccessoryStore.vue"),
 	},
 	{
@@ -37,7 +37,7 @@ export const departments = [
 		label: "Sewing",
 		shortLabel: "SW",
 		path: "/sewing",
-		sections: { plans: "plans", work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], reports: "reports", attendance: "attendance" },
+		sections: { plans: "plans", work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports", attendance: "attendance" },
 		component: () => import("./Sewing.vue"),
 	},
 	{
@@ -45,7 +45,7 @@ export const departments = [
 		label: "Finishing",
 		shortLabel: "FN",
 		path: "/finishing",
-		sections: { plans: "plans", reports: "reports", rework_details: "rework-details", rework_groups: "rework-groups", dispatches: "dispatches", work_orders: "work-orders" },
+		sections: { plans: "plans", reports: "reports", rework_details: "rework-details", rework_groups: "rework-groups", dispatches: "dispatches", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes" },
 		component: () => import("./Finishing.vue"),
 	},
 	{
@@ -53,7 +53,7 @@ export const departments = [
 		label: "Quality",
 		shortLabel: "QA",
 		path: "/quality",
-		sections: { inspections: "inspections", work_orders: "work-orders", reports: "reports" },
+		sections: { inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
 		component: () => import("./Quality.vue"),
 	},
 	{
@@ -61,7 +61,7 @@ export const departments = [
 		label: "Merch",
 		shortLabel: "MR",
 		path: "/merch",
-		sections: { lots: "lots", item_production_details: "item-production-details", production_orders: "production-orders", work_orders: "work-orders", process_costs: "process-costs", bill_tracking: "bill-tracking", purchase_invoices: "purchase-invoices", reports: "reports" },
+		sections: { lots: "lots", item_production_details: "item-production-details", production_orders: "production-orders", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", process_costs: "process-costs", bill_tracking: "bill-tracking", purchase_invoices: "purchase-invoices", reports: "reports" },
 		component: () => import("./Merch.vue"),
 	},
 	{
@@ -94,7 +94,7 @@ export const departments = [
 		label: "Planning",
 		shortLabel: "PL",
 		path: "/planning",
-		sections: { cutting_plans: "cutting-plans", sewing_plans: "sewing-plans", finishing_plans: "finishing-plans", lots: "lots", production_orders: "production-orders", work_orders: "work-orders", box_stickers: "box-sticker-prints", reports: "reports" },
+		sections: { cutting_plans: "cutting-plans", sewing_plans: "sewing-plans", finishing_plans: "finishing-plans", lots: "lots", production_orders: "production-orders", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", box_stickers: "box-sticker-prints", reports: "reports" },
 		component: () => import("./Planning.vue"),
 	},
 	{

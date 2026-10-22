@@ -24,6 +24,12 @@ const recordRoutes = {
 	"YRP Process Cost": (name) => `/web/merch/process-costs/${encodeURIComponent(name)}`,
 }
 
+/** Delivery Challan and GRN pages a Work Orders department owns under `basePath`. */
+const documentRoutes = (basePath) => ({
+	"YRP Delivery Challan": (name) => `/web${basePath}/delivery-challans/${encodeURIComponent(name)}`,
+	"YRP Goods Received Note": (name) => `/web${basePath}/goods-received-notes/${encodeURIComponent(name)}`,
+})
+
 export const DEPARTMENT_RECORD_ROUTES = {
 	"/accounts": {
 		"YRP Bill Tracking": (name) => `/web/accounts/bill-tracking/${encodeURIComponent(name)}`,
@@ -31,6 +37,7 @@ export const DEPARTMENT_RECORD_ROUTES = {
 	"/quality": {
 		"YRP Work Order": (name) => `/web/quality/work-orders/${encodeURIComponent(name)}`,
 		"SD YRP Essdee Quality Inspection": recordRoutes["SD YRP Essdee Quality Inspection"],
+		...documentRoutes("/quality"),
 	},
 	"/sewing": {
 		"YRP Work Order": (name) => `/web/sewing/work-orders/${encodeURIComponent(name)}`,
@@ -39,9 +46,11 @@ export const DEPARTMENT_RECORD_ROUTES = {
 	},
 	"/finishing": {
 		"YRP Work Order": (name) => `/web/finishing/work-orders/${encodeURIComponent(name)}`,
+		...documentRoutes("/finishing"),
 	},
 	"/accessory-store": {
 		"YRP Work Order": (name) => `/web/accessory-store/work-orders/${encodeURIComponent(name)}`,
+		...documentRoutes("/accessory-store"),
 	},
 	"/cut-panel-store": {
 		"YRP Work Order": (name) => `/web/cut-panel-store/work-orders/${encodeURIComponent(name)}`,
@@ -57,6 +66,7 @@ export const DEPARTMENT_RECORD_ROUTES = {
 		"YRP Production Order": (name) => `/web/planning/production-orders/${encodeURIComponent(name)}`,
 		"SD YRP Cutting Plan": (name) => `/web/planning/cutting-plans/${encodeURIComponent(name)}`,
 		"SD YRP Finishing Plan": (name) => `/web/planning/finishing-plans/${encodeURIComponent(name)}`,
+		...documentRoutes("/planning"),
 	},
 	"/purchase": {
 		"YRP Bill Tracking": (name) => `/web/purchase/bill-tracking/${encodeURIComponent(name)}`,
@@ -69,6 +79,7 @@ export const DEPARTMENT_RECORD_ROUTES = {
 		"YRP Bill Tracking": (name) => `/web/merch/bill-tracking/${encodeURIComponent(name)}`,
 		"YRP Purchase Invoice": (name) => `/web/merch/purchase-invoices/${encodeURIComponent(name)}`,
 		"YRP Item Production Detail": (name) => `/web/merch/item-production-details/${encodeURIComponent(name)}`,
+		...documentRoutes("/merch"),
 	},
 }
 

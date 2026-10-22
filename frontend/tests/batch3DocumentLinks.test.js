@@ -76,7 +76,7 @@ const directCases = [
  ['D14', 'hr/BillTracking', 'dd', 'record.supplier', { record: { supplier: 'SUP/1' } }, [pair('SUP/1','supplier')]],
  ['D14', 'hr/BillTracking', 'td', 'row.assigned_to', { row: { assigned_to: 'Accounts' } }, [pair('Accounts','department')]],
  ['D14', 'hr/BillTracking', 'td', 'row.assigned_by', { row: { assigned_by: 'USER/1' } }, [pair('USER/1','user')]],
- ['D15', 'finishing/plan/FinishingGrnTab', 'td', 'batch.grn', { batch: { grn: 'GRN/1' } }, [['GRN/1','/web/fabric-store/goods-received-notes/GRN%2F1']]],
+ ['D15', 'finishing/plan/FinishingGrnTab', 'td', 'batch.grn', { batch: { grn: 'GRN/1' } }, [['GRN/1','/web/planning/goods-received-notes/GRN%2F1']]],
  ['D15', 'finishing/plan/FinishingOldLotTab', 'td', 'group.fp', { group: { fp: 'FP/1', lot: 'LOT/1' }, buckets: () => [1] }, [['FP/1','/web/planning/finishing-plans/FP%2F1'],['LOT/1','/web/planning/lots/LOT%2F1']]],
  ['D15', 'finishing/plan/FinishingAlternativesTab', 'h3', 'lot.name', { lot: { name: 'LOT/1', item: 'ITEM/1' } }, [['LOT/1','/web/planning/lots/LOT%2F1'],['ITEM/1','/web/purchase/items/ITEM%2F1']]],
  ['D15', 'finishing/plan/FinishingDispatchHistoryTab', 'td', 'log.source_name', { log: { source_doctype: 'YRP Work Order', source_name: 'WO/1' } }, [['YRP Work Order WO/1','/web/planning/work-orders/WO%2F1']]],

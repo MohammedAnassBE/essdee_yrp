@@ -6,6 +6,7 @@ import vm from "node:vm"
 import { createMemoryHistory, createRouter } from "vue-router"
 
 import * as accountsViews from "../src/departments/accounts/accountsViews.js"
+import * as storeWorkspaces from "../src/departments/fabric-store/storeWorkspaces.js"
 import { MERCH_ROUTES } from "../src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
@@ -42,6 +43,7 @@ async function finishingCards(sections) {
 		"../components/DepartmentPage.vue": stub("department"),
 		"../components/common/WorkspaceLauncher.vue": stub("launcher"),
 		"../components/common/WorkspaceLoadError.vue": stub("error"),
+		"./fabric-store/storeWorkspaces.js": storeWorkspaces,
 	})
 	const root = mountComponent(page, {})
 	await tick()
@@ -58,6 +60,7 @@ function workOrderSection(capabilities) {
 	})
 	const section = loadComponent(resolve("frontend/src/departments/FabricStoreSection.vue"), {
 		"primevue/message": stub("message"),
+		"./cut-panel-store/CutPanelDocuments.vue": stub("documents"),
 		"../api/fabricStore.js": { getFabricStoreCapabilities: () => assert.fail("Finishing must use Finishing capabilities") },
 		"../api/finishing.js": { getFinishingCapabilities: async () => { requests.push("finishing"); return capabilities } },
 		"../api/quality.js": { getQualityCapabilities: () => assert.fail("Finishing must not use Quality capabilities") },

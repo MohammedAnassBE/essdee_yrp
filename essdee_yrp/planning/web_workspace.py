@@ -83,6 +83,8 @@ def get_capabilities() -> dict:
 		"lots": _with_label("Lot", permission_flags("SD YRP Lot", ("read", "write"))),
 		"production_orders": sales_sections.get("production_orders") or {},
 		"work_orders": fabric_store_sections.get("work_orders") or {},
+		"delivery_challans": fabric_store_sections.get("delivery_challans") or {},
+		"goods_received_notes": fabric_store_sections.get("goods_received_notes") or {},
 		"box_stickers": _with_label(
 			"Box Sticker Print",
 			permission_flags("SD YRP Box Sticker Print", ("read", "create", "write", "submit")),

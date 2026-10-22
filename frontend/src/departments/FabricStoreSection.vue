@@ -26,6 +26,7 @@ import FabricPurchaseOrders from "./fabric-store/FabricPurchaseOrders.vue"
 import FabricReports from "./fabric-store/FabricReports.vue"
 import FabricStockTransfers from "./fabric-store/FabricStockTransfers.vue"
 import FabricWorkOrders from "./fabric-store/FabricWorkOrders.vue"
+import CutPanelDocuments from "./cut-panel-store/CutPanelDocuments.vue"
 
 const props = defineProps({
 	section: { type: String, required: true },
@@ -35,10 +36,14 @@ const props = defineProps({
 	workOrderNewRouteName: { type: String, default: "fabric-work-order-new" },
 	purchaseOrderViewRouteName: { type: String, default: "fabric-purchase-order" },
 	purchaseOrderNewRouteName: { type: String, default: "fabric-purchase-order-new" },
+	deliveryChallanViewRouteName: { type: String, default: "fabric-delivery-challan" },
+	goodsReceivedNoteViewRouteName: { type: String, default: "fabric-goods-received-note" },
 	reportKeys: { type: Array, default: () => ["stock_balance"] },
 })
 const definitions = {
 	work_orders: { label: "Work Orders", component: FabricWorkOrders },
+	delivery_challans: { label: "Delivery Challans", component: CutPanelDocuments },
+	goods_received_notes: { label: "Goods Received Notes", component: CutPanelDocuments },
 	purchase_orders: { label: "Purchase Orders", component: FabricPurchaseOrders },
 	stock_transfers: { label: "Stock Transfers", component: FabricStockTransfers },
 	reports: { label: "Reports", component: FabricReports },
@@ -46,12 +51,17 @@ const definitions = {
 const definition = computed(() => definitions[props.section] || definitions.work_orders)
 const capability = ref(null)
 const workOrderFilters = ref([])
+const DOCUMENT_VIEW_ROUTES = { delivery_challans: "deliveryChallanViewRouteName", goods_received_notes: "goodsReceivedNoteViewRouteName" }
 const sectionProps = computed(() => ({
 	capability: capability.value,
 	...(props.section === "work_orders" ? {
 		filters: workOrderFilters.value,
 		viewRouteName: props.workOrderViewRouteName,
 		newRouteName: props.workOrderNewRouteName,
+	} : {}),
+	...(DOCUMENT_VIEW_ROUTES[props.section] ? {
+		filters: workOrderFilters.value,
+		viewRouteName: props[DOCUMENT_VIEW_ROUTES[props.section]],
 	} : {}),
 	...(props.section === "purchase_orders" ? {
 		viewRouteName: props.purchaseOrderViewRouteName,
@@ -64,7 +74,7 @@ const error = ref("")
 let loadSequence = 0
 const CAPABILITY_LOADERS = { "/quality": getQualityCapabilities, "/finishing": getFinishingCapabilities }
 
-/** Work Order list filters a department narrows to: Sewing and Quality see their stitching processes. */
+/** Work Order, Delivery Challan and GRN list filters a department narrows to: Sewing and Quality see their stitching processes. */
 async function getWorkOrderFilters(basePath) {
 	if (basePath !== "/sewing" && basePath !== "/quality") return []
 	const processFilter = ["process_name", "in", await getSewingWorkOrderProcesses() || []]
@@ -83,7 +93,8 @@ async function load() {
 		const nextCapability = quality
 			? (sectionCapability?.can_read ? { ...sectionCapability, can_create: false } : null)
 			: sectionCapability
-		const filters = section === "work_orders" && nextCapability ? await getWorkOrderFilters(basePath) : []
+		const scoped = section === "work_orders" || Boolean(DOCUMENT_VIEW_ROUTES[section])
+		const filters = scoped && nextCapability ? await getWorkOrderFilters(basePath) : []
 		if (sequence !== loadSequence) return
 		capability.value = nextCapability
 		workOrderFilters.value = filters

@@ -34,6 +34,8 @@ class TestSewingWebWorkspace(TestCase):
 			{
 				"plans": "Sewing Plan",
 				"work_orders": "Work Orders",
+				"delivery_challans": "Delivery Challans",
+				"goods_received_notes": "Goods Received Notes",
 				"reports": "Reports",
 				"attendance": "Attendance Report",
 			},
@@ -115,8 +117,8 @@ class TestSewingWebWorkspace(TestCase):
 
 	def test_report_and_attendance_sections_require_plan_read_and_report(self):
 		for denied_permission, expected_sections in (
-			("read", {"work_orders"}),
-			("report", {"plans", "work_orders"}),
+			("read", {"work_orders", "delivery_challans", "goods_received_notes"}),
+			("report", {"plans", "work_orders", "delivery_challans", "goods_received_notes"}),
 		):
 			with self.subTest(denied_permission=denied_permission):
 				payload = self._capabilities(denied={("SD YRP Sewing Plan", denied_permission)})

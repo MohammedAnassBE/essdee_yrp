@@ -9,6 +9,7 @@
 import { computed, onMounted, ref } from "vue"
 
 import { getFinishingCapabilities } from "../api/finishing.js"
+import { documentWorkspaces } from "./fabric-store/storeWorkspaces.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
@@ -23,6 +24,7 @@ const workspaces = [
 	{ key: "rework_groups", label: "Rework Grouped Details", description: "Rework rows grouped by item and lot with size-wise entry.", icon: "pi pi-objects-column", to: "/finishing/rework-groups" },
 	{ key: "dispatches", label: "Finishing Plan Dispatch", description: "Dispatch packed boxes from several Finishing Plans together.", icon: "pi pi-truck", to: "/finishing/dispatches" },
 	{ key: "work_orders", label: "Work Orders", description: "Work Orders: make DCs and receive GRNs.", icon: "pi pi-briefcase", to: "/finishing/work-orders" },
+	...documentWorkspaces("/finishing"),
 ]
 const visibleWorkspaces = computed(() => workspaces.filter((workspace) => sections.value[workspace.key]?.can_read))
 

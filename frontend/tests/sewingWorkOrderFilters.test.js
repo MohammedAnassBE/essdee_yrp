@@ -14,6 +14,7 @@ function setup(basePath, getProcesses) {
 	})
 	const component = loadComponent("frontend/src/departments/FabricStoreSection.vue", {
 		"primevue/message": stub("message"),
+		"./cut-panel-store/CutPanelDocuments.vue": stub("documents"),
 		"../api/fabricStore.js": { getFabricStoreCapabilities: async () => ({ sections: { work_orders: { can_create: 1 } } }) },
 		"../api/sewing.js": { getSewingWorkOrderProcesses: getProcesses },
 		"../api/finishing.js": { getFinishingCapabilities: () => assert.fail("Only Finishing uses Finishing capabilities") },

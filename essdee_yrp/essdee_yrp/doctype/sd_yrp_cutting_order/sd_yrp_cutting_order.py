@@ -292,7 +292,7 @@ def calc_laysheets(cutting_order):
 
 	# Re-process all Label Printed LaySheets
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
-		update_cutting_plan,
+		apply_laysheet_to_parent,
 	)
 
 	cls_list = frappe.get_list(
@@ -301,7 +301,7 @@ def calc_laysheets(cutting_order):
 		pluck="name",
 	)
 	for cls in cls_list:
-		update_cutting_plan(cls)
+		apply_laysheet_to_parent(frappe.get_doc("SD YRP Cutting LaySheet", cls))
 
 	co_doc.reload()
 	co_doc.save()

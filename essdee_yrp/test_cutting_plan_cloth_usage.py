@@ -114,3 +114,84 @@ def _plan_used_weights(cutting_plan):
 		(row.colour, row.cloth_type, row.dia): flt(row.used_weight, 3)
 		for row in plan.cutting_plan_cloth_details
 	}
+
+
+class TestCalculateLaySheetsRepairsUsedWeight(IntegrationTestCase):
+	def test_planner_without_laysheet_write_recomputes_double_counted_plan(self):
+		cutting_plan = _find_plan_with_printed_laysheets()
+		if not cutting_plan:
+			self.skipTest("No V3 Cutting Plan with two Label Printed LaySheets is available")
+		expected = _expected_used_weights(cutting_plan)
+		frappe.db.savepoint("calc_repair")
+		try:
+			frappe.db.sql(
+				"""UPDATE `tabSD YRP Cutting Plan Cloth Detail` SET used_weight = used_weight * 2 + 158
+				WHERE parent = %s AND parentfield = 'cutting_plan_cloth_details'""",
+				cutting_plan,
+			)
+			frappe.set_user(_planner_without_laysheet_write())
+			calc(cutting_plan)
+			first = _plan_used_weights(cutting_plan)
+			calc(cutting_plan)
+			second = _plan_used_weights(cutting_plan)
+		finally:
+			frappe.set_user("Administrator")
+			frappe.db.rollback(save_point="calc_repair")
+
+		for key, used_weight in expected.items():
+			self.assertAlmostEqual(first[key], used_weight, places=2)
+			self.assertAlmostEqual(second[key], used_weight, places=2)
+
+
+def _find_plan_with_printed_laysheets():
+	rows = frappe.db.sql(
+		"""
+		SELECT plan.name
+		FROM `tabSD YRP Cutting Plan` plan
+		JOIN `tabSD YRP Cutting LaySheet` laysheet ON laysheet.cutting_plan = plan.name
+		WHERE plan.docstatus = 1 AND plan.version = 'V3' AND laysheet.status = 'Label Printed'
+			AND laysheet.is_manual_entry = 0
+			AND NOT EXISTS (
+				SELECT 1 FROM `tabSD YRP Recut and Print Panel` recut
+				WHERE recut.cutting_plan = plan.name AND recut.docstatus = 1
+			)
+		GROUP BY plan.name
+		HAVING COUNT(*) >= 2
+		ORDER BY plan.creation DESC
+		LIMIT 1
+		"""
+	)
+	return rows[0][0] if rows else None
+
+
+def _expected_used_weights(cutting_plan):
+	expected = {key: 0.0 for key in _plan_used_weights(cutting_plan)}
+	details = frappe.db.sql(
+		"""
+		SELECT detail.colour, detail.cloth_type, detail.actual_dia, detail.weight - detail.balance_weight
+		FROM `tabSD YRP Cutting LaySheet Detail` detail
+		JOIN `tabSD YRP Cutting LaySheet` laysheet ON laysheet.name = detail.parent
+		WHERE laysheet.cutting_plan = %(plan)s AND laysheet.status = 'Label Printed'
+		UNION ALL
+		SELECT accessory.colour, accessory.cloth_type, accessory.actual_dia, accessory.weight
+		FROM `tabSD YRP Cutting LaySheet Accessory Detail` accessory
+		JOIN `tabSD YRP Cutting LaySheet` laysheet ON laysheet.name = accessory.parent
+		WHERE laysheet.cutting_plan = %(plan)s AND laysheet.status = 'Label Printed'
+		""",
+		{"plan": cutting_plan},
+	)
+	for colour, cloth_type, dia, used_weight in details:
+		if (colour, cloth_type, dia) in expected:
+			expected[(colour, cloth_type, dia)] += flt(used_weight)
+	return expected
+
+
+def _planner_without_laysheet_write():
+	email = "cutting.plan.calc.planner@example.test"
+	if not frappe.db.exists("User", email):
+		user = frappe.get_doc(
+			{"doctype": "User", "email": email, "first_name": "Calc Planner", "send_welcome_email": 0}
+		)
+		user.append("roles", {"role": "Production Planner"})
+		user.insert(ignore_permissions=True)
+	return email

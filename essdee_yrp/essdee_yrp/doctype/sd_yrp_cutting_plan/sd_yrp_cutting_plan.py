@@ -17,7 +17,7 @@ from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail impor
 from essdee_yrp.cutting.cloth_substitution import expand_cutting_rows
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	_save_laysheet_terminal_transition,
-	update_cutting_plan,
+	apply_laysheet_to_parent,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
@@ -748,7 +748,7 @@ def calc(cutting_plan):
 		pluck="name",
 	)
 	for cls in cls_list:
-		update_cutting_plan(cls)
+		apply_laysheet_to_parent(frappe.get_doc("SD YRP Cutting LaySheet", cls))
 
 	cp_doc.reload()
 	cloth = {}

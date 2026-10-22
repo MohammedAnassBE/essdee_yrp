@@ -1641,6 +1641,11 @@ def update_cutting_plan(cutting_laysheet, check_cp=False):
 	cls_doc.check_permission("write")
 	if cls_doc.status not in ("Bundles Generated", "Label Printed"):
 		frappe.throw(f"Cutting totals cannot be updated from a {cls_doc.status} Cutting LaySheet.")
+	apply_laysheet_to_parent(cls_doc, check_cp)
+
+
+def apply_laysheet_to_parent(cls_doc, check_cp=False):
+	"""Add a LaySheet's cut quantities and cloth usage to its plan/order; MRP update_cutting_plan."""
 	parent_dt, parent_name = get_parent_ref(cls_doc)
 	_production_detail, incomplete_items_json, completed_items_json, version = get_completed_incomplete_json(
 		parent_dt, parent_name
@@ -3137,7 +3142,7 @@ def calculate_cutting_order_laysheets(cutting_order):
 		pluck="name",
 	)
 	for cls in cls_list:
-		update_cutting_plan(cls)
+		apply_laysheet_to_parent(frappe.get_doc("SD YRP Cutting LaySheet", cls))
 
 	co_doc.reload()
 	co_doc.run_method("on_update_after_submit")

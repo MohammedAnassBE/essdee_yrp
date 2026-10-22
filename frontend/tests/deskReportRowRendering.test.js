@@ -4,6 +4,7 @@ import test from "node:test"
 import * as reportConfig from "../src/components/reports/deskReportConfig.js"
 import * as reportExport from "../src/components/reports/reportExport.js"
 import { cellAlign, reconcileReportLayout, reportCellValue } from "../src/composables/reportColumns.js"
+import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 
 const nodes = (root, type) => findNodes(root, (node) => node.type === type)
@@ -21,7 +22,7 @@ function mountReport(sourceRows, reportKey = "purchase-order-itemwise") {
 		"../common/DateField.vue": stub("date-field"), "../common/LinkField.vue": stub("link-field"),
 		"./ReportShell.vue": (props, { slots }) => Vue.h("report-shell", props, [slots.default?.()]),
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
-		"./deskReportConfig.js": reportConfig, "./reportExport.js": reportExport,
+		"./deskReportConfig.js": reportConfig, "../../composables/useIncrementalRows.js": incrementalRows, "./reportExport.js": reportExport,
 		"./reportUtils.js": { todayIso: () => "2026-10-22", stockCellValue: (value) => value },
 		"../../composables/useWebReport.js": { useWebReport: () => ({ sourceColumns, sourceRows, activeFilters: Vue.ref(null), filtersChanged() {}, generate: async () => {} }) },
 		"../../composables/useReportColumns.js": { useReportColumns: () => {

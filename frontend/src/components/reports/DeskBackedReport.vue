@@ -29,8 +29,9 @@ import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRoute } from "vue-router"
+import { ROW_RENDER_STEP, useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
@@ -63,31 +64,10 @@ const exportSource = computed(() => config.renderedExport
 	? { reportKey: props.reportKey, appliedFilters: appliedFilterLabels(config.filters, activeFilters.value || {}) }
 	: deskExportSource(props.reportKey, activeFilters.value, columns.value, config.filters))
 
-// Mounting tens of thousands of rows at once froze the tab; mount in steps as the end scrolls into view.
 // A rendered export reads the table DOM, so it keeps every row mounted.
-const ROW_RENDER_STEP = config.renderedExport ? Infinity : 200
-const renderLimit = ref(ROW_RENDER_STEP)
-const moreRowsSentinel = ref(null)
-const renderedRows = computed(() => rows.value.slice(0, renderLimit.value))
-const unrenderedCount = computed(() => Math.max(0, rows.value.length - renderLimit.value))
-let moreRowsObserver = null
-function renderMoreRows() { renderLimit.value += ROW_RENDER_STEP }
-watch(sourceRows, () => { renderLimit.value = ROW_RENDER_STEP })
-watch(moreRowsSentinel, (element) => {
-	moreRowsObserver?.disconnect()
-	moreRowsObserver = null
-	if (!element || typeof IntersectionObserver === "undefined") return
-	moreRowsObserver = new IntersectionObserver(async (entries) => {
-		if (!entries.some(entry => entry.isIntersecting)) return
-		renderMoreRows()
-		await nextTick()
-		// Re-observing reports the sentinel again if it is still in view after the new rows.
-		moreRowsObserver?.unobserve(element)
-		moreRowsObserver?.observe(element)
-	}, { rootMargin: "600px" })
-	moreRowsObserver.observe(element)
+const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(rows, {
+	step: config.renderedExport ? Infinity : ROW_RENDER_STEP, resetOn: sourceRows,
 })
-onBeforeUnmount(() => moreRowsObserver?.disconnect())
 
 function cellToneClass(row, column) {
 	const tone = config.cellTone?.(column.fieldname, cellValue(row, column))

@@ -61,9 +61,10 @@
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr></thead>
 				<tbody>
-					<tr v-for="(row, rowIndex) in rows" :key="rowIndex" :class="{ 'report-total-row': row.is_total_row }">
+					<tr v-for="(row, rowIndex) in renderedRows" :key="rowIndex" :class="{ 'report-total-row': row.is_total_row }">
 						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ stockCellValue(cellValue(row, column), column) }}</span></td>
 					</tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="stock-more"><td :colspan="columns.length"><div class="stock-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ rows.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -77,6 +78,7 @@ import { FilterService } from "@primevue/core/api"
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue"
 
 import { callMethod, searchLink } from "../../api/frappe.js"
+import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
@@ -114,6 +116,8 @@ const {
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "stock-balance", sourceColumns, sourceRows })
 const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+// Export rebuilds rows on the server, so only the mounted table is stepped.
+const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(rows, { resetOn: sourceRows })
 const totals = computed(() => dataRows.value.reduce((result, row) => {
 	result.balanceQty += Number(row.bal_qty || 0); result.inQty += Number(row.in_qty || 0); result.outQty += Number(row.out_qty || 0); return result
 }, { balanceQty: 0, inQty: 0, outQty: 0 }))
@@ -268,6 +272,16 @@ onMounted(loadDimensions)
 
 .multiline-cell {
 	white-space: pre-line;
+}
+
+.stock-more__inner {
+	position: sticky;
+	left: 0;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--erp-space-3);
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
 }
 
 @media (max-width: 800px) {

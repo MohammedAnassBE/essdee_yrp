@@ -7,6 +7,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import * as views from "../src/departments/quality/qualityViews.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
 
 const read = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8")
@@ -281,6 +282,7 @@ test("DeskBackedReport generates RFT with empty filters and renders all dynamic 
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": reportConfig,
 		"./reportUtils.js": { todayIso: () => "2026-10-21", stockCellValue: (value) => value },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../../composables/useWebReport.js": { useWebReport: () => ({ sourceColumns, sourceRows, activeFilters: Vue.ref(null), filtersChanged() {}, generate: async (filters) => requests.push(filters) }) },
 		"../../composables/useReportColumns.js": { useReportColumns: () => {
 			const columns = Vue.computed(() => reconcileReportLayout(sourceColumns.value, null))

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import test from "node:test"
 import vm from "node:vm"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
 
 const configUrl = new URL("../src/components/reports/deskReportConfig.js", import.meta.url)
@@ -181,6 +182,7 @@ test("report lot query prefills the lookup and follows navigation within the rep
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": await config(),
 		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../../composables/useWebReport.js": { useWebReport: () => ({ sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null),
 			filtersChanged() {}, clear() {}, generate: async request => requests.push(request),
 		}) },
@@ -216,6 +218,7 @@ test("FI Updates passes the company-location restriction to its supplier lookup"
 		"./ReportShell.vue": ReportShell, "./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": await config(),
 		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../../composables/useWebReport.js": { useWebReport: () => ({
 			sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null), filtersChanged() {},
 		}) },
@@ -257,6 +260,7 @@ test("GRN Summary sends each selected status including Draft as a string", async
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": await config(),
 		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../../composables/useWebReport.js": { useWebReport: () => ({
 			sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null), filtersChanged() {},
 			generate: async request => requests.push(request),
@@ -311,6 +315,7 @@ test("ageing ranges and warehouse defaults render, reset and reach report genera
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": await config(),
 		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../../composables/useWebReport.js": { useWebReport: () => ({
 			sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null), filtersChanged() {}, clear() {},
 			generate: async request => requests.push(request),
@@ -384,6 +389,7 @@ test("PO conditional dates and all Lot Consumption required filters reach the sh
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": await config(),
 		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../../composables/useWebReport.js": { useWebReport: () => ({
 			sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null), filtersChanged() {},
 			generate: async request => requests.push(request),

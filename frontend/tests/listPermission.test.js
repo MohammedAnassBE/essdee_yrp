@@ -44,12 +44,6 @@ test("router, launcher and permission page are wired to the list guard", () => {
 	assert.match(source("../src/components/documents/DocumentUnavailable.vue"), /You don't have permission to view \{\{ doctype \}\}/)
 })
 
-test("the header has a Log out button beside the theme toggle", () => {
-	const app = source("../src/App.vue")
-	assert.match(app, /<button type="button" class="app-theme-toggle app-logout"[^>]*@click="logOut">[\s\S]*?<span>Log out<\/span>/)
-	assert.ok(app.indexOf("app-logout") > app.indexOf('class="app-theme-toggle"'))
-})
-
 test("logOut posts to the standard Frappe logout and then redirects to /login", async () => {
 	const calls = []
 	const assigned = []

@@ -203,6 +203,11 @@ a {
 	transform: translateY(1px);
 }
 
+.app-account-menu .app-account-menu__item--danger .p-menu-item-icon,
+.app-account-menu .app-account-menu__item--danger .p-menu-item-label {
+	color: var(--erp-danger);
+}
+
 .app-topbar__home:hover {
 	border-color: var(--erp-accent-border);
 	background: var(--erp-surface-hover);

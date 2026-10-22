@@ -27,10 +27,7 @@
 					<i :class="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'" aria-hidden="true" />
 					<span>{{ isDarkTheme ? "Light" : "Dark" }}</span>
 				</button>
-				<button type="button" class="app-theme-toggle app-logout" aria-label="Log out" title="Log out" @click="logOut">
-					<i class="pi pi-sign-out" aria-hidden="true" />
-					<span>Log out</span>
-				</button>
+				<AccountMenu />
 				<RouterLink v-if="!lockedDepartment" class="app-topbar__home" to="/" aria-label="Workspaces">
 					<i class="pi pi-th-large" aria-hidden="true" />
 					<span>Workspaces</span>
@@ -58,8 +55,8 @@ import Toast from "primevue/toast"
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
-import { logOut } from "./api/frappe.js"
 import ServerMessageDialog from "./components/common/ServerMessageDialog.vue"
+import AccountMenu from "./components/navigation/AccountMenu.vue"
 import { departments } from "./departments/registry.js"
 import { getHomePath, isOutsideLayout, lockedDepartment } from "./router/departmentLock.js"
 import { currentTheme, toggleTheme } from "./utils/themePreference.js"

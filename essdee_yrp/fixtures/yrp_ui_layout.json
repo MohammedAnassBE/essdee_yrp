@@ -132,14 +132,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"movements\",\n   \"work_orders\",\n   \"cut_bundle_edits\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Cut Panel Store department workspace only: movements, work_orders, cut_bundle_edits, box_stickers, excel_stickers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"movements\",\n   \"work_orders\",\n   \"cut_bundle_edits\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\",\n   \"delivery_challans\",\n   \"goods_received_notes\"\n  ]\n }\n}",
+  "description": "/web Cut Panel Store department workspace only: movements, work_orders, cut_bundle_edits, box_stickers, excel_stickers, reports, delivery_challans, goods_received_notes.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "cut-panel-store",
   "layout_name": "Cut Panel Store",
-  "modified": "2026-10-15 10:10:21.270712",
+  "modified": "2026-10-22 12:14:41.182129",
   "name": "Cut Panel Store",
   "render_mode": "Registered Experience"
  },
@@ -228,14 +228,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"purchase_invoices\",\n   \"bill_tracking\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Accounts department workspace only: purchase_invoices, bill_tracking, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"purchase_invoices\",\n   \"bill_tracking\",\n   \"reports\",\n   \"debits\"\n  ]\n }\n}",
+  "description": "/web Accounts department workspace only: purchase_invoices, bill_tracking, reports, debits.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "accounts",
   "layout_name": "Accounts",
-  "modified": "2026-10-15 10:10:21.288065",
+  "modified": "2026-10-22 12:14:41.214395",
   "name": "Accounts",
   "render_mode": "Registered Experience"
  },

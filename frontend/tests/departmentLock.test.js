@@ -111,9 +111,12 @@ test("registry sections match the department layouts and real routes", () => {
 	for (const layout of layouts) {
 		const department = departments.find((item) => item.key === layout.experience_key)
 		assert.ok(department, layout.name)
-		for (const workspace of JSON.parse(layout.config).experience_props.workspaces) {
+		const workspaces = JSON.parse(layout.config).experience_props.workspaces
+		for (const workspace of workspaces) {
 			assert.ok(getWorkspacePaths(department)[workspace], `${layout.name}: ${workspace}`)
 		}
+		const missing = Object.keys(getWorkspacePaths(department)).filter((key) => !workspaces.includes(key))
+		assert.deepEqual(missing, [], `${layout.name} layout misses registry sections`)
 	}
 
 	const viewSources = readdirSync(new URL("../src/departments/", import.meta.url), { recursive: true })

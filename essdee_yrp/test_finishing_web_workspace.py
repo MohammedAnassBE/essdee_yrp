@@ -122,13 +122,15 @@ class TestFinishingWebWorkspace(TestCase):
 			],
 		)
 
-	def test_work_orders_card_follows_work_order_read_and_never_creates(self):
+	def test_work_orders_card_follows_work_order_read_and_create(self):
 		with self._permissions(allowed={("YRP Work Order", "read")}):
 			sections = self._workspace().get_capabilities()["sections"]
 		self.assertEqual(
 			sections["work_orders"],
 			{"label": "Work Orders", "doctype": "YRP Work Order", "can_read": True, "can_create": False},
 		)
+		with self._permissions(allowed={("YRP Work Order", "read"), ("YRP Work Order", "create")}):
+			self.assertTrue(self._workspace().get_capabilities()["sections"]["work_orders"]["can_create"])
 		with self._permissions(denied={("YRP Work Order", "read")}):
 			self.assertNotIn("work_orders", self._workspace().get_capabilities()["sections"])
 

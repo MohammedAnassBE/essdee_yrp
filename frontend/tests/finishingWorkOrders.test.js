@@ -52,7 +52,7 @@ function workOrderSection(capabilities) {
 	const requests = []
 	const workOrders = loadComponent(resolve("frontend/src/departments/fabric-store/FabricWorkOrders.vue"), {
 		"primevue/button": stub("button"), "vue-router": { useRouter: () => ({}) },
-		"../../components/common/ListView.vue": stub("list"),
+		"../../components/common/ListView.vue": (props, { slots }) => Vue.h("list", props, slots["toolbar-actions"]?.()),
 		"../../components/documents/DocumentStatusBadge.vue": stub("badge"),
 		"../../router/listDocumentNavigation.js": {},
 	})
@@ -84,13 +84,15 @@ test("Finishing shows the Work Orders card only when the server allows Work Orde
 	assert.ok(!hidden.some((item) => item.key === "work_orders"))
 })
 
-test("the Finishing list shows submitted packing Work Orders with Finishing capabilities", async () => {
+test("the Finishing list shows all Work Orders like Fabric Store, with Finishing capabilities", async () => {
 	const { root, requests } = workOrderSection({ sections: { work_orders: { can_read: true, can_create: false } } })
 	await tick()
 	assert.deepEqual(requests, ["finishing"])
-	const list = nodes(root, "list")[0]
-	assert.deepEqual(list.props.filters, [["docstatus", "=", 1], ["includes_packing", "=", 1]])
-	assert.equal(nodes(root, "button").length, 0, "Finishing does not create Work Orders")
+	assert.deepEqual(nodes(root, "list")[0].props.filters, [])
+	assert.equal(nodes(root, "button").length, 0, "Create needs Work Order create permission")
+	const creator = workOrderSection({ sections: { work_orders: { can_read: true, can_create: true } } })
+	await tick()
+	assert.equal(nodes(creator.root, "button").length, 1)
 })
 
 test("the Finishing list waits for permission and never falls back to all Work Orders", async () => {
@@ -100,16 +102,19 @@ test("the Finishing list waits for permission and never falls back to all Work O
 	assert.equal(nodes(root, "message").length, 1)
 })
 
-test("the Finishing routes open the shared Work Order list and a view-only Work Order page", () => {
+test("the Finishing routes open the shared Work Order list, editor and page", () => {
 	const router = loadRouter()
 	const list = router.resolve(PATH)
 	assert.equal(list.name, "finishing-work-orders")
 	assert.equal(list.matched.at(-1).components.default, router.resolve("/sewing/work-orders").matched.at(-1).components.default)
-	assert.deepEqual(JSON.parse(JSON.stringify(list.matched.at(-1).props.default)), { section: "work_orders", storeName: "Finishing", basePath: "/finishing", workOrderViewRouteName: "finishing-work-order" })
+	assert.deepEqual(JSON.parse(JSON.stringify(list.matched.at(-1).props.default)), { section: "work_orders", storeName: "Finishing", basePath: "/finishing", workOrderViewRouteName: "finishing-work-order", workOrderNewRouteName: "finishing-work-order-new" })
 	const view = router.resolve(`${PATH}/WO-1`)
 	assert.equal(view.name, "finishing-work-order")
 	assert.equal(view.matched.at(-1).components.default, router.resolve("/sewing/work-orders/WO-1").matched.at(-1).components.default)
-	assert.equal(view.matched.at(-1).props.default.showEditorActions, false)
+	assert.equal(view.matched.at(-1).props.default.editRouteName, "finishing-work-order-edit")
+	assert.equal(router.resolve(`${PATH}/new`).name, "finishing-work-order-new")
+	assert.equal(router.resolve(`${PATH}/WO-1/edit`).name, "finishing-work-order-edit")
+	assert.equal(router.resolve(`${PATH}/new`).matched.at(-1).components.default, router.resolve("/sewing/work-orders/new").matched.at(-1).components.default)
 	assert.equal(webDocumentPath("YRP Work Order", "WO/1", "/web/finishing/work-orders"), "/web/finishing/work-orders/WO%2F1")
 })
 

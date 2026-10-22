@@ -22,7 +22,7 @@ const workspaces = [
 	{ key: "rework_details", label: "Rework Details", description: "Clear rework pieces into Accepted or Rejected stock per GRN.", icon: "pi pi-replay", to: "/finishing/rework-details" },
 	{ key: "rework_groups", label: "Rework Grouped Details", description: "Rework rows grouped by item and lot with size-wise entry.", icon: "pi pi-objects-column", to: "/finishing/rework-groups" },
 	{ key: "dispatches", label: "Finishing Plan Dispatch", description: "Dispatch packed boxes from several Finishing Plans together.", icon: "pi pi-truck", to: "/finishing/dispatches" },
-	{ key: "work_orders", label: "Work Orders", description: "Packing Work Orders: make DCs and receive GRNs.", icon: "pi pi-briefcase", to: "/finishing/work-orders" },
+	{ key: "work_orders", label: "Work Orders", description: "Work Orders: make DCs and receive GRNs.", icon: "pi pi-briefcase", to: "/finishing/work-orders" },
 ]
 const visibleWorkspaces = computed(() => workspaces.filter((workspace) => sections.value[workspace.key]?.can_read))
 

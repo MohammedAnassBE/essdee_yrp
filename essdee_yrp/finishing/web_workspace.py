@@ -138,10 +138,9 @@ def get_capabilities() -> dict:
 	dispatches = _permission_flags(DISPATCH_DOCTYPE, ("read", "create", "write", "submit", "cancel"))
 	if dispatches["can_read"]:
 		sections["dispatches"] = _section("Finishing Plan Dispatch", DISPATCH_DOCTYPE, dispatches)
-	if frappe.has_permission(WORK_ORDER_DOCTYPE, ptype="read"):
-		sections["work_orders"] = _section(
-			"Work Orders", WORK_ORDER_DOCTYPE, {"can_read": True, "can_create": False}
-		)
+	work_orders = _permission_flags(WORK_ORDER_DOCTYPE, ("read", "create"))
+	if work_orders["can_read"]:
+		sections["work_orders"] = _section("Work Orders", WORK_ORDER_DOCTYPE, work_orders)
 	return {"sections": sections}
 
 

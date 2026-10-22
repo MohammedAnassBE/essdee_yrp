@@ -63,11 +63,9 @@ const loading = ref(true)
 const error = ref("")
 let loadSequence = 0
 const CAPABILITY_LOADERS = { "/quality": getQualityCapabilities, "/finishing": getFinishingCapabilities }
-const FINISHING_WORK_ORDER_FILTERS = [["docstatus", "=", 1], ["includes_packing", "=", 1]]
 
-/** Work Order list filters a department narrows to: Finishing sees submitted packing Work Orders, Sewing and Quality their stitching processes. */
+/** Work Order list filters a department narrows to: Sewing and Quality see their stitching processes. */
 async function getWorkOrderFilters(basePath) {
-	if (basePath === "/finishing") return FINISHING_WORK_ORDER_FILTERS
 	if (basePath !== "/sewing" && basePath !== "/quality") return []
 	const processFilter = ["process_name", "in", await getSewingWorkOrderProcesses() || []]
 	return basePath === "/quality" ? [["docstatus", "=", 1], processFilter] : [processFilter]

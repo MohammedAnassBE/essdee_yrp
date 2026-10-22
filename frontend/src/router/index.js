@@ -205,11 +205,19 @@ const routes = [
 	{ path: "/finishing/plans", name: "finishing-plans", component: FinishingPlans },
 	{
 		path: "/finishing/work-orders", name: "finishing-work-orders", component: FabricStoreSection,
-		props: { section: "work_orders", storeName: "Finishing", basePath: "/finishing", workOrderViewRouteName: "finishing-work-order" },
+		props: { section: "work_orders", storeName: "Finishing", basePath: "/finishing", workOrderViewRouteName: "finishing-work-order", workOrderNewRouteName: "finishing-work-order-new" },
+	},
+	{
+		path: "/finishing/work-orders/new", name: "finishing-work-order-new", component: FabricWorkOrderEditorPage,
+		props: { backTo: "/finishing/work-orders", backLabel: "Work Orders", listRouteName: "finishing-work-orders", viewRouteName: "finishing-work-order" },
+	},
+	{
+		path: "/finishing/work-orders/:workOrderId/edit", name: "finishing-work-order-edit", component: FabricWorkOrderEditorPage,
+		props: { backTo: "/finishing/work-orders", backLabel: "Work Orders", listRouteName: "finishing-work-orders", viewRouteName: "finishing-work-order" },
 	},
 	{
 		path: "/finishing/work-orders/:workOrderId", name: "finishing-work-order", component: FabricWorkOrder,
-		props: { backTo: "/finishing/work-orders", backLabel: "Work Orders", viewRouteName: "finishing-work-order", showEditorActions: false },
+		props: { backTo: "/finishing/work-orders", backLabel: "Work Orders", viewRouteName: "finishing-work-order", newRouteName: "finishing-work-order-new", editRouteName: "finishing-work-order-edit" },
 	},
 	{ path: "/finishing/plans/:finishingPlanId", name: "finishing-plan", component: FinishingPlan },
 	{ path: "/finishing/reports", name: "finishing-reports", component: FinishingReports },

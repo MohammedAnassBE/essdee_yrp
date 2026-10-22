@@ -131,27 +131,54 @@ def _group_items(rows, parent_doctype, *, lot=None):
 
 
 def fetch_stock_entry_items(items, ipd=None):
-	"""Group Stock Entry rows like F15: one table per item, or per attribute set for items without sizes."""
+	"""Group Stock Entry rows into tables exactly like F15's fetch_stock_entry_items.
+
+	Rows go in ``row_index`` text order. F15's groups never stored the dependent attribute, so an
+	item that has one (Stage) gets a table per row; other rows join the first table with the same
+	attributes, and a sized row only joins a table of its own item.
+	"""
+	entries = [
+		(source, item)
+		for source in _group_items(items, "YRP Stock Entry")
+		for item in source.get("items") or []
+	]
+	entries.sort(key=lambda entry: str(entry[1].get("row_index") or ""))
+	sort_attributes = len(entries) > 1
 	groups = []
-	group_by_key = {}
-	source_groups = _group_items(items, "YRP Stock Entry")
-	sort_attributes = sum(len(group.get("items") or []) for group in source_groups) > 1
-	for source in source_groups:
-		attributes = list(source.get("attributes") or [])
-		if sort_attributes:
-			# F15's get_item_group_index sorted attribute lists in place once a second row was grouped.
-			attributes.sort()
-		for item in source.get("items") or []:
-			key = (
-				item.get("name")
-				if source.get("primary_attribute")
-				else (tuple(sorted(attributes)), source.get("dependent_attribute"))
-			)
-			if key not in group_by_key:
-				group_by_key[key] = {**source, "attributes": attributes, "items": []}
-				groups.append(group_by_key[key])
-			group_by_key[key]["items"].append(item)
+	for source, item in entries:
+		index = get_stock_entry_group_index(groups, source, item.get("name"))
+		if index == -1:
+			attributes = list(source.get("attributes") or [])
+			if sort_attributes:
+				# F15's get_item_group_index sorted attribute lists in place once a second row was grouped.
+				attributes.sort()
+			groups.append({**source, "attributes": attributes, "dependent_attribute": None, "items": [item]})
+		else:
+			groups[index]["items"].append(item)
 	return groups
+
+
+def get_stock_entry_group_index(groups, details, item_name):
+	"""F15's get_item_group_index for a Stock Entry row's attribute details."""
+	index = next(
+		(
+			position
+			for position, group in enumerate(groups)
+			if sorted(group.get("attributes") or []) == sorted(details.get("attributes") or [])
+			and (group.get("primary_attribute") or "") == (details.get("primary_attribute") or "")
+			and not details.get("dependent_attribute")
+		),
+		-1,
+	)
+	if (
+		index == -1
+		or not details.get("primary_attribute")
+		or groups[index]["items"][0].get("name") == item_name
+	):
+		return index
+	return next(
+		(position for position, group in enumerate(groups) if group["items"][0].get("name") == item_name), -1
+	)
 
 
 def fetch_grn_purchase_item_details(items, docstatus=0):

@@ -6,12 +6,16 @@ from frappe.tests import UnitTestCase
 from essdee_yrp import print_helpers
 
 
-def _group(attributes, names, primary_attribute="Size"):
+def _group(attributes, names, primary_attribute="Size", dependent_attribute=None, row_indexes=None):
 	return {
 		"attributes": attributes,
 		"primary_attribute": primary_attribute,
+		"dependent_attribute": dependent_attribute,
 		"primary_attribute_values": ["S", "M"] if primary_attribute else [],
-		"items": [{"name": name} for name in names],
+		"items": [
+			{"name": name, "row_index": row_index}
+			for name, row_index in zip(names, row_indexes or [""] * len(names), strict=True)
+		],
 	}
 
 
@@ -24,6 +28,21 @@ class TestStockEntryPrint(UnitTestCase):
 			[[item["name"] for item in group["items"]] for group in groups], [["Shirt", "Shirt"], ["Vest"]]
 		)
 		self.assertEqual(groups[0]["attributes"], ["Colour", "Stage"])
+
+	def test_items_with_a_dependent_attribute_get_one_table_per_row_like_mrp(self):
+		source = [_group(["Stage", "Colour"], ["Vest", "Vest", "Vest"], dependent_attribute="Stage")]
+		with patch.object(print_helpers, "_group_items", return_value=source):
+			groups = print_helpers.fetch_stock_entry_items([])
+		self.assertEqual([len(group["items"]) for group in groups], [1, 1, 1])
+		self.assertTrue(all(group["attributes"] == ["Colour", "Stage"] for group in groups))
+
+	def test_rows_follow_row_index_text_order_like_mrp(self):
+		source = [
+			_group(["Colour"], ["Box", "Tape", "Cone"], primary_attribute=None, row_indexes=["2", "10", "1"])
+		]
+		with patch.object(print_helpers, "_group_items", return_value=source):
+			groups = print_helpers.fetch_stock_entry_items([])
+		self.assertEqual([item["row_index"] for item in groups[0]["items"]], ["1", "10", "2"])
 
 	def test_items_without_sizes_share_a_table_per_attribute_set(self):
 		source = [_group(["Colour"], ["Box", "Tape"], primary_attribute=None)]

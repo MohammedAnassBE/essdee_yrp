@@ -32,6 +32,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	make_grn_completion,
 	validate_purchase_order_lot,
 )
+from yrp.yrp.doctype.yrp_supplier.yrp_supplier import get_primary_address
 
 from essdee_yrp.additional_grn import get_defaults as get_additional_grn_defaults
 from essdee_yrp.fabric_store.documents.common import (
@@ -613,7 +614,7 @@ def get_delivery_address(delivery_location=None, purchase_order=None) -> str:
 		return address or ""
 	po = frappe.get_doc("Purchase Order", purchase_order)
 	po.check_permission("read")
-	return po.get("shipping_address") or ""
+	return get_primary_address(po.get("default_delivery_location")) or ""
 
 
 @frappe.whitelist()

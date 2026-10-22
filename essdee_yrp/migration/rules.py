@@ -188,8 +188,10 @@ RULES = {
 		field_map={
 			"po_date": "transaction_date",
 			"supplier_address_display": "address_display",
-			"delivery_address": "shipping_address",
-			"delivery_address_display": "shipping_address_display",
+		},
+		ignored_fields={
+			"delivery_address": "Read from default_delivery_location; shipping_address is the Company address",
+			"delivery_address_display": "Read from default_delivery_location; shipping_address is the Company address",
 		},
 		value_transformers={
 			"status": "purchase_order_status",

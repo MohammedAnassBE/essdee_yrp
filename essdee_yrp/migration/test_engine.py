@@ -33,6 +33,13 @@ class MigrationEngineTest(unittest.TestCase):
 		self.assertNotIn("reserved_qty", RULES["Bin"].field_map)
 		self.assertNotIn("reserved_qty", RULES["Bin"].ignored_fields)
 
+	def test_purchase_order_delivery_address_stays_out_of_company_shipping_address(self):
+		rule = RULES["Purchase Order"]
+		self.assertNotIn("shipping_address", rule.field_map.values())
+		self.assertNotIn("shipping_address_display", rule.field_map.values())
+		self.assertIn("delivery_address", rule.ignored_fields)
+		self.assertIn("delivery_address_display", rule.ignored_fields)
+
 	def test_runtime_metadata_does_not_expose_source_app_name(self):
 		app_root = Path(__file__).resolve().parents[1]
 		former_source_name = "production" + "_api"

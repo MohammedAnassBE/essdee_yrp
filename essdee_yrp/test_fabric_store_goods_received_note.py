@@ -46,10 +46,10 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		self.assertIn("isCurrent() && !form[fieldname]", source)
 		self.assertIn("function applyWorkspace(nextWorkspace) {\n\tinvalidateAddresses()", source)
 
-	def test_po_delivery_address_uses_shipping_party_then_po_fallback(self):
+	def test_po_delivery_address_uses_shipping_party_then_po_delivery_location(self):
 		po = MagicMock()
-		po.get.return_value = "PO-SHIPPING"
-		for party_address, expected in (("PARTY-SHIPPING", "PARTY-SHIPPING"), (None, "PO-SHIPPING")):
+		po.get.side_effect = {"default_delivery_location": "S-0071", "shipping_address": "COMPANY-ADDRESS"}.get
+		for party_address, expected in (("PARTY-SHIPPING", "PARTY-SHIPPING"), (None, "S-0071-Primary")):
 			with (
 				self.subTest(party_address=party_address),
 				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
@@ -57,6 +57,7 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.db.get_value", return_value="S-0070"),
 				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value=party_address) as party,
 				patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc", return_value=po),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_primary_address", side_effect=lambda supplier: f"{supplier}-Primary"),
 				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_supplier_address", return_value="BILLING"),
 			):
 				defaults = _source_defaults("Purchase Order", "PO-1")
@@ -115,13 +116,13 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 				if picked:
 					values["delivery_address"] = picked
 					values["supplier_address"] = picked
-				po = frappe._dict(shipping_address="PO-SHIPPING", supplier_address="Usha Quality Stickerz-Billing")
+				po = frappe._dict(shipping_address="COMPANY-ADDRESS", default_delivery_location="S-0070", supplier_address="Usha Quality Stickerz-Billing")
 				po.check_permission = MagicMock()
 				# Exercise the actual source default path through both preview and save.
 				# Insert must see both mandatory address fields already populated.
 				doc.insert.side_effect = lambda: (
 					self.assertEqual(BaseDocument._get_missing_mandatory_fields(doc), []),
-					self.assertEqual(doc.delivery_address, picked or "PO-SHIPPING"),
+					self.assertEqual(doc.delivery_address, picked or "S-0070-Shipping"),
 					self.assertEqual(doc.supplier_address, picked or "Usha Quality Stickerz-Billing"),
 				)
 				with (
@@ -131,12 +132,13 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_purchase_order_defaults", side_effect=lambda name: {"supplier": "Usha Quality Stickerz", "delivery_location": "S-0070", "items": []}),
 					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", side_effect=lambda party, preferred_type: "Usha Quality Stickerz-Billing" if preferred_type == "Billing" else None),
 					patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.get_doc", return_value=po),
+					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_primary_address", side_effect=lambda supplier: f"{supplier}-Shipping"),
 					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_stock_dimensions_for_ui", return_value=[]),
 					patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
 				):
 					preview = preview_goods_received_note_source(values)
 					self.assertEqual(preview["values"]["supplier_address"], picked or "Usha Quality Stickerz-Billing")
-					self.assertEqual(preview["values"]["delivery_address"], picked or "PO-SHIPPING")
+					self.assertEqual(preview["values"]["delivery_address"], picked or "S-0070-Shipping")
 					save_goods_received_note(values)
 				doc.insert.assert_called_once()
 

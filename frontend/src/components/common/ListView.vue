@@ -274,6 +274,11 @@
 						</slot>
 					</template>
 				</Column>
+				<Column header="" class="list-modified-column">
+					<template #body="{ data }">
+						<span class="list-modified-value" :title="modifiedTitle(data)">{{ modifiedLabel(data) }}</span>
+					</template>
+				</Column>
 				<Column v-if="$slots.actions" header="" frozen align-frozen="right">
 					<template #body="{ data }">
 						<slot name="actions" :row="data"></slot>
@@ -319,6 +324,7 @@
 								<strong>{{ displayValue(row[mobileColumns[0]?.fieldname], mobileColumns[0], row) }}</strong>
 							</slot>
 						</div>
+						<span class="mobile-list-record__modified" :title="modifiedTitle(row)">{{ modifiedLabel(row) }}</span>
 						<button v-if="clickable" type="button" class="mobile-list-record__open" :aria-label="`Open ${row.name || 'record'}`" @click.stop="openRow(row)">
 							<i class="pi pi-chevron-right" aria-hidden="true"></i>
 						</button>
@@ -498,6 +504,7 @@ import {
 	navigationStorageKey,
 	readNavigationState,
 } from "../../utils/listNavigation.js"
+import { formatFullDateTime, prettyDate } from "../../utils/prettyDate.js"
 import { listStatusTone } from "../../utils/statusTone.js"
 import { listStandardFilterFields, listStatusFilters } from "./listStatusFilters.js"
 
@@ -550,6 +557,7 @@ const filterExcludedFieldtypes = new Set([
 ])
 
 const rows = ref([])
+const now = ref(new Date())
 const total = ref(0)
 const loading = ref(false)
 const error = ref("")
@@ -1057,6 +1065,7 @@ async function loadRows(existingSequence = null) {
 		if (sequence !== loadSequence) return
 		rows.value = data
 		total.value = count
+		now.value = new Date()
 		clearSelection()
 		emit("loaded", { rows: data, total: count })
 	} catch (reason) {
@@ -1475,6 +1484,15 @@ watch(search, () => {
 		applySearch()
 	}, 300)
 })
+
+function modifiedLabel(row) {
+	return prettyDate(row?.modified, { now: now.value })
+}
+
+function modifiedTitle(row) {
+	const timestamp = formatFullDateTime(row?.modified)
+	return timestamp ? `Last updated ${prettyDate(row.modified, { now: now.value, mini: false })} · ${timestamp}` : ""
+}
 
 onBeforeUnmount(() => {
 	if (searchTimer) clearTimeout(searchTimer)
@@ -2097,6 +2115,19 @@ defineExpose({ refresh: reload })
 	width: 44px;
 }
 
+.list-modified-column {
+	width: 56px;
+	text-align: right;
+}
+
+.list-modified-value,
+.mobile-list-record__modified {
+	color: var(--erp-text-muted);
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
 .list-row-open {
 	display: grid;
 	width: 32px;
@@ -2362,13 +2393,13 @@ defineExpose({ refresh: reload })
 
 	.mobile-list-record > header {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-columns: auto minmax(0, 1fr) auto auto;
 		align-items: center;
 		gap: 10px;
 	}
 
 	.mobile-list-record__header--without-selection {
-		grid-template-columns: minmax(0, 1fr) auto !important;
+		grid-template-columns: minmax(0, 1fr) auto auto !important;
 	}
 
 	.mobile-list-record__open {

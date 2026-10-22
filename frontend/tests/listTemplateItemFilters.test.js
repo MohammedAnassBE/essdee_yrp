@@ -4,6 +4,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import * as listColumns from "../src/components/common/listColumns.js"
 import * as listNavigation from "../src/utils/listNavigation.js"
 import * as statusTone from "../src/utils/statusTone.js"
+import * as prettyDate from "../src/utils/prettyDate.js"
 import * as listStatusFilters from "../src/components/common/listStatusFilters.js"
 import * as listItemFilters from "../src/components/common/listItemFilters.js"
 
@@ -31,6 +32,7 @@ for (const enabled of [false, true]) test(`ListView template Item filtering is o
 		"./listColumns.js": listColumns,
 		"../../utils/listNavigation.js": listNavigation,
 		"../../utils/statusTone.js": statusTone,
+		"../../utils/prettyDate.js": prettyDate,
 		"./listStatusFilters.js": listStatusFilters,
 		"./listItemFilters.js": listItemFilters,
 	}

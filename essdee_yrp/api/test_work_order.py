@@ -2261,13 +2261,7 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 		self.assertAlmostEqual(planned[v["yarn_b"]], 4.0, places=3)
 		self.assertAlmostEqual(planned[accessory], 6.0, places=3)
 
-		# GRN consumption is restricted to inputs already delivered against
-		# the Work Order. Record the calculated inputs as fully delivered so
-		# this test exercises the partial-output consumption ratio itself.
-		for row in work_order.deliverables:
-			if row.is_calculated:
-				row.db_set("pending_quantity", 0, update_modified=False)
-		work_order.reload()
+		# Supplier stock is checked separately; this test covers the ratio.
 
 		receivable = work_order.receivables[0]
 		grn = frappe.new_doc("YRP Goods Received Note")
@@ -2282,7 +2276,8 @@ class TestMultiYarnClothIPD(IntegrationTestCase):
 				"ref_docname": receivable.name,
 			},
 		)
-		calculate_grn_consumption(grn)
+		with patch("essdee_yrp.fabric_grn.validate_supplier_input_stock"):
+			calculate_grn_consumption(grn)
 
 		consumed = {
 			(frappe.db.get_value("Item", row.item_variant, "variant_of") or row.item_variant): flt(

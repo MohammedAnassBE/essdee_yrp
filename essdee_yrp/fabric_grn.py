@@ -603,13 +603,53 @@ def _aggregate_rows(rows):
 
 
 def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=False):
-	"""Allocate each exact output demand to available Work Order input rows."""
-	from yrp.stock.utils import get_conversion_factor, get_stock_balance
+	"""Allocate each exact input demand to its Work Order input rows.
+
+	Delivered-and-unconsumed quantity is taken first. Like Production API, any
+	remainder is still consumed from the preferred matching row; the gate is the
+	supplier's stock balance, checked once for the whole GRN.
+	"""
+	from yrp.stock.utils import get_conversion_factor
+
+	sources = _work_order_input_sources(wo)
+	stock_cache = {}
+	plan = []
+	missing = []
+	for required in rows:
+		conversion = get_conversion_factor(required["item_variant"], required.get("uom"))
+		remaining_stock_qty = flt(required["qty"]) * (flt(conversion.get("conversion_factor")) or 1)
+		candidates = _matching_input_sources(sources, required, wo, exact_business_key)
+		if not candidates:
+			missing.append(required["item_variant"])
+			continue
+		for source in candidates:
+			take_stock_qty = min(remaining_stock_qty, flt(source["available_stock_qty"]))
+			if take_stock_qty <= QTY_TOLERANCE:
+				continue
+			plan.append(_input_plan_row(required, source, take_stock_qty, grn, stock_cache))
+			source["available_stock_qty"] -= take_stock_qty
+			remaining_stock_qty -= take_stock_qty
+		if remaining_stock_qty > QTY_TOLERANCE:
+			plan.append(_input_plan_row(required, candidates[0], remaining_stock_qty, grn, stock_cache))
+	if missing:
+		frappe.throw(
+			_("Work Order {0} has no input row for {1}, which the Item Production Detail requires.").format(
+				wo.name, ", ".join(sorted(set(missing)))
+			),
+			title=_("Input Not On Work Order"),
+		)
+	if not (getattr(grn, "flags", None) or {}).get("skip_input_stock_check"):
+		validate_supplier_input_stock(wo, grn, plan, stock_cache)
+	return plan
+
+
+def _work_order_input_sources(wo):
+	from yrp.stock.utils import get_conversion_factor
 	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
 
 	from essdee_yrp.fabric_reference import get_reference_allocations
 
-	available = []
+	sources = []
 	for deliverable in wo.get("deliverables") or []:
 		if not deliverable.get("is_calculated"):
 			continue
@@ -617,7 +657,7 @@ def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=Fa
 		factor = flt(conversion.get("conversion_factor")) or 1
 		delivered_qty = flt(deliverable.qty) - flt(deliverable.pending_quantity)
 		available_qty = max(delivered_qty - flt(deliverable.stock_update), 0)
-		available.append(
+		sources.append(
 			{
 				"row": deliverable,
 				"factor": factor,
@@ -627,119 +667,124 @@ def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=Fa
 				"references": set(get_reference_allocations(deliverable, deliverable.qty)),
 			}
 		)
+	return sources
 
-	valuation_cache = {}
-	plan = []
-	shortages = {}
-	for required in rows:
-		conversion = get_conversion_factor(required["item_variant"], required.get("uom"))
-		required_stock_qty = flt(required["qty"]) * (flt(conversion.get("conversion_factor")) or 1)
-		remaining_stock_qty = required_stock_qty
-		reference = required.get("reference_item_variant")
-		exact_deliverable = required.get("work_order_deliverable")
+
+def _matching_input_sources(sources, required, wo, exact_business_key):
+	"""Return the Work Order input rows for one demand, preferred row first."""
+	reference = required.get("reference_item_variant")
+	exact_deliverable = required.get("work_order_deliverable")
+	candidates = [
+		item
+		for item in sources
+		if item["row"].item_variant == required["item_variant"]
+		and (not exact_deliverable or item["row"].name == exact_deliverable)
+	]
+	if required.get("uom"):
+		candidates = [item for item in candidates if item["row"].uom == required["uom"]]
+	if "set_combination" in required:
+		from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
+
+		required_combination = _normal_json(required.get("set_combination"))
 		candidates = [
 			item
-			for item in available
-			if item["row"].item_variant == required["item_variant"]
-			and (not exact_deliverable or item["row"].name == exact_deliverable)
+			for item in candidates
+			if _normal_json(item["row"].get("set_combination")) == required_combination
 		]
-		if required.get("uom"):
-			candidates = [item for item in candidates if item["row"].uom == required["uom"]]
-		if "set_combination" in required:
-			from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import _normal_json
-
-			required_combination = _normal_json(required.get("set_combination"))
-			candidates = [
-				item
-				for item in candidates
-				if _normal_json(item["row"].get("set_combination")) == required_combination
-			]
-		if exact_business_key and len(candidates) != 1:
-			frappe.throw(
-				_(
-					"Calculated input {0} matches {1} Work Order Deliverables in {2}; expected exactly one."
-				).format(required["item_variant"], len(candidates), wo.name)
-			)
-		candidates.sort(
-			key=lambda item: (
-				0 if reference and reference in item["references"] else 1,
-				item["row"].idx or 0,
-				item["row"].name or "",
-			)
+	if exact_business_key and len(candidates) != 1:
+		frappe.throw(
+			_(
+				"Calculated input {0} matches {1} Work Order Deliverables in {2}; expected exactly one."
+			).format(required["item_variant"], len(candidates), wo.name)
 		)
-		for source in candidates:
-			available_stock_qty = flt(source["available_stock_qty"])
-			if available_stock_qty <= QTY_TOLERANCE:
-				continue
-			take_stock_qty = min(remaining_stock_qty, available_stock_qty)
-			row = source["row"]
-			dimensions = source["dimensions"]
-			valuation_key = (
-				required["item_variant"],
-				grn.from_warehouse,
-				tuple(sorted(dimensions.items())),
-			)
-			if valuation_key not in valuation_cache:
-				_balance, valuation_cache[valuation_key] = get_stock_balance(
-					required["item_variant"],
-					grn.from_warehouse,
-					posting_date=grn.posting_date,
-					posting_time=grn.posting_time,
-					with_valuation_rate=True,
-					**dimensions,
-				)
-			plan.append(
-				{
-					"goods_received_note_item": required["goods_received_note_item"],
-					"received_item_variant": required["received_item_variant"],
-					"work_order_deliverable": row.name,
-					"item_variant": required["item_variant"],
-					"quantity": take_stock_qty / source["factor"],
-					"stock_qty": take_stock_qty,
-					"uom": row.uom,
-					"stock_uom": source["stock_uom"],
-					"conversion_factor": source["factor"],
-					"valuation_rate": flt(row.valuation_rate or row.rate or valuation_cache[valuation_key]),
-					"dimensions": dimensions,
-					"set_combination": row.get("set_combination") or {},
-				}
-			)
-			source["available_stock_qty"] = available_stock_qty - take_stock_qty
-			remaining_stock_qty -= take_stock_qty
-			if remaining_stock_qty <= QTY_TOLERANCE:
-				break
-
-		key = (required["item_variant"], conversion.get("stock_uom") or required.get("uom"))
-		totals = shortages.setdefault(key, {"need": 0.0, "short": 0.0})
-		totals["need"] += required_stock_qty
-		if remaining_stock_qty > QTY_TOLERANCE:
-			totals["short"] += remaining_stock_qty
-	throw_input_shortages(wo, shortages)
-	return plan
+	candidates.sort(
+		key=lambda item: (
+			0 if reference and reference in item["references"] else 1,
+			item["row"].idx or 0,
+			item["row"].name or "",
+		)
+	)
+	return candidates
 
 
-def throw_input_shortages(wo, shortages):
-	"""Report every short calculated input of the GRN in one message."""
-	lines = [
-		_("{0}: need {1} {2}, available {3}, short {4}").format(
+def _input_plan_row(required, source, stock_qty, grn, stock_cache):
+	row = source["row"]
+	dimensions = source["dimensions"]
+	_balance, valuation_rate = _supplier_stock(required["item_variant"], dimensions, grn, stock_cache)
+	return {
+		"goods_received_note_item": required["goods_received_note_item"],
+		"received_item_variant": required["received_item_variant"],
+		"work_order_deliverable": row.name,
+		"item_variant": required["item_variant"],
+		"quantity": stock_qty / source["factor"],
+		"stock_qty": stock_qty,
+		"uom": row.uom,
+		"stock_uom": source["stock_uom"],
+		"conversion_factor": source["factor"],
+		"valuation_rate": flt(row.valuation_rate or row.rate or valuation_rate),
+		"dimensions": dimensions,
+		"set_combination": row.get("set_combination") or {},
+	}
+
+
+def _supplier_stock(item_variant, dimensions, grn, stock_cache):
+	"""Return the cached supplier (balance, valuation rate) for one bucket."""
+	from yrp.stock.utils import get_stock_balance
+
+	key = (item_variant, grn.from_warehouse, tuple(sorted(dimensions.items())))
+	if key not in stock_cache:
+		stock_cache[key] = get_stock_balance(
 			item_variant,
-			f"{flt(totals['need'], 3):g}",
-			uom or "",
-			f"{flt(totals['need'] - totals['short'], 3):g}",
-			f"{flt(totals['short'], 3):g}",
+			grn.from_warehouse,
+			posting_date=grn.posting_date,
+			posting_time=grn.posting_time,
+			with_valuation_rate=True,
+			**dimensions,
 		)
-		for (item_variant, uom), totals in shortages.items()
-		if totals["short"] > QTY_TOLERANCE
-	]
+	return stock_cache[key]
+
+
+def validate_supplier_input_stock(wo, grn, plan, stock_cache):
+	"""Reject the GRN when the supplier lacks stock for its consumed inputs.
+
+	Mirrors Production API's ``validate_deliverable_stock``: one message listing
+	every short item and stock bucket.
+	"""
+	need = defaultdict(float)
+	stock_uom = {}
+	for item in plan:
+		key = (item["item_variant"], tuple(sorted(item["dimensions"].items())))
+		need[key] += flt(item["stock_qty"])
+		stock_uom[key] = item["stock_uom"]
+	lines = []
+	for key, required_qty in need.items():
+		item_variant, dimensions = key
+		balance = flt(_supplier_stock(item_variant, dict(dimensions), grn, stock_cache)[0])
+		if required_qty - balance <= QTY_TOLERANCE:
+			continue
+		bucket = ", ".join(
+			f"{fieldname.replace('_', ' ').title()} {value}" for fieldname, value in dimensions if value
+		)
+		lines.append(
+			_("{0} ({1}): need {2} {3}, supplier stock {4}, short {5}").format(
+				item_variant,
+				bucket,
+				f"{flt(required_qty, 3):g}",
+				stock_uom[key] or "",
+				f"{flt(balance, 3):g}",
+				f"{flt(required_qty - balance, 3):g}",
+			)
+		)
 	if lines:
 		frappe.throw(
 			_(
-				"Work Order {0} does not have enough delivered input for this GRN "
-				"(available = delivered and not yet consumed). Deliver the remaining input first:"
-			).format(wo.name)
+				"Supplier {0} does not have enough stock of the materials this GRN consumes. "
+				"The quantities come from Item Production Detail {1}, process {2}, for the received items "
+				"of Work Order {3} and are listed in Consumed Materials:"
+			).format(grn.from_warehouse, wo.get("production_detail"), wo.get("process_name"), wo.name)
 			+ "<br>"
 			+ "<br>".join(lines),
-			title=_("Input Short"),
+			title=_("Supplier Stock Short"),
 		)
 
 

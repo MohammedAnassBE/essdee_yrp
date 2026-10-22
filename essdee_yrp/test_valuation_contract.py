@@ -42,6 +42,7 @@ from essdee_yrp.overrides.goods_received_note import (
 	_set_dynamic_packing_piece_uom,
 	_validate_mapped_consumption_ownership,
 	_validate_versioned_cloth_receivables,
+	preview_consumed_materials,
 )
 from essdee_yrp.patches.backfill_deterministic_valuation_lineage import (
 	_get_owned_consumption_sle,
@@ -971,6 +972,85 @@ class TestEssdeeValuationContract(UnitTestCase):
 		self.assertNotIn("consumption route", message.lower())
 		base_submit.assert_not_called()
 
+	def _draft_stitching_grn(self):
+		return frappe.get_doc(
+			{
+				"doctype": "YRP Goods Received Note",
+				"against": "YRP Work Order",
+				"against_id": "WO-1",
+				"items": [{"name": "GRN-OUT-1", "item_variant": "GARMENT-S", "quantity": 2}],
+			}
+		)
+
+	def test_draft_save_previews_the_consumed_materials_without_stock_check(self):
+		doc = self._draft_stitching_grn()
+		planned_flags = []
+
+		def calculate(grn, plan_kind):
+			planned_flags.append((plan_kind, grn.flags.get("skip_input_stock_check")))
+			return [{"item_variant": "Jobwork-Piping Rope-2 mm"}]
+
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note._new_consumption_plan_kind",
+				return_value="stitching",
+			),
+			patch(
+				"essdee_yrp.overrides.goods_received_note._calculate_new_consumption_plan",
+				side_effect=calculate,
+			),
+			patch("essdee_yrp.fabric_grn.populate_grn_deliverables") as populate,
+		):
+			preview_consumed_materials(doc)
+
+		self.assertEqual(planned_flags, [("stitching", True)])
+		populate.assert_called_once_with(doc, [{"item_variant": "Jobwork-Piping Rope-2 mm"}])
+		self.assertFalse(doc.flags.get("skip_input_stock_check"))
+
+	def test_draft_preview_failure_does_not_block_save_but_explains_why(self):
+		doc = self._draft_stitching_grn()
+		doc.append("grn_deliverables", {"item_variant": "STALE"})
+
+		def calculate(_grn, _plan_kind):
+			frappe.throw("Calculated input PANEL matches 2 Work Order Deliverables")
+
+		message_count = len(frappe.local.message_log)
+		with (
+			patch(
+				"essdee_yrp.overrides.goods_received_note._new_consumption_plan_kind",
+				return_value="stitching",
+			),
+			patch(
+				"essdee_yrp.overrides.goods_received_note._calculate_new_consumption_plan",
+				side_effect=calculate,
+			),
+		):
+			preview_consumed_materials(doc)
+
+		self.assertEqual(doc.grn_deliverables, [])
+		new_messages = frappe.local.message_log[message_count:]
+		del frappe.local.message_log[message_count:]
+		self.assertEqual(len(new_messages), 1)
+		self.assertIn("Consumed Materials", str(new_messages[0]))
+		self.assertIn("matches 2 Work Order Deliverables", str(new_messages[0]))
+
+	def test_draft_preview_skips_receipts_without_a_new_planner(self):
+		doc = self._draft_stitching_grn()
+		doc.append("grn_deliverables", {"item_variant": "LAYSHEET-INPUT"})
+		for plan_kind in (None, "cutting"):
+			with (
+				patch(
+					"essdee_yrp.overrides.goods_received_note._new_consumption_plan_kind",
+					return_value=plan_kind,
+				),
+				patch(
+					"essdee_yrp.overrides.goods_received_note._calculate_new_consumption_plan"
+				) as calculate,
+			):
+				preview_consumed_materials(doc)
+			calculate.assert_not_called()
+		self.assertEqual(len(doc.grn_deliverables), 1)
+
 	def test_empty_plan_guidance_matches_the_selected_planner(self):
 		grn = frappe._dict(
 			against_id="WO-1",
@@ -1178,7 +1258,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 			with self.assertRaisesRegex(frappe.ValidationError, "matches 2 Work Order Deliverables"):
 				_allocate_to_work_order_deliverables(required, work_order, grn, exact_business_key=True)
 
-	def test_packing_input_shortage_lists_every_short_input_once(self):
+	def _packing_allocation_fixture(self):
 		def deliverable(index, item_variant, qty, delivered):
 			return frappe._dict(
 				name=f"WO-IN-{index}",
@@ -1194,6 +1274,8 @@ class TestEssdeeValuationContract(UnitTestCase):
 
 		work_order = frappe._dict(
 			name="WO-PACK-1",
+			production_detail="IPD-1",
+			process_name="Packing",
 			deliverables=[
 				deliverable(1, "INNER-CARD", 4000, 60),
 				deliverable(2, "POLY-BAG", 4000, 0),
@@ -1216,12 +1298,18 @@ class TestEssdeeValuationContract(UnitTestCase):
 			for output in ("75", "80")
 			for item_variant, qty in (("INNER-CARD", 120), ("POLY-BAG", 120), ("TOP-BOX", 12))
 		]
+		return work_order, grn, required
+
+	def _allocate_with_supplier_stock(self, work_order, grn, required, stock):
 		with (
 			patch(
 				"yrp.stock.utils.get_conversion_factor",
 				return_value={"conversion_factor": 1, "stock_uom": "Nos"},
 			),
-			patch("yrp.stock.utils.get_stock_balance", return_value=(0, 1)),
+			patch(
+				"yrp.stock.utils.get_stock_balance",
+				side_effect=lambda item, *_args, **_kwargs: (stock[item], 1),
+			),
 			patch(
 				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
@@ -1230,15 +1318,60 @@ class TestEssdeeValuationContract(UnitTestCase):
 				"essdee_yrp.fabric_reference.get_reference_allocations",
 				return_value={},
 			),
-			self.assertRaises(frappe.ValidationError) as raised,
 		):
-			_allocate_to_work_order_deliverables(required, work_order, grn)
+			return _allocate_to_work_order_deliverables(required, work_order, grn)
+
+	def test_input_shortage_is_the_supplier_stock_and_names_its_source(self):
+		work_order, grn, required = self._packing_allocation_fixture()
+		stock = {"INNER-CARD": 100, "POLY-BAG": 240, "TOP-BOX": 24}
+
+		with self.assertRaises(frappe.ValidationError) as raised:
+			self._allocate_with_supplier_stock(work_order, grn, required, stock)
 
 		message = str(raised.exception)
-		self.assertIn("INNER-CARD: need 240 Nos, available 60, short 180", message)
-		self.assertIn("POLY-BAG: need 240 Nos, available 0, short 240", message)
+		self.assertIn("SUPPLIER-WH", message)
+		self.assertIn("Item Production Detail IPD-1", message)
+		self.assertIn("Packing", message)
+		self.assertIn("Consumed Materials", message)
+		self.assertIn(
+			"INNER-CARD (Lot LOT-1, Received Type Accepted): need 240 Nos, supplier stock 100, short 140",
+			message,
+		)
+		self.assertNotIn("POLY-BAG", message)
 		self.assertNotIn("TOP-BOX", message)
 		self.assertNotIn("BOXED-GARMENT", message)
+
+	def test_input_beyond_work_order_delivery_is_consumed_from_supplier_stock_like_mrp(self):
+		work_order, grn, required = self._packing_allocation_fixture()
+		stock = {"INNER-CARD": 240, "POLY-BAG": 240, "TOP-BOX": 24}
+
+		plan = self._allocate_with_supplier_stock(work_order, grn, required, stock)
+
+		consumed = {}
+		for row in plan:
+			key = (row["work_order_deliverable"], row["item_variant"])
+			consumed[key] = consumed.get(key, 0) + row["stock_qty"]
+		self.assertEqual(
+			consumed,
+			{
+				("WO-IN-1", "INNER-CARD"): 240,
+				("WO-IN-2", "POLY-BAG"): 240,
+				("WO-IN-3", "TOP-BOX"): 24,
+			},
+		)
+		self.assertEqual(
+			{row["goods_received_note_item"] for row in plan if row["item_variant"] == "POLY-BAG"},
+			{"75", "80"},
+		)
+
+	def test_draft_preview_skips_supplier_stock_check(self):
+		work_order, grn, required = self._packing_allocation_fixture()
+		grn.flags = frappe._dict(skip_input_stock_check=True)
+		stock = {"INNER-CARD": 0, "POLY-BAG": 0, "TOP-BOX": 0}
+
+		plan = self._allocate_with_supplier_stock(work_order, grn, required, stock)
+
+		self.assertEqual(sum(row["stock_qty"] for row in plan), 504)
 
 	def test_stitching_planner_preserves_each_received_output_identity(self):
 		receivable = frappe._dict(

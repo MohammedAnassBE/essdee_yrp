@@ -129,6 +129,8 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		from essdee_yrp.fabric_grn import validate_actual_dia_rows
 
 		validate_actual_dia_rows(self)
+		if self.docstatus == 0:
+			preview_consumed_materials(self)
 
 	def validate_against(self):
 		from essdee_yrp.sewing.closed_work_order import (
@@ -606,6 +608,35 @@ def _new_consumption_plan_kind(grn):
 	from essdee_yrp.fabric_grn import is_calculable_fabric_grn
 
 	return "fabric" if is_calculable_fabric_grn(grn) else None
+
+
+def preview_consumed_materials(grn):
+	"""Show the inputs Submit will consume on the draft, like Production API.
+
+	Submit recalculates under the Work Order lock and checks supplier stock, so
+	the preview skips that check and never blocks a draft save.
+	"""
+	plan_kind = _new_consumption_plan_kind(grn)
+	if not plan_kind or plan_kind == "cutting":
+		return
+	from essdee_yrp.fabric_grn import populate_grn_deliverables
+
+	message_count = len(frappe.local.message_log)
+	grn.flags.skip_input_stock_check = True
+	try:
+		plan = _calculate_new_consumption_plan(grn, plan_kind)
+	except frappe.ValidationError as error:
+		del frappe.local.message_log[message_count:]
+		grn.set("grn_deliverables", [])
+		frappe.msgprint(
+			_("Consumed Materials could not be calculated yet, so Submit will fail: {0}").format(error),
+			indicator="orange",
+			alert=True,
+		)
+		return
+	finally:
+		grn.flags.skip_input_stock_check = False
+	populate_grn_deliverables(grn, plan)
 
 
 def _calculate_new_consumption_plan(grn, plan_kind):

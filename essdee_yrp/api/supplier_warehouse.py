@@ -49,4 +49,4 @@ def _get_readable_document(doctype: str, name: str | None):
 	if not name:
 		return None
 	document = frappe.get_doc(doctype, name)
-	return document if document.has_permission("read") else None
+	return document if frappe.has_permission(document.doctype, "read", doc=document) else None

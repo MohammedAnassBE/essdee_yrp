@@ -7,6 +7,7 @@ from frappe.tests import UnitTestCase
 from essdee_yrp.cut_panel_store.movement_workspace import (
 	_authoritative_selection,
 	_movement_context,
+	_transaction_record,
 	create_movement_transaction,
 	get_movement_linked_documents,
 	get_movement_work_orders,
@@ -66,6 +67,19 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 		selected["collapsed_details"][0].update({"moved": True, "move_qty": 2})
 		selected["accessory_data"][0]["moved_weight"] = 1.25
 		return selected
+
+	def test_transaction_flags_for_user_without_cancel_show_no_permission_message(self):
+		stock_entry = frappe.get_doc({"doctype": "YRP Stock Entry", "name": "STE-QUIET", "docstatus": 1})
+		frappe.local.message_log = []
+		frappe.set_user("Guest")
+		try:
+			with patch("frappe.permissions.get_doc_permissions", return_value={"read": 1, "cancel": 0, "print": 0}):
+				permissions = _transaction_record(stock_entry)["permissions"]
+		finally:
+			frappe.set_user("Administrator")
+		self.assertFalse(permissions["can_cancel"])
+		self.assertFalse(permissions["can_print"])
+		self.assertEqual(frappe.local.message_log, [], "a permission flag must not pop up Frappe's access message")
 
 	def test_new_editor_returns_empty_defaults_without_generating_stock(self):
 		context = frappe._dict(
@@ -243,7 +257,6 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 			modified="2026-10-07 12:01:00",
 			purpose="Material Transfer",
 		)
-		readable.has_permission = MagicMock(return_value=True)
 		unreadable = frappe._dict(
 			doctype="YRP Delivery Challan",
 			name="DC-HIDDEN",
@@ -252,12 +265,13 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 			posting_time="12:02:00",
 			modified="2026-10-07 12:03:00",
 		)
-		unreadable.has_permission = MagicMock(return_value=False)
 		get_doc.side_effect = lambda doctype, name: movement if doctype == "SD YRP Cut Panel Movement" else {
 			"STE-1": readable,
 			"DC-HIDDEN": unreadable,
 		}[name]
-		has_permission.side_effect = lambda doctype, ptype="read", **_kwargs: doctype != "YRP Goods Received Note"
+		has_permission.side_effect = lambda doctype, ptype="read", doc=None, **_kwargs: (
+			doctype != "YRP Goods Received Note" and doc is not unreadable
+		)
 		get_list.side_effect = lambda doctype, **_kwargs: {
 			"YRP Stock Entry": ["STE-1"],
 			"YRP Delivery Challan": ["DC-HIDDEN"],
@@ -306,7 +320,6 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 		doc.name = "STE-NEW"
 		doc.docstatus = 0
 		doc.get.side_effect = lambda fieldname: {"modified": "now"}.get(fieldname)
-		doc.has_permission.return_value = True
 		new_doc.return_value = doc
 		linked_documents.return_value = {"sections": {}}
 
@@ -358,7 +371,6 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 			doc.name = name
 			doc.docstatus = 0
 			doc.get.side_effect = lambda fieldname: {"modified": "now"}.get(fieldname)
-			doc.has_permission.return_value = True
 			created.append(doc)
 		new_doc.side_effect = created
 

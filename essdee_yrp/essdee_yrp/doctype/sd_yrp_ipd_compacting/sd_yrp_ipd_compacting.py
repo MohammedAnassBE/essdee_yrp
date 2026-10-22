@@ -237,7 +237,7 @@ def _context(ipd_doc):
 			expected, compacting.get("compacting_details") if compacting else []
 		),
 		"modified": str(compacting.modified) if compacting else None,
-		"can_write": bool(ipd_doc.has_permission("write")),
+		"can_write": bool(frappe.has_permission(ipd_doc.doctype, "write", doc=ipd_doc)),
 	}
 
 

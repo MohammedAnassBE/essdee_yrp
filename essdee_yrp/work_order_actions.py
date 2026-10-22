@@ -46,7 +46,7 @@ def get_work_order_action_context(work_order: str) -> dict:
 	doc = frappe.get_doc("YRP Work Order", work_order)
 	doc.check_permission("read")
 	is_open = doc.docstatus == 1 and doc.open_status == "Open"
-	can_write = bool(doc.has_permission("write"))
+	can_write = bool(frappe.has_permission(doc.doctype, "write", doc=doc))
 	processes = _processes(doc.process_name)
 	ipd = (
 		frappe.get_cached_doc("YRP Item Production Detail", doc.production_detail)

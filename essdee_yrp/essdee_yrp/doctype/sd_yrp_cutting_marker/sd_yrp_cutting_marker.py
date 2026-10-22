@@ -301,10 +301,10 @@ def _web_marker_payload(doc):
 		"group_items": marker_detail.get("cutting_marker_groups") or [],
 		"print_formats": get_document_print_formats(doc),
 		"permissions": {
-			"can_write": bool(doc.docstatus == 0 and doc.has_permission("write")),
-			"can_submit": bool(doc.docstatus == 0 and doc.has_permission("submit")),
-			"can_cancel": bool(doc.docstatus == 1 and doc.has_permission("cancel")),
-			"can_print": bool(doc.has_permission("print")),
+			"can_write": bool(doc.docstatus == 0 and frappe.has_permission(doc.doctype, "write", doc=doc)),
+			"can_submit": bool(doc.docstatus == 0 and frappe.has_permission(doc.doctype, "submit", doc=doc)),
+			"can_cancel": bool(doc.docstatus == 1 and frappe.has_permission(doc.doctype, "cancel", doc=doc)),
+			"can_print": bool(frappe.has_permission(doc.doctype, "print", doc=doc)),
 		},
 	}
 

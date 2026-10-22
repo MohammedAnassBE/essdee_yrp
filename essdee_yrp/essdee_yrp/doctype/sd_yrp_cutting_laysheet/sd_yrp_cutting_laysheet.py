@@ -798,8 +798,8 @@ def get_web_laysheet(cutting_plan=None, cutting_laysheet=None, cutting_order=Non
 	]
 	details["print_formats"] = get_document_print_formats(doc)
 
-	can_write = bool(doc.has_permission("write"))
-	can_print = bool(doc.has_permission("print"))
+	can_write = bool(frappe.has_permission(doc.doctype, "write", doc=doc))
+	can_print = bool(frappe.has_permission(doc.doctype, "print", doc=doc))
 	has_details = bool(doc.cutting_laysheet_details) or bool(doc.is_manual_entry)
 	can_generate = bool(
 		can_write

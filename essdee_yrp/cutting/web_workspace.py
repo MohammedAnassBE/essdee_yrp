@@ -273,10 +273,10 @@ def _movement_payload(doc, *, include_data=False):
 		"totals": _movement_totals(doc.cut_panel_movement_json),
 		"active_root_transactions": active_roots,
 		"permissions": {
-			"can_write": bool(doc.docstatus == 0 and doc.has_permission("write")),
-			"can_submit": bool(doc.docstatus == 0 and doc.has_permission("submit")),
-			"can_cancel": bool(doc.docstatus == 1 and doc.has_permission("cancel")),
-			"can_print": bool(doc.has_permission("print")),
+			"can_write": bool(doc.docstatus == 0 and frappe.has_permission(doc.doctype, "write", doc=doc)),
+			"can_submit": bool(doc.docstatus == 0 and frappe.has_permission(doc.doctype, "submit", doc=doc)),
+			"can_cancel": bool(doc.docstatus == 1 and frappe.has_permission(doc.doctype, "cancel", doc=doc)),
+			"can_print": bool(frappe.has_permission(doc.doctype, "print", doc=doc)),
 		},
 		"print_formats": get_document_print_formats(doc),
 	}
@@ -300,10 +300,10 @@ def _get_movements(plan):
 
 def _transaction_permissions(doc):
 	return {
-		"can_submit": bool(doc.docstatus == 0 and doc.has_permission("submit")),
-		"can_cancel": bool(doc.docstatus == 1 and doc.has_permission("cancel")),
-		"can_delete": bool(doc.docstatus == 0 and doc.has_permission("delete")),
-		"can_print": bool(doc.has_permission("print")),
+		"can_submit": bool(doc.docstatus == 0 and frappe.has_permission(doc.doctype, "submit", doc=doc)),
+		"can_cancel": bool(doc.docstatus == 1 and frappe.has_permission(doc.doctype, "cancel", doc=doc)),
+		"can_delete": bool(doc.docstatus == 0 and frappe.has_permission(doc.doctype, "delete", doc=doc)),
+		"can_print": bool(frappe.has_permission(doc.doctype, "print", doc=doc)),
 	}
 
 
@@ -421,7 +421,7 @@ def _get_transactions(plan):
 		if not operation or not frappe.db.exists(doctype, name):
 			continue
 		doc = frappe.get_doc(doctype, name)
-		if not doc.has_permission("read"):
+		if not frappe.has_permission(doc.doctype, "read", doc=doc):
 			continue
 		transactions[operation].append(_transaction_payload(doc))
 	for rows in transactions.values():

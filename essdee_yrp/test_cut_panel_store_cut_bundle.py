@@ -302,6 +302,8 @@ class TestCutBundleAmendment(TestCase):
 			for allowed in (False, True):
 				with self.subTest(docstatus=docstatus, allowed=allowed):
 					doc = MagicMock(docstatus=docstatus)
-					doc.has_permission.return_value = allowed
-					with patch("essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.has_permission", return_value=True):
+					with patch(
+						"essdee_yrp.cut_panel_store.cut_bundle_workspace.frappe.has_permission",
+						side_effect=lambda _doctype, ptype="read", doc=None, **_kwargs: allowed if doc else True,
+					):
 						self.assertEqual(_permissions(doc)["can_amend"], docstatus == 2 and allowed)

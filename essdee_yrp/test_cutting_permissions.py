@@ -12,9 +12,11 @@ class TestCuttingPermissions(TestCase):
 		plan = MagicMock()
 		plan.docstatus = 1
 		plan.cp_status = "Ready to Cut"
-		plan.has_permission.side_effect = lambda ptype: ptype in {"read", "write", "print"}
+		plan.doctype = "SD YRP Cutting Plan"
 
-		def has_permission(doctype, ptype):
+		def has_permission(doctype, ptype, doc=None):
+			if doc is plan:
+				return ptype in {"read", "write", "print"}
 			if ptype == "read":
 				return doctype in {"SD YRP Cutting LaySheet", "YRP Stock Update"}
 			return False

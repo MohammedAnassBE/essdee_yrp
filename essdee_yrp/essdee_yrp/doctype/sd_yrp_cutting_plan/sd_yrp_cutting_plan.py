@@ -1395,7 +1395,7 @@ def _get_web_cutting_laysheets(cutting_plan_doc):
 
 
 def _get_web_cutting_plan_permissions(cutting_plan_doc):
-	can_write = bool(cutting_plan_doc.has_permission("write"))
+	can_write = bool(frappe.has_permission(cutting_plan_doc.doctype, "write", doc=cutting_plan_doc))
 	is_active = cutting_plan_doc.docstatus != 2
 	is_submitted = cutting_plan_doc.docstatus == 1
 	can_read_marker = bool(frappe.has_permission("SD YRP Cutting Marker", "read"))
@@ -1414,7 +1414,7 @@ def _get_web_cutting_plan_permissions(cutting_plan_doc):
 	can_create_laysheet = frappe.has_permission("SD YRP Cutting LaySheet", "create")
 	return {
 		"can_write": can_write,
-		"can_print": bool(cutting_plan_doc.has_permission("print")),
+		"can_print": bool(frappe.has_permission(cutting_plan_doc.doctype, "print", doc=cutting_plan_doc)),
 		"can_read_marker": can_read_marker,
 		"can_read_laysheet": can_read_laysheet,
 		"can_read_movement": can_read_movement,

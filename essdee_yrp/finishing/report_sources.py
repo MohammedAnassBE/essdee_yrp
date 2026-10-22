@@ -138,7 +138,7 @@ def readable_rework_entries(names):
 	entries = []
 	for name in names:
 		doc = frappe.get_doc(REWORK_DOCTYPE, name)
-		if not doc.has_permission("read"):
+		if not frappe.has_permission(doc.doctype, "read", doc=doc):
 			continue
 		_ipd_name, ipd = lot_ipd(doc.lot)
 		if ipd:

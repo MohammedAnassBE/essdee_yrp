@@ -63,13 +63,6 @@ def box_doc(*, name="BSP-1", docstatus=1, modified="M1", rows=None):
 	doc.against = None
 	doc.against_id = None
 	doc.box_sticker_print_details = rows or []
-	doc.has_permission.side_effect = lambda permission: permission in {
-		"read",
-		"write",
-		"submit",
-		"cancel",
-		"print",
-	}
 	return doc
 
 
@@ -835,9 +828,11 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 		active = reservation_row(state="Active")
 		for doc in (box_doc(docstatus=2), box_doc(docstatus=1)):
 			with self.subTest(docstatus=doc.docstatus):
-				if doc.docstatus == 1:
-					doc.has_permission.side_effect = lambda permission: permission != "print"
 				with (
+					patch(
+						f"{MODULE}.frappe.has_permission",
+						side_effect=lambda _doctype, ptype="read", **_kwargs: ptype != "print",
+					),
 					patch(f"{MODULE}.frappe.session", _dict(user="Administrator")),
 					patch(f"{MODULE}._lock_reservation", return_value=active),
 					patch(f"{MODULE}.frappe.get_doc", return_value=doc),

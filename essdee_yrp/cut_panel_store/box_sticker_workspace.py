@@ -95,10 +95,8 @@ def _row_payload(row) -> dict:
 
 
 def _document_permission(doc, ptype: str) -> bool:
-	checker = getattr(doc, "has_permission", None)
-	return bool(checker(ptype)) if callable(checker) else bool(
-		frappe.has_permission(doc.doctype, ptype=ptype, doc=doc)
-	)
+	"""Quiet capability probe: a denied check must not surface Frappe's permission message."""
+	return bool(frappe.has_permission(doc.doctype, ptype=ptype, doc=doc))
 
 
 def _permissions(doc=None) -> dict:

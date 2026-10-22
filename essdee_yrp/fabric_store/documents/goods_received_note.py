@@ -33,6 +33,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 	validate_purchase_order_lot,
 )
 
+from essdee_yrp.additional_grn import get_defaults as get_additional_grn_defaults
 from essdee_yrp.fabric_store.documents.common import (
 	assert_expected_modified,
 	get_allow_on_submit_fields,
@@ -250,7 +251,14 @@ def _special_source_context(doc_or_values) -> dict:
 		for fieldname in SPECIAL_SOURCE_FIELDS
 		if doc_or_values.get(fieldname) not in (None, "", 0, False)
 	]
-	return {"active": bool(modes), "modes": modes, "read_only": bool(modes)}
+	# An Additional GRN keeps editable receipt rows, like production_api.
+	read_only = any(mode != "additional_grn" for mode in modes)
+	return {"active": bool(modes), "modes": modes, "read_only": read_only}
+
+
+def _is_additional_grn_source(values: Mapping) -> bool:
+	is_work_order = values.get("work_order") or values.get("against") == "YRP Work Order"
+	return bool(is_work_order and cint(values.get("additional_grn")) and not cint(values.get("is_return")))
 
 
 def _calculate_eligible(doc) -> bool:
@@ -565,11 +573,22 @@ def _resolve_source(source) -> tuple[dict, str, str, str | None]:
 	if against not in {"YRP Work Order", "Purchase Order"} or not against_id:
 		frappe.throw(_("Select a Work Order or Purchase Order for the Goods Received Note."))
 	delivery_challan = values.get("delivery_challan") if against == "YRP Work Order" else None
+	if _is_additional_grn_source(values):
+		# Additional receipts list every Work Order receivable, not one challan's rows.
+		delivery_challan = None
 	return values, against, against_id, delivery_challan
 
 
-def _source_defaults(against: str, against_id: str, delivery_challan: str | None = None) -> dict:
-	if against == "YRP Work Order":
+def _source_defaults(
+	against: str,
+	against_id: str,
+	delivery_challan: str | None = None,
+	additional_grn: bool = False,
+) -> dict:
+	if additional_grn:
+		defaults = get_additional_grn_defaults(against_id)
+		defaults["additional_grn"] = 1
+	elif against == "YRP Work Order":
 		defaults = get_work_order_defaults(against_id, delivery_challan)
 	else:
 		defaults = get_purchase_order_defaults(against_id)
@@ -697,7 +716,9 @@ def preview_goods_received_note_source(source) -> dict:
 
 	frappe.has_permission("YRP Goods Received Note", ptype="create", throw=True)
 	values, against, against_id, delivery_challan = _resolve_source(source)
-	defaults = _source_defaults(against, against_id, delivery_challan)
+	defaults = _source_defaults(
+		against, against_id, delivery_challan, _is_additional_grn_source(values)
+	)
 	doc = frappe.new_doc("YRP Goods Received Note")
 	doc.update(_source_values(defaults, values))
 	doc.against = against
@@ -1140,7 +1161,9 @@ def save_goods_received_note(
 	else:
 		frappe.has_permission("YRP Goods Received Note", ptype="create", throw=True)
 		_source, against, against_id, delivery_challan = _resolve_source(values)
-		defaults = _source_defaults(against, against_id, delivery_challan)
+		defaults = _source_defaults(
+			against, against_id, delivery_challan, _is_additional_grn_source(values)
+		)
 		doc = frappe.new_doc("YRP Goods Received Note")
 		doc.update(_source_values(defaults))
 		doc.against = against
@@ -1162,8 +1185,8 @@ def save_goods_received_note(
 		)
 	else:
 		doc.update(_editable_headers(doc, values))
-	if _special_source_context(doc)["active"]:
-		# Prepared return/packing/cutting/additional rows belong to their native
+	if _special_source_context(doc)["read_only"]:
+		# Prepared return/packing/cutting rows belong to their native
 		# builders and must not be reconstructed from a generic browser matrix.
 		items = authoritative_items
 		corrections = authoritative_corrections

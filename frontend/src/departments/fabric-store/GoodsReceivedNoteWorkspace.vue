@@ -211,7 +211,7 @@
 			</template>
 
 			<template #panel>
-				<section v-if="workspace.special_source?.active" class="goods-received-note-special-context" aria-label="Source-managed Goods Received Note context">
+				<section v-if="workspace.special_source?.read_only" class="goods-received-note-special-context" aria-label="Source-managed Goods Received Note context">
 					<header><span>Source-managed mode</span><strong>Prepared by the originating workflow</strong></header>
 					<div><span v-for="mode in workspace.special_source.modes || []" :key="mode">{{ titleCase(mode) }}</span></div>
 				</section>
@@ -280,6 +280,7 @@ import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
+import { additionalGrnFieldState, additionalGrnSourceContext } from "./grnAdditional.js"
 import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, unusedLotsForEntry } from "./grnLotOptions.js"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
@@ -398,10 +399,12 @@ function canEditMatrixBlock(kind) {
 }
 // A Cut Panel Movement decides exact or collapsed bundle handling for its GRN.
 const cutPanelMovementOwned = computed(() => Boolean(form.cut_panel_movement || workspace.value.record?.cut_panel_movement))
+const additionalGrn = computed(() => additionalGrnFieldState({ against: form.against || workspace.value.record?.against, isReturn: form.is_return, isRework: form.is_rework, isNew: !currentName.value, canEditDraft: canEditDraft.value }))
 const visibleFields = computed(() => {
 	const result = new Map()
 	for (const source of workspace.value.fields || []) {
-		if (!source?.fieldname || source.hidden || sourceOwnedFieldnames.has(source.fieldname) || presentationHiddenFieldnames.has(source.fieldname)) continue
+		const shownAdditionalGrn = source?.fieldname === "additional_grn" && additionalGrn.value.visible
+		if (!source?.fieldname || source.hidden || (sourceOwnedFieldnames.has(source.fieldname) && !shownAdditionalGrn) || presentationHiddenFieldnames.has(source.fieldname)) continue
 		if (source.depends_on && !evaluateCondition(source.depends_on, true)) continue
 		if (headerFieldnames.has(source.fieldname) && (!sourceFieldnames.has(source.fieldname) || currentName.value)) continue
 		if (result.has(source.fieldname)) continue
@@ -409,7 +412,7 @@ const visibleFields = computed(() => {
 			...source,
 			label: fieldLabelOverrides[source.fieldname] || source.label,
 			reqd: Boolean(source.reqd || source.mandatory || evaluateCondition(source.mandatory_depends_on)),
-			read_only: Boolean(source.read_only || evaluateCondition(source.read_only_depends_on) || (source.fieldname === "allow_non_bundle" && cutPanelMovementOwned.value)),
+			read_only: Boolean(source.read_only || evaluateCondition(source.read_only_depends_on) || (source.fieldname === "allow_non_bundle" && cutPanelMovementOwned.value) || (shownAdditionalGrn && !additionalGrn.value.editable)),
 		}
 		if (!canEdit.value && !hasDocumentDisplayValue(form[source.fieldname] ?? source.value)) continue
 		result.set(source.fieldname, field)
@@ -428,7 +431,7 @@ const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["
 const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["posting", "movement"].includes(group.key)))
 const afterMatrixFields = computed(() => visibleFields.value.filter((field) => afterMatrixFieldnames.has(field.fieldname)))
 const overviewDefinitions = [
-	{ key: "identity", label: "Receipt identity", description: "Source and production references", icon: "pi pi-id-card", fields: ["naming_series", "against", "against_id", "delivery_challan", "production_detail", "is_return", "is_rework"] },
+	{ key: "identity", label: "Receipt identity", description: "Source and production references", icon: "pi pi-id-card", fields: ["naming_series", "against", "against_id", "delivery_challan", "production_detail", "is_return", "is_rework", "additional_grn"] },
 	{ key: "movement", label: "Movement", description: "Supplier and stock destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "delivery_location", "delivery_location_name", "from_warehouse", "to_warehouse", "billing_address", "delivery_address"] },
 	{ key: "schedule", label: "Supplier reference", description: "Posting and transport information", icon: "pi pi-calendar", fields: ["posting_date", "posting_time", "actual_date", "supplier_document_no", "supplier_document_date", "dc_no", "vehicle_no"] },
 	{ key: "status", label: "Status & notes", description: "Receipt controls, charges and comments", icon: "pi pi-clipboard", fields: ["status", "freight_charges", "purchase_invoice_name", "includes_packing", "allow_non_bundle", "is_internal_unit", "transfer_complete", "letter_head", "comments"] },
@@ -554,6 +557,7 @@ function applyWorkspace(nextWorkspace) {
 
 async function setField(fieldname, value) {
 	if (editingSubmitted.value && !allowOnSubmitFields.value.has(fieldname)) return
+	if (fieldname === "additional_grn" && !currentName.value) return reloadAdditionalGrnSource(value)
 	form[fieldname] = value
 	if (fieldname === "supplier") { form.contact_person = ""; form.billing_address = "" }
 	if (fieldname in addressDefaults) invalidateAddress(fieldname)
@@ -561,6 +565,22 @@ async function setField(fieldname, value) {
 	markDirty()
 	if (fieldname === "delivery_location") await defaultAddress("delivery_address", value)
 	if (fieldname === "supplier") await defaultAddress("supplier_address", value)
+}
+
+// The Additional GRN source lists every Work Order receivable, so rebuild the draft from it.
+async function reloadAdditionalGrnSource(checked) {
+	const sequence = ++actionSequence
+	const requestedRouteName = props.name
+	acting.value = "additional_grn"
+	error.value = ""
+	try {
+		const nextWorkspace = await getGoodsReceivedNoteWorkspace("", additionalGrnSourceContext(props.sourceContext, checked)) || {}
+		if (actionIsStale(sequence, requestedRouteName)) return
+		applyWorkspace(nextWorkspace)
+		dirty.value = true
+	} catch (reason) {
+		if (!actionIsStale(sequence, requestedRouteName)) error.value = reason?.message || "Unable to load the Additional GRN receivables."
+	} finally { if (!actionIsStale(sequence, requestedRouteName)) acting.value = "" }
 }
 
 function invalidateAddress(fieldname) { addressDefaults[fieldname].sequence += 1; addressDefaults[fieldname].pending = false }
@@ -774,7 +794,7 @@ const grnFieldGroups = [
 ]
 const grnGroupFields = {
 	source: ["against", "against_id", "delivery_challan", "production_detail"],
-	posting: ["naming_series", "posting_date", "posting_time", "edit_posting_date_and_time", "actual_date"],
+	posting: ["additional_grn", "naming_series", "posting_date", "posting_time", "edit_posting_date_and_time", "actual_date"],
 	movement: ["from_warehouse", "billing_address", "contact_person", "delivery_location", "to_warehouse", "delivery_address", "delivery_location_name"],
 	"supplier-document": ["supplier_document_no", "supplier_document_date", "dc_no", "vehicle_no"],
 	addresses: ["billing_address_display", "supplier_address", "supplier_address_display", "contact_display", "contact_mobile", "delivery_address_display"],

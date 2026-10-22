@@ -8,6 +8,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from essdee_yrp.fabric_store.documents.goods_received_note import (
 	_editable_headers,
+	_is_additional_grn_source,
 	_merge_authoritative_rows,
 	_merge_inspection_sources,
 	_source_defaults,
@@ -510,7 +511,72 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		):
 			workspace = get_goods_received_note_workspace(doc.name)
 		self.assertNotIn("calculate", workspace["capabilities"])
-		self.assertTrue(workspace["special_source"]["read_only"])
+		self.assertTrue(workspace["special_source"]["active"])
+		# Like production_api, an Additional GRN keeps its received quantities editable.
+		self.assertFalse(workspace["special_source"]["read_only"])
+		self.assertTrue(_special_source_context({"is_rework": 1})["read_only"])
+
+	def test_additional_grn_preview_lists_every_work_order_receivable(self):
+		defaults = {
+			"supplier": "SUPPLIER-1",
+			"items": [{"item_variant": "STYLE-S", "quantity": 0, "max_receivable_quantity": -1}],
+			"item_details": [{"kind": "additional"}],
+			"correction_items": [],
+			"correction_item_details": [],
+		}
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_additional_grn_defaults", return_value=defaults) as additional,
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_work_order_defaults") as ordinary,
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value="ADDRESS"),
+		):
+			workspace = preview_goods_received_note_source(
+				{"against": "YRP Work Order", "against_id": "WO-1", "delivery_challan": "DC-1", "additional_grn": 1}
+			)
+		additional.assert_called_once_with("WO-1")
+		ordinary.assert_not_called()
+		self.assertEqual(workspace["values"]["additional_grn"], 1)
+		self.assertEqual(workspace["matrices"]["items"], [{"kind": "additional"}])
+		self.assertTrue(workspace["special_source"]["active"])
+		self.assertFalse(workspace["special_source"]["read_only"])
+
+	def test_additional_grn_flag_is_ignored_for_purchase_orders_and_returns(self):
+		for source in (
+			{"purchase_order": "PO-1", "additional_grn": 1},
+			{"against": "YRP Work Order", "against_id": "WO-1", "is_return": 1, "additional_grn": 1},
+		):
+			with self.subTest(source=source):
+				self.assertFalse(_is_additional_grn_source(source))
+		self.assertTrue(_is_additional_grn_source({"work_order": "WO-1", "additional_grn": "1"}))
+
+	def test_new_additional_grn_save_takes_operator_quantities(self):
+		doc = self.make_document()
+		doc.name = "GRN-NEW"
+		doc.items = []
+		doc.correction_items = []
+		source_row = dict(self.make_document()["items"][0], quantity=0, max_receivable_quantity=-1)
+		defaults = {
+			"supplier": "SUPPLIER-1",
+			"from_warehouse": "Supplier - E",
+			"to_warehouse": "Stores - E",
+			"items": [source_row],
+			"correction_items": [],
+		}
+		with (
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.new_doc", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_additional_grn_defaults", return_value=defaults),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.ungroup_items_from_ui", return_value=[dict(source_row, quantity=7)]),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_party_address", return_value="ADDRESS"),
+			patch("essdee_yrp.fabric_grn.validate_actual_dia_rows"),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_goods_received_note_workspace", return_value={}),
+		):
+			save_goods_received_note(
+				{"against": "YRP Work Order", "against_id": "WO-1", "additional_grn": 1, "item_details": [{}]}
+			)
+		self.assertEqual(doc.additional_grn, 1)
+		self.assertEqual([row.quantity for row in doc["items"]], [7])
+		doc.insert.assert_called_once()
 
 	def test_work_order_preview_uses_essdee_defaults(self):
 		defaults = {
@@ -552,7 +618,7 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		loader.assert_called_once_with("PO-1")
 
 	def test_existing_save_uses_saved_rows_and_preserves_other_types_corrections_and_special_rows(self):
-		doc = self.make_document(additional_grn=1)
+		doc = self.make_document(is_rework=1)
 		browser_rows = [
 			{
 				"item_variant": "STYLE-S",

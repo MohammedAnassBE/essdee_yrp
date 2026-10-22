@@ -48,6 +48,12 @@ class TestMrpRolePermissions(IntegrationTestCase):
 		self.assertTrue(all(permissions[ptype] for ptype in ("read", "write", "create", "submit", "print")))
 		self.assertFalse(permissions["cancel"] or permissions["delete"])
 
+	def test_all_roles_read_item_attribute_values(self):
+		permissions = self.role_permissions("YRP Item Attribute Value", "All")
+		self.assertTrue(permissions["read"] and permissions["select"])
+		self.assertFalse(any(permissions[ptype] for ptype in ("write", "create", "delete")))
+		self.assertTrue(frappe.db.exists("Custom DocPerm", {"parent": "YRP Item Attribute Value", "role": "All"}))
+
 	def test_merch_roles_run_stock_balance(self):
 		for report, roles in MRP_REPORT_ROLES.items():
 			custom_role = frappe.get_doc("Custom Role", {"report": report})

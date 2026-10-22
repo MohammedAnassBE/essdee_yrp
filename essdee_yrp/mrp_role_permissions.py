@@ -35,6 +35,8 @@ MRP_ROLE_GRANTS = {
 	"YRP Purchase Invoice": {"Merch User": (*ENTRY, "delete"), "Brand QA Manager": VIEW},
 	# Not a production row: Purchase users reached it there through Stock/Accounts User.
 	"YRP Excel Sticker Print": {"Purchase User": ("read", "write", "create", "submit", "print")},
+	# Attribute values back link fields on every department's forms.
+	"YRP Item Attribute Value": {"All": ("read", "select")},
 }
 # YRP grants these roles access production never gave them.
 MRP_ROLE_REVOKES = {

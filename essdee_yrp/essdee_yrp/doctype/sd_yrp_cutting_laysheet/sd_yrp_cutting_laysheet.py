@@ -44,6 +44,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker i
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 from essdee_yrp.fabric_requirement import get_stich_details, get_stitching_combination
 from essdee_yrp.ipd_attribute_links import major_stitching_value
+from essdee_yrp.print_helpers import set_attribute_display_values
 
 
 def get_part_list(ipd_doc):
@@ -120,6 +121,9 @@ def get_piece_weight_tolerance(doc_name):
 class SDYRPCuttingLaySheet(Document):
 	def autoname(self):
 		self.naming_series = "CLS-.YY..MM.-.{#####}."
+
+	def before_print(self, settings=None):
+		set_attribute_display_values(self)
 
 	def onload(self):
 		if not self.is_new():

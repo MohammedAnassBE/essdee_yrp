@@ -413,6 +413,14 @@ def fetch_order_item_details(
 	return _generic_work_order_items(items)
 
 
+def set_attribute_display_values(doc):
+	"""Replace stored IAV links with their display values on a document being printed."""
+	registered = attribute_db.fields()
+	for row in (doc, *doc.get_all_children()):
+		for fieldname in registered.get(row.doctype, ()):
+			row.set(fieldname, _attribute_value(row.get(fieldname)))
+
+
 def prepare_print_document(doc, method=None, settings=None):
 	"""Add transient F15 layout aliases to the F16 YRP documents.
 

@@ -344,12 +344,15 @@ async function shellSuite(page) {
 async function accessoryStoreSuite(page) {
 	const listRequests = []
 	await mockWorkspace(page, listRequests)
+	await mockBoxStickerCapability(page, {
+		excel_stickers: { label: "Excel Sticker Print", doctype: "YRP Excel Sticker Print", can_read: true, can_create: true },
+	})
 	await page.setViewportSize({ width: 1600, height: 1000 })
 	await page.goto(`${SITE}/web/accessory-store`, { waitUntil: "domcontentloaded" })
 	const launcher = page.locator(".workspace-launcher")
 	await launcher.waitFor({ timeout: 20_000 })
 
-	const expectedCards = ["Work Orders", "Purchase Orders", "Stock Transfers", "Reports"]
+	const expectedCards = ["Work Orders", "Purchase Orders", "Stock Transfers", "Excel Sticker Print", "Reports"]
 	const cards = launcher.locator(".workspace-launcher__card")
 	await cards.nth(expectedCards.length - 1).waitFor()
 	assert(JSON.stringify((await cards.locator("strong").allTextContents()).map((label) => label.trim())) === JSON.stringify(expectedCards), `Unexpected Accessory Store cards: ${JSON.stringify(await cards.locator("strong").allTextContents())}`)
@@ -357,6 +360,7 @@ async function accessoryStoreSuite(page) {
 		["Work Orders", "/web/accessory-store/work-orders"],
 		["Purchase Orders", "/web/accessory-store/purchase-orders"],
 		["Stock Transfers", "/web/accessory-store/stock-transfers"],
+		["Excel Sticker Print", "/web/accessory-store/excel-sticker-prints"],
 		["Reports", "/web/accessory-store/reports"],
 	]) {
 		assert(await launcher.getByRole("link", { name: new RegExp(`^${label}`) }).getAttribute("href") === path, `${label} points outside Accessory Store`)

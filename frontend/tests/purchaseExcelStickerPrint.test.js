@@ -9,7 +9,7 @@ import { merchPurchaseLauncherItems } from "../src/departments/merch-purchase/me
 import { MERCH_ROUTES, visibleMerchLauncherItems } from "../src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
-import { storeWorkspaces } from "../src/departments/fabric-store/storeWorkspaces.js"
+import { ACCESSORY_STORE_WORKSPACE_KEYS, storeWorkspaces } from "../src/departments/fabric-store/storeWorkspaces.js"
 import { PURCHASE_REPORT_KEYS, PURCHASE_ROUTES, PURCHASE_STORE_WORKSPACE_KEYS } from "../src/departments/purchase/purchaseViews.js"
 import { departments, getWorkspacePaths } from "../src/departments/registry.js"
 import { getLockedDepartment, getLockedRedirect, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
@@ -77,4 +77,43 @@ test("the card and list need read permission on YRP Excel Sticker Print", () => 
 	const readable = (excel) => Object.fromEntries(items.map((item) => [item.key, { can_read: item.key !== "excel_stickers" || excel }]))
 	assert.ok(visibleMerchLauncherItems(readable(true), items).some((item) => item.key === "excel_stickers"))
 	assert.ok(!visibleMerchLauncherItems(readable(false), items).some((item) => item.key === "excel_stickers"))
+})
+
+const STORE_ROUTES = [
+	{ key: "accessory-store", path: "/accessory-store/excel-sticker-prints", name: "accessory-excel-stickers", props: { section: "excel_stickers", backTo: "/accessory-store", backLabel: "Accessory Store" } },
+	{ key: "cut-panel-store", path: "/cut-panel-store/excel-sticker-prints", name: "cut-panel-excel-stickers", props: { section: "excel_stickers" } },
+]
+
+test("Accessory Store and Cut Panel Store show the Excel Sticker Print card", () => {
+	assert.ok(ACCESSORY_STORE_WORKSPACE_KEYS.includes("excel_stickers"))
+	assert.match(source("../src/departments/AccessoryStore.vue"), /:workspace-keys="ACCESSORY_STORE_WORKSPACE_KEYS"/)
+	const card = storeWorkspaces("/accessory-store").find((item) => item.key === "excel_stickers")
+	assert.equal(card.to, STORE_ROUTES[0].path)
+	assert.match(source("../src/departments/CutPanelStore.vue"), /key: "excel_stickers".*to: "\/cut-panel-store\/excel-sticker-prints"/)
+})
+
+test("the store routes open the shared Excel Sticker Print section inside their layouts", () => {
+	const router = loadRouter()
+	for (const store of STORE_ROUTES) {
+		const route = router.resolve(store.path)
+		assert.equal(route.name, store.name)
+		assert.equal(route.matched.at(-1).components.default, router.resolve(PATH).matched.at(-1).components.default)
+		assert.deepEqual(JSON.parse(JSON.stringify(route.matched.at(-1).props.default)), store.props)
+		assert.deepEqual(getWorkspacePaths(departments.find((item) => item.key === store.key)).excel_stickers, [store.path])
+		const locked = lockedFor(store.key)
+		assert.ok(locked.workspaces.includes("excel_stickers"), store.key)
+		assert.ok(isWorkspaceInLayout({ key: "excel_stickers", to: store.path }, locked), store.key)
+		assert.equal(getLockedRedirect(route, locked), undefined, store.key)
+	}
+})
+
+test("the store Excel Sticker Print lists need read permission on YRP Excel Sticker Print", () => {
+	const allowed = { user: { name: "store@example.com", can_read: [DOCTYPE] } }
+	const denied = { user: { name: "store@example.com", can_read: ["SD YRP Box Sticker Print"] } }
+	for (const { path } of STORE_ROUTES) {
+		assert.equal(canOpenList(path, allowed), true)
+		assert.deepEqual(getPermissionRedirect({ path, fullPath: path, params: {} }, denied), {
+			path: NO_PERMISSION_PATH, query: { doctype: DOCTYPE, from: path }, replace: true,
+		})
+	}
 })

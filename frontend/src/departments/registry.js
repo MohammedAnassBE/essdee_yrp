@@ -29,7 +29,7 @@ export const departments = [
 		label: "Accessory Store",
 		shortLabel: "AS",
 		path: "/accessory-store",
-		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", reports: "reports" },
+		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", excel_stickers: "excel-sticker-prints", reports: "reports" },
 		component: () => import("./AccessoryStore.vue"),
 	},
 	{

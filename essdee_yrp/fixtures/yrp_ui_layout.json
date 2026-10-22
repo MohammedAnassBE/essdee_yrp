@@ -144,14 +144,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"work_orders\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Accessory Store department workspace only: work_orders, purchase_orders, stock_transfers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"work_orders\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Accessory Store department workspace only: work_orders, purchase_orders, stock_transfers, excel_stickers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "accessory-store",
   "layout_name": "Accessory Store",
-  "modified": "2026-10-15 10:10:21.272552",
+  "modified": "2026-10-22 10:54:39.737801",
   "name": "Accessory Store",
   "render_mode": "Registered Experience"
  },

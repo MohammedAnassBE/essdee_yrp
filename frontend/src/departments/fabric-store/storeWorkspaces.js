@@ -1,3 +1,5 @@
+export const ACCESSORY_STORE_WORKSPACE_KEYS = ["work_orders", "purchase_orders", "stock_transfers", "excel_stickers", "reports"]
+
 /** Launcher cards shared by the store departments under `basePath`. */
 export function storeWorkspaces(basePath, reportKeys = ["stock_balance"]) {
 	return [

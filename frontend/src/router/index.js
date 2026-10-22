@@ -537,6 +537,12 @@ const routes = [
 		props: { section: "reports", storeName: "Accessory Store", basePath: "/accessory-store" },
 	},
 	{
+		path: "/accessory-store/excel-sticker-prints",
+		name: "accessory-excel-stickers",
+		component: CutPanelStoreSection,
+		props: { section: "excel_stickers", backTo: "/accessory-store", backLabel: "Accessory Store" },
+	},
+	{
 		path: "/accessory-store/work-orders/new",
 		name: "accessory-work-order-new",
 		component: FabricWorkOrderEditorPage,

@@ -111,7 +111,7 @@ for (const asset of ["sha256", "qz-tray"]) for (const failure of ["error", "time
 			document.head.appendChild(script)
 		}
 		const first = getQzPrinters()
-		const rejected = assert.rejects(first, /Could not connect to QZ Tray/)
+		const rejected = assert.rejects(first, /Could not load QZ Tray printing support/)
 		const failed = scripts.at(-1)
 		if (failure === "error") failed.dispatchEvent(new Event("error"))
 		else t.mock.timers.tick(15000)
@@ -132,36 +132,25 @@ for (const asset of ["sha256", "qz-tray"]) for (const failure of ["error", "time
 	})
 }
 
-test("F-B26: the overall timeout removes a QZ script loaded after a slow SHA request", async t => {
+test("F-B26: each QZ asset gets its own load timeout, so a slow SHA request does not fail the QZ script", async t => {
 	t.mock.timers.enable({ apis: ["setTimeout"] })
 	const { scripts, load } = printerAssets(t)
 	const first = getQzPrinters()
-	const rejected = assert.rejects(first, /Could not connect to QZ Tray/)
 	t.mock.timers.tick(14000)
 	load(scripts[0]); await tick()
-	const failed = scripts.at(-1)
-	assert.ok(failed.src.includes("qz-tray"))
-	t.mock.timers.tick(1000)
-	await rejected
-	assert.ok(!scripts.includes(failed))
-	const retry = getQzPrinters()
-	assert.notEqual(scripts.at(-1), failed)
+	assert.ok(scripts.at(-1).src.includes("qz-tray"))
+	t.mock.timers.tick(14000)
 	load(scripts.at(-1))
-	assert.deepEqual(await retry, ["Printer"])
+	assert.deepEqual(await first, ["Printer"])
 })
 
-for (const stage of ["connect", "find"]) test(`F-B26: ${stage} timeout gives an actionable error and permits retry`, async t => {
-	t.mock.timers.enable({ apis: ["setTimeout"] })
+test("F-B26: an unreachable QZ Tray gives an actionable error and permits retry", async t => {
 	const previous = globalThis.window
-	const never = () => new Promise(() => {})
-	const qz = { api: { setPromiseType() {}, setSha256Type() {} }, websocket: { isActive: () => false, connect: stage === "connect" ? never : async () => {} }, printers: { find: stage === "find" ? never : async () => ["Printer"] } }
+	const qz = { api: { setPromiseType() {}, setSha256Type() {} }, websocket: { isActive: () => false, connect: async () => { throw new Error("Unable to establish connection with QZ") } }, printers: { find: async () => ["Printer"] } }
 	globalThis.window = { qz, sha256() {} }
 	t.after(() => { globalThis.window = previous })
-	const result = getQzPrinters()
-	const rejected = assert.rejects(result, /Could not connect to QZ Tray\. Start QZ Tray on this computer and try again\./)
-	await tick(); t.mock.timers.tick(15000); await rejected
-	globalThis.window = { qz, sha256() {} }
-	qz.websocket.connect = async () => {}; qz.printers.find = async () => ["Printer"]
+	await assert.rejects(getQzPrinters(), /Could not connect to QZ Tray\. Start QZ Tray on this computer and try again\./)
+	qz.websocket.connect = async () => {}
 	assert.deepEqual(await getQzPrinters(), ["Printer"])
 	assert.match(read("departments/cut-panel-store/PrinterDialog.vue"), /label="Retry"[^>]*@click="loadPrinters"/)
 })

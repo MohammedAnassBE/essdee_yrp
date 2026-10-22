@@ -10,7 +10,7 @@
 		@update:visible="emit('update:visible', $event)"
 	>
 		<div class="printer-dialog__content">
-			<div v-if="loading" class="printer-dialog__loading"><i class="pi pi-spin pi-spinner" /><span>Connecting to QZ Tray and finding printers…</span></div>
+			<div v-if="loading" class="printer-dialog__loading"><i class="pi pi-spin pi-spinner" /><span>Connecting to QZ Tray and finding printers… Approve the QZ Tray prompt on this computer if it asks.</span></div>
 			<template v-else>
 				<label><span>Printer *</span><Select v-model="selected" :options="printers" filter fluid placeholder="Select printer" /></label>
 				<label v-if="showResolution"><span>Printer Resolution *</span><Select v-model="selectedResolution" :options="resolutions" fluid placeholder="Select resolution" /></label>

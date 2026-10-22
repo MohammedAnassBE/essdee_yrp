@@ -55,27 +55,19 @@ def create_alternative_plan_production_order(
 	finishing_plan,
 ):
 	"""Create the paired PPO and apply the first alternative-item quantity move."""
+	from essdee_yrp.finishing.alternative_checks import throw_alternative_plan_issues
+
 	piece_transfers = _normalise_transfers(transfers)
 	_lock_production_orders(source_production_order)
-	source = frappe.get_doc("YRP Production Order", source_production_order)
-	if source.docstatus != 1:
-		frappe.throw(_("Source Production Order {0} must be submitted").format(source.name))
-	if attribute_db.get_value("SD YRP Lot", source_lot, "production_order") != source.name:
-		frappe.throw(_("Source Lot is not linked to the selected Production Order"))
-	if alternative_item not in get_alternative_items(source.item):
-		frappe.throw(
-			_("Item {0} is not configured as an alternative of {1}").format(alternative_item, source.item)
+	throw_alternative_plan_issues(
+		get_alternative_production_order_issues(
+			source_production_order, source_lot, alternative_item, piece_transfers
 		)
-
+	)
+	source = frappe.get_doc("YRP Production Order", source_production_order)
 	source_rows = get_rows_by_size(source)
 	target_item = frappe.get_cached_doc("Item", alternative_item)
 	target_sizes = set(get_attribute_details(alternative_item).get("primary_attribute_values") or [])
-	invalid_sizes = [size for size in piece_transfers if size not in target_sizes]
-	if invalid_sizes:
-		frappe.throw(_("Item {0} is not made in size {1}").format(alternative_item, ", ".join(invalid_sizes)))
-	for size in piece_transfers:
-		if size not in source_rows:
-			frappe.throw(_("Size {0} is not present in {1}").format(size, source.name))
 
 	target = frappe.new_doc("YRP Production Order")
 	for fieldname in ALTERNATIVE_PPO_COPY_FIELDS:
@@ -163,6 +155,30 @@ def create_alternative_plan_production_order(
 		f"Alternative item conversion from Finishing Plan {finishing_plan}",
 	)
 	return target.name
+
+
+def get_alternative_production_order_issues(source_production_order, source_lot, alternative_item, sizes):
+	"""Return every source Production Order blocker for an alternative-item move."""
+	source = frappe.get_doc("YRP Production Order", source_production_order)
+	issues = []
+	if source.docstatus != 1:
+		issues.append(_("Source Production Order {0} is not submitted").format(source.name))
+	if attribute_db.get_value("SD YRP Lot", source_lot, "production_order") != source.name:
+		issues.append(
+			_("Source Lot {0} is not linked to Production Order {1}").format(source_lot, source.name)
+		)
+	if alternative_item not in get_alternative_items(source.item):
+		issues.append(
+			_("Item {0} is not configured as an alternative of {1}").format(alternative_item, source.item)
+		)
+	target_sizes = set(get_attribute_details(alternative_item).get("primary_attribute_values") or [])
+	source_sizes = set(get_rows_by_size(source))
+	for size in sorted(sizes):
+		if size not in target_sizes:
+			issues.append(_("Size {0}: Item {1} is not made in this size").format(size, alternative_item))
+		if size not in source_sizes:
+			issues.append(_("Size {0}: not present in Production Order {1}").format(size, source.name))
+	return issues
 
 
 def apply_alternative_plan_ppo_transfer(

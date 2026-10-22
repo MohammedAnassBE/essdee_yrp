@@ -67,7 +67,7 @@ def build_packing_work_order_rows(lot, process_name):
 	"""
 	lot = frappe.get_doc("SD YRP Lot", lot) if isinstance(lot, str) else lot
 	ipd = frappe.get_cached_doc("YRP Item Production Detail", lot.production_detail)
-	if process_name != ipd.packing_process and not _group_contains(process_name, ipd.packing_process):
+	if not has_packing_process(process_name, ipd.packing_process):
 		frappe.throw(
 			_("Process {0} does not include packing process {1}").format(process_name, ipd.packing_process)
 		)
@@ -237,6 +237,10 @@ def _colour_summary(ipd, principal):
 		if colour and colour not in colours:
 			colours.append(colour)
 	return ", ".join(colours)
+
+
+def has_packing_process(process_name, packing_process):
+	return process_name == packing_process or _group_contains(process_name, packing_process)
 
 
 def _group_contains(group, process):

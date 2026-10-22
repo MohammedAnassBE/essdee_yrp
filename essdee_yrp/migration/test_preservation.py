@@ -7,6 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, mock_open, patch
 
+import frappe
+from frappe.utils.password import get_decrypted_password
+
 from essdee_yrp.migration.engine import MigrationError, transform_document
 from essdee_yrp.migration.live import (
 	FrappeBulkTarget,
@@ -59,7 +62,7 @@ class PreservationTest(unittest.TestCase):
 				"essdee_yrp.migration.preservation.frappe.get_meta",
 				return_value=SimpleNamespace(issingle=True),
 			),
-			patch("essdee_yrp.migration.preservation.frappe.db.sql") as sql,
+			patch("essdee_yrp.migration.preservation.frappe.db.sql", return_value=[]) as sql,
 		):
 			result = run_auth(self.plan, source)
 		self.assertEqual(sql.call_args.args[1][-2:], ("test-ciphertext", 1))
@@ -75,19 +78,19 @@ class PreservationTest(unittest.TestCase):
 				"essdee_yrp.migration.preservation.frappe.get_meta",
 				return_value=SimpleNamespace(issingle=True),
 			),
-			patch("essdee_yrp.migration.preservation.set_encrypted_password") as encrypt,
+			patch("essdee_yrp.migration.preservation.frappe.db.sql", return_value=[]) as sql,
+			patch("essdee_yrp.migration.preservation.encrypt", return_value="target-ciphertext") as encrypt,
 		):
 			result = run_auth(self.plan, source)
-		encrypt.assert_called_once_with(
-			"YRP Stock Settings",
-			"YRP Stock Settings",
-			"test-plaintext",
-			fieldname="sms_old_database_password",
+		encrypt.assert_called_once_with("test-plaintext")
+		self.assertEqual(
+			sql.call_args.args[1],
+			("YRP Stock Settings", "YRP Stock Settings", "sms_old_database_password", "target-ciphertext", 1),
 		)
 		self.assertEqual(result["reencrypted"], 1)
 		self.assertNotIn("test-plaintext", repr(result))
 
-	def test_verify_detects_changed_ciphertext_without_rewriting(self):
+	def test_verify_accepts_existing_target_ciphertext_without_rewriting(self):
 		source = SimpleNamespace(iter_auth_rows=lambda: iter([self.credential()]))
 		with (
 			patch(
@@ -97,9 +100,20 @@ class PreservationTest(unittest.TestCase):
 			patch("essdee_yrp.migration.preservation.frappe.db.sql", return_value=[("changed", 1)]) as sql,
 		):
 			result = run_auth(self.plan, source, verify=True)
-		self.assertEqual(result["status"], "Failed")
+		self.assertEqual(result["status"], "Pass")
+		self.assertEqual(result["kept_target"], 1)
+		self.assertEqual(sql.call_count, 1)
 		self.assertTrue(sql.call_args.args[0].startswith("SELECT"))
 		self.assertNotIn("test-ciphertext", repr(result))
+
+	def test_verify_detects_missing_credential_without_writing(self):
+		source = SimpleNamespace(iter_auth_rows=lambda: iter([self.credential()]))
+		with patch("essdee_yrp.migration.preservation.frappe.db.sql", return_value=[]) as sql:
+			result = run_auth(self.plan, source, verify=True)
+		self.assertEqual(result["status"], "Failed")
+		self.assertEqual(len(result["failures"]), 1)
+		self.assertEqual(sql.call_count, 1)
+		self.assertTrue(sql.call_args.args[0].startswith("SELECT"))
 
 	def test_orphan_preserves_original_identity_and_zero_position(self):
 		row = {
@@ -155,7 +169,7 @@ class PreservationTest(unittest.TestCase):
 		source = SimpleNamespace(iter_auth_rows=lambda: iter([row]))
 		with (
 			patch("essdee_yrp.migration.preservation.frappe.db.exists", return_value=False),
-			patch("essdee_yrp.migration.preservation.frappe.db.sql") as sql,
+			patch("essdee_yrp.migration.preservation.frappe.db.sql", return_value=[]) as sql,
 		):
 			result = run_auth(self.plan, source)
 		self.assertEqual(result["source_orphan_count"], 1)
@@ -193,10 +207,11 @@ class PreservationTest(unittest.TestCase):
 			doctype="FG Item OMS Settings", name="CHILD", fieldname="api_secret", source_record_exists=False
 		)
 		source = SimpleNamespace(iter_auth_rows=lambda: iter([row]))
-		with patch("essdee_yrp.migration.preservation.frappe.db.sql") as sql:
+		with patch("essdee_yrp.migration.preservation.frappe.db.sql", return_value=[]) as sql:
 			result = run_auth(self.plan, source, dry_run=True)
 		self.assertEqual(result["source_orphan_count"], 1)
-		sql.assert_not_called()
+		self.assertEqual(sql.call_count, 1)
+		self.assertTrue(sql.call_args.args[0].startswith("SELECT"))
 
 	def test_restored_item_description_is_preserved(self):
 		result = transform_document(
@@ -421,6 +436,139 @@ class PreservationTest(unittest.TestCase):
 			with self.assertRaisesRegex(MigrationError, "Refusing numeric rounding"):
 				FrappeBulkTarget()._bulk_upsert("Example", [{"name": "E-1", "qty": "1.234567891"}])
 		self.assertEqual(sql.call_count, 1)  # only the storage-definition read
+
+
+class AuthPreservationTest(unittest.TestCase):
+	def setUp(self):
+		frappe.db.savepoint("migration_auth_preservation")
+		self.addCleanup(frappe.db.rollback, save_point="migration_auth_preservation")
+		self.name = "_test-migration-auth-" + frappe.generate_hash(length=10) + "@example.invalid"
+		target = FrappeBulkTarget()
+		target.upsert_batch(
+			"User",
+			[{"doctype": "User", "name": self.name, "email": self.name, "send_welcome_email": 0}],
+		)
+		target.upsert_batch(
+			"Email Account",
+			[
+				{
+					"doctype": "Email Account",
+					"name": self.name,
+					"email_id": self.name,
+					"enable_incoming": 0,
+					"enable_outgoing": 0,
+				}
+			],
+		)
+		self.plan = SimpleNamespace(
+			specs={
+				doctype: SimpleNamespace(
+					target=doctype,
+					ignored_fields=set(),
+					field_map={},
+					source_schema={"issingle": doctype == "YRP Stock Settings"},
+					target_schema={
+						"issingle": doctype == "YRP Stock Settings",
+						"fields": [{"fieldname": field, "fieldtype": "Password"} for field in fields],
+					},
+				)
+				for doctype, fields in (
+					("User", ("password", "api_secret")),
+					("Email Account", ("password",)),
+					("YRP Stock Settings", ("sms_old_database_password",)),
+				)
+			}
+		)
+
+	def credential(self, doctype, fieldname="password", **changes):
+		return {
+			"doctype": doctype,
+			"name": doctype if doctype == "YRP Stock Settings" else self.name,
+			"fieldname": fieldname,
+			"password": "mrp-local-hash",
+			"encrypted": 0,
+			"decryptable": False,
+			"source_record_exists": True,
+			**changes,
+		}
+
+	def read_auth(self, row):
+		return frappe.db.sql(
+			"SELECT * FROM __Auth WHERE doctype=%s AND name=%s AND fieldname=%s",
+			(row["doctype"], row["name"], row["fieldname"]),
+		)
+
+	def test_existing_target_credentials_are_kept_for_every_doctype(self):
+		rows = [
+			self.credential("User"),
+			self.credential(
+				"User", "api_secret", encrypted=1, decryptable=True, plaintext="mrp-local-secret"
+			),
+			self.credential("Email Account", encrypted=1),
+			self.credential("YRP Stock Settings", "sms_old_database_password", encrypted=1),
+		]
+		for row in rows:
+			frappe.db.sql(
+				"INSERT INTO __Auth (doctype,name,fieldname,password,encrypted) VALUES (%s,%s,%s,%s,%s) "
+				"ON DUPLICATE KEY UPDATE name=name",
+				(row["doctype"], row["name"], row["fieldname"], "erp-local-value", row["encrypted"]),
+			)
+		before = [self.read_auth(row) for row in rows]
+		source = SimpleNamespace(iter_auth_rows=lambda: iter(rows))
+		for options in ({}, {"verify": True}, {"dry_run": True}):
+			with self.subTest(options=options):
+				result = run_auth(self.plan, source, preserved_users={}, **options)
+				self.assertEqual(result["kept_target"], len(rows))
+				self.assertEqual(result["reencrypted"], 0)
+				self.assertEqual(result["raw_preserved"], 0)
+				self.assertEqual(result["failures"], [])
+				self.assertEqual(result["status"], "Pass")
+				self.assertEqual([self.read_auth(row) for row in rows], before)
+
+	def test_absent_credentials_are_inserted_and_reruns_keep_them(self):
+		rows = [
+			self.credential("User"),
+			self.credential(
+				"User", "api_secret", encrypted=1, decryptable=True, plaintext="mrp-local-secret"
+			),
+			self.credential("Email Account", encrypted=1, password="mrp-local-ciphertext"),
+		]
+		for row in rows:
+			self.assertFalse(self.read_auth(row))
+		source = SimpleNamespace(iter_auth_rows=lambda: iter(rows))
+		result = run_auth(self.plan, source, preserved_users={})
+		self.assertEqual(result["reencrypted"], 1)
+		self.assertEqual(result["raw_preserved"], 2)
+		self.assertEqual(result["kept_target"], 0)
+		self.assertEqual(get_decrypted_password("User", self.name, "api_secret"), "mrp-local-secret")
+		for row in (rows[0], rows[2]):
+			self.assertEqual(
+				frappe.db.sql(
+					"SELECT password, encrypted FROM __Auth WHERE doctype=%s AND name=%s AND fieldname=%s",
+					(row["doctype"], row["name"], row["fieldname"]),
+				)[0],
+				(row["password"], row["encrypted"]),
+			)
+		before = [self.read_auth(row) for row in rows]
+		self.assertEqual(run_auth(self.plan, source, preserved_users={})["kept_target"], 3)
+		self.assertEqual([self.read_auth(row) for row in rows], before)
+
+	def test_preserved_user_never_receives_absent_credentials(self):
+		rows = [
+			self.credential("User"),
+			self.credential(
+				"User", "api_secret", encrypted=1, decryptable=True, plaintext="mrp-local-secret"
+			),
+		]
+		source = SimpleNamespace(iter_auth_rows=lambda: iter(rows))
+		for preserved_users in ({self.name: self.name}, None):
+			for verify in (False, True):
+				with self.subTest(preserved_users=preserved_users, verify=verify):
+					result = run_auth(self.plan, source, preserved_users=preserved_users, verify=verify)
+					self.assertEqual(result["kept_target"], 2)
+					self.assertEqual(result["status"], "Pass")
+					for row in rows:
+						self.assertFalse(self.read_auth(row))
 
 
 class MetadataOnlyRetiredTest(unittest.TestCase):

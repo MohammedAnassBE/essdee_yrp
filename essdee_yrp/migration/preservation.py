@@ -1,16 +1,15 @@
 """Lossless auxiliary phases of the original load, not post-migration repairs.
 
-Orphan child rows retain their original missing-parent references. Credentials
+Orphan child rows retain their original missing-parent references. Missing credentials
 are re-encrypted when the source key works; otherwise their exact ciphertext is
 preserved with an explicit source-key warning, never described as operational.
 """
 
 import json
 from collections import Counter, defaultdict
-from hmac import compare_digest
 
 import frappe
-from frappe.utils.password import get_decrypted_password, set_encrypted_password
+from frappe.utils.password import encrypt
 
 from essdee_yrp.migration.engine import (
 	MigrationError,
@@ -50,8 +49,8 @@ def auth_identity(row, plan):
 	return spec.target, name, fieldname
 
 
-def run_auth(plan, source, *, dry_run=False, verify=False):
-	counts = Counter()
+def run_auth(plan, source, *, dry_run=False, verify=False, preserved_users=None):
+	counts = Counter(kept_target=0, reencrypted=0, raw_preserved=0)
 	unavailable = []
 	orphans = []
 	failures = []
@@ -66,6 +65,19 @@ def run_auth(plan, source, *, dry_run=False, verify=False):
 			orphans.append(identity)
 		decryptable = bool(row.get("encrypted") and row.get("decryptable"))
 		counts["total"] += 1
+		# Restored ERP Users own even absent credentials. Without an ownership
+		# map, conservatively protect every User already present on the target.
+		if doctype == "User" and (
+			name in preserved_users if preserved_users is not None else frappe.db.exists("User", name)
+		):
+			counts["kept_target"] += 1
+			continue
+		if frappe.db.sql(
+			"SELECT 1 FROM __Auth WHERE doctype=%s AND name=%s AND fieldname=%s",
+			(doctype, name, fieldname),
+		):
+			counts["kept_target"] += 1
+			continue
 		counts["reencrypted" if decryptable else "raw_preserved"] += 1
 		if row.get("encrypted") and not decryptable:
 			unavailable.append(identity)
@@ -82,33 +94,20 @@ def run_auth(plan, source, *, dry_run=False, verify=False):
 		# __Auth can legitimately outlive a deleted child. Preserve its value and
 		# original identity without inventing a live record or dropping history.
 		if verify:
-			if decryptable:
-				try:
-					actual = get_decrypted_password(doctype, name, fieldname, raise_exception=False)
-				except Exception:
-					actual = None
-				matches = actual is not None and compare_digest(
-					str(actual).encode(), str(row["plaintext"]).encode()
-				)
-			else:
-				actual = frappe.db.sql(
-					"SELECT password, encrypted FROM __Auth WHERE doctype=%s AND name=%s AND fieldname=%s",
-					(doctype, name, fieldname),
-				)
-				matches = (
-					bool(actual)
-					and int(actual[0][1]) == int(row["encrypted"])
-					and compare_digest(str(actual[0][0]).encode(), str(row["password"]).encode())
-				)
-			if not matches:
-				failures.append(f"Credential value mismatch: {doctype} {name}.{fieldname}")
-		elif decryptable:
-			set_encrypted_password(doctype, name, row["plaintext"], fieldname=fieldname)
+			failures.append(f"Credential missing: {doctype} {name}.{fieldname}")
 		else:
+			# Encrypt before an insert-only write; the regular password setter
+			# upserts and could overwrite a credential created since our read.
 			frappe.db.sql(
 				"INSERT INTO __Auth (doctype,name,fieldname,password,encrypted) VALUES (%s,%s,%s,%s,%s) "
-				"ON DUPLICATE KEY UPDATE password=VALUES(password),encrypted=VALUES(encrypted)",
-				(doctype, name, fieldname, row["password"], int(row["encrypted"])),
+				"ON DUPLICATE KEY UPDATE name=name",
+				(
+					doctype,
+					name,
+					fieldname,
+					encrypt(row["plaintext"]) if decryptable else row["password"],
+					1 if decryptable else int(row["encrypted"]),
+				),
 			)
 	return {
 		**counts,
@@ -166,7 +165,9 @@ def run_retired_archive(migration_name, source, *, dry_run=False, verify=False, 
 	}
 
 
-def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missing_files=False):
+def run_preservation(
+	plan, source, *, migration_name, dry_run=False, allow_missing_files=False, preserved_users=None
+):
 	from essdee_yrp.migration.live import FrappeBulkTarget, _apply_contextual_defaults
 
 	reference_data = None
@@ -190,7 +191,7 @@ def run_preservation(plan, source, *, migration_name, dry_run=False, allow_missi
 				frappe.db.commit()
 	for doctype, batch in batches.items():
 		target.upsert_batch(doctype, batch)
-	auth = run_auth(plan, source, dry_run=dry_run)
+	auth = run_auth(plan, source, dry_run=dry_run, preserved_users=preserved_users)
 	retired = run_retired_archive(
 		migration_name, source, dry_run=dry_run, allow_missing_files=allow_missing_files
 	)

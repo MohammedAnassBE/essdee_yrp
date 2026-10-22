@@ -103,6 +103,7 @@ PRESERVED_TARGET_IDENTITY_DOCTYPES = frozenset(
 		"Item Variant Attribute",
 		"Supplier",
 		"UOM",
+		"User",
 	}
 )
 # Existing child rows on commonized ERP Items are target-owned as well.  The
@@ -628,6 +629,19 @@ class FrappeBulkTarget:
 	def upsert_batch(self, target_doctype: str, documents: list[dict[str, Any]]) -> None:
 		if not documents:
 			return
+		if target_doctype == "User":
+			new_users = []
+			for document in documents:
+				if target_name := frappe.db.exists("User", document["name"]):
+					self._merge_user_roles(document, target_name)
+				else:
+					new_users.append(document)
+			documents = new_users
+			if not documents:
+				return
+			# Supporting Users also pass here, before approved-data reconciliation.
+			# A unique alias collision must never turn their INSERT into an ERP update.
+			_reconcile_approved_user_unique_values(documents, dry_run=False)
 		if target_doctype == "Item Attribute Value":
 			self._reconcile_item_attribute_values(documents)
 		meta = frappe.get_meta(target_doctype)
@@ -664,6 +678,39 @@ class FrappeBulkTarget:
 			set_encrypted_password(target_doctype, name, value, fieldname=fieldname)
 		if target_doctype == "Supplier":
 			self._upsert_supplier_warehouses(documents)
+
+	def _merge_user_roles(self, document: Mapping[str, Any], target_name: str) -> None:
+		"""The restored ERP User owns its row, credentials and existing children."""
+		rows = frappe.get_all(
+			"Has Role",
+			filters={"parent": target_name, "parenttype": "User", "parentfield": "roles"},
+			fields=["role", "idx"],
+			limit_page_length=0,
+		)
+		roles = {_database_identity_key(row.role) for row in rows}
+		idx = max((row.idx or 0 for row in rows), default=0)
+		for child in document.get("roles") or []:
+			role = child.get("role")
+			if child.get("doctype") != "Has Role" or not role or not frappe.db.exists("Role", role):
+				raise MigrationError(f"Invalid source role for User {document['name']}: {role}")
+			key = _database_identity_key(role)
+			if key in roles:
+				continue
+			idx += 1
+			# A source child hash may already belong to a different target parent.
+			# Allocate a fresh identity and insert without saving the User parent.
+			frappe.get_doc(
+				{
+					**child,
+					"name": frappe.generate_hash(length=10),
+					"parent": target_name,
+					"parenttype": "User",
+					"parentfield": "roles",
+					"idx": idx,
+				}
+			).db_insert()
+			roles.add(key)
+		frappe.clear_document_cache("User", target_name)
 
 	def _replace_child_tables(self, meta, documents: list[dict[str, Any]]) -> None:
 		target_doctype = meta.name
@@ -1689,6 +1736,7 @@ def run_job(
 			migration_name=migration_name,
 			dry_run=mode == "dry_run",
 			allow_missing_files=allow_missing_files,
+			preserved_users=result["approved_frappe_data"]["preserved_target_identities"]["User"],
 		)
 		from essdee_yrp.migration.framework_history import run_framework_history
 
@@ -2698,6 +2746,12 @@ def _load_supporting_external_masters(
 		transformed = [
 			_transform_supporting_document(document, doctype, doctype_map) for document in documents
 		]
+		if doctype == "User" and reconciliation is not None:
+			reconciliation["preserved_target_identities"][doctype] = {
+				document["name"]: target_name
+				for document in documents
+				if (target_name := frappe.db.exists(doctype, document["name"]))
+			}
 		counts[doctype] = len(transformed)
 		if not dry_run:
 			target.upsert_batch(doctype, transformed)
@@ -2826,6 +2880,7 @@ def _run_approved_frappe_data(
 	skipped: dict[str, int] = {}
 	processed = 0
 	documents: list[dict[str, Any]] = []
+	preserved_users = {}
 
 	for source_document in source.iter_approved_frappe_documents():
 		doctype = str(source_document.get("doctype") or "")
@@ -2835,6 +2890,8 @@ def _run_approved_frappe_data(
 		if position < last_order:
 			raise MigrationError("Approved Frappe source order is not deterministic")
 		last_order = position
+		if doctype == "User" and (target_name := frappe.db.exists(doctype, source_document["name"])):
+			preserved_users[source_document["name"]] = target_name
 		document = _prepare_approved_frappe_document(source_document, plan)
 		if document is None:
 			skipped[doctype] = skipped.get(doctype, 0) + 1
@@ -2866,7 +2923,8 @@ def _run_approved_frappe_data(
 		if current_doctype != doctype:
 			flush()
 			current_doctype = doctype
-		_assert_approved_frappe_child_identities(document)
+		if doctype != "User" or document["name"] not in preserved_users:
+			_assert_approved_frappe_child_identities(document)
 		batch.append(document)
 		if len(batch) >= batch_size:
 			flush()
@@ -2885,6 +2943,7 @@ def _run_approved_frappe_data(
 		"unavailable_in_frappe_16": list(APPROVED_FRAPPE_UNAVAILABLE_IN_F16),
 		"default_value_reconciliation": default_value_reconciliation,
 		"user_unique_value_reconciliation": user_unique_value_reconciliation,
+		"preserved_target_identities": {"User": preserved_users},
 	}
 
 
@@ -2969,19 +3028,12 @@ def _reconcile_approved_default_values(
 
 
 def _reconcile_approved_user_unique_values(
-	documents: Iterable[dict[str, Any]], *, dry_run: bool
+	documents: Iterable[dict[str, Any]],
+	*,
+	dry_run: bool,
+	preserved_users: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-	"""Preserve both User identities when optional login aliases collide.
-
-	The ERP clone and the MRP source can contain separate User records for the
-	same person. ``User.name``/email is the authoritative identity referenced by
-	historical documents, while username, mobile number, and API key are optional
-	unique login aliases. A target-only identity must not be overwritten or
-	merged merely because one of those aliases matches. Keep the existing ERP
-	alias and clear the conflicting alias on the migrated source identity.
-	When both identities are migrated, release the obsolete target alias before
-	User writes so source alias reassignment works in either insertion order.
-	"""
+	"""Keep ERP login aliases; clear collisions only on new source Users."""
 
 	users = {
 		_database_identity_key(document["name"]): document
@@ -2990,9 +3042,15 @@ def _reconcile_approved_user_unique_values(
 	}
 	by_field: dict[str, int] = {}
 	preserved_target_users: set[str] = set()
-	releases: set[tuple[str, str, str]] = set()
+	aliases: dict[tuple[str, str], str] = {}
 	for document in users.values():
 		source_name = str(document["name"])
+		if (
+			source_name in preserved_users
+			if preserved_users is not None
+			else frappe.db.exists("User", source_name)
+		):
+			continue
 		for fieldname in APPROVED_USER_OPTIONAL_UNIQUE_FIELDS:
 			value = document.get(fieldname)
 			if value in (None, ""):
@@ -3003,43 +3061,24 @@ def _reconcile_approved_user_unique_values(
 				pluck="name",
 				limit_page_length=0,
 			)
-			protected = []
-			for name in collisions:
-				owner = users.get(_database_identity_key(name))
-				if owner is None or fieldname not in owner:
-					protected.append(str(name))
-					continue
-				if _database_identity_key(owner.get(fieldname)) == _database_identity_key(value):
-					raise MigrationError(
-						f"Source Users {source_name} and {name} share unique field {fieldname}"
-					)
-				# This identity is also migrated, so its old ERP alias is about
-				# to be replaced. Release it before any User batch is inserted:
-				# source ordering and alias swaps must not lose incoming values.
-				releases.add((str(name), fieldname, str(value)))
-			if protected:
-				# Target-only identities retain their existing login aliases.
+			if collisions:
 				document[fieldname] = None
 				by_field[fieldname] = by_field.get(fieldname, 0) + 1
-				preserved_target_users.update(protected)
+				preserved_target_users.update(collisions)
+				continue
+			key = (fieldname, _database_identity_key(value))
+			if owner := aliases.get(key):
+				raise MigrationError(f"Source Users {source_name} and {owner} share unique field {fieldname}")
+			aliases[key] = source_name
 
-	if not dry_run:
-		for name, fieldname, old_value in sorted(releases):
-			frappe.db.set_value(
-				"User",
-				{"name": name, fieldname: old_value},
-				fieldname,
-				None,
-				update_modified=False,
-			)
 	return {
 		"status": "Dry Run" if dry_run else "Reconciled",
 		"source_users": len(users),
 		"conflicting_optional_values": sum(by_field.values()),
 		"cleared_source_aliases": sum(by_field.values()),
 		"preserved_target_users": len(preserved_target_users),
-		"released_migrating_aliases": 0 if dry_run else len(releases),
-		"planned_alias_reassignments": len(releases),
+		"released_migrating_aliases": 0,
+		"planned_alias_reassignments": 0,
 		"by_field": dict(sorted(by_field.items())),
 	}
 
@@ -3301,7 +3340,11 @@ def _verify_target_setup_state() -> dict[str, Any]:
 
 
 def _verify_approved_frappe_data(
-	plan: MigrationPlan, source: F15SourceBridge, *, batch_size: int = 250
+	plan: MigrationPlan,
+	source: F15SourceBridge,
+	*,
+	batch_size: int = 250,
+	preserved_users: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
 	batch: list[dict[str, Any]] = []
 	counts: dict[str, int] = {}
@@ -3322,7 +3365,7 @@ def _verify_approved_frappe_data(
 		nonlocal batch, verified_documents, verified_values, skipped_password_values
 		if not batch:
 			return
-		result = _verify_transformed_value_batch(batch, plan, **caches)
+		result = _verify_transformed_value_batch(batch, plan, preserved_users=preserved_users, **caches)
 		verified_documents += result["documents"]
 		verified_values += result["values"]
 		skipped_password_values += result["skipped_password_values"]
@@ -3338,11 +3381,17 @@ def _verify_approved_frappe_data(
 		counts[doctype] = counts.get(doctype, 0) + 1
 		documents.append(document)
 
-	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(documents, dry_run=True)
+	user_unique_value_reconciliation = _reconcile_approved_user_unique_values(
+		documents, dry_run=True, preserved_users=preserved_users
+	)
 	for document in documents:
 		doctype = str(document.get("doctype") or "")
 		batch.append(document)
-		for fieldname, expected in (document.get("__migration_passwords") or {}).items():
+		preserved_user = doctype == "User" and (
+			preserved_users is None or document["name"] in preserved_users
+		)
+		passwords = {} if preserved_user else document.get("__migration_passwords") or {}
+		for fieldname, expected in passwords.items():
 			try:
 				actual = get_decrypted_password(doctype, document["name"], fieldname, raise_exception=False)
 			except Exception:
@@ -4820,11 +4869,27 @@ def _verify_counts(
 	identity = _verify_source_identities(plan, source, migration_name)
 	values = _verify_source_values(plan, source, migration_name)
 	supporting_business_masters = _verify_supporting_business_master_identities(source)
-	approved_frappe_data = _verify_approved_frappe_data(plan, source)
+	approved_reconciliation = (migration_report.get("approved_frappe_data") or {}).get(
+		"preserved_target_identities"
+	)
+	approved_frappe_data = _verify_approved_frappe_data(
+		plan,
+		source,
+		preserved_users=approved_reconciliation.get("User", {})
+		if approved_reconciliation is not None
+		else None,
+	)
 	from essdee_yrp.migration.preservation import run_auth, run_retired_archive, verify_orphan_values
 
 	orphan_values = verify_orphan_values(plan, source)
-	auth = run_auth(plan, source, verify=True)
+	auth = run_auth(
+		plan,
+		source,
+		verify=True,
+		preserved_users=approved_reconciliation.get("User", {})
+		if approved_reconciliation is not None
+		else None,
+	)
 	retired = run_retired_archive(migration_name, source, verify=True)
 	from essdee_yrp.migration.framework_history import run_framework_history
 
@@ -5113,20 +5178,45 @@ def _verify_transformed_value_batch(
 	fieldtypes_cache: dict[str, dict[str, str]] | None = None,
 	numeric_scales_cache: dict[str, dict[str, int]] | None = None,
 	attachment_url_relocations: Mapping[tuple[str, str, str, str], set[str]] | None = None,
+	preserved_users: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
 	columns_cache = columns_cache if columns_cache is not None else {}
 	fieldtypes_cache = fieldtypes_cache if fieldtypes_cache is not None else {}
 	numeric_scales_cache = numeric_scales_cache if numeric_scales_cache is not None else {}
 	grouped: dict[str, list[dict[str, Any]]] = {}
 	skipped_password_values = 0
+	verified_documents = 0
+	verified_values = 0
+	failures: list[str] = []
 	for document in documents:
+		if document["doctype"] == "User" and (preserved_users is None or document["name"] in preserved_users):
+			# Child hashes, ordering, profile values and credentials are target-owned.
+			# Only identity presence and the source role subset are required.
+			name = document["name"]
+			verified_documents += 1
+			skipped_password_values += len(document.get("__migration_passwords") or {})
+			if not frappe.db.exists("User", name):
+				failures.append(f"Missing User {name}")
+				continue
+			roles = {
+				_database_identity_key(role)
+				for role in frappe.get_all(
+					"Has Role",
+					filters={"parent": name, "parenttype": "User", "parentfield": "roles"},
+					pluck="role",
+					limit_page_length=0,
+				)
+			}
+			for child in document.get("roles") or []:
+				role = child.get("role")
+				verified_values += 1
+				if _database_identity_key(role) not in roles or not frappe.db.exists("Role", role):
+					failures.append(f"Missing source role for User {name}: {role}")
+			continue
 		skipped_password_values += _collect_expected_value_rows(
 			strip_item_migration_context(document), plan, grouped
 		)
 
-	verified_documents = 0
-	verified_values = 0
-	failures: list[str] = []
 	normalized_attachment_urls: list[str] = []
 	normalized_numeric_values: list[str] = []
 	for doctype, expected_rows in grouped.items():

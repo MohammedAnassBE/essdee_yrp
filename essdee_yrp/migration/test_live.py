@@ -6,6 +6,7 @@ import json
 import runpy
 import unittest
 from contextlib import ExitStack
+from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 import frappe
+from frappe.utils.password import get_decrypted_password, update_password
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_mrp_data_migration.sd_yrp_mrp_data_migration import (
 	MRPDataMigration,
@@ -46,6 +48,7 @@ from essdee_yrp.migration.live import (
 	_generated_supplier_warehouse_names,
 	_include_reset_generated_audit_scope,
 	_is_verified_attachment_url,
+	_load_supporting_external_masters,
 	_mark_reset_started,
 	_migration_contract_fingerprint,
 	_migration_generated_identity_allowances,
@@ -3727,3 +3730,197 @@ class MetadataOnlyFilesTest(unittest.TestCase):
 		self.row["missing_blob"] = 1
 		with self.assertRaisesRegex(MigrationError, "has no source blob"):
 			_run_files("RUN", self.plan, self.source, dry_run=True)
+
+
+class MigrationUserPreservationTest(unittest.TestCase):
+	"""Exercise the live SQL writer on local-only rows, rolled back after each test."""
+
+	def setUp(self):
+		frappe.db.savepoint("migration_user_preservation")
+		self.addCleanup(frappe.db.rollback, save_point="migration_user_preservation")
+		self.target = FrappeBulkTarget()
+		self.prefix = "_Test Migration User " + frappe.generate_hash(length=10)
+		self.name = self.prefix.lower().replace(" ", "-") + "@example.invalid"
+		self.roles = [self.prefix + suffix for suffix in (" ERP", " Shared", " MRP")]
+		self.target.upsert_batch(
+			"Role", [{"doctype": "Role", "name": role, "role_name": role} for role in self.roles]
+		)
+		self.target.upsert_batch(
+			"Email Account",
+			[
+				{
+					"doctype": "Email Account",
+					"name": self.prefix,
+					"email_id": self.name,
+					"enable_incoming": 0,
+					"enable_outgoing": 0,
+				}
+			],
+		)
+		self.source_document = {
+			"doctype": "User",
+			"name": self.name,
+			"email": self.name,
+			"first_name": "MRP local test",
+			"enabled": 1,
+			"username": self.name.split("@")[0],
+			"mobile_no": frappe.generate_hash(length=10),
+			"api_key": frappe.generate_hash(length=15),
+			"time_zone": "Asia/Kolkata",
+			"send_welcome_email": 0,
+			"roles": [
+				{"doctype": "Has Role", "name": frappe.generate_hash(length=10), "role": role}
+				for role in self.roles[1:]
+			],
+			"block_modules": [
+				{"doctype": "Block Module", "name": frappe.generate_hash(length=10), "module": "Desk"}
+			],
+			"user_emails": [
+				{
+					"doctype": "User Email",
+					"name": frappe.generate_hash(length=10),
+					"email_account": self.prefix,
+					"email_id": self.name,
+				}
+			],
+			"social_logins": [
+				{
+					"doctype": "User Social Login",
+					"name": frappe.generate_hash(length=10),
+					"provider": "local-test",
+					"userid": "mrp-local-id",
+				}
+			],
+			"__migration_passwords": {"password": "mrp-local-password", "api_secret": "mrp-local-secret"},
+		}
+		doctypes = ["User", *(field.options for field in frappe.get_meta("User").get_table_fields())]
+		self.plan = SimpleNamespace(
+			specs={}, target_schemas={doctype: frappe.get_meta(doctype).as_dict() for doctype in doctypes}
+		)
+
+	def snapshot(self):
+		return {
+			"row": frappe.db.get_value("User", self.name, "*", as_dict=True),
+			"children": {
+				field.fieldname: frappe.get_all(
+					field.options,
+					filters={"parent": self.name, "parenttype": "User", "parentfield": field.fieldname},
+					fields=["*"],
+					order_by="name",
+					limit_page_length=0,
+				)
+				for field in frappe.get_meta("User").get_table_fields()
+			},
+			"auth": frappe.db.sql(
+				"SELECT * FROM __Auth WHERE doctype='User' AND name=%s ORDER BY fieldname",
+				(self.name,),
+			),
+		}
+
+	def test_existing_user_keeps_row_auth_and_children_across_both_phases(self):
+		erp = deepcopy(self.source_document)
+		erp.update(first_name="ERP local test", enabled=0, username=None, mobile_no=None, time_zone="UTC")
+		erp["api_key"] = frappe.generate_hash(length=15)
+		erp["roles"][1]["role"] = self.roles[0]
+		erp["block_modules"][0]["module"] = "Core"
+		erp["social_logins"][0]["userid"] = "erp-local-id"
+		erp["__migration_passwords"] = {"api_secret": "erp-local-secret"}
+		self.target.upsert_batch("User", [erp])
+		update_password(self.name, "erp-local-password")
+		before = self.snapshot()
+		# The incoming missing-role hash deliberately collides with an ERP-only role.
+		self.source_document["name"] = self.name.upper()
+		source = SimpleNamespace(
+			iter_supporting_documents=lambda doctype, names: (
+				iter([deepcopy(self.source_document)]) if doctype == "User" else iter([])
+			),
+			iter_approved_frappe_documents=lambda: iter([deepcopy(self.source_document)]),
+		)
+		reconciliation = {}
+		_load_supporting_external_masters(
+			self.target,
+			source,
+			{"User": {self.source_document["name"]}},
+			plan=self.plan,
+			dry_run=False,
+			reconciliation=reconciliation,
+		)
+		self.assertEqual(
+			reconciliation["preserved_target_identities"]["User"], {self.source_document["name"]: self.name}
+		)
+		with patch("essdee_yrp.migration.live.frappe.db.commit"):
+			report = _run_approved_frappe_data(self.plan, source, self.target, dry_run=False, batch_size=1)
+		self.target.upsert_batch("User", [self.source_document])
+		after = self.snapshot()
+		self.assertEqual(before["row"], after["row"])
+		self.assertEqual(before["auth"], after["auth"])
+		before_roles = before["children"].pop("roles")
+		after_roles = after["children"].pop("roles")
+		self.assertEqual(before["children"], after["children"])
+		self.assertEqual({row.role for row in after_roles}, set(self.roles))
+		self.assertEqual(len(after_roles), 3)
+		for row in before_roles:
+			self.assertIn(row, after_roles)
+		preserved = report["preserved_target_identities"]["User"]
+		self.assertEqual(preserved, {self.source_document["name"]: self.name})
+		verified = _verify_approved_frappe_data(self.plan, source, preserved_users=preserved)
+		self.assertEqual(verified["failures"], [])
+		self.assertEqual(verified["status"], "Pass")
+		self.assertEqual(after["auth"], self.snapshot()["auth"])
+
+	def test_new_user_inserts_source_row_children_and_passwords(self):
+		self.target.upsert_batch("User", [self.source_document])
+		verified = _verify_transformed_value_batch([self.source_document], self.plan, preserved_users={})
+		self.assertEqual(verified["failures"], [])
+		for fieldname, expected in self.source_document["__migration_passwords"].items():
+			self.assertEqual(get_decrypted_password("User", self.name, fieldname), expected)
+		self.assertEqual(frappe.db.get_value("User", self.name, "enabled"), 1)
+
+	def test_approved_new_user_is_verified_exactly_and_reports_no_preserved_identity(self):
+		source = SimpleNamespace(
+			iter_approved_frappe_documents=lambda: iter([deepcopy(self.source_document)])
+		)
+		with patch("essdee_yrp.migration.live.frappe.db.commit"):
+			report = _run_approved_frappe_data(self.plan, source, self.target, dry_run=False, batch_size=1)
+		self.assertEqual(report["preserved_target_identities"], {"User": {}})
+		verified = _verify_approved_frappe_data(self.plan, source, preserved_users={})
+		self.assertEqual(verified["failures"], [])
+		self.assertEqual(verified["verified_password_values"], 1)
+		frappe.db.set_value("User", self.name, "first_name", "unexpected change", update_modified=False)
+		self.assertEqual(
+			_verify_approved_frappe_data(self.plan, source, preserved_users={})["status"], "Failed"
+		)
+
+	def test_verification_rejects_missing_user_and_missing_source_role(self):
+		self.assertIn(
+			f"Missing User {self.name}",
+			_verify_transformed_value_batch([self.source_document], self.plan)["failures"],
+		)
+		erp = deepcopy(self.source_document)
+		erp["roles"] = erp["roles"][:1]
+		self.target.upsert_batch("User", [erp])
+		result = _verify_transformed_value_batch([self.source_document], self.plan)
+		self.assertEqual(result["failures"], [f"Missing source role for User {self.name}: {self.roles[2]}"])
+		self.assertEqual(len(self.snapshot()["children"]["roles"]), 1)
+
+	def test_new_user_alias_collision_cannot_update_an_existing_user(self):
+		self.target.upsert_batch("User", [self.source_document])
+		before = self.snapshot()
+		new_user = deepcopy(self.source_document)
+		new_user.update(name="new-" + self.name, email="new-" + self.name, first_name="Another local user")
+		for field in frappe.get_meta("User").get_table_fields():
+			for child in new_user.get(field.fieldname) or []:
+				child["name"] = frappe.generate_hash(length=10)
+		self.target.upsert_batch("User", [new_user])
+		self.assertEqual(before, self.snapshot())
+		self.assertEqual(frappe.db.get_value("User", new_user["name"], "first_name"), "Another local user")
+		for fieldname in ("username", "mobile_no", "api_key"):
+			self.assertIsNone(frappe.db.get_value("User", new_user["name"], fieldname))
+
+	def test_existing_user_rejects_a_role_that_has_not_been_loaded(self):
+		self.target.upsert_batch("User", [self.source_document])
+		before = self.snapshot()
+		self.source_document["roles"] = [{"doctype": "Has Role", "role": self.prefix + " Missing"}]
+		with self.assertRaisesRegex(MigrationError, "Invalid source role"):
+			self.target.upsert_batch("User", [self.source_document])
+		self.assertEqual(before, self.snapshot())

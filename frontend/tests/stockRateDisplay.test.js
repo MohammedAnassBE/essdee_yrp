@@ -23,6 +23,7 @@ const modules = {
 	"primevue/message": Container,
 	"../../components/common/LinkField.vue": LinkField,
 	"../../utils/stockItemComposer.js": stockItemComposer,
+	"../../api/frappe.js": { callMethod: async () => [] },
 }
 const Composer = loadComponent(resolve(rootPath, "frontend/src/components/stock/StockItemComposer.vue"), modules)
 const Matrix = loadComponent(resolve(rootPath, "frontend/src/components/stock/StockItemMatrix.vue"), {

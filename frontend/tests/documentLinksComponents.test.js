@@ -9,6 +9,7 @@ import * as autocompleteKeys from "../src/components/common/autocompleteKeys.js"
 import { MERCH_DETAIL_GROUPS } from "../src/departments/merch/lot/merchLotViews.js"
 
 import * as target from "../src/utils/linkTarget.js"
+import * as quickEntry from "../src/utils/quickEntry.js"
 const nodes = (root, type) => findNodes(root, node => node.type === type)
 const text = node => node.text + node.children.map(text).join("")
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
@@ -119,6 +120,8 @@ function linkField(props, push) {
 	return mountComponent(component("components/common/LinkField", push, {
 		"primevue/autocomplete": { setup: () => () => Vue.h("input") },
 		"./autocompleteKeys.js": autocompleteKeys,
+		"../../utils/quickEntry.js": quickEntry,
+		"./asyncQuickEntryDialog.js": () => null,
 		"../../api/frappe.js": { invalidatePendingReads() {}, searchLink: async () => [] },
 	}), props)
 }

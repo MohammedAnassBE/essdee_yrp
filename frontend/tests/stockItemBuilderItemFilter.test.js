@@ -12,6 +12,7 @@ function itemFilters(editor) {
 		"primevue/message": (props) => Vue.h("message", props),
 		"../../components/common/LinkField.vue": (props) => Vue.h("link-field", props),
 		"../../utils/stockItemComposer.js": stockItemComposer,
+		"../../api/frappe.js": { callMethod: async () => [] },
 	})
 	const root = mountComponent(component, { operation: "stock_entry", editor, modelValue: [], schemaLoader: async () => ({}) })
 	return findNodes(root, node => node.type === "link-field" && node.props.label === "Item *")[0].props.filters

@@ -38,6 +38,11 @@
 						{{ emptyStateMessage }}
 					</span>
 				</template>
+				<template v-if="showCreate" #footer>
+					<button type="button" class="link-field__create" @mousedown.prevent @click="openCreate">
+						<i class="pi pi-plus" aria-hidden="true" /> Create a new {{ createTarget }}
+					</button>
+				</template>
 			</AutoComplete>
 			<Button
 				v-if="canOpen && openHandler"
@@ -58,6 +63,14 @@
 				:title="`Open ${modelValue}`"
 			><i class="pi pi-arrow-up-right" aria-hidden="true" /></DocumentLink>
 		</span>
+		<QuickEntryDialog
+			v-if="createVisible"
+			v-model:visible="createVisible"
+			:doctype="createTarget"
+			:presets="linkCreateValues(filters, createValues)"
+			:query="createQuery"
+			@created="selectCreated"
+		/>
 		<small v-if="validationError && showValidationMessage" :id="`${resolvedInputId}-link-error`" class="link-field__error" role="alert">{{ validationError }}</small>
 		<small v-if="helpText" class="common-field__help">{{ helpText }}</small>
 	</div>
@@ -69,7 +82,9 @@ import Button from "primevue/button"
 import { computed, nextTick, ref, useId, watch } from "vue"
 
 import { invalidatePendingReads, searchLink } from "../../api/frappe.js"
-import { canReadDoctype } from "../../utils/linkTarget.js"
+import { canCreateDoctype, canReadDoctype } from "../../utils/linkTarget.js"
+import { linkCreateValues } from "../../utils/quickEntry.js"
+import QuickEntryDialog from "./asyncQuickEntryDialog.js"
 import DocumentLink from "./DocumentLink.vue"
 import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "./autocompleteKeys.js"
 
@@ -101,6 +116,10 @@ const props = defineProps({
 	dependencyMessage: { type: String, default: "Select the related field first" },
 	searchHandler: { type: Function, default: null },
 	openHandler: { type: Function, default: null },
+	allowCreate: { type: Boolean, default: true },
+	createDoctype: { type: String, default: "" },
+	createValues: { type: Object, default: null },
+	createValueField: { type: String, default: "name" },
 })
 
 const labelParts = computed(() => {
@@ -108,6 +127,9 @@ const labelParts = computed(() => {
 	return match ? { text: match[1], required: true } : { text: props.label, required: props.required }
 })
 const canOpen = computed(() => props.showOpenButton && props.modelValue && String(props.modelValue).trim() && canReadDoctype(props.doctype))
+
+const createTarget = computed(() => props.createDoctype || props.doctype)
+const showCreate = computed(() => props.allowCreate && !props.cellEditor && !props.disabled && canCreateDoctype(createTarget.value))
 
 const emit = defineEmits(["update:modelValue", "select", "clear", "validation", "finish", "cancel"])
 
@@ -120,6 +142,8 @@ const searchError = ref("")
 const validationError = ref("")
 const committedName = ref("")
 const committedLabel = ref("")
+const createVisible = ref(false)
+const createQuery = ref("")
 let requestSequence = 0
 let suggestionSequence = null
 let blurredOption = null
@@ -211,6 +235,23 @@ function select(event) {
 	emit("select", { name, label: committedLabel.value, row: selected })
 }
 
+function openCreate() {
+	createQuery.value = typeof inputValue.value === "string" ? inputValue.value.trim() : ""
+	input.value?.hide()
+	createVisible.value = true
+}
+
+function selectCreated({ doc, label }) {
+	const name = doc?.[props.createValueField]
+	if (name === undefined || name === null || name === "") return
+	setValidation()
+	committedName.value = name
+	committedLabel.value = props.createValueField === "name" ? label || String(name) : String(name)
+	inputValue.value = { name, label: committedLabel.value }
+	emit("update:modelValue", name)
+	emit("select", { name, label: committedLabel.value, row: doc })
+}
+
 function updateInput(value) {
 	blurredOption = null
 	if (typeof value === "string") {
@@ -246,7 +287,7 @@ async function focusFirstOption() {
 function onBlur() {
 	// A tab click blurs the input before its before-change handler runs.
 	blurredOption = exactOption()
-	rejectUnselected()
+	if (!createVisible.value) rejectUnselected()
 	restoreCommittedValue({ keepBlurredOption: true })
 	input.value?.hide()
 }
@@ -395,6 +436,25 @@ defineExpose({ focus, open, finishEdit })
 	align-items: center;
 	gap: 6px;
 	padding: 8px 10px;
+}
+
+.link-field__create {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	border-top: 1px solid var(--erp-border);
+	background: transparent;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	text-align: left;
+	cursor: pointer;
+}
+
+.link-field__create:hover {
+	background: var(--erp-surface-soft);
 }
 
 .link-field__option {

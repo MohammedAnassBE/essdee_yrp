@@ -66,6 +66,9 @@
 						:label="`${attribute} *`"
 						doctype="Item Attribute Value"
 						:search-handler="(text) => searchAttribute(attribute, text)"
+						create-doctype="YRP Item Attribute Value"
+						:create-values="{ attribute_name: attribute }"
+						create-value-field="attribute_value"
 						:show-open-button="false"
 						:disabled="disabled"
 						@update:model-value="setAttribute(attribute, $event)"
@@ -137,7 +140,8 @@ import Message from "primevue/message"
 import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
-import { matchAttributeValues, mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
+import { callMethod } from "../../api/frappe.js"
+import { mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -289,8 +293,11 @@ function setAttribute(attribute, value) {
 	}
 }
 
-function searchAttribute(attribute, text) {
-	return matchAttributeValues(itemSchema.value?.attribute_values?.[attribute], text).map((value) => ({ name: value, label: value }))
+async function searchAttribute(attribute, text) {
+	const values = await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values", {
+		txt: text, attribute, item: itemSchema.value?.item, page_len: 20,
+	})
+	return (values || []).map((value) => ({ name: value, label: value }))
 }
 
 async function stageItem() {

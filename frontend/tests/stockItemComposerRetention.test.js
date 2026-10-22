@@ -19,6 +19,7 @@ function mountComposer(operation) {
 	const component = loadComponent(resolve(rootPath, "frontend/src/components/stock/StockItemComposer.vue"), {
 		"primevue/button": Button, "primevue/message": Message, "../../components/common/LinkField.vue": LinkField,
 		"../../utils/stockItemComposer.js": stockItemComposer,
+		"../../api/frappe.js": { callMethod: async () => [] },
 	})
 	const lines = []
 	const props = Vue.reactive({ operation, editor, modelValue: [], schemaLoader: async () => structuredClone(schema), "onUpdate:modelValue": (value) => { props.modelValue = value; lines.push(value) } })

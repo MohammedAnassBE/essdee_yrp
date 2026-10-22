@@ -5,6 +5,10 @@ export function canReadDoctype(doctype, boot = globalThis.window?.frappe?.boot) 
 	return Array.isArray(boot?.user?.can_read) && boot.user.can_read.includes(doctype)
 }
 
+export function canCreateDoctype(doctype, boot = globalThis.window?.frappe?.boot) {
+	return Boolean(doctype) && Array.isArray(boot?.user?.can_create) && boot.user.can_create.includes(doctype)
+}
+
 export function deskDocumentPath(doctype, name) {
 	const slug = doctype.toLowerCase().replace(/ /g, "-")
 	return `/desk/${slug}/${encodeURIComponent(name)}`

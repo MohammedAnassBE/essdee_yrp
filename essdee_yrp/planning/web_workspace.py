@@ -83,6 +83,10 @@ def get_capabilities() -> dict:
 		"lots": _with_label("Lot", permission_flags("SD YRP Lot", ("read", "write"))),
 		"production_orders": sales_sections.get("production_orders") or {},
 		"work_orders": fabric_store_sections.get("work_orders") or {},
+		"box_stickers": _with_label(
+			"Box Sticker Print",
+			permission_flags("SD YRP Box Sticker Print", ("read", "create", "write", "submit")),
+		),
 		"reports": _reports_section(sewing_sections, finishing_sections),
 	}
 	return {"sections": {key: flags for key, flags in sections.items() if flags.get("can_read")}}

@@ -20,3 +20,27 @@ class TestPlanningReportsSection(TestCase):
 			"ppo_report": {"label": "PPO Report", "can_read": True, "can_export": True},
 		})
 		self.assertEqual(self.production(False, False), {})
+
+
+class TestPlanningBoxStickerSection(TestCase):
+	def sections(self, granted):
+		empty = {"sections": {}}
+		with (
+			patch.object(web_workspace.sewing_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.finishing_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.sales_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.fabric_store_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.cutting_capabilities, "get_capabilities", return_value={}),
+			patch.object(web_workspace, "_reports_section", return_value={"can_read": False}),
+			patch.object(
+				web_workspace.frappe, "has_permission",
+				side_effect=lambda doctype, ptype, doc=None: doctype == "SD YRP Box Sticker Print" and ptype in granted,
+			),
+		):
+			return web_workspace.get_capabilities()["sections"]
+
+	def test_box_sticker_card_follows_box_sticker_print_read(self):
+		self.assertEqual(self.sections({"read", "create"}), {"box_stickers": {
+			"label": "Box Sticker Print", "can_read": True, "can_create": True, "can_write": False, "can_submit": False,
+		}})
+		self.assertEqual(self.sections({"create"}), {})

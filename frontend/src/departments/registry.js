@@ -94,7 +94,7 @@ export const departments = [
 		label: "Planning",
 		shortLabel: "PL",
 		path: "/planning",
-		sections: { cutting_plans: "cutting-plans", sewing_plans: "sewing-plans", finishing_plans: "finishing-plans", lots: "lots", production_orders: "production-orders", work_orders: "work-orders", reports: "reports" },
+		sections: { cutting_plans: "cutting-plans", sewing_plans: "sewing-plans", finishing_plans: "finishing-plans", lots: "lots", production_orders: "production-orders", work_orders: "work-orders", box_stickers: "box-sticker-prints", reports: "reports" },
 		component: () => import("./Planning.vue"),
 	},
 	{

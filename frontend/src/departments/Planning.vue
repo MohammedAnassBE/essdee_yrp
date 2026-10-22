@@ -7,7 +7,7 @@
 			:items="visibleWorkspaces"
 			:loading="loading"
 			empty-text="No permitted Planning workspaces"
-			:skeleton-count="7"
+			:skeleton-count="8"
 		/>
 	</DepartmentPage>
 </template>

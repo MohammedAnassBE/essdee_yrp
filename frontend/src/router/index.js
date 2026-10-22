@@ -737,6 +737,10 @@ const routes = [
 		path: "/planning/work-orders/:workOrderId", name: PLANNING_ROUTES.workOrder, component: FabricWorkOrder,
 		props: { backTo: "/planning/work-orders", backLabel: "Work Orders", viewRouteName: PLANNING_ROUTES.workOrder, newRouteName: PLANNING_ROUTES.workOrderNew, editRouteName: PLANNING_ROUTES.workOrderEdit },
 	},
+	{
+		path: "/planning/box-sticker-prints", name: PLANNING_ROUTES.boxStickers, component: CutPanelStoreSection,
+		props: { section: "box_stickers", backTo: "/planning", backLabel: "Planning" },
+	},
 	{ path: "/planning/reports", name: PLANNING_ROUTES.reports, component: PlanningReports },
 	{ path: "/merch/item-production-details", name: MERCH_ROUTES.ipds, component: IpdList },
 	{ path: "/merch/lots", name: MERCH_ROUTES.lots, component: MerchLotsList },

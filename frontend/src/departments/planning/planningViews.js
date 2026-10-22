@@ -16,6 +16,7 @@ export const PLANNING_ROUTES = {
 	workOrderNew: "planning-work-order-new",
 	workOrder: "planning-work-order",
 	workOrderEdit: "planning-work-order-edit",
+	boxStickers: "planning-box-stickers",
 	reports: "planning-reports",
 }
 
@@ -61,6 +62,13 @@ export const PLANNING_WORKSPACES = [
 		description: "Process orders, deliverables and production movements.",
 		icon: "pi pi-briefcase",
 		to: "/planning/work-orders",
+	},
+	{
+		key: "box_stickers",
+		label: "Box Sticker Print",
+		description: "Prepare, preview and print size-based box labels.",
+		icon: "pi pi-tags",
+		to: "/planning/box-sticker-prints",
 	},
 	{
 		key: "reports",

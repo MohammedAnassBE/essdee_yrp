@@ -821,7 +821,7 @@ def get_web_laysheet(cutting_plan=None, cutting_laysheet=None, cutting_order=Non
 			and doc.cutting_laysheet_bundles
 			and not doc.goods_received_note
 		),
-		"can_approve": bool(can_write and doc.status == "Approval Pending" and can_approve_grammage()),
+		"can_approve": bool(doc.status == "Approval Pending" and can_approve_grammage()),
 		"can_cancel": bool(can_write and doc.status != "Cancelled" and "System Manager" in roles),
 		"can_revert_labels": bool(
 			can_write and doc.status == "Label Printed" and "System Manager" in roles
@@ -2346,8 +2346,8 @@ def request_grammage_approval(doc_name):
 
 @frappe.whitelist()
 def approve_grammage(doc_name):
-	"""Approve grammage for a CLS that is in Approval Pending status."""
-	frappe.get_doc("SD YRP Cutting LaySheet", doc_name).check_permission("write")
+	"""Approve grammage for a CLS that is in Approval Pending status; the approval role replaces write access."""
+	frappe.get_doc("SD YRP Cutting LaySheet", doc_name).check_permission("read")
 	settings = frappe.get_single("SD YRP MRP Settings")
 	approval_roles = [row.role for row in (settings.get("cls_grammage_approval_roles") or [])]
 	user_roles = frappe.get_roles(frappe.session.user)

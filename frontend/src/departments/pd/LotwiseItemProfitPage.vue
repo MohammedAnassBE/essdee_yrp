@@ -99,6 +99,7 @@ import {
 	LOTWISE_SECTIONS,
 	LOTWISE_TABLE_COLUMNS,
 	PD_ROUTES,
+	copiedLotwiseDraft,
 	lotwiseChildMeta,
 	mergeComputedValues,
 	pdRecordPath,
@@ -149,13 +150,29 @@ const parentFields = computed(() => {
 		filters[field.fieldname] ? { ...field, link_filters: filters[field.fieldname] } : field,
 	]))
 })
-const documentActions = computed(() => !isNew.value && permissions.value.can_delete ? [{
-	key: "delete",
-	label: "Delete",
-	icon: "pi pi-trash",
-	disabled: pageBusy.value,
-	command: () => { deleteVisible.value = true },
-}] : [])
+const documentActions = computed(() => {
+	if (isNew.value || !form.value.name) return []
+	return [
+		{
+			key: "duplicate",
+			label: "Duplicate",
+			icon: "pi pi-copy",
+			menuOnly: true,
+			allowed: permissions.value.can_create,
+			command: duplicateLotwise,
+		},
+		{
+			key: "delete",
+			label: "Delete",
+			icon: "pi pi-trash",
+			allowed: permissions.value.can_delete,
+			command: () => { deleteVisible.value = true },
+		},
+	].filter((action) => action.allowed).map(({ allowed: _allowed, ...action }) => ({
+		...action,
+		disabled: pageBusy.value,
+	}))
+})
 
 function clone(value) {
 	if (value === undefined) return undefined
@@ -179,14 +196,16 @@ function indexMetadata(metadata) {
 	return indexed
 }
 
-function applyWorkspace(payload) {
+function applyWorkspace(payload, source = null) {
 	workspace.value = {
 		...payload,
 		modified: payload?.modified || "",
 		permissions: payload?.permissions || {},
 		link_filters: payload?.link_filters || {},
 	}
-	form.value = clone(payload?.record || {})
+	form.value = source
+		? copiedLotwiseDraft(payload?.record, source.record)
+		: clone(payload?.record || {})
 }
 
 function commandValues() {
@@ -218,14 +237,19 @@ async function load() {
 	actionError.value = ""
 	deleteVisible.value = false
 	try {
+		const copyName = isNew.value ? String(route.query.copy || "").trim() : ""
 		const request = getLotwiseWorkspace({
 			name: isNew.value ? null : props.profitId,
 			product: isNew.value ? String(route.query.product || "") || null : null,
 		})
-		const [payload, metadata] = await Promise.all([request, getMeta(LOTWISE_DOCTYPE)])
+		const [payload, metadata, source] = await Promise.all([
+			request,
+			getMeta(LOTWISE_DOCTYPE),
+			copyName ? getLotwiseWorkspace({ name: copyName }) : Promise.resolve(null),
+		])
 		if (isUnmounted || sequence !== loadSequence) return
 		metadataByName.value = indexMetadata(metadata)
-		applyWorkspace(payload || {})
+		applyWorkspace(payload || {}, source)
 	} catch (reason) {
 		if (isUnmounted || sequence !== loadSequence) return
 		workspace.value = {}
@@ -347,6 +371,10 @@ async function save() {
 	}
 }
 
+function duplicateLotwise() {
+	router.push({ name: PD_ROUTES.lotwiseNew, query: { copy: form.value.name } })
+}
+
 async function confirmDelete() {
 	if (isNew.value || !permissions.value.can_delete || pageBusy.value) return
 	invalidateCommands()
@@ -371,7 +399,7 @@ function handleShortcut(event) {
 	runUserCommand("recalculate")
 }
 
-watch(() => [route.name, props.profitId, String(route.query.product || "")], load, { immediate: true })
+watch(() => [route.name, props.profitId, String(route.query.product || ""), route.query.copy], load, { immediate: true })
 onMounted(() => window.addEventListener("keydown", handleShortcut))
 onBeforeUnmount(() => {
 	isUnmounted = true

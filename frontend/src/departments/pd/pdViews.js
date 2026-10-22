@@ -228,6 +228,28 @@ const LOTWISE_COMPUTED_COLUMNS = {
 	other_costs: ["total"],
 }
 
+const LOTWISE_COPY_COLUMNS = {
+	...LOTWISE_TABLE_COLUMNS,
+	qty_rate_chart: [...LOTWISE_TABLE_COLUMNS.qty_rate_chart, "ratio"],
+	cloth_value: [...LOTWISE_TABLE_COLUMNS.cloth_value, "gsm", "ratio"],
+}
+
+export function copiedLotwiseDraft(defaultRecord, sourceRecord) {
+	const source = { ...(defaultRecord || {}), ...(sourceRecord || {}) }
+	const draft = {}
+	for (const fieldname of Object.values(LOTWISE_SECTIONS).flat()) {
+		if (!Object.hasOwn(source, fieldname)) continue
+		const columns = LOTWISE_COPY_COLUMNS[fieldname]
+		draft[fieldname] = columns
+			? (source[fieldname] || []).map((row) => Object.fromEntries(columns
+				.filter((column) => !LOTWISE_COMPUTED_COLUMNS[fieldname]?.includes(column)
+					&& Object.hasOwn(row, column))
+				.map((column) => [column, row[column]])))
+			: source[fieldname]
+	}
+	return draft
+}
+
 export function lotwiseChildMeta(table, metadata) {
 	const columns = LOTWISE_TABLE_COLUMNS[table]
 	if (!columns) throw new Error(`Columns for ${table} are not configured.`)

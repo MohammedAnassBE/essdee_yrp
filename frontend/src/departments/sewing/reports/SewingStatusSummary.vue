@@ -1,6 +1,6 @@
 <template>
 	<section data-sewing-report="status-summary" aria-label="Status Summary">
-		<ReportShell title="Status Summary" :loading="loading" :generated="generated" :has-results="visible.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Status Summary" :loading="loading" :generated="generated" :has-results="visible.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
 				<div v-for="field in identities" :key="field.key" class="common-field">
 					<label :for="`status-${field.key}`">{{ field.label }}</label>

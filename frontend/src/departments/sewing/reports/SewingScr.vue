@@ -1,6 +1,6 @@
 <template>
 	<section data-sewing-report="scr" aria-label="SCR">
-		<ReportShell title="SCR" :loading="loading" :generated="generated" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="SCR" :loading="loading" :generated="generated" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Choose a Lot" :search-handler="searchLots" :show-open-button="false" show-clear :disabled="loading" />
 				<div class="common-field"><label for="scr-colours">Colour</label><MultiSelect input-id="scr-colours" v-model="filters.colours" :options="data.colours || []" aria-label="Colour" placeholder="All Colours" :max-selected-labels="1" filter fluid :disabled="loading" /></div>

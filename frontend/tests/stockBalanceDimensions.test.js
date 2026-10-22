@@ -6,6 +6,7 @@ import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as filterState from "../src/components/reports/reportFilterState.js"
 import { FilterService } from "@primevue/core/api"
+const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
 
 const dimensions = [
 	{ fieldname: "lot", label: "Lot", dimension_doctype: "SD YRP Lot" },
@@ -61,6 +62,7 @@ for (const configured of [dimensions, []]) {
 			"../common/DateField.vue": control,
 			"../common/LinkField.vue": control,
 			"../common/MultiSelectField.vue": control,
+			"./reportExport.js": reportExportModule,
 			"./ReportShell.vue": shell,
 			"./ReportColumnPicker.vue": control,
 			"./ReportRunStatus.vue": control,

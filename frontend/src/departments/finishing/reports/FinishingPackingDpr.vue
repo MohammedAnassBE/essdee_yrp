@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="packing-dpr" aria-label="Packing DPR">
-		<ReportShell title="Packing DPR" :generated="generated" :loading="loading" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Packing DPR" :generated="generated" :loading="loading" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<label class="finishing-report-toggle"><Checkbox v-model="filters.summary" binary input-id="packing-dpr-summary" @change="clearResults" /><span>Summary</span></label>
 				<DateField v-if="!filters.summary" v-model="filters.date" label="Date" required />

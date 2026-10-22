@@ -1,5 +1,5 @@
 <template>
-	<ReportShell
+	<ReportShell :export-source="{ doctype: 'SD YRP Cutting LaySheet' }"
 		title="Daily Cut Sheet Report"
 		:generated="generated"
 		:loading="loading"

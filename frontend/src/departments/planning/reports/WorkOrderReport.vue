@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Work Order">
-		<ReportShell title="Work Order" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ reportKey: 'planning-work-order' }" title="Work Order" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<label class="common-field"><span class="erp-field-label">Based on</span><Select v-model="filters.based_on" :options="['Date', 'WO Status']" aria-label="Based on" fluid /></label>
 				<template v-if="filters.based_on === 'Date'"><DateField v-model="filters.from_date" label="From Date" required show-clear /><DateField v-model="filters.to_date" label="To Date" required show-clear /></template>
@@ -14,7 +14,6 @@
 			</template>
 			<template #actions>
 				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" /></template>
 			
@@ -50,7 +49,7 @@ const {
 const {
 	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
 	hasLinkedColumns, layoutError, loadFieldOptions, applyLayout, saveLayout, resetLayout,
-	cellAlign, pickerVisible, formattedCell, downloadCsv,
+	cellAlign, pickerVisible, formattedCell,
 } = usePlanningReportColumns("planning-work-order", sourceColumns, sourceRows)
 
 function requestFilters() { return workOrderRequest(filters) }

@@ -1,13 +1,10 @@
 <template>
 	<section aria-label="Inward Quantity">
-		<ReportShell title="Inward Quantity" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ reportKey: 'planning-inward-quantity' }" title="Inward Quantity" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" required :show-open-button="false" show-clear />
 				<LinkField v-model="filters.process" doctype="YRP Process" label="Process" required :show-open-button="false" show-clear />
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
-			</template>
-			<template #actions>
-				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 			
@@ -37,7 +34,7 @@ const {
 	trackingStartedAt, loading, isBusy, generated, statusOnly, activeFilters, payload, reportSummary,
 	generate: generateReport, filtersChanged, clear,
 } = useWebReport({ reportKey: "planning-inward-quantity" })
-const { columns, rows, cellAlign, formattedCell, downloadCsv } = usePlanningQuantityColumns("planning-inward-quantity", sourceColumns, sourceRows)
+const { columns, rows, cellAlign, formattedCell } = usePlanningQuantityColumns("planning-inward-quantity", sourceColumns, sourceRows)
 
 function requestFilters() { return populatedFilters(filters) }
 function generate() { if (!hint.value) return generateReport(requestFilters()) }

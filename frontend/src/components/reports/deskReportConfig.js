@@ -113,7 +113,7 @@ export const deskReportConfig = {
 			{ ...link("to_item", "To Item", "Item"), filters: { is_stock_item: 1 } }],
 	},
 	"finishing-inward-updates": {
-		title: "Finishing Inward Updates",
+		title: "Finishing Inward Updates", renderedExport: true,
 		filters: [{ ...link("supplier", "Sewing Unit", "Supplier"), reqd: 1, filters: { is_company_location: 1 } }],
 	},
 }

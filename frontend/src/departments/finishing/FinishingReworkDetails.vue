@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Rework Details" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-rework erp-workspace" data-finishing-page="rework-details">
-			<ReportShell title="Rework Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+			<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rework Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 				<template #filters>
 					<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
 					<LinkField v-model="filters.item" doctype="Item" label="Item" placeholder="Search item…" :show-open-button="false" show-clear />

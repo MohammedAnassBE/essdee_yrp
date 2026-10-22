@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="rework-completion" aria-label="Rework Completion">
-		<ReportShell title="Rework Completion" :generated="generated" :loading="loading" :has-results="colours.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rework Completion" :generated="generated" :loading="loading" :has-results="colours.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" required :show-open-button="false" show-clear />
 				<LinkField v-model="filters.process" doctype="YRP Process" label="Process" placeholder="Search process…" required :show-open-button="false" show-clear />

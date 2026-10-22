@@ -26,6 +26,13 @@
 					@click="$emit('reset')"
 				/>
 				<slot name="actions" />
+				<ReportExportButton
+					v-if="exportSource"
+					:title="title"
+					:source="exportSource"
+					:get-rows="getRenderedRows"
+					:disabled="loading || !generated || !hasResults"
+				/>
 				<Button
 					v-if="copyable"
 					type="button"
@@ -76,7 +83,7 @@
 					<span v-if="emptyDescription">{{ emptyDescription }}</span>
 				</div>
 			</div>
-			<div v-else class="report-shell__results">
+			<div v-else ref="resultsRoot" class="report-shell__results">
 				<div v-if="$slots.metrics" class="report-metrics"><slot name="metrics" /></div>
 				<slot />
 			</div>
@@ -91,6 +98,8 @@ import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 
 import { copyElementAsImage } from "./copyElementAsImage.js"
+import ReportExportButton from "./ReportExportButton.vue"
+import { renderedReportRows } from "./reportExport.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import { usePageNavigation } from "../navigation/pageNavigationContext.js"
 
@@ -101,6 +110,7 @@ const props = defineProps({
 	error: { type: String, default: "" },
 	hasResults: { type: Boolean, default: false },
 	copyable: { type: Boolean, default: false },
+	exportSource: { type: Object, default: null },
 	keepResultsWhileLoading: { type: Boolean, default: false },
 	generateDisabled: { type: Boolean, default: false },
 	generateLabel: { type: String, default: "Generate" },
@@ -116,6 +126,8 @@ const showInlineHeading = computed(() => Boolean(pageNavigation?.inline?.value))
 defineEmits(["generate", "reset"])
 
 const reportRoot = ref(null)
+const resultsRoot = ref(null)
+const getRenderedRows = () => renderedReportRows(resultsRoot.value)
 const copying = ref(false)
 const copyNotice = ref("")
 const copyNoticeIsError = ref(false)

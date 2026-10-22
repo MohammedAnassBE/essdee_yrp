@@ -1,5 +1,5 @@
 <template>
-	<ReportShell title="Work In Progress" :generated="generated" :loading="isBusy" :error="error" :has-results="sourceRows.length > 0" copyable @generate="generate" @reset="reset">
+	<ReportShell :export-source="{ reportKey: 'merch-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="isBusy" :error="error" :has-results="sourceRows.length > 0" copyable @generate="generate" @reset="reset">
 		<template #filters>
 			<div>
 				<LinkField v-model="filters.category" label="Product Category" doctype="SD YRP Product Category" :invalid="Boolean(errors.category)" :show-open-button="false" aria-describedby="wip-category-error" />
@@ -19,7 +19,6 @@
 		</template>
 		<template #actions>
 			<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
-			<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !sourceRows.length || isBusy" @click="download" />
 		</template>
 		<template #metrics>
 			<div v-for="metric in reportSummary || []" :key="metric.label" class="report-metric">
@@ -56,7 +55,7 @@ import { useWebReport } from "../../../composables/useWebReport.js"
 import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
 import { mergeNames } from "../../../components/reports/pasteValues.js"
 import WipLinkMultiSelect from "./WipLinkMultiSelect.vue"
-import { cellText, cellTone, columnGroups, reportCsv, validateWipFilters } from "./workInProgress.js"
+import { cellText, cellTone, columnGroups, validateWipFilters } from "./workInProgress.js"
 
 const defaults = () => ({ category: "", product_season: "", lot_status: "Open", lot: [], item: [], from_date: "", to_date: "", process_list: [] })
 const filters = reactive(defaults())
@@ -74,14 +73,6 @@ function generate() {
 }
 function reset() { Object.assign(filters, defaults()); errors.value = {}; report.clear() }
 function paste({ target, names }) { filters[target] = mergeNames(filters[target], names) }
-function download() {
-	const url = URL.createObjectURL(new Blob([reportCsv(sourceRows.value, sourceColumns.value)], { type: "text/csv;charset=utf-8" }))
-	const anchor = document.createElement("a")
-	anchor.href = url
-	anchor.download = "Work_In_Progress.csv"
-	anchor.click()
-	setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
 </script>
 
 <style scoped>

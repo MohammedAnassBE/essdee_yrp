@@ -1,6 +1,6 @@
 <template>
 	<section data-sewing-report="dpr" aria-label="DPR">
-		<ReportShell title="DPR" :loading="loading" :generated="generated" :has-results="blockers.length > 0 || sections.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="DPR" :loading="loading" :generated="generated" :has-results="blockers.length > 0 || sections.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
 				<div class="common-field"><label for="dpr-mode" class="erp-field-label">DPR Mode</label><select class="erp-native-select" id="dpr-mode" v-model="filters.mode" :disabled="loading"><option value="daily">Daily</option><option value="range">Date range</option></select></div>
 				<DateField v-if="filters.mode === 'daily'" v-model="filters.date" label="DPR Date" :disabled="loading" />

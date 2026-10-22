@@ -1,6 +1,6 @@
 <template>
 	<section data-sewing-report="monthly-summary" aria-label="Monthly Summary">
-		<ReportShell title="Monthly Summary" :loading="loading" :generated="generated" :has-results="data.rows?.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Monthly Summary" :loading="loading" :generated="generated" :has-results="data.rows?.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
 				<DateField v-model="filters.fromDate" label="From Date" :disabled="loading" />
 				<DateField v-model="filters.toDate" label="To Date" :disabled="loading" />

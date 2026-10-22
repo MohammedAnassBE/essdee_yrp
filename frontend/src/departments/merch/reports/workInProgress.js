@@ -36,12 +36,3 @@ export function cellTone(row, column) {
 	const value = row[column.fieldname]
 	return value < 0 ? "wip-negative" : value > 0 ? "wip-positive" : ""
 }
-
-export function reportCsv(rows, columns) {
-	const escape = (value) => `"${String(value).replaceAll('"', '""')}"`
-	const lines = [columns.map((column) => column.label), ...rows.map((row) => columns.map((column) => {
-		const value = row[column.fieldname]
-		return typeof value === "number" ? value : cellText(row, column)
-	}))]
-	return "\uFEFF" + lines.map((line) => line.map((value) => escape(/^[=+\-@]/.test(String(value)) && typeof value !== "number" ? `'${value}` : value)).join(",")).join("\r\n")
-}

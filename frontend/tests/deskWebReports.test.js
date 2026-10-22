@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import test from "node:test"
 import vm from "node:vm"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
 
 const configUrl = new URL("../src/components/reports/deskReportConfig.js", import.meta.url)
 async function config() {
@@ -173,6 +174,7 @@ test("report lot query prefills the lookup and follows navigation within the rep
 		"vue-router": { useRoute: () => route },
 		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null, "primevue/select": () => null,
 		"../common/DateField.vue": () => null, "../common/LinkField.vue": props => Vue.h("filter-link", props),
+		"./reportExport.js": reportExportModule,
 		"./ReportShell.vue": Vue.defineComponent({ emits: ["generate", "reset"], setup: (_props, { slots, emit }) => () => Vue.h("report-shell", {
 			onGenerate: () => emit("generate"), onReset: () => emit("reset"),
 		}, slots.filters?.()) }),
@@ -210,6 +212,7 @@ test("FI Updates passes the company-location restriction to its supplier lookup"
 		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null, "primevue/select": () => null,
 		"../common/DateField.vue": () => null,
 		"../common/LinkField.vue": props => Vue.h("supplier-lookup", props),
+		"./reportExport.js": reportExportModule,
 		"./ReportShell.vue": ReportShell, "./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": await config(),
 		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
@@ -246,6 +249,7 @@ test("GRN Summary sends each selected status including Draft as a string", async
 		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null,
 		"primevue/select": props => Vue.h("status-select", props),
 		"../common/DateField.vue": () => null, "../common/LinkField.vue": () => null,
+		"./reportExport.js": reportExportModule,
 		"./ReportShell.vue": Vue.defineComponent({
 			emits: ["generate"],
 			setup: (_props, { slots, emit }) => () => Vue.h("report-shell", { onGenerate: () => emit("generate") }, slots.filters?.()),
@@ -297,6 +301,7 @@ test("ageing ranges and warehouse defaults render, reset and reach report genera
 		"primevue/button": () => null, "primevue/checkbox": props => Vue.h("warehouse-check", props),
 		"primevue/select": () => null, "primevue/inputnumber": props => Vue.h("age-range", props),
 		"../common/DateField.vue": () => null, "../common/LinkField.vue": () => null,
+		"./reportExport.js": reportExportModule,
 		"./ReportShell.vue": Vue.defineComponent({
 			emits: ["generate", "reset"],
 			setup: (_props, { slots, emit }) => () => Vue.h("report-shell", {
@@ -370,6 +375,7 @@ test("PO conditional dates and all Lot Consumption required filters reach the sh
 		"primevue/select": props => Vue.h("filter-select", props),
 		"../common/DateField.vue": props => Vue.h("filter-date", props),
 		"../common/LinkField.vue": props => Vue.h("filter-link", props),
+		"./reportExport.js": reportExportModule,
 		"./ReportShell.vue": Vue.defineComponent({
 			emits: ["generate"], setup: (props, { slots, emit }) => () => Vue.h("report-shell", {
 				...props, onGenerate: () => emit("generate"),

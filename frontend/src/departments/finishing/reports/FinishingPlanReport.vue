@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="finishing-plan-report" aria-label="Finishing Plan Report">
-		<ReportShell title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="deskExportSource('finishing-plan', activeFilters, columns)" title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.item" doctype="Item" label="Item" placeholder="Search item…" :filters="{ has_variants: 1 }" :show-open-button="false" show-clear />
@@ -18,9 +18,7 @@
 				<div class="report-metric"><i class="pi pi-box" /><div><span>Finishing Plans</span><strong>{{ formatQuantity(dataRows.length) }}</strong></div></div>
 			</template>
 			<div class="finishing-stack">
-				<FinishingReportHeading title="Finishing Plan Report" :period="period">
-					<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="downloadCsv" />
-				</FinishingReportHeading>
+				<FinishingReportHeading title="Finishing Plan Report" :period="period" />
 				<div class="finishing-scroll fp-report__scroll" role="region" tabindex="0" aria-label="Finishing Plan Report results">
 					<table ref="table" class="finishing-table fp-report__table">
 						<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
@@ -53,6 +51,7 @@ import ReportColumnPicker from "../../../components/reports/ReportColumnPicker.v
 import { finishingPlanFormFilters } from "../../../components/reports/reportFilterState.js"
 import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
+import { deskExportSource } from "../../../components/reports/reportExport.js"
 import { formatQuantity } from "../finishingViews.js"
 import FinishingReportHeading from "./FinishingReportHeading.vue"
 import { FROZEN_COLUMNS, formatReportCell, frozenColumnOffsets, reportCellTone } from "./finishingReports.js"
@@ -127,21 +126,6 @@ function restoreFilters(request) {
 	if (!request) return
 	Object.assign(filters, finishingPlanFormFilters(request))
 	period.value = Object.values(request).filter(Boolean).join(" · ")
-}
-
-function csvCell(value) {
-	const text = String(value ?? "")
-	return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
-}
-
-function downloadCsv() {
-	const lines = [columns.value.map((column) => column.label), ...rows.value.map((row) => columns.value.map((column) => cellValue(row, column) ?? ""))]
-	const url = URL.createObjectURL(new Blob(["﻿", lines.map((line) => line.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }))
-	const link = document.createElement("a")
-	link.href = url
-	link.download = "finishing_plan_report.csv"
-	link.click()
-	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })

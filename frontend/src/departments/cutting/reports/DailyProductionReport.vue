@@ -1,5 +1,5 @@
 <template>
-	<ReportShell
+	<ReportShell :export-source="{ reportKey: 'cutting-dpr' }"
 		title="Daily Production Report"
 		:generated="generated"
 		:loading="loading"

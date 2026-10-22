@@ -1,5 +1,6 @@
 <template>
 	<ReportShell
+		:export-source="deskExportSource('stock-balance', activeFilters, columns)"
 		title="Stock Balance"
 		:generated="generated"
 		:loading="loading"
@@ -85,6 +86,7 @@ import ReportColumnPicker from "./ReportColumnPicker.vue"
 import { stockBalanceFormFilters } from "./reportFilterState.js"
 import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
+import { deskExportSource } from "./reportExport.js"
 import { number, oneMonthAgoIso, stockCellValue, todayIso } from "./reportUtils.js"
 
 // The server searches document-specific fields (for example Lot.item).

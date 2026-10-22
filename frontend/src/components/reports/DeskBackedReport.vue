@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" @generate="generate" @reset="reset">
+	<ReportShell :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" :export-source="exportSource" @generate="generate" @reset="reset">
 		<template #filters>
 			<template v-for="field in visibleFilters" :key="field.fieldname">
 				<LinkField v-if="field.fieldtype === 'Link'" v-model="filters[field.fieldname]" :doctype="field.options" :label="field.label" :filters="field.filters" :required="Boolean(field.reqd)" :show-open-button="false" show-clear />
@@ -33,6 +33,7 @@ import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
 import LinkField from "../common/LinkField.vue"
 import { deskReportConfig, deskReportDefaults, deskReportQueryFilters } from "./deskReportConfig.js"
+import { appliedFilterLabels, deskExportSource } from "./reportExport.js"
 import ReportColumnPicker from "./ReportColumnPicker.vue"
 import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
@@ -54,6 +55,10 @@ const {
 	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
 	layoutError, loadLayout, loadFieldOptions, applyLayout, saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: props.reportKey, sourceColumns, sourceRows })
+
+const exportSource = computed(() => config.renderedExport
+	? { reportKey: props.reportKey, appliedFilters: appliedFilterLabels(config.filters, activeFilters.value || {}) }
+	: deskExportSource(props.reportKey, activeFilters.value, columns.value, config.filters))
 
 function cellToneClass(row, column) {
 	const tone = config.cellTone?.(column.fieldname, cellValue(row, column))

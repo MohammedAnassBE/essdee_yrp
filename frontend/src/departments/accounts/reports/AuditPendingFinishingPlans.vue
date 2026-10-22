@@ -1,6 +1,6 @@
 <template>
     <div class="audit-dashboard">
-        <ReportShell title="Audit Pending Finishing Plans" :generated="generated" :loading="loading" :error="errorMessage" :has-results="true" :generate-disabled="loading" keep-results-while-loading copyable @generate="generateDashboard" @reset="resetFilters">
+        <ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Audit Pending Finishing Plans" :generated="generated" :loading="loading" :error="errorMessage" :has-results="true" :generate-disabled="loading" keep-results-while-loading copyable @generate="generateDashboard" @reset="resetFilters">
             <template #filters>
                 <label class="audit-filter"><span>Finishing Plan</span><input v-model="filters.plan" type="search" placeholder="Search plan…" /></label>
                 <label class="audit-filter"><span>Lot</span><input v-model="filters.lot" type="search" placeholder="Search lot…" /></label>

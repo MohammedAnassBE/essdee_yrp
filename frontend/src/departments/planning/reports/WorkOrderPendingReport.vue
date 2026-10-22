@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Work Order Pending">
-		<ReportShell title="Work Order Pending" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ reportKey: 'planning-work-order-pending' }" title="Work Order Pending" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<AsyncLinkMultiSelect v-model="filters.production_order" doctype="YRP Production Order" label="Production Orders" />
 				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
@@ -14,7 +14,6 @@
 			</template>
 			<template #actions>
 				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" /></template>
 			<template #metrics><div v-for="(metric, index) in reportSummary || []" :key="index" class="report-metric"><div><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></div></template>
@@ -50,7 +49,7 @@ const {
 const {
 	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
 	hasLinkedColumns, layoutError, loadFieldOptions, applyLayout, saveLayout, resetLayout,
-	cellAlign, pickerVisible, formattedCell, downloadCsv,
+	cellAlign, pickerVisible, formattedCell,
 } = usePlanningReportColumns("planning-work-order-pending", sourceColumns, sourceRows)
 
 function requestFilters() { return populatedFilters(filters) }

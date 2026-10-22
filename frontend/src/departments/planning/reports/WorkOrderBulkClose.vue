@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Work Order Bulk Close">
-		<ReportShell title="Work Order Bulk Close" generate-label="Load Work Orders" :generated="generated" :loading="loading" :error="loadError" :has-results="rows.length > 0" :generate-disabled="Boolean(filterHint) || busy" empty-title="No open Work Orders for this supplier and filters." empty-description="" @generate="loadWorkOrders" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'YRP Work Order' }" title="Work Order Bulk Close" generate-label="Load Work Orders" :generated="generated" :loading="loading" :error="loadError" :has-results="rows.length > 0" :generate-disabled="Boolean(filterHint) || busy" empty-title="No open Work Orders for this supplier and filters." empty-description="" @generate="loadWorkOrders" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.supplier" doctype="Supplier" label="Supplier" required :show-open-button="false" show-clear :disabled="busy" />
 				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" :disabled="busy" />

@@ -1,5 +1,5 @@
 <template>
-	<ReportShell
+	<ReportShell :export-source="{ reportKey: 'cut-bundle-balance' }"
 		title="Cut Bundle Balance"
 		:generated="generated"
 		:loading="loading"

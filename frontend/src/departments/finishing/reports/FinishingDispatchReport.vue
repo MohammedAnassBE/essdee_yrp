@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="dispatch-report" aria-label="Dispatch Report">
-		<ReportShell title="Dispatch Report" :generated="generated" :loading="loading" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Dispatch Report" :generated="generated" :loading="loading" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<DateField v-model="filters.fromDate" label="From Date" required />
 				<DateField v-model="filters.toDate" label="To Date" required />

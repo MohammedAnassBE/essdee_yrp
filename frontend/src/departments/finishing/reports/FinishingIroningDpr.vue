@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="ironing-dpr" aria-label="Ironing DPR">
-		<ReportShell title="Ironing DPR" :generated="generated" :loading="loading" :has-results="reports.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Ironing DPR" :generated="generated" :loading="loading" :has-results="reports.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<label class="finishing-report-toggle"><Checkbox v-model="filters.summary" binary input-id="ironing-dpr-summary" @change="clearResults" /><span>Summary</span></label>
 				<DateField v-if="!filters.summary" v-model="filters.date" label="Date" required />

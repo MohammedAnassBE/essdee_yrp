@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="rejection-details" aria-label="Rejection Details">
-		<ReportShell title="Rejection Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rejection Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<DateField v-model="filters.startDate" label="Start Date" required />
 				<DateField v-model="filters.endDate" label="End Date" required />

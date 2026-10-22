@@ -7,6 +7,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import * as views from "../src/departments/quality/qualityViews.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
 
 const read = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8")
 const component = (name, modules) => loadComponent(resolve(`frontend/src/departments/quality/${name}.vue`), modules)
@@ -275,6 +276,7 @@ test("DeskBackedReport generates RFT with empty filters and renders all dynamic 
 		"vue-router": { useRoute: () => ({ query: {} }) },
 		"primevue/button": Button, "primevue/checkbox": () => null, "primevue/inputnumber": () => null, "primevue/select": () => null,
 		"../common/DateField.vue": stub("date-field"), "../common/LinkField.vue": stub("link-field"),
+		"./reportExport.js": reportExportModule,
 		"./ReportShell.vue": (props, { slots }) => Vue.h("report-shell", props, [slots.filters?.(), slots.default?.()]),
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": reportConfig,

@@ -1,6 +1,6 @@
 <template>
 	<section data-sewing-report="item-summary" aria-label="Item Summary">
-		<ReportShell title="Item Summary" :loading="loading || optionsLoading" :generated="generated" :has-results="data.groups?.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Item Summary" :loading="loading || optionsLoading" :generated="generated" :has-results="data.groups?.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<div class="common-field"><label for="item-summary-lots">Lot</label><MultiSelect input-id="item-summary-lots" v-model="filters.lots" :options="options.lots" aria-label="Lot" placeholder="Choose Lots" :max-selected-labels="1" filter fluid :disabled="loading || optionsLoading || !optionsReady" /></div>
 				<div class="common-field"><label for="item-summary-items">Item</label><MultiSelect input-id="item-summary-items" v-model="filters.items" :options="options.items" aria-label="Item" placeholder="Choose Items" :max-selected-labels="1" filter fluid :disabled="loading || optionsLoading || !optionsReady" /></div>

@@ -1,6 +1,6 @@
 <template>
 	<section data-attendance-strength aria-label="Attendance Strength Report">
-		<ReportShell title="Attendance Strength Report" :loading="loading" :generated="generated" :has-results="hasResults" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Attendance Strength Report" :loading="loading" :generated="generated" :has-results="hasResults" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<DateField v-model="filters.date" label="Date" show-clear :disabled="loading" />
 				<TimeField v-model="filters.fromTime" label="From Time" show-clear :disabled="loading" />
@@ -10,7 +10,6 @@
 			<section v-for="table in tables" :key="table.label" class="attendance-strength__section" :aria-label="table.label + ' results'">
 				<header class="attendance-strength__heading">
 					<h2>{{ table.label }}</h2>
-					<Button :label="table.exportLabel" icon="pi pi-download" outlined severity="secondary" class="erp-action-button" :disabled="loading || !table.rows.length" @click="exportTable(table)" />
 				</header>
 				<div v-if="table.rows.length" class="attendance-strength__table erp-table-wrap" role="region" :aria-label="table.label" tabindex="0">
 					<table class="erp-table">
@@ -28,7 +27,6 @@
 
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
-import Button from "primevue/button"
 import { getAttendanceStrength } from "../../api/sewing.js"
 import DateField from "../common/DateField.vue"
 import TimeField from "../common/TimeField.vue"
@@ -40,7 +38,6 @@ const filters = reactive({ date: todayIso(), fromTime: "", toTime: "" })
 const data = ref({}), loading = ref(false), generated = ref(false), error = ref("")
 const errorTitle = ref("Unable to generate Strength Report")
 let mounted = true
-let resultDate = ""
 const hasResults = computed(() => Boolean(data.value.rows?.length || data.value.employee_punches?.length))
 const punchColumns = [
 	["employee", "Employee ID"], ["employee_name", "Employee Name"], ["department", "Department"],
@@ -50,8 +47,8 @@ const tables = computed(() => {
 	const rows = data.value.rows || []
 	const total = Number(data.value.add_total_row) === 1 && rows.length ? rows[rows.length - 1] : null
 	return [
-		{ label: "Workers Strength Summary", exportLabel: "Export Strength", filename: "Workers_Strength", columns: (data.value.columns || []).map((column, index) => ({ ...column, index })).filter(column => !Number(column.hidden)), rows, body: total ? rows.slice(0, -1) : rows, total },
-		{ label: "Employee First Punch", exportLabel: "Export Punches", filename: "Employee_First_Punch", columns: punchColumns, rows: data.value.employee_punches || [], body: data.value.employee_punches || [], total: null },
+		{ label: "Workers Strength Summary", columns: (data.value.columns || []).map((column, index) => ({ ...column, index })).filter(column => !Number(column.hidden)), rows, body: total ? rows.slice(0, -1) : rows, total },
+		{ label: "Employee First Punch", columns: punchColumns, rows: data.value.employee_punches || [], body: data.value.employee_punches || [], total: null },
 	]
 })
 
@@ -68,7 +65,7 @@ async function generate() {
 	const date = filters.date
 	try {
 		const result = await getAttendanceStrength(date, filters.fromTime, filters.toTime)
-		if (mounted) { data.value = result || {}; generated.value = true; resultDate = date }
+		if (mounted) { data.value = result || {}; generated.value = true }
 	} catch (reason) {
 		if (mounted) { errorTitle.value = "Unable to generate Strength Report"; error.value = reason.message || "Unable to generate the Strength Report. Please try again." }
 	} finally { if (mounted) loading.value = false }
@@ -86,23 +83,6 @@ function display(value, column) {
 	if (Array.isArray(value)) return value.join(", ")
 	if (value && typeof value === "object") return JSON.stringify(value)
 	return stockCellValue(value, column)
-}
-function exportTable(table) {
-	try {
-		const csvCell = value => {
-			let text = value == null ? "" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : String(value)
-			// HR text is untrusted; prevent spreadsheet execution while preserving numeric values.
-			if (typeof value !== "number" && /^[\s]*[=+\-@]/.test(text)) text = `'${text}`
-			return `"${text.replaceAll('"', '""')}"`
-		}
-		const csv = [table.columns.map(column => column.label || column.fieldname), ...table.rows.map(row => table.columns.map(column => cell(row, column)))].map(row => row.map(csvCell).join(",")).join("\r\n")
-		const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }))
-		const link = document.createElement("a")
-		link.href = url; link.download = `${table.filename}_${resultDate}.csv`; link.click()
-		window.setTimeout(() => URL.revokeObjectURL(url), 0)
-	} catch {
-		errorTitle.value = "Unable to export report"; error.value = "The report could not be exported. Please try again."
-	}
 }
 </script>
 

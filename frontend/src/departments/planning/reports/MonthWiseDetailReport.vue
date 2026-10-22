@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Month-wise Detail">
-		<ReportShell title="Month-wise Detail" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ reportKey: 'planning-month-wise-detail' }" title="Month-wise Detail" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
 				<AsyncLinkMultiSelect v-model="filters.item" doctype="Item" label="Items" :filters="{ has_variants: 1 }" />
@@ -10,7 +10,6 @@
 			</template>
 			<template #actions>
 				<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
-				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 			
@@ -45,7 +44,7 @@ const {
 	trackingStartedAt, loading, isBusy, generated, statusOnly, activeFilters, payload, reportSummary,
 	generate: generateReport, filtersChanged, clear,
 } = useWebReport({ reportKey: "planning-month-wise-detail" })
-const { columns, rows, cellAlign, formattedCell, downloadCsv } = usePlanningQuantityColumns("planning-month-wise-detail", sourceColumns, sourceRows)
+const { columns, rows, cellAlign, formattedCell } = usePlanningQuantityColumns("planning-month-wise-detail", sourceColumns, sourceRows)
 
 function requestFilters() { return populatedFilters(filters) }
 function generate() { if (!hint.value) return generateReport(requestFilters()) }

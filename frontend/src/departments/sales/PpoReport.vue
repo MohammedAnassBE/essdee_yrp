@@ -1,6 +1,6 @@
 <template>
 	<div class="ppo-report">
-		<ReportShell title="PPO Report" :generated="generated" :loading="loading" :has-results="orders.length > 0" keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'YRP Production Order' }" title="PPO Report" :generated="generated" :loading="loading" :has-results="orders.length > 0" keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<div class="common-field">
 					<label for="ppo-report-status">Status</label>

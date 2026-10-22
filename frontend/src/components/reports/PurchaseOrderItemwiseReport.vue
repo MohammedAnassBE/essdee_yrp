@@ -1,5 +1,6 @@
 <template>
 	<ReportShell
+		:export-source="deskExportSource('purchase-order-itemwise', activeFilters, columns)"
 		class="purchase-order-itemwise-report"
 		title="Purchase Order Itemwise"
 		:generated="generated"
@@ -76,6 +77,7 @@ import ReportColumnPicker from "./ReportColumnPicker.vue"
 import { purchaseOrderFormFilters } from "./reportFilterState.js"
 import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
+import { deskExportSource } from "./reportExport.js"
 import { number, stockCellValue, todayIso } from "./reportUtils.js"
 
 const filterError = ref("")

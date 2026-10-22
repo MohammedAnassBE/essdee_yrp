@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Work In Progress">
-		<ReportShell title="Work In Progress" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ reportKey: 'planning-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.category" doctype="SD YRP Product Category" label="Category" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.product_season" doctype="SD YRP Product Season" label="Product Season" :show-open-button="false" show-clear />
@@ -16,7 +16,6 @@
 				<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
 				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
 				<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined @click="download" />
-				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" determinate @rebuild="rebuild" /></template>
 			<template #metrics><div v-for="metric in reportSummary" :key="metric.label" class="report-metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></template>
@@ -50,7 +49,7 @@ const filters = reactive(defaultFilters())
 const hint = computed(() => wipHint(filters))
 const pasteVisible = ref(false)
 const { state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError, trackingStartedAt, loading, isBusy, generated, statusOnly, activeFilters, reportSummary, isBackgroundResult, download, generate: generateReport, filtersChanged, clear } = useWebReport({ reportKey: "planning-work-in-progress" })
-const { columns: allColumns, displayColumns: columns, rows: layoutRows, linkSources, fieldsBySource, hasLinkedColumns, layoutError, loadFieldOptions, applyLayout, saveLayout, resetLayout, cellValue, cellAlign, pickerVisible, formattedCell, downloadCsv } = usePlanningReportColumns("planning-work-in-progress", sourceColumns, sourceRows, { cellValue: progressCellValue, exportRows: () => rows.value })
+const { columns: allColumns, displayColumns: columns, rows: layoutRows, linkSources, fieldsBySource, hasLinkedColumns, layoutError, loadFieldOptions, applyLayout, saveLayout, resetLayout, cellValue, cellAlign, pickerVisible, formattedCell } = usePlanningReportColumns("planning-work-in-progress", sourceColumns, sourceRows, { cellValue: progressCellValue })
 const rows = computed(() => progressTotals(layoutRows.value, columns.value, cellValue))
 function requestFilters() { return populatedFilters({ ...filters, process_list: JSON.stringify(filters.process_list) }) }
 function generate() { if (!hint.value) return generateReport(requestFilters()) }

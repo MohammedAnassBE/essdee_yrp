@@ -1,5 +1,5 @@
 <template>
-	<ReportShell
+	<ReportShell :export-source="{ doctype: 'SD YRP Lot' }"
 		class="lot-cut-quantity-report"
 		title="Lot Cut Quantity"
 		:generated="generated"

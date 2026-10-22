@@ -1298,7 +1298,6 @@ def get_collapsed_stock(lot: str, location: str) -> dict:
 
 	frappe.get_doc("SD YRP Lot", lot).check_permission("read")
 	frappe.get_doc("Supplier", location).check_permission("read")
-	frappe.has_permission("SD YRP Cut Bundle Movement Ledger", "read", throw=True)
 	return {"lot": lot, "location": location, "panels": get_collapsed_panels(lot, location)}
 
 

@@ -484,7 +484,6 @@ def _require_manage_access(lot):
 	):
 		frappe.throw(_("Not permitted to prepare a Cut Bundle Edit."), frappe.PermissionError)
 	frappe.get_doc("SD YRP Lot", lot).check_permission("read")
-	frappe.has_permission("SD YRP Cut Bundle Movement Ledger", "read", throw=True)
 
 
 CutBundleEdit = SDYRPCutBundleEdit

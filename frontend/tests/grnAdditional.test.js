@@ -29,3 +29,7 @@ test("GRN workspace renders the Additional GRN checkbox and reloads rows when it
 	assert.match(workspaceSource, /fields: \["naming_series", "against", "against_id", "delivery_challan", "production_detail", "is_return", "is_rework", "additional_grn"\]/)
 	assert.match(workspaceSource, /v-if="workspace\.special_source\?\.read_only" class="goods-received-note-special-context"/)
 })
+
+test("Additional GRN rows can add Received Type splits like a regular GRN", () => {
+	assert.match(workspaceSource, /v-if="block\.kind === 'items' && canEditDraft && !workspace\.special_source\?\.read_only" label="Add split"/)
+})

@@ -324,6 +324,40 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 				{"item_variant": "FABRIC-GREY", "set_combination": "{}", "qty": 16},
 			)
 
+	def test_additional_grn_calculation_is_not_capped_by_pending_quantity(self):
+		work_order = frappe._dict(
+			name="WO-1",
+			receivables=[
+				frappe._dict(name="WOR-1", item_variant="STYLE-S", set_combination="{}", pending_quantity=0, idx=1),
+				frappe._dict(name="WOR-2", item_variant="STYLE-S", set_combination="{}", pending_quantity=3, idx=2),
+			],
+		)
+
+		allocations = _allocate_calculated_receivables(
+			work_order,
+			{"item_variant": "STYLE-S", "set_combination": "{}", "qty": 16},
+			capped=False,
+		)
+
+		self.assertEqual([(row.name, quantity) for row, quantity in allocations], [("WOR-1", 16)])
+
+	def test_additional_grn_calculation_starts_from_every_receivable_row(self):
+		from essdee_yrp.garment_grn import _validate_grn_calculation, get_calculation_base_rows
+
+		grn = frappe._dict(additional_grn=1, items=["SAVED"], delivery_challan=None)
+		with (
+			patch("essdee_yrp.additional_grn.get_receivable_rows", return_value=["ALL"]) as receivable_rows,
+			patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note._pending_receivable_rows") as pending,
+		):
+			self.assertEqual(get_calculation_base_rows(grn, "WO", {}, "Accepted"), ["ALL"])
+		receivable_rows.assert_called_once_with("WO", ["SAVED"])
+		pending.assert_not_called()
+
+		draft = frappe._dict(docstatus=0, against="YRP Work Order", against_id="WO-1", additional_grn=1)
+		with patch("essdee_yrp.garment_grn.frappe.get_doc", side_effect=LookupError("reached Work Order")):
+			with self.assertRaisesRegex(LookupError, "reached Work Order"):
+				_validate_grn_calculation(draft)
+
 	def make_document(
 		self,
 		*,
@@ -502,15 +536,17 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 
 		self.assertEqual(workspace["actual_dia"], self.actual_dia_context.return_value)
 
-	def test_workspace_hides_calculate_for_new_or_special_modes(self):
-		doc = self.make_document(additional_grn=1)
-		with (
-			patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
-			patch("essdee_yrp.fabric_store.documents.goods_received_note.get_workspace_base", side_effect=self.workspace_base),
-			patch("essdee_yrp.fabric_store.documents.goods_received_note._related_documents", return_value={}),
-		):
-			workspace = get_goods_received_note_workspace(doc.name)
-		self.assertNotIn("calculate", workspace["capabilities"])
+	def test_workspace_hides_calculate_for_rework_but_offers_it_for_additional_grn(self):
+		for flags, has_calculate in (({"is_rework": 1}, False), ({"additional_grn": 1}, True)):
+			doc = self.make_document(**flags)
+			with (
+				patch("essdee_yrp.fabric_store.documents.goods_received_note._get_grn", return_value=doc),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note.get_workspace_base", side_effect=self.workspace_base),
+				patch("essdee_yrp.fabric_store.documents.goods_received_note._related_documents", return_value={}),
+			):
+				workspace = get_goods_received_note_workspace(doc.name)
+			# Like production_api, Calculate stays available on an Additional GRN.
+			self.assertEqual("calculate" in workspace["capabilities"], has_calculate, flags)
 		self.assertTrue(workspace["special_source"]["active"])
 		# Like production_api, an Additional GRN keeps its received quantities editable.
 		self.assertFalse(workspace["special_source"]["read_only"])

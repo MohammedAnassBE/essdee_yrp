@@ -79,7 +79,10 @@ def calculate_grn_receivables(
 		quantity = flt(output.get("qty"))
 		if quantity <= 0:
 			continue
-		for target, allocated_quantity in _allocate_calculated_receivables(work_order, output):
+		allocations = _allocate_calculated_receivables(
+			work_order, output, capped=not grn.get("additional_grn")
+		)
+		for target, allocated_quantity in allocations:
 			desired_by_receivable[target.name] = (
 				flt(desired_by_receivable.get(target.name)) + allocated_quantity
 			)
@@ -90,24 +93,8 @@ def calculate_grn_receivables(
 		_apply_dimension_values_to_rows,
 		_get_production_group_dimensions,
 	)
-	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
-		_pending_receivable_rows,
-	)
 
-	delivery_challan = (
-		frappe.get_doc("YRP Delivery Challan", grn.delivery_challan) if grn.delivery_challan else None
-	)
-	canonical_rows = _pending_receivable_rows(
-		work_order,
-		existing_rows=grn.get("items") or [],
-		delivery_challan=delivery_challan,
-	)
-	canonical_rows = _include_calculated_receivable_rows(
-		canonical_rows,
-		work_order,
-		desired_by_receivable,
-		received_type,
-	)
+	canonical_rows = get_calculation_base_rows(grn, work_order, desired_by_receivable, received_type)
 	canonical_rows = _apply_calculated_receivable_quantities(
 		canonical_rows,
 		desired_by_receivable,
@@ -143,7 +130,6 @@ def _validate_grn_calculation(grn):
 		for fieldname in (
 			"is_return",
 			"is_rework",
-			"additional_grn",
 			"includes_packing",
 			"cutting_laysheet",
 			"cut_panel_movement",
@@ -300,7 +286,28 @@ def _matching_calculated_receivables(work_order, output):
 	)
 
 
-def _allocate_calculated_receivables(work_order, output):
+def get_calculation_base_rows(grn, work_order, desired_by_receivable, received_type):
+	"""Return the draft rows Calculate fills: pending rows, or every receivable for an Additional GRN."""
+	if grn.get("additional_grn"):
+		from essdee_yrp.additional_grn import get_receivable_rows
+
+		return get_receivable_rows(work_order, grn.get("items") or [])
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+		_pending_receivable_rows,
+	)
+
+	delivery_challan = (
+		frappe.get_doc("YRP Delivery Challan", grn.delivery_challan) if grn.delivery_challan else None
+	)
+	rows = _pending_receivable_rows(
+		work_order,
+		existing_rows=grn.get("items") or [],
+		delivery_challan=delivery_challan,
+	)
+	return _include_calculated_receivable_rows(rows, work_order, desired_by_receivable, received_type)
+
+
+def _allocate_calculated_receivables(work_order, output, *, capped=True):
 	"""Allocate one calculated SKU output across matching WO receivable rows.
 
 	A Work Order can legitimately contain multiple logical rows with the same
@@ -318,6 +325,9 @@ def _allocate_calculated_receivables(work_order, output):
 		)
 
 	requested = flt(output.get("qty"))
+	if not capped:
+		# Like production_api, an Additional GRN takes the whole output on the first match.
+		return [(candidates[0], requested)]
 	pending_total = sum(max(flt(row.get("pending_quantity")), 0) for row in candidates)
 	if requested > pending_total + QTY_TOLERANCE:
 		frappe.throw(

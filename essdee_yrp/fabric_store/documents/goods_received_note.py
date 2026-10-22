@@ -267,7 +267,7 @@ def _calculate_eligible(doc) -> bool:
 		and cint(doc.docstatus) == 0
 		and doc.get("against") == "YRP Work Order"
 		and doc.get("against_id")
-		and not any(doc.get(fieldname) for fieldname in SPECIAL_SOURCE_FIELDS)
+		and not any(doc.get(fieldname) for fieldname in SPECIAL_SOURCE_FIELDS if fieldname != "additional_grn")
 	)
 
 

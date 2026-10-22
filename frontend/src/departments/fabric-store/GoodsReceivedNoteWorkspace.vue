@@ -167,7 +167,7 @@
 												<small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
-											<td><InputText v-model="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="markDirty" /><Button v-if="block.kind === 'items' && canEditDraft && !workspace.special_source?.active" label="Add split" size="small" severity="secondary" text @click="openSplit(section.group, row)" /></td><td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
+											<td><InputText v-model="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="markDirty" /><Button v-if="block.kind === 'items' && canEditDraft && !workspace.special_source?.read_only" label="Add split" size="small" severity="secondary" text @click="openSplit(section.group, row)" /></td><td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td class="erp-number goods-received-note-matrix__value">{{ formatMoney(rowValue(row)) }}</td>
 											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>

@@ -17,33 +17,7 @@ from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
 @frappe.whitelist()
 def get_defaults(work_order):
 	defaults = get_work_order_defaults(work_order)
-	wo = frappe.get_doc("YRP Work Order", work_order)
-	types, default_type = _get_received_type_options(None)
-	rows = []
-	for source in wo.receivables:
-		for received_type in [default_type or types[0]]:
-			rows.append(
-				frappe._dict(
-					item_variant=source.item_variant,
-					quantity=0,
-					uom=source.uom,
-					pending_quantity=source.pending_quantity,
-					max_receivable_quantity=-1,
-					ref_doctype=source.doctype,
-					ref_docname=source.name,
-					table_index=source.table_index,
-					row_index=f"{source.row_index}::{received_type}",
-					set_combination=source.set_combination,
-					rate=source.cost,
-					received_type=received_type,
-					lot=wo.get("lot"),
-				)
-			)
-	_apply_dimension_values_to_rows(rows, _get_production_group_dimensions(wo))
-	apply_dimension_defaults(rows)
-	from essdee_yrp.overrides.goods_received_note import normalize_cutting_grn_row_indexes
-
-	rows = normalize_cutting_grn_row_indexes(rows)
+	rows = get_receivable_rows(frappe.get_doc("YRP Work Order", work_order))
 	defaults.update(
 		items=rows,
 		item_details=group_items_for_ui(rows, "YRP Goods Received Note"),
@@ -51,6 +25,40 @@ def get_defaults(work_order):
 		correction_item_details=[],
 	)
 	return defaults
+
+
+def get_receivable_rows(wo, existing_rows=None):
+	"""Every WO receivable in every Received Type, like a regular GRN, without the pending cap."""
+	from essdee_yrp.overrides.goods_received_note import normalize_cutting_grn_row_indexes
+
+	types, default_type = _get_received_type_options(existing_rows)
+	quantities = {}
+	for row in existing_rows or []:
+		key = (row.get("ref_docname"), row.get("received_type") or default_type)
+		quantities[key] = flt(quantities.get(key)) + flt(row.get("quantity"))
+	rows = []
+	for source in wo.receivables:
+		for received_type in types:
+			row = frappe._dict(
+				item_variant=source.item_variant,
+				quantity=quantities.get((source.name, received_type), 0),
+				uom=source.uom,
+				pending_quantity=source.pending_quantity,
+				max_receivable_quantity=-1,
+				ref_doctype=source.doctype,
+				ref_docname=source.name,
+				table_index=source.table_index,
+				row_index=f"{source.row_index}::{received_type}" if received_type else source.row_index,
+				set_combination=source.set_combination,
+				rate=source.cost,
+				lot=wo.get("lot"),
+			)
+			if received_type:
+				row.received_type = received_type
+			rows.append(row)
+	_apply_dimension_values_to_rows(rows, _get_production_group_dimensions(wo))
+	apply_dimension_defaults(rows)
+	return normalize_cutting_grn_row_indexes(rows)
 
 
 def validate_receivables(grn):

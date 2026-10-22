@@ -34,3 +34,41 @@ class TestAdditionalGRN(TestCase):
 				validate_submit_role()
 			roles.return_value = ["Stock Manager"]
 			validate_submit_role()
+
+	def test_receivable_rows_offer_every_received_type_like_a_regular_grn(self):
+		from essdee_yrp.additional_grn import get_receivable_rows
+
+		wo = frappe._dict(
+			lot="LOT-1",
+			receivables=[
+				frappe._dict(
+					doctype="YRP Work Order Receivables",
+					name="WOR-1",
+					item_variant="STYLE-S",
+					uom="Nos",
+					pending_quantity=0,
+					table_index=0,
+					row_index=0,
+					set_combination="{}",
+					cost=10,
+				)
+			],
+		)
+		existing = [frappe._dict(ref_docname="WOR-1", received_type="Rejected", quantity=4)]
+		with (
+			patch(
+				"essdee_yrp.additional_grn._get_received_type_options",
+				return_value=(["Accepted", "Rejected", "Rework"], "Accepted"),
+			),
+			patch("essdee_yrp.additional_grn._get_production_group_dimensions", return_value={}),
+			patch("essdee_yrp.additional_grn.apply_dimension_defaults"),
+			patch(
+				"essdee_yrp.overrides.goods_received_note.normalize_cutting_grn_row_indexes",
+				side_effect=lambda rows: rows,
+			),
+		):
+			rows = get_receivable_rows(wo, existing)
+		self.assertEqual([row.received_type for row in rows], ["Accepted", "Rejected", "Rework"])
+		self.assertEqual([row.quantity for row in rows], [0, 4, 0])
+		self.assertEqual({row.max_receivable_quantity for row in rows}, {-1})
+		self.assertEqual(rows[1].row_index, "0::Rejected")

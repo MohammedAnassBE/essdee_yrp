@@ -270,7 +270,6 @@ function configure_calculate_button(frm) {
 		|| !frm.doc.against_id
 		|| frm.doc.is_return
 		|| frm.doc.is_rework
-		|| frm.doc.additional_grn
 		|| frm.doc.includes_packing
 		|| frm.doc.cutting_laysheet
 		|| frm.doc.cut_panel_movement

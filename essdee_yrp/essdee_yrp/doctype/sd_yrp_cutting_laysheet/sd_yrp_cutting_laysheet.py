@@ -23,6 +23,7 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 )
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant, get_parent_item
 
+from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
 from essdee_yrp.cutting.parent_adapter import (
 	get_completed_incomplete_json,
 	get_detail_doc,
@@ -143,6 +144,12 @@ class SDYRPCuttingLaySheet(Document):
 					"cutting_marker_groups": [],
 				}
 				self.set_onload("marker_details", details)
+
+	def on_update(self):
+		previous = self.get_doc_before_save()
+		statuses = {self.status, previous.status if previous else None}
+		if self.cutting_plan and "Label Printed" in statuses:
+			recompute_cutting_plan_cloth_usage(self.cutting_plan)
 
 	def after_insert(self):
 		parent_dt, parent_name = get_parent_ref(self)
@@ -1642,10 +1649,15 @@ def update_cutting_plan(cutting_laysheet, check_cp=False):
 	if cls_doc.status not in ("Bundles Generated", "Label Printed"):
 		frappe.throw(f"Cutting totals cannot be updated from a {cls_doc.status} Cutting LaySheet.")
 	apply_laysheet_to_parent(cls_doc, check_cp)
+	if cls_doc.cutting_plan and not check_cp:
+		recompute_cutting_plan_cloth_usage(cls_doc.cutting_plan)
 
 
 def apply_laysheet_to_parent(cls_doc, check_cp=False):
-	"""Add a LaySheet's cut quantities and cloth usage to its plan/order; MRP update_cutting_plan."""
+	"""Add a LaySheet's cut quantities to its plan/order and check its cloth rows; MRP update_cutting_plan.
+
+	Cloth usage is not added here: recompute_cutting_plan_cloth_usage derives it from the plan's LaySheets.
+	"""
 	parent_dt, parent_name = get_parent_ref(cls_doc)
 	_production_detail, incomplete_items_json, completed_items_json, version = get_completed_incomplete_json(
 		parent_dt, parent_name
@@ -1768,7 +1780,6 @@ def apply_laysheet_to_parent(cls_doc, check_cp=False):
 		if has_cloth_tracking(parent_dt):
 			cloth = {}
 			accessory = {}
-			accessory_cloth = {}
 			cp_cloth = []
 			cp_accessory = []
 			for item in cls_doc.cutting_laysheet_details:
@@ -1784,9 +1795,6 @@ def apply_laysheet_to_parent(cls_doc, check_cp=False):
 				)
 				accessory.setdefault(key, 0)
 				accessory[key] += item.weight
-				key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.actual_dia))
-				accessory_cloth.setdefault(key, 0)
-				accessory_cloth[key] += item.weight
 
 			cp_doc = frappe.get_doc("SD YRP Cutting Plan", parent_name)
 
@@ -1820,25 +1828,6 @@ def apply_laysheet_to_parent(cls_doc, check_cp=False):
 							)
 
 			if not check_cp:
-				for item in cp_doc.cutting_plan_cloth_details:
-					key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
-					if key in cloth:
-						item.used_weight += cloth[key]
-						item.balance_weight = item.weight - item.used_weight
-					if key in accessory_cloth:
-						item.used_weight += accessory_cloth[key]
-						item.balance_weight = item.weight - item.used_weight
-
-				for item in cp_doc.cutting_plan_accessory_details:
-					key = (
-						item.accessory,
-						_attribute_value(item.colour),
-						item.cloth_type,
-						_attribute_value(item.dia),
-					)
-					if key in accessory:
-						item.used_weight += accessory[key]
-
 				cp_doc.incomplete_items_json = incomplete_items
 				cp_doc.completed_items_json = completed_items
 				cp_doc.save(ignore_permissions=True)
@@ -2020,20 +2009,6 @@ def apply_laysheet_to_parent(cls_doc, check_cp=False):
 							frappe.throw(f"No accessory is mentioned with {cloth_type}, {colour}-{dia}")
 
 			if not check_cp:
-				for item in cp_doc.cutting_plan_cloth_details:
-					key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
-					if key in cloth:
-						item.used_weight += cloth[key]
-						item.balance_weight = item.weight - item.used_weight
-					if key in accessory:
-						item.used_weight += accessory[key]
-						item.balance_weight = item.weight - item.used_weight
-
-				for item in cp_doc.cutting_plan_accessory_details:
-					key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
-					if key in accessory:
-						item.used_weight += accessory[key]
-
 				cp_doc.incomplete_items_json = incomplete_items
 				cp_doc.completed_items_json = completed_items
 				cp_doc.save(ignore_permissions=True)

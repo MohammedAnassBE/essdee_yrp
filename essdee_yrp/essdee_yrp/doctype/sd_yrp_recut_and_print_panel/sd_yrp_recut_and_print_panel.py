@@ -15,6 +15,7 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 )
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
 
+from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
 
 
@@ -24,15 +25,19 @@ class SDYRPRecutandPrintPanel(Document):
 		self._set_cloth_variants_and_rates()
 
 	def before_submit(self):
-		self._update_cutting_plan(multiplier=1)
+		self._validate_cutting_plan_cloth_rows()
 		make_sl_entries(self._get_stock_ledger_entries())
+
+	def on_submit(self):
+		recompute_cutting_plan_cloth_usage(self.cutting_plan)
+		self._validate_cutting_plan_balance()
 
 	def before_cancel(self):
 		self.ignore_linked_doctypes = ("YRP Stock Ledger Entry", "YRP Repost Item Valuation")
-		self._update_cutting_plan(multiplier=-1)
 
 	def on_cancel(self):
 		make_sl_entries(self._get_stock_ledger_entries(cancel=True), cancel=True)
+		recompute_cutting_plan_cloth_usage(self.cutting_plan)
 
 	def _validate_context(self):
 		if not self.cutting_plan:
@@ -111,22 +116,31 @@ class SDYRPRecutandPrintPanel(Document):
 				**self._dimension_values(row),
 			)
 
-	def _update_cutting_plan(self, *, multiplier):
-		cloth = {}
-		for row in self.get("recut_and_print_panel_details") or []:
-			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
-			cloth[key] = flt(cloth.get(key)) + flt(row.weight)
+	def _recut_cloth_keys(self):
+		return {
+			(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
+			for row in self.get("recut_and_print_panel_details") or []
+		}
 
-		plan = frappe.get_doc("SD YRP Cutting Plan", self.cutting_plan)
-		matched = set()
-		for row in plan.get("cutting_plan_cloth_details") or []:
-			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
-			if key not in cloth:
-				continue
-			matched.add(key)
-			row.used_weight = flt(row.used_weight) + (multiplier * cloth[key])
-			row.balance_weight = flt(row.weight) - flt(row.used_weight)
-			if row.balance_weight < -1e-6:
+	def _plan_cloth_rows(self):
+		return {
+			(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia)): row
+			for row in frappe.get_doc("SD YRP Cutting Plan", self.cutting_plan).cutting_plan_cloth_details
+		}
+
+	def _validate_cutting_plan_cloth_rows(self):
+		missing = self._recut_cloth_keys() - set(self._plan_cloth_rows())
+		if missing:
+			colour, cloth_type, dia = next(iter(missing))
+			frappe.throw(
+				_("No Cutting Plan cloth row exists for {0} / {1} / {2}.").format(dia, colour, cloth_type)
+			)
+
+	def _validate_cutting_plan_balance(self):
+		plan_rows = self._plan_cloth_rows()
+		for key in self._recut_cloth_keys():
+			row = plan_rows[key]
+			if flt(row.balance_weight) < -1e-6:
 				frappe.throw(
 					_("{0} {1}, {2} was used more than the received weight.").format(
 						frappe.bold(_attribute_value(row.dia)),
@@ -134,13 +148,6 @@ class SDYRPRecutandPrintPanel(Document):
 						frappe.bold(row.cloth_type),
 					)
 				)
-		missing = set(cloth) - matched
-		if missing:
-			colour, cloth_type, dia = next(iter(missing))
-			frappe.throw(
-				_("No Cutting Plan cloth row exists for {0} / {1} / {2}.").format(dia, colour, cloth_type)
-			)
-		plan.save(ignore_permissions=True)
 
 	def _get_stock_ledger_entries(self, *, cancel=False):
 		warehouse = self._warehouse()

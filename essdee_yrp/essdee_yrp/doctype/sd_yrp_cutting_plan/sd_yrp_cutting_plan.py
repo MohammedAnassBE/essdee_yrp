@@ -15,6 +15,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_crea
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 from essdee_yrp.cutting.cloth_substitution import expand_cutting_rows
+from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	_save_laysheet_terminal_transition,
 	apply_laysheet_to_parent,
@@ -729,17 +730,12 @@ def calculate_laysheets(cutting_plan, ignore_phantom_panels=False):
 
 
 def calc(cutting_plan):
+	"""Rebuild the plan's cut quantities and cloth usage from its Label Printed LaySheets."""
 	cp_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 	item_details = fetch_order_item_details(cp_doc.items, cp_doc.production_detail)
 	completed, incomplete = get_complete_incomplete_structure(cp_doc.production_detail, item_details)
 	cp_doc.completed_items_json = completed
 	cp_doc.incomplete_items_json = incomplete
-	for item in cp_doc.cutting_plan_cloth_details:
-		item.used_weight = 0
-		item.balance_weight = 0
-
-	for item in cp_doc.cutting_plan_accessory_details:
-		item.used_weight = 0
 	cp_doc.save()
 
 	cls_list = frappe.get_list(
@@ -749,33 +745,7 @@ def calc(cutting_plan):
 	)
 	for cls in cls_list:
 		apply_laysheet_to_parent(frappe.get_doc("SD YRP Cutting LaySheet", cls))
-
-	cp_doc.reload()
-	cloth = {}
-	recut_items = frappe.get_all(
-		"SD YRP Recut and Print Panel",
-		filters={
-			"cutting_plan": cutting_plan,
-			"docstatus": 1,
-		},
-		pluck="name",
-	)
-
-	for recut in recut_items:
-		recut_doc = frappe.get_doc("SD YRP Recut and Print Panel", recut)
-		for item in recut_doc.recut_and_print_panel_details:
-			key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
-			cloth.setdefault(key, 0)
-			cloth[key] += item.weight
-
-	for item in cp_doc.cutting_plan_cloth_details:
-		key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.dia))
-		if key not in cloth:
-			continue
-		item.used_weight += cloth[key]
-		item.balance_weight = item.weight - item.used_weight
-
-	cp_doc.save()
+	recompute_cutting_plan_cloth_usage(cutting_plan)
 
 
 @frappe.whitelist()

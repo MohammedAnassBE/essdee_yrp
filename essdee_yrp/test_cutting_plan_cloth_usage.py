@@ -1,15 +1,22 @@
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import flt
+from yrp.attribute_links import value as attribute_value
 
+from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet import sd_yrp_cutting_laysheet as laysheet_module
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
+	_save_laysheet_terminal_transition,
 	update_cutting_plan,
 	validate_cutting_plan_cloth_balance,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import calc
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_recut_and_print_panel import (
+	sd_yrp_recut_and_print_panel as recut_module,
+)
 
 
 def _laysheet(used_weight, accessory_weight=0):
@@ -67,25 +74,143 @@ class TestBundleGenerationClothBalance(IntegrationTestCase):
 		plan.save.assert_not_called()
 
 
-class TestCuttingPlanUsedWeightFlow(IntegrationTestCase):
-	def test_generate_then_print_counts_laysheet_cloth_once(self):
+class TestCuttingPlanClothUsageFromLaySheets(IntegrationTestCase):
+	"""Used weight is the plan's Label Printed LaySheets counted once, whatever events ran."""
+
+	def test_repeated_label_print_counts_each_laysheet_once(self):
+		cutting_plan, laysheet_name = _find_plan_with_printed_laysheets(with_laysheet=True)
+		if not cutting_plan:
+			self.skipTest("No V3 Cutting Plan with two Label Printed LaySheets is available")
+		expected = _expected_used_weights(cutting_plan)
+		frappe.db.savepoint("label_print_retry")
+		try:
+			update_cutting_plan(laysheet_name)
+			update_cutting_plan(laysheet_name)
+			after = _plan_used_weights(cutting_plan)
+		finally:
+			frappe.db.rollback(save_point="label_print_retry")
+
+		_assert_usage(self, after, expected)
+
+	def test_bundle_generation_then_print_counts_laysheet_once(self):
 		laysheet_name = _find_single_pending_laysheet()
 		if not laysheet_name:
 			self.skipTest("No V3 Cutting Plan with one Bundles Generated LaySheet is available")
 		laysheet = frappe.get_doc("SD YRP Cutting LaySheet", laysheet_name)
-		frappe.db.savepoint("cloth_usage_flow")
+		frappe.db.savepoint("generate_then_print")
 		try:
-			calc(laysheet.cutting_plan)
-			before = _plan_used_weights(laysheet.cutting_plan)
+			recompute_cutting_plan_cloth_usage(laysheet.cutting_plan)
 			validate_cutting_plan_cloth_balance(laysheet, laysheet.cutting_plan)
 			update_cutting_plan(laysheet_name)
-			after = _plan_used_weights(laysheet.cutting_plan)
+			while_printing = _plan_used_weights(laysheet.cutting_plan)
+			expected_while_printing = _expected_used_weights(laysheet.cutting_plan)
+			laysheet.reload()
+			laysheet.status = "Label Printed"
+			_save_laysheet_terminal_transition(laysheet)
+			update_cutting_plan(laysheet_name)
+			printed = _plan_used_weights(laysheet.cutting_plan)
+			expected_printed = _expected_used_weights(laysheet.cutting_plan)
 		finally:
-			frappe.db.rollback(save_point="cloth_usage_flow")
+			frappe.db.rollback(save_point="generate_then_print")
 
-		for row in laysheet.cutting_laysheet_details:
-			key = (row.colour, row.cloth_type, row.actual_dia)
-			self.assertAlmostEqual(after[key], before[key] + flt(row.used_weight), places=3)
+		_assert_usage(self, while_printing, expected_while_printing)
+		_assert_usage(self, printed, expected_printed)
+
+	def test_two_printed_laysheets_sum_their_used_cloth(self):
+		cutting_plan, _laysheet_name = _find_plan_with_printed_laysheets(with_laysheet=True)
+		if not cutting_plan:
+			self.skipTest("No V3 Cutting Plan with two Label Printed LaySheets is available")
+		frappe.db.savepoint("two_laysheets")
+		try:
+			row = _keep_two_laysheets_cutting(cutting_plan, [(121, 0), (160, 1.5)])
+			recompute_cutting_plan_cloth_usage(cutting_plan)
+			recompute_cutting_plan_cloth_usage(cutting_plan)
+			used_weight, balance_weight = frappe.db.get_value(
+				"SD YRP Cutting Plan Cloth Detail", row.name, ["used_weight", "balance_weight"]
+			)
+		finally:
+			frappe.db.rollback(save_point="two_laysheets")
+
+		self.assertAlmostEqual(flt(used_weight), 279.5, places=3)
+		self.assertAlmostEqual(flt(balance_weight), flt(row.weight) - 279.5, places=3)
+
+
+class TestClothUsageRecomputeTriggers(IntegrationTestCase):
+	def _laysheet_save(self, before_status, status):
+		doc = frappe.new_doc("SD YRP Cutting LaySheet")
+		doc.update({"cutting_plan": "CP-TEST", "status": status})
+		doc._doc_before_save = frappe._dict(status=before_status)
+		with patch.object(laysheet_module, "recompute_cutting_plan_cloth_usage") as recompute:
+			doc.on_update()
+		return recompute
+
+	def test_label_print_and_revert_recompute_plan_usage(self):
+		self._laysheet_save("Bundles Generated", "Label Printed").assert_called_once_with("CP-TEST")
+		self._laysheet_save("Label Printed", "Bundles Generated").assert_called_once_with("CP-TEST")
+		self._laysheet_save("Label Printed", "Cancelled").assert_called_once_with("CP-TEST")
+
+	def test_unprinted_laysheet_save_leaves_plan_usage(self):
+		self._laysheet_save("Completed", "Bundles Generated").assert_not_called()
+
+	def test_recut_submit_and_cancel_recompute_plan_usage(self):
+		doc = frappe.new_doc("SD YRP Recut and Print Panel")
+		doc.cutting_plan = "CP-TEST"
+		with (
+			patch.object(recut_module, "recompute_cutting_plan_cloth_usage") as recompute,
+			patch.object(recut_module, "make_sl_entries"),
+			patch.object(type(doc), "_get_stock_ledger_entries", return_value=[]),
+			patch.object(type(doc), "_validate_cutting_plan_balance"),
+		):
+			doc.on_submit()
+			doc.on_cancel()
+		self.assertEqual(recompute.call_args_list, [call("CP-TEST"), call("CP-TEST")])
+
+
+def _assert_usage(test, actual, expected):
+	for key, (used_weight, balance_weight) in expected.items():
+		test.assertAlmostEqual(actual[key][0], used_weight, places=3, msg=str(key))
+		test.assertAlmostEqual(actual[key][1], balance_weight, places=3, msg=str(key))
+
+
+def _keep_two_laysheets_cutting(cutting_plan, weights):
+	"""Leave two Label Printed LaySheets, each cutting one (weight, balance) of the plan's first cloth row."""
+	row = frappe.get_all(
+		"SD YRP Cutting Plan Cloth Detail",
+		filters={"parent": cutting_plan, "parentfield": "cutting_plan_cloth_details"},
+		fields=["name", "colour", "cloth_type", "dia", "weight"],
+		order_by="idx asc",
+		limit=1,
+	)[0]
+	laysheets = frappe.get_all(
+		"SD YRP Cutting LaySheet",
+		filters={"cutting_plan": cutting_plan, "status": "Label Printed"},
+		pluck="name",
+		limit=2,
+	)
+	frappe.db.sql(
+		"""UPDATE `tabSD YRP Cutting LaySheet` SET status = 'Cancelled'
+		WHERE cutting_plan = %s AND name NOT IN %s""",
+		(cutting_plan, tuple(laysheets)),
+	)
+	for doctype in ("SD YRP Cutting LaySheet Detail", "SD YRP Cutting LaySheet Accessory Detail"):
+		frappe.db.delete(doctype, {"parent": ["in", laysheets]})
+	for laysheet, (weight, balance_weight) in zip(laysheets, weights, strict=True):
+		frappe.get_doc(
+			{
+				"doctype": "SD YRP Cutting LaySheet Detail",
+				"name": frappe.generate_hash(length=12),
+				"parent": laysheet,
+				"parenttype": "SD YRP Cutting LaySheet",
+				"parentfield": "cutting_laysheet_details",
+				"colour": row.colour,
+				"cloth_type": row.cloth_type,
+				"dia": row.dia,
+				"actual_dia": row.dia,
+				"weight": weight,
+				"balance_weight": balance_weight,
+			}
+		).db_insert()
+	return row
 
 
 def _find_single_pending_laysheet():
@@ -111,7 +236,7 @@ def _find_single_pending_laysheet():
 def _plan_used_weights(cutting_plan):
 	plan = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 	return {
-		(row.colour, row.cloth_type, row.dia): flt(row.used_weight, 3)
+		_key(row.colour, row.cloth_type, row.dia): (flt(row.used_weight, 3), flt(row.balance_weight, 3))
 		for row in plan.cutting_plan_cloth_details
 	}
 
@@ -138,15 +263,36 @@ class TestCalculateLaySheetsRepairsUsedWeight(IntegrationTestCase):
 			frappe.set_user("Administrator")
 			frappe.db.rollback(save_point="calc_repair")
 
-		for key, used_weight in expected.items():
-			self.assertAlmostEqual(first[key], used_weight, places=2)
-			self.assertAlmostEqual(second[key], used_weight, places=2)
+		_assert_usage(self, first, expected)
+		_assert_usage(self, second, expected)
+
+	def test_recompute_repairs_double_counted_plan_idempotently(self):
+		cutting_plan = _find_plan_with_printed_laysheets()
+		if not cutting_plan:
+			self.skipTest("No V3 Cutting Plan with two Label Printed LaySheets is available")
+		expected = _expected_used_weights(cutting_plan)
+		frappe.db.savepoint("recompute_repair")
+		try:
+			frappe.db.sql(
+				"""UPDATE `tabSD YRP Cutting Plan Cloth Detail` SET used_weight = used_weight * 2 + 158
+				WHERE parent = %s""",
+				cutting_plan,
+			)
+			recompute_cutting_plan_cloth_usage(cutting_plan)
+			first = _plan_used_weights(cutting_plan)
+			recompute_cutting_plan_cloth_usage(cutting_plan)
+			second = _plan_used_weights(cutting_plan)
+		finally:
+			frappe.db.rollback(save_point="recompute_repair")
+
+		_assert_usage(self, first, expected)
+		_assert_usage(self, second, expected)
 
 
-def _find_plan_with_printed_laysheets():
+def _find_plan_with_printed_laysheets(with_laysheet=False):
 	rows = frappe.db.sql(
 		"""
-		SELECT plan.name
+		SELECT plan.name, MAX(laysheet.name)
 		FROM `tabSD YRP Cutting Plan` plan
 		JOIN `tabSD YRP Cutting LaySheet` laysheet ON laysheet.cutting_plan = plan.name
 		WHERE plan.docstatus = 1 AND plan.version = 'V3' AND laysheet.status = 'Label Printed'
@@ -161,11 +307,17 @@ def _find_plan_with_printed_laysheets():
 		LIMIT 1
 		"""
 	)
+	if with_laysheet:
+		return rows[0] if rows else (None, None)
 	return rows[0][0] if rows else None
 
 
 def _expected_used_weights(cutting_plan):
-	expected = {key: 0.0 for key in _plan_used_weights(cutting_plan)}
+	weights = {
+		_key(row.colour, row.cloth_type, row.dia): flt(row.weight)
+		for row in frappe.get_doc("SD YRP Cutting Plan", cutting_plan).cutting_plan_cloth_details
+	}
+	expected = dict.fromkeys(weights, 0.0)
 	details = frappe.db.sql(
 		"""
 		SELECT detail.colour, detail.cloth_type, detail.actual_dia, detail.weight - detail.balance_weight
@@ -181,9 +333,14 @@ def _expected_used_weights(cutting_plan):
 		{"plan": cutting_plan},
 	)
 	for colour, cloth_type, dia, used_weight in details:
-		if (colour, cloth_type, dia) in expected:
-			expected[(colour, cloth_type, dia)] += flt(used_weight)
-	return expected
+		key = _key(colour, cloth_type, dia)
+		if key in expected:
+			expected[key] += flt(used_weight)
+	return {key: (used, weights[key] - used) for key, used in expected.items()}
+
+
+def _key(colour, cloth_type, dia):
+	return (attribute_value(colour), cloth_type, attribute_value(dia))
 
 
 def _planner_without_laysheet_write():

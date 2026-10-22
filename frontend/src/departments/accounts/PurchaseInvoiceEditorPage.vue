@@ -106,6 +106,7 @@ import {
 	isCurrentRecordAction,
 	isMaskedValue,
 	purchaseInvoiceEditorField,
+	purchaseInvoiceGrnSupplier,
 	purchaseInvoicePreviewTotals,
 	purchaseInvoiceSaveValues,
 	queryValue,
@@ -262,7 +263,7 @@ function updateField(fieldname, value) {
 		return
 	}
 	form[fieldname] = value ?? ""
-	if (fieldname !== "against") return
+	if (!["against", "billing_supplier"].includes(fieldname)) return
 	grns.value = []
 	items.value = []
 	fetchWarnings.value = []
@@ -285,10 +286,11 @@ async function fetchSelectedGrns() {
 	fetchWarnings.value = []
 	actionError.value = ""
 	try {
+		const supplier = purchaseInvoiceGrnSupplier(form)
 		const payload = await fetchGrnDetails({
 			grns: grns.value,
 			against: form.against,
-			supplier: isMaskedValue(form.supplier) ? undefined : form.supplier,
+			supplier: isMaskedValue(supplier) ? undefined : supplier,
 			purchaseInvoice: request.name || undefined,
 			billTracking: form.bill_tracking || undefined,
 		}) || {}

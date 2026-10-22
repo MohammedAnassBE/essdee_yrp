@@ -102,6 +102,10 @@ export function groupedItemTotals(rows = [], taxRates = {}) {
 	}
 }
 
+export function purchaseInvoiceGrnSupplier(values) {
+	return values.billing_supplier || values.supplier
+}
+
 export function applySupplierChange(state, supplier) {
 	return {
 		...state,

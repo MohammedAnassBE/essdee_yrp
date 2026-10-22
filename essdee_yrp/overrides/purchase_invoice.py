@@ -24,6 +24,7 @@ from essdee_yrp.purchase_invoice import (
 	build_purchase_order_invoice_payload,
 	build_verification_details,
 	build_work_order_invoice_payload,
+	get_invoice_grn_supplier,
 	project_purchase_order_items,
 )
 from essdee_yrp.work_order_billing import (
@@ -96,7 +97,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			if row.grn in seen:
 				frappe.throw(_("GRN {0} is duplicated.").format(row.grn))
 			seen.add(row.grn)
-			_validate_selected_grn(row.grn, self.supplier, self.against, self.name)
+			_validate_selected_grn(row.grn, get_invoice_grn_supplier(self), self.against, self.name)
 
 	def _lock_selected_grns(self):
 		names = sorted({row.grn for row in self.get("grn") or [] if row.grn})
@@ -208,7 +209,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 		expense_heads = {row.group_key: row.expense_head for row in posted_rows}
 		payload = build_work_order_invoice_payload(
 			grns,
-			supplier=self.supplier,
+			supplier=get_invoice_grn_supplier(self),
 			purchase_invoice=None if self.is_new() else self.name,
 			final_rates=final_rates,
 			expense_heads=expense_heads,
@@ -252,7 +253,7 @@ class EssdeePurchaseInvoice(PurchaseInvoice):
 			grns = [row.grn for row in self.get("grn") or [] if row.grn]
 			payload = build_purchase_order_invoice_payload(
 				grns,
-				supplier=self.supplier,
+				supplier=get_invoice_grn_supplier(self),
 				purchase_invoice=None if self.is_new() else self.name,
 				final_rates=final_rates,
 				expense_heads=expense_heads,

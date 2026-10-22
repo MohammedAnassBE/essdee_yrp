@@ -346,6 +346,24 @@ class TestPurchaseInvoiceEditor(TestCase):
 			):
 				_resolve_grn_supplier(supplier)
 
+	def test_resolve_grn_supplier_uses_billing_supplier_with_fallback(self):
+		from essdee_yrp.purchase_invoice import _resolve_grn_supplier
+
+		for billing_supplier in ("SUP-2", "", None):
+			for supplier in (None, "XXXXXXXX"):
+				doc = FakeInvoice(supplier="SUP-1", billing_supplier=billing_supplier)
+				with (
+					self.subTest(billing_supplier=billing_supplier, supplier=supplier),
+					patch("essdee_yrp.purchase_invoice.frappe.db.exists", return_value=True),
+					patch("essdee_yrp.purchase_invoice.frappe.get_doc", return_value=doc),
+				):
+					self.assertEqual(
+						_resolve_grn_supplier(supplier, purchase_invoice=doc.name),
+						billing_supplier or "SUP-1",
+					)
+					self.assertEqual(_resolve_grn_supplier("SUP-3", purchase_invoice=doc.name), "SUP-3")
+				self.assertEqual(doc.checked_permissions, ["write"])
+
 	def test_eligible_grns_requires_resolvable_supplier(self):
 		from essdee_yrp.purchase_invoice import get_eligible_grns
 
@@ -361,7 +379,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 	def test_eligible_grns_resolves_masked_supplier_from_existing_invoice(self):
 		from essdee_yrp.purchase_invoice import get_eligible_grns
 
-		doc = FakeInvoice(supplier="SUP-1")
+		doc = FakeInvoice(supplier="SUP-1", billing_supplier="SUP-2")
 		with (
 			patch("essdee_yrp.purchase_invoice.frappe.db.exists", return_value=True),
 			patch("essdee_yrp.purchase_invoice.frappe.get_doc", return_value=doc),
@@ -383,7 +401,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 		self.assertEqual(doc.checked_permissions, ["write"])
 		self.assertEqual(
 			get_list.call_args.kwargs["filters"],
-			{"docstatus": 1, "supplier": "SUP-1", "against": "Purchase Order"},
+			{"docstatus": 1, "supplier": "SUP-2", "against": "Purchase Order"},
 		)
 		self.assertEqual(get_list.call_args.kwargs["limit_page_length"], 75)
 
@@ -618,6 +636,37 @@ class TestPurchaseInvoiceEditor(TestCase):
 			self.assertRaisesRegex(frappe.ValidationError, "belongs to another supplier"),
 		):
 			EssdeePurchaseInvoice.validate_grns(doc)
+
+	def test_invoice_validation_uses_billing_supplier_with_fallback(self):
+		from essdee_yrp.overrides.purchase_invoice import EssdeePurchaseInvoice
+
+		for against in ("Purchase Order", "YRP Work Order"):
+			for billing_supplier in ("SUP-2", "", None):
+				doc = frappe._dict(
+					name="PI-1",
+					supplier="SUP-1",
+					billing_supplier=billing_supplier,
+					against=against,
+					grn=[frappe._dict(idx=1, grn="GRN-1")],
+				)
+				grn = frappe._dict(
+					docstatus=1,
+					supplier=billing_supplier or "SUP-1",
+					against=against,
+					purchase_invoice_name=None,
+				)
+				with (
+					self.subTest(against=against, billing_supplier=billing_supplier),
+					patch("essdee_yrp.work_order_billing.frappe.db.exists", return_value=True),
+					patch("essdee_yrp.work_order_billing.frappe.db.get_value", return_value=grn),
+					patch("essdee_yrp.work_order_billing.frappe.has_permission"),
+					patch("essdee_yrp.work_order_billing._is_active_purchase_invoice", return_value=False),
+					patch("essdee_yrp.work_order_billing._active_invoice_links_for_grns", return_value={}),
+				):
+					EssdeePurchaseInvoice.validate_grns(doc)
+					grn.supplier = "SUP-OTHER"
+					with self.assertRaisesRegex(frappe.ValidationError, "belongs to another supplier"):
+						EssdeePurchaseInvoice.validate_grns(doc)
 
 	def test_fetch_validation_ignores_cancelled_direct_link_but_rejects_active_child(self):
 		from essdee_yrp.work_order_billing import _validate_selected_grn

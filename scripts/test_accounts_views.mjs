@@ -70,7 +70,7 @@ assert.equal(departments.find(({ key }) => key === "accounts").sections.bill_tra
 assert.equal(canOpenList(billTrackingPath, { user: { can_read: ["YRP Bill Tracking"] } }), true)
 assert.equal(canOpenList(billTrackingPath, { user: { can_read: [] } }), false)
 const layouts = JSON.parse(readFileSync(new URL("../essdee_yrp/fixtures/yrp_ui_layout.json", import.meta.url), "utf8"))
-assert.deepEqual(JSON.parse(layouts.find(({ name }) => name === "Accounts").config).experience_props.workspaces, ["purchase_invoices", "bill_tracking", "reports"])
+assert.deepEqual(JSON.parse(layouts.find(({ name }) => name === "Accounts").config).experience_props.workspaces, ["purchase_invoices", "bill_tracking", "reports", "debits"])
 
 assert.deepEqual(
 	ACCOUNTS_REPORTS.slice(0, -1).map((report) => report.key),
@@ -299,3 +299,99 @@ assert.equal(accountsRequests[3].body.limit, 200)
 assert.equal(accountsRequests[3].body.search_text, "needle")
 
 console.log("accounts views OK")
+
+const accountsViews = await import("../frontend/src/departments/accounts/accountsViews.js")
+const { Vue, findNodes, loadComponent, mountComponent } = await import("./helpers/vue_renderer.mjs")
+for (const billing_supplier of ["BILLING-SUP", "", null, undefined]) {
+	assert.equal(
+		accountsViews.purchaseInvoiceGrnSupplier({ supplier: "BILL-SUP", billing_supplier }),
+		billing_supplier || "BILL-SUP",
+	)
+}
+
+const control = (props) => Vue.h("control", props)
+const flush = async () => {
+	await Vue.nextTick()
+	await Vue.nextTick()
+}
+const grnRequests = []
+const bodyComponent = loadComponent("frontend/src/departments/accounts/components/PurchaseInvoiceEditorBody.vue", {
+	"primevue/button": control,
+	"primevue/message": control,
+	"primevue/column": control,
+	"primevue/checkbox": control,
+	"primevue/datatable": control,
+	"primevue/inputtext": control,
+	"primevue/tag": control,
+	"../../../components/common/FormField.vue": control,
+	"../../../components/documents/DocumentFieldGroupGrid.vue": control,
+	"./PurchaseInvoiceGroupedItems.vue": control,
+	"../accountsViews.js": accountsViews,
+	"../../../api/accounts.js": {
+		getEligibleGrns: async (args) => {
+			grnRequests.push(args)
+			return [{ name: `GRN-${args.supplier}`, total_received_quantity: 12 }]
+		},
+	},
+})
+const bodyProps = Vue.reactive({
+	groups: [], grns: [], items: [], previewTotals: [], currentName: "PI-1",
+	form: { supplier: "BILL-SUP", billing_supplier: "BILLING-SUP", against: "Purchase Order" },
+})
+mountComponent(bodyComponent, bodyProps)
+await flush()
+assert.equal(grnRequests.at(-1).supplier, "BILLING-SUP")
+for (const billingSupplier of ["CHANGED-SUP", "", "XXXXXXXX"]) {
+	const count = grnRequests.length
+	bodyProps.form.billing_supplier = billingSupplier
+	await flush()
+	assert.equal(grnRequests.length, count + 1)
+	assert.equal(grnRequests.at(-1).supplier, billingSupplier === "XXXXXXXX" ? undefined : billingSupplier || "BILL-SUP")
+	assert.equal(grnRequests.at(-1).purchaseInvoice, "PI-1")
+}
+
+const fetchRequests = []
+const pageComponent = loadComponent("frontend/src/departments/accounts/PurchaseInvoiceEditorPage.vue", {
+	"primevue/skeleton": control,
+	"primevue/usetoast": { useToast: () => ({ add() {} }) },
+	"vue-router": {
+		useRoute: () => ({ params: {}, query: {}, fullPath: "/accounts/purchase-invoices/PI-1/edit" }),
+		useRouter: () => ({}), onBeforeRouteLeave() {}, onBeforeRouteUpdate() {},
+	},
+	"../../api/accounts.js": {
+		getPurchaseInvoiceEditor: async () => ({
+			values: { supplier: "BILL-SUP", billing_supplier: "BILLING-SUP", against: "Purchase Order" },
+			grns: ["GRN-1"], items: [{ qty: 12, rate: 5 }], is_rate_only: false,
+		}),
+		fetchGrnDetails: async (args) => { fetchRequests.push(args); return {} },
+	},
+	"../../components/DepartmentPage.vue": (_props, { slots }) => Vue.h("page", {}, slots.default()),
+	"../../components/common/WorkspaceLoadError.vue": control,
+	"../../components/documents/DocumentConfirmationDialog.vue": control,
+	"../../components/documents/DocumentErrorDialog.vue": control,
+	"../../router/listDocumentNavigation.js": { preserveListNavigationState() {} },
+	"./accountsViews.js": accountsViews,
+	"./components/PurchaseInvoiceEditorBody.vue": (props) => Vue.h("editor-body", props),
+	"./components/PurchaseInvoiceEditorHeader.vue": control,
+})
+globalThis.window.addEventListener = () => {}
+globalThis.window.removeEventListener = () => {}
+const page = mountComponent(pageComponent, { purchaseInvoiceId: "PI-1" })
+await flush()
+const editorBody = () => findNodes(page, (node) => node.type === "editor-body")[0].props
+editorBody().onFetch()
+await flush()
+assert.equal(fetchRequests.at(-1).supplier, "BILLING-SUP")
+for (const billingSupplier of ["CHANGED-SUP", "", "XXXXXXXX"]) {
+	editorBody().onUpdateField("billing_supplier", billingSupplier)
+	await flush()
+	assert.equal(editorBody().form.supplier, "BILL-SUP")
+	assert.deepEqual(editorBody().grns, [])
+	assert.deepEqual(editorBody().items, [])
+	editorBody()["onUpdate:grns"](["GRN-2"])
+	await flush()
+	editorBody().onFetch()
+	await flush()
+	assert.equal(fetchRequests.at(-1).supplier, billingSupplier === "XXXXXXXX" ? undefined : billingSupplier || "BILL-SUP")
+}
+console.log("accounts billing supplier GRN refresh and fetch OK")

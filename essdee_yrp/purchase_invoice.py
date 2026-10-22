@@ -401,13 +401,17 @@ def _calculate_verification_grand_total(data):
 	}
 
 
+def get_invoice_grn_supplier(invoice):
+	return invoice.get("billing_supplier") or invoice.get("supplier")
+
+
 def _resolve_grn_supplier(supplier=None, purchase_invoice=None, bill_tracking=None):
 	if supplier and not is_masked_value(supplier):
 		return supplier
 	if purchase_invoice and frappe.db.exists("YRP Purchase Invoice", purchase_invoice):
 		invoice = frappe.get_doc("YRP Purchase Invoice", purchase_invoice)
 		invoice.check_permission("write")
-		resolved_supplier = invoice.get("supplier")
+		resolved_supplier = get_invoice_grn_supplier(invoice)
 	elif bill_tracking:
 		bill = frappe.get_doc("YRP Bill Tracking", bill_tracking)
 		bill.check_permission("read")
@@ -573,7 +577,7 @@ def build_legacy_work_order_invoice_payload(invoice):
 	truth. Historical Work Orders can predate ``process_cost`` and cancelled
 	invoices can share GRNs with their active amendments, so this intentionally
 	does not apply the interactive Fetch GRN ownership checks. It still requires
-	submitted GRNs belonging to the invoice supplier and maps every generated
+	submitted GRNs belonging to the invoice's GRN supplier and maps every generated
 	physical row back to one frozen commercial group.
 	"""
 	commercial_rows = list(invoice.get("essdee_items") or [])
@@ -600,7 +604,8 @@ def build_legacy_work_order_invoice_payload(invoice):
 			"unlinked": True,
 		}
 
-	grn_docs = [_load_historical_work_order_grn(name, invoice.supplier) for name in grn_names]
+	supplier = get_invoice_grn_supplier(invoice)
+	grn_docs = [_load_historical_work_order_grn(name, supplier) for name in grn_names]
 	by_work_order = defaultdict(list)
 	for grn in grn_docs:
 		if not grn.against_id:

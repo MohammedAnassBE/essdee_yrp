@@ -73,6 +73,80 @@ class FakeInvoice:
 
 
 class TestPurchaseInvoiceWorkspace(TestCase):
+	def test_billing_supplier_grn_fetch_save_and_workspace_on_site(self):
+		from frappe.utils import nowdate
+
+		from essdee_yrp.accounts.purchase_invoice_editor import (
+			get_purchase_invoice_editor,
+			save_purchase_invoice,
+		)
+		from essdee_yrp.purchase_invoice import fetch_grn_details, get_eligible_grns
+
+		original_user = frappe.session.user
+		frappe.set_user("Administrator")
+		try:
+			grn_name = frappe.db.get_value(
+				"YRP Goods Received Note",
+				{"docstatus": 1, "against": "Purchase Order", "total": [">", 0]},
+				"name",
+			)
+			self.assertTrue(grn_name, "Expected a Purchase Order GRN with non-zero value")
+			grn = frappe.copy_doc(frappe.get_doc("YRP Goods Received Note", grn_name), ignore_no_copy=False)
+			grn.name = f"E2E-LOCAL-BILLING-GRN-{frappe.generate_hash(length=8)}"
+			grn.docstatus = 1
+			grn.purchase_invoice_name = None
+			grn.set_parent_in_children()
+			grn.db_insert()
+			for row in grn.get_all_children():
+				row.docstatus = 1
+				row.db_insert()
+			bill_supplier = frappe.db.get_value("Supplier", {"name": ["!=", grn.supplier], "disabled": 0})
+			self.assertTrue(bill_supplier, "Expected another supplier for the bill")
+			payload = fetch_grn_details([grn.name], "Purchase Order", supplier=grn.supplier)
+			items = payload["additional_field_values"]["essdee_items"]
+			self.assertGreater(sum(row["qty"] for row in items), 0)
+			self.assertGreater(payload["additional_field_values"]["grand_total"], 0)
+			workspace = save_purchase_invoice(
+				values={
+					"supplier": bill_supplier,
+					"billing_supplier": grn.supplier,
+					"against": "Purchase Order",
+					"bill_no": grn.name,
+					"bill_date": nowdate(),
+					"posting_date": nowdate(),
+				},
+				grns=[grn.name],
+				items=items,
+			)
+			name = workspace["record"]["name"]
+			self.assertEqual(workspace["record"]["supplier"], bill_supplier)
+			self.assertEqual([row["grn"] for row in workspace["grns"]], [grn.name])
+			self.assertGreater(workspace["record"]["grand_total"], 0)
+			editor = get_purchase_invoice_editor(name)
+			self.assertEqual(editor["values"]["billing_supplier"], grn.supplier)
+			for billing_supplier in (grn.supplier, "", None):
+				with self.subTest(billing_supplier=billing_supplier):
+					frappe.db.set_value(
+						"YRP Purchase Invoice",
+						name,
+						{
+							"billing_supplier": billing_supplier,
+							"supplier": grn.supplier if not billing_supplier else bill_supplier,
+						},
+					)
+					eligible = get_eligible_grns(
+						against="Purchase Order", purchase_invoice=name, search_text=grn.name
+					)
+					self.assertEqual([row.name for row in eligible], [grn.name])
+					self.assertTrue(eligible[0].selected)
+					fetched = fetch_grn_details([grn.name], "Purchase Order", purchase_invoice=name)
+					self.assertEqual(fetched["additional_field_values"]["essdee_items"], items)
+			with self.assertRaisesRegex(frappe.ValidationError, "belongs to another supplier"):
+				fetch_grn_details([grn.name], "Purchase Order", supplier=bill_supplier, purchase_invoice=name)
+		finally:
+			frappe.db.rollback()
+			frappe.set_user(original_user)
+
 	def test_details_omit_zero_numeric_values_and_keep_nonzero_values_in_order(self):
 		from essdee_yrp.accounts.purchase_invoice_workspace import serialize_purchase_invoice_details
 

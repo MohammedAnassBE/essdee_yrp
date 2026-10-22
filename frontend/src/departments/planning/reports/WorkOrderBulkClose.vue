@@ -15,11 +15,11 @@
 			<div class="finishing-scroll" role="region" aria-label="Open Work Orders" tabindex="0">
 				<table class="finishing-table">
 					<thead><tr>
-						<th><input type="checkbox" aria-label="Select all listed Work Orders" :checked="allSelected" :indeterminate="selectedNames.length > 0 && !allSelected" :disabled="busy" @change="selectAll($event.target.checked)" /></th>
+						<th><input type="checkbox" aria-label="Select all shown Work Orders" :checked="allSelected" :indeterminate="selectedNames.length > 0 && !allSelected" :disabled="busy" @change="selectAll($event.target.checked)" /></th>
 						<th>Work Order</th><th :aria-sort="dateSort === 'asc' ? 'ascending' : 'descending'"><Button label="WO Date" :icon="dateSort === 'asc' ? 'pi pi-sort-amount-up' : 'pi pi-sort-amount-down'" text @click="dateSort = dateSort === 'asc' ? 'desc' : 'asc'" /></th>
 						<th>Item</th><th>Lot</th><th>Process</th><th>Delivered</th><th>Received</th><th>Difference</th><th>Actions</th>
-					</tr></thead>
-					<tbody><tr v-for="row in listedRows" :key="row.name">
+					</tr><ReportFilterRow :columns="filterColumns" :filter="inlineFilter" /></thead>
+					<tbody><tr v-for="row in visibleRows" :key="row.name">
 						<td><input v-model="selection" type="checkbox" :value="row.name" :aria-label="`Select Work Order ${row.name}`" :disabled="busy" /></td>
 						<td><RouterLink :to="'/planning/work-orders/' + encodeURIComponent(row.name)">{{ row.name }}</RouterLink></td>
 						<td>{{ row.wo_date }}</td><td>{{ row.item }}</td><td>{{ row.lot }}</td><td>{{ row.process_name }}</td>
@@ -80,7 +80,9 @@ import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
+import { useInlineFilters } from "../../../composables/useInlineFilters.js"
 import AsyncLinkMultiSelect from "../../cutting/reports/AsyncLinkMultiSelect.vue"
 import WorkOrderItemMatrix from "../../fabric-store/WorkOrderItemMatrix.vue"
 import { CLOSE_REASONS, bulkCloseFilterHint, closeReasonHint, pendingSummary, sortedWorkOrders } from "./workOrderBulkClose.js"
@@ -94,8 +96,20 @@ const rows = ref([])
 const selection = ref([])
 const dateSort = ref("desc")
 const listedRows = computed(() => sortedWorkOrders(rows.value, dateSort.value))
-const selectedNames = computed(() => listedRows.value.filter((row) => selection.value.includes(row.name)).map((row) => row.name))
-const allSelected = computed(() => rows.value.length > 0 && selectedNames.value.length === rows.value.length)
+const filterColumns = [
+	{ fieldname: "select", filterable: false }, { fieldname: "name", label: "Work Order" }, { fieldname: "wo_date", label: "WO Date", fieldtype: "Date" },
+	{ fieldname: "item", label: "Item" }, { fieldname: "lot", label: "Lot" }, { fieldname: "process_name", label: "Process" },
+	{ fieldname: "total_delivered", label: "Delivered", fieldtype: "Float" }, { fieldname: "total_received", label: "Received", fieldtype: "Float" },
+	{ fieldname: "difference", label: "Difference", fieldtype: "Float" }, { fieldname: "actions", filterable: false },
+]
+const inlineFilter = useInlineFilters(listedRows, filterColumns, {
+	cellValue: (row, column) => row[column.fieldname],
+	cellText: (row, column) => column.fieldtype === "Float" ? quantity(row[column.fieldname]) : row[column.fieldname],
+})
+const visibleRows = inlineFilter.filteredRows
+// Selection acts on the shown rows only, so a column filter never closes a hidden Work Order.
+const selectedNames = computed(() => visibleRows.value.filter((row) => selection.value.includes(row.name)).map((row) => row.name))
+const allSelected = computed(() => visibleRows.value.length > 0 && selectedNames.value.length === visibleRows.value.length)
 const loading = ref(false)
 const generated = ref(false)
 const loadError = ref("")
@@ -120,7 +134,7 @@ watch(filters, () => {
 	rows.value = []; selection.value = []; generated.value = false; loading.value = false; loadError.value = ""
 }, { deep: true, flush: "sync" })
 
-function selectAll(checked) { selection.value = checked ? listedRows.value.map((row) => row.name) : [] }
+function selectAll(checked) { selection.value = checked ? visibleRows.value.map((row) => row.name) : [] }
 function quantity(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 
 async function loadWorkOrders() {

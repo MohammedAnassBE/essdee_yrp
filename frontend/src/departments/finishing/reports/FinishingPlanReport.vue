@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="finishing-plan-report" aria-label="Finishing Plan Report">
-		<ReportShell :export-source="deskExportSource('finishing-plan', activeFilters, columns)" title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="deskExportSource('finishing-plan', activeFilters, columns, [], inlineFilter.matchingIndices.value)" title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.item" doctype="Item" label="Item" placeholder="Search item…" :filters="{ has_variants: 1 }" :show-open-button="false" show-clear />
@@ -26,9 +26,10 @@
 							<tr>
 								<th v-for="column in columns" :key="column.key" :class="headerClass(column)" :style="frozenStyle(column, true)">{{ column.label }}</th>
 							</tr>
+							<ReportFilterRow :columns="columns" :filter="inlineFilter" :cell-class="headerClass" :cell-style="column => frozenStyle(column, true)" />
 						</thead>
 						<tbody>
-							<tr v-for="(row, index) in rows" :key="index" :class="{ 'report-total-row': row.is_total_row }">
+							<tr v-for="(row, index) in inlineFilter.filteredRows.value" :key="index" :class="{ 'report-total-row': row.is_total_row }">
 								<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)" :style="frozenStyle(column, false)">{{ formattedCell(column, row) }}</td>
 							</tr>
 						</tbody>
@@ -44,10 +45,12 @@
 import Button from "primevue/button"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
+import { useInlineFilters } from "../../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../../composables/useReportColumns.js"
 import { useWebReport } from "../../../composables/useWebReport.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import ReportColumnPicker from "../../../components/reports/ReportColumnPicker.vue"
+import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import { finishingPlanFormFilters } from "../../../components/reports/reportFilterState.js"
 import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
@@ -71,7 +74,8 @@ const {
 	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "finishing-plan", sourceColumns, sourceRows })
-const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => formattedCell(column, row) })
+const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
 
 function defaultFilters() {
 	return { lot: "", item: "", season: "", productCategory: "" }

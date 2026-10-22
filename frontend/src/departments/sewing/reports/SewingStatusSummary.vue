@@ -10,7 +10,7 @@
 				<DateField v-model="filters.toDate" label="Input To Date" show-clear />
 			</template>
 			<template #metrics><div class="report-metric"><i class="pi pi-list" /><div><span>Visible rows</span><strong>{{ visible.length }}</strong></div></div></template>
-			<SewingReportMatrix label="Status Summary quantities and readiness" :columns="columns" :rows="visible" :totals="totals" total-label="Visible total" />
+			<SewingReportMatrix label="Status Summary quantities and readiness" :columns="columns" :rows="visible" :totals="totals" total-label="Visible total" inline-filters />
 		</ReportShell>
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 	</section>

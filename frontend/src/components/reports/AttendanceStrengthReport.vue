@@ -13,7 +13,7 @@
 				</header>
 				<div v-if="table.rows.length" class="attendance-strength__table erp-table-wrap" role="region" :aria-label="table.label" tabindex="0">
 					<table class="erp-table">
-						<thead><tr><th v-for="column in table.columns" :key="column.fieldname" scope="col" :class="{ numeric: isNumeric(column) }">{{ column.label || column.fieldname }}</th></tr></thead>
+						<thead><tr><th v-for="column in table.columns" :key="column.fieldname" scope="col" :class="{ numeric: isNumeric(column) }">{{ column.label || column.fieldname }}</th></tr><ReportFilterRow :columns="table.columns" :filter="table.filter" /></thead>
 						<tbody><tr v-for="(row, index) in table.body" :key="index"><td v-for="column in table.columns" :key="column.fieldname" :class="{ numeric: isNumeric(column) }">{{ display(cell(row, column), column) }}</td></tr></tbody>
 						<tfoot v-if="table.total"><tr><th v-for="(column, index) in table.columns" :key="column.fieldname" :scope="index === 0 ? 'row' : undefined" :class="{ numeric: isNumeric(column) }">{{ display(cell(table.total, column), column) }}</th></tr></tfoot>
 					</table>
@@ -31,6 +31,9 @@ import { getAttendanceStrength } from "../../api/sewing.js"
 import DateField from "../common/DateField.vue"
 import TimeField from "../common/TimeField.vue"
 import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"
+import { useInlineFilters } from "../../composables/useInlineFilters.js"
+import { filteredTotalRow } from "./inlineFilters.js"
+import ReportFilterRow from "./ReportFilterRow.vue"
 import ReportShell from "./ReportShell.vue"
 import { stockCellValue, todayIso } from "./reportUtils.js"
 
@@ -43,14 +46,21 @@ const punchColumns = [
 	["employee", "Employee ID"], ["employee_name", "Employee Name"], ["department", "Department"],
 	["designation", "Designation"], ["manpower_agent", "Manpower Agent"], ["shift_type", "Shift"], ["first_punch", "First Punch"],
 ].map(([fieldname, label]) => ({ fieldname, label }))
-const tables = computed(() => {
-	const rows = data.value.rows || []
-	const total = Number(data.value.add_total_row) === 1 && rows.length ? rows[rows.length - 1] : null
-	return [
-		{ label: "Workers Strength Summary", columns: (data.value.columns || []).map((column, index) => ({ ...column, index })).filter(column => !Number(column.hidden)), rows, body: total ? rows.slice(0, -1) : rows, total },
-		{ label: "Employee First Punch", columns: punchColumns, rows: data.value.employee_punches || [], body: data.value.employee_punches || [], total: null },
-	]
-})
+const summaryRows = computed(() => data.value.rows || [])
+const summaryTotal = computed(() => Number(data.value.add_total_row) === 1 && summaryRows.value.length ? summaryRows.value.at(-1) : null)
+const summaryBody = computed(() => summaryTotal.value ? summaryRows.value.slice(0, -1) : summaryRows.value)
+const summaryColumns = computed(() => (data.value.columns || []).map((column, index) => ({ ...column, index })).filter(column => !Number(column.hidden)))
+const punchRows = computed(() => data.value.employee_punches || [])
+const filterOptions = { cellValue: cell, cellText: (row, column) => display(cell(row, column), column) }
+const summaryFilter = useInlineFilters(summaryBody, summaryColumns, filterOptions)
+const punchFilter = useInlineFilters(punchRows, punchColumns, filterOptions)
+const tables = computed(() => [
+	{
+		label: "Workers Strength Summary", columns: summaryColumns.value, rows: summaryRows.value, filter: summaryFilter, body: summaryFilter.filteredRows.value,
+		total: summaryTotal.value && summaryFilter.isFiltered.value ? filteredTotalRow(summaryFilter.filteredRows.value, summaryColumns.value, cell) : summaryTotal.value,
+	},
+	{ label: "Employee First Punch", columns: punchColumns, rows: punchRows.value, filter: punchFilter, body: punchFilter.filteredRows.value, total: null },
+])
 
 async function generate() {
 	if (loading.value) return

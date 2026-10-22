@@ -10,7 +10,7 @@
 			<template #actions>
 				<Button v-if="generated && data.rows?.length > 0 && !loading" type="button" label="Print" icon="pi pi-print" severity="secondary" outlined class="erp-action-button" @click="handlePrint" />
 			</template>
-			<SewingReportMatrix label="Monthly quantities by date and Item / Part" :columns="columns" :rows="data.rows || []" :totals="data.grand_total" total-label="Grand Total" />
+			<SewingReportMatrix label="Monthly quantities by date and Item / Part" :columns="columns" :rows="data.rows || []" :totals="data.grand_total" total-label="Grand Total" inline-filters />
 		</ReportShell>
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 	</section>

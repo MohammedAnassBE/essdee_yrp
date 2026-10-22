@@ -17,7 +17,7 @@
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" /></template>
 			
-			<PlanningReportTable title="Work Order" :columns="columns" :rows="rows" :cell-align="cellAlign" :formatted-cell="formattedCell" />
+			<PlanningReportTable title="Work Order" :columns="columns" :rows="rows" :cell-value="cellValue" inline-filters :cell-align="cellAlign" :formatted-cell="formattedCell" />
 		</ReportShell>
 		<ReportColumnPicker v-model:visible="pickerVisible" :columns="allColumns" :link-sources="linkSources" :fields-by-source="fieldsBySource" :load-field-options="loadFieldOptions" :apply-layout="applyLayout" :save-layout="saveLayout" :reset-layout="resetLayout" :error="layoutError" />
 		
@@ -49,7 +49,7 @@ const {
 const {
 	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
 	hasLinkedColumns, layoutError, loadFieldOptions, applyLayout, saveLayout, resetLayout,
-	cellAlign, pickerVisible, formattedCell,
+	cellAlign, cellValue, pickerVisible, formattedCell,
 } = usePlanningReportColumns("planning-work-order", sourceColumns, sourceRows)
 
 function requestFilters() { return workOrderRequest(filters) }

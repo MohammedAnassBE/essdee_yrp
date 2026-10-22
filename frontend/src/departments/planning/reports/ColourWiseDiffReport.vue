@@ -6,7 +6,7 @@
 			<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
 		</template>
 		<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
-		<PlanningReportTable title="Colour-wise Diff" :columns="columns" :rows="rows" :cell-align="cellAlign" :formatted-cell="formattedCell" />
+		<PlanningReportTable title="Colour-wise Diff" :columns="columns" :rows="rows" inline-filters :cell-align="cellAlign" :formatted-cell="formattedCell" />
 	</ReportShell>
 </template>
 

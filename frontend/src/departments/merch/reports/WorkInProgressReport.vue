@@ -32,9 +32,10 @@
 				<thead>
 					<tr><th v-for="(group, index) in groups" :key="index" :colspan="group.span" scope="colgroup">{{ group.label }}</th></tr>
 					<tr><th v-for="column in sourceColumns" :key="column.fieldname" scope="col">{{ column.label }}</th></tr>
+					<ReportFilterRow :columns="sourceColumns" :filter="inlineFilter" />
 				</thead>
 				<tbody>
-					<tr v-for="row in sourceRows" :key="row.lot || 'total'" :class="{ 'wip-total': row.is_total_row }">
+					<tr v-for="row in inlineFilter.filteredRows.value" :key="row.lot || 'total'" :class="{ 'wip-total': row.is_total_row }">
 						<td v-for="column in sourceColumns" :key="column.fieldname" :class="[cellTone(row, column), { 'wip-number': column.fieldtype === 'Float' }]">{{ cellText(row, column) }}</td>
 					</tr>
 				</tbody>
@@ -53,6 +54,8 @@ import LinkField from "../../../components/common/LinkField.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import { useWebReport } from "../../../composables/useWebReport.js"
 import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
+import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
+import { useInlineFilters } from "../../../composables/useInlineFilters.js"
 import { mergeNames } from "../../../components/reports/pasteValues.js"
 import WipLinkMultiSelect from "./WipLinkMultiSelect.vue"
 import { cellText, cellTone, columnGroups, validateWipFilters } from "./workInProgress.js"
@@ -64,6 +67,8 @@ const pasteVisible = ref(false)
 const report = useWebReport({ reportKey: "merch-work-in-progress" })
 const { sourceColumns, sourceRows, reportSummary, payload, generated, isBusy, error } = report
 const groups = computed(() => columnGroups(sourceColumns.value))
+// A stage cell outside the lot's current stage shows blank, so it filters as blank too.
+const inlineFilter = useInlineFilters(sourceRows, sourceColumns, { cellValue: (row, column) => cellText(row, column) === "" ? null : row[column.fieldname], cellText })
 const notInIpdProcesses = computed(() => payload.value?.not_in_ipd_processes || [])
 const formatNumber = (value) => Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })
 watch(filters, () => { errors.value = {}; report.filtersChanged(filters) }, { deep: true })

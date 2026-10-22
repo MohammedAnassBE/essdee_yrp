@@ -8,7 +8,7 @@
 			<article v-if="rows.length" class="scr-report">
 				<header class="scr-heading"><h2>{{ data.item }}</h2><span class="scr-title">SCR</span></header>
 				<p>{{ filters.lot }}<span v-if="lines.length"> · {{ lines.join(', ') }}</span></p>
-				<SewingReportMatrix :label="`${data.item} SCR quantities by type, colour and size`" :columns="columns" :rows="rows" :cell-tone="tone" />
+				<SewingReportMatrix :label="`${data.item} SCR quantities by type, colour and size`" :columns="columns" :rows="rows" :cell-tone="tone" inline-filters />
 			</article>
 		</ReportShell>
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />

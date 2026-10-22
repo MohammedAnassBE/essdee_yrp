@@ -19,7 +19,7 @@
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" determinate @rebuild="rebuild" /></template>
 			<template #metrics><div v-for="metric in reportSummary" :key="metric.label" class="report-metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></template>
-			<PlanningReportTable title="Work In Progress" :columns="columns" :rows="rows" :cell-align="cellAlign" :formatted-cell="formattedCell" :cell-link="progressCellLink" />
+			<PlanningReportTable title="Work In Progress" :columns="columns" :rows="rows" :cell-value="cellValue" inline-filters :cell-align="cellAlign" :formatted-cell="formattedCell" :cell-link="progressCellLink" />
 		</ReportShell>
 		<PasteListDialog v-model:visible="pasteVisible" @apply="paste" />
 		<ReportColumnPicker v-model:visible="pickerVisible" :columns="allColumns" :link-sources="linkSources" :fields-by-source="fieldsBySource" :load-field-options="loadFieldOptions" :apply-layout="applyLayout" :save-layout="saveLayout" :reset-layout="resetLayout" :error="layoutError" />

@@ -17,7 +17,7 @@
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 			
 			<template #metrics><div v-for="metric in reportSummary || []" :key="metric.label" class="report-metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></template>
-			<PlanningReportTable title="Process Pending" :columns="columns" :rows="rows" :cell-link="(column, row) => column.fieldname === 'lot' && row.lot && !row.is_total_row ? '/planning/lots/' + encodeURIComponent(row.lot) : ''" :cell-align="cellAlign" :formatted-cell="formattedCell">
+			<PlanningReportTable title="Process Pending" :columns="columns" :rows="rows" inline-filters :cell-link="(column, row) => column.fieldname === 'lot' && row.lot && !row.is_total_row ? '/planning/lots/' + encodeURIComponent(row.lot) : ''" :cell-align="cellAlign" :formatted-cell="formattedCell">
 				<template #annotation="{ column, row }"><small v-if="pendingAnnotation(column, row)" class="pending-days" :title="pendingAnnotation(column, row).title">{{ pendingAnnotation(column, row).label }}</small></template>
 			</PlanningReportTable>
 		</ReportShell>

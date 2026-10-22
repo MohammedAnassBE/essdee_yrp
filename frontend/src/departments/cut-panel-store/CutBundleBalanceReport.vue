@@ -34,9 +34,10 @@
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead>
 					<tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label }}</th></tr>
+					<ReportFilterRow :columns="columns" :filter="inlineFilter" />
 				</thead>
 				<tbody>
-					<tr v-for="(row, index) in rows" :key="`${row.name || 'row'}-${index}`" :class="{ 'report-total-row': row.is_total_row }">
+					<tr v-for="(row, index) in inlineFilter.filteredRows.value" :key="`${row.name || 'row'}-${index}`" :class="{ 'report-total-row': row.is_total_row }">
 						<td v-for="column in columns" :key="column.key" :class="cellAlign(column)">
 							<strong v-if="column.kind === 'base' && column.fieldname === 'qty'">{{ number(cellValue(row, column)) }}</strong>
 							<span v-else>{{ cellValue(row, column) || "—" }}</span>
@@ -53,10 +54,12 @@
 import Button from "primevue/button"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 
+import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import LinkField from "../../components/common/LinkField.vue"
 import ReportColumnPicker from "../../components/reports/ReportColumnPicker.vue"
+import ReportFilterRow from "../../components/reports/ReportFilterRow.vue"
 import { cutBundleFormFilters } from "../../components/reports/reportFilterState.js"
 import ReportRunStatus from "../../components/reports/ReportRunStatus.vue"
 import ReportShell from "../../components/reports/ReportShell.vue"
@@ -76,7 +79,8 @@ const {
 } = useReportColumns({ reportKey: "cut-bundle-balance", sourceColumns, sourceRows })
 
 const columns = computed(() => reportColumns.value.filter(column => column.fieldname !== "name"))
-const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => column.kind === "base" && column.fieldname === "qty" ? number(cellValue(row, column)) : cellValue(row, column) })
+const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
 const totalQuantity = computed(() => dataRows.value.reduce((total, row) => total + Number(row.qty || 0), 0))
 const uniqueLots = computed(() => new Set(dataRows.value.map((row) => row.lot).filter(Boolean)).size)
 const uniqueSuppliers = computed(() => new Set(dataRows.value.map((row) => row.supplier).filter(Boolean)).size)

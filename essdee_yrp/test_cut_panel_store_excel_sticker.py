@@ -118,7 +118,7 @@ class TestCutPanelStoreExcelStickerWorkspace(UnitTestCase):
 		)
 		self.assertNotIn("serialized_data", record)
 		doc.check_permission.assert_called_once_with("read")
-		attachment.check_permission.assert_called_once_with("read")
+		attachment.check_permission.assert_not_called()
 
 	def test_sample_uses_unique_aliases_and_reports_clipped_content(self):
 		prefix = "h" * (workspace.SAMPLE_HEADER_LIMIT + 10)
@@ -153,15 +153,15 @@ class TestCutPanelStoreExcelStickerWorkspace(UnitTestCase):
 		):
 			get_excel_sticker_editor("ESP-1")
 
-	def test_editor_checks_file_read_permission(self):
+	def test_editor_authorizes_the_attachment_through_the_parent_document(self):
 		doc = excel_doc()
-		attachment = file_doc()
+		attachment = file_doc(owner="someone.else@example.com")
 		attachment.check_permission.side_effect = frappe.PermissionError
-		with (
-			patch(f"{MODULE}.frappe.get_doc", side_effect=[doc, attachment]),
-			self.assertRaises(frappe.PermissionError),
-		):
-			get_excel_sticker_editor("ESP-1")
+		with patch(f"{MODULE}.frappe.get_doc", side_effect=[doc, attachment]):
+			editor = get_excel_sticker_editor("ESP-1")
+		doc.check_permission.assert_called_once_with("read")
+		attachment.check_permission.assert_not_called()
+		self.assertEqual(editor["record"]["excel_file"], doc.excel_file)
 
 	def test_new_editor_returns_a_private_upload_target(self):
 		with (
@@ -650,3 +650,39 @@ class TestCutPanelStoreExcelStickerIntegration(IntegrationTestCase):
 		preserved = frappe.get_doc(EXCEL_STICKER_DOCTYPE, draft["name"])
 		self.assertEqual(preserved.docstatus, 0)
 		self.assertFalse(preserved.serialized_data)
+
+	def test_real_parent_reader_opens_and_prints_another_users_private_workbook(self):
+		suffix = frappe.generate_hash(length=8)
+		format_doc = self._make_format(suffix)
+		temporary_name = get_excel_sticker_editor()["defaults"]["temporary_name"]
+		content = make_xlsx([["sku", "print_quantity"], ["SKU-1", 2]], "Stickers").getvalue()
+		attachment = self._attach(temporary_name, content, suffix)
+		draft = save_excel_sticker(
+			{
+				"excel_file": attachment.file_url,
+				"print_format": format_doc.name,
+				"temporary_name": temporary_name,
+			}
+		)
+		execute_excel_sticker_command(draft["name"], "submit", expected_modified=draft["modified"])
+		reader = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": f"excel-sticker-reader-{suffix}@example.com",
+				"first_name": "Excel Sticker Reader",
+				"send_welcome_email": 0,
+				"roles": [{"role": "Stock User"}],
+			}
+		).insert(ignore_permissions=True)
+		attachment.reload()
+
+		frappe.set_user(reader.name)
+		try:
+			self.assertTrue(frappe.has_permission(EXCEL_STICKER_DOCTYPE, "read", draft["name"]))
+			self.assertFalse(frappe.has_permission("File", "read", attachment))
+			editor = get_excel_sticker_editor(draft["name"])
+			print_data = get_excel_sticker_print_data(draft["name"], "200dpi")
+		finally:
+			frappe.set_user("Administrator")
+		self.assertTrue(editor["permissions"]["can_print"])
+		self.assertEqual(print_data, "^XA^FDSKU-1-203-1^FS^XZ")

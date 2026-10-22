@@ -66,6 +66,7 @@ def _xlsx_path(value) -> bool:
 
 
 def _attachment(doc, file_url, *, temporary_name=None):
+	"""Callers authorize the parent; its permission covers the file (ERP limits File read to owners)."""
 	if not file_url:
 		frappe.throw(_("Please upload an Excel file."))
 	if not str(file_url).startswith("/private/files/") or not _xlsx_path(file_url):
@@ -83,7 +84,6 @@ def _attachment(doc, file_url, *, temporary_name=None):
 		)
 	except frappe.DoesNotExistError:
 		frappe.throw(_("The Excel file is not an available attachment. Upload it again."))
-	file_doc.check_permission("read")
 
 	if (
 		not cint(file_doc.is_private)

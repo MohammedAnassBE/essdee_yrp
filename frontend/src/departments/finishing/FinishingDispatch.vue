@@ -12,7 +12,7 @@
 					<div class="finishing-dispatch__meta">
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="statusLabel" />
 						<span class="finishing-plan__fact"><small>Plans</small><strong>{{ rows.length }}</strong></span>
-						<span v-if="record.stock_entry" class="finishing-plan__fact"><small>Stock Entry</small><button type="button" class="finishing-dispatch__link" @click="openStockEntry">{{ record.stock_entry }}</button></span>
+						<span v-if="record.stock_entry" class="finishing-plan__fact"><small>Stock Entry</small><button type="button" class="finishing-dispatch__link" @click="openStockEntry()">{{ record.stock_entry }}</button></span>
 					</div>
 				</div>
 				<div class="finishing-dispatch__actions">

@@ -286,9 +286,10 @@ const clothColumns = [
 	column("shade", "Shade"),
 	column("weight", "Weight", (value) => number(value, 3), true),
 	column("no_of_rolls", "Rolls", display, true),
-	column("no_of_bits", "Bits", display, true),
+	column("no_of_bits", "Bits", bitsDisplay, true),
 	column("used_weight", "Used Weight", (value) => number(value, 3), true),
 	column("balance_weight", "Balance Weight", (value) => number(value, 3), true),
+	column("fabric_type", "Fabric Type"),
 ]
 const accessoryColumns = [
 	column("colour", "Colour"),
@@ -697,6 +698,7 @@ async function reloadChanged() {
 }
 
 function display(value) { return value === null || value === undefined || value === "" ? "—" : value }
+function bitsDisplay(value, row) { return row?.effective_bits && row.effective_bits !== value ? `${value} (${row.effective_bits})` : display(value) }
 function number(value, precision) { return value === null || value === undefined || value === "" ? "—" : Number(value).toFixed(precision) }
 function column(field, label, format = display, numeric = false) { return { field, label, format, numeric } }
 function parseDate(value) { if (!value) return null; const [year, month, day] = String(value).split("-").map(Number); return new Date(year, month - 1, day) }

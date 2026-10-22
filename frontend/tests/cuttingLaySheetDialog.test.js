@@ -18,7 +18,7 @@ function setup(props, { createGate = null, qzPrinters = async () => [] } = {}) {
 			return { name: args.cutting_laysheet, cutting_marker: "CM-1", status: "Bundles Generated", permissions: {} }
 		}
 	}
-	const api = new Function("computed", "defineComponent", "h", "reactive", "ref", "watch", "defineProps", "defineEmits", "callMethod", "getQzPrinters", "printQzRaw", "useActionConfirmation", `${source}\nreturn { createForm, createLaySheet, generateBundles, generationParts, runStatusAction, sheet, error, actionError, loading, success, revertLabels, laysheetOverviewFields, loadPrinters, printers, subdialogError }`)(
+	const api = new Function("computed", "defineComponent", "h", "reactive", "ref", "watch", "defineProps", "defineEmits", "callMethod", "getQzPrinters", "printQzRaw", "useActionConfirmation", `${source}\nreturn { createForm, createLaySheet, generateBundles, generationParts, runStatusAction, sheet, error, actionError, loading, success, revertLabels, laysheetOverviewFields, loadPrinters, printers, subdialogError, clothColumns }`)(
 		computed, defineComponent, h, reactive, ref, watch, () => props, () => () => {}, callMethod, qzPrinters, async () => {}, () => options => confirmations.push(options),
 	)
 	return { ...api, calls, confirmations }
@@ -133,4 +133,16 @@ test("F-B26 QZ Tray failure stays in the Print Labels dialog and Retry reloads p
 	assert.deepEqual(state.printers.value, [])
 	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingLaySheetDialog.vue", import.meta.url), "utf8")
 	assert.match(source, /<Button v-if="subdialogError && !printers.length" label="Retry"[^>]*@click="loadPrinters"/)
+})
+
+test("cloth details show Fabric Type and Tubler effective bits like MRP", () => {
+	const { clothColumns } = setup(reactive({ visible: false, cuttingPlan: "CP-1", parentDoctype: "SD YRP Cutting Plan", parentName: "", laysheetName: "", canCreate: false }))
+	const cell = (field, row) => {
+		const column = clothColumns.find((item) => item.field === field)
+		assert.ok(column, `missing ${field} column`)
+		return column.format(row[field], row)
+	}
+	assert.equal(cell("fabric_type", { fabric_type: "Tubler" }), "Tubler")
+	assert.equal(cell("no_of_bits", { no_of_bits: 36, effective_bits: 72 }), "36 (72)")
+	assert.equal(cell("no_of_bits", { no_of_bits: 18, effective_bits: 18 }), 18)
 })

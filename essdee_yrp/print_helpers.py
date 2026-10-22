@@ -158,7 +158,15 @@ def fetch_grn_purchase_item_details(items, docstatus=0):
 	rows = list(items or [])
 	if int(docstatus or 0) != 0:
 		rows = [row for row in rows if flt(row.get("quantity")) > 0]
-	return _group_items(rows, "YRP Goods Received Note")
+	return sort_grouped_attributes(_group_items(rows, "YRP Goods Received Note"))
+
+
+def sort_grouped_attributes(groups):
+	"""F15's get_item_group_index sorted attribute columns in place once a second row was grouped."""
+	if sum(len(group.get("items") or []) for group in groups) > 1:
+		for group in groups:
+			group["attributes"] = sorted(group.get("attributes") or [])
+	return groups
 
 
 def check_key_value_in_dict_or_list_of_dict(key, value):
@@ -352,6 +360,29 @@ def get_dc_structure(doc_name):
 	return items, expected_delivery_date
 
 
+def get_grn_structure(doc_name):
+	"""Group GRN rows like MRP's Work Order GRN print: one row per item and received type."""
+	doc = frappe.get_doc("YRP Goods Received Note", doc_name)
+	groups = _group_items(doc.get("items") or [], "YRP Goods Received Note", lot=doc.get("lot"))
+	for group in groups:
+		merged = OrderedDict()
+		for item in group.get("items") or []:
+			received_type = (item.get("dimensions") or {}).get("received_type") or ""
+			key = (
+				item.get("name"),
+				frappe.as_json(item.get("attributes")),
+				str(item.get("set_combination") or ""),
+			)
+			target = merged.setdefault(key, {**item, "types": [], "values": {}})
+			target["types"].append(received_type)
+			for attribute_value, detail in (item.get("values") or {}).items():
+				cell = target["values"].setdefault(attribute_value, {**detail, "types": {}})
+				if detail.get("ref_docname"):
+					cell["types"][received_type] = flt(detail.get("received"))
+		group["items"] = list(merged.values())
+	return sort_grouped_attributes(groups)
+
+
 def _generic_work_order_items(items):
 	"""Build the garment print's item-grid shape for fabric work orders.
 
@@ -521,9 +552,22 @@ def prepare_print_document(doc, method=None, settings=None):
 	if doc.doctype == "YRP Delivery Challan":
 		prepare_delivery_challan_print(doc)
 	elif doc.doctype == "YRP Goods Received Note":
-		doc.supplier_name = _supplier_name(doc.get("supplier"))
-		doc.supplier_address_display = get_supplier_address_display(doc.get("supplier"))
-		doc.grn_date = doc.get("posting_date")
+		doc.letter_head = get_dc_grn_letter_head(doc)
+		doc.supplier_name = doc.get("supplier_name") or _supplier_name(doc.get("supplier"))
+		doc.supplier_address_display = (
+			doc.get("supplier_address_display")
+			or _address_display(doc.get("supplier_address"))
+			or get_supplier_address_display(doc.get("supplier"))
+		)
+		doc.delivery_location_name = doc.get("delivery_location_name") or _supplier_name(
+			doc.get("delivery_location")
+		)
+		doc.delivery_address_display = (
+			doc.get("delivery_address_display")
+			or _address_display(doc.get("delivery_address"))
+			or get_supplier_address_display(doc.get("delivery_location"))
+		)
+		doc.grn_date = doc.get("grn_date") or doc.get("posting_date")
 		doc.show_delivery_details = 0
 		doc.total_tax = 0
 		doc.grand_total = flt(doc.get("total"))

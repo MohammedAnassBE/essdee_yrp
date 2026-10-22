@@ -1,94 +1,402 @@
-<div class="essdee-print">
-	{% if doc.docstatus != 1 %}
-		<div class="essdee-print__watermark">
-			{{ "DRAFT" if doc.docstatus == 0 else "CANCELLED" }}
-		</div>
-	{% endif %}
-
-	<div class="essdee-print__header">
-		<div class="essdee-print__party">
-			<div class="essdee-print__title">Goods Received Note</div>
-			<div style="margin-top: 8px">
-				<small>Received from</small><br>
-				<strong>
-					{{ frappe.db.get_value("Supplier", doc.supplier, "supplier_name") or doc.supplier or "—" }}
-				</strong><br>
-				{{ get_supplier_address_display(doc.supplier) or "" }}
+{% if doc.against == "Purchase Order" %}
+    <div style="border:1px solid #aaa; border-radius: 0px; border-collapse: collapse;" class="container-fluid">
+        {% if doc.docstatus == 0 or doc.docstatus == 2 %}
+            <div id="background">
+                <p id="bg-text">
+                    {% if doc.docstatus == 0 %}
+                        Draft<br> <span class="small-bg-text" style="font-size: 20px;">This Document is pending for approval</span>
+                    {% else %}
+                        Cancelled<br> <span class="small-bg-text" style="font-size: 20px;">This Document is Cancelled</span>
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+        <div id="content">
+            <div class="row" style="border-bottom:1px solid #666;display: flex;">
+                <div class="col-xs-4" style="border-right:1px solid #ddd;">
+                    <div class="col-xs-12" style="font-size:95%; padding-left: 0;">
+                        <small>Supplier:</small>
+                        <br><strong>{{doc.supplier_name}}</strong>
+                        <br>{{doc.supplier_address_display}}
+                    </div>
+                </div>
+                <div class="col-xs-4" style="border-right:1px solid #ddd;">
+                    <div class="col-xs-12" style="font-size:95%; padding-left: 0;">
+                        <small>Delivered Location:</small>
+                        <br><strong>{{doc.delivery_location_name}}</strong>
+                        <br>{{doc.delivery_address_display}}
+                    </div>
+                </div>
+                <div class="col-xs-4" style="border-left:1px solid #ddd;">
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-12 text-center">
+                            <h5 style="margin: 0;"> <strong>GOODS RECEIVED NOTE</strong></h4>
+                            {% if doc.docstatus == 0 %}
+                                (Draft)
+                            {% elif doc.docstatus == 2 %}
+                                (Cancelled)
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-5 text-right" style=" padding-right: 4px; padding-left:0px;"><small>Date:</small></div>
+                        <div class="col-xs-7" style="padding-left:0px;"><strong>{{doc.get_formatted("grn_date")}}</strong></div>
+                    </div>
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-5 text-right" style=" padding-right: 4px; padding-left:0px;"><small>No.:</small></div>
+                        <div class="col-xs-7" style="padding-left:0px;"><strong>{{doc.name}}</strong></div>
+                    </div>
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-5 text-right" style=" padding-right: 4px; padding-left:0px;"><small>Supplier Doc No.:</small></div>
+                        <div class="col-xs-7" style="padding-left:0px;"><strong>{{doc.supplier_document_no}}</strong></div>
+                    </div>
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-5 text-right" style=" padding-right: 4px; padding-left:0px;"><small>Vehicle No.:</small></div>
+                        <div class="col-xs-7" style="padding-left:0px;"><strong>{{doc.vehicle_no}}</strong></div>
+                    </div>
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-5 text-right" style=" padding-right: 4px; padding-left:0px;"><small>Against:</small></div>
+                        <div class="col-xs-7" style="padding-left:0px;"><strong>{{ doc.against | replace("YRP ", "") }}</strong></div>
+                    </div>
+                    <div class="row" style="border-bottom:1px solid #ddd;">
+                        <div class="col-xs-5 text-right" style=" padding-right: 4px; padding-left:0px;"><small>Against No.:</small></div>
+                        <div class="col-xs-7" style="padding-left:0px;"><strong>{{doc.against_id}}</strong></div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" style="border-bottom:1px solid #666;">
+                <div class="col-xs-12 text-center">Particulars</div>
+            </div>
+            <div class="row">
+                {% set item_details = fetch_grn_purchase_item_details(doc.items, docstatus=doc.docstatus) %}
+                <table class="table table-sm table-bordered">
+                    {% for i in item_details %}
+                        <tr>
+                            {% if i.primary_attribute %}
+                                <td>
+                                    <table class="table table-sm table-bordered">
+                                        <tr>
+                                            <th>S.No.</th>
+                                            <th>Item</th>
+                                            {% for attr in i['attributes'] %}
+                                                <th>{{ attr }}</th>
+                                            {% endfor %}
+                                            {% for attr in i['primary_attribute_values'] %}
+                                                <th>{{ attr }}</th>
+                                            {% endfor %}
+                                            <th>Comments</th>
+                                        </tr>
+                                        {% for j in i['items'] %}
+                                            <tr>
+                                                <td>{{ loop.index }}</td>
+                                                <td>{{ j.name }}</td>
+                                                {% for attr in i['attributes'] %}
+                                                    <td>{{ j.attributes[attr] }}</td>
+                                                {% endfor %}
+                                                {% for attr in j['values'] %}
+                                                    <td>
+                                                        {% if j['values'][attr].received %}
+                                                            <div>
+                                                                {{ j['values'][attr].received }}{% if j.default_uom %}{{' ' + j.default_uom}}{% endif %}
+                                                                {% if j['values'][attr].secondary_received %}
+                                                                    <span><br>({{ j['values'][attr].secondary_received }}{% if j.secondary_uom %}{{' ' + j.secondary_uom }}{% endif %})</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="text-center">
+                                                                ---
+                                                            </div>
+                                                        {% endif %}
+                                                    </td>
+                                                {% endfor %}
+                                                <td>{{ j.comments }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </table>
+                                </td>
+                            {% else %}
+                                <td>
+                                    <table class="table table-sm table-bordered">
+                                        <tr>
+                                            <th>S.No.</th>
+                                            <th>Item</th>
+                                            {% for attr in i.attributes %}
+                                                <th>{{ attr }}</th>
+                                            {% endfor %}
+                                            <th>Received Quantity</th>
+                                            <th>Comments</th>
+                                        </tr>
+                                        {% for j in i['items'] %}
+                                            <tr>
+                                                <td>{{ loop.index }}</td>
+                                                <td>{{ j.name }}</td>
+                                                {% for attr in i['attributes'] %}
+                                                    <td>{{ j.attributes[attr] }}</td>
+                                                {% endfor %}
+                                                <td>
+                                                    {{ j['values']['default'].received }}{% if j.default_uom %}{{' ' + j.default_uom}}{% endif %}
+                                                    {% if j['values']['default'].secondary_received %}
+                                                        <span><br>({{ j['values']['default'].secondary_received }}{% if j.secondary_uom %}{{' ' + j.secondary_uom }}{% endif %})</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ j.comments }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </table>
+                                </td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            <div class="row" style="border-bottom:1px solid #666;">
+                {% if doc.comments %}
+                <div class="col-xs-12">
+                    GRN Comments: {{doc.comments}}
+                </div>
+                {% endif %}
+            </div>
+            <div class="row">
+                {% set company = frappe.db.get_single_value("SD YRP Company Settings", "company") %}
+                <div class="col-xs-6 text-center" style="border-right:0px solid #666;">
+                </div>
+                <div class="col-xs-6 text-right">
+                    <small>For </small>
+                    <strong>{{ company  }}</strong>
+                    <br>
+                    <br> Authorized Signatory
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div style="padding-top:10px;">
+		<div class="border-top-style" style="height:50px;text-align:right;">
+			<div style="margin-right:10px;">
+                {% if doc.is_return %}
+                    <p style="font-size:20px;">Return Goods Receipt</p>
+                {% else %}
+                    <p style="font-size:20px;">Goods Received Note</p>
+                {% endif %}
+				<p style="font-size:12px;">{{doc.name}}</p>
 			</div>
 		</div>
-		<div class="essdee-print__meta">
-			<div><strong>No.:</strong> {{ doc.name }}</div>
-			<div><strong>Date:</strong> {{ frappe.utils.formatdate(doc.posting_date, "dd-MM-yyyy") }}</div>
-			<div><strong>Process:</strong> {{ doc.process_name or "—" }}</div>
-			<div><strong>Against:</strong> {{ doc.against or "—" }} {{ doc.against_id or "" }}</div>
-			<div><strong>Vehicle:</strong> {{ doc.vehicle_no or "—" }}</div>
-		</div>
-	</div>
+        <div style="width:100%;height:auto;display:flex;">
+            <div class="border-style" style="width:33%;padding:5px;">
+                From:<br>
+                <br><strong>{{doc.supplier_name}}</strong>
+                {{doc.supplier_address_display}}
+            </div>
+            <div class="border-style" style="width:34%;padding:5px;">
+                To.<br>
+                <br><strong>{{doc.delivery_location_name}}</strong>
+                {{doc.delivery_address_display}}
+            </div>
+            <div class="border-style" style="width:33%;">
+                <div class="border-group" style="height:15px;">Date : {{doc.posting_date}}</div>
+                <div class="border-group" style="height:15px;">
+                    Vehicle No: 
+                    {% if doc.vehicle_no %}
+                        <span>{{doc.vehicle_no}}</span>
+                    {% else %}
+                        <span>NA</span>
+                    {% endif %}
+                </div>
+                <div class="border-group" style="height:15px;">
+                    DC No: 
+                    {% if doc.dc_no %}
+                        <span>{{doc.dc_no}}</span>
+                    {% else %}
+                        <span>NA</span>
+                    {% endif %}
+                </div>
+                <div class="border-group" style="height:15px;">Against: {{ doc.against | replace("YRP ", "") }}</div>
+                <div style="height:15px;text-align:center;">Against ID: {{doc.against_id}}</div>
+                
+            </div>
+        </div>
+        <div class="border-style" style="text-align: center;">
+            Particulars
+        </div>
+        <div>
+            {% set items = get_grn_structure(doc.name) %}
+            <table style="width:100%;">
+                {% for i in items %}
+                    <tr>
+                        {% if i.primary_attribute %}
+                            <td>
+                                {% if i.items() %}
+                                    <div style="width: 100%;display:flex;height:15px;">
+                                        <div style="width: 50%;">Item name:<span class="font_weight">{{i['items'][0]['name']}}</span></div>
+                                        <div style="width: 50%;">Lot : <span class="font_weight">{{i.lot}}</span></div>
+                                    </div>
+                                    <table style="width:100%;">
+                                        {% set primary_values = {} %}
+                                        <tr>
+                                            <td class="font_weight">S.No.</td>
+                                            {% for attr in i.attributes %}
+                                                <td class="font_weight">{{attr}}</td>
+                                            {% endfor %}
+                                            <td class="font_weight">Type</td>
+                                            {% for attr in i.primary_attribute_values %}
+                                                {% set _ = primary_values.update({attr: 0}) %}
+                                                <td class="font_weight">{{attr}}</td>
+                                            {% endfor %}
+                                            <td class="font_weight">Total</td>
+                                        </tr>	
+                                        {% for j in i['items'] %}
+                                            {% for t in j['types']%}
+                                                <tr>
+                                                    <td>{{loop.index}}</td>
+                                                    {% for attr in i.attributes %}
+                                                        <td>
+                                                            {% if j.attributes[attr]%}
+                                                                {{ j.attributes[attr] }}
+                                                            {% endif %}
+                                                        </td>
+                                                    {% endfor %}
+                                                    <td>{{t}}</td>
+                                                    {% set total = {"total":0} %}
+                                                    {% for attr in j['values'] %}
+                                                        {% if j['values'][attr]['types']%}
+                                                            {% set types_dict = get_dict_object(j['values'][attr]['types']) %}
+                                                            {% for ty in types_dict %}
+                                                                {% if ty == t %}
+                                                                    <td>
+                                                                        {% set attr_qty = primary_values[attr] + types_dict[ty] %}
+                                                                        {% if primary_values.update({attr:attr_qty })%}{% endif %}
+                                                                        {% set qty = total["total"] + types_dict[ty] %}
+                                                                        {% if total.update({"total":qty })%}{% endif %}
+                                                                        {{types_dict[ty] | round(3)  }}
+                                                                        {% if j.default_uom %}
+                                                                            <span>{{ " " + j.default_uom }}</span>
+                                                                        {% endif %}
+                                                                    </td>
+                                                                {% endif %}	
+                                                            {% endfor %}	
+                                                        {% else %}
+                                                            <td></td>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                    <td class="font_weight" >{{total["total"] | round(3) }}</td>
+                                                </tr>
+                                            {% endfor %}	
+                                        {% endfor %}
+                                        <tr>
+                                            {% set total_table_qty = {"total": 0} %}
+                                            <td class="font_weight">Total</td>
+                                            {% for attr in i.attributes %}
+                                                <td></td>
+                                            {% endfor %}
+                                            <td></td>
+                                            {% for attr in i.primary_attribute_values %}
+                                                <td class="font_weight">{{primary_values[attr] | round(3) }}</td>
+                                                {% set temp = primary_values[attr] + total_table_qty["total"] %}
+                                                {% if total_table_qty.update({"total": temp}) %}{% endif %}
+                                            {% endfor %}
+                                            <td class="font_weight">{{ total_table_qty["total"] }}</td>
+                                        </tr>
+                                    </table>
+                                {% endif %}
+                            </td>	
+                        {% else %}
+                            <td>
+                                {% if i.items() %}
+                                    <div style="height:15px;">Lot: <span class="font_weight">{{i.lot}}</span></div>
+                                    <table style="width:100%;">
+                                        <tr>
+                                            <td class="font_weight">S.No.</td>
+                                            <td class="font_weight">Item</td>
+                                            {% for attr in i.attributes %}
+                                                <td class="font_weight">{{attr}}</td>
+                                            {% endfor %}
+                                            <td class="font_weight">Type</td>
+                                            <td class="font_weight">Received qty</td>
+                                        </tr>
+                                        {% set total = {"total":0} %}
+                                        {% for j in i['items'] %}
+                                            {% for t in j['types']%}
+                                                <tr>
+                                                    <td>{{ loop.index }}</td>
+                                                    <td>{{ j.name }}</td>
+                                                    {% for attr in i.attributes %}
+                                                        <td>{{ j.attributes[attr] }}</td>
+                                                    {% endfor %}
+                                                    <td>{{t}}</td>
+                                                    <td>
+                                                        {% if j['values']["default"]['received'] > 0 %}
+                                                            {% set _ = total["total"] + j['values']["default"]['received'] %}
+                                                            {% if total.update({ "total":_ }) %}{% endif %}
+                                                            {{ j['values']["default"]['received'] | round(3) }}
+                                                            {% if j.default_uom %}
+                                                                <span>{{ " " + j.default_uom }}</span>
+                                                            {% endif %}	
+                                                        {% endif %}		
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}	
+                                        {% endfor %}
+                                        <tr>
+                                            <td></td>
+                                            <td class="font_weight">Total</td>
+                                            {% for attr in i.attributes %}
+                                                <td></td>
+                                            {% endfor %}
+                                            <td></td>
+                                            <td class="font_weight">{{ total["total"] | round(3) }}</td>
+                                        </tr>
+                                    </table>
+                                {% endif %}	
+                            </td>
+                        {% endif %}
+                    </tr>	    
+                {% endfor %}
+            </table>
+        </div>
+        {% if doc.comments %}
+        <div class="border-style" style="height:auto;width:100%">
+            <strong>Comments:</strong><br><span style="display:block;padding-left:20px;"> {{ doc.comments.replace("\n", "<br>") | safe }}</span>
+        </div>
+        {% endif %}
+        <div style="height:90px;width:100%;display:flex;">
+            <div class="border-style" style="height:90px;width:50%">
+                <div  class="font_weight" style="text-align:center;height: 15px;">
+                    Receiver's Signature
+                </div>
+                <div style="height:50px;">
 
-	<table>
-		<thead>
-			<tr>
-				<th style="width: 4%">S.No.</th>
-				<th>Item Variant</th>
-				<th style="width: 12%">Quantity</th>
-				<th style="width: 12%">Secondary</th>
-				<th style="width: 12%">Rate</th>
-				<th style="width: 14%">Amount</th>
-				<th>Comments</th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for row in doc.items %}
-				{% if doc.docstatus == 0 or row.quantity > 0 %}
-					<tr>
-						<td>{{ loop.index }}</td>
-						<td><strong>{{ row.item_variant }}</strong></td>
-						<td>{{ frappe.utils.flt(row.quantity, 3) }} {{ row.uom or "" }}</td>
-						<td>
-							{% if row.secondary_qty %}
-								{{ frappe.utils.flt(row.secondary_qty, 3) }} {{ row.secondary_uom or "" }}
-							{% else %}
-								—
-							{% endif %}
-						</td>
-						<td>{{ frappe.utils.fmt_money(row.rate or 0, currency="₹") }}</td>
-						<td>{{ frappe.utils.fmt_money(row.amount or 0, currency="₹") }}</td>
-						<td>{{ row.comments or "" }}</td>
-					</tr>
-				{% endif %}
-			{% endfor %}
-		</tbody>
-	</table>
+                </div>
+                <div style="display:flex;height:15px;width:100%;">
+                    <div  class="font_weight" style="height: 15px;width:50%;text-align: left;padding-left:5px;">
+                        Name:
+                    </div>
+                    <div class="font_weight" style="height: 15px;width:50%;text-align: left;">
+                        Designation:
+                    </div>
+                </div>
+            </div>
+            <div class="border-style font_weight" style="height:90px;width:50%">
+                <div style="text-align:right;height: 15px;padding-right:15px;">
+                    For <span class="font_weight">Essdee Knitting Mills Private Limited</span>
+                </div>
+                <div style="height:50px;">
 
-	<div class="essdee-print__totals">
-		<table>
-			<tr>
-				<th>Total received</th>
-				<td>{{ frappe.utils.flt(doc.total_received_quantity, 3) }}</td>
-			</tr>
-			<tr>
-				<th>Freight</th>
-				<td>{{ frappe.utils.fmt_money(doc.freight_charges or 0, currency="₹") }}</td>
-			</tr>
-			<tr>
-				<th>Total value</th>
-				<td><strong>{{ frappe.utils.fmt_money(doc.total or 0, currency="₹") }}</strong></td>
-			</tr>
-		</table>
-	</div>
-
-	{% if doc.comments %}
-		<div style="border-top: 1px solid #666; padding: 8px">
-			<strong>Comments:</strong><br>
-			{{ doc.comments | replace("\n", "<br>") | safe }}
-		</div>
-	{% endif %}
-
-	<div class="essdee-print__footer">
-		<div>Receiver's Signature</div>
-		<div>
-			For Essdee Knitting Mills Private Limited<br><br>
-			Authorised Signatory
-		</div>
-	</div>
-</div>
+                </div>
+                <div style="height:15px;width:100%;text-align:right;padding-right: 15px;">
+                    Authorised Signatory
+                </div>
+            </div>
+        </div>
+        {% set user_current_time = get_current_user_time() %}
+        {% set user = user_current_time[0] %}
+        {% set current_time = user_current_time[1] %}
+        <div class="border-bottom-style font_weight" style="display: flex;height: 20px;width: 100%;">
+            <div style="width: 50%;padding-left: 15px;">
+                Print Time: {{current_time}}	
+            </div>	
+            <div style="width: 50%;padding-left: 15px;">
+                Print User : {{user}}
+            </div>
+        </div>
+    </div>
+{% endif %}

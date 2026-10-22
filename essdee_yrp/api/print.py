@@ -78,7 +78,9 @@ def get_print_options(doctype, name):
 		"Letter Head", filters={"disabled": 0}, pluck="name", order_by="name asc"
 	)
 	document_letter_head = (
-		get_dc_grn_letter_head(doc) if doc.doctype == "YRP Delivery Challan" else doc.get("letter_head")
+		get_dc_grn_letter_head(doc)
+		if doc.doctype in ("YRP Delivery Challan", "YRP Goods Received Note")
+		else doc.get("letter_head")
 	)
 	default_letter_head = None
 	if document_letter_head not in letter_heads:

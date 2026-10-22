@@ -24,6 +24,40 @@ EXPENSE_ACCOUNT_ENDPOINT = "/api/method/essdee.essdee.utils.mrp.purchase_invoice
 MAX_EXPENSE_ACCOUNT_ITEMS = 200
 
 
+@frappe.whitelist()
+def get_bill_tracking_invoice_defaults(name):
+	from yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking import get_role_permissions
+
+	from essdee_yrp.overrides.bill_tracking import CANCEL_REQUESTABLE_STATUSES
+	from essdee_yrp.web_common import is_masked_value
+
+	frappe.has_permission("Purchase Invoice", "create", throw=True)
+	if not get_role_permissions().get("can_create_invoice"):
+		frappe.throw(_("Not permitted to create an invoice from Bill Tracking."), frappe.PermissionError)
+	bill = frappe.get_doc("YRP Bill Tracking", name)
+	bill.check_permission("read")
+	if (
+		bill.docstatus != 1
+		or bill.form_status not in CANCEL_REQUESTABLE_STATUSES
+		or bill.purchase_invoice
+		or bill.erp_purchase_invoice
+	):
+		frappe.throw(_("Bill Tracking must be submitted and open without a linked invoice."))
+	bill.apply_fieldlevel_read_permissions()
+	for fieldname in ("supplier", "bill_no", "bill_date", "invoice_value"):
+		if bill.get(fieldname) in (None, "") or is_masked_value(bill.get(fieldname)):
+			frappe.throw(
+				_("Not permitted to read the Bill Tracking invoice details."), frappe.PermissionError
+			)
+	return {
+		"supplier": bill.supplier,
+		"bill_no": bill.bill_no,
+		"bill_date": bill.bill_date,
+		"vendor_bill_tracking": bill.name,
+		"remarks": _("Bill Tracking Invoice Value: {0}").format(bill.invoice_value),
+	}
+
+
 def is_same_site_erp_available():
 	"""Return whether this site can create Essdee's ERPNext Purchase Invoice locally."""
 	if getattr(frappe.flags, "in_test", False) and not getattr(

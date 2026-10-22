@@ -1,3 +1,4 @@
+from unittest import TestCase
 from unittest.mock import MagicMock, call, patch
 
 import frappe
@@ -19,6 +20,7 @@ from essdee_yrp.erp_purchase_invoice import (
 	create_erp_invoice,
 	fetch_expense_accounts,
 	fetch_items_expense_head,
+	get_bill_tracking_invoice_defaults,
 	get_erp_inv_link,
 	revert_bill_tracking_from_erp,
 	submit_erp_invoice,
@@ -1210,3 +1212,92 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 			front.qty * weights["front"] + sleeve.qty * weights["sleeve"],
 			100,
 		)
+
+
+class TestBillTrackingInvoiceDefaults(TestCase):
+	def setUp(self):
+		self.previous_user = frappe.session.user
+		frappe.set_user("Administrator")
+		self.addCleanup(frappe.set_user, self.previous_user)
+		self.addCleanup(frappe.db.rollback)
+		self.bill = frappe.get_doc(
+			{
+				"doctype": "YRP Bill Tracking",
+				"supplier": frappe.db.get_value("Supplier", {"disabled": 0}, "name"),
+				"bill_no": f"LOCAL-VBT-{frappe.generate_hash(length=10)}",
+				"bill_date": "2026-10-20",
+				"invoice_value": 1250.75,
+				"received_via": frappe.db.get_value("YRP Bill Tracking Received Via", {}, "name"),
+				"receive_comment": "Local-only invoice prefill regression test",
+			}
+		).insert()
+		self.bill.submit()
+
+	def test_prefills_saved_bill_without_creating_an_invoice(self):
+		before = frappe.db.count("Purchase Invoice")
+		defaults = get_bill_tracking_invoice_defaults(self.bill.name)
+		self.assertEqual(defaults["supplier"], self.bill.supplier)
+		self.assertEqual(defaults["bill_no"], self.bill.bill_no)
+		self.assertEqual(str(defaults["bill_date"]), "2026-10-20")
+		self.assertEqual(defaults["vendor_bill_tracking"], self.bill.name)
+		self.assertEqual(defaults["remarks"], "Bill Tracking Invoice Value: 1250.75")
+		self.assertEqual(frappe.db.count("Purchase Invoice"), before)
+		self.assertFalse(frappe.db.get_value("YRP Bill Tracking", self.bill.name, "erp_purchase_invoice"))
+		meta = frappe.get_meta("Purchase Invoice")
+		self.assertTrue(all(meta.has_field(fieldname) for fieldname in defaults))
+
+	def test_rejects_ineligible_bills(self):
+		for values in (
+			{"docstatus": 0},
+			{"docstatus": 2},
+			{"form_status": "Pending Approval"},
+			{"form_status": "Cancel Request Approved"},
+			{"form_status": "Closed"},
+			{"form_status": "Cancelled"},
+			{"purchase_invoice": "LOCAL-VBT-YRP-PI"},
+			{"erp_purchase_invoice": "LOCAL-VBT-ERP-PI"},
+		):
+			with self.subTest(values=values):
+				frappe.db.savepoint("bill_state")
+				frappe.db.set_value("YRP Bill Tracking", self.bill.name, values)
+				with self.assertRaises(frappe.ValidationError):
+					get_bill_tracking_invoice_defaults(self.bill.name)
+				frappe.db.rollback(save_point="bill_state")
+
+	def test_requires_purchase_invoice_create_permission(self):
+		frappe.set_user("Guest")
+		with self.assertRaises(frappe.PermissionError):
+			get_bill_tracking_invoice_defaults(self.bill.name)
+
+	def test_requires_configured_invoice_role(self):
+		with (
+			patch(
+				"yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.get_role_permissions",
+				return_value={"can_create_invoice": False},
+			),
+			self.assertRaises(frappe.PermissionError),
+		):
+			get_bill_tracking_invoice_defaults(self.bill.name)
+
+	def test_requires_bill_read_permission(self):
+		with (
+			patch.object(
+				type(self.bill), "check_permission", side_effect=frappe.PermissionError
+			) as check_permission,
+			self.assertRaises(frappe.PermissionError),
+		):
+			get_bill_tracking_invoice_defaults(self.bill.name)
+		check_permission.assert_called_once_with("read")
+
+	def test_does_not_copy_masked_or_unreadable_source_values(self):
+		for value in ("XXXXXXXXXX", "XXXXXXXX", None):
+			with self.subTest(value=value):
+
+				def restrict_supplier(doc):
+					doc.supplier = value
+
+				with (
+					patch.object(type(self.bill), "apply_fieldlevel_read_permissions", restrict_supplier),
+					self.assertRaises(frappe.PermissionError),
+				):
+					get_bill_tracking_invoice_defaults(self.bill.name)

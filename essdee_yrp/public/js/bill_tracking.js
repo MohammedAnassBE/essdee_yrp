@@ -1,6 +1,3 @@
-// Essdee adds its YRP Purchase Invoice path. Base YRP owns the ERPNext
-// Purchase Invoice field and actions.
-
 const CANCEL_PENDING_STATUS = "Pending Approval";
 const CANCEL_APPROVED_STATUS = "Cancel Request Approved";
 const CANCEL_REQUESTABLE_STATUSES = ["Open", "Assigned", "Reopen", "Amended"];
@@ -40,8 +37,16 @@ function remove_conflicting_actions(frm) {
 function configure_purchase_invoice_actions(frm, permissions) {
 	const has_yrp_invoice = Boolean(frm.doc.purchase_invoice);
 	const has_erp_invoice = Boolean(frm.doc.erp_purchase_invoice);
+	frm.remove_custom_button(__("Create ERP Purchase Invoice"));
 
 	if (!has_yrp_invoice && !has_erp_invoice && permissions.can_create_invoice) {
+		frm.add_custom_button(__("Create ERP Purchase Invoice"), async () => {
+			const defaults = await frappe.xcall(
+				"essdee_yrp.erp_purchase_invoice.get_bill_tracking_invoice_defaults",
+				{ name: frm.doc.name }
+			);
+			return frappe.new_doc("Purchase Invoice", {}, (invoice) => Object.assign(invoice, defaults));
+		});
 		frm.add_custom_button(__("Create YRP Purchase Invoice"), () => {
 			const invoice = frappe.model.get_new_doc("YRP Purchase Invoice");
 			invoice.supplier = frm.doc.supplier;

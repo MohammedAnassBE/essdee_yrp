@@ -6,12 +6,15 @@ const scriptPath = __dirname + "/bill_tracking.js";
 
 const PERMISSIONS_METHOD = "yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking.get_role_permissions";
 
-function loadFormScript(permissions = {}) {
+function loadFormScript(permissions = {}, defaults = {}) {
 	let handlers;
 	const calls = [];
 	const xcalls = [];
 	const confirmations = [];
 	const dialogs = [];
+	const invoices = [];
+	const routes = [];
+	const prefillCalls = [];
 	const context = {
 		console,
 		__: (value) => value,
@@ -28,9 +31,12 @@ function loadFormScript(permissions = {}) {
 				},
 			},
 			user: { has_role: () => true },
-			async xcall(method) {
+			async xcall(method, args) {
 				xcalls.push(method);
-				return permissions;
+				if (method === PERMISSIONS_METHOD) return permissions;
+				prefillCalls.push({ method, args });
+				if (defaults instanceof Error) throw defaults;
+				return defaults;
 			},
 			confirm(message, action) {
 				confirmations.push(message);
@@ -41,11 +47,18 @@ function loadFormScript(permissions = {}) {
 				if (options.callback) options.callback({ message: true });
 			},
 			model: { get_new_doc: () => ({}) },
-			set_route() {},
+			async new_doc(doctype, options, initialize) {
+				await Promise.resolve();
+				const doc = { doctype, name: "new-invoice", company: "Configured Company" };
+				initialize(doc);
+				invoices.push(doc);
+				routes.push(["Form", doctype, doc.name]);
+			},
+			set_route(...route) { routes.push(route); },
 		},
 	};
 	vm.runInNewContext(fs.readFileSync(scriptPath, "utf8"), context, { filename: scriptPath });
-	return { handlers, calls, xcalls, confirmations, dialogs };
+	return { handlers, calls, xcalls, confirmations, dialogs, invoices, routes, prefillCalls };
 }
 
 function makeForm(formStatus) {
@@ -65,7 +78,7 @@ function makeForm(formStatus) {
 			erp_purchase_invoice: null,
 		},
 		is_new: () => false,
-		add_custom_button(label, action) { buttons.set(label, action); },
+		add_custom_button(label, action) { if (!buttons.has(label)) buttons.set(label, action); },
 		remove_custom_button(label) { buttons.delete(label); },
 		reload_doc() { reloads += 1; },
 		buttons,
@@ -73,8 +86,8 @@ function makeForm(formStatus) {
 	};
 }
 
-async function render(status, permissions) {
-	const runtime = loadFormScript(permissions);
+async function render(status, permissions, defaults) {
+	const runtime = loadFormScript(permissions, defaults);
 	const frm = makeForm(status);
 	await runtime.handlers.refresh(frm);
 	return { ...runtime, frm };
@@ -85,7 +98,6 @@ async function render(status, permissions) {
 		const { frm, calls, confirmations } = await render("Open", { can_request_cancel: true });
 		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
 			"Assign",
-			"Create ERP Purchase Invoice",
 			"Bill Received",
 			"Request for Cancel",
 		]));
@@ -137,9 +149,33 @@ async function render(status, permissions) {
 		const { frm } = await render("Open", {});
 		assert.deepEqual(new Set(frm.buttons.keys()), new Set([
 			"Assign",
-			"Create ERP Purchase Invoice",
 			"Bill Received",
 		]));
+	}
+
+	{
+		const defaults = {
+			supplier: "SUP-LOCAL-VBT", bill_no: "LOCAL-VBT-42", bill_date: "2026-10-20",
+			vendor_bill_tracking: "YRP-BT-TEST", remarks: "Bill Tracking Invoice Value: 1250.75",
+		};
+		const { frm, invoices, routes, prefillCalls } = await render("Open", { can_create_invoice: true }, defaults);
+		frm.doc.supplier = "XXXXXXXXXX";
+		await frm.buttons.get("Create ERP Purchase Invoice")();
+		assert.equal(invoices.length, 1);
+		assert.deepEqual(invoices[0], {
+			doctype: "Purchase Invoice", name: "new-invoice", company: "Configured Company", ...defaults,
+		});
+		assert.equal(prefillCalls[0].method, "essdee_yrp.erp_purchase_invoice.get_bill_tracking_invoice_defaults");
+		assert.equal(prefillCalls[0].args.name, frm.doc.name);
+		assert.deepEqual(routes, [["Form", "Purchase Invoice", "new-invoice"]]);
+	}
+
+	{
+		const failure = new Error("No permission to read this bill");
+		const { frm, invoices, routes } = await render("Open", { can_create_invoice: true }, failure);
+		await assert.rejects(frm.buttons.get("Create ERP Purchase Invoice"), failure);
+		assert.equal(invoices.length, 0);
+		assert.equal(routes.length, 0);
 	}
 
 	console.log("Essdee YRP Bill Tracking UI behavior tests passed");

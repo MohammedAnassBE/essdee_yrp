@@ -41,7 +41,7 @@ def _permissions(doc=None) -> dict:
 		"can_create": bool(frappe.has_permission(EXCEL_STICKER_DOCTYPE, ptype="create")),
 		"can_write": bool(doc and cint(doc.docstatus) == 0 and _document_permission(doc, "write")),
 		"can_submit": bool(doc and cint(doc.docstatus) == 0 and _document_permission(doc, "submit")),
-		"can_print": bool(doc and cint(doc.docstatus) == 1 and _document_permission(doc, "print")),
+		"can_print": bool(doc and cint(doc.docstatus) == 1 and _document_permission(doc, "read")),
 	}
 
 
@@ -388,7 +388,7 @@ def get_excel_sticker_preview(name) -> dict:
 @frappe.whitelist()
 def get_excel_sticker_print_data(name, printer_type) -> str:
 	doc = frappe.get_doc(EXCEL_STICKER_DOCTYPE, name)
-	doc.check_permission("print")
+	doc.check_permission("read")
 	if cint(doc.docstatus) != 1:
 		frappe.throw(_("Submit the Excel Sticker Print before printing."))
 	_attachment(doc, doc.excel_file)

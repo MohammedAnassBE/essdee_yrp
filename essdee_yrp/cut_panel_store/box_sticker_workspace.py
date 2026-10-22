@@ -105,7 +105,7 @@ def _permissions(doc=None) -> dict:
 		"can_write": bool(doc and cint(doc.docstatus) == 0 and _document_permission(doc, "write")),
 		"can_submit": bool(doc and cint(doc.docstatus) == 0 and _document_permission(doc, "submit")),
 		"can_cancel": bool(doc and cint(doc.docstatus) == 1 and _document_permission(doc, "cancel")),
-		"can_print": bool(doc and cint(doc.docstatus) == 1 and _document_permission(doc, "print")),
+		"can_print": bool(doc and cint(doc.docstatus) == 1 and _document_permission(doc, "read")),
 	}
 
 
@@ -459,7 +459,7 @@ def get_box_sticker_preview(name) -> dict:
 
 @frappe.whitelist()
 def get_configured_box_sticker_printers(printers) -> list[str]:
-	frappe.has_permission(BOX_STICKER_DOCTYPE, ptype="print", throw=True)
+	frappe.has_permission(BOX_STICKER_DOCTYPE, ptype="read", throw=True)
 	if isinstance(printers, str):
 		printers = frappe.parse_json(printers)
 	if not isinstance(printers, list) or any(not isinstance(printer, str) for printer in printers):
@@ -481,7 +481,7 @@ def _lock_box_sticker(
 	*,
 	require_expected=True,
 	require_submitted=True,
-	permission_type="print",
+	permission_type="read",
 ):
 	doc = frappe.get_doc(BOX_STICKER_DOCTYPE, name)
 	doc.check_permission(permission_type)
@@ -739,7 +739,7 @@ def _reservation_response(reservation, doc, *, already_reserved) -> dict:
 
 def _authorise_box_sticker_print(name, expected_modified):
 	doc = frappe.get_doc(BOX_STICKER_DOCTYPE, name)
-	doc.check_permission("print")
+	doc.check_permission("read")
 	_require_expected_modified(doc, expected_modified)
 	if cint(doc.docstatus) != 1:
 		frappe.throw(_("Submit the Box Sticker Print before printing."))
@@ -889,7 +889,7 @@ def get_box_sticker_print_recovery(request_id) -> dict:
 		"record": _record_payload(doc),
 	}
 	if state == "Active":
-		can_resume = cint(doc.docstatus) == 1 and _document_permission(doc, "print")
+		can_resume = cint(doc.docstatus) == 1 and _document_permission(doc, "read")
 		payload.update({"can_resume": can_resume, "release_required": not can_resume})
 		if can_resume:
 			payload.update(

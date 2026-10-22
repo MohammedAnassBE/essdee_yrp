@@ -48,7 +48,7 @@ def get_fg_details(fg_item, lot=None):
 @frappe.whitelist()
 def get_print_format(doc, print_items, printer_type):
 	doc = frappe.get_doc("SD YRP Box Sticker Print", doc)
-	doc.check_permission("write")
+	doc.check_permission("read")
 	if doc.docstatus != 1:
 		frappe.throw(_("Submit the Box Sticker Print before printing"))
 	_lock_linked_production_order(doc.lot)
@@ -152,7 +152,7 @@ def override_print_quantity(print_items, print_format):
 		if not row:
 			frappe.throw(_("Invalid Box Sticker Print detail"))
 		parent = frappe.get_doc("SD YRP Box Sticker Print", row[0].parent)
-		parent.check_permission("write")
+		parent.check_permission("read")
 		_lock_linked_production_order(parent.lot)
 		labels = math.ceil(int(item.get("quantity") or 0) / label_count)
 		new_quantity = int(row[0].printed_quantity or 0) - labels * label_count

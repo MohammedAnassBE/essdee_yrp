@@ -373,7 +373,7 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 
 		renderer.assert_not_called()
 
-	def test_configured_printers_are_filtered_only_after_print_permission(self):
+	def test_configured_printers_are_filtered_after_read_permission(self):
 		with (
 			patch(f"{MODULE}.frappe.has_permission", return_value=True) as permission,
 			patch(f"{MODULE}.get_printer", return_value=["Zebra-A"]),
@@ -381,7 +381,7 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 			printers = get_configured_box_sticker_printers(["Zebra-A", "Office"])
 
 		self.assertEqual(printers, ["Zebra-A"])
-		permission.assert_called_once_with(BOX_STICKER_DOCTYPE, ptype="print", throw=True)
+		permission.assert_called_once_with(BOX_STICKER_DOCTYPE, ptype="read", throw=True)
 
 	def test_print_lock_order_is_production_order_then_box_sticker_parent(self):
 		doc = box_doc()
@@ -824,28 +824,45 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 					{"state": "Missing", "reservation": "request-12345678"},
 				)
 
-	def test_active_print_recovery_withholds_zpl_after_cancel_or_print_permission_loss(self):
+	def test_active_print_recovery_withholds_zpl_after_cancel(self):
 		active = reservation_row(state="Active")
-		for doc in (box_doc(docstatus=2), box_doc(docstatus=1)):
-			with self.subTest(docstatus=doc.docstatus):
-				with (
-					patch(
-						f"{MODULE}.frappe.has_permission",
-						side_effect=lambda _doctype, ptype="read", **_kwargs: ptype != "print",
-					),
-					patch(f"{MODULE}.frappe.session", _dict(user="Administrator")),
-					patch(f"{MODULE}._lock_reservation", return_value=active),
-					patch(f"{MODULE}.frappe.get_doc", return_value=doc),
-					patch(f"{MODULE}._record_payload", return_value={"name": "BSP-1", "docstatus": doc.docstatus}),
-				):
-					payload = get_box_sticker_print_recovery("request-12345678")
+		doc = box_doc(docstatus=2)
+		with (
+			patch(f"{MODULE}.frappe.has_permission", return_value=True),
+			patch(f"{MODULE}.frappe.session", _dict(user="Administrator")),
+			patch(f"{MODULE}._lock_reservation", return_value=active),
+			patch(f"{MODULE}.frappe.get_doc", return_value=doc),
+			patch(f"{MODULE}._record_payload", return_value={"name": "BSP-1", "docstatus": 2}),
+		):
+			payload = get_box_sticker_print_recovery("request-12345678")
 
-				self.assertEqual(payload["state"], "Active")
-				self.assertFalse(payload["can_resume"])
-				self.assertTrue(payload["release_required"])
-				self.assertNotIn("zpl", payload)
-				self.assertNotIn("raw", payload)
-				self.assertNotIn("printer_type", payload)
+		self.assertFalse(payload["can_resume"])
+		self.assertTrue(payload["release_required"])
+		self.assertNotIn("zpl", payload)
+
+	def test_read_access_is_enough_to_print_and_resume(self):
+		def read_only(_doctype, ptype="read", **_kwargs):
+			return ptype == "read"
+
+		doc = box_doc()
+		with (
+			patch(f"{MODULE}.frappe.has_permission", side_effect=read_only),
+			patch(f"{MODULE}.frappe.get_doc", return_value=doc),
+		):
+			self.assertTrue(workspace._permissions(doc)["can_print"])
+			workspace._authorise_box_sticker_print("BSP-1", "M1")
+		doc.check_permission.assert_called_with("read")
+
+		with (
+			patch(f"{MODULE}.frappe.has_permission", side_effect=read_only),
+			patch(f"{MODULE}.frappe.session", _dict(user="Administrator")),
+			patch(f"{MODULE}._lock_reservation", return_value=reservation_row(state="Active")),
+			patch(f"{MODULE}.frappe.get_doc", return_value=doc),
+			patch(f"{MODULE}._record_payload", return_value={"name": "BSP-1", "docstatus": 1}),
+		):
+			payload = get_box_sticker_print_recovery("request-12345678")
+		self.assertTrue(payload["can_resume"])
+		self.assertEqual(payload["zpl"], "^XA-STORED^XZ")
 
 	def test_missing_and_wrong_owner_reservations_use_the_same_non_disclosing_error(self):
 		errors = []

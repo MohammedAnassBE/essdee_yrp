@@ -74,12 +74,22 @@ class TestCutPanelStoreExcelStickerWorkspace(UnitTestCase):
 		frappe.local.message_log = []
 		frappe.set_user("Guest")
 		try:
-			with patch("frappe.permissions.get_doc_permissions", return_value={"read": 1, "print": 0}):
+			with patch("frappe.permissions.get_doc_permissions", return_value={"read": 0, "print": 1}):
 				permissions = workspace._permissions(doc)
 		finally:
 			frappe.set_user("Administrator")
 		self.assertFalse(permissions["can_print"])
 		self.assertEqual(frappe.local.message_log, [], "a capability probe must not pop up Frappe's access message")
+
+	def test_read_access_is_enough_to_print(self):
+		doc = frappe.get_doc({"doctype": EXCEL_STICKER_DOCTYPE, "name": "ESP-READ", "docstatus": 1})
+		frappe.set_user("Guest")
+		try:
+			with patch("frappe.permissions.get_doc_permissions", return_value={"read": 1, "print": 0}):
+				can_print = workspace._permissions(doc)["can_print"]
+		finally:
+			frappe.set_user("Administrator")
+		self.assertTrue(can_print)
 
 	def test_editor_returns_only_a_bounded_safe_sample(self):
 		rows = []
@@ -413,7 +423,7 @@ class TestCutPanelStoreExcelStickerWorkspace(UnitTestCase):
 			"RAW-200",
 			{"sku": "SKU-1", "print_quantity": 2, "dpi": 203},
 		)
-		doc.check_permission.assert_called_once_with("print")
+		doc.check_permission.assert_called_once_with("read")
 
 	def test_print_selects_the_exact_300dpi_template(self):
 		doc = excel_doc(

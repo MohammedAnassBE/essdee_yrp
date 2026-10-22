@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -128,6 +129,34 @@ class TestBoxStickerPrint(unittest.TestCase):
 
 		self.assertEqual(result, "ZPL")
 		self.assertEqual(render.call_args.args[1]["dpi"], 300)
+
+	def test_desk_print_needs_only_read_permission(self):
+		client = Path(box_sticker_print.__file__).with_suffix(".js").read_text(encoding="utf-8")
+		self.assertNotIn("perm?.[0]?.write", client)
+		doc = MagicMock(docstatus=1, lot="LOT-1", print_format="FMT", fg_item="FG-1", size=None)
+		with (
+			patch.object(box_sticker_print.frappe, "get_doc", return_value=doc),
+			patch.object(box_sticker_print, "_lock_linked_production_order"),
+			patch.object(box_sticker_print, "_raw_code", return_value="RAW"),
+		):
+			box_sticker_print.get_print_format("BSP-1", "[]", "300dpi")
+		doc.check_permission.assert_any_call("read")
+		self.assertNotIn(unittest.mock.call("write"), doc.check_permission.call_args_list)
+
+	def test_desk_print_rollback_needs_only_read_permission(self):
+		parent = MagicMock(lot="LOT-1")
+		format_doc = MagicMock(labels_per_row=1)
+		with (
+			patch.object(box_sticker_print.frappe, "get_doc", side_effect=[format_doc, parent]),
+			patch.object(
+				box_sticker_print.frappe.db, "sql", return_value=[_dict(printed_quantity=3, parent="BSP-1")]
+			),
+			patch.object(box_sticker_print, "_lock_linked_production_order"),
+			patch.object(box_sticker_print.attribute_db, "set_value") as set_value,
+		):
+			box_sticker_print.override_print_quantity('[{"doc_name": "ROW-1", "quantity": 2}]', "FMT")
+		parent.check_permission.assert_called_once_with("read")
+		set_value.assert_called_once_with("SD YRP Box Sticker Print Detail", "ROW-1", "printed_quantity", 1)
 
 	def test_save_does_not_refetch_or_overwrite_mrp(self):
 		doc = SimpleNamespace(

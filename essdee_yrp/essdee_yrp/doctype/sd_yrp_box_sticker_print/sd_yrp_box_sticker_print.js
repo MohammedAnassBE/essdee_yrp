@@ -17,7 +17,7 @@ frappe.ui.form.on("SD YRP Box Sticker Print", {
 	refresh(frm) {
 		disable_browser_print_shortcut();
 		hide_standard_print_actions();
-		if (frm.doc.docstatus === 1 && frm.perm?.[0]?.write) {
+		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Print Labels"), () => open_print_dialog(frm));
 		}
 		render_preview(frm);

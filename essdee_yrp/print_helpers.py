@@ -6,6 +6,7 @@ therefore build the old print shape from YRP's canonical stock grouping API
 instead of importing an uninstalled customer application.
 """
 
+import re
 from collections import OrderedDict
 from datetime import datetime
 
@@ -363,24 +364,52 @@ def get_dc_structure(doc_name):
 def get_grn_structure(doc_name):
 	"""Group GRN rows like MRP's Work Order GRN print: one row per item and received type."""
 	doc = frappe.get_doc("YRP Goods Received Note", doc_name)
-	groups = _group_items(doc.get("items") or [], "YRP Goods Received Note", lot=doc.get("lot"))
+	rows = doc.get("items") or []
+	type_positions = {}
+	for position, row in enumerate(rows):
+		type_positions.setdefault((str(row.get("row_index") or ""), row.get("received_type") or ""), position)
+	groups = _group_items(rows, "YRP Goods Received Note", lot=doc.get("lot"))
 	for group in groups:
-		merged = OrderedDict()
-		for item in group.get("items") or []:
-			received_type = (item.get("dimensions") or {}).get("received_type") or ""
-			key = (
-				item.get("name"),
-				frappe.as_json(item.get("attributes")),
-				str(item.get("set_combination") or ""),
-			)
-			target = merged.setdefault(key, {**item, "types": [], "values": {}})
-			target["types"].append(received_type)
-			for attribute_value, detail in (item.get("values") or {}).items():
-				cell = target["values"].setdefault(attribute_value, {**detail, "types": {}})
-				if detail.get("ref_docname"):
-					cell["types"][received_type] = flt(detail.get("received"))
-		group["items"] = list(merged.values())
+		group["items"] = merge_received_types(group.get("items") or [], type_positions)
 	return sort_grouped_attributes(groups)
+
+
+def merge_received_types(items, type_positions=None):
+	"""Merge the received-type splits of an item row, listing types in MRP's row order.
+
+	Every size holds a quantity for every type, 0 when it has none: MRP's grid emits a size cell only
+	for the types a size has, so a type missing from one size shifted that row's cells left.
+	"""
+	type_positions = type_positions or {}
+	merged = OrderedDict()
+	for item in items:
+		received_type = (item.get("dimensions") or {}).get("received_type") or ""
+		key = (
+			item.get("name"),
+			frappe.as_json(item.get("attributes")),
+			str(item.get("set_combination") or ""),
+		)
+		target = merged.setdefault(key, {**item, "types": [], "values": {}, "type_positions": {}})
+		position = type_positions.get((str(item.get("row_index") or ""), received_type), len(type_positions))
+		if received_type not in target["types"]:
+			target["types"].append(received_type)
+		target["type_positions"][received_type] = min(
+			position, target["type_positions"].get(received_type, position)
+		)
+		for attribute_value, detail in (item.get("values") or {}).items():
+			cell = target["values"].setdefault(attribute_value, {**detail, "types": {}})
+			if detail.get("ref_docname") or flt(detail.get("received")):
+				cell["types"][received_type] = cell["types"].get(received_type, 0.0) + flt(
+					detail.get("received")
+				)
+	for target in merged.values():
+		positions = target.pop("type_positions")
+		target["types"].sort(key=positions.get)
+		for cell in target["values"].values():
+			cell["types"] = {
+				received_type: cell["types"].get(received_type, 0.0) for received_type in target["types"]
+			}
+	return list(merged.values())
 
 
 def _generic_work_order_items(items):
@@ -496,10 +525,33 @@ def get_dc_grn_letter_head(doc):
 	return doc.get("letter_head") or frappe.db.get_single_value("SD YRP MRP Settings", "dc_grn_letter_head") or ""
 
 
-def _address_display(address):
-	from frappe.contacts.doctype.address.address import get_address_display
+MRP_ADDRESS_TEMPLATE = (
+	"{{ address_line1 }}, {% if address_line2 %}{{ address_line2 }}{% endif -%}<br>"
+	"{{ city }}, {% if state %}{{ state }}{% endif -%}{% if pincode %} - {{ pincode }}{% endif -%}"
+)
 
-	return get_address_display(address) if address else ""
+
+def _address_display(address):
+	"""A linked Address in MRP's party-address layout, which has no address title line."""
+	if not address:
+		return ""
+	doc = frappe.get_cached_doc("Address", address)
+	doc.check_permission("read")
+	return frappe.render_template(MRP_ADDRESS_TEMPLATE, doc.as_dict())
+
+
+def strip_party_name_line(address_display, party_name):
+	"""Drop a leading address line that only repeats the party name printed above it."""
+	lines = re.split(r"(<br\s*/?>|\n)", address_display or "", maxsplit=1)
+	if party_name and lines[0].strip().rstrip(",").strip() == party_name.strip():
+		return lines[2].lstrip() if len(lines) > 2 else ""
+	return address_display or ""
+
+
+def get_party_address_display(party_name, stored_display, address, party):
+	"""The stored F15 snapshot, else the linked address, else the party's primary address."""
+	display = stored_display or _address_display(address) or get_supplier_address_display(party)
+	return strip_party_name_line(display, party_name)
 
 
 def prepare_delivery_challan_print(doc):
@@ -512,9 +564,9 @@ def prepare_delivery_challan_print(doc):
 		doc.set(name_field, doc.get(name_field) or _supplier_name(doc.get(party)))
 		doc.set(
 			details,
-			doc.get(details)
-			or _address_display(doc.get(address))
-			or get_supplier_address_display(doc.get(party)),
+			get_party_address_display(
+				doc.get(name_field), doc.get(details), doc.get(address), doc.get(party)
+			),
 		)
 
 
@@ -554,18 +606,20 @@ def prepare_print_document(doc, method=None, settings=None):
 	elif doc.doctype == "YRP Goods Received Note":
 		doc.letter_head = get_dc_grn_letter_head(doc)
 		doc.supplier_name = doc.get("supplier_name") or _supplier_name(doc.get("supplier"))
-		doc.supplier_address_display = (
-			doc.get("supplier_address_display")
-			or _address_display(doc.get("supplier_address"))
-			or get_supplier_address_display(doc.get("supplier"))
+		doc.supplier_address_display = get_party_address_display(
+			doc.supplier_name,
+			doc.get("supplier_address_display"),
+			doc.get("supplier_address"),
+			doc.get("supplier"),
 		)
 		doc.delivery_location_name = doc.get("delivery_location_name") or _supplier_name(
 			doc.get("delivery_location")
 		)
-		doc.delivery_address_display = (
-			doc.get("delivery_address_display")
-			or _address_display(doc.get("delivery_address"))
-			or get_supplier_address_display(doc.get("delivery_location"))
+		doc.delivery_address_display = get_party_address_display(
+			doc.delivery_location_name,
+			doc.get("delivery_address_display"),
+			doc.get("delivery_address"),
+			doc.get("delivery_location"),
 		)
 		doc.grn_date = doc.get("grn_date") or doc.get("posting_date")
 		doc.show_delivery_details = 0

@@ -49,3 +49,10 @@ class TestStockEntryPrint(UnitTestCase):
 			self.assertEqual(print_helpers.get_stock_entry_locations(receipt), ("JOB", "SUP-B"))
 			explicit = frappe._dict(purpose="Send to Warehouse", from_supplier="X", to_supplier="Y")
 			self.assertEqual(print_helpers.get_stock_entry_locations(explicit), ("X", "Y"))
+
+	def test_size_grid_prints_zero_for_sizes_without_quantity(self):
+		from essdee_yrp.test_delivery_challan_print import print_format_data
+
+		format_data = print_format_data("essdee_stock_transfer")
+		self.assertIn('text-center\\">\\n' + " " * 48 + "0\\n", format_data)
+		self.assertNotIn("---", format_data)

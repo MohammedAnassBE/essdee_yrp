@@ -1,9 +1,16 @@
+import json
+from pathlib import Path
 from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
 
 from essdee_yrp import print_helpers
+
+
+def print_format_data(name):
+	path = Path(frappe.get_app_path("essdee_yrp", "essdee_yrp", "print_format", name, f"{name}.json"))
+	return json.loads(path.read_text())["format_data"]
 
 
 class TestDeliveryChallanPrint(IntegrationTestCase):
@@ -74,3 +81,21 @@ class TestDeliveryChallanPrint(IntegrationTestCase):
 	def test_single_row_keeps_item_attribute_order(self):
 		groups = self.get_structure([{"attributes": ["Panel", "Colour"], "items": [{}]}])
 		self.assertEqual(groups[0]["attributes"], ["Panel", "Colour"])
+
+	def test_address_snapshot_does_not_repeat_the_party_name(self):
+		doc = self.make_doc(
+			from_location_name="Sri Iyyappa Garments",
+			from_address_details="Sri Iyyappa Garments<br>4/144/36, First Floor",
+			supplier_name="Essdee Ironing Unit",
+			supplier_address_details="Essdee Ironing Unit<br>No.1/2, Ground Floor",
+			letter_head="Doc Head",
+		)
+		print_helpers.prepare_delivery_challan_print(doc)
+		self.assertEqual(doc.from_address_details, "4/144/36, First Floor")
+		self.assertEqual(doc.supplier_address_details, "No.1/2, Ground Floor")
+
+	def test_size_grid_prints_zero_for_sizes_without_quantity(self):
+		for name in ("essdee_delivery_challan", "essdee_dc"):
+			format_data = print_format_data(name)
+			self.assertIn("<td>0</td>", format_data)
+			self.assertNotIn("<td>--</td>", format_data)

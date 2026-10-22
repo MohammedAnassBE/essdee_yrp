@@ -4,6 +4,7 @@ import test from "node:test"
 import vm from "node:vm"
 import { createMemoryHistory, createRouter } from "vue-router"
 
+import { ACCOUNTS_ROUTES } from "../src/departments/accounts/accountsViews.js"
 import { merchPurchaseLauncherItems } from "../src/departments/merch-purchase/merchPurchaseViews.js"
 import { MERCH_ROUTES, visibleMerchLauncherItems } from "../src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
@@ -26,7 +27,7 @@ const lockedFor = (key) => {
 function loadRouter() {
 	const routerSource = source("../src/router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
+	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined, getPermissionRedirect: () => undefined, NO_PERMISSION_PATH }
 	vm.runInNewContext(routerSource, context)
 	return context.router

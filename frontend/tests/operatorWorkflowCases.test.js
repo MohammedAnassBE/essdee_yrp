@@ -85,6 +85,29 @@ test("F-D19: zero-first entry, per-colour fill/clear and allowance limit includi
 	assert.match(read("departments/sewing/plan/SewingDataEntry.vue"), /Fill remaining/)
 })
 
+test("Sewing data entry Lot filter is a Sewing Unit scoped Link field", async () => {
+	const source = read("departments/sewing/plan/SewingDataEntry.vue")
+	assert.match(source, /<LinkField v-model="filters.lot" doctype="SD YRP Lot"[^>]*show-clear[^>]*:search-handler="text => search\('SD YRP Lot', text\)"/)
+	assert.doesNotMatch(source, /input-id="sewing-lot"/)
+	const state = Vue.reactive({ response: { data: { "LOT-A": { "PLAN-A": { details: { lot: "LOT-A" }, colours: {} } }, "LOT-B": { "PLAN-B": { details: { lot: "LOT-B" }, colours: {} } } } }, busy: false, entryDrafts: {}, inspectionDrafts: {} })
+	const filters = Vue.reactive({ lot: "", plan: "PLAN-B", inputType: "", inspectionType: "pre_final" })
+	const lotSearches = []
+	const page = script("departments/sewing/plan/SewingDataEntry.vue", {
+		defineProps: () => ({ state, filters }), useSewingContext: sewingContext,
+		getSewingSupplierLots: async (supplier, text) => { lotSearches.push({ supplier, text }); return [{ name: "LOT-A", label: "LOT-A" }] },
+		searchLink: async () => assert.fail("Lot must use the Sewing Unit lot query"),
+	}, "search, plans")
+	assert.deepEqual(await page.search("SD YRP Lot", "lot"), [{ name: "LOT-A", label: "LOT-A" }])
+	assert.deepEqual(lotSearches, [{ supplier: "UNIT-1", text: "lot" }])
+	filters.lot = "LOT-A"
+	await tick()
+	assert.deepEqual(page.plans.value.map(plan => plan.name), ["PLAN-A"])
+	assert.equal(filters.plan, "")
+	filters.lot = ""
+	await tick()
+	assert.deepEqual(page.plans.value.map(plan => plan.name), ["PLAN-A", "PLAN-B"])
+})
+
 test("F-C04/C05: Cut Panel document routes, filtered lists, back navigation and GRN movement link", () => {
 	for (const [doctype, slug, param] of [["YRP Delivery Challan", "delivery-challans", "deliveryChallanId"], ["YRP Goods Received Note", "goods-received-notes", "goodsReceivedNoteId"]]) {
 		assert.equal(webDocumentPath(doctype, "DOC/1", "/web/cut-panel-store/movements"), `/web/cut-panel-store/${slug}/DOC%2F1`)

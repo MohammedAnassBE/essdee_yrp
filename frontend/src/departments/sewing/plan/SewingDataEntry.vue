@@ -6,7 +6,7 @@
 			<p v-if="loading && loaded" role="status">Refreshing Sewing Plans…</p>
 			<Message v-if="loadError && !editor" severity="warn" :closable="false">Displayed Sewing Plans may be out of date. <Button label="Retry" text :disabled="loading || busy" @click="load()" /></Message>
 			<div class="sewing-data-entry__toolbar">
-				<div class="common-field"><label for="sewing-lot">Lot</label><Select input-id="sewing-lot" v-model="filters.lot" :options="lots" aria-label="Lot" placeholder="All Lots" show-clear :disabled="loading || busy" fluid /></div>
+				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" aria-label="Lot" placeholder="All Lots" :show-open-button="false" show-clear :disabled="loading || busy" :search-handler="text => search('SD YRP Lot', text)" />
 				<Button label="Refresh" aria-label="Refresh data entry" icon="pi pi-refresh" severity="secondary" :disabled="loading || busy" @click="load()" />
 				<span v-if="plans.length" class="sewing-data-entry__count">{{ plans.length }} {{ plans.length === 1 ? 'plan' : 'plans' }}</span>
 			</div>
@@ -77,7 +77,7 @@ import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import { computed, onMounted, onUnmounted, ref, toRefs, watch } from "vue"
 import { searchLink } from "../../../api/frappe.js"
-import { getSewingDataEntry } from "../../../api/sewing.js"
+import { getSewingDataEntry, getSewingSupplierLots } from "../../../api/sewing.js"
 import DateField from "../../../components/common/DateField.vue"
 import TimeField from "../../../components/common/TimeField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
@@ -103,7 +103,6 @@ let mounted = true
 const searchSequences = new Map()
 const canCreate = computed(() => Boolean(props.actions?.entry?.can_create))
 const canWrite = computed(() => Boolean(props.actions?.plan?.can_write))
-const lots = computed(() => Object.keys(response.value.data || {}))
 const planGroups = computed(() => Object.entries(response.value.data || {})
 	.filter(([lot]) => !props.filters.lot || lot === props.filters.lot)
 	.map(([lot, records], index) => ({ lot, headingId: `sewing-lot-${safeId(lot)}-${index}`, plans: Object.entries(records).map(([name, data]) => ({ name, data })) })))
@@ -179,7 +178,7 @@ async function search(doctype, text) {
 	searchSequences.set(doctype, sequence)
 	const current = () => mounted && !busy.value && !loading.value && selectedSupplier === supplier.value && isCurrent(generation) && searchSequences.get(doctype) === sequence
 	try {
-		const rows = await searchLink(doctype, text)
+		const rows = doctype === "SD YRP Lot" ? await getSewingSupplierLots(selectedSupplier, text) : await searchLink(doctype, text)
 		return current() ? rows : []
 	} catch (reason) { if (current()) error.value = reason.message || 'Unable to load entry options.'; return [] }
 }

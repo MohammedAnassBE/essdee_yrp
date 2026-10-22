@@ -50,7 +50,6 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_layshe
 	_attribute_row,
 	_cutting_grn_consumed_rows,
 	_cutting_grn_output_rows,
-	_save_cutting_plan_cloth_usage,
 	cancel_cut_bundle,
 	create_cut_bundle_ledger,
 	create_grn_entry,
@@ -807,81 +806,6 @@ class TestCuttingBusinessLogic(IntegrationTestCase):
 				self.assertEqual(custom.create, standard.create)
 				if standard.role != "System Manager":
 					self.assertEqual(custom.submit, standard.submit)
-
-	def _assert_bundle_generation_persists_precise_cutting_plan_cloth_usage(self):
-		laysheet = SimpleNamespace(
-			name="CLS-TEST",
-			cutting_laysheet_details=[
-				SimpleNamespace(
-					colour="Red",
-					cloth_type="Rib Fabric",
-					actual_dia="26 Dia",
-					used_weight=0.082,
-				),
-				SimpleNamespace(
-					colour="Red",
-					cloth_type="Rib Fabric",
-					actual_dia="26 Dia",
-					used_weight=1.118,
-				),
-			],
-			cutting_laysheet_accessory_details=[
-				SimpleNamespace(
-					colour="Red",
-					cloth_type="Main Fabric",
-					actual_dia="26 Dia",
-					weight=1.5,
-				)
-			],
-		)
-		rib = SimpleNamespace(
-			colour="Red",
-			cloth_type="Rib Fabric",
-			dia="26 Dia",
-			weight=1.2,
-			used_weight=0,
-			balance_weight=1.2,
-		)
-		accessory = SimpleNamespace(
-			colour="Red",
-			cloth_type="Main Fabric",
-			dia="26 Dia",
-			weight=1.5,
-			used_weight=0,
-			balance_weight=1.5,
-		)
-		cutting_plan = SimpleNamespace(
-			cutting_plan_cloth_details=[rib, accessory],
-			save=MagicMock(),
-		)
-		original_get_doc = frappe.get_doc
-		original_get_all = frappe.get_all
-
-		def get_doc(doctype, name):
-			if (doctype, name) == ("SD YRP Cutting Plan", "CP-TEST"):
-				return cutting_plan
-			return original_get_doc(doctype, name)
-
-		def get_all(doctype, *args, **kwargs):
-			if doctype == "SD YRP Cutting LaySheet":
-				return [laysheet.name]
-			return original_get_all(doctype, *args, **kwargs)
-
-		with (
-			patch.object(frappe, "get_all", side_effect=get_all),
-			patch.object(frappe, "get_doc", side_effect=get_doc),
-		):
-			_save_cutting_plan_cloth_usage(laysheet, "CP-TEST")
-			self.assertAlmostEqual(rib.used_weight, 1.2, places=3)
-			_save_cutting_plan_cloth_usage(laysheet, "CP-TEST")
-			self.assertAlmostEqual(rib.used_weight, 1.2, places=3)
-
-		self.assertAlmostEqual(rib.used_weight, 1.2, places=3)
-		self.assertEqual(rib.balance_weight, 0)
-		self.assertEqual(accessory.used_weight, 1.5)
-		self.assertEqual(accessory.balance_weight, 0)
-		self.assertEqual(cutting_plan.save.call_count, 2)
-		cutting_plan.save.assert_called_with(ignore_permissions=True)
 
 	def test_cutting_plan_creates_balance_lot_transfer_draft(self):
 		cutting_plan = "CP-2603-00030"
@@ -2492,6 +2416,3 @@ class TestCuttingPlanClothUsage(UnitTestCase):
 			(("SD YRP Cutting Plan", "CP-EMPTY", "cp_status", "Planned"), {}),
 			[(call.args, call.kwargs) for call in set_value.call_args_list],
 		)
-
-	def test_bundle_generation_persists_precise_cutting_plan_cloth_usage(self):
-		TestCuttingBusinessLogic._assert_bundle_generation_persists_precise_cutting_plan_cloth_usage(self)

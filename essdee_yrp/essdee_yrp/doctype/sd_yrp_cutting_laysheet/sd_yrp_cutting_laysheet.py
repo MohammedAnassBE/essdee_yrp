@@ -949,39 +949,24 @@ def save_web_laysheet_details(
 	return get_web_laysheet(cutting_plan, doc.name, cutting_order=cutting_order)
 
 
-def _save_cutting_plan_cloth_usage(laysheet_doc, cutting_plan):
+def validate_cutting_plan_cloth_balance(laysheet_doc, cutting_plan):
+	"""Check the plan can absorb this LaySheet's cloth; usage is persisted only at label print."""
 	cloth = {}
-	accessory_cloth = {}
-	tracked_laysheets = frappe.get_all(
-		"SD YRP Cutting LaySheet",
-		filters={
-			"cutting_plan": cutting_plan,
-			"status": ["in", ("Bundles Generated", "Approval Pending", "Label Printed")],
-		},
-		pluck="name",
-	)
-	for name in tracked_laysheets:
-		doc = laysheet_doc if name == laysheet_doc.name else frappe.get_doc("SD YRP Cutting LaySheet", name)
-		for row in doc.cutting_laysheet_details:
-			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))
-			cloth.setdefault(key, 0)
-			cloth[key] += row.used_weight
-		for row in doc.cutting_laysheet_accessory_details:
-			key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))
-			accessory_cloth.setdefault(key, 0)
-			accessory_cloth[key] += row.weight
+	for row in laysheet_doc.cutting_laysheet_details:
+		key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))
+		cloth[key] = cloth.get(key, 0) + flt(row.used_weight)
+	for row in laysheet_doc.cutting_laysheet_accessory_details:
+		key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))
+		cloth[key] = cloth.get(key, 0) + flt(row.weight)
 
 	cp_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 	for row in cp_doc.cutting_plan_cloth_details:
 		key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
-		row.used_weight = flt(cloth.get(key), 3) + flt(accessory_cloth.get(key), 3)
-		row.balance_weight = flt(row.weight - row.used_weight, 3)
-		if row.balance_weight < 0:
+		if key in cloth and flt(row.weight - row.used_weight - cloth[key], 3) < 0:
 			frappe.throw(
 				f"{bold(_attribute_value(row.dia))} {bold(_attribute_value(row.colour))}, {bold(row.cloth_type)} "
 				"was used more than the received weight"
 			)
-	cp_doc.save(ignore_permissions=True)
 
 
 @frappe.whitelist()
@@ -1259,7 +1244,7 @@ def get_cut_sheet_data(
 
 	parent_dt, parent_name = get_parent_ref(doc)
 	if has_cloth_tracking(parent_dt) and not doc.get("cutting_bulk_lay_sheet"):
-		_save_cutting_plan_cloth_usage(doc, parent_name)
+		validate_cutting_plan_cloth_balance(doc, parent_name)
 
 	update_cutting_plan(doc_name, check_cp=True)
 	if doc.cutting_plan:

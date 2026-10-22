@@ -48,7 +48,7 @@ def get_reports() -> list[WebReport]:
 			key="planning-work-in-progress", kind="callable",
 			runner="essdee_yrp.planning.reports.work_in_progress.run",
 			access="essdee_yrp.planning.reports.work_in_progress.require_access",
-			filters={"lot": "JSON", "item": "JSON", "category": ("Link", "SD YRP Product Category"), "lot_status": "Select", "process_list": "JSON", "from_date": "Date", "to_date": "Date"},
+			filters={"lot": "JSON", "item": "JSON", "category": ("Link", "SD YRP Product Category"), "product_season": ("Link", "SD YRP Product Season"), "lot_status": "Select", "process_list": "JSON", "from_date": "Date", "to_date": "Date"},
 			link_sources={"lot": "SD YRP Lot", "item": "Item"},
 			permission_doctypes=("SD YRP Lot", "YRP Work Order", "YRP Item Production Detail", "SD YRP Finishing Plan", "SD YRP GRN Rework Item", "YRP Goods Received Note"),
 			dependency_doctypes="essdee_yrp.planning.reports.work_in_progress.dependency_doctypes",

@@ -9,10 +9,10 @@
 				<LinkField v-model="filters.process" doctype="YRP Process" label="Process" :placeholder="defaultProcess || 'MRP Settings finishing inward process'" :show-open-button="false" show-clear />
 				<small v-if="defaultProcess">Default process: {{ defaultProcess }}</small>
 				<WorkspaceLoadError v-if="defaultsError" class="process-defaults-error" title="Default process unavailable" :message="defaultsError" @retry="loadDefaults" />
-				<Button label="Paste values" severity="secondary" outlined @click="openPaste" />
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
 			</template>
 			<template #actions>
+				<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
 				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
@@ -22,11 +22,7 @@
 				<template #annotation="{ column, row }"><small v-if="pendingAnnotation(column, row)" class="pending-days" :title="pendingAnnotation(column, row).title">{{ pendingAnnotation(column, row).label }}</small></template>
 			</PlanningReportTable>
 		</ReportShell>
-		<Dialog v-model:visible="pasteVisible" header="Paste values" modal>
-			<div class="finishing-stack"><label class="common-field"><span class="erp-field-label">Apply to</span><Select v-model="pasteTarget" :options="['Lot', 'Item']" aria-label="Apply to" fluid /></label>
-			<label class="common-field"><span class="erp-field-label">One value per line or comma separated</span><Textarea v-model="pastedText" rows="8" aria-label="Values" fluid /></label></div>
-			<template #footer><Button label="Apply" :disabled="!pastedText.trim()" @click="applyPaste" /></template>
-		</Dialog>
+		<PasteListDialog v-model:visible="pasteVisible" @apply="paste" />
 	</section>
 </template>
 
@@ -41,12 +37,12 @@ import { useWebReport } from "../../../composables/useWebReport.js"
 import PlanningReportTable from "./PlanningReportTable.vue"
 import { pendingAnnotation } from "./processPendingAnnotations.js"
 import { usePlanningQuantityColumns } from "./usePlanningQuantityColumns.js"
-import Dialog from "primevue/dialog"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
-import Textarea from "primevue/textarea"
 import AsyncLinkMultiSelect from "../../cutting/reports/AsyncLinkMultiSelect.vue"
-import { mergePastedValues, populatedFilters } from "./productionReportFilters.js"
+import { populatedFilters } from "./productionReportFilters.js"
+import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
+import { mergeNames } from "../../../components/reports/pasteValues.js"
 
 function defaultFilters() { return { lot: [], item: [], category: "", lot_status: "Open", process: "" } }
 const filters = reactive(defaultFilters())
@@ -65,14 +61,7 @@ function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request) }, { flush: "sync" })
 const pasteVisible = ref(false)
-const pasteTarget = ref("Lot")
-const pastedText = ref("")
-function openPaste() { pasteTarget.value = "Lot"; pastedText.value = ""; pasteVisible.value = true }
-function applyPaste() {
-	const key = pasteTarget.value === "Item" ? "item" : "lot"
-	filters[key] = mergePastedValues(filters[key], pastedText.value)
-	pasteVisible.value = false
-}
+function paste({ target, names }) { filters[target] = mergeNames(filters[target], names) }
 const defaultProcess = ref("")
 const defaultsError = ref("")
 async function loadDefaults() {

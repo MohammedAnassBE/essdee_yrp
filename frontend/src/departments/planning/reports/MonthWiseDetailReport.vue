@@ -9,6 +9,7 @@
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
 			</template>
 			<template #actions>
+				<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
 				<Button label="Download CSV" icon="pi pi-download" severity="secondary" outlined :disabled="!generated || !rows.length" @click="downloadCsv" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
@@ -17,18 +18,20 @@
 			<PlanningReportTable title="Month-wise Detail" :columns="columns" :rows="group.rows" :cell-align="cellAlign" :formatted-cell="formattedCell" />
 			</section>
 		</ReportShell>
-
+		<PasteListDialog v-model:visible="pasteVisible" @apply="paste" />
 	</section>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import { computed, reactive, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
 import { useWebReport } from "../../../composables/useWebReport.js"
 import PlanningReportTable from "./PlanningReportTable.vue"
 import { usePlanningQuantityColumns } from "./usePlanningQuantityColumns.js"
+import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
+import { mergeNames } from "../../../components/reports/pasteValues.js"
 import DateField from "../../../components/common/DateField.vue"
 import AsyncLinkMultiSelect from "../../cutting/reports/AsyncLinkMultiSelect.vue"
 import { monthWiseHint, populatedFilters } from "./productionReportFilters.js"
@@ -36,6 +39,7 @@ import { monthWiseHint, populatedFilters } from "./productionReportFilters.js"
 function defaultFilters() { return { lot: [], item: [], from_date: "", to_date: "" } }
 const filters = reactive(defaultFilters())
 const hint = computed(() => monthWiseHint(filters))
+const pasteVisible = ref(false)
 const {
 	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError,
 	trackingStartedAt, loading, isBusy, generated, statusOnly, activeFilters, payload, reportSummary,
@@ -46,6 +50,7 @@ const { columns, rows, cellAlign, formattedCell, downloadCsv } = usePlanningQuan
 function requestFilters() { return populatedFilters(filters) }
 function generate() { if (!hint.value) return generateReport(requestFilters()) }
 function rebuild() { if (!hint.value) return generateReport(requestFilters(), { refresh: true }) }
+function paste({ target, names }) { filters[target] = mergeNames(filters[target], names) }
 function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request) }, { flush: "sync" })

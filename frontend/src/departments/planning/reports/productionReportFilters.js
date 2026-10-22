@@ -65,6 +65,10 @@ export function stockHint(filters) {
 	return !filters.lot.length && !filters.item.length && !(filters.category || filters.product_category) ? "Select at least one Lot, Item or Category." : pairedDateHint(filters)
 }
 
+export function wipHint(filters) {
+	return !filters.lot.length && !filters.item.length && !filters.category && !filters.product_season ? "Select at least one Lot, Item, Category or Season." : pairedDateHint(filters)
+}
+
 export function progressTotals(rows, columns, cellValue = (row, column) => row[column.fieldname]) {
 	const data = rows.filter((row) => !row.is_total_row)
 	if (!data.length) return []

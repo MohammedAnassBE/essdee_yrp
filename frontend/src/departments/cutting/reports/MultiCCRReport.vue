@@ -14,6 +14,7 @@
 			<label><span class="erp-field-label">Status</span><select class="erp-native-select" v-model="filters.status"><option value="">All statuses</option><option value="Open">Open</option><option value="Closed">Closed</option></select></label>
 			<LinkField v-model="filters.category" doctype="Product Category" label="Product category" placeholder="Search category…" :show-open-button="false" show-clear />
 		</template>
+		<template #actions><Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="loading" @click="pasteVisible = true" /></template>
 
 		<template #metrics>
 			<div class="report-metric"><i class="pi pi-inbox" /><div><span>Output lots</span><strong>{{ number(result.output_lots?.length) }}</strong></div></div>
@@ -71,9 +72,11 @@
 			</div>
 		</section>
 	</ReportShell>
+	<PasteListDialog v-model:visible="pasteVisible" @apply="paste" />
 </template>
 
 <script setup>
+import Button from "primevue/button"
 import { computed, reactive, ref } from "vue"
 
 import { getMultiCcrReport } from "../../../api/cuttingReports.js"
@@ -82,12 +85,15 @@ import AsyncLinkMultiSelect from "./AsyncLinkMultiSelect.vue"
 import ClothTable from "./ClothTable.vue"
 import CompletionMatrix from "./CompletionMatrix.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
+import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
+import { mergeNames } from "../../../components/reports/pasteValues.js"
 import { errorMessage, number, quantity } from "../../../components/reports/reportUtils.js"
 
 const filters = reactive(defaultFilters())
 const selected = reactive({ lots: [], items: [] })
 const result = reactive(emptyResult())
 const loading = ref(false)
+const pasteVisible = ref(false)
 const generated = ref(false)
 const error = ref("")
 
@@ -112,6 +118,7 @@ async function generate() {
 	} catch (exception) { error.value = errorMessage(exception) }
 	finally { loading.value = false }
 }
+function paste({ target, names }) { const key = target === "item" ? "items" : "lots"; filters[key] = mergeNames(filters[key], names) }
 function reset() {
 	Object.assign(filters, defaultFilters())
 	Object.assign(selected, { lots: [], items: [] })

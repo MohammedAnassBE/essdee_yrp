@@ -53,7 +53,8 @@ import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import { useWebReport } from "../../../composables/useWebReport.js"
-import PasteListDialog from "./PasteListDialog.vue"
+import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
+import { mergeNames } from "../../../components/reports/pasteValues.js"
 import WipLinkMultiSelect from "./WipLinkMultiSelect.vue"
 import { cellText, cellTone, columnGroups, reportCsv, validateWipFilters } from "./workInProgress.js"
 
@@ -72,7 +73,7 @@ function generate() {
 	if (!Object.keys(errors.value).length) report.generate({ ...filters })
 }
 function reset() { Object.assign(filters, defaults()); errors.value = {}; report.clear() }
-function paste({ target, names }) { filters[target] = [...new Set([...filters[target], ...names])] }
+function paste({ target, names }) { filters[target] = mergeNames(filters[target], names) }
 function download() {
 	const url = URL.createObjectURL(new Blob([reportCsv(sourceRows.value, sourceColumns.value)], { type: "text/csv;charset=utf-8" }))
 	const anchor = document.createElement("a")

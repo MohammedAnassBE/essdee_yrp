@@ -158,14 +158,18 @@ def production_lots(filters, category_field="category", *, creation_end_midnight
 	lots = authorize_filter_values("SD YRP Lot", filters.get("lot"))
 	items = authorize_filter_values("Item", filters.get("item"))
 	category = filters.get(category_field)
-	if not lots and not items and not category:
-		frappe.throw(_("Select at least one Lot, Item or Category."))
+	season = filters.get("product_season")
+	if not lots and not items and not category and not season:
+		frappe.throw(_("Select at least one Lot, Item, Category or Season."))
 	status = filters.get("lot_status") or "Open"
 	if status not in ("Open", "Closed"):
 		frappe.throw(_("Lot Status must be Open or Closed."))
 	conditions = {"status": status, "production_detail": ["is", "set"]}
 	if lots:
 		conditions["name"] = ["in", lots]
+	if season:
+		authorize_filter_values("SD YRP Product Season", [season])
+		conditions["season"] = season
 	if category:
 		authorize_filter_values("SD YRP Product Category", [category])
 		members = frappe.get_all("Item", filters={"product_category": category}, pluck="name", limit_page_length=0)

@@ -103,5 +103,43 @@ class TestWorkInProgressDateParity(TestCase):
 			merch.resolve_lots(filters)
 
 
+class TestWorkInProgressSeason(TestCase):
+	def test_season_alone_is_enough_and_narrows_lots(self):
+		from essdee_yrp.planning.reports import production_quantities as quantities
+		calls = []
+		def read(doctype, **kwargs):
+			calls.append((doctype, kwargs.get("filters")))
+			return [] if doctype == "SD YRP Lot" else ["Summer 26"]
+		with patch.object(frappe, "get_list", side_effect=read):
+			quantities.production_lots({"product_season": "Summer 26"}, creation_end_midnight=True)
+		self.assertEqual(calls[0], ("SD YRP Product Season", {"name": ["in", ["Summer 26"]]}))
+		self.assertEqual(calls[-1][1]["season"], "Summer 26")
+
+	def test_without_any_filter_names_season_in_error(self):
+		from essdee_yrp.planning.reports import production_quantities as quantities
+		with self.assertRaisesRegex(frappe.ValidationError, "Season"):
+			quantities.production_lots({"lot_status": "Open"})
+
+	def test_planning_report_accepts_season_filter(self):
+		from essdee_yrp.web_reports import get_reports
+		entry = next(entry for entry in get_reports() if entry.key == "planning-work-in-progress")
+		self.assertEqual(entry.filters["product_season"], ("Link", "SD YRP Product Season"))
+
+
+class TestWorkInProgressSeasonLive(IntegrationTestCase):
+	def test_season_matches_direct_lot_query(self):
+		from essdee_yrp.planning.reports import production_quantities as quantities
+		season = frappe.db.get_value("SD YRP Lot", {"season": ["is", "set"], "status": "Open", "production_detail": ["is", "set"]}, "season")
+		if not season:
+			self.skipTest("No open lot has a season.")
+		expected = frappe.get_all("SD YRP Lot", filters={"season": season, "status": "Open", "production_detail": ["is", "set"]}, pluck="name", order_by="name")
+		lots = quantities.production_lots({"product_season": season, "lot_status": "Open"}, creation_end_midnight=True)
+		self.assertEqual([lot["name"] for lot in lots], expected)
+		other = frappe.get_all("SD YRP Lot", filters={"season": ["!=", season], "status": "Open", "production_detail": ["is", "set"]}, pluck="name", limit=1)
+		if other:
+			mixed = quantities.production_lots({"product_season": season, "lot": [expected[0], other[0]]})
+			self.assertEqual([lot["name"] for lot in mixed], [expected[0]])
+
+
 class TestWorkInProgressLive(LiveProductionChecks, IntegrationTestCase):
 	report = report

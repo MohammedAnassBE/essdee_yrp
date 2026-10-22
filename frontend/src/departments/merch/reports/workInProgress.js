@@ -1,7 +1,3 @@
-export function parsePastedNames(text) {
-	return [...new Set(String(text || "").split(/[\t\r\n]+/).map((name) => name.trim()).filter(Boolean))]
-}
-
 export function validateWipFilters(filters) {
 	const errors = {}
 	if (!filters.category && !filters.product_season && !filters.lot?.length && !filters.item?.length) {

@@ -1178,6 +1178,68 @@ class TestEssdeeValuationContract(UnitTestCase):
 			with self.assertRaisesRegex(frappe.ValidationError, "matches 2 Work Order Deliverables"):
 				_allocate_to_work_order_deliverables(required, work_order, grn, exact_business_key=True)
 
+	def test_packing_input_shortage_lists_every_short_input_once(self):
+		def deliverable(index, item_variant, qty, delivered):
+			return frappe._dict(
+				name=f"WO-IN-{index}",
+				idx=index,
+				item_variant=item_variant,
+				uom="Nos",
+				qty=qty,
+				pending_quantity=qty - delivered,
+				stock_update=0,
+				is_calculated=1,
+				set_combination="{}",
+			)
+
+		work_order = frappe._dict(
+			name="WO-PACK-1",
+			deliverables=[
+				deliverable(1, "INNER-CARD", 4000, 60),
+				deliverable(2, "POLY-BAG", 4000, 0),
+				deliverable(3, "TOP-BOX", 400, 24),
+			],
+		)
+		grn = frappe._dict(
+			from_warehouse="SUPPLIER-WH",
+			posting_date="2026-10-22",
+			posting_time="12:00:00",
+		)
+		required = [
+			{
+				"goods_received_note_item": output,
+				"received_item_variant": f"BOXED-GARMENT-{output}",
+				"item_variant": item_variant,
+				"qty": qty,
+				"uom": "Nos",
+			}
+			for output in ("75", "80")
+			for item_variant, qty in (("INNER-CARD", 120), ("POLY-BAG", 120), ("TOP-BOX", 12))
+		]
+		with (
+			patch(
+				"yrp.stock.utils.get_conversion_factor",
+				return_value={"conversion_factor": 1, "stock_uom": "Nos"},
+			),
+			patch("yrp.stock.utils.get_stock_balance", return_value=(0, 1)),
+			patch(
+				"yrp.yrp.doctype.yrp_work_order.yrp_work_order._stock_dimension_values",
+				return_value={"lot": "LOT-1", "received_type": "Accepted"},
+			),
+			patch(
+				"essdee_yrp.fabric_reference.get_reference_allocations",
+				return_value={},
+			),
+			self.assertRaises(frappe.ValidationError) as raised,
+		):
+			_allocate_to_work_order_deliverables(required, work_order, grn)
+
+		message = str(raised.exception)
+		self.assertIn("INNER-CARD: need 240 Nos, available 60, short 180", message)
+		self.assertIn("POLY-BAG: need 240 Nos, available 0, short 240", message)
+		self.assertNotIn("TOP-BOX", message)
+		self.assertNotIn("BOXED-GARMENT", message)
+
 	def test_stitching_planner_preserves_each_received_output_identity(self):
 		receivable = frappe._dict(
 			name="WO-OUT-1",

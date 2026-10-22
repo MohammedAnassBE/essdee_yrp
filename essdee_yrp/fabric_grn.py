@@ -630,6 +630,7 @@ def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=Fa
 
 	valuation_cache = {}
 	plan = []
+	shortages = {}
 	for required in rows:
 		conversion = get_conversion_factor(required["item_variant"], required.get("uom"))
 		required_stock_qty = flt(required["qty"]) * (flt(conversion.get("conversion_factor")) or 1)
@@ -708,20 +709,38 @@ def _allocate_to_work_order_deliverables(rows, wo, grn, *, exact_business_key=Fa
 			if remaining_stock_qty <= QTY_TOLERANCE:
 				break
 
+		key = (required["item_variant"], conversion.get("stock_uom") or required.get("uom"))
+		totals = shortages.setdefault(key, {"need": 0.0, "short": 0.0})
+		totals["need"] += required_stock_qty
 		if remaining_stock_qty > QTY_TOLERANCE:
-			frappe.throw(
-				_(
-					"Work Order {0} has only {1} stock available for calculated input {2}, "
-					"but receiving {3} requires {4}. Deliver the remaining input first."
-				).format(
-					wo.name,
-					flt(required_stock_qty - remaining_stock_qty, 6),
-					required["item_variant"],
-					required["received_item_variant"],
-					flt(required_stock_qty, 6),
-				)
-			)
+			totals["short"] += remaining_stock_qty
+	throw_input_shortages(wo, shortages)
 	return plan
+
+
+def throw_input_shortages(wo, shortages):
+	"""Report every short calculated input of the GRN in one message."""
+	lines = [
+		_("{0}: need {1} {2}, available {3}, short {4}").format(
+			item_variant,
+			f"{flt(totals['need'], 3):g}",
+			uom or "",
+			f"{flt(totals['need'] - totals['short'], 3):g}",
+			f"{flt(totals['short'], 3):g}",
+		)
+		for (item_variant, uom), totals in shortages.items()
+		if totals["short"] > QTY_TOLERANCE
+	]
+	if lines:
+		frappe.throw(
+			_(
+				"Work Order {0} does not have enough delivered input for this GRN "
+				"(available = delivered and not yet consumed). Deliver the remaining input first:"
+			).format(wo.name)
+			+ "<br>"
+			+ "<br>".join(lines),
+			title=_("Input Short"),
+		)
 
 
 def populate_grn_deliverables(grn, plan):

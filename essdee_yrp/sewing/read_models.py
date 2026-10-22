@@ -68,7 +68,16 @@ def _plans(supplier, *, lots=None, items=None):
 	)
 
 
-def _entries(plans, *, entry_date=None, work_station=None, input_type=None, start=0, page_length=0):
+def _entries(
+	plans,
+	*,
+	entry_date=None,
+	work_station=None,
+	input_type=None,
+	start=0,
+	page_length=0,
+	order_by="entry_date desc, entry_time desc, creation desc, name desc",
+):
 	if not plans:
 		return []
 	frappe.has_permission("SD YRP Sewing Plan Entry Detail", "read", throw=True)
@@ -91,7 +100,7 @@ def _entries(plans, *, entry_date=None, work_station=None, input_type=None, star
 			"entry_date",
 			"entry_time",
 		],
-		order_by="entry_date desc, entry_time desc, creation desc, name desc",
+		order_by=order_by,
 		limit_start=start,
 		limit_page_length=page_length,
 	)
@@ -106,7 +115,7 @@ def _details(entries):
 			"parent": ["in", [row.name for row in entries]],
 			"parenttype": "SD YRP Sewing Plan Entry Detail",
 		},
-		fields=["parent", "item_variant", "set_combination", "quantity"],
+		fields=["parent", "idx", "item_variant", "set_combination", "quantity"],
 		limit_page_length=0,
 	)
 
@@ -207,14 +216,21 @@ def get_scr_data(supplier, lot):
 	if not ipd:
 		return {"status": "failed", "message": _("Lot has no production detail."), "data": {}}
 
-	order_rows = frappe.get_all(
-		"SD YRP Sewing Plan Order Detail",
-		filters={"parent": ["in", list(plan_map)]},
-		fields=["parent", "item_variant", "set_combination", "quantity"],
-		limit_page_length=0,
+	# MRP walks plans and entries newest-modified first and child rows by idx;
+	# that walk fixes the colour, size and received-type header order.
+	plan_position = {name: index for index, name in enumerate(plan_map)}
+	order_rows = sorted(
+		frappe.get_all(
+			"SD YRP Sewing Plan Order Detail",
+			filters={"parent": ["in", list(plan_map)]},
+			fields=["parent", "idx", "item_variant", "set_combination", "quantity"],
+			limit_page_length=0,
+		),
+		key=lambda row: (plan_position[row.parent], row.idx),
 	)
-	entries = _entries(plans)
-	detail_rows = _details(entries)
+	entries = _entries(plans, order_by="modified desc, name desc")
+	entry_position = {row.name: index for index, row in enumerate(entries)}
+	detail_rows = sorted(_details(entries), key=lambda row: (entry_position[row.parent], row.idx))
 	entry_map = {row.name: row for row in entries}
 	work_order_names = [row.work_order for row in plans if row.work_order]
 	delivered_rows = (
@@ -233,7 +249,6 @@ def get_scr_data(supplier, lot):
 	data = {}
 	colours = []
 	lines = defaultdict(set)
-	observed_headers = []
 
 	def add(row, header, quantity, work_station=None):
 		bucket, size = _bucket(row, ipd, attributes)
@@ -256,8 +271,6 @@ def get_scr_data(supplier, lot):
 		)
 		if work_station and re.match(r"sewing line\s+\d", cstr(work_station).strip(), re.I):
 			lines[colour].add(work_station)
-		if header not in observed_headers:
-			observed_headers.append(header)
 
 	for row in order_rows:
 		add(row, "Order Qty", row.quantity)
@@ -276,12 +289,13 @@ def get_scr_data(supplier, lot):
 
 	stages = [row.input_type for row in configuration]
 	# Legacy SCR includes every non-default receipt in the configured total,
-	# including receipts at another stage.
-	received_headers = sorted(
-		(header for header in observed_headers
-		 if header not in {"Order Qty", "Delivered Qty", *stages}),
-		key=lambda header: (any(header.startswith(f"{stage} ") for stage in stages), header),
+	# including receipts at another stage, in first colour/size/entry order.
+	observed_headers = dict.fromkeys(
+		header for group in data.values() for values in group["values"].values() for header in values
 	)
+	received_headers = [
+		header for header in observed_headers if header not in {"Order Qty", "Delivered Qty", *stages}
+	]
 	headers = ["Order Qty", "Delivered Qty", "Delivered - Input"]
 	balance_headers = ["Delivered - Input"]
 	for stage in stages:
@@ -438,17 +452,19 @@ def _read_get_sewing_plan_entries(
 
 
 @frappe.whitelist()
-def get_sewing_plan_dpr_data(supplier, dpr_date, work_station=None, input_type=None):
+def get_sewing_plan_dpr_data(supplier, dpr_date, work_station=None, input_type=None, lot=None, item=None):
 	from essdee_yrp.sewing.reporting import daily_dpr
 
-	return daily_dpr(supplier, dpr_date, work_station, input_type)
+	return daily_dpr(supplier, dpr_date, work_station, input_type, lot, item)
 
 
 @frappe.whitelist()
-def get_sewing_plan_dpr_summary(supplier, from_date, to_date, work_station=None, input_type=None):
+def get_sewing_plan_dpr_summary(
+	supplier, from_date=None, to_date=None, work_station=None, input_type=None, lot=None, item=None
+):
 	from essdee_yrp.sewing.reporting import dpr_summary
 
-	return dpr_summary(supplier, from_date, to_date, work_station, input_type)
+	return dpr_summary(supplier, from_date, to_date, work_station, input_type, lot, item)
 
 
 @frappe.whitelist()

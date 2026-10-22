@@ -3,7 +3,7 @@
 		<table class="erp-table">
 			<caption>{{ label }}</caption>
 			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="cellClass(column, index)" :style="cellStyle(index)">{{ column.label }}</th></tr></thead>
-			<tbody><tr v-for="(row, rowIndex) in rows" :key="rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :title="column.width ? format(row[column.key]) : undefined">{{ format(row[column.key]) }}</td></tr></tbody>
+			<tbody><tr v-for="(row, rowIndex) in rows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key]) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key]) }}</slot></td></tr></tbody>
 			<tfoot v-if="totals"><tr><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(totals[column.key]) }}</th></tr></tfoot>
 		</table>
 	</div>
@@ -18,6 +18,7 @@ const props = defineProps({
 	rows: { type: Array, default: () => [] },
 	totals: { type: Object, default: null },
 	totalLabel: { type: String, default: "Total" },
+	cellTone: { type: Function, default: null },
 })
 // Frozen columns must be a leading run with explicit pixel widths so each sticky left offset is known.
 const frozenOffsets = computed(() => {
@@ -64,5 +65,6 @@ thead th.frozen { z-index: 3; }
 	.frozen-last { box-shadow: none; }
 }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+td.negative { color: var(--erp-danger); font-weight: var(--erp-font-weight-semibold); }
 .sewing-report-matrix:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; }
 </style>

@@ -22,6 +22,8 @@ const filters = reactive({
 	toDate: "",
 	workStation: "",
 	inputType: "",
+	lot: "",
+	item: "",
 })
 </script>
 

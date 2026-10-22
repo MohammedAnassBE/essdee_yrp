@@ -27,12 +27,12 @@ READINESS_FIELDS = {
 }
 
 
-def _report_plans(supplier, *, open_only=False):
+def _report_plans(supplier, *, open_only=False, lot=None, item=None):
 	from essdee_yrp.sewing.read_models import _plans
 
 	frappe.has_permission("SD YRP Sewing Plan", "read", throw=True)
 	frappe.has_permission("SD YRP Sewing Plan", "report", throw=True)
-	plans = _plans(supplier)
+	plans = _plans(supplier, lots=[lot] if lot else None, items=[item] if item else None)
 	names = list({row.work_order for row in plans if row.work_order})
 	work_orders = {}
 	if names:
@@ -91,7 +91,7 @@ def _snapshot(
 			"SD YRP Sewing Plan Entry Detail",
 			filters=filters,
 			fields=["name", "sewing_plan", "input_type", "received_type", "work_station", "entry_date"],
-			order_by="name asc" if status_order else "entry_date asc, name asc",
+			order_by="name asc" if status_order else "entry_date asc, modified desc, name desc",
 			limit=0,
 		)
 	if status_order and entries:
@@ -355,8 +355,8 @@ def _report_date(value, label):
 	return parsed
 
 
-def daily_dpr(supplier, dpr_date, work_station=None, input_type=None):
-	plans = _report_plans(supplier)
+def daily_dpr(supplier, dpr_date, work_station=None, input_type=None, lot=None, item=None):
+	plans = _report_plans(supplier, lot=lot, item=item)
 	date = _report_date(dpr_date, "DPR Date")
 	snapshot = _snapshot(
 		plans, from_date=date, to_date=date, work_station=work_station, input_type=input_type
@@ -364,12 +364,12 @@ def daily_dpr(supplier, dpr_date, work_station=None, input_type=None):
 	return _dpr_reports(snapshot, [date])[0]
 
 
-def dpr_summary(supplier, from_date, to_date, work_station=None, input_type=None):
-	plans = _report_plans(supplier)
-	start = _report_date(from_date, "From Date")
-	end = _report_date(to_date, "To Date")
-	if start > end:
-		frappe.throw(_("From Date cannot be after To Date."))
+def dpr_summary(
+	supplier, from_date=None, to_date=None, work_station=None, input_type=None, lot=None, item=None
+):
+	"""Return one DPR per entry date; FI-blocked dates are listed in pending_fi, not reported."""
+	plans = _report_plans(supplier, lot=lot, item=item)
+	start, end = _summary_range(from_date, to_date, lot or item)
 	snapshot = _snapshot(
 		plans, from_date=start, to_date=end, work_station=work_station, input_type=input_type
 	)
@@ -379,7 +379,24 @@ def dpr_summary(supplier, from_date, to_date, work_station=None, input_type=None
 	for report in reports:
 		for row in report["pending_fi"]:
 			pending[(row["lot"], row["colour"], row["part"])] = row
-	return {"reports": reports, "pending_fi": list(pending.values()), **_blocking_contract(bool(pending))}
+	return {
+		"reports": [report for report in reports if report["dpr_data"]],
+		"pending_fi": list(pending.values()),
+		**_blocking_contract(bool(pending)),
+	}
+
+
+def _summary_range(from_date, to_date, has_scope):
+	"""A summary needs a date range, a Lot or an Item; a range needs both bounds."""
+	if not cstr(from_date).strip() and not cstr(to_date).strip():
+		if not has_scope:
+			frappe.throw(_("Select a Date Range, Lot, or Item."))
+		return None, None
+	start = _report_date(from_date, "From Date")
+	end = _report_date(to_date, "To Date")
+	if start > end:
+		frappe.throw(_("From Date cannot be after To Date."))
+	return start, end
 
 
 def _blocking_contract(blocked):
@@ -410,11 +427,12 @@ def _dpr_reports(snapshot, dates):
 
 def _assemble_dpr(snapshot, dates, attributes, primary_values, headers):
 	entry_map = {row.name: row for row in snapshot.entries}
+	entry_position = {row.name: index for index, row in enumerate(snapshot.entries)}
 	by_date = defaultdict(list)
-	plans_by_date = defaultdict(set)
+	lots_by_date = defaultdict(set)
 	for entry in snapshot.entries:
-		plans_by_date[getdate(entry.entry_date)].add(entry.sewing_plan)
-	for row in snapshot.details:
+		lots_by_date[getdate(entry.entry_date)].add(snapshot.plans[entry.sewing_plan].lot)
+	for row in sorted(snapshot.details, key=lambda row: (entry_position[row.parent], row.idx)):
 		by_date[getdate(entry_map[row.parent].entry_date)].append(row)
 	orders = defaultdict(list)
 	for row in snapshot.orders:
@@ -422,7 +440,8 @@ def _assemble_dpr(snapshot, dates, attributes, primary_values, headers):
 	reports = []
 	for date in dates:
 		data = {}
-		plan_names = plans_by_date[date]
+		# MRP checks FI on every plan of each reported Lot, not only plans entered that day.
+		plan_names = [name for name, plan in snapshot.plans.items() if plan.lot in lots_by_date[date]]
 		pending = {}
 		for plan_name in sorted(plan_names):
 			plan = snapshot.plans[plan_name]

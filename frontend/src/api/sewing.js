@@ -29,7 +29,7 @@ export function getSewingStatusSummary(supplier) {
 export function getSewingDpr(supplier, filters) {
 	const common = { supplier, work_station: filters.workStation || "", input_type: filters.inputType || "" }
 	return filters.mode === "range"
-		? callMethod(`${PLAN_METHOD}.get_sewing_plan_dpr_summary`, { supplier, from_date: filters.fromDate, to_date: filters.toDate, work_station: common.work_station, input_type: common.input_type })
+		? callMethod(`${PLAN_METHOD}.get_sewing_plan_dpr_summary`, { ...common, from_date: filters.fromDate || "", to_date: filters.toDate || "", lot: filters.lot || "", item: filters.item || "" })
 		: callMethod(`${PLAN_METHOD}.get_sewing_plan_dpr_data`, { supplier, dpr_date: filters.date, work_station: common.work_station, input_type: common.input_type })
 }
 

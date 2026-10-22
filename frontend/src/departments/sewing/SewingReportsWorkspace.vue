@@ -65,7 +65,7 @@ const allowed = computed(() => {
 // Only filters survive tab switches. Business rows remain owned by the active
 // report; a Supplier change remounts this workspace and clears its local state.
 const statusFilters = reactive({ lot: [], item: [], colour: [], part: [], fromDate: "", toDate: "" })
-const dprFilters = reactive({ mode: "daily", date: "", fromDate: "", toDate: "", workStation: "", inputType: "" })
+const dprFilters = reactive({ mode: "daily", date: "", fromDate: "", toDate: "", workStation: "", inputType: "", lot: "", item: "" })
 const scrFilters = reactive({ lot: "", colours: [] })
 const monthlyFilters = reactive({ fromDate: "", toDate: "", inputType: "", showGrn: false })
 const itemFilters = reactive({ lots: [], items: [] })

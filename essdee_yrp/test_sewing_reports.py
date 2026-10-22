@@ -78,11 +78,12 @@ class TestSewingReports(IntegrationTestCase):
 	def test_scr_configured_balances_received_types_and_signed_totals(self):
 		# A non-default earlier-stage receipt joins the configured received-type
 		# total, matching the operational SCR contract, without changing Input Qty.
+		# Received-type headers follow MRP's newest-modified entry walk.
 		self._entry(self.plan, "Input Qty", "2090-01-01", 2, self.reject_type.name)
 		result = api.get_scr_data(self.supplier, self.plan.lot)
 		expected = ["Order Qty", "Delivered Qty", "Delivered - Input", "Input Qty", "Input Qty Balance",
-			"Line Output", "Line Output Balance", "Checking Output", self.reject_type.name,
-			f"Input Qty {self.reject_type.name}", "Checking Output Total", "Checking Output Balance",
+			"Line Output", "Line Output Balance", "Checking Output", f"Input Qty {self.reject_type.name}",
+			self.reject_type.name, "Checking Output Total", "Checking Output Balance",
 			"AQL Output", "AQL Output Balance"]
 		self.assertEqual(result["headers"], expected)
 		self.assertFalse(result.get("derived_balances_omitted", False))
@@ -482,8 +483,8 @@ class TestSewingReports(IntegrationTestCase):
 		self.assertEqual(result["status"], "pending_fi")
 		self.assertTrue(result["blocked"])
 		self.assertEqual(len(result["pending_fi"]), 1)
-		self.assertEqual(len(result["reports"]), 3)
-		self.assertTrue(all(row["blocked"] and row["message"] for row in result["reports"]))
+		# MRP lists blocked dates in pending_fi and reports only dates with data.
+		self.assertEqual(result["reports"], [])
 
 	def test_dpr_never_returns_another_suppliers_rows_or_pending_fi(self):
 		other = self._plan(self.other_supplier)

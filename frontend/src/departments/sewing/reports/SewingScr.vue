@@ -1,14 +1,14 @@
 <template>
 	<section data-sewing-report="scr" aria-label="SCR">
-		<ReportShell title="SCR" :loading="loading" :generated="generated" :has-results="groups.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
+		<ReportShell title="SCR" :loading="loading" :generated="generated" :has-results="rows.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Choose a Lot" :search-handler="searchLots" :show-open-button="false" show-clear :disabled="loading" />
 				<div class="common-field"><label for="scr-colours">Colour</label><MultiSelect input-id="scr-colours" v-model="filters.colours" :options="data.colours || []" aria-label="Colour" placeholder="All Colours" :max-selected-labels="1" filter fluid :disabled="loading" /></div>
 			</template>
-			<article v-for="group in groups" :key="group.key" class="scr-colour">
-				<h2>{{ group.colour }}{{ group.part ? ` · ${group.part}` : '' }}</h2>
-				<p>{{ data.item }} · {{ filters.lot }}<span v-if="group.lines?.length"> · {{ group.lines.join(', ') }}</span></p>
-				<SewingReportMatrix :label="`${group.colour} recorded quantities by size and input stage`" :columns="columns" :rows="matrixRows(group)" :totals="group.type_wise_total" />
+			<article v-if="rows.length" class="scr-report">
+				<header class="scr-heading"><h2>{{ data.item }}</h2><span class="scr-title">SCR</span></header>
+				<p>{{ filters.lot }}<span v-if="lines.length"> · {{ lines.join(', ') }}</span></p>
+				<SewingReportMatrix :label="`${data.item} SCR quantities by type, colour and size`" :columns="columns" :rows="rows" :cell-tone="tone" />
 			</article>
 		</ReportShell>
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
@@ -24,18 +24,17 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import SewingReportMatrix from "../components/SewingReportMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
+import { isNegativeBalance, scrColumns, scrLines, scrRows } from "./sewingReportTables.js"
 
 const props = defineProps({ filters: { type: Object, required: true } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
 const data = ref({}), loading = ref(false), generated = ref(false), error = ref("")
 let mounted = true, searchSequence = 0
-const columns = computed(() => [{ key: "size", label: "Size" }, ...(data.value.headers || []).map(label => ({ key: label, label, numeric: true }))])
-const groups = computed(() => (data.value.colours || Object.keys(data.value.data || {}))
-	.filter(key => !props.filters.colours.length || props.filters.colours.includes(key))
-	.map(key => ({ ...data.value.data[key], key })))
-// Respect primary-value and stage order. All cell/received-type totals come
-// directly from the server, including signed configured stage balances.
-function matrixRows(group) { return (data.value.primary_values || Object.keys(group.values || {})).map(size => ({ size, ...(group.values?.[size] || {}) })) }
+// Cells and type totals, including signed stage balances, come from the server.
+const columns = computed(() => scrColumns(data.value))
+const rows = computed(() => scrRows(data.value, props.filters.colours))
+const lines = computed(() => scrLines(data.value, props.filters.colours))
+function tone(row, column) { return (column.numeric && isNegativeBalance(row.type, row[column.key])) ? "negative" : undefined }
 async function searchLots(text) {
 	const generation = requestGeneration.value, unit = supplier.value, sequence = ++searchSequence
 	const rows = await getSewingSupplierLots(unit, text)
@@ -61,7 +60,9 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 </script>
 
 <style scoped>
-.scr-colour { display: grid; min-width: 0; gap: 9px; }
+.scr-report { display: grid; min-width: 0; gap: 9px; }
+.scr-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.scr-title { color: var(--erp-text-muted); font-weight: var(--erp-font-weight-bold); }
 h2 { margin: 0; color: var(--erp-text); font-size: 15px; overflow-wrap: anywhere; }
 p { margin: 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); overflow-wrap: anywhere; }
 </style>

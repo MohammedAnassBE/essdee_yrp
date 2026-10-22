@@ -334,8 +334,11 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 		self.assertTrue(invoice_name, "Expected a Purchase Invoice with a supplier")
 		user_email = f"e2e.ahr.workspace.{frappe.generate_hash(length=8)}@example.com"
 		original_user = frappe.session.user
-		against_field = frappe.get_meta("YRP Purchase Invoice").get_field("against")
+		meta = frappe.get_meta("YRP Purchase Invoice")
+		against_field = meta.get_field("against")
 		original_permlevel = against_field.permlevel
+		supplier_field = meta.get_field("supplier")
+		original_mask = supplier_field.mask
 		try:
 			user = frappe.get_doc({
 				"doctype": "User",
@@ -348,6 +351,7 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 			})
 			user.insert(ignore_permissions=True)
 			against_field.permlevel = 1
+			supplier_field.mask = 1
 			frappe.set_user(user_email)
 
 			payload = get_purchase_invoice_workspace(invoice_name[0])
@@ -358,6 +362,7 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 		finally:
 			frappe.set_user("Administrator")
 			against_field.permlevel = original_permlevel
+			supplier_field.mask = original_mask
 			if frappe.db.exists("User", user_email):
 				frappe.delete_doc("User", user_email, ignore_permissions=True, force=True)
 			for contact in frappe.get_all("Contact", filters={"email_id": user_email}, pluck="name"):

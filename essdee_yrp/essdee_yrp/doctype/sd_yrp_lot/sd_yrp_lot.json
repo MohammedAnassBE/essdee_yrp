@@ -128,6 +128,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
+   "no_copy": 1,
    "options": "Open\nClosed"
   },
   {
@@ -307,6 +308,7 @@
    "fieldname": "last_calculated_time",
    "fieldtype": "Datetime",
    "label": "Last Calculated Time",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -467,12 +469,14 @@
    "fieldname": "is_transferred",
    "fieldtype": "Check",
    "label": "Is Transferred",
+   "no_copy": 1,
    "read_only": 1
   },
   {
    "fieldname": "transferred_lot",
    "fieldtype": "Link",
    "label": "Transferred Lot",
+   "no_copy": 1,
    "options": "SD YRP Lot",
    "read_only": 1
   },
@@ -481,6 +485,7 @@
    "fieldname": "has_transferred",
    "fieldtype": "Check",
    "label": "Has Transferred",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -555,7 +560,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-25 15:12:33.705488",
+ "modified": "2026-10-22 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Lot",

@@ -96,6 +96,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "FP Status",
+   "no_copy": 1,
    "options": "Planned\nPartially Received\nReady to Pack\nPartially Dispatched\nDispatched\nFully Dispatched\nReady for Audit\nAudit Completed\nAuto Closed\nOCR Completed\nP&L Submitted",
    "read_only": 1
   },
@@ -103,6 +104,7 @@
    "fieldname": "fp_status_since",
    "fieldtype": "Datetime",
    "label": "FP Status Since",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -228,6 +230,7 @@
    "fieldname": "finishing_start_date",
    "fieldtype": "Date",
    "label": "Finishing Start Date",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -235,6 +238,7 @@
    "fieldname": "finishing_end_date",
    "fieldtype": "Date",
    "label": "Finishing End Date",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -242,6 +246,7 @@
    "fieldname": "audit_requested_date",
    "fieldtype": "Date",
    "label": "Audit Requested Date",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -249,6 +254,7 @@
    "fieldname": "audit_completed_date",
    "fieldtype": "Date",
    "label": "Audit Completed Date",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -369,7 +375,8 @@
    "fieldname": "return_grn_list",
    "fieldtype": "Small Text",
    "hidden": 1,
-   "label": "Return GRN List"
+   "label": "Return GRN List",
+   "no_copy": 1
   },
   {
    "default": "0",
@@ -384,7 +391,8 @@
    "fieldname": "pack_return_list",
    "fieldtype": "Small Text",
    "hidden": 1,
-   "label": "Pack Return List"
+   "label": "Pack Return List",
+   "no_copy": 1
   },
   {
    "fieldname": "comments",
@@ -405,13 +413,15 @@
    "fieldname": "incomplete_transfer_dc_list",
    "fieldtype": "Small Text",
    "hidden": 1,
-   "label": "Incomplete Transfer DC List"
+   "label": "Incomplete Transfer DC List",
+   "no_copy": 1
   },
   {
    "fieldname": "incomplete_transfer_grn_list",
    "fieldtype": "Small Text",
    "hidden": 1,
-   "label": "Incomplete Transfer GRN List"
+   "label": "Incomplete Transfer GRN List",
+   "no_copy": 1
   },
   {
    "fieldname": "alternatives_tab",
@@ -437,7 +447,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-28 15:37:39.890569",
+ "modified": "2026-10-22 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Finishing Plan",

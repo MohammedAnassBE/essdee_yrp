@@ -217,7 +217,8 @@
    "fieldname": "calculated_result",
    "fieldtype": "Data",
    "hidden": 1,
-   "label": "Calculated Result"
+   "label": "Calculated Result",
+   "no_copy": 1
   },
   {
    "fieldname": "section_break_xebx",
@@ -362,7 +363,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-02-06 18:13:37.178064",
+ "modified": "2026-10-22 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Essdee Quality Inspection",

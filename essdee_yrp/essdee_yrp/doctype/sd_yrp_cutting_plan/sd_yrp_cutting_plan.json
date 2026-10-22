@@ -198,14 +198,16 @@
    "fieldname": "completed_items_json",
    "fieldtype": "JSON",
    "hidden": 1,
-   "label": "Completed Items JSON"
+   "label": "Completed Items JSON",
+   "no_copy": 1
   },
   {
    "allow_on_submit": 1,
    "fieldname": "incomplete_items_json",
    "fieldtype": "JSON",
    "hidden": 1,
-   "label": "Incomplete Items JSON"
+   "label": "Incomplete Items JSON",
+   "no_copy": 1
   },
   {
    "fieldname": "completed_items_html",
@@ -269,6 +271,7 @@
    "fieldname": "cutting_start_date",
    "fieldtype": "Date",
    "label": "Cutting Start Date",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -277,6 +280,7 @@
    "fieldname": "cutting_end_date",
    "fieldtype": "Date",
    "label": "Cutting End Date",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -294,6 +298,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Open Status",
+   "no_copy": 1,
    "options": "\nOpen\nClosed",
    "read_only": 1
   },
@@ -309,6 +314,7 @@
    "fieldname": "no_of_colours_completed",
    "fieldtype": "Int",
    "label": "No of Colours Completed",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -318,6 +324,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "CP Status",
+   "no_copy": 1,
    "options": "\nDraft\nPlanned\nFabric Partially Received\nReady to Cut\nCutting In Progress\nPartially Completed\nCompleted\nCut Panel Dispatch Pending\nCancelled",
    "read_only": 1
   },
@@ -353,7 +360,7 @@
    "link_fieldname": "cutting_plan"
   }
  ],
- "modified": "2026-03-13 10:14:45.796757",
+ "modified": "2026-10-22 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Cutting Plan",

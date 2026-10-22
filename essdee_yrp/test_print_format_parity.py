@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
@@ -111,6 +112,19 @@ class TestPrintFormatParity(IntegrationTestCase):
 					if name not in PRINT_CONTEXT_NAMES and name not in jenv.globals
 				)
 				self.assertEqual(missing, [])
+
+	def test_user_signature_falls_back_to_the_erp_signature(self):
+		from essdee_yrp.print_helpers import get_user_signature
+
+		signatures = {"SD YRP Signature": None, "SD Signature": "/files/erp-sign.png"}
+		with (
+			patch.object(frappe.db, "exists", return_value=True),
+			patch.object(frappe.db, "get_value", side_effect=lambda doctype, *args: signatures[doctype]),
+		):
+			self.assertEqual(get_user_signature("approver@example.com"), "/files/erp-sign.png")
+			signatures["SD YRP Signature"] = "/files/mrp-sign.png"
+			self.assertEqual(get_user_signature("approver@example.com"), "/files/mrp-sign.png")
+		self.assertIsNone(get_user_signature(None))
 
 	def test_templates_do_not_query_pre_namespace_doctypes(self):
 		for path, data in self._formats():

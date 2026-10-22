@@ -47,13 +47,15 @@ def get_current_user_time():
 
 
 def get_user_signature(user):
-	if not user or not frappe.db.exists("DocType", "SD YRP Signature"):
+	"""The user's submitted MRP signature, else the ERP one: this helper replaces essdee's of the same name."""
+	if not user:
 		return None
-	return frappe.db.get_value(
-		"SD YRP Signature",
-		{"user": user, "docstatus": 1},
-		"signature",
-	)
+	for doctype in ("SD YRP Signature", "SD Signature"):
+		if frappe.db.exists("DocType", doctype):
+			signature = frappe.db.get_value(doctype, {"user": user, "docstatus": 1}, "signature")
+			if signature:
+				return signature
+	return None
 
 
 def get_ipd_pf_details(ipd):

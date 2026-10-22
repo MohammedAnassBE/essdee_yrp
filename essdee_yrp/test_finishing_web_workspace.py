@@ -94,11 +94,12 @@ class TestFinishingWebWorkspace(TestCase):
 		with self._permissions(denied=denied), roles_patch, settings_patch:
 			return workspace.get_plan_actions(plan)
 
-	def test_capabilities_expose_the_five_finishing_cards(self):
+	def test_capabilities_expose_the_six_finishing_cards(self):
 		with self._permissions():
 			payload = self._workspace().get_capabilities()
 		self.assertEqual(
-			list(payload["sections"]), ["plans", "reports", "rework_details", "rework_groups", "dispatches"]
+			list(payload["sections"]),
+			["plans", "reports", "rework_details", "rework_groups", "dispatches", "work_orders"],
 		)
 		self.assertEqual(payload["sections"]["plans"]["doctype"], DOCTYPE)
 		self.assertEqual(payload["sections"]["dispatches"]["doctype"], "SD YRP Finishing Plan Dispatch")
@@ -114,8 +115,22 @@ class TestFinishingWebWorkspace(TestCase):
 				"rework_completion",
 				"grn_report",
 				"grn_summary",
+				"dc_report",
+				"stock_entry_report",
+				"stock_reconciliation_report",
+				"stock_update_report",
 			],
 		)
+
+	def test_work_orders_card_follows_work_order_read_and_never_creates(self):
+		with self._permissions(allowed={("YRP Work Order", "read")}):
+			sections = self._workspace().get_capabilities()["sections"]
+		self.assertEqual(
+			sections["work_orders"],
+			{"label": "Work Orders", "doctype": "YRP Work Order", "can_read": True, "can_create": False},
+		)
+		with self._permissions(denied={("YRP Work Order", "read")}):
+			self.assertNotIn("work_orders", self._workspace().get_capabilities()["sections"])
 
 	def test_capabilities_omit_unreadable_sections(self):
 		with self._permissions(allowed=set()):

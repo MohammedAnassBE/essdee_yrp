@@ -45,7 +45,7 @@ export const departments = [
 		label: "Finishing",
 		shortLabel: "FN",
 		path: "/finishing",
-		sections: { plans: "plans", reports: "reports", rework_details: "rework-details", rework_groups: "rework-groups", dispatches: "dispatches" },
+		sections: { plans: "plans", reports: "reports", rework_details: "rework-details", rework_groups: "rework-groups", dispatches: "dispatches", work_orders: "work-orders" },
 		component: () => import("./Finishing.vue"),
 	},
 	{

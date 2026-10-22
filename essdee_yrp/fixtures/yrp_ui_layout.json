@@ -168,14 +168,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"plans\",\n   \"reports\",\n   \"rework_details\",\n   \"rework_groups\",\n   \"dispatches\"\n  ]\n }\n}",
-  "description": "/web Finishing department workspace only: plans, reports, rework_details, rework_groups, dispatches.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"plans\",\n   \"reports\",\n   \"rework_details\",\n   \"rework_groups\",\n   \"dispatches\",\n   \"work_orders\"\n  ]\n }\n}",
+  "description": "/web Finishing department workspace only: plans, reports, rework_details, rework_groups, dispatches, work_orders.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "finishing",
   "layout_name": "Finishing",
-  "modified": "2026-10-15 10:10:21.280754",
+  "modified": "2026-10-22 11:31:12.659959",
   "name": "Finishing",
   "render_mode": "Registered Experience"
  },

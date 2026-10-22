@@ -37,6 +37,9 @@ export const DEPARTMENT_RECORD_ROUTES = {
 		"YRP Delivery Challan": (name) => `/web/sewing/delivery-challans/${encodeURIComponent(name)}`,
 		"YRP Goods Received Note": (name) => `/web/sewing/goods-received-notes/${encodeURIComponent(name)}`,
 	},
+	"/finishing": {
+		"YRP Work Order": (name) => `/web/finishing/work-orders/${encodeURIComponent(name)}`,
+	},
 	"/accessory-store": {
 		"YRP Work Order": (name) => `/web/accessory-store/work-orders/${encodeURIComponent(name)}`,
 	},

@@ -16,6 +16,7 @@ import Message from "primevue/message"
 import { computed, onMounted, ref, watch } from "vue"
 
 import { getFabricStoreCapabilities } from "../api/fabricStore.js"
+import { getFinishingCapabilities } from "../api/finishing.js"
 import { getSewingWorkOrderProcesses } from "../api/sewing.js"
 import { getQualityCapabilities } from "../api/quality.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
@@ -61,6 +62,16 @@ const sectionProps = computed(() => ({
 const loading = ref(true)
 const error = ref("")
 let loadSequence = 0
+const CAPABILITY_LOADERS = { "/quality": getQualityCapabilities, "/finishing": getFinishingCapabilities }
+const FINISHING_WORK_ORDER_FILTERS = [["docstatus", "=", 1], ["includes_packing", "=", 1]]
+
+/** Work Order list filters a department narrows to: Finishing sees submitted packing Work Orders, Sewing and Quality their stitching processes. */
+async function getWorkOrderFilters(basePath) {
+	if (basePath === "/finishing") return FINISHING_WORK_ORDER_FILTERS
+	if (basePath !== "/sewing" && basePath !== "/quality") return []
+	const processFilter = ["process_name", "in", await getSewingWorkOrderProcesses() || []]
+	return basePath === "/quality" ? [["docstatus", "=", 1], processFilter] : [processFilter]
+}
 
 async function load() {
 	const sequence = ++loadSequence
@@ -69,14 +80,12 @@ async function load() {
 	error.value = ""
 	try {
 		const quality = basePath === "/quality"
-		const payload = await (quality ? getQualityCapabilities() : getFabricStoreCapabilities()) || {}
+		const payload = await (CAPABILITY_LOADERS[basePath] || getFabricStoreCapabilities)() || {}
 		const sectionCapability = payload.sections?.[section] || null
 		const nextCapability = quality
 			? (sectionCapability?.can_read ? { ...sectionCapability, can_create: false } : null)
 			: sectionCapability
-		const filters = section === "work_orders" && (basePath === "/sewing" || quality) && nextCapability
-			? [...(quality ? [["docstatus", "=", 1]] : []), ["process_name", "in", await getSewingWorkOrderProcesses() || []]]
-			: []
+		const filters = section === "work_orders" && nextCapability ? await getWorkOrderFilters(basePath) : []
 		if (sequence !== loadSequence) return
 		capability.value = nextCapability
 		workOrderFilters.value = filters

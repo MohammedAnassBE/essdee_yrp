@@ -80,6 +80,7 @@ DISPATCH_LOG_FIELDS = (
 
 REWORK_DOCTYPE = "SD YRP GRN Rework Item"
 DISPATCH_DOCTYPE = "SD YRP Finishing Plan Dispatch"
+WORK_ORDER_DOCTYPE = "YRP Work Order"
 REPORTS = {
 	"stock_balance": ("Stock Balance", ((STOCK_REPORT_DOCTYPE, "read"), (STOCK_REPORT_DOCTYPE, "report"))),
 	"packing_dpr": ("Packing DPR", ((DOCTYPE, "read"), ("YRP Goods Received Note", "read"))),
@@ -137,6 +138,10 @@ def get_capabilities() -> dict:
 	dispatches = _permission_flags(DISPATCH_DOCTYPE, ("read", "create", "write", "submit", "cancel"))
 	if dispatches["can_read"]:
 		sections["dispatches"] = _section("Finishing Plan Dispatch", DISPATCH_DOCTYPE, dispatches)
+	if frappe.has_permission(WORK_ORDER_DOCTYPE, ptype="read"):
+		sections["work_orders"] = _section(
+			"Work Orders", WORK_ORDER_DOCTYPE, {"can_read": True, "can_create": False}
+		)
 	return {"sections": sections}
 
 

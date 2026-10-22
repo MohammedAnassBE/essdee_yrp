@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Finishing" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
-		<WorkspaceLauncher v-else title="Finishing" :items="visibleWorkspaces" :loading="loading" empty-text="No permitted Finishing workspaces" :skeleton-count="5" />
+		<WorkspaceLauncher v-else title="Finishing" :items="visibleWorkspaces" :loading="loading" empty-text="No permitted Finishing workspaces" :skeleton-count="6" />
 	</DepartmentPage>
 </template>
 
@@ -22,6 +22,7 @@ const workspaces = [
 	{ key: "rework_details", label: "Rework Details", description: "Clear rework pieces into Accepted or Rejected stock per GRN.", icon: "pi pi-replay", to: "/finishing/rework-details" },
 	{ key: "rework_groups", label: "Rework Grouped Details", description: "Rework rows grouped by item and lot with size-wise entry.", icon: "pi pi-objects-column", to: "/finishing/rework-groups" },
 	{ key: "dispatches", label: "Finishing Plan Dispatch", description: "Dispatch packed boxes from several Finishing Plans together.", icon: "pi pi-truck", to: "/finishing/dispatches" },
+	{ key: "work_orders", label: "Work Orders", description: "Packing Work Orders: make DCs and receive GRNs.", icon: "pi pi-briefcase", to: "/finishing/work-orders" },
 ]
 const visibleWorkspaces = computed(() => workspaces.filter((workspace) => sections.value[workspace.key]?.can_read))
 

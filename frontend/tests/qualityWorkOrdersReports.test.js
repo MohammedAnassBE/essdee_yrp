@@ -34,6 +34,7 @@ function workOrderList(basePath, { processes = async () => ["Stitching", "Finish
 		"../api/fabricStore.js": { getFabricStoreCapabilities: async () => { requests.push("fabric"); return { sections: { work_orders: { can_read: true, can_create: true } } } } },
 		"../api/quality.js": { getQualityCapabilities: async () => { requests.push("quality"); return { sections: { work_orders: qualityCapability } } } },
 		"../api/sewing.js": { getSewingWorkOrderProcesses: () => { requests.push("processes"); return processes() } },
+		"../api/finishing.js": { getFinishingCapabilities: () => assert.fail("Only Finishing uses Finishing capabilities") },
 		"../components/DepartmentPage.vue": stub("department"),
 		"../components/common/ListPageSkeleton.vue": stub("skeleton"),
 		"../components/common/WorkspaceLoadError.vue": stub("error"),

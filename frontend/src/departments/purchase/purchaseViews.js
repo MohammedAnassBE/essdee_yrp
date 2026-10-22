@@ -15,7 +15,7 @@ export const PURCHASE_ROUTES = {
 	itemPriceEdit: "purchase-item-price-edit",
 }
 
-export const PURCHASE_STORE_WORKSPACE_KEYS = ["purchase_orders", "stock_transfers", "box_stickers", "reports"]
+export const PURCHASE_STORE_WORKSPACE_KEYS = ["purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"]
 export const PURCHASE_REPORT_KEYS = ["stock_balance", "purchase_order_itemwise", "lot_cut_quantity"]
 
 export function purchaseLauncherItems() {

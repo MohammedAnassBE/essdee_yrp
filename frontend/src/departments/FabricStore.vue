@@ -21,6 +21,8 @@ import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import { storeWorkspaces } from "./fabric-store/storeWorkspaces.js"
 
+const CUT_PANEL_STICKER_KEYS = ["box_stickers", "excel_stickers"]
+
 const props = defineProps({
 	storeName: { type: String, default: "Fabric Store" },
 	basePath: { type: String, default: "/fabric-store" },
@@ -50,14 +52,16 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
-		const includesBoxStickers = props.workspaceKeys.includes("box_stickers")
+		const stickerKeys = CUT_PANEL_STICKER_KEYS.filter((key) => props.workspaceKeys.includes(key))
 		const [payload, cutPanelPayload, extraPayload] = await Promise.all([
 			getFabricStoreCapabilities(),
-			includesBoxStickers ? getCutPanelStoreCapabilities() : null,
+			stickerKeys.length ? getCutPanelStoreCapabilities() : null,
 			props.extraCapabilitiesLoader ? props.extraCapabilitiesLoader() : null,
 		])
 		sections.value = { ...payload?.sections, ...extraPayload?.sections }
-		if (cutPanelPayload?.sections?.box_stickers) sections.value.box_stickers = cutPanelPayload.sections.box_stickers
+		for (const key of stickerKeys) {
+			if (cutPanelPayload?.sections?.[key]) sections.value[key] = cutPanelPayload.sections[key]
+		}
 	} catch (reason) {
 		error.value = reason?.message || `Unable to load the ${props.storeName} workspace.`
 	} finally {

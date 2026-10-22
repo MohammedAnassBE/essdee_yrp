@@ -28,7 +28,13 @@ STORE = {
 		"reports": {"label": "Reports", "reports": {"stock_balance": {"label": "Stock Balance", "can_read": True}, "grn_report": {"label": "GRN Report", "can_read": True}}},
 	},
 }
-CUT_PANEL = {"sections": {"box_stickers": {"label": "Box Sticker Print", "can_read": True}, "movements": {"can_read": True}}}
+CUT_PANEL = {
+	"sections": {
+		"box_stickers": {"label": "Box Sticker Print", "can_read": True},
+		"excel_stickers": {"label": "Excel Sticker Print", "can_read": True, "can_create": True},
+		"movements": {"can_read": True},
+	}
+}
 
 
 def _patched(merch=MERCH, purchase=PURCHASE, store=STORE, cut_panel=CUT_PANEL):
@@ -50,8 +56,9 @@ class TestMerchPurchaseWebWorkspace(TestCase):
 		sections = self.get_capabilities()["sections"]
 		self.assertEqual(
 			list(sections),
-			["lots", "production_orders", "work_orders", "items", "purchase_orders", "stock_transfers", "box_stickers", "reports"],
+			["lots", "production_orders", "work_orders", "items", "purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"],
 		)
+		self.assertEqual(sections["excel_stickers"], CUT_PANEL["sections"]["excel_stickers"])
 		self.assertEqual(sections["lots"], {
 			"label": "Lot", "can_read": True, "can_create": True, "can_write": True, "workflow_states": [],
 		})
@@ -71,9 +78,10 @@ class TestMerchPurchaseWebWorkspace(TestCase):
 		self.assertFalse(capabilities["sections"]["reports"]["can_read"])
 		self.assertNotIn("stock_transfers", capabilities["sections"])
 		self.assertNotIn("box_stickers", capabilities["sections"])
+		self.assertNotIn("excel_stickers", capabilities["sections"])
 
 	def test_each_section_follows_its_doctype_permission(self):
-		denied = {"Purchase Order", "SD YRP Lot"}
+		denied = {"Purchase Order", "SD YRP Lot", "YRP Excel Sticker Print"}
 
 		def has_permission(doctype, ptype="read", doc=None, *args, **kwargs):
 			return doctype not in denied
@@ -82,6 +90,8 @@ class TestMerchPurchaseWebWorkspace(TestCase):
 		with patch("frappe.has_permission", side_effect=has_permission):
 			sections = web_workspace.get_capabilities()["sections"]
 		self.assertNotIn("purchase_orders", sections)
+		self.assertNotIn("excel_stickers", sections)
+		self.assertTrue(sections["box_stickers"]["can_read"])
 		self.assertFalse(sections["lots"]["can_read"])
 		self.assertNotIn("can_write", sections["lots"], "Purchase hides an unreadable Lot section")
 		self.assertTrue(sections["items"]["can_read"])

@@ -5,6 +5,7 @@ export function storeWorkspaces(basePath, reportKeys = ["stock_balance"]) {
 		{ key: "purchase_orders", label: "Purchase Orders", description: "Review purchase quantities and create Goods Received Notes.", icon: "pi pi-shopping-cart", to: `${basePath}/purchase-orders` },
 		{ key: "stock_transfers", label: "Stock Transfers", description: "Create and review store stock movements and reconciliations.", icon: "pi pi-arrow-right-arrow-left", to: `${basePath}/stock-transfers` },
 		{ key: "box_stickers", label: "Box Sticker Print", description: "Prepare, preview and print size-based box labels.", icon: "pi pi-tags", to: `${basePath}/box-sticker-prints` },
+		{ key: "excel_stickers", label: "Excel Sticker Print", description: "Upload sticker rows, preview labels and print through QZ.", icon: "pi pi-file-excel", to: `${basePath}/excel-sticker-prints` },
 		{
 			key: "reports",
 			label: "Reports",

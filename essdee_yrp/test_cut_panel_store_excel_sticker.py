@@ -69,6 +69,18 @@ def print_format(*, labels_per_row=2):
 
 
 class TestCutPanelStoreExcelStickerWorkspace(UnitTestCase):
+	def test_denied_capability_probe_shows_no_permission_message(self):
+		doc = frappe.get_doc({"doctype": EXCEL_STICKER_DOCTYPE, "name": "ESP-QUIET", "docstatus": 1})
+		frappe.local.message_log = []
+		frappe.set_user("Guest")
+		try:
+			with patch("frappe.permissions.get_doc_permissions", return_value={"read": 1, "print": 0}):
+				permissions = workspace._permissions(doc)
+		finally:
+			frappe.set_user("Administrator")
+		self.assertFalse(permissions["can_print"])
+		self.assertEqual(frappe.local.message_log, [], "a capability probe must not pop up Frappe's access message")
+
 	def test_editor_returns_only_a_bounded_safe_sample(self):
 		rows = []
 		for index in range(workspace.SAMPLE_ROW_LIMIT + 3):

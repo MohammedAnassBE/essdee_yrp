@@ -851,6 +851,12 @@ const routes = [
 		props: { section: "box_stickers", backTo: "/purchase", backLabel: "Purchase" },
 	},
 	{
+		path: "/purchase/excel-sticker-prints",
+		name: "purchase-excel-stickers",
+		component: CutPanelStoreSection,
+		props: { section: "excel_stickers", backTo: "/purchase", backLabel: "Purchase" },
+	},
+	{
 		path: "/purchase/reports",
 		name: "purchase-reports",
 		component: FabricStoreSection,

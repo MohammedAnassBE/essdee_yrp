@@ -43,6 +43,11 @@ class TestMrpRolePermissions(IntegrationTestCase):
 					self.assertFalse(any(permissions.get(ptype) for ptype in ("read", "create", "write")))
 		self.assertTrue(self.role_permissions("YRP Process Cost", "Merch Manager").get("write"))
 
+	def test_purchase_user_prints_excel_stickers(self):
+		permissions = self.role_permissions("YRP Excel Sticker Print", "Purchase User")
+		self.assertTrue(all(permissions[ptype] for ptype in ("read", "write", "create", "submit", "print")))
+		self.assertFalse(permissions["cancel"] or permissions["delete"])
+
 	def test_merch_roles_run_stock_balance(self):
 		for report, roles in MRP_REPORT_ROLES.items():
 			custom_role = frappe.get_doc("Custom Role", {"report": report})

@@ -3,7 +3,7 @@ export const APPROVAL_TIMEOUT_MS = 120000
 
 export const QZ_MESSAGES = {
 	assets: "Could not load QZ Tray printing support from this site. Reload the page and try again.",
-	blocked: "This browser is blocking this site from reaching QZ Tray. Click the site settings icon left of the address bar, allow Local network access (Apps on this device), reload the page and try again.",
+	blocked: "This browser is blocking this site from reaching QZ Tray. Click the site settings icon left of the address bar, set Local network access and Apps on this device (whichever are listed) to Allow, reload the page and try again. If they already allow it, make sure QZ Tray is running.",
 	unreached: "The browser did not reach QZ Tray. If the browser asks to let this site access apps on this device, click Allow (or allow Local network access in the site settings left of the address bar). Make sure QZ Tray is running, then try again.",
 	unreachable: "Could not connect to QZ Tray. Start QZ Tray on this computer and try again.",
 	connectApproval: "QZ Tray did not answer the connection request. Find the QZ Tray Allow window (it may be behind other windows or on another screen), click Allow, then try again.",
@@ -96,18 +96,36 @@ function abandon(qz, message) {
 	return new Error(message)
 }
 
+function isUnreachable(reason) {
+	return String(reason?.message || reason || "").startsWith(UNREACHABLE)
+}
+
 function qzError(reason) {
 	const message = String(reason?.message || reason || "")
-	if (message.startsWith(UNREACHABLE)) return new Error(QZ_MESSAGES.unreachable)
+	if (isUnreachable(reason)) return new Error(QZ_MESSAGES.unreachable)
 	return new Error(`QZ Tray: ${message || "the request was not completed."}`)
+}
+
+/** Blames the browser only when QZ Tray was unreachable and the site's local network permission is denied. */
+async function connectionError(reason) {
+	if (isUnreachable(reason) && await getLocalNetworkAccess() === "denied") return new Error(QZ_MESSAGES.blocked)
+	return qzError(reason)
+}
+
+/** Same sequence as Frappe Desk's qz_connect: one attempt, then launch QZ Tray and retry three times. */
+function connectLikeDesk(qz) {
+	return qz.websocket.connect().catch((reason) => {
+		if (!isUnreachable(reason)) throw reason
+		window.location?.assign?.("qz:launch")
+		return qz.websocket.connect({ retries: 3, delay: 1 })
+	})
 }
 
 async function openConnection(qz, onStatus) {
 	const access = await getLocalNetworkAccess()
-	if (access === "denied") throw new Error(QZ_MESSAGES.blocked)
 	onStatus?.(access === "prompt" ? "browser-permission" : "connecting")
 	const reached = new Promise((resolve) => { socketOpened.notify = resolve })
-	const connected = qz.websocket.connect({ retries: 2, delay: 1 }).then(() => true, (reason) => { throw qzError(reason) })
+	const connected = connectLikeDesk(qz).then(() => true, async (reason) => { throw await connectionError(reason) })
 	try {
 		if (await within(Promise.race([reached, connected]), REACH_TIMEOUT_MS) === TIMED_OUT) throw abandon(qz, QZ_MESSAGES.unreached)
 		onStatus?.("approve-connection")

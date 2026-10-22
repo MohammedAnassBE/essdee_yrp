@@ -9,7 +9,7 @@ class FakeSocket extends EventTarget {}
 
 function qzWindow(t, { permission = "granted", connect, find = async () => ["Zebra"] } = {}) {
 	const saved = { window: globalThis.window, WebSocket: globalThis.WebSocket, navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator") }
-	const calls = { connect: 0, disconnect: 0, find: 0, sha256: null, promise: null }
+	const calls = { connect: 0, disconnect: 0, find: 0, sha256: null, promise: null, launched: [] }
 	const qz = {
 		api: {
 			setPromiseType: (type) => { calls.promise = type },
@@ -29,7 +29,7 @@ function qzWindow(t, { permission = "granted", connect, find = async () => ["Zeb
 		},
 	}
 	globalThis.WebSocket = FakeSocket
-	globalThis.window = { qz, sha256: (data) => `hash:${data}` }
+	globalThis.window = { qz, sha256: (data) => `hash:${data}`, location: { assign: (url) => calls.launched.push(url) } }
 	Object.defineProperty(globalThis, "navigator", { configurable: true, value: { permissions: { query: async () => ({ state: permission }) } } })
 	t.after(() => {
 		globalThis.window = saved.window
@@ -47,10 +47,27 @@ test("QZ: wires promise, SHA-256 and a tracked WebSocket type before connecting,
 	assert.ok(new qz.Socket("wss://localhost:8181") instanceof FakeSocket)
 })
 
-test("QZ: a browser that blocks local network access fails at once with the site-settings fix", async t => {
-	const { calls } = qzWindow(t, { permission: "denied", connect: async () => {} })
+test("QZ: a denied local network permission does not stop the connect attempt", async t => {
+	const { calls } = qzWindow(t, { permission: "denied", connect: async (qz) => qz.open() })
+	assert.deepEqual(await getQzPrinters(), ["Zebra"])
+	assert.equal(calls.connect, 1)
+})
+
+test("QZ: an unreachable QZ Tray with a denied local network permission gets the site-settings fix", async t => {
+	const { calls } = qzWindow(t, { permission: "denied", connect: async () => { throw new Error("Unable to establish connection with QZ") } })
 	await assert.rejects(getQzPrinters(), { message: QZ_MESSAGES.blocked })
-	assert.equal(calls.connect, 0)
+	assert.equal(calls.connect, 2)
+})
+
+test("QZ: like Desk, an unreachable QZ Tray is launched and retried three times", async t => {
+	let attempts = 0
+	const options = []
+	const { qz, calls } = qzWindow(t, { connect: async (qz) => { if (++attempts === 1) throw new Error("Unable to establish connection with QZ"); qz.open() } })
+	const connect = qz.websocket.connect
+	qz.websocket.connect = (value) => { options.push(value); return connect(value) }
+	assert.deepEqual(await getQzPrinters(), ["Zebra"])
+	assert.deepEqual(options, [undefined, { retries: 3, delay: 1 }])
+	assert.deepEqual(calls.launched, ["qz:launch"])
 })
 
 test("QZ: a socket the browser never opens (pending permission prompt) times out with a browser hint", async t => {

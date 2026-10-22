@@ -80,7 +80,15 @@ export async function getSewingSupplierLots(supplier, text = "") {
 	const rows = await callMethod(`${PLAN_METHOD}.get_supplier_lots`, {
 		doctype: "SD YRP Lot", txt: text, searchfield: "name", start: 0, page_len: 20, filters: { supplier },
 	})
-	return (rows || []).map(([name, item]) => ({ name, label: name, item }))
+	return (rows || []).map(([name, item]) => ({ name, label: name, item, description: item }))
+}
+
+export function getSewingFiUpdates(supplier) {
+	return callMethod(`${FI_DATE_METHOD}.get_fi_updates_data`, { supplier })
+}
+
+export function updateSewingFiDates(rows) {
+	return callMethod(`${FI_DATE_METHOD}.update_fi_dates`, { data: rows })
 }
 
 export function getSewingFiUpdates(supplier) {

@@ -30,6 +30,7 @@
 					<span class="link-field__option">
 						<strong>{{ option.label }}</strong>
 						<small v-if="option.name && option.name !== option.label">{{ option.name }}</small>
+						<small v-if="option.description">{{ option.description }}</small>
 					</span>
 				</template>
 				<template #empty>

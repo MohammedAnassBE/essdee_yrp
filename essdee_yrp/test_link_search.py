@@ -51,16 +51,23 @@ class TestLinkSearch(UnitTestCase):
 			{"name": ["in", ["SUPPLIER-1-Billing", "SUPPLIER-1-Shipping"]], "disabled": 0},
 		)
 
-	def test_visible_only_search_does_not_match_hidden_search_fields(self):
+	def test_visible_only_search_matches_search_fields_shown_as_description(self):
 		meta = frappe._dict(name="SD YRP Lot", title_field=None, search_fields="item")
 		meta.has_field = lambda fieldname: fieldname in {"lot_name", "item"}
+		lot = {"name": "C1225-03", "item": "Hamic - Tiger Bermuda"}
 
 		with patch("essdee_yrp.api.link_search.frappe.get_meta", return_value=meta), patch(
-			"essdee_yrp.api.link_search.frappe.get_list", return_value=[]
+			"essdee_yrp.api.link_search.frappe.get_list", side_effect=[[lot], []]
 		) as get_list:
-			link_search("SD YRP Lot", "TE", match_visible_only=True)
+			rows = link_search("SD YRP Lot", "tiger", match_visible_only=True)
 
-		self.assertEqual(get_list.call_args_list[0].kwargs["or_filters"], [["name", "like", "%TE%"]])
+		self.assertEqual(rows, [{"name": "C1225-03", "label": "C1225-03", "description": "Hamic - Tiger Bermuda"}])
+		self.assertEqual(
+			get_list.call_args_list[0].kwargs["or_filters"],
+			[["name", "like", "%tiger%"], ["item", "like", "%tiger%"]],
+		)
+		self.assertEqual(get_list.call_args_list[0].kwargs["fields"], ["name", "item"])
+		self.assertEqual(get_list.call_args_list[1].kwargs["fields"], ["name", "item"])
 
 	def test_normal_link_search_keeps_configured_search_fields(self):
 		meta = frappe._dict(name="SD YRP Lot", title_field=None, search_fields="item")

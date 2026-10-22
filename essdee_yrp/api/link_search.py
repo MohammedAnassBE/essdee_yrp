@@ -73,11 +73,10 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 
 	`filters` (AND) narrow the result set (e.g. attribute_name for Item Attribute
 	Value). List-filter pickers set ``match_visible_only`` so typed text is matched
-	only against values shown in the menu (name/title); this prevents a Lot search
-	for ``TE`` from returning unrelated-looking IDs merely because their hidden
-	Item search field contains ``Vest``. Form links retain Frappe-style matching
-	against configured search fields. The `label` is the doctype's human title
-	field when it has one, else the `name`.
+	only against values shown in the menu (name, title and the search-field
+	``description``). Form links also match the label field. The `label` is the
+	doctype's human title field when it has one, else the `name`; `description`
+	joins the search-field values, as Desk shows them under each suggestion.
 	"""
 	if not doctype:
 		return []
@@ -88,8 +87,10 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 	meta = frappe.get_meta(doctype)
 	label_field = _label_field(meta)
 	match_fields = _match_fields(meta, label_field)
+	description_fields = [field for field in match_fields if field != label_field]
 	if match_visible_only:
 		match_fields = [label_field] if label_field else []
+		match_fields += description_fields
 	txt = (txt or "").strip()
 
 	# Fetch name + the label field (when there is a distinct human title).
@@ -111,17 +112,24 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 		doctype,
 		filters=filters,
 		or_filters=or_filters,
-		fields=fields,
+		fields=fields + description_fields,
 		limit_page_length=page_len,
 		order_by="modified desc",
 	)
 	if txt:
-		rows = _exact_matches_first(doctype, txt, filters, fields, page_len, rows)
-	out = []
-	for r in rows:
-		label = (r.get(label_field) if label_field else None) or r["name"]
-		out.append({"name": r["name"], "label": label})
-	return out
+		rows = _exact_matches_first(doctype, txt, filters, fields, page_len, rows, description_fields)
+	return [get_link_option(row, label_field, description_fields) for row in rows]
+
+
+def get_link_option(row, label_field, description_fields):
+	"""One suggestion: the stored `name`, its `label`, and a search-field `description`."""
+	label = (row.get(label_field) if label_field else None) or row["name"]
+	option = {"name": row["name"], "label": label}
+	values = [str(row.get(field)) for field in description_fields if row.get(field) not in (None, "")]
+	description = ", ".join(value for value in values if value not in (label, row["name"]))
+	if description:
+		option["description"] = description
+	return option
 
 
 def _parse_filters(filters):
@@ -133,13 +141,13 @@ def _parse_filters(filters):
 	return filters or {}
 
 
-def _exact_matches_first(doctype, text, filters, fields, page_length, rows):
+def _exact_matches_first(doctype, text, filters, fields, page_length, rows, extra_fields=()):
 	# Equality uses the same case-insensitive collation as the regular search.
 	exact = frappe.get_list(
 		doctype,
 		filters=filters,
 		or_filters=[[fieldname, "=", text] for fieldname in fields],
-		fields=fields,
+		fields=[*fields, *extra_fields],
 		limit_page_length=page_length,
 		order_by="modified desc",
 	)

@@ -17,7 +17,14 @@
 			:disabled="disabled"
 			@complete="complete"
 			@before-show="focusFirstOption"
-		/>
+		>
+			<template #option="{ option }">
+				<span class="async-multi__option">
+					<strong>{{ option.label }}</strong>
+					<small v-if="option.description">{{ option.description }}</small>
+				</span>
+			</template>
+		</AutoComplete>
 		<small v-if="helpText" class="erp-help-text">{{ helpText }}</small>
 	</label>
 </template>
@@ -92,6 +99,16 @@ async function complete(event) {
 .async-multi {
 	display: block;
 	min-width: 0;
+}
+
+.async-multi__option {
+	display: grid;
+	gap: 2px;
+}
+
+.async-multi__option small {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
 }
 
 .async-multi :deep(.p-autocomplete-multiple) {

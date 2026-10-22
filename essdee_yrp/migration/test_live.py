@@ -997,6 +997,33 @@ class MigrationLiveAdapterTest(unittest.TestCase):
 			"Purchase Accessories",
 		)
 
+	def test_work_order_process_row_keeps_its_own_item_group(self):
+		document = {
+			"doctype": "YRP Purchase Invoice",
+			"name": "MPI-WO-1",
+			"against": "YRP Work Order",
+			"items": [
+				{
+					"doctype": "YRP Purchase Invoice Item",
+					"item": "GARMENT-VARIANT",
+					"item_group": "Products",
+					"essdee_group_key": "group-1",
+				}
+			],
+			"essdee_items": [
+				{
+					"doctype": "SD YRP Essdee Purchase Invoice Item",
+					"item": "STITCHING EXPENSES",
+					"item_group": "Service",
+					"group_key": "group-1",
+				}
+			],
+		}
+
+		prepared = _prepare_purchase_invoice_migration_documents([document])
+
+		self.assertEqual(prepared[0]["essdee_items"][0]["item_group"], "Service")
+
 	def test_submitted_unlinked_invoice_blocks_the_migration_batch(self):
 		document = {
 			"doctype": "YRP Purchase Invoice",

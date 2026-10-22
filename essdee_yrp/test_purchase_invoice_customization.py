@@ -685,6 +685,40 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		self.assertIsNone(created_payload["vendor_bill_tracking"])
 		self.assertEqual(result["name"], "ERP-PI-LOCAL")
 
+	def test_local_erp_creator_uses_item_master_group_over_stale_row_group(self):
+		api = MagicMock()
+		api.get_erp_item_expense_account.return_value = "Service Expenses - E"
+		api._create.return_value = {"name": "ERP-PI-LOCAL", "docstatus": 0}
+		payload = {
+			"items": [
+				{"item": "STITCHING TO CHECKING EXPENSES", "item_group": "Products"},
+				{"item": "POLYTHENE", "item_group": "Purchase Accessories"},
+			],
+		}
+		master_groups = {
+			"STITCHING TO CHECKING EXPENSES": "M_Service",
+			"POLYTHENE": "M_Purchase Accessories",
+		}
+		with (
+			patch(
+				"essdee_yrp.erp_purchase_invoice._local_erp_purchase_invoice_api",
+				return_value=api,
+			),
+			patch("essdee_yrp.erp_purchase_invoice.frappe.db.exists", return_value=True),
+			patch(
+				"essdee_yrp.erp_purchase_invoice.frappe.db.get_value",
+				side_effect=lambda doctype, name, field: master_groups[name],
+			),
+		):
+			_create_local_erp_invoice(payload)
+
+		created_items = api._create.call_args.args[0]["items"]
+		self.assertEqual(
+			[row["item_group"] for row in created_items],
+			["M_Service", "M_Purchase Accessories"],
+		)
+		self.assertEqual(payload["items"][0]["item_group"], "Products")
+
 	def test_same_site_submit_temporarily_suppresses_legacy_remote_callback(self):
 		api = MagicMock()
 		api.submit.return_value = {

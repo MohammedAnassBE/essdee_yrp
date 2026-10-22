@@ -4353,6 +4353,7 @@ def _prepare_purchase_invoice_migration_documents(
 				if row.get(fieldname) in (None, ""):
 					row[fieldname] = 0
 		direct_item_groups: dict[str, str] = {}
+		direct_items: dict[str, str] = {}
 		for row in prepared.get("items") or []:
 			group_key = str(row.get("essdee_group_key") or "")
 			item_group = str(row.get("item_group") or "")
@@ -4364,12 +4365,14 @@ def _prepare_purchase_invoice_migration_documents(
 					f"for commercial group {group_key}"
 				)
 			direct_item_groups[group_key] = item_group
+			direct_items[group_key] = row.get("item")
 		for row in prepared.get("essdee_items") or []:
 			group_key = str(row.get("group_key") or "")
-			if group_key in direct_item_groups:
+			if group_key in direct_item_groups and direct_items[group_key] == row.get("item"):
 				# The F15 grouped row can retain an obsolete M_* Item Group while
 				# its physical row and commonized F16 Item use the current group.
-				# Keep the two operational projections consistent on original load.
+				# Work Order physical rows are garments, so their group never
+				# describes the Process billing Item.
 				row["item_group"] = direct_item_groups[group_key]
 			elif not row.get("item_group") and row.get("item"):
 				row["item_group"] = _get_item_group(row["item"])

@@ -306,11 +306,7 @@ def _create_local_erp_invoice(payload):
 	bill_tracking = local_payload.get("vendor_bill_tracking")
 	local_payload["vendor_bill_tracking"] = None
 	api = _local_erp_purchase_invoice_api()
-	_validate_local_erp_items(local_payload["items"], api)
-	# Essdee's public ``create`` API validates an old cross-site contract where
-	# the MRP Item Group was unprefixed and ERP added ``M_``. On the combined
-	# site both rows already use the same ERPNext Item Group, so run the corrected
-	# local validation above and retain its established document creator.
+	_apply_local_item_groups(local_payload["items"], api)
 	result = api._create(local_payload)
 	if bill_tracking and result and result.get("name"):
 		frappe.db.set_value(
@@ -323,37 +319,34 @@ def _create_local_erp_invoice(payload):
 	return result
 
 
-def _validate_local_erp_items(items, api):
-	"""Validate same-site Items without applying the legacy MRP Item Group prefix."""
+def _apply_local_item_groups(items, api):
+	"""Use the shared Item master group; YRP rows only hold a migration-era snapshot of it."""
 	exceptions = []
-	seen = set()
+	item_groups = {}
 	for row in items:
 		item_code = row.get("item")
-		if not item_code or item_code in seen:
+		if not item_code:
 			continue
-		seen.add(item_code)
-		if not frappe.db.exists("Item", item_code):
-			exceptions.append(_("{0} does not exist").format(item_code))
-			continue
-
-		item_group = frappe.db.get_value("Item", item_code, "item_group")
-		if item_group != row.get("item_group"):
-			exceptions.append(
-				_("For {0}, Item Group must be {1}, not {2}.").format(
-					item_code,
-					item_group,
-					row.get("item_group") or _("blank"),
-				)
-			)
-		if not api.get_erp_item_expense_account(item_code):
-			exceptions.append(
-				_("Item Group {0} for item {1} does not have a default Expense Account").format(
-					item_group, item_code
-				)
-			)
+		if item_code not in item_groups:
+			item_groups[item_code] = _get_local_item_group(item_code, api, exceptions)
+		row["item_group"] = item_groups[item_code]
 
 	if exceptions:
 		frappe.throw("<br>".join(exceptions))
+
+
+def _get_local_item_group(item_code, api, exceptions):
+	if not frappe.db.exists("Item", item_code):
+		exceptions.append(_("{0} does not exist").format(item_code))
+		return None
+	item_group = frappe.db.get_value("Item", item_code, "item_group")
+	if not api.get_erp_item_expense_account(item_code):
+		exceptions.append(
+			_("Item Group {0} for item {1} does not have a default Expense Account").format(
+				item_group, item_code
+			)
+		)
+	return item_group
 
 
 def _run_local_erp_action(action, invoice_name):

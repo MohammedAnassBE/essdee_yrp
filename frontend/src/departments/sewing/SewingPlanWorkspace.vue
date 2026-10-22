@@ -15,6 +15,7 @@
 					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" :mutate="cancelEntry" />
 					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" :mutate="saveConsumption" />
 					<SewingClosedWorkOrderGrn v-else-if="active === 'closed-work-order-grn'" :state="closedGrnState" :actions="capabilities.plan_actions" :mutate="createClosedGrn" />
+					<SewingFiUpdates v-else-if="active === 'fi-updates'" />
 					<div v-else :data-sewing-plan-tab="active" class="erp-empty-state" role="status">{{ tabs.find(tab => tab.value === active).label }} is not loaded yet.</div>
 				</TabPanel>
 			</TabPanels>
@@ -32,6 +33,7 @@ import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, reactive, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { cancelSewingEntry, createClosedWorkOrderGrn, saveSewingConsumption, submitSewingDataEntry, updateSewingInspection } from "../../api/sewing.js"
+import { canShowFiUpdates } from "./plan/fiUpdates.js"
 import { useSewingContext } from "./useSewingContext.js"
 
 const SewingDashboard = defineAsyncComponent(() => import("./plan/SewingDashboard.vue"))
@@ -39,18 +41,20 @@ const SewingDataEntry = defineAsyncComponent(() => import("./plan/SewingDataEntr
 const SewingEntries = defineAsyncComponent(() => import("./plan/SewingEntries.vue"))
 const SewingConsumption = defineAsyncComponent(() => import("./plan/SewingConsumption.vue"))
 const SewingClosedWorkOrderGrn = defineAsyncComponent(() => import("./plan/SewingClosedWorkOrderGrn.vue"))
-defineProps({ capabilities: { type: Object, default: () => ({}) } })
+const SewingFiUpdates = defineAsyncComponent(() => import("./plan/SewingFiUpdates.vue"))
+const props = defineProps({ capabilities: { type: Object, default: () => ({}) } })
 const route = useRoute(), router = useRouter()
 const { supplier, beginRequest } = useSewingContext()
-const tabs = [
+const tabs = computed(() => [
 	{ value: "dashboard", label: "Dashboard" },
 	{ value: "data-entry", label: "Data Entry" },
 	{ value: "entries", label: "Entries" },
 	{ value: "consumption", label: "Consumption" },
 	{ value: "closed-work-order-grn", label: "Closed Work Order GRN" },
-]
+	...(canShowFiUpdates(route.name, props.capabilities) ? [{ value: "fi-updates", label: "FI Updates" }] : []),
+])
 const active = computed({
-	get: () => tabs.some(tab => tab.value === route.query.tab) ? route.query.tab : "dashboard",
+	get: () => tabs.value.some(tab => tab.value === route.query.tab) ? route.query.tab : "dashboard",
 	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
 })
 const routeLot = typeof route.query.lot === "string" ? route.query.lot : ""

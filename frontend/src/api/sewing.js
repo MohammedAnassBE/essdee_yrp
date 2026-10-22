@@ -3,6 +3,7 @@ import { callMethod, getMeta } from "./frappe.js"
 const WORKSPACE_METHOD = "essdee_yrp.sewing.web_workspace"
 const PLAN_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan"
 const CLOSED_WO_METHOD = "essdee_yrp.sewing.closed_work_order"
+const FI_DATE_METHOD = "essdee_yrp.sewing.fi_dates"
 
 export function getSewingWorkOrderProcesses() {
 	return callMethod("essdee_yrp.sewing.read_models.get_sewing_work_order_processes")
@@ -80,6 +81,14 @@ export async function getSewingSupplierLots(supplier, text = "") {
 		doctype: "SD YRP Lot", txt: text, searchfield: "name", start: 0, page_len: 20, filters: { supplier },
 	})
 	return (rows || []).map(([name, item]) => ({ name, label: name, item }))
+}
+
+export function getSewingFiUpdates(supplier) {
+	return callMethod(`${FI_DATE_METHOD}.get_fi_updates_data`, { supplier })
+}
+
+export function updateSewingFiDates(rows) {
+	return callMethod(`${FI_DATE_METHOD}.update_fi_dates`, { data: rows })
 }
 
 export function getSewingConsumption(supplier, lot) {

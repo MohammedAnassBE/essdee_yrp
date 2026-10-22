@@ -24,6 +24,7 @@ from essdee_yrp.sewing.entry import (
 	submit_data_entry_log,
 	update_sewing_plan_data,
 )
+from essdee_yrp.sewing.fi_dates import get_fi_updates_data, update_fi_dates
 from essdee_yrp.sewing.plan import (
 	_order_rows,
 	_should_have_sewing_plan,
@@ -32,7 +33,6 @@ from essdee_yrp.sewing.plan import (
 from essdee_yrp.sewing.read_models import (
 	get_consumption_mapping_data,
 	get_dashboard_data,
-	get_fi_updates_data,
 	get_item_summary_data,
 	get_item_summary_options,
 	get_monthly_summary_data,
@@ -47,7 +47,6 @@ from essdee_yrp.sewing.read_models import (
 	get_supplier_lots,
 	get_the_lot,
 	save_consumption_data,
-	update_fi_dates,
 )
 
 

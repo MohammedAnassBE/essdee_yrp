@@ -49,10 +49,10 @@ def can_run_desk_report(name):
 
 
 def can_view_fi_updates():
-	roles = frappe.get_roles()
-	planner_role = frappe.db.get_single_value("SD YRP MRP Settings", "production_planner_role")
+	from essdee_yrp.sewing.fi_dates import is_production_planner
+
 	return bool(
-		("System Manager" in roles or (planner_role and planner_role in roles))
+		is_production_planner()
 		and frappe.has_permission("SD YRP Sewing Plan", ptype="read")
 		and frappe.has_permission("SD YRP Sewing Plan", ptype="report")
 	)
@@ -90,7 +90,7 @@ def require_fi_updates_access():
 
 
 def run_fi_updates(filters):
-	from essdee_yrp.sewing.read_models import get_fi_updates_data
+	from essdee_yrp.sewing.fi_dates import get_fi_updates_data
 
 	require_fi_updates_access()
 	if not filters.get("supplier"):

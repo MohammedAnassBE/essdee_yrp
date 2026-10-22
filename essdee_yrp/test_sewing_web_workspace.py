@@ -184,8 +184,18 @@ class TestSewingWebWorkspace(TestCase):
 						"can_delete": flag != "can_delete",
 						"can_submit": flag != "can_submit",
 						"can_report": flag != "can_report",
+						"can_update_fi_dates": True,
 					},
 				)
+
+	def test_fi_date_capability_follows_the_production_planner_role(self):
+		for roles, expected in (
+			(["System Manager"], True),
+			(["Production Planner"], True),
+			(["Sewing User"], False),
+		):
+			with self.subTest(roles=roles), patch.object(frappe, "get_roles", return_value=roles):
+				self.assertIs(self._capabilities()["sections"]["plans"]["can_update_fi_dates"], expected)
 
 	def test_resource_flags_are_independent_effective_permissions(self):
 		resources = {

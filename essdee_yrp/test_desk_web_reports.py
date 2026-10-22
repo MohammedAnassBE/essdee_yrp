@@ -304,7 +304,7 @@ class TestDeskWebReports(IntegrationTestCase):
 
 	def test_fi_updates_uses_desk_rows_and_planner_role(self):
 		from essdee_yrp.desk_web_reports import can_view_fi_updates, run_fi_updates
-		from essdee_yrp.sewing.read_models import get_fi_updates_data
+		from essdee_yrp.sewing.fi_dates import get_fi_updates_data
 
 		supplier = frappe.db.get_value("SD YRP Sewing Plan", {}, "supplier") or frappe.db.get_value("Supplier", {}, "name")
 		self.assertTrue(can_view_fi_updates())

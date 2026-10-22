@@ -196,3 +196,58 @@ class TestSewingDprScrParity(IntegrationTestCase):
 			api.get_sewing_plan_dpr_summary(self.supplier)
 		with self.assertRaises(frappe.ValidationError):
 			api.get_sewing_plan_dpr_summary(self.supplier, "2090-01-01", None, lot=self.lot)
+
+	def _user(self, *roles):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": f"fi.{frappe.generate_hash(length=8)}@example.test",
+				"first_name": "FI",
+				"send_welcome_email": 0,
+				"roles": [{"role": role} for role in roles],
+			}
+		).insert(ignore_permissions=True)
+		self.addCleanup(frappe.set_user, frappe.session.user)
+		return user.name
+
+	def _fi_update(self, plan, part):
+		colour = next(
+			row["colour"] for row in api.get_fi_updates_data(self.supplier)["data"] if row["part"] == part
+		)
+		return [
+			{"sewing_plan": plan.name, "lot": self.lot, "colour": colour, "part": part, "date": "2090-01-15"}
+		]
+
+	def _fi_dates(self, plan):
+		return frappe.get_all(
+			"SD YRP Sewing Plan Order Detail", filters={"parent": plan.name}, pluck="fi_date", order_by="idx"
+		)
+
+	def test_fi_update_refuses_users_without_the_planner_role(self):
+		plan = self._plan([(self.top, 40)], fi_date=None)
+		update = self._fi_update(plan, self.top.part)
+		frappe.set_user(self._user())
+		with self.assertRaises(frappe.PermissionError):
+			api.update_fi_dates(update)
+		self.assertEqual(self._fi_dates(plan), [None])
+
+	def test_planner_without_plan_write_sets_fi_date_and_unblocks_dpr(self):
+		plan = self._plan([(self.top, 40), (self.bottom, 30)], fi_date=None)
+		self._entry(plan, "Input Qty", "2090-01-01", [(self.top, 10)])
+		update = self._fi_update(plan, self.top.part)
+		planner_role = frappe.db.get_single_value("SD YRP MRP Settings", "production_planner_role")
+		planner = self._user(planner_role)
+		frappe.set_user(planner)
+		self.assertFalse(frappe.has_permission("SD YRP Sewing Plan", "write", plan.name))
+		self.assertEqual(api.update_fi_dates(frappe.as_json(update)), "Success")
+		frappe.set_user("Administrator")
+		self.assertEqual(
+			[str(value) if value else None for value in self._fi_dates(plan)], ["2090-01-15", None]
+		)
+		self.assertEqual(frappe.db.get_value("SD YRP Sewing Plan", plan.name, "modified_by"), planner)
+		report = api.get_sewing_plan_dpr_data(self.supplier, "2090-01-01")
+		self.assertEqual([row["part"] for row in report["pending_fi"]], [self.bottom.part])
+
+	def test_fi_update_requires_at_least_one_dated_row(self):
+		with self.assertRaises(frappe.ValidationError):
+			api.update_fi_dates([])

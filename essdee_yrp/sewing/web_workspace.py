@@ -8,6 +8,12 @@ from frappe import _
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
 from essdee_yrp.planning.reports import inhouse_quantity
 from essdee_yrp.purchase.lot_cut_quantity import get_lot_cut_quantity_capability
+from essdee_yrp.sewing.fi_dates import is_production_planner
+
+DOCUMENT_SECTIONS = {
+	"delivery_challans": ("Delivery Challans", "YRP Delivery Challan"),
+	"goods_received_notes": ("Goods Received Notes", "YRP Goods Received Note"),
+}
 
 PLAN_RESOURCES = {
 	"entry": ("Sewing Plan Entry", "SD YRP Sewing Plan Entry Detail"),
@@ -77,9 +83,14 @@ def get_capabilities() -> dict:
 			"can_delete": entry["can_delete"],
 			"can_submit": grn["can_create"] and grn["can_submit"],
 			"can_report": plan["can_report"],
+			"can_update_fi_dates": is_production_planner(),
 		}
 	if work_order["can_read"]:
 		sections["work_orders"] = work_order
+	for key, (label, doctype) in DOCUMENT_SECTIONS.items():
+		flags = _permission_flags(doctype)
+		if flags["can_read"]:
+			sections[key] = {"doctype": doctype, "label": _(label), **flags}
 
 	reports = {}
 	if plan["can_read"] and plan["can_report"]:

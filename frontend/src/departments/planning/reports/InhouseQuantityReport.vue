@@ -12,7 +12,7 @@
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 			
 			<h3 v-if="payload?.summary?.item">Item: {{ payload.summary.item }}</h3>
-			<PlanningReportTable title="In-house Quantity" :columns="columns" :rows="rows" :cell-tone="(column, row) => row.tones?.[column.fieldname] || ''" :cell-align="cellAlign" :formatted-cell="formattedCell" />
+			<PlanningReportTable title="In-house Quantity" :columns="columns" :rows="rows" :cell-tone="(column, row) => row.tones?.[column.fieldname] || ''" :cell-align="cellAlign" :formatted-cell="formattedCell" :cell-span="cellSpan" />
 		</ReportShell>
 
 	</section>
@@ -29,6 +29,7 @@ import PlanningReportTable from "./PlanningReportTable.vue"
 import { usePlanningQuantityColumns } from "./usePlanningQuantityColumns.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import { quantityHint, quantityDeepLink, populatedFilters } from "./productionReportFilters.js"
+import { blockCellSpan, blockSpans } from "./inhouseQuantityBlocks.js"
 
 function defaultFilters() { return { lot: "", process: "" } }
 const filters = reactive(defaultFilters())
@@ -39,6 +40,7 @@ const {
 	generate: generateReport, filtersChanged, clear,
 } = useWebReport({ reportKey: "planning-inhouse-quantity" })
 const { columns, rows, cellAlign, formattedCell, downloadCsv } = usePlanningQuantityColumns("planning-inhouse-quantity", sourceColumns, sourceRows)
+const cellSpan = computed(() => blockCellSpan(blockSpans(rows.value)))
 
 function requestFilters() { return populatedFilters(filters) }
 function generate() { if (!hint.value) return generateReport(requestFilters()) }

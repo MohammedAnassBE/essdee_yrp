@@ -159,7 +159,18 @@ class TestPrintFormatParity(IntegrationTestCase):
 		self.assertEqual(parse_json('[{"key": "value"}]'), [{"key": "value"}])
 		self.assertEqual(get_item_size("Small", [5, 10], [30, 20, 10]), 30)
 		self.assertEqual(get_item_size("A very long item", [5, 10], [30, 20, 10]), 10)
-		self.assertEqual(get_value_with_pad("ABC", 5), "ABC  ")
+		self.assertEqual(get_value_with_pad("ABC", 5), "ABC")
+
+	def test_value_padding_matches_mrp_label_layout(self):
+		"""MRP pads to ``pad - len(value)``; rotated ZPL fields are positioned by that width."""
+		from essdee_yrp.print_helpers import get_value_with_pad
+
+		self.assertEqual(get_value_with_pad("75 cm", 16), "75 cm      ")
+		self.assertEqual(get_value_with_pad("64.00", 17), "64.00       ")
+		self.assertEqual(get_value_with_pad("NOV/2026/F0926-47", 40), "NOV/2026/F0926-47      ")
+		self.assertEqual(get_value_with_pad("S", 16), "S              ")
+		self.assertEqual(get_value_with_pad("TOO LONG VALUE", 5), "TOO LONG VALUE")
+		self.assertEqual(get_value_with_pad(None, 4), "    ")
 
 	def test_templates_render_against_migrated_documents(self):
 		from essdee_yrp.print_helpers import prepare_print_document

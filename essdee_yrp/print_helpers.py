@@ -17,10 +17,11 @@ from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 def get_value_with_pad(value, pad):
-	"""Pad a raw-printer value to the requested display width."""
+	"""Pad like MRP: ``ljust(pad - len(value))``; ZPL layouts were positioned against that width."""
 
 	value = str(value or "")
-	return value.ljust(max(len(value), int(pad or 0)), " ")
+	pad = int(pad or 0)
+	return value.ljust(pad - len(value), " ") if len(value) < pad else value
 
 
 def get_item_size(item, item_size, text_size):

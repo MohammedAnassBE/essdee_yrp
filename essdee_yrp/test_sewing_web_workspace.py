@@ -55,8 +55,14 @@ class TestSewingWebWorkspace(TestCase):
 				"monthly_summary": "Monthly Summary",
 				"item_summary": "Item Summary",
 				"finishing_dispatch": "Finishing Plan Dispatch",
+				"lot_cut_quantity": "Lot Cut Quantity",
+				"inhouse_quantity": "In-house Quantity",
 				"grn_report": "GRN Report",
 				"grn_summary": "GRN Summary",
+				"dc_report": "DC Report",
+				"stock_entry_report": "Stock Entry Report",
+				"stock_reconciliation_report": "Stock Reconciliation Report",
+				"stock_update_report": "Stock Update Report",
 				"finishing_inward_updates": "Finishing Inward Updates",
 			},
 		)
@@ -76,6 +82,28 @@ class TestSewingWebWorkspace(TestCase):
 				payload = self._capabilities(allowed=base - {missing})
 				self.assertNotIn("finishing_dispatch", payload["reports"])
 				self.assertIn("status_summary", payload["reports"])
+
+	def test_lot_cut_quantity_follows_sewing_report_access(self):
+		base = {("SD YRP Sewing Plan", "read"), ("SD YRP Sewing Plan", "report")}
+		capability = self._capabilities(allowed=base)["reports"]["lot_cut_quantity"]
+		self.assertIs(capability["can_read_cutting_plan"], False)
+		capability = self._capabilities(allowed=base | {("SD YRP Cutting Plan", "read")})["reports"]["lot_cut_quantity"]
+		self.assertIs(capability["can_read_cutting_plan"], True)
+		self.assertNotIn("lot_cut_quantity", self._capabilities(allowed={("SD YRP Sewing Plan", "read")})["reports"])
+
+	def test_inhouse_quantity_requires_work_order_and_lot_read(self):
+		base = {
+			("SD YRP Sewing Plan", "read"),
+			("SD YRP Sewing Plan", "report"),
+			("YRP Work Order", "read"),
+			("SD YRP Lot", "read"),
+		}
+		self.assertEqual(
+			self._capabilities(allowed=base)["reports"]["inhouse_quantity"]["label"], "In-house Quantity"
+		)
+		for missing in (("YRP Work Order", "read"), ("SD YRP Lot", "read")):
+			with self.subTest(missing=missing):
+				self.assertNotIn("inhouse_quantity", self._capabilities(allowed=base - {missing})["reports"])
 
 	def test_capabilities_omit_all_unreadable_sections(self):
 		payload = self._capabilities(allowed=set())
@@ -121,7 +149,11 @@ class TestSewingWebWorkspace(TestCase):
 		):
 			with self.subTest(label=capability["label"]):
 				self.assertEqual(
-					{key: value for key, value in capability.items() if key.startswith("can_")},
+					{
+						key: value
+						for key, value in capability.items()
+						if key.startswith("can_") and key != "can_read_cutting_plan"
+					},
 					{
 						"can_read": True,
 						"can_create": False,

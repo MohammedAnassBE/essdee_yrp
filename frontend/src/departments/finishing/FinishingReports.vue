@@ -52,6 +52,7 @@ const REPORTS = [
 	{ key: "finishing_plan_report", value: "finishing-plan-report", label: "Finishing Plan Report", icon: "pi pi-table", component: defineAsyncComponent(() => import("./reports/FinishingPlanReport.vue")) },
 	{ key: "rejection_details", value: "rejection-details", label: "Rejection Details", icon: "pi pi-ban", component: defineAsyncComponent(() => import("./reports/FinishingRejectionReport.vue")) },
 	{ key: "rework_completion", value: "rework-completion", label: "Rework Completion", icon: "pi pi-check-square", component: defineAsyncComponent(() => import("./reports/FinishingReworkCompletion.vue")) },
+	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")), capabilityProps: (report) => ({ canReadCuttingPlan: Boolean(report.can_read_cutting_plan) }) },
 ]
 
 const route = useRoute()
@@ -59,7 +60,7 @@ const router = useRouter()
 const loading = ref(true)
 const loadError = ref("")
 const reports = ref({})
-const tabs = computed(() => [...REPORTS.filter((report) => reports.value[report.key]?.can_read), ...departmentDeskReports(route.path.split("/")[1], reports.value).map(tab => ({ ...tab, component: DeskBackedReport }))])
+const tabs = computed(() => [...REPORTS.filter((report) => reports.value[report.key]?.can_read).map((report) => ({ ...report, props: report.capabilityProps?.(reports.value[report.key]) })), ...departmentDeskReports(route.path.split("/")[1], reports.value).map(tab => ({ ...tab, component: DeskBackedReport }))])
 const active = computed({
 	get: () => (tabs.value.some((tab) => tab.value === route.query.report) ? route.query.report : tabs.value[0]?.value),
 	set: (report) => router.replace({ query: { ...route.query, report } }),

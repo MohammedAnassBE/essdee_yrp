@@ -19,13 +19,36 @@ class TestLotCutQuantity(TestCase):
 			report.get_lot_cut_quantity([f"LOT-{index}" for index in range(21)])
 
 	def test_report_role_is_required(self):
-		with patch.object(frappe, "get_roles", return_value=["All", "Desk User"]):
+		with (
+			patch.object(frappe, "get_roles", return_value=["All", "Desk User"]),
+			patch.object(frappe, "has_permission", return_value=False),
+		):
 			with self.assertRaises(frappe.PermissionError):
 				report.get_lot_cut_quantity(["LOT-1"])
+
+	def test_sewing_or_finishing_report_access_can_run_the_report(self):
+		for department in ("sewing", "finishing"):
+			with (
+				self.subTest(department=department),
+				patch.object(frappe, "get_roles", return_value=["All", "Desk User"]),
+				patch("essdee_yrp.sewing.web_workspace.has_report_access", return_value=department == "sewing"),
+				patch(
+					"essdee_yrp.finishing.web_workspace.has_report_access",
+					return_value=department == "finishing",
+				),
+				patch.object(frappe, "get_doc", side_effect=lambda _doctype, name: frappe._dict(name=name)),
+				patch.object(frappe, "has_permission", return_value=True),
+				patch.object(frappe, "get_all", return_value=[]),
+			):
+				self.assertEqual(
+					report.get_lot_cut_quantity(["LOT-1"]),
+					{"lots": [{"lot": "LOT-1", "cutting_plans": []}]},
+				)
 
 	def test_report_role_is_checked_before_input_is_parsed(self):
 		with (
 			patch.object(frappe, "get_roles", return_value=["All", "Desk User"]),
+			patch.object(frappe, "has_permission", return_value=False),
 			patch.object(frappe, "parse_json") as parse_json,
 			self.assertRaises(frappe.PermissionError),
 		):

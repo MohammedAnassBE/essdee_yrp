@@ -10,6 +10,23 @@ def can_view_lot_cut_quantity():
 	return bool(LOT_CUT_QUANTITY_ROLES.intersection(frappe.get_roles()))
 
 
+def can_run_lot_cut_quantity():
+	"""Purchase roles, or the Sewing or Finishing report access that lists this report."""
+	from essdee_yrp.finishing.web_workspace import has_report_access as has_finishing_report_access
+	from essdee_yrp.sewing.web_workspace import has_report_access as has_sewing_report_access
+
+	return can_view_lot_cut_quantity() or has_sewing_report_access() or has_finishing_report_access()
+
+
+def get_lot_cut_quantity_capability():
+	return {
+		"label": _("Lot Cut Quantity"),
+		"can_read": True,
+		"can_report": True,
+		"can_read_cutting_plan": bool(frappe.has_permission("SD YRP Cutting Plan", ptype="read")),
+	}
+
+
 def _normalise_lots(lots):
 	if isinstance(lots, str):
 		try:
@@ -62,7 +79,7 @@ def _get_lot_plans(lot):
 @frappe.whitelist(methods=["GET", "POST"])
 def get_lot_cut_quantity(lots):
 	"""Return stored completed-cut matrices for permitted Lots."""
-	if not can_view_lot_cut_quantity():
+	if not can_run_lot_cut_quantity():
 		frappe.throw(_("You do not have permission to view Lot Cut Quantity."), frappe.PermissionError)
 	lot_names = _validate_lots(lots)
 

@@ -113,6 +113,7 @@ class TestFinishingWebWorkspace(TestCase):
 				"finishing_plan_report",
 				"rejection_details",
 				"rework_completion",
+				"lot_cut_quantity",
 				"grn_report",
 				"grn_summary",
 				"dc_report",
@@ -133,6 +134,17 @@ class TestFinishingWebWorkspace(TestCase):
 			self.assertTrue(self._workspace().get_capabilities()["sections"]["work_orders"]["can_create"])
 		with self._permissions(denied={("YRP Work Order", "read")}):
 			self.assertNotIn("work_orders", self._workspace().get_capabilities()["sections"])
+
+	def test_lot_cut_quantity_follows_finishing_report_access(self):
+		with self._permissions(denied={("SD YRP Cutting Plan", "read")}):
+			reports = self._workspace().get_capabilities()["sections"]["reports"]["reports"]
+		self.assertEqual(
+			reports["lot_cut_quantity"],
+			{"label": "Lot Cut Quantity", "can_read": True, "can_report": True, "can_read_cutting_plan": False},
+		)
+		with self._permissions(allowed={("SD YRP Cutting Plan", "read")}):
+			self.assertFalse(self._workspace().has_report_access())
+			self.assertNotIn("reports", self._workspace().get_capabilities()["sections"])
 
 	def test_capabilities_omit_unreadable_sections(self):
 		with self._permissions(allowed=set()):

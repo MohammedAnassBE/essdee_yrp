@@ -24,6 +24,7 @@ from essdee_yrp.finishing.alternative import get_alternative_details
 from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.finishing.web_entries import ENTRY_COMMANDS
 from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.purchase.lot_cut_quantity import get_lot_cut_quantity_capability
 
 DOCTYPE = "SD YRP Finishing Plan"
 STOCK_REPORT_DOCTYPE = "YRP Stock Ledger Entry"
@@ -98,12 +99,21 @@ def _permission_flags(
 	return {f"can_{ptype}": bool(frappe.has_permission(doctype, ptype=ptype)) for ptype in ptypes}
 
 
+def has_report_access() -> bool:
+	return any(
+		all(frappe.has_permission(doctype, ptype=ptype) for doctype, ptype in checks)
+		for _label, checks in REPORTS.values()
+	)
+
+
 def _readable_reports() -> dict:
 	reports = {
 		key: {"label": _(label), "can_read": True}
 		for key, (label, checks) in REPORTS.items()
 		if all(frappe.has_permission(doctype, ptype=ptype) for doctype, ptype in checks)
 	}
+	if reports:
+		reports["lot_cut_quantity"] = get_lot_cut_quantity_capability()
 
 	from essdee_yrp.desk_web_reports import department_report_capabilities
 

@@ -7,6 +7,7 @@
 		:error="error"
 		:has-results="resultLots.length > 0"
 		:generate-disabled="Boolean(lotValidation)"
+		copyable
 		@generate="generate"
 		@reset="reset"
 	>

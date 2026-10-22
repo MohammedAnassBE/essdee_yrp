@@ -14,6 +14,8 @@
 				<SewingMonthlySummary v-else-if="active === 'monthly-summary'" :filters="monthlyFilters" />
 				<SewingItemSummary v-else-if="active === 'item-summary'" :filters="itemFilters" />
 				<FinishingDispatchReport v-else-if="active === 'finishing-dispatch'" />
+				<LotCutQuantityReport v-else-if="active === 'lot-cut-quantity'" :can-read-cutting-plan="Boolean(props.capabilities.reports?.lot_cut_quantity?.can_read_cutting_plan)" />
+				<InhouseQuantityReport v-else-if="active === 'inhouse-quantity'" />
 				<DeskBackedReport v-else-if="deskTabs.some(tab => tab.value === active)" :key="active" :report-key="active" :supplier="active === 'finishing-inward-updates' ? supplier : ''" />
 			</TabPanel></TabPanels>
 		</Tabs>
@@ -42,6 +44,8 @@ const SewingScr = defineAsyncComponent(() => import("./reports/SewingScr.vue"))
 const SewingMonthlySummary = defineAsyncComponent(() => import("./reports/SewingMonthlySummary.vue"))
 const SewingItemSummary = defineAsyncComponent(() => import("./reports/SewingItemSummary.vue"))
 const FinishingDispatchReport = defineAsyncComponent(() => import("../finishing/reports/FinishingDispatchReport.vue"))
+const LotCutQuantityReport = defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue"))
+const InhouseQuantityReport = defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue"))
 const props = defineProps({ capabilities: { type: Object, required: true } })
 const route = useRoute(), router = useRouter()
 const REPORTS = [
@@ -51,6 +55,8 @@ const REPORTS = [
 	{ value: "monthly-summary", key: "monthly_summary", label: "Monthly Summary" },
 	{ value: "item-summary", key: "item_summary", label: "Item Summary" },
 	{ value: "finishing-dispatch", key: "finishing_dispatch", label: "Finishing Plan Dispatch" },
+	{ value: "lot-cut-quantity", key: "lot_cut_quantity", label: "Lot Cut Quantity" },
+	{ value: "inhouse-quantity", key: "inhouse_quantity", label: "In-house Quantity" },
 ]
 const deskTabs = computed(() => departmentDeskReports(route.path.split("/")[1], props.capabilities.reports))
 const tabs = computed(() => [...REPORTS.filter(tab => props.capabilities.reports?.[tab.key]?.can_read), ...deskTabs.value])

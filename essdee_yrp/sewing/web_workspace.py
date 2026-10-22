@@ -6,7 +6,8 @@ import frappe
 from frappe import _
 
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
-
+from essdee_yrp.planning.reports import inhouse_quantity
+from essdee_yrp.purchase.lot_cut_quantity import get_lot_cut_quantity_capability
 
 PLAN_RESOURCES = {
 	"entry": ("Sewing Plan Entry", "SD YRP Sewing Plan Entry Detail"),
@@ -40,6 +41,10 @@ def _report_capability(label: str) -> dict:
 		"can_submit": False,
 		"can_report": True,
 	}
+
+
+def has_report_access() -> bool:
+	return all(frappe.has_permission("SD YRP Sewing Plan", ptype=ptype) for ptype in ("read", "report"))
 
 
 @frappe.whitelist()
@@ -83,6 +88,12 @@ def get_capabilities() -> dict:
 		reports = {key: _report_capability(label) for key, label in REPORT_LABELS.items()}
 		if can_view_dispatch_report():
 			reports["finishing_dispatch"] = _report_capability("Finishing Plan Dispatch")
+		reports["lot_cut_quantity"] = {
+			**_report_capability("Lot Cut Quantity"),
+			"can_read_cutting_plan": get_lot_cut_quantity_capability()["can_read_cutting_plan"],
+		}
+		if inhouse_quantity.can_view():
+			reports["inhouse_quantity"] = _report_capability("In-house Quantity")
 
 	from essdee_yrp.desk_web_reports import department_report_capabilities
 

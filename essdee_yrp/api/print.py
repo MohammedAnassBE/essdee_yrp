@@ -3,6 +3,8 @@
 import frappe
 from frappe.utils import cint
 
+from essdee_yrp.print_helpers import get_dc_grn_letter_head
+
 
 def order_print_formats(records, default_format="", enable_raw_printing=False):
 	"""Build the Desk list, moving an available default to the front.
@@ -75,7 +77,9 @@ def get_print_options(doctype, name):
 	letter_heads = frappe.get_all(
 		"Letter Head", filters={"disabled": 0}, pluck="name", order_by="name asc"
 	)
-	document_letter_head = doc.get("letter_head")
+	document_letter_head = (
+		get_dc_grn_letter_head(doc) if doc.doctype == "YRP Delivery Challan" else doc.get("letter_head")
+	)
 	default_letter_head = None
 	if document_letter_head not in letter_heads:
 		default_letter_head = frappe.db.get_value("Letter Head", {"disabled": 0, "is_default": 1}, "name")

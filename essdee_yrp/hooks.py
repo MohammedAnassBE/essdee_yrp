@@ -88,6 +88,7 @@ fixtures = [
 					"YRP Delivery Challan-ste_transferred-precision",
 					"YRP Delivery Challan-transfer_complete-depends_on",
 					"YRP Delivery Challan-vehicle_no-allow_on_submit",
+					"YRP Delivery Challan-main-default_print_format",
 					"YRP Delivery Challan-total_delivered_qty-precision",
 					"YRP Delivery Challan Item-secondary_qty-precision",
 					"YRP Delivery Challan Item-delivered_quantity-precision",

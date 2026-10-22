@@ -302,6 +302,10 @@ def get_dc_structure(doc_name):
 	doc = frappe.get_doc("YRP Delivery Challan", doc_name)
 	lot = frappe.db.get_value("YRP Work Order", doc.work_order, "lot") if doc.get("work_order") else None
 	items = _group_items(doc.get("items") or [], "YRP Delivery Challan", lot=lot)
+	if sum(len(group.get("items") or []) for group in items) > 1:
+		# F15's get_item_group_index sorted attribute lists in place once a second row was grouped.
+		for group in items:
+			group["attributes"] = sorted(group.get("attributes") or [])
 	expected_delivery_date = (
 		frappe.db.get_value(
 			"YRP Work Order",
@@ -422,6 +426,33 @@ def set_attribute_display_values(doc):
 			row.set(fieldname, _attribute_value(row.get(fieldname)))
 
 
+def get_dc_grn_letter_head(doc):
+	"""The DC's own letter head, else MRP's DC/GRN letter head, which F15 stamped on submit."""
+	return doc.get("letter_head") or frappe.db.get_single_value("SD YRP MRP Settings", "dc_grn_letter_head") or ""
+
+
+def _address_display(address):
+	from frappe.contacts.doctype.address.address import get_address_display
+
+	return get_address_display(address) if address else ""
+
+
+def prepare_delivery_challan_print(doc):
+	"""Print the stored party names and address snapshots like F15, filling only missing ones."""
+	doc.letter_head = get_dc_grn_letter_head(doc)
+	for party, name_field, address, details in (
+		("from_location", "from_location_name", "from_address", "from_address_details"),
+		("supplier", "supplier_name", "supplier_address", "supplier_address_details"),
+	):
+		doc.set(name_field, doc.get(name_field) or _supplier_name(doc.get(party)))
+		doc.set(
+			details,
+			doc.get(details)
+			or _address_display(doc.get(address))
+			or get_supplier_address_display(doc.get(party)),
+		)
+
+
 def prepare_print_document(doc, method=None, settings=None):
 	"""Add transient F15 layout aliases to the F16 YRP documents.
 
@@ -429,10 +460,7 @@ def prepare_print_document(doc, method=None, settings=None):
 	not expand or duplicate the canonical F16 DocType schema.
 	"""
 	if doc.doctype == "YRP Delivery Challan":
-		doc.from_location_name = _supplier_name(doc.get("from_location"))
-		doc.from_address_details = get_supplier_address_display(doc.get("from_location"))
-		doc.supplier_name = _supplier_name(doc.get("supplier"))
-		doc.supplier_address_details = get_supplier_address_display(doc.get("supplier"))
+		prepare_delivery_challan_print(doc)
 	elif doc.doctype == "YRP Goods Received Note":
 		doc.supplier_name = _supplier_name(doc.get("supplier"))
 		doc.supplier_address_display = get_supplier_address_display(doc.get("supplier"))

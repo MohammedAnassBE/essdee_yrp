@@ -27,8 +27,11 @@ def create_return_grn(doc_name, items, received_type=None, cut_panel_movement=No
 
 
 def onload(doc, method=None):
-	"""Render a cutting DC as one panel/colour row with Size columns."""
+	"""Default Desk's print letter head like F15, and render a cutting DC as one panel/colour row with Size columns."""
 	del method
+	from essdee_yrp.print_helpers import get_dc_grn_letter_head
+
+	doc.letter_head = get_dc_grn_letter_head(doc)
 	if not doc.get("cut_panel_movement"):
 		return
 

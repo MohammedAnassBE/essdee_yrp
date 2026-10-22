@@ -10,7 +10,7 @@
 		@update:visible="emit('update:visible', $event)"
 	>
 		<div class="printer-dialog__content">
-			<div v-if="loading" class="printer-dialog__loading"><i class="pi pi-spin pi-spinner" /><span>Connecting to QZ Tray and finding printers… Approve the QZ Tray prompt on this computer if it asks.</span></div>
+			<div v-if="loading" class="printer-dialog__loading"><i class="pi pi-spin pi-spinner" /><span>{{ statusText }}</span></div>
 			<template v-else>
 				<label><span>Printer *</span><Select v-model="selected" :options="printers" filter fluid placeholder="Select printer" /></label>
 				<label v-if="showResolution"><span>Printer Resolution *</span><Select v-model="selectedResolution" :options="resolutions" fluid placeholder="Select resolution" /></label>
@@ -29,7 +29,7 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Select from "primevue/select"
-import { ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 
 import { getQzPrinters } from "../../api/qzPrinter.js"
 
@@ -49,6 +49,14 @@ const selected = ref("")
 const selectedResolution = ref("")
 const error = ref("")
 let loadSequence = 0
+const status = ref("connecting")
+const STATUS_TEXT = {
+	"connecting": "Connecting to QZ Tray…",
+	"browser-permission": "Connecting to QZ Tray… If the browser asks to let this site access apps on this device, click Allow.",
+	"approve-connection": "Approve the QZ Tray connection prompt on this computer (it may be behind other windows).",
+	"approve-printers": "Finding printers… Approve the QZ Tray prompt on this computer if it asks.",
+}
+const statusText = computed(() => STATUS_TEXT[status.value] || STATUS_TEXT.connecting)
 
 watch(() => props.visible, (visible) => {
 	if (visible) loadPrinters()
@@ -60,10 +68,10 @@ watch(() => props.visible, (visible) => {
 
 async function loadPrinters() {
 	const sequence = ++loadSequence
-	loading.value = true; error.value = ""; printers.value = []; selected.value = ""
+	loading.value = true; error.value = ""; printers.value = []; selected.value = ""; status.value = "connecting"
 	selectedResolution.value = props.resolutions.includes(props.defaultResolution) ? props.defaultResolution : props.resolutions[0] || ""
 	try {
-		const detected = await getQzPrinters()
+		const detected = await getQzPrinters({ onStatus: (stage) => { if (sequence === loadSequence) status.value = stage } })
 		if (sequence !== loadSequence || !props.visible) return
 		const available = props.filterPrinters ? await props.filterPrinters(detected) : detected
 		if (sequence !== loadSequence || !props.visible) return

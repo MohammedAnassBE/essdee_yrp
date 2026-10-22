@@ -14,7 +14,10 @@
 		<div class="erp-table-wrap report-table-frame" role="region" :aria-label="`${config.title} results`" tabindex="0">
 			<table class="erp-data-table desk-report-table">
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr></thead>
-				<tbody><tr v-for="(row, index) in rows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellToneClass(row, column)]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr></tbody>
+				<tbody>
+					<tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellToneClass(row, column)]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="desk-report-more"><td :colspan="columns.length"><div class="desk-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ rows.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
+				</tbody>
 			</table>
 		</div>
 	</ReportShell>
@@ -26,7 +29,7 @@ import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
-import { computed, onMounted, reactive, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
@@ -59,6 +62,32 @@ const {
 const exportSource = computed(() => config.renderedExport
 	? { reportKey: props.reportKey, appliedFilters: appliedFilterLabels(config.filters, activeFilters.value || {}) }
 	: deskExportSource(props.reportKey, activeFilters.value, columns.value, config.filters))
+
+// Mounting tens of thousands of rows at once froze the tab; mount in steps as the end scrolls into view.
+// A rendered export reads the table DOM, so it keeps every row mounted.
+const ROW_RENDER_STEP = config.renderedExport ? Infinity : 200
+const renderLimit = ref(ROW_RENDER_STEP)
+const moreRowsSentinel = ref(null)
+const renderedRows = computed(() => rows.value.slice(0, renderLimit.value))
+const unrenderedCount = computed(() => Math.max(0, rows.value.length - renderLimit.value))
+let moreRowsObserver = null
+function renderMoreRows() { renderLimit.value += ROW_RENDER_STEP }
+watch(sourceRows, () => { renderLimit.value = ROW_RENDER_STEP })
+watch(moreRowsSentinel, (element) => {
+	moreRowsObserver?.disconnect()
+	moreRowsObserver = null
+	if (!element || typeof IntersectionObserver === "undefined") return
+	moreRowsObserver = new IntersectionObserver(async (entries) => {
+		if (!entries.some(entry => entry.isIntersecting)) return
+		renderMoreRows()
+		await nextTick()
+		// Re-observing reports the sentinel again if it is still in view after the new rows.
+		moreRowsObserver?.unobserve(element)
+		moreRowsObserver?.observe(element)
+	}, { rootMargin: "600px" })
+	moreRowsObserver.observe(element)
+})
+onBeforeUnmount(() => moreRowsObserver?.disconnect())
 
 function cellToneClass(row, column) {
 	const tone = config.cellTone?.(column.fieldname, cellValue(row, column))
@@ -95,6 +124,7 @@ onMounted(() => {
 .desk-report-check { display: flex; align-items: center; gap: 8px; font-size: var(--erp-font-size-caption); }
 .desk-report-table { width: max-content; min-width: 100%; }
 .desk-report-table td { white-space: pre-line; }
+.desk-report-more__inner { position: sticky; left: 0; display: inline-flex; align-items: center; gap: var(--erp-space-3); color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .desk-report-table .desk-report-cell--success { color: var(--erp-success-text); font-weight: 650; }
 .desk-report-table .desk-report-cell--danger { color: var(--erp-danger); font-weight: 650; }
 .desk-report-table .desk-report-cell--warning { color: var(--erp-warning); font-weight: 650; }

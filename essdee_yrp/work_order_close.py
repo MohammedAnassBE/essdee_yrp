@@ -2,7 +2,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate, nowtime
+from frappe.utils import escape_html, flt, nowdate, nowtime
 from yrp.stock.job_worker_variant import get_job_worker_stock_variant
 from yrp.yrp.doctype.yrp_work_order.yrp_work_order import (
 	_apply_close_details,
@@ -86,6 +86,7 @@ def close_work_order(
 	remaining_by_bucket = {}
 	posting_date = nowdate()
 	posting_time = nowtime()
+	has_lineage = _has_mapped_output_lineage(doc.name)
 	for row in doc.get("deliverables") or []:
 		delivered_qty = flt(row.qty) - flt(row.pending_quantity)
 		reduce_qty = delivered_qty - flt(row.stock_update)
@@ -114,7 +115,13 @@ def close_work_order(
 			}
 
 		bucket_balance = remaining_by_bucket[bucket]
-		if bucket_balance["qty"] + QTY_TOLERANCE < reduce_stock_qty:
+		if not has_lineage:
+			# Migrated receipts: write off like Frappe 15, capped at the balance.
+			reduce_stock_qty = min(reduce_stock_qty, bucket_balance["qty"])
+			if reduce_stock_qty <= QTY_TOLERANCE:
+				continue
+			reduce_qty = reduce_stock_qty / factor
+		elif bucket_balance["qty"] + QTY_TOLERANCE < reduce_stock_qty:
 			frappe.throw(
 				_(
 					"Cannot close Work Order {0}. Row {1} requires {2} {3} of "
@@ -129,7 +136,7 @@ def close_work_order(
 				)
 			)
 
-		output_allocations = _get_excess_output_allocations(doc, row, dimensions)
+		output_allocations = _get_excess_output_allocations(doc, row, dimensions) if has_lineage else []
 		result_key = f"wo-close:{row.name}"
 		entries.append(
 			{
@@ -181,6 +188,8 @@ def close_work_order(
 	doc.is_delivered = 1
 	doc.total_quantity = 0
 	doc.save(ignore_permissions=True)
+	if not has_lineage and excess_plans:
+		doc.add_comment("Comment", _get_write_off_comment(excess_plans))
 
 	adjustment_allocations = []
 	production_links = []
@@ -308,17 +317,11 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 			row.output_item,
 		)
 		grouped[key] = flt(grouped.get(key)) + flt(row.stock_qty)
-	if not rows and _has_mapped_output_lineage(work_order.name):
+	if not rows:
 		# No receipt ever used this input: it is unsewn stock, so nothing carries its value.
 		return []
 	if not grouped:
-		frappe.throw(
-			_(
-				"Cannot allocate excess usage for Work Order row {0}. No submitted "
-				"GRN output has exact mapped lineage and matching Stock Dimensions. "
-				"Historical ambiguous lineage must be resolved before closing."
-			).format(deliverable.idx or deliverable.name)
-		)
+		_throw_lineage_dimension_mismatch(work_order, deliverable, dimensions, rows)
 	return [
 		{
 			"output_receipt_sle": key[0],
@@ -330,6 +333,50 @@ def _get_excess_output_allocations(work_order, deliverable, dimensions):
 		for key, weight in grouped.items()
 		if weight > 0
 	]
+
+
+def _throw_lineage_dimension_mismatch(work_order, deliverable, dimensions, rows):
+	mismatches = []
+	for row in rows:
+		row_dimensions = frappe.parse_json(row.stock_dimensions or "{}")
+		for key, value in dimensions.items():
+			recorded = row_dimensions.get(key) or None
+			if recorded != (value or None):
+				mismatch = _("{0} has {1} {2} (Work Order row has {3})").format(
+					row.output_voucher, frappe.unscrub(key).lower(), recorded or _("none"), value or _("none")
+				)
+				if mismatch not in mismatches:
+					mismatches.append(mismatch)
+	leftover = flt(deliverable.qty) - flt(deliverable.pending_quantity) - flt(deliverable.stock_update)
+	frappe.throw(
+		_(
+			"Cannot close Work Order {0}: row {1} ({2}) has {3} {4} left over, but the GRNs that "
+			"consumed it recorded other Stock Dimensions: {5}. Correct the lot or received type on "
+			"the GRN (cancel and amend it) or on the Work Order row so they match, then close again."
+		).format(
+			work_order.name,
+			deliverable.idx or deliverable.name,
+			deliverable.item_variant,
+			f"{round(leftover, 3):g}",
+			deliverable.uom,
+			"; ".join(mismatches),
+		)
+	)
+
+
+def _get_write_off_comment(excess_plans):
+	lines = [
+		_("Row {0}: {1} {2} {3}").format(
+			plan["deliverable"].idx,
+			escape_html(plan["deliverable"].item_variant),
+			f"{round(flt(plan['stock_quantity']), 3):g}",
+			plan["stock_uom"],
+		)
+		for plan in excess_plans
+	]
+	return "<br>".join(
+		[_("Leftover written off without cost allocation (migrated GRNs without lineage):"), *lines]
+	)
 
 
 def _has_mapped_output_lineage(work_order):

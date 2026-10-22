@@ -134,6 +134,7 @@ class TestWorkOrderClose(UnitTestCase):
 			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 			patch("essdee_yrp.work_order_close._validate_wo_close"),
 			patch("essdee_yrp.work_order_close._apply_close_details"),
+			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=True),
 			patch(
 				"essdee_yrp.work_order_close._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
@@ -235,19 +236,52 @@ class TestWorkOrderClose(UnitTestCase):
 		work_order = frappe._dict(name="WO-1")
 		deliverable = frappe._dict(name="WOD-UNSEWN", idx=4)
 		dimensions = {"lot": "LOT-1", "received_type": "Accepted"}
-		with (
-			patch.object(frappe.db, "sql", return_value=[]),
-			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=True),
-		):
+		with patch.object(frappe.db, "sql", return_value=[]):
 			self.assertEqual(_get_excess_output_allocations(work_order, deliverable, dimensions), [])
 
-		with (
-			patch.object(frappe.db, "sql", return_value=[]),
-			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=False),
-			self.assertRaisesRegex(frappe.ValidationError, "Historical ambiguous lineage"),
-		):
-			_get_excess_output_allocations(work_order, deliverable, dimensions)
+	def test_linked_row_allocates_to_the_matching_grn_output(self):
+		work_order = frappe._dict(name="WO-1")
+		deliverable = frappe._dict(name="WOD-1", idx=4)
+		dimensions = {"lot": "LOT-1", "received_type": "Accepted"}
+		rows = [
+			frappe._dict(
+				output_receipt_sle="SLE-1",
+				output_voucher="GRN-1",
+				output_detail="GRN-ITEM-1",
+				output_item="OUT-1",
+				stock_qty=qty,
+				stock_dimensions='{"lot": "LOT-1", "received_type": "Accepted"}',
+			)
+			for qty in (3, 2)
+		]
+		with patch.object(frappe.db, "sql", return_value=rows):
+			allocations = _get_excess_output_allocations(work_order, deliverable, dimensions)
 
+		self.assertEqual(
+			allocations,
+			[
+				{
+					"output_receipt_sle": "SLE-1",
+					"output_voucher": "GRN-1",
+					"output_detail": "GRN-ITEM-1",
+					"output_item": "OUT-1",
+					"allocation_weight": 5,
+				}
+			],
+		)
+
+	def test_lineage_in_other_stock_dimensions_names_the_mismatch(self):
+		work_order = frappe._dict(name="WO-1")
+		deliverable = frappe._dict(
+			name="WOD-1",
+			idx=4,
+			item_variant="FABRIC-NAVY",
+			qty=20,
+			pending_quantity=5,
+			stock_update=3,
+			uom="Kg",
+		)
+		dimensions = {"lot": "LOT-1", "received_type": "Accepted"}
 		mismatched = frappe._dict(
 			output_receipt_sle="SLE-1",
 			output_voucher="GRN-1",
@@ -258,10 +292,72 @@ class TestWorkOrderClose(UnitTestCase):
 		)
 		with (
 			patch.object(frappe.db, "sql", return_value=[mismatched]),
-			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=True),
-			self.assertRaisesRegex(frappe.ValidationError, "matching Stock Dimensions"),
+			self.assertRaises(frappe.ValidationError) as raised,
 		):
 			_get_excess_output_allocations(work_order, deliverable, dimensions)
+
+		message = str(raised.exception)
+		for text in ("WO-1", "row 4", "FABRIC-NAVY", "12 Kg", "GRN-1", "lot LOT-2", "LOT-1"):
+			self.assertIn(text, message)
+		self.assertIn("then close again", message)
+
+	def test_close_writes_off_leftover_of_work_order_without_lineage(self):
+		doc, row = self._manager_close_doc()
+		doc.add_comment = MagicMock()
+		ledger_result = {"entries": {"wo-close:WOD-1": {"sle": "SLE-WRITE-OFF", "rate": 12, "value": 2400}}}
+
+		def record_usage(_doc, plan):
+			plan["audit_row"] = frappe._dict(name="WO-EXCESS-1")
+
+		with ExitStack() as stack:
+			for target, kwargs in (
+				("essdee_yrp.work_order_close._is_wo_close_manager", {"return_value": True}),
+				("essdee_yrp.work_order_close._validate_wo_close", {}),
+				("essdee_yrp.work_order_close._apply_close_details", {}),
+				("essdee_yrp.work_order_close._has_mapped_output_lineage", {"return_value": False}),
+				(
+					"essdee_yrp.work_order_close._stock_dimension_values",
+					{"return_value": {"lot": "LOT-1", "received_type": "Accepted"}},
+				),
+				("essdee_yrp.work_order_close._record_excess_usage", {"side_effect": record_usage}),
+				(
+					"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
+					{"return_value": "WH-1"},
+				),
+				(
+					"yrp.stock.utils.get_conversion_factor",
+					{"return_value": {"conversion_factor": 1, "stock_uom": "Piece"}},
+				),
+				("yrp.stock.utils.get_stock_balance", {"return_value": (200, 12)}),
+				("yrp.stock.stock_ledger.enqueue_voucher_repost", {}),
+				("yrp.stock.utils.close_voucher_reservations", {}),
+				("essdee_yrp.work_order_close.nowdate", {"return_value": "2026-08-26"}),
+				("essdee_yrp.work_order_close.nowtime", {"return_value": "17:30:00"}),
+			):
+				stack.enter_context(patch(target, **kwargs))
+			stack.enter_context(patch.object(frappe.db, "sql"))
+			stack.enter_context(patch.object(frappe, "get_doc", return_value=doc))
+			allocations = stack.enter_context(
+				patch("essdee_yrp.work_order_close._get_excess_output_allocations")
+			)
+			make_entries = stack.enter_context(
+				patch("yrp.stock.stock_ledger.make_sl_entries", return_value=ledger_result)
+			)
+			svc = "yrp.yrp_stock.doctype.yrp_stock_valuation_adjustment.yrp_stock_valuation_adjustment"
+			register_links = stack.enter_context(patch(f"{svc}.register_production_links"))
+			create_adjustment = stack.enter_context(patch(f"{svc}.create_adjustment"))
+			result = close_work_order("WO-1", sd_close_reason="Sewing Shortage")
+
+		allocations.assert_not_called()
+		self.assertEqual(make_entries.call_args.args[0][0]["qty"], -200)
+		self.assertEqual(row.stock_update, 5400)
+		self.assertEqual(result, {"status": "Close", "deducted_qty": 200.0})
+		self.assertEqual(register_links.call_args.args[2], [])
+		self.assertEqual(create_adjustment.call_args.kwargs["allocations"], [])
+		comment = doc.add_comment.call_args.args
+		self.assertEqual(comment[0], "Comment")
+		self.assertIn("without cost allocation (migrated GRNs without lineage)", comment[1])
+		self.assertIn("INPUT-VARIANT", comment[1])
 
 	def test_close_consumes_unsewn_input_without_a_valuation_allocation(self):
 		doc, row = self._manager_close_doc()

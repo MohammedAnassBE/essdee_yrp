@@ -95,7 +95,7 @@
 		</template>
 	</Dialog>
 
-	<FabricStockOperationDialog v-model:visible="stockDocumentVisible" operation="stock_entry" :name="linkedDocumentName" @changed="linkedDocumentChanged" />
+	<StockDocumentDialog v-model:visible="stockDocumentVisible" :name="linkedDocumentName" :docstatus="linkedDocumentDocstatus" @changed="linkedDocumentChanged" />
 	<RelatedDocumentWorkspaceDialog v-model:visible="relatedDocumentVisible" :doctype="linkedDocumentDoctype" :name="linkedDocumentName" @changed="linkedDocumentChanged" @closed="relatedDocumentVisible = false" />
 
 	<DocumentConfirmationDialog
@@ -130,8 +130,8 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import CutPanelMovementEditor from "../cutting/CutPanelMovementEditor.vue"
-import FabricStockOperationDialog from "../fabric-store/FabricStockOperationDialog.vue"
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"
+import StockDocumentDialog from "../fabric-store/StockDocumentDialog.vue"
 import CutPanelMovementRail from "./CutPanelMovementRail.vue"
 
 const router = useRouter()
@@ -159,6 +159,7 @@ const stockDocumentVisible = ref(false)
 const relatedDocumentVisible = ref(false)
 const linkedDocumentDoctype = ref("")
 const linkedDocumentName = ref("")
+const linkedDocumentDocstatus = ref(0)
 let loadSequence = 0
 let actionSequence = 0
 const record = computed(() => editor.record)
@@ -332,6 +333,7 @@ function openLinkedDocument(document) {
 	}
 	linkedDocumentDoctype.value = document.doctype
 	linkedDocumentName.value = document.name
+	linkedDocumentDocstatus.value = Number(document.docstatus || 0)
 	if (document.doctype === "YRP Stock Entry") stockDocumentVisible.value = true
 	else relatedDocumentVisible.value = true
 }

@@ -36,21 +36,15 @@
 			</template>
 		</ListView>
 
-		<FabricStockOperationDialog
-			v-model:visible="createVisible"
-			:operation="activeOperation"
-			:name="editorName"
-			:expected-modified="editorExpectedModified"
-			@changed="documentChanged"
-		/>
-		<DocumentTransactionDialog
-			v-if="selectedDocument"
+		<StockDocumentDialog
+			v-if="activeCapability"
 			v-model:visible="documentVisible"
-			:doctype="selectedDocument.doctype"
+			:operation="activeOperation"
+			:doctype="activeCapability.doctype"
 			:name="selectedDocument.name"
+			:docstatus="selectedDocument.docstatus"
+			:expected-modified="selectedDocument.modified"
 			@changed="documentChanged"
-			@edit="editDocument"
-			@amended="editDocument"
 		/>
 	</section>
 </template>
@@ -60,8 +54,7 @@ import Button from "primevue/button"
 import { computed, ref, watch } from "vue"
 
 import ListView from "../../components/common/ListView.vue"
-import DocumentTransactionDialog from "../../components/documents/DocumentTransactionDialog.vue"
-import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
+import StockDocumentDialog from "./StockDocumentDialog.vue"
 
 const props = defineProps({ capability: { type: Object, required: true } })
 
@@ -79,11 +72,8 @@ const operations = computed(() => Object.entries(props.capability.operations || 
 })))
 const activeOperation = ref(operations.value[0]?.key || "")
 const listView = ref(null)
-const createVisible = ref(false)
 const documentVisible = ref(false)
-const selectedDocument = ref(null)
-const editorName = ref("")
-const editorExpectedModified = ref("")
+const selectedDocument = ref({ name: "", docstatus: 0, modified: "" })
 const activeCapability = computed(() => props.capability.operations?.[activeOperation.value] || null)
 const activeDefinition = computed(() => definitions[activeOperation.value] || { mark: "ST", columns: [], minWidth: "900px" })
 
@@ -92,28 +82,12 @@ watch(operations, (available) => {
 })
 
 function createDocument() {
-	editorName.value = ""
-	editorExpectedModified.value = ""
-	createVisible.value = true
-}
-function openDocument(row) {
-	if (Number(row.docstatus) === 0) {
-		editorName.value = row.name
-		editorExpectedModified.value = row.modified || ""
-		createVisible.value = true
-		return
-	}
-	selectedDocument.value = { doctype: activeCapability.value.doctype, name: row.name }
+	selectedDocument.value = { name: "", docstatus: 0, modified: "" }
 	documentVisible.value = true
 }
-function editDocument(payload) {
-	const record = payload?.record || payload || {}
-	const operation = Object.entries(props.capability.operations || {}).find(([, value]) => value.doctype === record.doctype)?.[0]
-	if (operation) activeOperation.value = operation
-	editorName.value = record.name || ""
-	editorExpectedModified.value = record.modified || ""
-	documentVisible.value = false
-	createVisible.value = true
+function openDocument(row) {
+	selectedDocument.value = { name: row.name, docstatus: Number(row.docstatus || 0), modified: row.modified || "" }
+	documentVisible.value = true
 }
 function documentChanged() { listView.value?.refresh?.(true) }
 </script>

@@ -26,7 +26,6 @@
 			:row-mark="activeDefinition.mark"
 			:min-table-width="activeDefinition.minWidth"
 			:default-columns="activeDefinition.columns"
-			template-item-filters
 			viewport-bounded
 			clickable
 			@row-click="openDocument"

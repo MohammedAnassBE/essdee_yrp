@@ -1,3 +1,19 @@
+export const TEMPLATE_ITEM_FILTER = Object.freeze(["variant_of", "is", "not set"])
+
+function linkFilterObject(linkFilters) {
+	const parsed = typeof linkFilters === "string" && linkFilters ? JSON.parse(linkFilters) : linkFilters
+	if (!Array.isArray(parsed)) return parsed && typeof parsed === "object" ? parsed : {}
+	return Object.fromEntries(parsed.filter(Array.isArray).map((filter) => {
+		const [fieldname, operator, value] = filter.length >= 4 ? filter.slice(1) : filter
+		return [fieldname, operator === "=" ? value : [operator, value]]
+	}))
+}
+
+export function templateItemLinkFilters(linkFilters) {
+	const [fieldname, operator, value] = TEMPLATE_ITEM_FILTER
+	return { ...linkFilterObject(linkFilters), [fieldname]: [operator, value] }
+}
+
 function itemFilterParts(filter, itemFields) {
 	if (!Array.isArray(filter) || ![3, 4].includes(filter.length)) return null
 	const [doctype, fieldname, operator, value] = filter.length === 4 ? filter : ["", ...filter]

@@ -495,7 +495,14 @@ import {
 	frappeStandardFilterFields,
 } from "./listColumns.js"
 import ListviewFilters from "./ListviewFilters.vue"
-import { expandTemplateItemFilters, hasChildTableFilter, parentGroupBy, templateItemFilterItems } from "./listItemFilters.js"
+import {
+	TEMPLATE_ITEM_FILTER,
+	expandTemplateItemFilters,
+	hasChildTableFilter,
+	parentGroupBy,
+	templateItemFilterItems,
+	templateItemLinkFilters,
+} from "./listItemFilters.js"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
 import UserListviewColumns from "./UserListviewColumns.vue"
 import {
@@ -517,7 +524,6 @@ const props = defineProps({
 	nameColumnLabel: { type: String, default: "Document" },
 	columnLabels: { type: Object, default: () => ({}) },
 	linkFilters: { type: Object, default: () => ({}) },
-	templateItemFilters: { type: Boolean, default: false },
 	rowMark: { type: String, default: "DOC" },
 	filters: { type: [Array, Object], default: () => [] },
 	initialAdvancedFilters: { type: Array, default: () => [] },
@@ -650,8 +656,8 @@ function sortFilterFields(fields) {
 }
 
 function templateItemFilterField(field) {
-	return props.templateItemFilters && field.fieldtype === "Link" && field.options === "Item"
-		? { ...field, link_filters: { variant_of: ["is", "not set"] } }
+	return field.fieldtype === "Link" && field.options === "Item"
+		? { ...field, link_filters: templateItemLinkFilters(field.link_filters) }
 		: field
 }
 
@@ -820,7 +826,6 @@ const itemFilterFields = computed(() => [...filterFields.value, ...standardFilte
 	.flatMap(field => field.doctype === props.doctype ? [field, { ...field, doctype: "" }] : [field]))
 
 async function resolveItemFilters(filters) {
-	if (!props.templateItemFilters) return filters
 	const items = templateItemFilterItems(filters, itemFilterFields.value)
 	const missing = items.filter(item => !Object.hasOwn(variantsByItem, item) && !pendingItemFilters.has(item))
 	if (missing.length) {
@@ -890,8 +895,10 @@ watch(bulkEditFieldKey, () => {
 watch(selectedRows, (selection) => emit("selection-change", [...selection]))
 
 function baseFilters() {
-	if (Array.isArray(props.filters)) return [...props.filters]
-	return Object.entries(props.filters || {}).map(([fieldname, value]) => [fieldname, "=", value])
+	const filters = Array.isArray(props.filters)
+		? [...props.filters]
+		: Object.entries(props.filters || {}).map(([fieldname, value]) => [fieldname, "=", value])
+	return props.doctype === "Item" ? [[...TEMPLATE_ITEM_FILTER], ...filters] : filters
 }
 
 function cloneFilters(filters) {
@@ -948,9 +955,7 @@ function allFilters({ expand = true } = {}) {
 	if (appliedSearch.value.trim()) {
 		filters.push(["name", "like", `%${appliedSearch.value.trim()}%`])
 	}
-	return props.templateItemFilters && expand
-		? expandTemplateItemFilters(filters, itemFilterFields.value, variantsByItem)
-		: filters
+	return expand ? expandTemplateItemFilters(filters, itemFilterFields.value, variantsByItem) : filters
 }
 
 async function initialise() {

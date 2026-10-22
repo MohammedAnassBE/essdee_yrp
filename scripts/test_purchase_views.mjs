@@ -164,16 +164,13 @@ const unrestrictedRow = itemEditorValues({ attributes: [{ attribute: "Colour", a
 assert.deepEqual([unrestrictedRow.values, unrestrictedRow.all_values_allowed, unrestrictedRow.value_count], [[], true, 506])
 
 assert.deepEqual(itemListFilters("purchase"), [
-	["variant_of", "is", "not set"],
 	["is_purchase_item", "=", 1],
 	["disabled", "=", 0],
 ])
 assert.deepEqual(itemListFilters("all"), [
-	["variant_of", "is", "not set"],
 	["disabled", "=", 0],
 ])
 assert.deepEqual(itemListFilters("disabled"), [
-	["variant_of", "is", "not set"],
 	["disabled", "=", 1],
 ])
 

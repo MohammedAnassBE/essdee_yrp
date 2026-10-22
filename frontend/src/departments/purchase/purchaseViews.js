@@ -217,9 +217,8 @@ export function itemKindLabel(attributes = []) {
 }
 
 export function itemListFilters(mode = "purchase") {
-	const filters = [["variant_of", "is", "not set"]]
-	if (mode === "disabled") return [...filters, ["disabled", "=", 1]]
-	if (mode === "purchase") filters.push(["is_purchase_item", "=", 1])
+	if (mode === "disabled") return [["disabled", "=", 1]]
+	const filters = mode === "purchase" ? [["is_purchase_item", "=", 1]] : []
 	return [...filters, ["disabled", "=", 0]]
 }
 

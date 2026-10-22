@@ -12,6 +12,7 @@ from essdee_yrp.accounts.purchase_invoice_workspace import (
 	purchase_invoice_actions,
 	serialize_grouped_items,
 )
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.erp_purchase_invoice import is_erp_purchase_invoice_available
 from essdee_yrp.purchase_invoice import MIGRATED_RATE_SOURCE, MODERN_RATE_SOURCE
 from essdee_yrp.web_common import (
@@ -126,7 +127,9 @@ def new_purchase_invoice_from_bill_tracking(bill_tracking: str, *, for_update: b
 
 
 @frappe.whitelist()
-def get_purchase_invoice_editor(name: str | None = None, bill_tracking: str | None = None) -> dict:
+def get_purchase_invoice_editor(
+	name: str | None = None, bill_tracking: str | None = None, duplicate_from: str | None = None
+) -> dict:
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		doc.check_permission("write")
@@ -136,11 +139,13 @@ def get_purchase_invoice_editor(name: str | None = None, bill_tracking: str | No
 		return _editor_payload(doc, True, duplicate_billing_supplier)
 
 	frappe.has_permission(DOCTYPE, ptype="create", throw=True)
-	doc = (
-		new_purchase_invoice_from_bill_tracking(bill_tracking)
-		if bill_tracking
-		else frappe.new_doc(DOCTYPE)
-	)
+	if duplicate_from:
+		doc = frappe.get_doc(build_duplicate_values(DOCTYPE, duplicate_from))
+		doc.set("bill_tracking", None)
+	elif bill_tracking:
+		doc = new_purchase_invoice_from_bill_tracking(bill_tracking)
+	else:
+		doc = frappe.new_doc(DOCTYPE)
 	duplicate_billing_supplier = apply_purchase_invoice_response_permissions(doc)
 	return _editor_payload(doc, False, duplicate_billing_supplier)
 

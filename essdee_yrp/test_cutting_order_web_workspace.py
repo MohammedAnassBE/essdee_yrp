@@ -228,3 +228,46 @@ class TestCuttingOrderWebWorkspace(TestCase):
 		self.assertEqual(saved["items"][0]["values"], {"S": 12})
 		self.assertTrue(saved["items"][0]["completed"])
 		doc.save.assert_called_once_with()
+
+	def test_duplicate_editor_prefills_unsaved_order_from_source(self):
+		doc = frappe.new_doc("SD YRP Cutting Order")
+		values = {
+			"doctype": "SD YRP Cutting Order",
+			"docstatus": 0,
+			"cutting_order_detail": "COD-SOURCE",
+			"cutting_location": "Manual Cutting",
+			"maximum_no_of_plys": 80,
+			"maximum_allow_percent": 5,
+			"item": "STYLE-001",
+			"is_set_item": 1,
+			"items_json": '{"items":[{"colour":"Navy"}]}',
+			"co_status": "Completed",
+			"lay_no": 4,
+		}
+		with (
+			patch("essdee_yrp.cutting.order_workspace.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.cutting.order_workspace.frappe.new_doc", return_value=doc),
+			patch("essdee_yrp.cutting.order_workspace.build_duplicate_values", return_value=values) as build,
+			patch(
+				"essdee_yrp.cutting.order_workspace.get_cutting_order_detail_data",
+				return_value=detail_data(),
+			) as get_detail,
+			patch(
+				"essdee_yrp.cutting.order_workspace._overlay_native_quantities",
+				side_effect=lambda matrix, native: matrix,
+			) as overlay,
+		):
+			payload = get_order_editor(duplicate_from="CO-SOURCE")
+
+		build.assert_called_once_with("SD YRP Cutting Order", "CO-SOURCE")
+		get_detail.assert_called_once_with("COD-SOURCE")
+		self.assertEqual(overlay.call_args.args[1], {"items": [{"colour": "Navy"}]})
+		record = payload["record"]
+		self.assertFalse(record["name"])
+		self.assertEqual(record["docstatus"], 0)
+		self.assertEqual(record["status"], "Draft")
+		self.assertEqual(record["lay_no"], 0)
+		self.assertEqual(record["cutting_order_detail"], "COD-SOURCE")
+		self.assertEqual(record["maximum_no_of_plys"], 80)
+		self.assertFalse(payload["permissions"]["can_write"])
+		self.assertTrue(doc.is_new())

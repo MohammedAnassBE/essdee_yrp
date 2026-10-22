@@ -171,6 +171,7 @@ let requestSequence = 0
 let isAlive = true
 
 const currentName = computed(() => String(props.billTrackingId || route.params.billTrackingId || ""))
+const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
 const backTo = computed(() => currentName.value
 	? `${props.basePath}/${encodeURIComponent(currentName.value)}`
 	: props.basePath)
@@ -192,7 +193,7 @@ async function load() {
 	attempted.value = false
 	allowNavigation = false
 	try {
-		const payload = await getBillTrackingEditor(request.name || null) || {}
+		const payload = await getBillTrackingEditor(request.name || null, request.name ? null : duplicateFrom.value || null) || {}
 		if (!isCurrentRequest(request)) return
 		editor.value = payload
 		for (const fieldname of FORM_FIELDS) form[fieldname] = payload.values?.[fieldname] ?? ""
@@ -361,7 +362,7 @@ onBeforeUnmount(() => {
 	pendingNavigation = null
 	window.removeEventListener("beforeunload", beforeUnload)
 })
-watch(currentName, load, { immediate: true })
+watch([currentName, duplicateFrom], load, { immediate: true })
 </script>
 
 <style scoped>

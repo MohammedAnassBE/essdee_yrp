@@ -285,12 +285,13 @@ export function itemPriceTierPrecision(fields = {}, fieldname) {
 	return Number.isInteger(precision) && precision >= 0 ? precision : (fieldname === "lead_time" ? 0 : 3)
 }
 
-export function itemPriceEditorRequestKey({ name = "", routeName = "", item = "", supplier = "" } = {}) {
+export function itemPriceEditorRequestKey({ name = "", routeName = "", item = "", supplier = "", duplicateFrom = "" } = {}) {
 	return JSON.stringify({
 		name: String(name || ""),
 		routeName: String(routeName || ""),
 		item: name ? "" : String(item || ""),
 		supplier: name ? "" : String(supplier || ""),
+		duplicateFrom: name ? "" : String(duplicateFrom || ""),
 	})
 }
 

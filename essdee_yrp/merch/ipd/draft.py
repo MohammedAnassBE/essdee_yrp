@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import cint, cstr, flt
 from yrp.attribute_links import value as attribute_value
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.ipd_ui import get_complete_item_details
 from essdee_yrp.merch.ipd import fields as registry
 
@@ -26,6 +27,16 @@ def load_ipd(name=None, ptype="write"):
 		return frappe.new_doc(registry.DOCTYPE)
 	doc = frappe.get_doc(registry.DOCTYPE, name)
 	doc.check_permission(ptype)
+	return doc
+
+
+def load_editor_ipd(name=None, duplicate_from=None):
+	"""Writable IPD, or an unsaved new IPD copied from `duplicate_from` like Desk Duplicate."""
+	doc = load_ipd(name, "write")
+	if name or not duplicate_from:
+		return doc
+	values = build_duplicate_values(registry.DOCTYPE, duplicate_from)
+	doc.update({key: value for key, value in values.items() if value is not None})
 	return doc
 
 

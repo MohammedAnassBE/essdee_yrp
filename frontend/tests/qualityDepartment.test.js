@@ -32,6 +32,7 @@ const selection = {
 }
 
 const overview = await import("../src/utils/documentOverview.js")
+const duplicate = await import("../src/composables/useDuplicateAction.js")
 
 test("Quality registry follows Finishing and automatically feeds the landing cards", () => {
 	const index = departments.findIndex(({ key }) => key === "quality")
@@ -189,7 +190,7 @@ test("create editor loads WO/GRN defaults, enforces required values and saves on
 	try {
 		const defaultsCalls = []
 		const ui = await editor({ getNewInspectionDefaults: async (args) => { defaultsCalls.push(args); return defaults } }, {}, { against_id: "WO-1", grn: "GRN-1" })
-		assert.deepEqual(defaultsCalls, [{ against_id: "WO-1", grn: "GRN-1", amend_from: undefined }])
+		assert.deepEqual(defaultsCalls, [{ against_id: "WO-1", grn: "GRN-1", amend_from: undefined, duplicate_from: undefined }])
 		assert.ok(ui.primary().props.disabled)
 		await ui.change("inspection_type", "Pre-FInal")
 		await ui.change("offer_qty", 50)
@@ -226,7 +227,7 @@ test("Amend action opens a new inspection with amendment defaults, title, select
 		const requests = []
 		const amendment = { ...defaults, amended_from: name, inspection_type: "Final", offer_qty: 50, spi_found: 8, upload_quality_approval_sheet: "/files/approval.jpg" }
 		const ui = await editor({ getNewInspectionDefaults: async (args) => { requests.push(args); return amendment } }, {}, { amend_from: name })
-		assert.deepEqual(requests, [{ against_id: undefined, grn: undefined, amend_from: name }])
+		assert.deepEqual(requests, [{ against_id: undefined, grn: undefined, amend_from: name, duplicate_from: undefined }])
 		assert.equal(nodes(ui.root, "h1")[0].text, `Amend ${name}`)
 		assert.deepEqual(nodes(ui.root, "picker")[0].props.modelValue, views.cleanSelection(selection))
 		assert.equal(ui.primary().props.disabled, false)
@@ -308,6 +309,7 @@ async function inspectionView(payload, api = {}) {
 		"primevue/usetoast": { useToast: () => ({ add: (value) => toasts.push(value) }) },
 		"vue-router": { useRoute: () => route, useRouter: () => ({ push: (target) => navigations.push(target), replace: (target) => { navigations.push(target); route.query = target.query } }) },
 		"../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({ listNavigation: "preserved" }) },
+		"../../composables/useDuplicateAction.js": duplicate,
 		"../../api/frappe.js": { submitDoc: async (...args) => calls.push(["submit", ...args]), cancelDoc: async (...args) => calls.push(["cancel", ...args]) },
 		"../../api/quality.js": { getInspectionWorkspace: async () => { calls.push(["load"]); return structuredClone(payload) }, updateInspectionResult: async (...args) => calls.push(["result", ...args]), createInspectionDebit: async (...args) => { calls.push(["debit", ...args]); return { name: "DEBIT-1" } }, ...api },
 		"../../components/DepartmentPage.vue": container,
@@ -495,4 +497,25 @@ test("copyText falls back when the Clipboard API rejects", async () => {
 	const doc = { createElement: () => area, body: { appendChild() {} }, execCommand: () => true }
 	assert.equal(await copyText("caption", doc, { writeText: async () => { throw new Error("denied") } }), true)
 	assert.equal(await copyText("caption", { ...doc, execCommand: () => { throw new Error("blocked") } }, undefined), false)
+})
+
+test("Duplicate opens an unsaved new inspection prefilled from the source and saves it as new", async () => {
+	const previous = globalThis.window
+	globalThis.window = { addEventListener() {}, removeEventListener() {} }
+	try {
+		const view = await inspectionView({ ...saved, permissions: { can_create: true } })
+		assert.equal(view.action("duplicate").menuOnly, true)
+		await view.action("duplicate").command()
+		assert.deepEqual(view.navigations, [{ name: "quality-inspection-new", query: { duplicate_from: "EQI-1" } }])
+		assert.equal((await inspectionView({ ...saved, permissions: { can_create: false } })).action("duplicate"), undefined)
+		const requests = []
+		const copy = { ...defaults, inspection_type: "Final", offer_qty: 50 }
+		const ui = await editor({ getNewInspectionDefaults: async (args) => { requests.push(args); return copy } }, {}, { duplicate_from: "EQI-1" })
+		assert.deepEqual(requests, [{ against_id: undefined, grn: undefined, amend_from: undefined, duplicate_from: "EQI-1" }])
+		assert.equal(ui.primary().props.dirty, false)
+		await ui.primary().props.onSave()
+		assert.equal(ui.calls[0][1].inspection_type, "Final")
+		assert.equal(ui.calls[0][1].amended_from, undefined)
+		assert.equal(ui.calls[0][2].name, "")
+	} finally { globalThis.window = previous }
 })

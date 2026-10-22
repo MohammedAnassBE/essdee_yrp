@@ -1,6 +1,6 @@
 <template>
 	<DepartmentPage title="Lot" back-to="/purchase/lots" back-label="Lots" :show-title="false" flat full-width inline-navigation>
-		<LotEditor :key="lotId || 'new'" :lot-id="lotId" />
+		<LotEditor :key="lotId || `new:${$route.query.duplicate_from || ''}`" :lot-id="lotId" />
 	</DepartmentPage>
 </template>
 <script setup>

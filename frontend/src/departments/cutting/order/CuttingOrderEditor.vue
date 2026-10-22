@@ -62,7 +62,7 @@ import DocumentSaveButton from "../../../components/documents/DocumentSaveButton
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 import CuttingOrderDetailDialog from "./CuttingOrderDetailDialog.vue"
 
-const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null } })
+const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null }, duplicateFrom: { type: String, default: "" } })
 const emit = defineEmits(["saved", "cancel", "loaded"])
 const form = reactive({ cutting_order_detail: "", item: "", cutting_location: "", maximum_no_of_plys: null, maximum_allow_percent: null })
 const groups = ref([])
@@ -114,7 +114,7 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
-		const payload = props.initialPayload || await getCuttingOrderEditor(props.name)
+		const payload = props.initialPayload || await getCuttingOrderEditor(props.name, "", props.duplicateFrom)
 		applyPayload(payload)
 		await loadDetailPermissions(payload?.record?.cutting_order_detail)
 	} catch (reason) { error.value = reason?.message || "Unable to load the Cutting Order editor." }
@@ -212,7 +212,7 @@ function discardChanges() { discardVisible.value = false; allowNavigation = true
 onBeforeRouteLeave((_to, _from, next) => { if (allowNavigation || !dirty.value) return next(); pendingNavigation = next; discardVisible.value = true })
 onMounted(() => { window.addEventListener("beforeunload", beforeUnload); load() })
 onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
-watch(() => props.name, load)
+watch(() => [props.name, props.duplicateFrom], load)
 </script>
 
 <style scoped>

@@ -81,7 +81,7 @@ export function useLotEditor(lotId) {
 		loadError.value = ""
 		actionError.value = ""
 		try {
-			const [payload, metadata] = await Promise.all([getLotForm(lotId || null), getMeta("SD YRP Lot")])
+			const [payload, metadata] = await Promise.all([getLotForm(lotId || null, lotId ? null : route.query.duplicate_from || null), getMeta("SD YRP Lot")])
 			if (isCurrentLoad(sequence)) applyForm(payload, metadata)
 		} catch (reason) {
 			if (isCurrentLoad(sequence)) { record.value = null; loadError.value = reason.message }

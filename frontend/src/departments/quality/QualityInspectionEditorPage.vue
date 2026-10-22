@@ -98,6 +98,7 @@ let workOrderSequence = 0
 let aqlSequence = 0
 const currentName = computed(() => props.inspectionId || String(route.params.inspectionId || ""))
 const amendFrom = computed(() => String(route.query.amend_from || ""))
+const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
 const backTo = computed(() => currentName.value ? `/quality/inspections/${encodeURIComponent(currentName.value)}` : "/quality/inspections")
 const signature = computed(() => JSON.stringify(inspectionPayload(form, selection.value)))
 const dirty = computed(() => !loading.value && !loadError.value && signature.value !== cleanSignature.value)
@@ -131,7 +132,7 @@ async function load() {
 	allowNavigation = false
 	try {
 		const payload = currentName.value ? await getInspectionWorkspace(currentName.value)
-			: await getNewInspectionDefaults({ against_id: route.query.against_id, grn: route.query.grn, amend_from: amendFrom.value || undefined })
+			: await getNewInspectionDefaults({ against_id: route.query.against_id, grn: route.query.grn, amend_from: amendFrom.value || undefined, duplicate_from: duplicateFrom.value || undefined })
 		if (!active || sequence !== loadSequence) return
 		if (currentName.value && !payload.actions?.edit?.allowed) throw new Error("This inspection cannot be edited.")
 		workspace.value = currentName.value ? payload : {}
@@ -257,7 +258,7 @@ function beforeUnload(event) {
 
 watch(() => form.against_id, (name) => { if (!loading.value) refreshWorkOrder(name) })
 watch(() => [form.offer_qty, form.checking_level, form.major_aql_level, form.minor_aql_level], () => { if (!loading.value) refreshAql() })
-watch(() => [currentName.value, route.query.against_id, route.query.grn, amendFrom.value], load, { immediate: true })
+watch(() => [currentName.value, route.query.against_id, route.query.grn, amendFrom.value, duplicateFrom.value], load, { immediate: true })
 onBeforeRouteLeave(guard)
 onBeforeRouteUpdate(guard)
 onMounted(() => window.addEventListener("beforeunload", beforeUnload))

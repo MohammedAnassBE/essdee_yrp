@@ -134,8 +134,8 @@ export function deleteProductRelease(name) {
 	return callMethod(`${WORKSPACE}.delete_product_release`, { name })
 }
 
-export function getLotwiseWorkspace({ name = null, product = null } = {}) {
-	return callMethod(`${LOTWISE}.get_lotwise_workspace`, { name, product })
+export function getLotwiseWorkspace({ name = null, product = null, duplicateFrom = null } = {}) {
+	return callMethod(`${LOTWISE}.get_lotwise_workspace`, { name, product, duplicate_from: duplicateFrom })
 }
 
 export function runLotwiseCommand(values, command, payload = null, name = null) {

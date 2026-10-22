@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Cutting Plan" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="cutting-plan-editor-page erp-workspace">
-			<CuttingPlanEditor :initial-source="source" @saved="saved" @cancel="router.push(backTo)" />
+			<CuttingPlanEditor :initial-source="source" :duplicate-from="duplicateFrom" @saved="saved" @cancel="router.push(backTo)" />
 		</div>
 	</DepartmentPage>
 </template>
@@ -22,6 +22,7 @@ const props = defineProps({
 
 const route = useRoute()
 const router = useRouter()
+const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
 const source = computed(() => Object.fromEntries(
 	["work_order", "lot", "item"].map((key) => [key, String(route.query[key] || "")]).filter(([, value]) => value),
 ))

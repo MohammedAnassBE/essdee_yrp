@@ -9,6 +9,7 @@ from yrp import attribute_links
 from yrp.stock.dimensions import append_production_group_filters
 
 from essdee_yrp import process_cost
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.api.work_order import get_work_order_selection_context
 from essdee_yrp.purchase.lot_documents import DOCUMENT_SECTIONS
 from essdee_yrp.web_common import action, assert_expected_modified, parse_mapping, permission_flags
@@ -250,7 +251,7 @@ def search_process_cost_attributes(lot, process_name, item=None, text=""):
 
 
 @frappe.whitelist()
-def get_process_cost_editor(name=None, lot=None):
+def get_process_cost_editor(name=None, lot=None, duplicate_from=None):
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		doc.check_permission("read")
@@ -260,6 +261,9 @@ def get_process_cost_editor(name=None, lot=None):
 		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
 		doc = frappe.new_doc(DOCTYPE)
 		doc.lot = lot
+		if duplicate_from:
+			values = build_duplicate_values(DOCTYPE, duplicate_from)
+			doc.update({key: value for key, value in values.items() if value is not None})
 	context = get_process_cost_grid(doc.lot, doc.process_name, doc.item, doc.attribute)
 	values = {key: doc.get(key) for key in VIEW_FIELDS}
 	values.update(item=context["item"], uom=context["uom"], from_date=doc.from_date or nowdate())

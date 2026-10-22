@@ -4,6 +4,7 @@ from frappe.desk.form.load import run_onload
 from frappe.utils import cint
 from yrp.attribute_links import value as attribute_value
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_colour_attribute
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 	check_enabled_po,
@@ -29,6 +30,10 @@ DERIVED_FIELDS = (
 	"total_order_quantity", "total_quantity", "assigned_person_name", "is_transferred", "has_transferred", "transferred_lot",
 )
 FABRIC_FIELDS = ("name", "cloth_item", "production_detail", "plan_status", "plan_built_on", "plan_error")
+DUPLICATE_FIELDS = (
+	*(field for field in EDITABLE_FIELDS if field not in ("lot_name", "status")), *IPD_DERIVED,
+	"items", "lot_order_details", "lot_fabric_details",
+)
 
 
 def load_writable_lot(name=None):
@@ -38,6 +43,16 @@ def load_writable_lot(name=None):
 		return doc
 	frappe.has_permission("SD YRP Lot", ptype="create", throw=True)
 	return frappe.new_doc("SD YRP Lot")
+
+
+def load_editor_lot(name=None, duplicate_from=None):
+	"""Writable Lot, or an unsaved new Lot prefilled from `duplicate_from`."""
+	doc = load_writable_lot(name)
+	if name or not duplicate_from:
+		return doc
+	values = build_duplicate_values("SD YRP Lot", duplicate_from)
+	doc.update({field: values[field] for field in DUPLICATE_FIELDS if values.get(field) is not None})
+	return doc
 
 
 def check_context_permission():
@@ -91,8 +106,8 @@ def derived_values(doc):
 
 
 @frappe.whitelist()
-def get_lot_form(name: str | None = None) -> dict:
-	doc = load_writable_lot(name)
+def get_lot_form(name: str | None = None, duplicate_from: str | None = None) -> dict:
+	doc = load_editor_lot(name, duplicate_from)
 	message_start = len(frappe.get_message_log())
 	ppo_mode = bool(check_enabled_po())
 	locks = _lot_locks(doc, ppo_mode, not name)

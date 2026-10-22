@@ -154,7 +154,7 @@ export function useMerchLotEditor(lotId) {
 		actionError.value = ""
 		try {
 			const [payload, metadata] = await Promise.all([
-				getLotForm(lotId || null),
+				getLotForm(lotId || null, lotId ? null : route.query.duplicate_from || null),
 				getMeta("SD YRP Lot"),
 			])
 			if (isCurrentLoad(sequence)) applyForm(payload, metadata)

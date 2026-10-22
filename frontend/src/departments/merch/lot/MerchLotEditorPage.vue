@@ -9,7 +9,7 @@
 		inline-navigation
 	>
 		<MerchLotEditor
-			:key="lotId || 'new'"
+			:key="lotId || `new:${$route.query.duplicate_from || ''}`"
 			:lot-id="lotId"
 		/>
 	</DepartmentPage>

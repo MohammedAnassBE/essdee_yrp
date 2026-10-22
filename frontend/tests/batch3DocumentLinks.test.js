@@ -11,6 +11,7 @@ const require = createRequire(new URL('../package.json', import.meta.url))
 const { parse } = require('@vue/compiler-sfc')
 const { parse: parseScript } = require('@babel/parser')
 const source = path => readFileSync(resolve(`frontend/src/departments/${path}.vue`), 'utf8')
+const debitDuplicateModules = { '../../composables/useDocumentPermissions.js': { useDocumentPermissions: () => Vue.ref(null) }, '../../composables/useDuplicateAction.js': { loadDuplicateValues: async () => null }, '../../components/common/FormView.vue': () => null }
 const modules = { 'vue-router': { useRouter: () => ({ push() {} }) }, '../../utils/linkTarget.js': targets }
 const DocumentLink = loadComponent(resolve('frontend/src/components/common/DocumentLink.vue'), modules)
 const text = node => node.type === 'comment' ? '' : node.text + node.children.map(text).join('')
@@ -130,13 +131,14 @@ test('D8 BulkWorkflowRail keeps row selection cards free of anchors', () => {
 
 
 test('D13 Debits resolves only Link metadata and leaves Data and Check values plain', () => readable(async () => {
- const route = {params:{debitId:'DEBIT/1'}}
+ const route = {params:{debitId:'DEBIT/1'},query:{}}
  const fields = [{fieldname:'work_order',fieldtype:'Link',options:'YRP Work Order'}, {fieldname:'approved_by',fieldtype:'Link',options:'User'}, {fieldname:'amended_from',fieldtype:'Link',options:'YRP Debit'}, {fieldname:'debit_no',fieldtype:'Data'}, {fieldname:'inspection',fieldtype:'Check'}]
  const control = (props,{slots}) => Vue.h('control',props,slots.default?.())
  const component = loadComponent(resolve('frontend/src/departments/accounts/Debits.vue'), {
   ...modules, 'vue-router':{useRoute:()=>route,useRouter:()=>({push(){}})},
   '../../utils/linkTarget.js':targets,
   '../../config/fields/debit.js': {detailGroups:[{fields:fields.map(field=>field.fieldname)}]},
+  ...debitDuplicateModules,
   '../../router/departmentLock.js':{isOutsideLayout:()=>false,getHomePath:()=>'/'},
   '../../api/frappe.js':{getDoc:async()=>({work_order:'WO/1',approved_by:'USER/1',amended_from:'DEBIT/0',debit_no:'Plain',inspection:1}),getMeta:async()=>[{name:'YRP Debit',fields}]},
   ...Object.fromEntries(['../../components/DepartmentPage.vue','../../components/common/ListView.vue','../../components/documents/DocumentStatusBadge.vue','../../components/documents/DocumentErrorDialog.vue','primevue/button','primevue/dialog'].map(path=>[path,control])),
@@ -148,7 +150,7 @@ test('D13 Debits resolves only Link metadata and leaves Data and Check values pl
 }))
 
 test('D13b Debits outside the layout loads only the linked debit and closes to the layout home', () => readable(async () => {
- const route = {params:{debitId:'DEBIT/1'}}
+ const route = {params:{debitId:'DEBIT/1'},query:{}}
  const pushes = []
  const dialog = {}
  const fields = [{fieldname:'debit_no',fieldtype:'Data'}]
@@ -156,6 +158,7 @@ test('D13b Debits outside the layout loads only the linked debit and closes to t
  const component = loadComponent(resolve('frontend/src/departments/accounts/Debits.vue'), {
   ...modules, 'vue-router':{useRoute:()=>route,useRouter:()=>({push:path=>pushes.push(path)})},
   '../../utils/linkTarget.js':targets,
+  ...debitDuplicateModules,
   '../../router/departmentLock.js':{isOutsideLayout:path=>path==='/accounts/debits',getHomePath:()=>'/sales'},
   '../../config/fields/debit.js': {detailGroups:[{fields:['debit_no']}]},
   '../../api/frappe.js':{getDoc:async()=>({debit_no:'Plain'}),getMeta:async()=>[{name:'YRP Debit',fields}]},

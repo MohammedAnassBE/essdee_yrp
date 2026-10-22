@@ -11,6 +11,7 @@ from frappe import _
 from frappe.model import get_permitted_fields
 from frappe.utils import cint, flt, sbool
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
 	fetch_order_item_details,
 	get_items,
@@ -30,6 +31,17 @@ EDITABLE_FIELDS = {
 }
 ROW_IDENTITY_FIELDS = ("name", "attributes", "item_keys", "primary_attribute")
 STATUS_ACTIONS = {"submit", "cancel", "amend"}
+DUPLICATE_FIELDS = (
+	"is_manual_entry",
+	"lot",
+	"item",
+	"production_detail",
+	"maximum_no_of_plys",
+	"maximum_allow_percent",
+	"cutting_location",
+	"work_order",
+	"items",
+)
 
 
 def _parse_json(value, fallback):
@@ -308,9 +320,20 @@ def load_lot_items(lot: str) -> dict:
 
 
 @frappe.whitelist()
-def get_editor(cutting_plan: str | None = None, lot: str | None = None) -> dict:
+def get_editor(
+	cutting_plan: str | None = None, lot: str | None = None, duplicate_from: str | None = None
+) -> dict:
 	with attribute_read_scope():
+		if duplicate_from:
+			return _build_duplicate_editor(duplicate_from)
 		return _build_editor(cutting_plan, lot)
+
+
+def _build_duplicate_editor(duplicate_from: str) -> dict:
+	values = build_duplicate_values(DOCTYPE, duplicate_from)
+	doc = frappe.new_doc(DOCTYPE)
+	doc.update({fieldname: values.get(fieldname) for fieldname in DUPLICATE_FIELDS})
+	return _serialize_editor(doc, _saved_matrix(doc))
 
 
 def _build_editor(cutting_plan: str | None = None, lot: str | None = None) -> dict:

@@ -6,6 +6,7 @@
 				<template #document-actions="{ busy, dirty }">
 					<DocumentPrintButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="busy" />
 					<DocumentDeleteButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="busy || dirty" redirect-to="/cutting/orders" />
+					<DocumentActionStrip :actions="duplicateActions" />
 				</template>
 			</CuttingOrderEditor>
 		</div>
@@ -37,7 +38,7 @@
 					<div class="order-record-actions">
 						<DocumentPrintButton v-if="workspace.permissions?.can_print" doctype="SD YRP Cutting Order" :name="cuttingOrderId" :formats="workspace.print_formats || []" :disabled="workspaceLoading" />
 						<DocumentDeleteButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="workspaceLoading || Boolean(lifecycleBusy)" redirect-to="/cutting/orders" />
-						<CuttingOrderActions v-if="record.name" :doc="record" :data="workspace" @refresh="loadWorkspace" />
+						<CuttingOrderActions v-if="record.name" :doc="record" :data="workspace" :extra-actions="duplicateActions" @refresh="loadWorkspace" />
 						<Button v-if="workspace.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="lifecycleBusy === 'cancel'" @click="changeStatus('cancel')" />
 						<Button v-if="workspace.permissions?.can_amend" label="Amend" icon="pi pi-copy" :loading="lifecycleBusy === 'amend'" @click="changeStatus('amend')" />
 					</div>
@@ -72,9 +73,11 @@ import { useRoute, useRouter } from "vue-router"
 import { changeCuttingOrderStatus, getCuttingOrderEditor, getCuttingOrderWorkspace } from "../api/cuttingOrder.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../components/navigation/InlinePageNavigation.vue"
+import { useDuplicateAction } from "../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import CuttingOrderActions from "./cutting/order/CuttingOrderActions.vue"
@@ -102,6 +105,14 @@ const showDraftEditor = computed(() => Boolean(editorProbe.value?.record?.docsta
 const record = computed(() => workspace.value.record || editorProbe.value?.record || {})
 const workspaceReady = computed(() => Boolean(workspace.value.record?.name))
 const showSidebar = computed(() => Boolean(workspaceLoading.value || workspace.value.permissions?.can_read_marker || workspace.value.permissions?.can_read_laysheet))
+const duplicateAction = useDuplicateAction({
+	canCreate: () => (workspace.value.permissions || editorProbe.value?.permissions)?.can_create,
+	newRouteName: "cutting-order-new",
+	name: () => record.value.name,
+	busy: () => workspaceLoading.value || Boolean(lifecycleBusy.value),
+	router,
+})
+const duplicateActions = computed(() => duplicateAction.value ? [duplicateAction.value] : [])
 
 async function initialise() {
 	const sequence = ++initialiseSequence

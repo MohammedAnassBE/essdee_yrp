@@ -11,8 +11,8 @@ export function getInspectionWorkspace(name) {
 	return callMethod(`${WORKSPACE}.get_inspection_workspace`, { name })
 }
 
-export function getNewInspectionDefaults({ against_id, grn, amend_from } = {}) {
-	return callMethod(`${WORKSPACE}.get_new_inspection_defaults`, { against_id, grn, amend_from })
+export function getNewInspectionDefaults({ against_id, grn, amend_from, duplicate_from } = {}) {
+	return callMethod(`${WORKSPACE}.get_new_inspection_defaults`, { against_id, grn, amend_from, duplicate_from })
 }
 
 export function saveInspection(values, { name, expectedModified } = {}) {

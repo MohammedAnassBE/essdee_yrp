@@ -33,6 +33,33 @@ DROPPED_FIELDS = {
 SAVEPOINT = "merch_ipd_copy"
 
 
+def detach_bom_mappings(doc):
+	"""Clear copied BOM mappings so a duplicated IPD can insert; re-link with attach_bom_mapping_copies."""
+	detached = [
+		(row, row.attribute_mapping)
+		for row in doc.get("item_bom") or []
+		if row.based_on_attribute_mapping and row.attribute_mapping
+	]
+	for row, _mapping in detached:
+		row.attribute_mapping = None
+		row.based_on_attribute_mapping = 0
+	return detached
+
+
+def attach_bom_mapping_copies(doc, detached):
+	"""Give each detached BOM row an owned copy of its source mapping, as duplicate_ipd does."""
+	for row, mapping in detached:
+		copy = frappe.copy_doc(frappe.get_doc(BOM_MAPPING, mapping))
+		if copy.meta.get_field("item_production_detail"):
+			copy.item_production_detail = doc.name
+		copy.flags.ignore_validate = True
+		copy.insert(ignore_permissions=True)
+		row.based_on_attribute_mapping = 1
+		row.attribute_mapping = copy.name
+	if detached:
+		doc.save(ignore_permissions=True)
+
+
 def load_source(source):
 	doc = frappe.get_doc(registry.DOCTYPE, source)
 	doc.check_permission("read")

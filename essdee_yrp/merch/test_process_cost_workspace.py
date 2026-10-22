@@ -230,6 +230,21 @@ class TestProcessCostWorkspace(TestCase):
 			with self.assertRaisesRegex(frappe.PermissionError, "not editable"):
 				workspace.get_process_cost_editor("ZZ TEST PC")
 
+	def test_editor_prefills_unsaved_duplicate(self):
+		copied = {"doctype": workspace.DOCTYPE, "docstatus": 0, "lot": "ZZ TEST Lot", "process_name": "ZZ TEST Process",
+			"supplier": "ZZ TEST Supplier", "from_date": None, "approved_by": None,
+			"process_cost_values": [{"doctype": "YRP Process Cost Value", "min_order_qty": 10, "price": 2.5}]}
+		context = {"item": "ZZ TEST Item", "uom": "Nos"}
+		with patch(f"{MODULE}.build_duplicate_values", return_value=copied) as build, \
+			patch(f"{MODULE}.get_process_cost_grid", return_value=context), patch.object(Document, "insert") as insert:
+			payload = workspace.get_process_cost_editor(duplicate_from="ZZ TEST PC")
+		build.assert_called_once_with(workspace.DOCTYPE, "ZZ TEST PC")
+		insert.assert_not_called()
+		self.assertIsNone(payload["modified"])
+		self.assertEqual((payload["values"]["lot"], payload["values"]["supplier"]), ("ZZ TEST Lot", "ZZ TEST Supplier"))
+		self.assertFalse(payload["values"]["approved_by"])
+		self.assertEqual([(row["min_order_qty"], row["price"]) for row in payload["values"]["process_cost_values"]], [(10, 2.5)])
+
 	def test_required_fields_use_desk_labels(self):
 		for fieldname, label in (("lot", "Lot"), ("process_name", "Process"), ("supplier", "Supplier"), ("tax_slab", "Tax Slab"), ("from_date", "From Date")):
 			values = frappe._dict(dict.fromkeys(workspace.REQUIRED_FIELDS, "present"))

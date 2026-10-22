@@ -16,8 +16,8 @@ export function getBillTrackingWorkspace(name) {
 	return callMethod(`${WORKSPACE_METHOD}.get_bill_tracking_workspace`, { name })
 }
 
-export function getBillTrackingEditor(name = null) {
-	return callMethod(`${WORKSPACE_METHOD}.get_bill_tracking_editor`, { name })
+export function getBillTrackingEditor(name = null, duplicateFrom = null) {
+	return callMethod(`${WORKSPACE_METHOD}.get_bill_tracking_editor`, { name, duplicate_from: duplicateFrom || undefined })
 }
 
 export function saveBillTracking(values, options = {}) {

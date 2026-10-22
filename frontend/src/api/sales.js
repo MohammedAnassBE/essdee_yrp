@@ -21,8 +21,8 @@ export function getLotOcrDetails(productionOrder, lot) {
 	})
 }
 
-export function getProductionOrderEditor(name = null, source = null) {
-	return callMethod(`${METHOD}.get_production_order_editor`, { name, source })
+export function getProductionOrderEditor(name = null, source = null, duplicateFrom = null) {
+	return callMethod(`${METHOD}.get_production_order_editor`, { name, source, duplicate_from: duplicateFrom || undefined })
 }
 
 export function saveProductionOrder(values, options = {}) {

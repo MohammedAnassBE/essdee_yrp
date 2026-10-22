@@ -57,6 +57,7 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.vue"
 import LotDocumentsRail from "../../purchase/lot/LotDocumentsRail.vue"
+import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
 import { MERCH_ROUTES } from "../merchViews.js"
 import ProcessCostGrid from "./ProcessCostGrid.vue"
 import { PROCESS_COST_DOCUMENT_SECTIONS, PROCESS_COST_LIST_PATH, PROCESS_COST_SECTIONS, PROCESS_COST_TABS, processCostActions, processCostActionMessage, processCostPath } from "./processCostViews.js"
@@ -77,11 +78,21 @@ const activeTab = computed({
 	get: () => PROCESS_COST_TABS.some((tab) => tab.key === route.query.tab) ? route.query.tab : "details",
 	set: (tab) => router.replace({ query: { ...route.query, tab }, state: preserveListNavigationState() }),
 })
-const actions = computed(() => processCostActions(workspace.value, {
-	busy: acting.value, execute: (action) => { pending.value = action },
-	edit: () => router.push(`${processCostPath(props.processCostId)}/edit`),
-	remove: () => { pending.value = { action: "Delete", label: "Delete" } },
-}))
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: MERCH_ROUTES.processCostNew,
+	name: () => workspace.value.record?.name,
+	busy: acting,
+	router,
+})
+const actions = computed(() => [
+	...processCostActions(workspace.value, {
+		busy: acting.value, execute: (action) => { pending.value = action },
+		edit: () => router.push(`${processCostPath(props.processCostId)}/edit`),
+		remove: () => { pending.value = { action: "Delete", label: "Delete" } },
+	}),
+	...(duplicateAction.value ? [duplicateAction.value] : []),
+])
 async function load() {
 	const sequence = ++loadSequence
 	loading.value = true

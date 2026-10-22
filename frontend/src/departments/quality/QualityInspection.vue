@@ -81,6 +81,7 @@ import InspectionDebitDetails from "./components/InspectionDebitDetails.vue"
 import InspectionDebitDialog from "./components/InspectionDebitDialog.vue"
 import InspectionResultDialog from "./components/InspectionResultDialog.vue"
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
+import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import InspectionApprovalSheet from "./components/InspectionApprovalSheet.vue"
@@ -114,6 +115,13 @@ const activeTab = computed({
 })
 let active = true
 let loadSequence = 0
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: "quality-inspection-new",
+	name: () => record.value.name,
+	busy: () => Boolean(acting.value),
+	router,
+})
 const actions = computed(() => {
 	const items = inspectionActionItems(workspace.value.actions, {
 		submit,
@@ -125,7 +133,8 @@ const actions = computed(() => {
 		cancel: () => { cancelVisible.value = true },
 		delete: () => deleteControl.value?.open(),
 	})
-	return items.map((action) => ({ ...action, disabled: Boolean(acting.value) || Boolean(action.disabled) }))
+	const visible = items.map((action) => ({ ...action, disabled: Boolean(acting.value) || Boolean(action.disabled) }))
+	return duplicateAction.value ? [...visible, duplicateAction.value] : visible
 })
 
 async function load() {

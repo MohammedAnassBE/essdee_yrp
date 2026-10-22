@@ -172,7 +172,8 @@ async function load() {
 	loadError.value = ""
 	actionError.value = ""
 	try {
-		const payload = await getItemEditor(currentName.value || null)
+		const duplicateFrom = currentName.value ? null : route.query.duplicate_from || null
+		const payload = await getItemEditor(currentName.value || null, duplicateFrom)
 		if (sequence === loadSequence) applyEditor(payload)
 	} catch (reason) {
 		if (sequence === loadSequence) loadError.value = reason?.message || "Unable to load the Item editor."
@@ -248,7 +249,7 @@ function cancel() {
 	router.push(backTo.value)
 }
 
-watch(() => [currentName.value, route.name], load, { immediate: true })
+watch(() => [currentName.value, route.name, route.query.duplicate_from], load, { immediate: true })
 watch(() => form.stock_uom, (stockUom, previousStockUom) => {
 	form.uoms = stockUomRows(form.uoms, stockUom, previousStockUom)
 	if (!isEdit.value && !form.uoms.some((row) => row.uom === previousStockUom)) {

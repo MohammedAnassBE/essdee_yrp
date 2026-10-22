@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as purchaseActions from "../src/departments/purchase/lot/lotPurchaseActions.js"
+import * as duplicateAction from "../src/composables/useDuplicateAction.js"
 import * as merchViews from "../src/departments/merch/lot/merchLotViews.js"
 
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
@@ -31,7 +32,8 @@ function mountMerchLot(workspace) {
 		"../../purchase/lot/LotPurchaseOrderDialog.vue": stub("po-dialog"),
 		"../../purchase/lot/lotPurchaseActions.js": purchaseActions,
 		"../../sales/LotOcrTable.vue": stub("ocr"),
-		"../merchViews.js": { MERCH_ROUTES: { lotEdit: "merch-lot-edit" } },
+		"../merchViews.js": { MERCH_ROUTES: { lotEdit: "merch-lot-edit", lotNew: "merch-lot-new" } },
+		"../../../composables/useDuplicateAction.js": duplicateAction,
 		"./merchLotViews.js": merchViews,
 		"./MerchClothProgramDialog.vue": stub("cloth"),
 		"./MerchLotBomTab.vue": stub("bom"),

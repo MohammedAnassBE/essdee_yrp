@@ -352,3 +352,36 @@ class TestCuttingPlanWebEditor(TestCase):
 		self.assertEqual(amended.docstatus, 0)
 		amended.insert.assert_called_once_with()
 		self.assertEqual(payload["record"]["name"], "CP-002")
+
+	def test_duplicate_editor_prefills_unsaved_plan_from_source(self):
+		doc = frappe.new_doc("SD YRP Cutting Plan")
+		values = {
+			"doctype": "SD YRP Cutting Plan",
+			"docstatus": 0,
+			"lot": "LOT-001",
+			"item": "STYLE-001",
+			"production_detail": "IPD-001",
+			"maximum_no_of_plys": 90,
+			"maximum_allow_percent": 7,
+			"cutting_location": "Machine Cutting",
+			"cp_status": "Completed",
+			"items": [],
+		}
+		with (
+			patch("essdee_yrp.cutting.plan_editor.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.cutting.plan_editor.frappe.new_doc", return_value=doc),
+			patch("essdee_yrp.cutting.plan_editor.build_duplicate_values", return_value=values) as build,
+			patch("essdee_yrp.cutting.plan_editor._saved_matrix", return_value=matrix_fixture()) as matrix,
+		):
+			payload = get_editor(duplicate_from="CP-SOURCE")
+
+		build.assert_called_once_with("SD YRP Cutting Plan", "CP-SOURCE")
+		matrix.assert_called_once_with(doc)
+		record = payload["record"]
+		self.assertFalse(record["name"])
+		self.assertEqual(record["status"], "Draft")
+		self.assertEqual(record["lot"], "LOT-001")
+		self.assertEqual(record["maximum_no_of_plys"], 90)
+		self.assertEqual(payload["matrix"]["groups"][0]["items"][0]["_row_key"], "g0:r0")
+		self.assertFalse(payload["permissions"]["can_write"])
+		self.assertTrue(doc.is_new())

@@ -242,6 +242,34 @@ class TestIpdWorkspace(IntegrationTestCase):
 			with self.assertRaisesRegex(frappe.ValidationError, "Item is fixed"):
 				workspace.save_ipd({"item": item}, doc.name, str(doc.modified))
 
+	def test_duplicate_opens_unsaved_copy_and_saves_owned_mappings(self):
+		self.as_user(WRITER)
+		source = frappe.get_doc(DOCTYPE, EDITABLE)
+		count = frappe.db.count(DOCTYPE)
+		draft_payload = workspace.get_ipd_editor(duplicate_from=EDITABLE)
+		self.assertIsNone(draft_payload["record"]["name"])
+		self.assertEqual(draft_payload["values"]["item"], source.item)
+		self.assertEqual(draft_payload["values"]["approval_status"], "Not Approved")
+		self.assertEqual(frappe.db.count(DOCTYPE), count)
+		with rolled_back("duplicate_draft"):
+			payload = workspace.save_ipd({"tech_pack_version": "QA-DUP"}, duplicate_from=EDITABLE)
+			doc = frappe.get_doc(DOCTYPE, payload["record"]["name"])
+			self.assertNotEqual(doc.name, EDITABLE)
+			self.assertEqual(doc.tech_pack_version, "QA-DUP")
+			self.assertEqual(doc.item, source.item)
+			for table in ("item_attributes", "packing_attribute_details", "stiching_item_details", "item_bom"):
+				with self.subTest(table=table):
+					self.assertEqual(len(doc.get(table)), len(source.get(table)))
+			self.assertFalse(
+				{row.mapping for row in doc.item_attributes if row.mapping}
+				& {row.mapping for row in source.item_attributes if row.mapping}
+			)
+			source_bom = {row.attribute_mapping for row in source.item_bom if row.attribute_mapping}
+			copied_bom = {row.attribute_mapping for row in doc.item_bom if row.attribute_mapping}
+			self.assertEqual(len(copied_bom), len(source_bom))
+			self.assertFalse(copied_bom & source_bom)
+			self.assertEqual(frappe.db.get_value(DOCTYPE, EDITABLE, "modified"), source.modified)
+
 	def test_save_attribute_values(self):
 		self.as_user(WRITER)
 		entry = colour_context(EDITABLE)

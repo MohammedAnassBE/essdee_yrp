@@ -266,6 +266,10 @@ export function cancelDoc(doctype, name, modified = "") {
 	return callMethod("essdee_yrp.api.lifecycle.cancel_document", { doctype, name, modified: modified || undefined })
 }
 
+export function getDuplicateValues(doctype, name) {
+	return callMethod("essdee_yrp.api.duplicate.get_duplicate_values", { doctype, name })
+}
+
 export async function getList(
 	doctype,
 	{ fields = ["name"], filters = [], orderBy = "modified desc", start = 0, pageLength = 20, groupBy } = {},

@@ -16,6 +16,7 @@ import * as lotEditor from '../src/departments/purchase/lot/lotEditor.js'
 import * as program from '../src/engine/lotClothProgram.js'
 import * as costViews from '../src/departments/merch/process-cost/processCostViews.js'
 import * as priceViews from '../src/departments/purchase/purchaseViews.js'
+import * as duplicateAction from '../src/composables/useDuplicateAction.js'
 import * as lotOcrView from '../src/departments/sales/lotOcrView.js'
 
 const nodes = (root, type) => findNodes(root, node => node.type === type)
@@ -37,6 +38,7 @@ const defaults = {
  '../../purchase/lot/lotViews.js': lotViews, '../../../engine/lotClothProgram.js': program,
  './processCostViews.js': costViews, './purchaseViews.js': priceViews, './lotOcrView.js': lotOcrView,
  '../ipdLinks.js': ipdLinks,
+ '../../composables/useDuplicateAction.js': duplicateAction, '../../../composables/useDuplicateAction.js': duplicateAction,
  './LinkField.vue': control, './FormField.vue': formControl,
  '../../../../components/common/FormField.vue': formControl,
  '../../../components/common/FormField.vue': formControl,

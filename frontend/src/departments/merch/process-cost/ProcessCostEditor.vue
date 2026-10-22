@@ -120,7 +120,8 @@ async function load() {
 	lookupErrors.value = {}
 	gridErrors.value = {}
 	try {
-		const result = await getProcessCostEditor(props.processCostId || null, route.query.lot || null)
+		const duplicateFrom = props.processCostId ? null : route.query.duplicate_from || null
+		const result = await getProcessCostEditor(props.processCostId || null, route.query.lot || null, duplicateFrom)
 		if (sequence !== requestSequence) return
 		editor.value = result
 		context.value = result.context
@@ -129,7 +130,7 @@ async function load() {
 		form.process_cost_values = mergeProcessCostRows(result.context.attribute_values, result.values.process_cost_values, form.attribute)
 		gridVersion.value++
 		fieldResetVersion.value++
-		cleanSignature.value = JSON.stringify(form)
+		cleanSignature.value = duplicateFrom ? "" : JSON.stringify(form)
 	} catch (reason) { if (sequence === requestSequence) loadError.value = reason.message }
 	finally { if (sequence === requestSequence) loading.value = false }
 }
@@ -237,7 +238,7 @@ onBeforeRouteLeave(() => allowNavigation ? true : guardNavigation())
 onBeforeRouteUpdate(guardNavigation)
 window.addEventListener("beforeunload", beforeUnload)
 onBeforeUnmount(() => { ++requestSequence; ++contextSequence; ++supplierSequence; window.removeEventListener("beforeunload", beforeUnload); finishNavigation(false) })
-watch(() => [props.processCostId, route.query.lot], load, { immediate: true })
+watch(() => [props.processCostId, route.query.lot, route.query.duplicate_from], load, { immediate: true })
 </script>
 
 <style scoped>

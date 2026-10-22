@@ -10,6 +10,7 @@ from frappe import _
 from frappe.utils import cint, flt, sbool
 from yrp.utils import update_if_string_instance
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order import (
 	get_cutting_order_detail_data,
 	get_cutting_order_planned_vs_actual,
@@ -27,6 +28,15 @@ EDITABLE_FIELDS = {
 	"item_details",
 }
 STATUS_ACTIONS = {"submit", "cancel", "amend"}
+DUPLICATE_FIELDS = (
+	"cutting_order_detail",
+	"cutting_location",
+	"maximum_no_of_plys",
+	"maximum_allow_percent",
+	"item",
+	"is_set_item",
+	"items_json",
+)
 
 
 def _parse_json(value, fallback):
@@ -251,23 +261,26 @@ def _record(doc):
 
 
 @frappe.whitelist()
-def get_order_editor(cutting_order: str | None = None, cutting_order_detail: str | None = None):
+def get_order_editor(
+	cutting_order: str | None = None,
+	cutting_order_detail: str | None = None,
+	duplicate_from: str | None = None,
+):
 	if cutting_order:
 		doc = frappe.get_doc(DOCTYPE, cutting_order)
 		frappe.has_permission(DOCTYPE, ptype="read", doc=doc, throw=True)
-		saved_detail = doc.cutting_order_detail
-		cutting_order_detail = cutting_order_detail or saved_detail
 	else:
 		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
-		doc = frappe.new_doc(DOCTYPE)
-		saved_detail = None
+		doc = new_order_doc(duplicate_from)
+	saved_detail = doc.cutting_order_detail
+	cutting_order_detail = cutting_order_detail or saved_detail
 
 	detail = None
 	matrix = []
 	if cutting_order_detail:
 		detail = get_cutting_order_detail_data(cutting_order_detail)
 		matrix = _build_detail_matrix(detail)
-		if cutting_order and cutting_order_detail == saved_detail:
+		if saved_detail and cutting_order_detail == saved_detail:
 			matrix = _overlay_native_quantities(
 				matrix,
 				_parse_json(_doc_value(doc, "items_json", "{}"), {}),
@@ -279,6 +292,15 @@ def get_order_editor(cutting_order: str | None = None, cutting_order_detail: str
 		"permissions": _permission_flags(doc if cutting_order else None),
 		"options": {"cutting_locations": ["Machine Cutting", "Manual Cutting"]},
 	}
+
+
+def new_order_doc(duplicate_from: str | None = None):
+	"""Unsaved Cutting Order, prefilled from ``duplicate_from`` when given."""
+	doc = frappe.new_doc(DOCTYPE)
+	if duplicate_from:
+		values = build_duplicate_values(DOCTYPE, duplicate_from)
+		doc.update({fieldname: values.get(fieldname) for fieldname in DUPLICATE_FIELDS})
+	return doc
 
 
 @frappe.whitelist()

@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.product_development import lotwise_costing
 from essdee_yrp.product_development.web_workspace import (
 	LOTWISE,
@@ -93,14 +94,18 @@ def workspace_payload(doc) -> dict:
 
 
 @frappe.whitelist()
-def get_lotwise_workspace(name: str | None = None, product: str | None = None) -> dict:
+def get_lotwise_workspace(
+	name: str | None = None, product: str | None = None, duplicate_from: str | None = None
+) -> dict:
 	if name:
 		doc = frappe.get_doc(LOTWISE, name)
 		doc.check_permission("read")
 		return workspace_payload(doc)
 	frappe.has_permission(LOTWISE, "create", throw=True)
 	doc = frappe.new_doc(LOTWISE)
-	if product:
+	if duplicate_from:
+		doc.update(build_duplicate_values(LOTWISE, duplicate_from))
+	elif product:
 		doc.product = product
 		lotwise_costing.load_product_sizes(doc)
 	return workspace_payload(doc)

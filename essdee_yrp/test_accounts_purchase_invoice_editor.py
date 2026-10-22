@@ -726,6 +726,29 @@ class TestPurchaseInvoiceEditor(TestCase):
 		self.assertEqual(payload["values"]["bill_tracking"], bill.name)
 		self.assertEqual(payload["locked_fields"], ["supplier", "bill_no", "bill_date"])
 
+	def test_editor_duplicates_unsaved_values_without_the_bill_tracking_link(self):
+		from essdee_yrp.accounts.purchase_invoice_editor import get_purchase_invoice_editor
+
+		doc = FakeInvoice(name=None, bill_no="BILL-9", bill_tracking="BT-00001", remarks="copied")
+		values = {"doctype": "YRP Purchase Invoice", "bill_no": "BILL-9"}
+		with (
+			patch(f"{MODULE}.frappe.has_permission", return_value=True),
+			patch(f"{MODULE}.build_duplicate_values", return_value=values) as build,
+			patch(f"{MODULE}.frappe.get_doc", return_value=doc) as get_doc,
+			patch(f"{MODULE}.frappe.new_doc") as new_doc,
+		):
+			payload = get_purchase_invoice_editor(duplicate_from="YRP-MPI-2026-00001")
+
+		build.assert_called_once_with("YRP Purchase Invoice", "YRP-MPI-2026-00001")
+		get_doc.assert_called_once_with(values)
+		new_doc.assert_not_called()
+		self.assertEqual(payload["values"]["bill_no"], "BILL-9")
+		self.assertEqual(payload["values"]["remarks"], "copied")
+		self.assertIsNone(payload["values"]["bill_tracking"])
+		self.assertEqual(payload["locked_fields"], [])
+		self.assertIsNone(payload["modified"])
+		self.assertEqual((doc.inserted, doc.saved), (0, 0))
+
 	def test_editor_masks_supplier_and_duplicate_billing_supplier(self):
 		from essdee_yrp.accounts.purchase_invoice_editor import get_purchase_invoice_editor
 

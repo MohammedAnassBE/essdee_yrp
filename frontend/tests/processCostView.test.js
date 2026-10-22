@@ -5,6 +5,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import * as views from "../src/departments/merch/process-cost/processCostViews.js"
 import * as lotViews from "../src/departments/purchase/lot/lotViews.js"
 import { MERCH_ROUTES } from "../src/departments/merch/merchViews.js"
+import * as duplicateAction from "../src/composables/useDuplicateAction.js"
 
 const fieldnames = ["lot", "process_name", "item", "uom", "is_rework", "supplier", "supplier_name", "tax_slab", "from_date", "to_date", "is_expired", "approved_by", "depends_on_attribute", "attribute"]
 const nodes = (root, type) => findNodes(root, (node) => node.type === type)
@@ -91,6 +92,7 @@ function mountPage(payload, query = {}, pageProps = { processCostId: "PC" }) {
 		"./ProcessCostGrid.vue": capture("values-grid"),
 		"./processCostViews.js": views,
 		"../merchViews.js": { MERCH_ROUTES },
+		"../../../composables/useDuplicateAction.js": duplicateAction,
 		...Object.fromEntries(["DocumentOverview", "DocumentStatusBadge", "DocumentActionStrip", "DocumentConfirmationDialog", "DocumentErrorDialog"].map((name) => [`../../../components/documents/${name}.vue`, capture(name)])),
 		...Object.fromEntries(["tab", "tablist", "tabpanel", "tabpanels", "tabs", "message"].map((name) => [`primevue/${name}`, (props, { slots }) => Vue.h(name, props, slots.default?.())])),
 	}

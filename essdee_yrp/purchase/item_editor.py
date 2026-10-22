@@ -14,6 +14,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import (
 )
 from yrp.yrp_retail.pricing import lock_pricing_policy
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.item_validations import validate as validate_cloth_item
 from essdee_yrp.purchase.item_dependent_attribute import (
 	apply_dependent_attribute,
@@ -335,14 +336,27 @@ def _reject_variant(doc) -> None:
 
 
 @frappe.whitelist()
-def get_item_editor(name: str | None = None) -> dict:
+def get_item_editor(name: str | None = None, duplicate_from: str | None = None) -> dict:
 	if name:
 		doc = frappe.get_doc(ITEM_DOCTYPE, name)
 		frappe.has_permission(ITEM_DOCTYPE, ptype="read", doc=doc, throw=True)
 		_reject_variant(doc)
 		return _editor_payload(doc)
 	frappe.has_permission(ITEM_DOCTYPE, ptype="create", throw=True)
+	if duplicate_from:
+		return get_duplicate_item_editor(duplicate_from)
 	return _editor_payload(frappe.new_doc(ITEM_DOCTYPE))
+
+
+def get_duplicate_item_editor(source: str) -> dict:
+	"""Unsaved new-Item editor prefilled from `source`; the Item name is left for the user."""
+	_reject_variant(frappe.get_doc(ITEM_DOCTYPE, source))
+	values = build_duplicate_values(ITEM_DOCTYPE, source)
+	doc = frappe.new_doc(ITEM_DOCTYPE)
+	doc.update({fieldname: value for fieldname, value in values.items() if value is not None})
+	payload = _editor_payload(doc)
+	payload["values"].update(name=None, stock_uom=doc.stock_uom)
+	return payload
 
 
 @frappe.whitelist()

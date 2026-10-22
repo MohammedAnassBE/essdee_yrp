@@ -97,6 +97,7 @@ import DepartmentPage from "../../components/DepartmentPage.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"
@@ -112,6 +113,7 @@ const props = defineProps({
 	backLabel: { type: String, default: "Purchase Invoices" },
 	listRouteName: { type: String, default: "accounts-purchase-invoices" },
 	editRouteName: { type: String, default: "accounts-purchase-invoice-edit" },
+	newRouteName: { type: String, default: "" },
 })
 const route = useRoute()
 const router = useRouter()
@@ -142,11 +144,18 @@ const handlers = {
 	submit_erp_bill: () => requestConfirmation("submit_erp_bill"),
 	fetch_expense_head: openExpenseHeadEditor,
 }
-const actions = computed(() => purchaseInvoiceActionItems(workspace.value.capabilities, handlers).map((action) => ({
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: () => props.newRouteName || props.editRouteName.replace(/-edit$/, "-new"),
+	name: () => workspace.value.record?.name,
+	busy: () => Boolean(acting.value),
+	router,
+})
+const actions = computed(() => [...purchaseInvoiceActionItems(workspace.value.capabilities, handlers).map((action) => ({
 	...action,
 	disabled: Boolean(acting.value),
 	loading: acting.value === action.key,
-})))
+})), ...(duplicateAction.value ? [duplicateAction.value] : [])])
 const hasErpInvoice = computed(() => Boolean(
 	workspace.value.record?.erp_inv_name
 	|| workspace.value.details?.find((field) => field.fieldname === "erp_inv_name")?.value,

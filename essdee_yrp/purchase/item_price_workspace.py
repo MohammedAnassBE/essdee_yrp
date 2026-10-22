@@ -17,6 +17,7 @@ from yrp.attribute_value_identity import attribute_value_name
 from yrp.attribute_values import MASTER, get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import get_global_attribute_values
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.fabric_store.documents.common import get_effective_fields
 from essdee_yrp.web_common import assert_expected_modified, parse_mapping, permission_flags
 
@@ -482,7 +483,9 @@ def _editor_payload(doc, *, existing: bool, item=None) -> dict:
 
 
 @frappe.whitelist()
-def get_item_price_editor(name: str | None = None, item: str | None = None) -> dict:
+def get_item_price_editor(
+	name: str | None = None, item: str | None = None, duplicate_from: str | None = None
+) -> dict:
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		frappe.has_permission(DOCTYPE, ptype="write", doc=doc, throw=True)
@@ -492,6 +495,10 @@ def get_item_price_editor(name: str | None = None, item: str | None = None) -> d
 		return _editor_payload(doc, existing=True, item=item_doc)
 	frappe.has_permission(DOCTYPE, ptype="create", throw=True)
 	doc = frappe.new_doc(DOCTYPE)
+	if duplicate_from:
+		values = build_duplicate_values(DOCTYPE, duplicate_from)
+		doc.update({fieldname: value for fieldname, value in values.items() if value is not None})
+		item = doc.item_name
 	doc.item_name = item
 	item_doc = _item_for_editor(item)
 	if item_doc:

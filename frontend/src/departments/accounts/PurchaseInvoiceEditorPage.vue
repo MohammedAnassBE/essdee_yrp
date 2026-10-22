@@ -151,6 +151,7 @@ const backTo = computed(() => currentName.value
 	: props.basePath)
 const backLabel = computed(() => currentName.value ? "Purchase Invoice" : "Purchase Invoices")
 const billTracking = computed(() => queryValue(route.query.bill_tracking))
+const duplicateFrom = computed(() => queryValue(route.query.duplicate_from))
 const shouldFetchExpenseHeads = computed(() => queryValue(route.query.fetchExpenseHead) === "1")
 const requestIdentity = computed(() => ({ name: currentName.value, route: route.fullPath }))
 const signature = computed(() => JSON.stringify({ values: form, grns: grns.value, items: items.value }))
@@ -180,7 +181,7 @@ async function load() {
 	const request = beginRequest("load")
 	startLoad()
 	try {
-		const payload = await getPurchaseInvoiceEditor(request.name || null, billTracking.value || null) || {}
+		const payload = await getPurchaseInvoiceEditor(request.name || null, billTracking.value || null, request.name ? null : duplicateFrom.value || null) || {}
 		if (!isCurrentRequest(request)) return
 		applyEditor(payload)
 		cleanSignature.value = signature.value

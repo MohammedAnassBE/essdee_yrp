@@ -48,6 +48,7 @@ export function useIpdEditor(initialName) {
 	const route = useRoute()
 	const router = useRouter()
 	const toast = useToast()
+	const duplicateFrom = initialName ? null : route.query.duplicate_from || null
 	const payload = shallowRef(null)
 	const draft = reactive({})
 	const cleanValues = shallowRef({})
@@ -129,7 +130,7 @@ export function useIpdEditor(initialName) {
 		actionError.value = ""
 		checks.value = null
 		try {
-			const result = await getIpdEditor(target || null)
+			const result = await getIpdEditor(target || null, target ? null : duplicateFrom)
 			if (!isCurrent(sequence, loadSequence)) return
 			if (redirectIfReadOnly(result)) return
 			applyPayload(result)
@@ -268,7 +269,7 @@ export function useIpdEditor(initialName) {
 	}
 	async function createDraft() {
 		if (!isNew.value || acting.value || !draft.item || hasInvalidCells()) return
-		const created = await persist("save", () => saveIpd(patch(), {}))
+		const created = await persist("save", () => saveIpd(patch(), { duplicateFrom }))
 		if (!created) return
 		navigatingInternally.value = true
 		try {

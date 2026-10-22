@@ -110,6 +110,7 @@ const props = defineProps({
 	name: { type: String, default: "" },
 	initialPayload: { type: Object, default: null },
 	initialSource: { type: Object, default: () => ({}) },
+	duplicateFrom: { type: String, default: "" },
 })
 const emit = defineEmits(["saved", "cancel", "loaded"])
 const form = reactive({ is_manual_entry: 0, lot: "", item: "", production_detail: "", maximum_no_of_plys: null, maximum_allow_percent: null, cutting_location: "", work_order: "" })
@@ -178,7 +179,7 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
-		const payload = clone(props.initialPayload || await getCuttingPlanEditor(props.name, props.name ? "" : props.initialSource.lot || ""))
+		const payload = clone(props.initialPayload || await getCuttingPlanEditor(props.name, props.name ? "" : props.initialSource.lot || "", props.duplicateFrom))
 		if (!props.name && props.initialSource.work_order && payload?.fields?.can_edit_work_order) {
 			payload.record = { ...(payload.record || {}), work_order: props.initialSource.work_order }
 		}
@@ -290,7 +291,7 @@ onMounted(() => {
 	load()
 })
 onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
-watch(() => props.name, () => load())
+watch(() => [props.name, props.duplicateFrom], () => load())
 </script>
 
 <style scoped>

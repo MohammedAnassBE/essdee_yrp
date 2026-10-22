@@ -178,6 +178,32 @@ class TestSalesWebWorkspace(TestCase):
 				self.assertEqual(doc.inserted, 0)
 				self.assertEqual(doc.saved, 0)
 
+	def test_editor_duplicates_header_and_source_matrix_without_inserting(self):
+		from essdee_yrp.test_sales_production_order_commands import FakeEditableProductionOrder
+
+		workspace = self._workspace()
+		doc = FakeEditableProductionOrder(name=None, item="ZZ TEST Template", comments="copied", status="Open")
+		values = {"doctype": "YRP Production Order", "item": "ZZ TEST Template"}
+		with (
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(workspace, "build_duplicate_values", return_value=values) as build,
+			patch.object(frappe, "get_doc", return_value=doc) as get_doc,
+			patch.object(frappe, "new_doc") as new_doc,
+			patch.object(frappe.db, "get_value", return_value=frappe._dict(has_variants=1, variant_of=None, disabled=0)),
+			patch.object(workspace.workflow, "get_order_editor_context", return_value={"items": {"M": {"qty": 5}}}) as matrix,
+		):
+			payload = workspace.get_production_order_editor(duplicate_from="PPO-0007")
+
+		build.assert_called_once_with("YRP Production Order", "PPO-0007")
+		get_doc.assert_called_once_with(values)
+		new_doc.assert_not_called()
+		matrix.assert_called_once_with(item="ZZ TEST Template", production_order="PPO-0007")
+		self.assertEqual(payload["record"], {"name": "", "docstatus": 0})
+		self.assertIsNone(payload["modified"])
+		self.assertEqual({field["fieldname"]: field["value"] for field in payload["fields"]}["comments"], "copied")
+		self.assertEqual(payload["matrix"], {"items": {"M": {"qty": 5}}})
+		self.assertEqual((doc.inserted, doc.saved), (0, 0))
+
 	def test_save_rejects_variant_in_matrix_even_with_valid_header_item(self):
 		from essdee_yrp.test_sales_production_order_commands import FakeEditableProductionOrder
 

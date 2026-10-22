@@ -254,6 +254,29 @@ class TestPurchaseItemEditor(TestCase):
 		variant = get_or_create_variant(doc.name, {self.colour: "Red", self.size: "Small"})
 		self.assertEqual(frappe.db.get_value("Item", variant, "variant_of"), doc.name)
 
+	def test_duplicate_editor_prefills_unsaved_copy_without_name(self):
+		from essdee_yrp.purchase.item_editor import get_item_editor
+
+		values = self._values(
+			attributes=[self._attribute_row(self.colour, "Red", "Blue")],
+			primary_attribute=self.colour,
+		)
+		source = self._create_as("item_manager", values)["name"]
+		count = frappe.db.count("Item")
+		payload = get_item_editor(duplicate_from=source)
+
+		self.assertIsNone(payload["values"]["name"])
+		self.assertIsNone(payload["modified"])
+		self.assertEqual(payload["values"]["item_group"], self.item_group)
+		self.assertEqual(payload["values"]["stock_uom"], self.uom)
+		self.assertEqual(payload["values"]["primary_attribute"], self.colour)
+		self.assertEqual(
+			[[value["label"] for value in row["values"]] for row in payload["values"]["attributes"]],
+			[["Red", "Blue"]],
+		)
+		self.assertEqual(payload["item_prices"], [])
+		self.assertEqual(frappe.db.count("Item"), count)
+
 	def test_template_create_accepts_attributes_without_values(self):
 		from essdee_yrp.purchase.item_editor import get_item_editor
 

@@ -9,8 +9,8 @@ export function getPurchaseCapabilities() {
 	return callMethod(`${CAPABILITIES_METHOD}.get_capabilities`)
 }
 
-export function getItemEditor(name = null) {
-	return callMethod(`${ITEM_METHOD}.get_item_editor`, { name })
+export function getItemEditor(name = null, duplicateFrom = null) {
+	return callMethod(`${ITEM_METHOD}.get_item_editor`, { name, duplicate_from: duplicateFrom })
 }
 
 export function searchItemAttributeValues(attribute, text = "", item = null) {
@@ -53,8 +53,8 @@ export function getItemPriceSummaries(names) {
 	return callMethod(`${ITEM_PRICE_METHOD}.get_item_price_summaries`, { names })
 }
 
-export function getItemPriceEditor(name = null, item = null) {
-	return callMethod(`${ITEM_PRICE_METHOD}.get_item_price_editor`, { name, item })
+export function getItemPriceEditor(name = null, item = null, duplicateFrom = null) {
+	return callMethod(`${ITEM_PRICE_METHOD}.get_item_price_editor`, { name, item, duplicate_from: duplicateFrom })
 }
 
 export function saveItemPrice(values, options = {}) {
@@ -84,8 +84,8 @@ export function getLotWorkspace(name) {
 	return callMethod(`${LOT_METHOD}.get_lot_workspace`, { name })
 }
 
-export function getLotForm(name = null) {
-	return callMethod("essdee_yrp.purchase.lot_editor.get_lot_form", { name })
+export function getLotForm(name = null, duplicateFrom = null) {
+	return callMethod("essdee_yrp.purchase.lot_editor.get_lot_form", { name, duplicate_from: duplicateFrom })
 }
 
 export function getLotProductionDetailContext(productionDetail, item, productionOrder = null) {

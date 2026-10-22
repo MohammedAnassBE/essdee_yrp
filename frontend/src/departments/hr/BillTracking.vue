@@ -134,6 +134,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import BillTrackingAssignDialog from "./components/BillTrackingAssignDialog.vue"
@@ -153,6 +154,7 @@ const props = defineProps({
 	backLabel: { type: String, default: "Bill Tracking" },
 	listRouteName: { type: String, default: "hr-bill-trackings" },
 	editRouteName: { type: String, default: "hr-bill-tracking-edit" },
+	newRouteName: { type: String, default: "" },
 	purchaseInvoiceNewRouteName: { type: String, default: "accounts-purchase-invoice-new" },
 	purchaseInvoiceViewRouteName: { type: String, default: "accounts-purchase-invoice" },
 })
@@ -185,13 +187,20 @@ const handlers = {
 	delete: () => requestConfirmation("delete"),
 	edit: openEditor,
 }
-const actions = computed(() => billTrackingActionItems(workspace.value.capabilities, handlers)
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: () => props.newRouteName || props.editRouteName.replace(/-edit$/, "-new"),
+	name: () => workspace.value.record?.name,
+	busy: () => Boolean(acting.value),
+	router,
+})
+const actions = computed(() => [...billTrackingActionItems(workspace.value.capabilities, handlers)
 	.filter((action) => action.key !== "show_erp_purchase_invoice" || workspace.value.can_open_desk)
 	.map((action) => ({
 		...action,
 		disabled: Boolean(acting.value),
 		loading: acting.value === action.key,
-	})))
+	})), ...(duplicateAction.value ? [duplicateAction.value] : [])])
 const confirmation = computed(() => ({
 	bill_received: {
 		title: "Mark bill as received?",

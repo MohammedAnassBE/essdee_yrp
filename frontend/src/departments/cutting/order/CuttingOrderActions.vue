@@ -62,7 +62,7 @@ import { copyElementAsImage } from "../../../components/reports/copyElementAsIma
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "../CuttingCompletedReport.vue"
 
-const props = defineProps({ doc: { type: Object, required: true }, data: { type: Object, default: () => ({}) } })
+const props = defineProps({ doc: { type: Object, required: true }, data: { type: Object, default: () => ({}) }, extraActions: { type: Array, default: () => [] } })
 const emit = defineEmits(["refresh"])
 const busy = ref("")
 const feedback = ref("")
@@ -85,6 +85,7 @@ const moreActionItems = computed(() => {
 		actions.value.can_calculate_laysheets ? { label: "Calculate LaySheets", icon: "pi pi-calculator", disabled, command: calculate } : null,
 		actions.value.can_get_completed ? { label: "Get Completed", icon: "pi pi-chart-bar", disabled, command: openCompletedReport } : null,
 		actions.value.can_update_completed ? { label: "Update Completed", icon: "pi pi-check-square", disabled, command: openCompletedEditor } : null,
+		...props.extraActions,
 	].filter(Boolean)
 })
 const hasActions = computed(() => moreActionItems.value.length > 0)

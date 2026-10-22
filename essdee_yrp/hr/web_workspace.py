@@ -8,6 +8,7 @@ from yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking import (
 	get_role_permissions,
 )
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.overrides.bill_tracking import (
 	CANCEL_APPROVED_STATUS,
 	CANCEL_PENDING_STATUS,
@@ -248,7 +249,7 @@ def _get_draft_for_save(name, expected_modified):
 
 
 @frappe.whitelist()
-def get_bill_tracking_editor(name: str | None = None) -> dict:
+def get_bill_tracking_editor(name: str | None = None, duplicate_from: str | None = None) -> dict:
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		doc.check_permission("write")
@@ -256,7 +257,7 @@ def get_bill_tracking_editor(name: str | None = None) -> dict:
 			frappe.throw(_("Only a draft Bill Tracking record can be edited."))
 	else:
 		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
-		doc = frappe.new_doc(DOCTYPE)
+		doc = frappe.get_doc(build_duplicate_values(DOCTYPE, duplicate_from)) if duplicate_from else frappe.new_doc(DOCTYPE)
 	can_create_delivery_person = bool(
 		frappe.has_permission(DELIVERY_PERSON_DOCTYPE, ptype="create")
 	)

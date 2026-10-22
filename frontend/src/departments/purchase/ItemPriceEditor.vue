@@ -139,6 +139,7 @@ const requestKey = computed(() => itemPriceEditorRequestKey({
 	routeName: route.name,
 	item: route.query.item,
 	supplier: route.query.supplier,
+	duplicateFrom: route.query.duplicate_from,
 }))
 const formSignature = computed(() => JSON.stringify(itemPriceSaveValues(form, attributeValues.value)))
 const dirty = computed(() => !loading.value && formSignature.value !== cleanSignature.value)
@@ -185,7 +186,7 @@ function applyEditor(payload, requestedName = "", context = {}) {
 		if (context.supplier) form.supplier = context.supplier
 	}
 	if (!form.item_price_values.length) addTier()
-	cleanSignature.value = formSignature.value
+	cleanSignature.value = context.duplicateFrom ? "" : formSignature.value
 	allowNavigation = false
 }
 
@@ -196,6 +197,7 @@ async function load() {
 	const context = {
 		item: requestedName ? "" : String(route.query.item || ""),
 		supplier: requestedName ? "" : String(route.query.supplier || ""),
+		duplicateFrom: requestedName ? "" : String(route.query.duplicate_from || ""),
 	}
 	itemSequence += 1
 	itemLoading.value = false
@@ -205,7 +207,7 @@ async function load() {
 	persistedName.value = requestedName
 	persistedModified.value = ""
 	try {
-		const payload = await getItemPriceEditor(requestedName || null, context.item || null)
+		const payload = await getItemPriceEditor(requestedName || null, context.item || null, context.duplicateFrom || null)
 		if (isAlive && sequence === loadSequence && requestKey.value === requestedKey) applyEditor(payload, requestedName, context)
 	} catch (reason) {
 		if (isAlive && sequence === loadSequence && requestKey.value === requestedKey) loadError.value = reason?.message || "Unable to load the Item Price editor."

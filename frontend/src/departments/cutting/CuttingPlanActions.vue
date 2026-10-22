@@ -135,6 +135,7 @@ import { copyElementAsImage } from "../../components/reports/copyElementAsImage.
 const props = defineProps({
 	doc: { type: Object, required: true },
 	data: { type: Object, default: () => ({}) },
+	extraActions: { type: Array, default: () => [] },
 })
 const emit = defineEmits(["refresh"])
 
@@ -196,6 +197,7 @@ const moreActionItems = computed(() => {
 				? { label: "Approval", icon: "pi pi-shield", disabled, command: openApproval }
 				: null,
 		].filter(Boolean),
+		props.extraActions,
 	].filter((group) => group.length)
 
 	return groups.flatMap((group, index) => index ? [{ separator: true }, ...group] : group)

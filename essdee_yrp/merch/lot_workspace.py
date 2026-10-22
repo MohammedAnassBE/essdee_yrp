@@ -170,9 +170,9 @@ def get_record_facts(doc, fields):
 
 
 @frappe.whitelist()
-def get_merch_lot_editor(name: str | None = None) -> dict:
-	payload = lot_editor.get_lot_form(name)
-	doc = lot_editor.load_writable_lot(name)
+def get_merch_lot_editor(name: str | None = None, duplicate_from: str | None = None) -> dict:
+	payload = lot_editor.get_lot_form(name, duplicate_from)
+	doc = lot_editor.load_editor_lot(name, duplicate_from)
 	if name:
 		payload["locks"]["production_order"] = True
 		for field in payload["fields"]:

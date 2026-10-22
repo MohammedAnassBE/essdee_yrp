@@ -330,6 +330,24 @@ class TestBillTrackingEditor(TestCase):
 		)
 		self.assertEqual(doc.fieldlevel_permissions_applied, 1)
 
+	def test_editor_duplicates_source_values_without_inserting(self):
+		doc = FakeBillTracking(name=None, docstatus=0, form_status=None, assigned_to=None, bill_no="BILL-9")
+		values = {"doctype": web_workspace.DOCTYPE, "bill_no": "BILL-9"}
+		with (
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(web_workspace, "build_duplicate_values", return_value=values) as build,
+			patch.object(frappe, "get_doc", return_value=doc) as get_doc,
+			patch.object(frappe, "new_doc") as new_doc,
+			patch.object(frappe, "get_all", return_value=[]),
+		):
+			payload = web_workspace.get_bill_tracking_editor(duplicate_from="BT-00001")
+
+		build.assert_called_once_with(web_workspace.DOCTYPE, "BT-00001")
+		get_doc.assert_called_once_with(values)
+		new_doc.assert_not_called()
+		self.assertEqual(payload["values"]["bill_no"], "BILL-9")
+		self.assertIsNone(payload["modified"])
+
 	def test_editor_filters_permlevel_field_and_masks_value(self):
 		doc = FakeBillTracking(docstatus=0, form_status=None, assigned_to=None)
 

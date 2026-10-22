@@ -7,8 +7,8 @@ export function getMerchLotWorkspace(name) {
 	return callMethod(`${LOT_METHOD}.get_merch_lot_workspace`, { name })
 }
 
-export function getMerchLotEditor(name = null) {
-	return callMethod(`${LOT_METHOD}.get_merch_lot_editor`, { name })
+export function getMerchLotEditor(name = null, duplicateFrom = null) {
+	return callMethod(`${LOT_METHOD}.get_merch_lot_editor`, { name, duplicate_from: duplicateFrom })
 }
 
 export function saveMerchLot(values, { name = null, expectedModified = null } = {}) {
@@ -43,8 +43,8 @@ export function getIpdWorkspace(name) {
 	return callMethod(`${IPD_METHOD}.get_ipd_workspace`, { name })
 }
 
-export function getIpdEditor(name = null) {
-	return callMethod(`${IPD_METHOD}.get_ipd_editor`, { name: name || null })
+export function getIpdEditor(name = null, duplicateFrom = null) {
+	return callMethod(`${IPD_METHOD}.get_ipd_editor`, { name: name || null, duplicate_from: duplicateFrom || null })
 }
 
 export function getIpdGrids(name, values, grids) {
@@ -55,9 +55,9 @@ export function checkIpd(name = null, values = null) {
 	return callMethod(`${IPD_METHOD}.check_ipd`, { name: name || null, values })
 }
 
-export function saveIpd(values, { name = null, expectedModified = null } = {}) {
+export function saveIpd(values, { name = null, expectedModified = null, duplicateFrom = null } = {}) {
 	return callMethod(`${IPD_METHOD}.save_ipd`, {
-		values, name: name || null, expected_modified: expectedModified || null,
+		values, name: name || null, expected_modified: expectedModified || null, duplicate_from: duplicateFrom || null,
 	})
 }
 
@@ -117,8 +117,8 @@ export function getProcessCostWorkspace(name) {
 	return callMethod(`${PROCESS_COST_METHOD}.get_process_cost_workspace`, { name })
 }
 
-export function getProcessCostEditor(name = null, lot = null) {
-	return callMethod(`${PROCESS_COST_METHOD}.get_process_cost_editor`, { name, lot })
+export function getProcessCostEditor(name = null, lot = null, duplicateFrom = null) {
+	return callMethod(`${PROCESS_COST_METHOD}.get_process_cost_editor`, { name, lot, duplicate_from: duplicateFrom })
 }
 
 export function getProcessCostGrid(values) {

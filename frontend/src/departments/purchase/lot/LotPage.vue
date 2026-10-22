@@ -120,6 +120,7 @@ import { useRoute, useRouter } from "vue-router"
 
 import { getLotDocuments, getLotWorkspace } from "../../../api/purchase.js"
 import DepartmentPage from "../../../components/DepartmentPage.vue"
+import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
 import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import LotIdentity from "./LotIdentity.vue"
@@ -200,7 +201,17 @@ const activeTab = computed({
 		}),
 })
 
-const lotActions = computed(() => purchaseLotActions(workspace.value, runLotAction, acting.value))
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: PURCHASE_ROUTES.lotNew,
+	name: () => workspace.value.name,
+	busy: acting,
+	router,
+})
+const lotActions = computed(() => [
+	...purchaseLotActions(workspace.value, runLotAction, acting.value),
+	...(duplicateAction.value ? [duplicateAction.value] : []),
+])
 function runLotAction(key) {
 	if (key === "edit") return openEditor()
 	if (key === "purchase_summary") return router.push(lotPurchaseSummaryRoute(props.lotId))

@@ -10,6 +10,7 @@ from frappe.utils import cint, flt
 from yrp.utils import get_variant_attr_details
 
 from essdee_yrp import production_order_workflow as workflow
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 	get_ocr_details as build_lot_ocr_details,
 )
@@ -505,7 +506,7 @@ def _validate_production_order_item(item) -> None:
 
 
 @frappe.whitelist()
-def get_production_order_editor(name: str | None = None, source=None) -> dict:
+def get_production_order_editor(name: str | None = None, source=None, duplicate_from: str | None = None) -> dict:
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		doc.check_permission("write")
@@ -513,7 +514,7 @@ def get_production_order_editor(name: str | None = None, source=None) -> dict:
 			frappe.throw(_("Only a draft Production Order can be edited."))
 	else:
 		frappe.has_permission(DOCTYPE, ptype="create", throw=True)
-		doc = frappe.new_doc(DOCTYPE)
+		doc = frappe.get_doc(build_duplicate_values(DOCTYPE, duplicate_from)) if duplicate_from else frappe.new_doc(DOCTYPE)
 		for fieldname, value in _parse_mapping(source or {}, _("Source")).items():
 			if fieldname in EDITOR_FIELDS:
 				doc.set(fieldname, value)
@@ -524,7 +525,7 @@ def get_production_order_editor(name: str | None = None, source=None) -> dict:
 		_validate_production_order_item(item)
 		matrix = workflow.get_order_editor_context(
 			item=item,
-			production_order=doc.name if name else doc.get("amended_from"),
+			production_order=doc.name if name else duplicate_from or doc.get("amended_from"),
 		)
 	return {
 		"record": {"name": doc.name if name else "", "docstatus": cint(doc.docstatus)},

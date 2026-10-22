@@ -66,7 +66,7 @@ import DocumentConfirmationDialog from "../../../components/documents/DocumentCo
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.vue"
-import { ipdEditRoute } from "../merchViews.js"
+import { MERCH_ROUTES, ipdEditRoute } from "../merchViews.js"
 import IpdChecksRail from "./IpdChecksRail.vue"
 import IpdCopyDialog from "./IpdCopyDialog.vue"
 import IpdIdentity from "./IpdIdentity.vue"
@@ -77,6 +77,7 @@ import { IPD_TABS } from "./ipdTabs.js"
 import { createFocusRegistry, goToProblem } from "./ipdFocus.js"
 import { gridErrors, isStaleWriteError, problemsFor, recordActions, sectionStates, sectionsFor } from "./ipdEditor.js"
 import { IPD_EDITOR_KEY } from "./useIpdEditor.js"
+import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
 import { ipdCommandSuccess } from "./ipdCommandSuccess.js"
 import "./ipd.css"
 
@@ -158,8 +159,18 @@ const handlers = {
 	new_version: () => { copyVisible.value = true },
 	regenerate_process_matrix: () => runCommand("regenerate_process_matrix"),
 }
-const stripActions = computed(() => recordActions({ approved: approved.value, capabilities: capabilities.value, acting: acting.value, problemCount: checks.value?.problems?.length || 0 })
-	.map((action) => ({ ...action, command: handlers[action.key] })))
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: MERCH_ROUTES.ipdNew,
+	name: () => workspace.value.record?.name,
+	busy: acting,
+	router,
+})
+const stripActions = computed(() => [
+	...recordActions({ approved: approved.value, capabilities: capabilities.value, acting: acting.value, problemCount: checks.value?.problems?.length || 0 })
+		.map((action) => ({ ...action, command: handlers[action.key] })),
+	...(duplicateAction.value ? [duplicateAction.value] : []),
+])
 
 async function load(refresh = false) {
 	const sequence = ++loadSequence

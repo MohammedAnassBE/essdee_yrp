@@ -3,10 +3,11 @@ import { callMethod } from "./frappe.js"
 const ORDER_METHOD = "essdee_yrp.cutting.order_workspace"
 const DETAIL_METHOD = "essdee_yrp.cutting.order_detail_editor"
 
-export function getCuttingOrderEditor(name = "", detail = "") {
+export function getCuttingOrderEditor(name = "", detail = "", duplicateFrom = "") {
 	return callMethod(`${ORDER_METHOD}.get_order_editor`, {
 		cutting_order: name || undefined,
 		cutting_order_detail: detail || undefined,
+		duplicate_from: duplicateFrom || undefined,
 	})
 }
 

@@ -244,6 +244,7 @@ import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import LotPurchaseOrderDialog from "../../purchase/lot/LotPurchaseOrderDialog.vue"
 import { purchaseOrderLinkActions } from "../../purchase/lot/lotPurchaseActions.js"
 import LotOcrTable from "../../sales/LotOcrTable.vue"
+import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
 import { MERCH_ROUTES } from "../merchViews.js"
 import { MERCH_DETAIL_GROUPS, merchLotCommandSuccess, merchLotTabs, merchLotActions } from "./merchLotViews.js"
 import MerchClothProgramDialog from "./MerchClothProgramDialog.vue"
@@ -288,9 +289,17 @@ const activeTab = computed({
 	set: (tab) =>
 		router.replace({ query: { ...route.query, tab }, state: preserveListNavigationState() }),
 })
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: MERCH_ROUTES.lotNew,
+	name: () => workspace.value.name,
+	busy: acting,
+	router,
+})
 const actions = computed(() => [
 	...merchLotActions(workspace.value, selectAction, acting.value),
 	...purchaseOrderLinkActions(workspace.value, selectAction, acting.value),
+	...(duplicateAction.value ? [duplicateAction.value] : []),
 ])
 const confirmationLabel = computed(
 	() => workspace.value.capabilities?.[pendingCommand.value]?.label || "Confirm",

@@ -116,6 +116,8 @@ test("tiles explain zero quantities while keeping production comparisons and the
 	assert.equal(views.inspectionStatTiles({ ...manual, minor_defect_found: 0 })[4].tone, "success")
 })
 
+const duplicate = await import("../src/composables/useDuplicateAction.js")
+
 function modules(record, api = {}) {
 	const payload = { record: { name: "EQI-1", docstatus: 0, against_id: "WO-1", checking_level: "Level 2", ...record },
 		colour_size_data: { colours: [], sizes: [] }, actions: { edit: { allowed: true } } }
@@ -127,6 +129,7 @@ function modules(record, api = {}) {
 			getInspectionAgainstDetails() {}, getInspectionAqlLimits: async () => ({ sample: 0, major_allowed: 0, minor_allowed: 0 }),
 			saveInspection() {}, createInspectionDebit() {}, updateInspectionResult() {}, ...api },
 		"../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({}) },
+		"../../composables/useDuplicateAction.js": duplicate,
 		"../../utils/documentOverview.js": overview, "../../../utils/documentOverview.js": overview,
 		"./qualityViews.js": views, "../qualityViews.js": views,
 		"./inspectionFields.js": fields, "../inspectionFields.js": fields,

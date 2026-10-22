@@ -6,10 +6,11 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a, b)
 function setup() {
 	const route = { params: { cuttingPlanId: "CP-1" } }, probes = [], calls = []
 	const source = fs.readFileSync(new URL("../src/departments/CuttingPlan.vue", import.meta.url), "utf8").split("<script setup>")[1].split("</script>")[0].replace(/^import .*$/gm, "")
-	const api = new Function("ref", "computed", "watch", "useRoute", "useRouter", "defineProps", "getCuttingPlanEditor", "callMethod", `${source}\nreturn { probeEditor, documentLoaded, documentSaved, editorSaved, retryWorkspace, workspaceData, workspaceReady, workspaceError, currentDocument, checkingEditor }`)(
+	const api = new Function("ref", "computed", "watch", "useRoute", "useRouter", "defineProps", "getCuttingPlanEditor", "callMethod", "useDuplicateAction", "PLANNING_ROUTES", `${source}\nreturn { probeEditor, documentLoaded, documentSaved, editorSaved, retryWorkspace, workspaceData, workspaceReady, workspaceError, currentDocument, checkingEditor }`)(
 		(value) => ({ value }), (fn) => ({ get value() { return fn() } }), () => {}, () => route, () => ({}), () => ({}),
 		() => { const d = deferred(); probes.push(d); return d.promise },
 		(method, args) => { const d = deferred(); calls.push({ ...d, method, args }); return d.promise },
+		() => ({ value: null }), {},
 	)
 	return { ...api, route, calls, probes }
 }

@@ -22,6 +22,7 @@
 				<template #document-actions="{ busy, dirty }">
 					<DocumentPrintButton doctype="SD YRP Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy" />
 					<DocumentDeleteButton doctype="SD YRP Cutting Plan" document-label="Cutting Plan" :name="cuttingPlanId" :docstatus="editorProbe?.record?.docstatus" :disabled="busy || dirty" :redirect-to="backTo" />
+					<DocumentActionStrip :actions="duplicateActions" />
 				</template>
 			</CuttingPlanEditor>
 		</div>
@@ -73,6 +74,7 @@
 					<CuttingPlanActions
 						:doc="doc"
 						:data="workspaceData"
+						:extra-actions="duplicateActions"
 						@refresh="refreshPage"
 					/>
 					<Button
@@ -129,8 +131,10 @@ import { callMethod } from "../api/frappe.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import FormView from "../components/common/FormView.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
+import { useDuplicateAction } from "../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import CuttingPlanActions from "./cutting/CuttingPlanActions.vue"
@@ -138,6 +142,7 @@ import DocumentPrintButton from "./cutting/DocumentPrintButton.vue"
 import CuttingPlanSidebar from "./cutting/CuttingPlanSidebar.vue"
 import CuttingPlanTabs from "./cutting/CuttingPlanTabs.vue"
 import CuttingPlanEditor from "./cutting/plan/CuttingPlanEditor.vue"
+import { PLANNING_ROUTES } from "./planning/planningViews.js"
 
 const props = defineProps({
 	backTo: { type: String, default: "/cutting/plans" },
@@ -175,6 +180,14 @@ let loadSequence = 0
 let probeSequence = 0
 let suppressNextLoaded = false
 let pendingView = null
+const duplicateAction = useDuplicateAction({
+	canCreate: () => editorProbe.value?.permissions?.can_create,
+	newRouteName: () => route.name === PLANNING_ROUTES.cuttingPlan ? PLANNING_ROUTES.cuttingPlanNew : "cutting-plan-new",
+	name: () => editorProbe.value?.record?.name,
+	busy: () => workspaceLoading.value || Boolean(lifecycleBusy.value),
+	router,
+})
+const duplicateActions = computed(() => duplicateAction.value ? [duplicateAction.value] : [])
 const showSidebar = computed(() => Boolean(
 	workspaceLoading.value
 	|| workspaceData.value.permissions?.can_read_marker

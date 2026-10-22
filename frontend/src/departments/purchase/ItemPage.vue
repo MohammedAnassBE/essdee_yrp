@@ -76,6 +76,7 @@ import { RouterLink, useRouter } from "vue-router"
 
 import { getItemEditor, getPurchaseCapabilities, setItemDisabled } from "../../api/purchase.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
+import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -114,12 +115,20 @@ const parameterProblems = computed(() => duplicateParameterProblems(values.value
 const tableWarnings = computed(() => itemTableWarnings(values.value, workspace.value))
 const combinationAttributes = computed(() => itemCombinationAttributes(values.value, workspace.value.options?.numeric_attributes))
 const toggleLabel = computed(() => Number(values.value.disabled) ? "Enable" : "Disable")
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: PURCHASE_ROUTES.itemNew,
+	name: () => props.itemId,
+	busy: acting,
+	router,
+})
 const actions = computed(() => {
-	if (loading.value || loadError.value || !workspace.value.permissions?.can_write) return []
-	return [
+	if (loading.value || loadError.value) return []
+	const items = workspace.value.permissions?.can_write ? [
 		{ key: "edit", label: "Edit", icon: "pi pi-pencil", primary: true, disabled: acting.value, command: editItem },
 		{ key: "toggle", label: toggleLabel.value, icon: Number(values.value.disabled) ? "pi pi-check" : "pi pi-ban", menuOnly: true, disabled: acting.value, command: openToggle },
-	]
+	] : []
+	return duplicateAction.value ? [...items, duplicateAction.value] : items
 })
 
 async function load() {

@@ -276,6 +276,26 @@ class TestLotEditor(TestCase):
 		self.assertTrue(doc.lot_order_details)
 		self.assertEqual(doc.total_order_quantity, sum(row.quantity for row in doc.lot_order_details))
 
+	def test_duplicate_form_is_unsaved_copy_without_lot_name(self):
+		source = self.live_lot()
+		count = frappe.db.count("SD YRP Lot")
+		with self.light_builders():
+			form = editor.get_lot_form(duplicate_from=source.name)
+			original = editor.get_lot_form(source.name)
+		self.assertEqual(form["record"], {"name": "", "status": form["record"]["status"], "modified": None})
+		self.assertFalse(form["values"]["lot_name"])
+		for field in ("item", "production_detail", "production_order", "season"):
+			self.assertEqual(form["values"][field], source.get(field))
+		self.assertEqual(form["item_details"], original["item_details"])
+		self.assertEqual(form["order_item_details"], original["order_item_details"])
+		self.assertEqual(
+			[row["cloth_item"] for row in form["values"]["lot_fabric_details"]],
+			[row.cloth_item for row in source.lot_fabric_details],
+		)
+		self.assertTrue(all(not row["name"] for row in form["values"]["lot_fabric_details"]))
+		self.assertFalse(form["locks"]["order_details"])
+		self.assertEqual(frappe.db.count("SD YRP Lot"), count)
+
 	def test_workspace_exposes_permissions(self):
 		doc = self.live_lot()
 		with self.light_builders():

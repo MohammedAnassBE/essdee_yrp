@@ -88,6 +88,7 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import { ITEM_PRICE_SECTIONS, PURCHASE_ROUTES, activePriceTiers, captureRecordTarget, isCurrentRecordRequest, itemPriceActionItems, itemPriceApprovedBy, itemPriceFieldLabel, itemPriceOverviewFields, itemPriceTierValue } from "./purchaseViews.js"
 import ItemPriceActionDialog from "./ItemPriceActionDialog.vue"
@@ -109,13 +110,21 @@ const record = computed(() => workspace.value.record || {})
 const NUMBER_COLUMNS = ["moq", "price", "lead_time"]
 const overviewFields = computed(() => itemPriceOverviewFields(workspace.value))
 const tiers = computed(() => activePriceTiers({ tiers: workspace.value.tiers }))
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: PURCHASE_ROUTES.itemPriceNew,
+	name: () => record.value.name,
+	busy: acting,
+	router,
+})
 const actions = computed(() => {
 	if (loading.value || loadError.value) return []
-	return itemPriceActionItems(workspace.value, {
+	const items = itemPriceActionItems(workspace.value, {
 		workflow: openWorkflowAction,
 		edit: editPrice,
 		delete: openDelete,
 	}).map((action) => ({ ...action, loading: acting.value === action.key, disabled: Boolean(acting.value) }))
+	return duplicateAction.value ? [...items, duplicateAction.value] : items
 })
 
 async function load() {

@@ -259,6 +259,24 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		self.assertEqual(payload["tier_fields"]["price"]["precision"], 3)
 		self.assertEqual(payload["tier_fields"]["lead_time"]["precision"], 0)
 
+	def test_editor_prefills_unsaved_duplicate_of_approved_price(self):
+		from essdee_yrp.purchase.item_price_workspace import get_item_price_editor
+
+		source = self._price_in_state("Approved")
+		count = frappe.db.count("YRP Item Price")
+		frappe.set_user(self.fixture_users["purchase_user"])
+		payload = get_item_price_editor(duplicate_from=source)
+
+		self.assertEqual(payload["values"]["item_name"], self.item)
+		self.assertEqual(payload["values"]["supplier"], self.suppliers[0])
+		self.assertEqual(payload["values"]["from_date"], nowdate())
+		self.assertIsNone(payload["values"]["approved_by"])
+		self.assertIsNone(payload["modified"])
+		self.assertEqual(payload["workflow"]["state"], "Draft")
+		self.assertTrue(payload["values"]["item_price_values"])
+		self.assertTrue(all(not row["name"] for row in payload["values"]["item_price_values"]))
+		self.assertEqual(frappe.db.count("YRP Item Price"), count)
+
 	def test_editor_offers_item_picklist_first_then_other_global_values(self):
 		from yrp.stock.test_uom import _attribute
 		from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values

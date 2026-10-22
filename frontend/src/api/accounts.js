@@ -34,8 +34,8 @@ export function getPurchaseInvoiceWorkspace(name) {
 	return callMethod(`${WORKSPACE_METHOD}.get_purchase_invoice_workspace`, { name })
 }
 
-export function getPurchaseInvoiceEditor(name = null, billTracking = null) {
-	return callMethod(`${EDITOR_METHOD}.get_purchase_invoice_editor`, { name, bill_tracking: billTracking })
+export function getPurchaseInvoiceEditor(name = null, billTracking = null, duplicateFrom = null) {
+	return callMethod(`${EDITOR_METHOD}.get_purchase_invoice_editor`, { name, bill_tracking: billTracking, duplicate_from: duplicateFrom || undefined })
 }
 
 export function savePurchaseInvoice({ values, grns, items }, options = {}) {

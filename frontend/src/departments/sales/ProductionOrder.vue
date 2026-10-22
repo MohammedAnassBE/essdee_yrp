@@ -68,6 +68,7 @@ import DocumentActionStrip from "../../components/documents/DocumentActionStrip.
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
+import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import ProductionOrderActionDialog from "./ProductionOrderActionDialog.vue"
 import ProductionOrderLotOcrDialog from "./ProductionOrderLotOcrDialog.vue"
@@ -86,6 +87,7 @@ const props = defineProps({
 	transferViewRouteName: { type: String, default: "sales-production-order" },
 	editRouteName: { type: String, default: "sales-production-order-edit" },
 	listRouteName: { type: String, default: "sales-production-orders" },
+	newRouteName: { type: String, default: "" },
 })
 
 const route = useRoute()
@@ -108,11 +110,18 @@ let loadSequence = 0
 const dialogModes = new Set(["request_changes", "change_dates", "change_status", "update_quantity_ratio", "transfer_quantity", "create_lot", "link_lot"])
 const iconMap = { save: "pi pi-pencil", request_ppo_approval: "pi pi-send", approve_ppo: "pi pi-check-circle", request_changes: "pi pi-undo", update_price: "pi pi-indian-rupee", change_dates: "pi pi-calendar", change_status: "pi pi-sync", update_quantity_ratio: "pi pi-sliders-h", approve_quantity_ratio: "pi pi-check", approve_status: "pi pi-check", transfer_quantity: "pi pi-arrow-right-arrow-left", approve_transfer: "pi pi-check", create_lot: "pi pi-plus", link_lot: "pi pi-link", reopen: "pi pi-lock-open", cancel: "pi pi-ban", delete: "pi pi-trash", amend: "pi pi-copy" }
 const priority = ["approve_ppo", "request_ppo_approval", "approve_quantity_ratio", "approve_status", "approve_transfer", "save", "update_quantity_ratio", "update_price", "change_dates", "change_status", "transfer_quantity", "create_lot", "link_lot", "reopen", "request_changes", "cancel", "amend", "delete"]
-const actions = computed(() => priority.flatMap((key) => {
+const duplicateAction = useDuplicateAction({
+	canCreate: () => workspace.value.permissions?.can_create,
+	newRouteName: () => props.newRouteName || props.editRouteName.replace(/-edit$/, "-new"),
+	name: () => workspace.value.record?.name,
+	busy: () => Boolean(acting.value),
+	router,
+})
+const actions = computed(() => [...priority.flatMap((key) => {
 	const capability = workspace.value.capabilities?.[key]
 	if (!capability?.allowed) return []
 	return [{ key, label: capability.label, icon: iconMap[key], primary: key === priority.find((candidate) => workspace.value.capabilities?.[candidate]?.allowed), menuOnly: ["cancel", "delete", "amend", "reopen", "create_lot", "link_lot"].includes(key), command: () => beginAction(key) }]
-}))
+}), ...(duplicateAction.value ? [duplicateAction.value] : [])])
 const dateActivity = computed(() => (workspace.value.histories?.dates || []).map((row, index) => ({
 	key: `date-${index}`,
 	label: row.date_field || "Date changed",

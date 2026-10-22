@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, nowdate
 
+from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.desk_web_reports import can_run_desk_report
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_essdee_quality_inspection.sd_yrp_essdee_quality_inspection import (
 	can_request_inspection_debit,
@@ -116,12 +117,17 @@ def inspection_actions(doc, permissions: dict) -> dict:
 
 @frappe.whitelist()
 def get_new_inspection_defaults(
-	against_id: str | None = None, grn: str | None = None, amend_from: str | None = None
+	against_id: str | None = None,
+	grn: str | None = None,
+	amend_from: str | None = None,
+	duplicate_from: str | None = None,
 ) -> dict:
-	"""Defaults for a new inspection from a Work Order, one of its GRNs, or a cancelled inspection."""
+	"""Defaults for a new inspection from a Work Order, a GRN, a cancelled inspection or a duplicate."""
 	frappe.has_permission(DOCTYPE, ptype="create", throw=True)
+	if duplicate_from:
+		return _copied_defaults(frappe.get_doc(build_duplicate_values(DOCTYPE, duplicate_from)))
 	if amend_from:
-		return _amendment_defaults(_get_amendable(amend_from))
+		return {**_copied_defaults(_get_amendable(amend_from)), "amended_from": amend_from}
 	if grn:
 		grn_doc = frappe.get_doc("YRP Goods Received Note", grn)
 		grn_doc.check_permission("read")
@@ -187,7 +193,7 @@ def update_inspection_result(name: str, result: str, expected_modified: str | No
 	return get_inspection_workspace(doc.name)
 
 
-def _amendment_defaults(source) -> dict:
+def _copied_defaults(source) -> dict:
 	details = get_against_details(WORK_ORDER, source.against_id)
 	selected = {
 		"colour": {row.colour for row in source.essdee_quality_inspection_colours if row.selected},
@@ -199,7 +205,6 @@ def _amendment_defaults(source) -> dict:
 	return {
 		**{fieldname: source.get(fieldname) for fieldname in EDITABLE_FIELDS},
 		"against": WORK_ORDER,
-		"amended_from": source.name,
 		"posting_date": nowdate(),
 		"against_details": details,
 	}

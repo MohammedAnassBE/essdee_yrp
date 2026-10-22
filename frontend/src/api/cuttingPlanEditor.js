@@ -2,10 +2,11 @@ import { callMethod } from "./frappe.js"
 
 const METHOD = "essdee_yrp.cutting.plan_editor"
 
-export function getCuttingPlanEditor(name = "", lot = "") {
+export function getCuttingPlanEditor(name = "", lot = "", duplicateFrom = "") {
 	return callMethod(`${METHOD}.get_editor`, {
 		cutting_plan: name || undefined,
 		lot: lot || undefined,
+		duplicate_from: duplicateFrom || undefined,
 	})
 }
 

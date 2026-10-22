@@ -171,3 +171,20 @@ class TestPdLotwiseWorkspace(IntegrationTestCase):
 		missing = f"PD-MISSING-PRODUCT-{frappe.generate_hash(length=10)}"
 		with self.assertRaises(frappe.DoesNotExistError):
 			lotwise_workspace.get_lotwise_workspace(product=missing)
+
+	def test_new_workspace_duplicates_source_without_saving(self):
+		values = self.values(gst=5)
+		if not values["lot"]:
+			self.skipTest("needs an SD YRP Lot")
+		source = lotwise_workspace.save_lotwise_item_profit(values)["record"]
+		before = frappe.db.count("SD YRP Lotwise Item Profit")
+		payload = lotwise_workspace.get_lotwise_workspace(duplicate_from=source["name"])
+		record = payload["record"]
+		self.assertFalse(record.get("name"))
+		self.assertEqual(record["lot"], source["lot"])
+		self.assertEqual(record["gst"], 5)
+		self.assertFalse(record.get("lot_costing_type"))
+		self.assertEqual([row["qty"] for row in record["qty_rate_chart"]], [2])
+		self.assertFalse(record["qty_rate_chart"][0].get("name"))
+		self.assertEqual(payload["modified"], "")
+		self.assertEqual(frappe.db.count("SD YRP Lotwise Item Profit"), before)

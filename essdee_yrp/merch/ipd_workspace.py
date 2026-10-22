@@ -9,9 +9,14 @@ from essdee_yrp.merch.ipd.attribute_values import get_usage, save_values
 from essdee_yrp.merch.ipd.bom_mapping import get_bom_mapping, save_bom_mapping
 from essdee_yrp.merch.ipd.capabilities import assert_allowed
 from essdee_yrp.merch.ipd.checks import run_checks
+from essdee_yrp.merch.ipd.copy_version import (
+	attach_bom_mapping_copies,
+	copy_options,
+	detach_bom_mappings,
+	ipd_changes,
+)
 from essdee_yrp.merch.ipd.copy_version import copy_ipd as copy_into_version
-from essdee_yrp.merch.ipd.copy_version import copy_options, ipd_changes
-from essdee_yrp.merch.ipd.draft import apply_patch, load_ipd
+from essdee_yrp.merch.ipd.draft import apply_patch, load_editor_ipd, load_ipd
 from essdee_yrp.merch.ipd.fields import DOCTYPE, section_of
 from essdee_yrp.merch.ipd.grids import build_grids, stored_panel_flag
 from essdee_yrp.merch.ipd.payload import build_payload, mapping_memo
@@ -44,8 +49,8 @@ def get_ipd_workspace(name: str) -> dict:
 
 
 @frappe.whitelist()
-def get_ipd_editor(name: str | None = None) -> dict:
-	return build_payload(load_ipd(name, "write"), editor=True)
+def get_ipd_editor(name: str | None = None, duplicate_from: str | None = None) -> dict:
+	return build_payload(load_editor_ipd(name, duplicate_from), editor=True)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -65,14 +70,17 @@ def check_ipd(name: str | None = None, values=None) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
-def save_ipd(values, name: str | None = None, expected_modified: str | None = None) -> dict:
+def save_ipd(
+	values, name: str | None = None, expected_modified: str | None = None, duplicate_from: str | None = None
+) -> dict:
 	values = parse_mapping(values, _("IPD values"))
-	doc = load_ipd(name, "write")
+	doc = load_editor_ipd(name, duplicate_from)
 	if name:
 		assert_expected_modified(doc, expected_modified)
 		if doc.approval_status == "Approved":
 			frappe.throw(_("Approved IPDs are read only. Revert approval to edit."))
 	apply_patch(doc, values)
+	detached = [] if name else detach_bom_mappings(doc)
 	if name:
 		problems = [
 			entry
@@ -86,6 +94,7 @@ def save_ipd(values, name: str | None = None, expected_modified: str | None = No
 		doc.save()
 	else:
 		doc.insert()
+		attach_bom_mapping_copies(doc, detached)
 	payload = build_payload(frappe.get_doc(DOCTYPE, doc.name), editor=True)
 	payload["messages"] = frappe.get_message_log()[message_start:]
 	return payload

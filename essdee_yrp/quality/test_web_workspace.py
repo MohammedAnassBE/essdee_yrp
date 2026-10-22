@@ -139,6 +139,25 @@ class TestQualityWebWorkspace(IntegrationTestCase):
 		self.assertEqual((amended["result"], amended["calculated_result"]), ("Fail", "Fail"))
 		self.assertTrue(amended["name"].startswith(doc.name))
 
+	def test_duplicate_defaults_copy_a_submitted_inspection_without_saving(self):
+		record = self.new_draft(description="duplicate source")["record"]
+		doc = frappe.get_doc(DOCTYPE, record["name"])
+		doc.submit()
+		count = frappe.db.count(DOCTYPE)
+		defaults = get_new_inspection_defaults(duplicate_from=doc.name)
+		self.assertEqual(frappe.db.count(DOCTYPE), count)
+		self.assertNotIn("amended_from", defaults)
+		self.assertNotIn("name", defaults)
+		self.assertEqual((defaults["description"], defaults["offer_qty"]), ("duplicate source", doc.offer_qty))
+		selected = [row["colour"] for row in defaults["against_details"]["colours"] if row["selected"]]
+		self.assertEqual(selected, [row.colour for row in doc.essdee_quality_inspection_colours if row.selected])
+		values = {key: defaults[key] for key in ("against_id", "inspection_type", "offer_qty", "checking_level", "major_aql_level", "minor_aql_level")}
+		selection = {key: defaults["against_details"][key] for key in ("colours", "sizes")}
+		copy = save_inspection({**values, "colour_and_size_data": selection})["record"]
+		self.assertNotEqual(copy["name"], doc.name)
+		self.assertEqual((copy["docstatus"], copy["amended_from"]), (0, None))
+		self.assertEqual(frappe.db.get_value(DOCTYPE, doc.name, "docstatus"), 1)
+
 	def test_amended_manual_override_keeps_both_result_fields(self):
 		record = self.new_draft(result="Hold")["record"]
 		doc = frappe.get_doc(DOCTYPE, record["name"])

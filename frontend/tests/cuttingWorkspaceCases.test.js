@@ -5,11 +5,13 @@ import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import { defaultOption } from "../src/utils/supplierDefaults.js"
 import { normaliseFrappeTime } from "../src/utils/documentValues.js"
+import { useDuplicateAction } from "../src/composables/useDuplicateAction.js"
+import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
 
 const read = path => readFileSync(resolve(`frontend/src/${path}`), "utf8")
 const script = path => read(path).split("<script setup>")[1].split("</script>")[0].replace(/^import[\s\S]*? from ["'][^"']+["'];?\n/gm, "")
 function setup(path, bindings, names) {
-	const values = { ...Vue, watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {}, defineProps: () => ({}), defineEmits: () => () => {}, useToast: () => ({ add() {} }), useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }), ...bindings }
+	const values = { ...Vue, watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {}, defineProps: () => ({}), defineEmits: () => () => {}, useToast: () => ({ add() {} }), useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }), useDuplicateAction, PLANNING_ROUTES, ...bindings }
 	return new Function(...Object.keys(values), `${script(path)}\nreturn { ${names} }`)(...Object.values(values))
 }
 const nodes = (root, type) => findNodes(root, node => node.type === type)

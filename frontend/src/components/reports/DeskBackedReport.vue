@@ -13,10 +13,10 @@
 		<template #status><ReportRunStatus :state="state" :job="job" :error="reportError" @rebuild="generate" /></template>
 		<div class="erp-table-wrap report-table-frame" role="region" :aria-label="`${config.title} results`" tabindex="0">
 			<table class="erp-data-table desk-report-table">
-				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr></thead>
+				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
 					<tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellToneClass(row, column)]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr>
-					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="desk-report-more"><td :colspan="columns.length"><div class="desk-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ rows.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="desk-report-more"><td :colspan="columns.length"><div class="desk-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -32,6 +32,7 @@ import Select from "primevue/select"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { ROW_RENDER_STEP, useIncrementalRows } from "../../composables/useIncrementalRows.js"
+import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
@@ -39,6 +40,7 @@ import LinkField from "../common/LinkField.vue"
 import { deskReportConfig, deskReportDefaults, deskReportQueryFilters } from "./deskReportConfig.js"
 import { appliedFilterLabels, deskExportSource } from "./reportExport.js"
 import ReportColumnPicker from "./ReportColumnPicker.vue"
+import ReportFilterRow from "./ReportFilterRow.vue"
 import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
 import { stockCellValue, todayIso } from "./reportUtils.js"
@@ -60,13 +62,14 @@ const {
 	layoutError, loadLayout, loadFieldOptions, applyLayout, saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: props.reportKey, sourceColumns, sourceRows })
 
+const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => stockCellValue(cellValue(row, column), column) })
 const exportSource = computed(() => config.renderedExport
 	? { reportKey: props.reportKey, appliedFilters: appliedFilterLabels(config.filters, activeFilters.value || {}) }
-	: deskExportSource(props.reportKey, activeFilters.value, columns.value, config.filters))
+	: deskExportSource(props.reportKey, activeFilters.value, columns.value, config.filters, inlineFilter.matchingIndices.value))
 
 // A rendered export reads the table DOM, so it keeps every row mounted.
-const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(rows, {
-	step: config.renderedExport ? Infinity : ROW_RENDER_STEP, resetOn: sourceRows,
+const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(inlineFilter.filteredRows, {
+	step: config.renderedExport ? Infinity : ROW_RENDER_STEP, resetOn: [sourceRows, inlineFilter.keywords],
 })
 
 function cellToneClass(row, column) {

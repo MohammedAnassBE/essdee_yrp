@@ -8,6 +8,7 @@ import test from "node:test"
 import * as views from "../src/departments/quality/qualityViews.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
+import * as inlineFilters from "../src/composables/useInlineFilters.js"
 const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
 
 const read = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8")
@@ -282,7 +283,7 @@ test("DeskBackedReport generates RFT with empty filters and renders all dynamic 
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
 		"./deskReportConfig.js": reportConfig,
 		"./reportUtils.js": { todayIso: () => "2026-10-21", stockCellValue: (value) => value },
-		"../../composables/useIncrementalRows.js": incrementalRows,
+		"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
 		"../../composables/useWebReport.js": { useWebReport: () => ({ sourceColumns, sourceRows, activeFilters: Vue.ref(null), filtersChanged() {}, generate: async (filters) => requests.push(filters) }) },
 		"../../composables/useReportColumns.js": { useReportColumns: () => {
 			const columns = Vue.computed(() => reconcileReportLayout(sourceColumns.value, null))
@@ -293,14 +294,15 @@ test("DeskBackedReport generates RFT with empty filters and renders all dynamic 
 	assert.ok(nodes(root, "date-field").every(({ props }) => !props.required))
 	await nodes(root, "report-shell")[0].props.onGenerate()
 	assert.deepEqual(requests, [{ lot: "", item: "", from_date: "", to_date: "", supplier: "", result: "" }])
-	assert.equal(nodes(root, "th").length, 9)
+	assert.equal(nodes(nodes(root, "tr")[0], "th").length, 9)
 	assert.ok(nodes(root, "td").find((cell) => cell.text === "Pass" && cell.props.class.includes("desk-report-cell--success")))
 	assert.ok(!nodes(root, "td")[1].props.class.includes("desk-report-cell--success"))
 	sourceColumns.value = dynamicRftColumns(20)
 	sourceRows.value = [{ result_1: "Pass", result_2: "Fail", result_20: "Hold" }]
 	await tick()
-	assert.equal(nodes(root, "th").length, 47)
-	assert.equal(nodes(root, "th").at(-1).text, "Result 20")
+	assert.equal(nodes(nodes(root, "tr")[0], "th").length, 47)
+	assert.equal(nodes(nodes(root, "tr")[0], "th").at(-1).text, "Result 20")
+	assert.equal(nodes(nodes(root, "tr")[1], "input").length, 47, "every column gets an inline filter")
 	for (const [value, tone] of [["Pass", "success"], ["Fail", "danger"], ["Hold", "warning"]]) assert.ok(nodes(root, "td").find((cell) => cell.text === value).props.class.includes(`desk-report-cell--${tone}`))
 	const source = read("components/reports/DeskBackedReport.vue")
 	for (const token of ["--erp-success-text", "--erp-danger", "--erp-warning"]) assert.ok(source.includes(`var(${token})`))

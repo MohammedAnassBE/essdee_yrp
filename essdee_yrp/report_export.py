@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.desk.query_report import build_xlsx_data, format_fields
+from frappe.desk.query_report import add_total_row, build_xlsx_data, format_fields
 from frappe.desk.query_report import run as run_query_report
 from frappe.desk.utils import get_csv_bytes, pop_csv_params, provide_binary_file
 from frappe.permissions import can_export
@@ -39,7 +39,7 @@ def get_export_doctype(report_key=None, doctype=None) -> str:
 
 
 @frappe.whitelist(methods=["POST"])
-def export_web_report(report_key, columns, filters=None, file_format_type="Excel", include_filters=0, applied_filters=None, csv_delimiter=",", csv_quoting=2, csv_decimal_sep="."):
+def export_web_report(report_key, columns, filters=None, file_format_type="Excel", include_filters=0, applied_filters=None, csv_delimiter=",", csv_quoting=2, csv_decimal_sep=".", visible_idx=None):
 	"""Re-run a Desk-backed /web report like Desk's export_query, keeping the picked columns."""
 	entry = get_web_report(report_key)
 	if entry.kind != "frappe_report":
@@ -50,6 +50,7 @@ def export_web_report(report_key, columns, filters=None, file_format_type="Excel
 	data = frappe._dict(run_query_report(entry.report, filters, ignore_prepared_report=True, are_default_filters=False))
 	if not data.columns:
 		frappe.throw(_("No data to export. You can try changing the filters of your report."))
+	keep_visible_rows(data, frappe.parse_json(visible_idx))
 	data.columns, data.result = get_picked_table(entry, data, frappe.parse_json(columns) or [])
 	data.update(report_name=entry.report, filters=filters, applied_filters=frappe.parse_json(applied_filters))
 	format_fields(data, file_format_type)
@@ -67,6 +68,16 @@ def export_report_rows(title, rows, report_key=None, doctype=None, file_format_t
 	filter_rows = get_filter_rows(frappe.parse_json(applied_filters)) if cint(include_filters) else []
 	csv_options = {"csv_delimiter": csv_delimiter, "csv_quoting": csv_quoting, "csv_decimal_sep": csv_decimal_sep}
 	write_report_file(title, filter_rows + rows, file_format_type, csv_options)
+
+
+def keep_visible_rows(data, visible_idx) -> None:
+	"""Keep the inline-filtered rows and rebuild the total row, like Desk's export_query visible_idx."""
+	if visible_idx is None:
+		return
+	if not isinstance(visible_idx, list) or not all(isinstance(index, int) for index in visible_idx):
+		frappe.throw(_("Visible rows must be a list of row numbers."))
+	result = [data.result[index] for index in visible_idx if 0 <= index < len(data.result)]
+	data.result = add_total_row(result, data.columns) if cint(data.get("add_total_row")) else result
 
 
 def get_picked_table(entry, data, picked_columns) -> tuple[list[dict], list[dict]]:

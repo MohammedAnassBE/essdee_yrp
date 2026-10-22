@@ -2,15 +2,19 @@
 	<div class="sewing-report-matrix erp-table-wrap" role="region" :aria-label="label" tabindex="0">
 		<table class="erp-table">
 			<caption>{{ label }}</caption>
-			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="cellClass(column, index)" :style="cellStyle(index)">{{ column.label }}</th></tr></thead>
-			<tbody><tr v-for="(row, rowIndex) in rows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key]) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key]) }}</slot></td></tr></tbody>
-			<tfoot v-if="totals"><tr><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(totals[column.key]) }}</th></tr></tfoot>
+			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="cellClass(column, index)" :style="cellStyle(index)">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="columns" :filter="inlineFilter" :cell-class="cellClass" :cell-style="(column, index) => cellStyle(index)" /></thead>
+			<tbody><tr v-for="(row, rowIndex) in visibleRows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key]) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key]) }}</slot></td></tr></tbody>
+			<tfoot v-if="footerTotals"><tr><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(footerTotals[column.key]) }}</th></tr></tfoot>
 		</table>
 	</div>
 </template>
 
 <script setup>
 import { computed } from "vue"
+
+import { columnTotal } from "../../../components/reports/inlineFilters.js"
+import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
+import { useInlineFilters } from "../../../composables/useInlineFilters.js"
 
 const props = defineProps({
 	label: { type: String, required: true },
@@ -19,6 +23,15 @@ const props = defineProps({
 	totals: { type: Object, default: null },
 	totalLabel: { type: String, default: "Total" },
 	cellTone: { type: Function, default: null },
+	/** Off for reports that render one matrix per group. */
+	inlineFilters: { type: Boolean, default: false },
+})
+const inlineFilter = useInlineFilters(() => props.rows, () => props.columns, { cellValue: (row, column) => row[column.key], cellText: (row, column) => format(row[column.key]) })
+const visibleRows = computed(() => props.inlineFilters ? inlineFilter.filteredRows.value : props.rows)
+// Footer totals are sums of the shown rows, so a column filter recomputes them like Desk's total row.
+const footerTotals = computed(() => {
+	if (!props.totals || !props.inlineFilters || !inlineFilter.isFiltered.value) return props.totals
+	return Object.fromEntries(Object.keys(props.totals).map(key => [key, columnTotal(visibleRows.value.map(row => row[key]), { fieldtype: "Float" }) ?? 0]))
 })
 // Frozen columns must be a leading run with explicit pixel widths so each sticky left offset is known.
 const frozenOffsets = computed(() => {
@@ -57,11 +70,11 @@ thead th.sized { white-space: normal; }
 td.sized { overflow: hidden; text-overflow: ellipsis; }
 tfoot th { color: var(--erp-text); background: var(--erp-surface-muted); font-weight: var(--erp-font-weight-bold); }
 .frozen { position: sticky; z-index: 1; }
-thead th.frozen { z-index: 3; }
+thead th.frozen, :deep(.report-filter-row > th.frozen) { z-index: 3; }
 .frozen-last { border-right: 1px solid var(--erp-border-strong); box-shadow: 4px 0 6px -4px rgb(16 24 40 / 18%); }
 @media (max-width: 1100px) {
 	td.frozen, tfoot th.frozen { position: static; }
-	thead th.frozen { left: auto !important; z-index: 2; }
+	thead th.frozen, :deep(.report-filter-row > th.frozen) { left: auto !important; z-index: 2; }
 	.frozen-last { box-shadow: none; }
 }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }

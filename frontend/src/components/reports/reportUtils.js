@@ -26,13 +26,14 @@ export function formatDate(value) {
 	return date.length === 3 ? `${date[2]}-${date[1]}-${date[0]}` : String(value)
 }
 
+const numberFormats = new Map()
+
+// toLocaleString builds a formatter per call; large report tables format thousands of cells.
 export function number(value, precision = 0) {
 	const parsed = Number(value)
 	if (!Number.isFinite(parsed)) return precision ? (0).toFixed(precision) : "0"
-	return parsed.toLocaleString("en-IN", {
-		minimumFractionDigits: precision,
-		maximumFractionDigits: precision,
-	})
+	if (!numberFormats.has(precision)) numberFormats.set(precision, new Intl.NumberFormat("en-IN", { minimumFractionDigits: precision, maximumFractionDigits: precision }))
+	return numberFormats.get(precision).format(parsed)
 }
 
 export function quantity(value) {

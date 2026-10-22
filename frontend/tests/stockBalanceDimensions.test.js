@@ -5,6 +5,7 @@ import vm from "node:vm"
 import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
+import * as inlineFilters from "../src/composables/useInlineFilters.js"
 import * as filterState from "../src/components/reports/reportFilterState.js"
 import { FilterService } from "@primevue/core/api"
 const reportExportModule = await import(new URL("../src/components/reports/reportExport.js", import.meta.url))
@@ -70,7 +71,7 @@ for (const configured of [dimensions, []]) {
 			"./reportFilterState.js": filterState,
 			"./reportUtils.js": { number: String, oneMonthAgoIso: () => "2026-09-20", todayIso: () => "2026-10-20", stockCellValue: String },
 			"../../api/frappe.js": { callMethod: async (method) => { calls.push(method); return configured }, searchLink: async (...args) => { lookups.push(args); return [{ name: "A", label: "Alpha" }] } },
-			"../../composables/useIncrementalRows.js": incrementalRows,
+			"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
 			"../../composables/useWebReport.js": { useWebReport: () => ({ state: ref("idle"), sourceColumns: ref([]), sourceRows: ref([]), job: ref(null), activeFilters, generate: async (filters) => requests.push(JSON.parse(JSON.stringify(filters))), filtersChanged: (filters) => changes.push(filters), clear() {} }) },
 			"../../composables/useReportColumns.js": { useReportColumns: () => ({ columns: ref([]), displayColumns: ref([]), rows: ref([]), linkSources: ref({}), fieldsBySource: ref({}), loadLayout() {} }) },
 		})

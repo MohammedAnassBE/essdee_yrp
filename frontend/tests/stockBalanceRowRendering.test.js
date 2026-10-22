@@ -6,6 +6,7 @@ import * as reportExport from "../src/components/reports/reportExport.js"
 import * as filterState from "../src/components/reports/reportFilterState.js"
 import { cellAlign, reconcileReportLayout, reportCellValue } from "../src/composables/reportColumns.js"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
+import * as inlineFilters from "../src/composables/useInlineFilters.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 
 const nodes = (root, type) => findNodes(root, (node) => node.type === type)
@@ -25,7 +26,7 @@ function mountReport(sourceRows) {
 		"./reportExport.js": reportExport, "./reportFilterState.js": filterState,
 		"./reportUtils.js": { number: (value) => String(value), oneMonthAgoIso: () => "2026-09-22", todayIso: () => "2026-10-22", stockCellValue: (value) => value },
 		"../../api/frappe.js": { callMethod: async () => [], searchLink: async () => [] },
-		"../../composables/useIncrementalRows.js": incrementalRows,
+		"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
 		"../../composables/useWebReport.js": { useWebReport: () => ({ state: Vue.ref("ready"), sourceColumns, sourceRows, job: Vue.ref(null), activeFilters: Vue.ref(null), generate: async () => {}, filtersChanged() {}, clear() {} }) },
 		"../../composables/useReportColumns.js": { useReportColumns: () => {
 			const displayColumns = Vue.computed(() => reconcileReportLayout(sourceColumns.value, null))

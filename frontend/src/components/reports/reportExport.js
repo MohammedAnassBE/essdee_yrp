@@ -36,10 +36,11 @@ function exportSettingsArgs(settings, appliedFilters) {
 	}
 }
 
-export function deskExportArgs({ reportKey, filters, columns, appliedFilters }, settings) {
+export function deskExportArgs({ reportKey, filters, columns, appliedFilters, visibleIndices }, settings) {
 	return {
 		report_key: reportKey,
 		filters: filters || {},
+		...(visibleIndices ? { visible_idx: visibleIndices } : {}),
 		columns: (columns || []).map(column => column.kind === "linked"
 			? { kind: "linked", source_column: column.source_column, target_field: column.target_field, label: column.label, fieldtype: column.fieldtype, width: column.width }
 			: { kind: "base", fieldname: column.fieldname, label: column.label }),
@@ -71,6 +72,7 @@ export function tableGrid(table) {
 	const grid = []
 	const carried = []
 	for (const row of table.rows || []) {
+		if (row.hasAttribute?.("data-export-ignore")) continue
 		const line = []
 		let column = 0
 		const useCarried = (index) => {
@@ -129,6 +131,7 @@ export function csvPreview(rows, settings) {
 		.join("\n")
 }
 
-export function deskExportSource(reportKey, filters, columns, filterFields = []) {
-	return { reportKey, desk: { filters: filters || {}, columns: columns || [] }, appliedFilters: appliedFilterLabels(filterFields, filters || {}) }
+/** `visibleIndices` are the inline-filtered data row indices; the server exports only those, like Desk's visible_idx. */
+export function deskExportSource(reportKey, filters, columns, filterFields = [], visibleIndices = null) {
+	return { reportKey, desk: { filters: filters || {}, columns: columns || [], visibleIndices }, appliedFilters: appliedFilterLabels(filterFields, filters || {}) }
 }

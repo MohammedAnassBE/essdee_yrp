@@ -4,7 +4,12 @@ import io
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from essdee_yrp.report_export import export_report_rows, export_web_report, get_export_permission
+from essdee_yrp.report_export import (
+	export_report_rows,
+	export_web_report,
+	get_export_permission,
+	keep_visible_rows,
+)
 
 
 def read_csv_response():
@@ -53,3 +58,17 @@ class TestReportExport(IntegrationTestCase):
 			export_report_rows("Lots", [["Lot"]], doctype="SD YRP Lot", file_format_type="PDF")
 		with self.assertRaises(frappe.ValidationError):
 			export_report_rows("Lots", [[{"bad": 1}]], doctype="SD YRP Lot")
+
+	def test_visible_rows_keep_inline_filtered_rows_and_rebuild_the_total(self):
+		columns = [{"fieldname": "item", "fieldtype": "Data"}, {"fieldname": "qty", "fieldtype": "Float"}]
+		rows = [{"item": "A", "qty": 2}, {"item": "B", "qty": 5}, {"item": "C", "qty": 7}, ["Total", 14]]
+		data = frappe._dict(columns=columns, result=list(rows), add_total_row=1)
+		keep_visible_rows(data, [2, 0, 9])
+		self.assertEqual(data.result[:2], [rows[2], rows[0]])
+		self.assertEqual(data.result[2][0], "Total")
+		self.assertEqual(data.result[2][1], 9)
+		unfiltered = frappe._dict(columns=columns, result=list(rows), add_total_row=1)
+		keep_visible_rows(unfiltered, None)
+		self.assertEqual(unfiltered.result, rows)
+		with self.assertRaises(frappe.ValidationError):
+			keep_visible_rows(unfiltered, ["1"])

@@ -5,7 +5,8 @@ import * as reportConfig from "../src/components/reports/deskReportConfig.js"
 import * as reportExport from "../src/components/reports/reportExport.js"
 import { cellAlign, reconcileReportLayout, reportCellValue } from "../src/composables/reportColumns.js"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
-import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+import * as inlineFilters from "../src/composables/useInlineFilters.js"
+import { Vue, findNodes, loadComponent, mountComponent, typeInto } from "../../scripts/helpers/vue_renderer.mjs"
 
 const nodes = (root, type) => findNodes(root, (node) => node.type === type)
 const tick = async () => { await new Promise((done) => setImmediate(done)); await Vue.nextTick() }
@@ -22,7 +23,7 @@ function mountReport(sourceRows, reportKey = "purchase-order-itemwise") {
 		"../common/DateField.vue": stub("date-field"), "../common/LinkField.vue": stub("link-field"),
 		"./ReportShell.vue": (props, { slots }) => Vue.h("report-shell", props, [slots.default?.()]),
 		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
-		"./deskReportConfig.js": reportConfig, "../../composables/useIncrementalRows.js": incrementalRows, "./reportExport.js": reportExport,
+		"./deskReportConfig.js": reportConfig, "../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters, "./reportExport.js": reportExport,
 		"./reportUtils.js": { todayIso: () => "2026-10-22", stockCellValue: (value) => value },
 		"../../composables/useWebReport.js": { useWebReport: () => ({ sourceColumns, sourceRows, activeFilters: Vue.ref(null), filtersChanged() {}, generate: async () => {} }) },
 		"../../composables/useReportColumns.js": { useReportColumns: () => {
@@ -89,4 +90,36 @@ test("Rendered-export reports keep every row mounted because their export reads 
 	await tick()
 	assert.equal(dataRows(root).length, 450)
 	assert.equal(moreRow(root), undefined)
+})
+
+test("Desk-backed column filters narrow the full result, rebuild the total row and export only the matching rows", async () => {
+	const rows = [...poRows(1_000), { name: "", qty: 499_500, is_total_row: true }]
+	const root = mountReport(Vue.ref(rows))
+	await tick()
+	const inputs = nodes(nodes(root, "thead")[0], "input")
+	assert.deepEqual(inputs.map((input) => input.props["aria-label"]), ["Filter PO Number", "Filter Qty"])
+	typeInto(inputs[1], ">900")
+	await tick()
+	assert.equal(dataRows(root).length, 200, "typing waits for the pause before re-rendering")
+	await new Promise((done) => setTimeout(done, 300))
+	await tick()
+	const shown = dataRows(root)
+	assert.equal(shown.length, 100)
+	assert.equal(nodes(shown[0], "td")[0].text, "PO-901", "rows beyond the first mounted step are found")
+	const total = shown.at(-1)
+	assert.match(String(total.props.class), /report-total-row/)
+	assert.deepEqual(nodes(total, "td").map((cell) => cell.text), ["Total", String(Array.from({ length: 99 }, (_, index) => 901 + index).reduce((sum, value) => sum + value))])
+	const exportSource = nodes(root, "report-shell")[0].props["export-source"]
+	assert.equal(exportSource.desk.visibleIndices.length, 99)
+	assert.equal(exportSource.desk.visibleIndices[0], 901)
+	typeInto(inputs[0], "po-95")
+	await new Promise((done) => setTimeout(done, 300))
+	await tick()
+	assert.deepEqual(dataRows(root).slice(0, -1).map((row) => nodes(row, "td")[0].text), Array.from({ length: 10 }, (_, index) => `PO-95${index}`), "filters combine with AND")
+	typeInto(inputs[0], "")
+	typeInto(inputs[1], "")
+	await new Promise((done) => setTimeout(done, 300))
+	await tick()
+	assert.equal(dataRows(root).length, 200)
+	assert.equal(nodes(root, "report-shell")[0].props["export-source"].desk.visibleIndices, null)
 })

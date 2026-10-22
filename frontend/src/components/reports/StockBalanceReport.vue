@@ -1,6 +1,6 @@
 <template>
 	<ReportShell
-		:export-source="deskExportSource('stock-balance', activeFilters, columns)"
+		:export-source="deskExportSource('stock-balance', activeFilters, columns, [], inlineFilter.matchingIndices.value)"
 		title="Stock Balance"
 		:generated="generated"
 		:loading="loading"
@@ -59,12 +59,12 @@
 		<div class="erp-table-wrap report-table-frame stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
 			<table class="erp-data-table stock-table">
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
-				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr></thead>
+				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
 					<tr v-for="(row, rowIndex) in renderedRows" :key="rowIndex" :class="{ 'report-total-row': row.is_total_row }">
 						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ stockCellValue(cellValue(row, column), column) }}</span></td>
 					</tr>
-					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="stock-more"><td :colspan="columns.length"><div class="stock-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ rows.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="stock-more"><td :colspan="columns.length"><div class="stock-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -79,12 +79,14 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from "vue"
 
 import { callMethod, searchLink } from "../../api/frappe.js"
 import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
+import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
 import LinkField from "../common/LinkField.vue"
 import MultiSelectField from "../common/MultiSelectField.vue"
 import ReportColumnPicker from "./ReportColumnPicker.vue"
+import ReportFilterRow from "./ReportFilterRow.vue"
 import { stockBalanceFormFilters } from "./reportFilterState.js"
 import ReportRunStatus from "./ReportRunStatus.vue"
 import ReportShell from "./ReportShell.vue"
@@ -115,9 +117,10 @@ const {
 	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "stock-balance", sourceColumns, sourceRows })
-const dataRows = computed(() => rows.value.filter((row) => !row.is_total_row))
+const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => stockCellValue(cellValue(row, column), column) })
+const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
 // Export rebuilds rows on the server, so only the mounted table is stepped.
-const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(rows, { resetOn: sourceRows })
+const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(inlineFilter.filteredRows, { resetOn: [sourceRows, inlineFilter.keywords] })
 const totals = computed(() => dataRows.value.reduce((result, row) => {
 	result.balanceQty += Number(row.bal_qty || 0); result.inQty += Number(row.in_qty || 0); result.outQty += Number(row.out_qty || 0); return result
 }, { balanceQty: 0, inQty: 0, outQty: 0 }))

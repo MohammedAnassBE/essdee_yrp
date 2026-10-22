@@ -33,6 +33,13 @@ const workspaces = [
 		to: "/accounts/purchase-invoices",
 	},
 	{
+		key: "bill_tracking",
+		label: "Vendor Bill Tracking",
+		description: "Track vendor bills, assignments and receipt status.",
+		icon: "pi pi-receipt",
+		to: "/accounts/bill-tracking",
+	},
+	{
 		key: "reports",
 		label: "Reports",
 		description: "Stock, cutting, sewing, dispatch and ironing reports.",

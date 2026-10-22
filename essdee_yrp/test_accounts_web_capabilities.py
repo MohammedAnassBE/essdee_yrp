@@ -27,6 +27,24 @@ CUSTOM_PERMISSION_FIELDS = (
 
 
 class TestAccountsHrCapabilities(TestCase):
+	def test_accounts_bill_tracking_follows_doctype_permissions(self):
+		from essdee_yrp.accounts import web_capabilities
+
+		for readable, creatable in ((True, False), (True, True), (False, False)):
+			with (
+				self.subTest(readable=readable, creatable=creatable),
+				patch.object(web_capabilities, "can_view_accounts_reports", return_value=False),
+				patch.object(
+					frappe,
+					"has_permission",
+					side_effect=lambda doctype, ptype: (
+						doctype == "YRP Bill Tracking" and {"read": readable, "create": creatable}[ptype]
+					),
+				),
+			):
+				section = web_capabilities.get_capabilities()["sections"]["bill_tracking"]
+				self.assertEqual(section, {"label": "Bill Tracking", "can_read": readable, "can_create": creatable})
+
 	def test_audit_pending_gate_is_last_and_requires_accounts_role_and_plan_read(self):
 		from essdee_yrp.accounts import web_capabilities
 

@@ -8,6 +8,7 @@ import { PD_ROUTES } from "../departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
 import { PLANNING_ROUTES } from "../departments/planning/planningViews.js"
 import { MERCH_ROUTES } from "../departments/merch/merchViews.js"
+import { ACCOUNTS_ROUTES } from "../departments/accounts/accountsViews.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")
@@ -920,6 +921,22 @@ const routes = [
 		name: "accounts-purchase-invoice",
 		component: PurchaseInvoice,
 		props: true,
+	},
+	{
+		path: "/accounts/bill-tracking", name: ACCOUNTS_ROUTES.billTrackings, component: BillTrackings,
+		props: { backTo: "/accounts", backLabel: "Accounts", eyebrow: "Accounts", viewRouteName: ACCOUNTS_ROUTES.billTracking, newRouteName: ACCOUNTS_ROUTES.billTrackingNew },
+	},
+	{
+		path: "/accounts/bill-tracking/new", name: ACCOUNTS_ROUTES.billTrackingNew, component: BillTrackingEditorPage,
+		props: { basePath: "/accounts/bill-tracking", viewRouteName: ACCOUNTS_ROUTES.billTracking, listRouteName: ACCOUNTS_ROUTES.billTrackings },
+	},
+	{
+		path: "/accounts/bill-tracking/:billTrackingId/edit", name: ACCOUNTS_ROUTES.billTrackingEdit, component: BillTrackingEditorPage,
+		props: idProps("billTrackingId", { basePath: "/accounts/bill-tracking", viewRouteName: ACCOUNTS_ROUTES.billTracking, listRouteName: ACCOUNTS_ROUTES.billTrackings }),
+	},
+	{
+		path: "/accounts/bill-tracking/:billTrackingId", name: ACCOUNTS_ROUTES.billTracking, component: BillTracking,
+		props: idProps("billTrackingId", { backTo: "/accounts/bill-tracking", backLabel: "Bill Tracking", listRouteName: ACCOUNTS_ROUTES.billTrackings, editRouteName: ACCOUNTS_ROUTES.billTrackingEdit, purchaseInvoiceNewRouteName: "accounts-purchase-invoice-new", purchaseInvoiceViewRouteName: "accounts-purchase-invoice" }),
 	},
 	{
 		path: "/accounts/reports",

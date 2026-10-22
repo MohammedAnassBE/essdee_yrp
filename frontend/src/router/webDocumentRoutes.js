@@ -25,6 +25,9 @@ const recordRoutes = {
 }
 
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/accounts": {
+		"YRP Bill Tracking": (name) => `/web/accounts/bill-tracking/${encodeURIComponent(name)}`,
+	},
 	"/quality": {
 		"YRP Work Order": (name) => `/web/quality/work-orders/${encodeURIComponent(name)}`,
 		"SD YRP Essdee Quality Inspection": recordRoutes["SD YRP Essdee Quality Inspection"],

@@ -110,7 +110,7 @@ export const departments = [
 		label: "Accounts",
 		shortLabel: "AC",
 		path: "/accounts",
-		sections: { debits: "debits", purchase_invoices: "purchase-invoices", reports: "reports" },
+		sections: { debits: "debits", purchase_invoices: "purchase-invoices", bill_tracking: "bill-tracking", reports: "reports" },
 		component: () => import("./Accounts.vue"),
 	},
 	{

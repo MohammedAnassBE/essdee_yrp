@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import vm from "node:vm"
 import { createMemoryHistory, createRouter } from "vue-router"
+import { ACCOUNTS_ROUTES } from "../src/departments/accounts/accountsViews.js"
 import { departments } from "../src/departments/registry.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../src/departments/purchase/purchaseViews.js"
@@ -46,7 +47,7 @@ test("Quality registry follows Finishing and automatically feeds the landing car
 test("actual router resolves the Quality launcher, list, create, edit and view", () => {
 	const source = read("router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES,
+	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => null,
 		LAYOUT_UNAVAILABLE_PATH: "/not-in-your-layout", getPermissionRedirect: () => undefined, NO_PERMISSION_PATH: "/no-permission" }
 	vm.runInNewContext(source, context)

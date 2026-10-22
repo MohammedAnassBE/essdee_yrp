@@ -5,6 +5,12 @@ import vm from "node:vm"
 import { DEPARTMENT_RECORD_ROUTES, webDocumentPath } from "../frontend/src/router/webDocumentRoutes.js"
 
 const previousPrefixes = {
+	"SD YRP Essdee Quality Inspection": "/web/quality/inspections/",
+	"Item": "/web/purchase/items/",
+	"YRP Production Order": "/web/sales/production-orders/",
+	"SD YRP Cutting Order": "/web/cutting/orders/",
+	"SD YRP Cutting Bulk Lay Sheets": "/web/cutting/bulk-lay-sheets/",
+	"SD YRP Cutting Laysheet Planner": "/web/cutting/lay-sheet-planner/",
 	"YRP Debit": "/web/accounts/debits/",
 	"SD YRP Lot": "/web/purchase/lots/",
 	"YRP Work Order": "/web/fabric-store/work-orders/",
@@ -31,7 +37,7 @@ for (const name of ["Record 1", "A/B?#&%", "தமிழ்", 123]) {
 		assert.ok(prefix, `new global route needs an explicit regression expectation: ${doctype}`)
 		const expected = prefix + encodeURIComponent(String(name))
 		assert.equal(resolve(String(name)), expected)
-		for (const path of ["/web/sales/production-orders", "/web/hr/bill-tracking", "/web/accounts/purchase-invoices", "/web/merchandise", "/merch", ""]) {
+		for (const path of ["/web/hr/bill-tracking", "/web/merchandise", "/merch", ""]) {
 			assert.equal(webDocumentPath(doctype, name, path), expected)
 		}
 	}
@@ -52,13 +58,20 @@ for (const [doctype, section] of Object.entries({
 })) {
 	assert.equal(webDocumentPath(doctype, "A/B", "/web/merch/"), `/web/merch/${section}/A%2FB`)
 }
+assert.equal(webDocumentPath("SD YRP Lot", "A/B", "/web/sales/production-orders"), "/web/merch/lots/A%2FB")
+for (const path of ["/web/accounts", "/web/accounts/", "/web/accounts/purchase-invoices/PI-1"]) {
+	for (const name of ["BT-1", "A/B?#&%", "தமிழ்"]) {
+		assert.equal(webDocumentPath("YRP Bill Tracking", name, path), `/web/accounts/bill-tracking/${encodeURIComponent(name)}`)
+		assert.equal(webDocumentPath("YRP Purchase Invoice", name, path), `/web/accounts/purchase-invoices/${encodeURIComponent(name)}`)
+	}
+}
 const originalLocation = globalThis.location
 try {
 	globalThis.location = { pathname: "/web/merch/purchase-invoices/PI-1" }
 	assert.equal(webDocumentPath("YRP Bill Tracking", "BT-1"), "/web/merch/bill-tracking/BT-1")
 	assert.equal(webDocumentPath("YRP Work Order", "WO-1").replace(/^\/web(?=\/)/, ""), "/merch/work-orders/WO-1")
 	globalThis.location.pathname = "/web/accounts/purchase-invoices/PI-1"
-	assert.equal(webDocumentPath("YRP Bill Tracking", "BT-1"), "/web/hr/bill-tracking/BT-1")
+	assert.equal(webDocumentPath("YRP Bill Tracking", "BT-1"), "/web/accounts/bill-tracking/BT-1")
 } finally {
 	if (originalLocation === undefined) delete globalThis.location
 	else globalThis.location = originalLocation

@@ -57,6 +57,11 @@ def get_capabilities() -> dict:
 				"can_read": bool(frappe.has_permission("YRP Purchase Invoice", ptype="read")),
 				"can_create": bool(frappe.has_permission("YRP Purchase Invoice", ptype="create")),
 			},
+			"bill_tracking": {
+				"label": _("Bill Tracking"),
+				"can_read": bool(frappe.has_permission("YRP Bill Tracking", ptype="read")),
+				"can_create": bool(frappe.has_permission("YRP Bill Tracking", ptype="create")),
+			},
 			"reports": {"label": _("Reports"), "can_read": bool(reports)},
 		},
 		"reports": reports,

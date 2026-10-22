@@ -228,8 +228,8 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"purchase_invoices\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Accounts department workspace only: purchase_invoices, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"purchase_invoices\",\n   \"bill_tracking\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Accounts department workspace only: purchase_invoices, bill_tracking, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",

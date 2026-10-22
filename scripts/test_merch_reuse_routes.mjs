@@ -2,7 +2,11 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import vm from "node:vm"
 
+import { LAYOUT_UNAVAILABLE_PATH } from "../frontend/src/router/departmentLock.js"
+import { NO_PERMISSION_PATH } from "../frontend/src/router/listPermission.js"
+
 import { createMemoryHistory, createRouter } from "../frontend/node_modules/vue-router/dist/vue-router.mjs"
+import { ACCOUNTS_ROUTES } from "../frontend/src/departments/accounts/accountsViews.js"
 import { MERCH_ROUTES } from "../frontend/src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../frontend/src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../frontend/src/departments/planning/planningViews.js"
@@ -12,7 +16,7 @@ const read = (path) => readFileSync(new URL(`../frontend/src/${path}`, import.me
 const copy = (value) => JSON.parse(JSON.stringify(value))
 const source = read("router/index.js")
 const routes = vm.runInNewContext(`${source.slice(source.indexOf("const AdministratorPage"), source.indexOf("const router = createRouter"))}; routes`, {
-	MERCH_ROUTES, PD_ROUTES, PLANNING_ROUTES, PURCHASE_ROUTES, departments: [],
+	ACCOUNTS_ROUTES, MERCH_ROUTES, PD_ROUTES, PLANNING_ROUTES, PURCHASE_ROUTES, LAYOUT_UNAVAILABLE_PATH, NO_PERMISSION_PATH, departments: [],
 })
 const router = createRouter({ history: createMemoryHistory("/web/"), routes })
 const routeProps = (path) => {
@@ -101,7 +105,7 @@ function harness(file, functions, props, extra = {}) {
 	}
 	return { context, navigation }
 }
-for (const props of [defaults("hr/BillTracking.vue"), routeProps("/merch/bill-tracking/BT-1")]) {
+for (const props of [defaults("hr/BillTracking.vue"), routeProps("/merch/bill-tracking/BT-1"), routeProps("/accounts/bill-tracking/BT-1")]) {
 	const { context, navigation } = harness("hr/BillTracking.vue", ["openEditor", "createPurchaseInvoice", "showPurchaseInvoice"], props, { recordName: () => "BT-1" })
 	context.openEditor()
 	context.createPurchaseInvoice()
@@ -111,7 +115,9 @@ for (const props of [defaults("hr/BillTracking.vue"), routeProps("/merch/bill-tr
 }
 for (const file of ["hr/BillTrackingEditorPage.vue", "accounts/PurchaseInvoiceEditorPage.vue"]) {
 	const section = file.startsWith("hr") ? "bill-tracking" : "purchase-invoices"
-	for (const props of [defaults(file), routeProps(`/merch/${section}/new`)]) {
+	const variants = [defaults(file), routeProps(`/merch/${section}/new`)]
+	if (section === "bill-tracking") variants.push(routeProps("/accounts/bill-tracking/new"))
+	for (const props of variants) {
 		const { context, navigation } = harness(file, ["navigateBack"], props)
 		context.navigateBack()
 		assert.equal(navigation.at(-1).name, props.viewRouteName)

@@ -2,9 +2,20 @@
 
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
+import vm from "node:vm"
+
+import { LAYOUT_UNAVAILABLE_PATH } from "../frontend/src/router/departmentLock.js"
+import { createMemoryHistory, createRouter } from "../frontend/node_modules/vue-router/dist/vue-router.mjs"
+import { MERCH_ROUTES } from "../frontend/src/departments/merch/merchViews.js"
+import { PD_ROUTES } from "../frontend/src/departments/pd/pdViews.js"
+import { PLANNING_ROUTES } from "../frontend/src/departments/planning/planningViews.js"
+import { PURCHASE_ROUTES } from "../frontend/src/departments/purchase/purchaseViews.js"
+import { departments } from "../frontend/src/departments/registry.js"
+import { canOpenList, NO_PERMISSION_PATH } from "../frontend/src/router/listPermission.js"
 
 import {
 	ACCOUNTS_REPORTS,
+	ACCOUNTS_ROUTES,
 	PURCHASE_INVOICE_EDITOR_GROUPS,
 	PURCHASE_INVOICE_LIST_COLUMNS,
 	PURCHASE_INVOICE_STATUS_OPTIONS,
@@ -21,6 +32,45 @@ import {
 	purchaseInvoicePreviewTotals,
 	purchaseInvoiceSaveValues,
 } from "../frontend/src/departments/accounts/accountsViews.js"
+
+const routerSource = readFileSync(new URL("../frontend/src/router/index.js", import.meta.url), "utf8")
+const routes = vm.runInNewContext(`${routerSource.slice(routerSource.indexOf("const AdministratorPage"), routerSource.indexOf("const router = createRouter"))}; routes`, {
+	ACCOUNTS_ROUTES, MERCH_ROUTES, PD_ROUTES, PLANNING_ROUTES, PURCHASE_ROUTES, LAYOUT_UNAVAILABLE_PATH, NO_PERMISSION_PATH, departments,
+})
+const router = createRouter({ history: createMemoryHistory("/web/"), routes })
+const routeProps = (path) => {
+	const route = router.resolve(path)
+	const props = route.matched.at(-1).props.default
+	return typeof props === "function" ? props(route) : props || {}
+}
+const billTrackingPath = "/accounts/bill-tracking"
+for (const [suffix, name] of [
+	["", ACCOUNTS_ROUTES.billTrackings],
+	["/new", ACCOUNTS_ROUTES.billTrackingNew],
+	["/A%2FB/edit", ACCOUNTS_ROUTES.billTrackingEdit],
+	["/A%2FB", ACCOUNTS_ROUTES.billTracking],
+]) {
+	const path = billTrackingPath + suffix
+	assert.equal(router.resolve(path).name, name)
+	assert.equal(router.resolve(path).matched.at(-1).components.default, router.resolve(`/merch/bill-tracking${suffix}`).matched.at(-1).components.default)
+	const props = routeProps(path)
+	assert.equal(props.backTo || props.basePath, suffix ? billTrackingPath : "/accounts")
+	if (suffix) assert.equal(props.listRouteName, ACCOUNTS_ROUTES.billTrackings)
+	if (suffix.startsWith("/A")) assert.equal(props.billTrackingId, "A/B")
+}
+assert.equal(router.resolve({ name: ACCOUNTS_ROUTES.billTracking, params: { billTrackingId: "A/B" } }).path, `${billTrackingPath}/A%2FB`)
+assert.equal(routeProps(billTrackingPath).eyebrow, "Accounts")
+assert.equal(routeProps(billTrackingPath).viewRouteName, ACCOUNTS_ROUTES.billTracking)
+assert.equal(routeProps(billTrackingPath).newRouteName, ACCOUNTS_ROUTES.billTrackingNew)
+const billTrackingProps = routeProps(`${billTrackingPath}/BT-1`)
+assert.equal(billTrackingProps.editRouteName, ACCOUNTS_ROUTES.billTrackingEdit)
+assert.equal(router.resolve({ name: billTrackingProps.purchaseInvoiceNewRouteName }).path, "/accounts/purchase-invoices/new")
+assert.equal(router.resolve({ name: billTrackingProps.purchaseInvoiceViewRouteName, params: { purchaseInvoiceId: "PI/1" } }).path, "/accounts/purchase-invoices/PI%2F1")
+assert.equal(departments.find(({ key }) => key === "accounts").sections.bill_tracking, "bill-tracking")
+assert.equal(canOpenList(billTrackingPath, { user: { can_read: ["YRP Bill Tracking"] } }), true)
+assert.equal(canOpenList(billTrackingPath, { user: { can_read: [] } }), false)
+const layouts = JSON.parse(readFileSync(new URL("../essdee_yrp/fixtures/yrp_ui_layout.json", import.meta.url), "utf8"))
+assert.deepEqual(JSON.parse(layouts.find(({ name }) => name === "Accounts").config).experience_props.workspaces, ["purchase_invoices", "bill_tracking", "reports"])
 
 assert.deepEqual(
 	ACCOUNTS_REPORTS.slice(0, -1).map((report) => report.key),

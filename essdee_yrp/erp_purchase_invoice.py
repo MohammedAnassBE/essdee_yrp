@@ -413,8 +413,45 @@ def _run_local_erp_action(action, invoice_name):
 			)
 
 
+def hold_bill_tracking_for_local_update(invoice, method=None):
+	"""Hide a local Bill Tracking from Essdee's retired remote MRP callback."""
+	bill_tracking = invoice.get("vendor_bill_tracking")
+	if not bill_tracking or not frappe.db.exists("YRP Bill Tracking", bill_tracking):
+		return
+	invoice.flags.local_bill_tracking = bill_tracking
+	invoice.vendor_bill_tracking = None
+
+
+def restore_held_bill_tracking(invoice):
+	bill_tracking = invoice.flags.pop("local_bill_tracking", None)
+	if bill_tracking:
+		invoice.db_set("vendor_bill_tracking", bill_tracking, update_modified=False)
+	return bill_tracking
+
+
+def close_bill_tracking_on_erp_submit(invoice, method=None):
+	"""Close the local Bill Tracking the way production_api's ERP submit callback did."""
+	bill_tracking = restore_held_bill_tracking(invoice)
+	if bill_tracking:
+		close_bill_tracking_for_erp_invoice(bill_tracking, invoice.name)
+
+
+def reopen_bill_tracking_on_erp_cancel(invoice, method=None):
+	"""Reopen the local Bill Tracking the way production_api's ERP cancel callback did."""
+	bill_tracking = restore_held_bill_tracking(invoice)
+	if bill_tracking:
+		revert_bill_tracking_for_erp_invoice(
+			bill_tracking, "purchase_invoice", invoice.name, origin="ERP-cancel"
+		)
+
+
 @frappe.whitelist()
 def close_bill_tracking_from_erp(name, purchase_invoice, remarks=None):
+	frappe.get_doc("YRP Bill Tracking", name).check_permission("write")
+	close_bill_tracking_for_erp_invoice(name, purchase_invoice, remarks)
+
+
+def close_bill_tracking_for_erp_invoice(name, purchase_invoice, remarks=None):
 	"""Close Bill Tracking from an ERPNext Purchase Invoice submission.
 
 	A generated ERP invoice points back to a local YRP Purchase Invoice through
@@ -422,7 +459,6 @@ def close_bill_tracking_from_erp(name, purchase_invoice, remarks=None):
 	link, so it closes Bill Tracking against ``erp_purchase_invoice`` alone.
 	"""
 	bill = frappe.get_doc("YRP Bill Tracking", name)
-	bill.check_permission("write")
 	same_site_invoice, local_invoice = _same_site_erp_invoice_context(name, purchase_invoice)
 	if not same_site_invoice:
 		local_invoice = _local_invoice_for_erp_callback(name, purchase_invoice)
@@ -486,11 +522,15 @@ def revert_bill_tracking_from_erp(
 	expected_pi_name,
 	origin=None,
 ):
-	"""Adapt the ERP cancellation callback without clobbering a replacement PI."""
 	if pi_field not in {"purchase_invoice", "mrp_purchase_invoice"}:
 		frappe.throw(_("Invalid Purchase Invoice field: {0}.").format(pi_field))
+	frappe.get_doc("YRP Bill Tracking", name).check_permission("write")
+	revert_bill_tracking_for_erp_invoice(name, pi_field, expected_pi_name, origin)
+
+
+def revert_bill_tracking_for_erp_invoice(name, pi_field, expected_pi_name, origin=None):
+	"""Adapt the ERP cancellation callback without clobbering a replacement PI."""
 	bill = frappe.get_doc("YRP Bill Tracking", name)
-	bill.check_permission("write")
 	if pi_field == "mrp_purchase_invoice":
 		local_invoice = expected_pi_name
 		same_site_invoice = False

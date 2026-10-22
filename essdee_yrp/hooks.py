@@ -555,6 +555,12 @@ doc_events = {
 			"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_bulk_lay_sheets.sd_yrp_cutting_bulk_lay_sheets.refresh_linked_bulk_status",
 		],
 	},
+	"Purchase Invoice": {
+		"before_submit": "essdee_yrp.erp_purchase_invoice.hold_bill_tracking_for_local_update",
+		"on_submit": "essdee_yrp.erp_purchase_invoice.close_bill_tracking_on_erp_submit",
+		"before_cancel": "essdee_yrp.erp_purchase_invoice.hold_bill_tracking_for_local_update",
+		"on_cancel": "essdee_yrp.erp_purchase_invoice.reopen_bill_tracking_on_erp_cancel",
+	},
 	"YRP Work Order Correction": {
 		"before_submit": "essdee_yrp.work_order_correction_hooks.validate_correction_ipd_items"
 	},

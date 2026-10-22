@@ -91,14 +91,6 @@ export function updateSewingFiDates(rows) {
 	return callMethod(`${FI_DATE_METHOD}.update_fi_dates`, { data: rows })
 }
 
-export function getSewingFiUpdates(supplier) {
-	return callMethod(`${FI_DATE_METHOD}.get_fi_updates_data`, { supplier })
-}
-
-export function updateSewingFiDates(rows) {
-	return callMethod(`${FI_DATE_METHOD}.update_fi_dates`, { data: rows })
-}
-
 export function getSewingConsumption(supplier, lot) {
 	return callMethod(`${PLAN_METHOD}.get_consumption_mapping_data`, { supplier, lot })
 }

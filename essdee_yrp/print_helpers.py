@@ -181,23 +181,38 @@ def get_item_from_variant(variant):
 
 
 def fetch_item_details(items, include_id=False):
-	"""Build the Purchase Order grid expected by the Essdee print layout.
+	"""Build MRP's Purchase Order print grid from the F16 grouping service.
 
-	The F16 grouping service remains the source of truth. Only legacy display
-	aliases are added here; no transaction data is changed.
+	Rows are ordered and grouped like MRP: ``row_index`` sorted as text, and a
+	size-wise item only shares a table with earlier rows of the same item.
 	"""
-	groups = _group_items(items, "Purchase Order")
-	for group in groups:
-		group["additional_parameters"] = [
-			True for item in group.get("items") or [] if item.get("additional_parameters")
-		]
-		for item in group.get("items") or []:
-			for detail in (item.get("values") or {}).values():
-				detail["pending_qty"] = detail.get("pending_quantity", 0)
-				detail["cancelled_qty"] = detail.get("cancelled_quantity", 0)
-				detail["tax"] = detail.get("tax") or item.get("tax") or 0
-				if include_id:
-					detail.setdefault("ref_doctype", "Purchase Order Item")
+	from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details
+	from yrp.yrp.doctype.yrp_purchase_order.yrp_purchase_order import get_item_group_index
+
+	delivery_dates = {}
+	for row in items or []:
+		key = str(row.get("row_index") or "")
+		dates = (delivery_dates.get(key), row.get("schedule_date"))
+		delivery_dates[key] = max(filter(None, dates), default=None)
+	entries = [item for group in _group_items(items, "Purchase Order") for item in group.get("items") or []]
+	groups = []
+	for item in sorted(entries, key=lambda entry: str(entry.get("row_index") or "")):
+		details = get_attribute_details(item["name"])
+		details = dict(details, attributes=list(details.get("attributes") or []))
+		delivery_date = delivery_dates.get(str(item.get("row_index") or "")) or item.get("schedule_date")
+		item["delivery_date"] = str(delivery_date)
+		item["secondary_uom"] = item.get("secondary_uom") or details.get("secondary_uom")
+		for detail in (item.get("values") or {}).values():
+			detail["pending_qty"] = detail.get("pending_quantity", 0)
+			detail["cancelled_qty"] = detail.get("cancelled_quantity", 0)
+			detail["tax"] = detail.get("tax") or item.get("tax") or 0
+			if include_id:
+				detail.setdefault("ref_doctype", "Purchase Order Item")
+		index = get_item_group_index(groups, details)
+		if index == -1:
+			groups.append({**details, "items": [item]})
+		else:
+			groups[index]["items"].append(item)
 	return groups
 
 

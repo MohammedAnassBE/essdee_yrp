@@ -20,6 +20,10 @@ export function getBillTrackingEditor(name = null, duplicateFrom = null) {
 	return callMethod(`${WORKSPACE_METHOD}.get_bill_tracking_editor`, { name, duplicate_from: duplicateFrom || undefined })
 }
 
+export function getSupplierTaxIds(supplier) {
+	return callMethod(`${WORKSPACE_METHOD}.get_supplier_tax_ids`, { supplier })
+}
+
 export function saveBillTracking(values, options = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.save_bill_tracking`, {
 		values,

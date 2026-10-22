@@ -11,9 +11,11 @@ export const BILL_TRACKING_STATUS_OPTIONS = [
 
 export const BILL_TRACKING_LIST_COLUMNS = [
 	"supplier",
+	"gstin",
 	"bill_no",
 	"bill_date",
 	"invoice_value",
+	"received_date",
 	"assigned_to",
 	"form_status",
 ]

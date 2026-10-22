@@ -29,7 +29,7 @@
 					search-placeholder="Search Bill Tracking…"
 					name-column-label="Bill Tracking"
 					row-mark="BT"
-					min-table-width="1080px"
+					min-table-width="1280px"
 					status-field="form_status"
 					:status-options="BILL_TRACKING_STATUS_OPTIONS"
 					:default-columns="BILL_TRACKING_LIST_COLUMNS"

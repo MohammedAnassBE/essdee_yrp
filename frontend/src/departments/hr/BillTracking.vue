@@ -28,7 +28,9 @@
 						</div>
 						<dl class="bill-tracking-header__facts">
 							<div><dt>Supplier</dt><dd :title="record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier" :label="record.supplier || '—'" /></dd></div>
+							<div><dt>GSTIN / UIN</dt><dd :title="record.gstin || '—'">{{ record.gstin || "—" }}</dd></div>
 							<div><dt>Bill No</dt><dd :title="record.bill_no || '—'">{{ record.bill_no || "—" }}</dd></div>
+							<div><dt>Bill Date</dt><dd>{{ dateTime(record.bill_date) }}</dd></div>
 							<div><dt>Invoice Value</dt><dd>{{ money(record.invoice_value) }}</dd></div>
 						</dl>
 					</div>
@@ -37,42 +39,34 @@
 					<DocumentActionStrip :actions="actions" />
 				</template>
 				<template #fields>
-					<Tabs v-model:value="activeTab" class="bill-tracking-tabs erp-tabs">
-						<TabList>
-							<Tab value="details">Details</Tab>
-							<Tab value="history">History <span>{{ workspace.history?.length || 0 }}</span></Tab>
-						</TabList>
-						<TabPanels>
-							<TabPanel value="details">
-								<DocumentOverview
-									:fields="workspace.details || []"
-									:definitions="DETAIL_GROUPS"
-									aria-label="Bill Tracking details"
-									id-prefix="bill-tracking-overview"
-								/>
-							</TabPanel>
-							<TabPanel value="history">
-								<section class="bill-tracking-history erp-card" aria-label="Bill Tracking history">
-									<div v-if="workspace.history?.length" class="bill-tracking-history__table" role="region" tabindex="0">
-										<table>
-											<thead><tr><th>Action</th><th>Department</th><th>By</th><th>On</th><th>Received</th><th>Remarks</th></tr></thead>
-											<tbody>
-												<tr v-for="(row, index) in workspace.history" :key="`${row.assigned_on || 'history'}-${index}`">
-													<td>{{ row.action || "—" }}</td>
-													<td><DocumentLink doctype="Department" :name="row.assigned_to" :label="row.assigned_to || '—'" /></td>
-													<td><DocumentLink doctype="User" :name="row.assigned_by" :label="row.assigned_by || '—'" /></td>
-													<td>{{ dateTime(row.assigned_on) }}</td>
-													<td>{{ Number(row.received) ? "Yes" : "No" }}</td>
-													<td>{{ row.remarks || "—" }}</td>
-												</tr>
-											</tbody>
-										</table>
-									</div>
-									<div v-else class="bill-tracking-history__empty"><i class="pi pi-inbox" /><span>No history has been recorded.</span></div>
-								</section>
-							</TabPanel>
-						</TabPanels>
-					</Tabs>
+					<div class="bill-tracking-body">
+						<DocumentOverview
+							:fields="detailFields"
+							:definitions="DETAIL_GROUPS"
+							include-empty
+							aria-label="Bill Tracking details"
+							id-prefix="bill-tracking-overview"
+						/>
+						<section class="bill-tracking-history erp-card" aria-labelledby="bill-tracking-history-title">
+							<h2 id="bill-tracking-history-title" class="bill-tracking-history__title">Bill Tracking History <span>{{ workspace.history?.length || 0 }}</span></h2>
+							<div v-if="workspace.history?.length" class="bill-tracking-history__table" role="region" tabindex="0">
+								<table>
+									<thead><tr><th>Action</th><th>Assigned To</th><th>Assigned By</th><th>Assigned On</th><th>Received</th><th>Remarks</th></tr></thead>
+									<tbody>
+										<tr v-for="(row, index) in workspace.history" :key="`${row.assigned_on || 'history'}-${index}`">
+											<td>{{ row.action || "—" }}</td>
+											<td><DocumentLink doctype="Department" :name="row.assigned_to" :label="row.assigned_to || '—'" /></td>
+											<td><DocumentLink doctype="User" :name="row.assigned_by" :label="row.assigned_by || '—'" /></td>
+											<td>{{ dateTime(row.assigned_on) }}</td>
+											<td>{{ Number(row.received) ? "Yes" : "No" }}</td>
+											<td>{{ row.remarks || "—" }}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+							<div v-else class="bill-tracking-history__empty"><i class="pi pi-inbox" /><span>No history has been recorded.</span></div>
+						</section>
+					</div>
 				</template>
 				<template #rail>
 					<div class="bill-tracking-metric"><span>History entries</span><strong>{{ workspace.history?.length || 0 }}</strong></div>
@@ -111,11 +105,6 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
-import Tab from "primevue/tab"
-import TabList from "primevue/tablist"
-import TabPanel from "primevue/tabpanel"
-import TabPanels from "primevue/tabpanels"
-import Tabs from "primevue/tabs"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
@@ -142,11 +131,21 @@ import BillTrackingCancelDialog from "./components/BillTrackingCancelDialog.vue"
 import { billTrackingActionItems } from "./hrViews.js"
 
 const DETAIL_GROUPS = [
-	{ key: "bill", label: "Bill", icon: "pi pi-receipt", fields: ["bill_date", "gstin", "pan"] },
-	{ key: "delivery", label: "Delivery", icon: "pi pi-truck", fields: ["received_date", "received_via", "receive_comment", "delivery_person", "delivery_mob_no"] },
-	{ key: "assignment", label: "Assignment", icon: "pi pi-send", fields: ["assigned_to", "cancel_reason"] },
-	{ key: "invoices", label: "Invoices", icon: "pi pi-file", fields: ["purchase_invoice", "erp_purchase_invoice"] },
+	{
+		key: "vendor",
+		label: "Vendor Details",
+		icon: "pi pi-receipt",
+		fields: ["supplier", "bill_no", "gstin", "bill_date", "pan", "invoice_value", "purchase_invoice", "department", "erp_purchase_invoice"],
+	},
+	{
+		key: "delivery",
+		label: "Delivery Details",
+		icon: "pi pi-truck",
+		fields: ["received_date", "received_via", "delivery_mob_no", "delivery_person", "assigned_to", "receive_comment"],
+	},
+	{ key: "status", label: "Status", icon: "pi pi-flag", fields: ["form_status", "cancel_reason", "amended_from"] },
 ]
+const OPTIONAL_DETAIL_FIELDS = new Set(["cancel_reason", "amended_from"])
 
 const props = defineProps({
 	billTrackingId: { type: String, default: "" },
@@ -165,7 +164,6 @@ const loading = ref(true)
 const loadError = ref("")
 const actionError = ref("")
 const acting = ref("")
-const activeTab = ref("details")
 const assignVisible = ref(false)
 const cancelVisible = ref(false)
 const confirmationVisible = ref(false)
@@ -202,6 +200,8 @@ const actions = computed(() => [...billTrackingActionItems(workspace.value.capab
 		disabled: Boolean(acting.value),
 		loading: acting.value === action.key,
 	})), ...(duplicateAction.value ? [duplicateAction.value] : [])])
+const detailFields = computed(() => (workspace.value.details || [])
+	.filter((field) => !OPTIONAL_DETAIL_FIELDS.has(field.fieldname) || ![null, undefined, ""].includes(field.value)))
 const confirmation = computed(() => ({
 	bill_received: {
 		title: "Mark bill as received?",
@@ -294,7 +294,6 @@ function resetRecordState() {
 	cancelVisible.value = false
 	confirmationVisible.value = false
 	pendingAction.value = ""
-	activeTab.value = "details"
 }
 
 function beginRecordAction(command) {
@@ -456,12 +455,11 @@ onBeforeUnmount(() => {
 .bill-tracking-header__facts > div { display: grid; min-width: 120px; gap: 2px; padding: 0 13px; border-left: 1px solid var(--erp-border); }
 .bill-tracking-header__facts dt, .bill-tracking-metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .bill-tracking-header__facts dd { max-width: 190px; margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.bill-tracking-tabs :deep(.p-tablist-tab-list) { border-color: var(--erp-border); background: transparent; }
-.bill-tracking-tabs :deep(.p-tab) { gap: 6px; }
-.bill-tracking-tabs :deep(.p-tab span) { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
-.bill-tracking-tabs :deep(.p-tabpanels) { padding: var(--erp-space-3) 0 0; background: transparent; }
 .bill-tracking-metric { display: grid; min-height: 76px; align-content: center; gap: 4px; padding: 12px 14px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface); }
 .bill-tracking-metric strong { color: var(--erp-accent-hover); font-size: 22px; font-variant-numeric: tabular-nums; }
+.bill-tracking-body { display: grid; min-width: 0; gap: var(--erp-space-4); }
+.bill-tracking-history__title { display: flex; align-items: center; gap: 6px; margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--erp-border); color: var(--erp-text); font-size: var(--erp-font-size-body, 14px); font-weight: 700; }
+.bill-tracking-history__title span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .bill-tracking-history { min-width: 0; overflow: hidden; border-color: var(--erp-border); box-shadow: var(--erp-shadow-xs); }
 .bill-tracking-history__table { max-width: 100%; overflow: auto; }
 .bill-tracking-history table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }

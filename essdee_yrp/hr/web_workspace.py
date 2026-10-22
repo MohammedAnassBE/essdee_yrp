@@ -23,24 +23,33 @@ DOCTYPE = "YRP Bill Tracking"
 RECEIVED_VIA_DOCTYPE = "YRP Bill Tracking Received Via"
 DELIVERY_PERSON_DOCTYPE = "YRP Vendor Bill Delivery Person"
 DETAIL_FIELDS = (
-	"bill_date",
+	"supplier",
 	"gstin",
 	"pan",
-	"received_date",
-	"received_via",
-	"receive_comment",
-	"delivery_person",
-	"delivery_mob_no",
-	"assigned_to",
-	"cancel_reason",
 	"purchase_invoice",
 	"erp_purchase_invoice",
-)
-EDITOR_FIELDS = (
-	"supplier",
 	"bill_no",
 	"bill_date",
 	"invoice_value",
+	"department",
+	"received_date",
+	"delivery_mob_no",
+	"delivery_person",
+	"received_via",
+	"receive_comment",
+	"assigned_to",
+	"form_status",
+	"cancel_reason",
+	"amended_from",
+)
+EDITOR_FIELDS = (
+	"supplier",
+	"gstin",
+	"pan",
+	"bill_no",
+	"bill_date",
+	"invoice_value",
+	"department",
 	"received_date",
 	"received_via",
 	"receive_comment",
@@ -54,7 +63,9 @@ RECORD_FIELDS = (
 	"form_status",
 	"modified",
 	"supplier",
+	"gstin",
 	"bill_no",
+	"bill_date",
 	"invoice_value",
 	"purchase_invoice",
 	"erp_purchase_invoice",
@@ -208,7 +219,7 @@ def serialize_details(doc) -> list[dict]:
 	return [
 		_detail_field(doc, fieldname)
 		for fieldname in DETAIL_FIELDS
-		if fieldname in readable_fields and doc.get(fieldname) not in (None, "")
+		if fieldname in readable_fields
 	]
 
 
@@ -248,6 +259,15 @@ def get_bill_tracking_workspace(name: str) -> dict:
 		"capabilities": capabilities,
 		"can_open_desk": can_open_desk,
 	}
+
+
+@frappe.whitelist()
+def get_supplier_tax_ids(supplier: str) -> dict:
+	"""GSTIN and PAN that Desk fetches into a bill when its supplier changes."""
+	if not frappe.has_permission("Supplier", ptype="select", doc=supplier):
+		frappe.has_permission("Supplier", ptype="read", doc=supplier, throw=True)
+	values = frappe.db.get_value("Supplier", supplier, ["gstin", "pan"], as_dict=True) or {}
+	return {"gstin": values.get("gstin"), "pan": values.get("pan")}
 
 
 def _get_draft_for_save(name, expected_modified):

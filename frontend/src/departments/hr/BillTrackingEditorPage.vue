@@ -97,7 +97,7 @@ import { useToast } from "primevue/usetoast"
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router"
 
-import { getBillTrackingEditor, saveBillTracking } from "../../api/hr.js"
+import { getBillTrackingEditor, getSupplierTaxIds, saveBillTracking } from "../../api/hr.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import FormField from "../../components/common/FormField.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
@@ -110,23 +110,26 @@ import DeliveryPersonSuggestion from "./components/DeliveryPersonSuggestion.vue"
 
 const FIELD_GROUPS = [
 	{
-		key: "bill",
+		key: "vendor",
 		eyebrow: "Vendor invoice",
-		label: "Bill",
-		fields: ["supplier", "bill_no", "bill_date", "invoice_value"],
+		label: "Vendor Details",
+		fields: ["supplier", "bill_no", "gstin", "bill_date", "pan", "invoice_value", "department"],
 	},
 	{
 		key: "delivery",
 		eyebrow: "Receipt",
-		label: "Delivery",
+		label: "Delivery Details",
 		fields: ["received_date", "received_via", "receive_comment"],
 	},
 ]
 const FORM_FIELDS = [
 	"supplier",
+	"gstin",
+	"pan",
 	"bill_no",
 	"bill_date",
 	"invoice_value",
+	"department",
 	"received_date",
 	"received_via",
 	"receive_comment",
@@ -135,9 +138,12 @@ const FORM_FIELDS = [
 const REQUIRED_FIELDS = new Set(["supplier", "bill_no", "bill_date", "invoice_value", "received_date", "received_via"])
 const FALLBACK_SCHEMA = {
 	supplier: { label: "Supplier", fieldtype: "Link", options: "Supplier" },
+	gstin: { label: "GSTIN / UIN", fieldtype: "Data" },
+	pan: { label: "PAN", fieldtype: "Data" },
 	bill_no: { label: "Bill No", fieldtype: "Data" },
 	bill_date: { label: "Bill Date", fieldtype: "Date" },
 	invoice_value: { label: "Invoice Value", fieldtype: "Currency" },
+	department: { label: "Department", fieldtype: "Link", options: "Department" },
 	received_date: { label: "Received Date", fieldtype: "Date" },
 	received_via: { label: "Received Via", fieldtype: "Select" },
 	receive_comment: { label: "Receive Comment", fieldtype: "Small Text" },
@@ -208,6 +214,23 @@ async function load() {
 	}
 }
 
+async function fetchSupplierTaxIds(supplier, previous) {
+	if (loading.value || supplier === previous) return
+	if (!supplier) {
+		form.gstin = ""
+		form.pan = ""
+		return
+	}
+	try {
+		const taxIds = await getSupplierTaxIds(supplier) || {}
+		if (form.supplier !== supplier) return
+		form.gstin = taxIds.gstin || ""
+		form.pan = taxIds.pan || ""
+	} catch {
+		// Saving still fetches GSTIN and PAN from the supplier on the server.
+	}
+}
+
 function beginRequest(command) {
 	return {
 		command,
@@ -221,9 +244,11 @@ function isCurrentRequest(request) {
 }
 
 function fieldsFor(group) {
-	return group.fields
-		.filter((fieldname) => fieldname !== "receive_comment" || form.received_via === "Others")
-		.map(editorField)
+	return group.fields.filter(isReadable).map(editorField)
+}
+
+function isReadable(fieldname) {
+	return Object.hasOwn(editor.value.values || {}, fieldname)
 }
 
 function editorField(fieldname) {
@@ -269,7 +294,8 @@ async function save(submit) {
 	const request = beginRequest(submit ? "submit" : "save")
 	saving.value = submit ? "submit" : "save"
 	try {
-		const workspace = await saveBillTracking({ ...form }, {
+		const values = Object.fromEntries(FORM_FIELDS.filter(isReadable).map((fieldname) => [fieldname, form[fieldname]]))
+		const workspace = await saveBillTracking(values, {
 			name: request.name || undefined,
 			submit,
 			expectedModified: editor.value.modified,
@@ -363,6 +389,7 @@ onBeforeUnmount(() => {
 	window.removeEventListener("beforeunload", beforeUnload)
 })
 watch([currentName, duplicateFrom], load, { immediate: true })
+watch(() => form.supplier, fetchSupplierTaxIds)
 </script>
 
 <style scoped>

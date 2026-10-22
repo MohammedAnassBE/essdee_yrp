@@ -544,6 +544,36 @@ class TestBillTrackingCommands(TestCase):
 			web_workspace.get_bill_tracking_editor,
 			web_workspace.save_bill_tracking,
 			web_workspace.execute_bill_tracking_command,
+			web_workspace.get_supplier_tax_ids,
 		):
 			with self.subTest(function=function.__name__):
 				self.assertIn(function, frappe.whitelisted)
+
+
+class TestBillTrackingDetails(TestCase):
+	def test_details_keep_empty_readable_fields_in_desk_order(self):
+		doc = FakeBillTracking(gstin="33ABCDE1234F1Z5", department=None, receive_comment="")
+		doc.permitted_fieldnames.discard("pan")
+
+		names = [field["fieldname"] for field in web_workspace.serialize_details(doc)]
+
+		self.assertEqual(names, [name for name in web_workspace.DETAIL_FIELDS if name != "pan"])
+		self.assertEqual(names[:3], ["supplier", "gstin", "purchase_invoice"])
+
+	def test_record_carries_gstin_and_bill_date_for_the_header(self):
+		doc = FakeBillTracking(gstin="33ABCDE1234F1Z5", bill_date="2026-09-19")
+
+		record = web_workspace._record(doc)
+
+		self.assertEqual(record["gstin"], "33ABCDE1234F1Z5")
+		self.assertEqual(record["bill_date"], "2026-09-19")
+
+	def test_supplier_tax_ids_need_supplier_access(self):
+		with (
+			patch.object(frappe, "has_permission", side_effect=[False, True]) as has_permission,
+			patch.object(frappe.db, "get_value", return_value={"gstin": "33ABCDE1234F1Z5", "pan": "ABCDE1234F"}),
+		):
+			result = web_workspace.get_supplier_tax_ids("E2E-AHR-SUPPLIER")
+
+		self.assertEqual(result, {"gstin": "33ABCDE1234F1Z5", "pan": "ABCDE1234F"})
+		self.assertEqual(has_permission.call_args.kwargs, {"ptype": "read", "doc": "E2E-AHR-SUPPLIER", "throw": True})

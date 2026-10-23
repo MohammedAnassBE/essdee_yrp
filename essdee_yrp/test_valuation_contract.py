@@ -1321,7 +1321,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 		):
 			return _allocate_to_work_order_deliverables(required, work_order, grn)
 
-	def test_input_shortage_is_the_supplier_stock_and_names_its_source(self):
+	def test_input_shortage_is_the_supplier_stock_as_a_short_table(self):
 		work_order, grn, required = self._packing_allocation_fixture()
 		stock = {"INNER-CARD": 100, "POLY-BAG": 240, "TOP-BOX": 24}
 
@@ -1329,12 +1329,11 @@ class TestEssdeeValuationContract(UnitTestCase):
 			self._allocate_with_supplier_stock(work_order, grn, required, stock)
 
 		message = str(raised.exception)
-		self.assertIn("SUPPLIER-WH", message)
-		self.assertIn("Item Production Detail IPD-1", message)
-		self.assertIn("Packing", message)
-		self.assertIn("Consumed Materials", message)
+		self.assertNotIn("SUPPLIER-WH", message)
+		self.assertNotIn("Item Production Detail", message)
 		self.assertIn(
-			"INNER-CARD (Lot LOT-1, Received Type Accepted): need 240 Nos, supplier stock 100, short 140",
+			"<td>INNER-CARD <small class='text-muted'>LOT-1 / Accepted</small></td>"
+			"<td>240</td><td>100</td><td>140</td>",
 			message,
 		)
 		self.assertNotIn("POLY-BAG", message)

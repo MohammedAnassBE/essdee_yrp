@@ -1,11 +1,11 @@
 <template>
 	<div class="finishing-stack" :class="{ 'finishing-entry--readonly': readonly }">
-		<div class="finishing-scroll" role="region" tabindex="0" aria-label="Packed and balance boxes">
+		<div v-if="dynamic" class="finishing-scroll" role="region" tabindex="0" aria-label="Packed and balance boxes">
 			<table class="finishing-table">
 				<thead><tr><th>Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
 					<tr v-if="showPacked"><td>Packed</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
-					<tr><td>Balance</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(Number(packed.total_packed || 0) - Number(packed.total_dispatched || 0)) }}</td></tr>
+					<tr><td>Balance</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -23,19 +23,24 @@
 				</tbody>
 			</table>
 			<table v-else-if="mode === 'Size Ratio Packing'" class="finishing-table">
-				<thead><tr><th>Colour</th><th class="erp-number">Boxes</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th></tr></thead>
+				<thead><tr><th>Colour</th><th class="erp-number">Boxes</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
+					<tr v-if="showPacked" class="dispatch-entry__reference"><td>Packed</td><td></td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
+					<tr class="dispatch-entry__reference"><td>Balance</td><td></td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 					<tr v-for="colour in colours" :key="colour">
 						<td>{{ colour }}</td>
 						<td><input v-model="state.colourBoxes[colour]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${colour} boxes`" :disabled="disabled" /></td>
-						<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(Number(state.colourBoxes[colour] || 0) * Number(ratio[size] || 0) / combo) }}</td>
+						<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(colourRatioPieces(colour, size)) }}</td>
+						<td class="erp-number">{{ formatQuantity(sizes.reduce((sum, size) => sum + colourRatioPieces(colour, size), 0)) }}</td>
 					</tr>
-					<tr class="finishing-table__total-row"><td>Dispatch</td><td class="erp-number">{{ formatQuantity(totalBoxes) }}</td><td v-for="size in sizes" :key="size" class="erp-number" :class="{ 'dispatch-entry--over': over(size) }">{{ formatQuantity(bySize[size]) }}</td></tr>
+					<tr class="finishing-table__total-row"><td>Dispatch</td><td class="erp-number">{{ formatQuantity(totalBoxes) }}</td><td v-for="size in sizes" :key="size" class="erp-number" :class="{ 'dispatch-entry--over': over(size) }">{{ formatQuantity(bySize[size]) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>
 				</tbody>
 			</table>
 			<table v-else-if="mode === 'Size Wise Packing'" class="finishing-table">
 				<thead><tr><th>Colour \ Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
+					<tr v-if="showPacked" class="dispatch-entry__reference"><td>Packed</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
+					<tr class="dispatch-entry__reference"><td>Balance</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 					<tr v-for="colour in colours" :key="colour">
 						<td>{{ colour }}</td>
 						<td v-for="size in sizes" :key="size"><input v-model="state.colourSize[colour][size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${colour} ${size} boxes`" :disabled="disabled" /></td>
@@ -47,8 +52,10 @@
 			<table v-else class="finishing-table">
 				<thead><tr><th>Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
+					<tr v-if="showPacked" class="dispatch-entry__reference"><td>Packed</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
+					<tr class="dispatch-entry__reference"><td>Balance</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 					<tr>
-						<td>Dispatch Qty</td>
+						<td>Dispatch</td>
 						<td v-for="size in sizes" :key="size"><input v-model="state.legacy[size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${size} dispatch boxes`" :disabled="disabled" /></td>
 						<td class="erp-number">{{ formatQuantity(grandTotal) }}</td>
 					</tr>
@@ -94,12 +101,18 @@ const totalBoxes = computed(() => dynamic.value
 	? batches.value.reduce((sum, batch) => sum + (Number(state.batchBoxes[batch.batch_row]) || 0), 0)
 	: Object.values(state.colourBoxes).reduce((sum, boxes) => sum + (Number(boxes) || 0), 0))
 
+const balanceTotal = computed(() => Number(props.packed.total_packed || 0) - Number(props.packed.total_dispatched || 0))
+
 function packedOf(size) {
 	return Number(props.packed.sizes?.[size]?.packed) || 0
 }
 
 function balance(size) {
 	return packedOf(size) - (Number(props.packed.sizes?.[size]?.dispatched) || 0)
+}
+
+function colourRatioPieces(colour, size) {
+	return Number(state.colourBoxes[colour] || 0) * Number(ratio.value[size] || 0) / combo.value
 }
 
 function over(size) {
@@ -124,5 +137,6 @@ defineExpose({ values, validationError: () => "" })
 </script>
 
 <style scoped>
+.dispatch-entry__reference td { color: var(--erp-text-secondary); }
 .dispatch-entry--over { color: var(--erp-danger) !important; font-weight: 750; }
 </style>

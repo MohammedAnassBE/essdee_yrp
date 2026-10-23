@@ -44,7 +44,7 @@
 				@transfer="confirmLotTransfer"
 			/>
 		</section>
-		<FinishingEntryDialog v-if="entryAction" v-model:visible="entryOpen" :action="entryAction" :name="finishingPlanId" :workspace="workspace" :busy="busy" @submit="submitEntry" />
+		<FinishingEntryDialog v-if="entryAction" v-model:visible="entryOpen" :action="entryAction" :name="finishingPlanId" :workspace="workspace" :prefill="entryContext.prefill" :source-entry="entryContext.sourceEntry" :busy="busy" @submit="submitEntry" />
 		<RelatedDocumentWorkspaceDialog
 			v-model:visible="relatedDocumentOpen"
 			:doctype="openedDocument.doctype"
@@ -115,6 +115,7 @@ const documentOpen = ref(false)
 const relatedDocumentOpen = ref(false)
 const entryOpen = ref(false)
 const entryAction = ref("")
+const entryContext = ref({})
 const RELATED_DOCUMENT_DOCTYPES = new Set(["YRP Delivery Challan", "YRP Goods Received Note"])
 const openedDocument = reactive({ doctype: "YRP Delivery Challan", name: "" })
 const headerFacts = computed(() => [
@@ -180,8 +181,9 @@ async function runCommand(command, payload = {}) {
 	}
 }
 
-function openEntry(action) {
+function openEntry(action, context = {}) {
 	entryAction.value = action
+	entryContext.value = context
 	entryOpen.value = true
 }
 

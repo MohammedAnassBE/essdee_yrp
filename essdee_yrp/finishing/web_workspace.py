@@ -22,6 +22,7 @@ from essdee_yrp.finishing import (
 )
 from essdee_yrp.finishing.alternative import get_alternative_details
 from essdee_yrp.finishing.parsing import json_object
+from essdee_yrp.finishing.source_entries import get_source_entries
 from essdee_yrp.finishing.web_entries import ENTRY_COMMANDS
 from essdee_yrp.planning.reports import inhouse_quantity
 from essdee_yrp.print_registry import get_document_print_formats
@@ -201,9 +202,7 @@ def get_linked_documents(doc) -> list[dict]:
 	groups = []
 	for key, (label, doctype, cancellable) in LINKED_DOCUMENT_LISTS.items():
 		entries = json_object(doc.get(key))
-		documents = [
-			{"name": name, "date": value if isinstance(value, str) else ""} for name, value in entries.items()
-		]
+		documents = [{"name": name, "date": _entry_date(value)} for name, value in entries.items()]
 		groups.append(
 			{
 				"key": key,
@@ -214,6 +213,12 @@ def get_linked_documents(doc) -> list[dict]:
 			}
 		)
 	return groups
+
+
+def _entry_date(value) -> str:
+	if isinstance(value, dict):
+		return cstr(value.get("datetime"))
+	return value if isinstance(value, str) else ""
 
 
 def get_dispatch_logs(doc) -> list[dict]:
@@ -293,6 +298,7 @@ def _old_lot_tab(doc):
 		"given": plan_views["old_lot_given_matrix"],
 		"received": plan_views["old_lot_received_matrix"],
 		"available": available,
+		"entries": get_source_entries(doc, "lot_transfer_list"),
 	}
 
 
@@ -311,6 +317,15 @@ def _p_and_l_tab(doc):
 	return {"documents": closure.get_p_and_l_documents(doc.name)}
 
 
+def _ironing_excess_tab(doc):
+	return _matrix_payload(
+		doc,
+		views.build_plan_views(doc),
+		"finishing_ironing",
+		entries=get_source_entries(doc, "ironing_excess_list"),
+	)
+
+
 def _view_tab(key):
 	return lambda doc: _matrix_payload(doc, views.build_plan_views(doc), key)
 
@@ -321,7 +336,7 @@ TAB_LOADERS = {
 	"grn": _grn_tab,
 	"inward": _view_tab("inward_details"),
 	"old_lot": _old_lot_tab,
-	"ironing_excess": _view_tab("finishing_ironing"),
+	"ironing_excess": _ironing_excess_tab,
 	"pack_return": _view_tab("pack_return"),
 	"ocr": _ocr_tab,
 	"ocr_consumption": lambda doc: insights.get_fp_consumption_details(doc.name),

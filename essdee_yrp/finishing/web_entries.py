@@ -9,7 +9,7 @@ from frappe import _
 from frappe.utils import cstr, flt
 
 from essdee_yrp.cut_panel_store.common import parse_json_object
-from essdee_yrp.finishing import alternative, old_lot, transactions, views
+from essdee_yrp.finishing import alternative, old_lot, source_entries, transactions, views
 from essdee_yrp.finishing.dispatch_locations import DISPATCH_LOCATION_FIELDS
 
 DELIVERY_CHALLAN_TYPES = ("balance", "return_qty", "pack_return")
@@ -84,6 +84,9 @@ def create_delivery_challan(doc, values):
 	selected_type = values.get("selected_type")
 	if selected_type not in DELIVERY_CHALLAN_TYPES:
 		frappe.throw(_("Choose Balance, Loose Piece or Loose Piece Packed."))
+	source_entry = cstr(values.get("source_entry"))
+	if source_entry:
+		source_entries.get_source_list_key(doc, source_entry)
 	items = get_entry_matrix(
 		doc, "finishing_qty", "balance_dc", values.get("quantities"), checked_default=False
 	)
@@ -96,6 +99,7 @@ def create_delivery_challan(doc, values):
 		"NA",
 		doc.name,
 		values["actual_date"],
+		source_entry=source_entry or None,
 	)
 	return document("YRP Delivery Challan", name)
 

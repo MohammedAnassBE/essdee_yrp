@@ -13,7 +13,7 @@
                 <tbody class="dark-border">
                     <tr v-for="(date, ie) in ie_list">
                         <td style="cursor: pointer;" @click="redirect_to('YRP Stock Entry', ie)">{{ ie }}</td>
-                        <td>{{ date }}</td>
+                        <td>{{ date?.datetime ?? date }}</td>
                         <td>
                             <button class="btn btn-primary" @click="cancel_doc('YRP Stock Entry', ie)">Cancel</button>
                         </td>

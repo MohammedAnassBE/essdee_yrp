@@ -7,6 +7,7 @@ from yrp.utils import update_if_string_instance
 
 from essdee_yrp.finishing.packing import rebuild_finishing_packing_quantities
 from essdee_yrp.finishing.parsing import json_object
+from essdee_yrp.finishing.source_entries import new_entry
 from essdee_yrp.finishing.state import (
 	get_finishing_plan_dict,
 	get_finishing_plan_list,
@@ -179,7 +180,7 @@ def _update_ironing_excess(finishing_doc, stock_entry, *, cancelled):
 	if cancelled:
 		ironing_excess_list.pop(stock_entry.name, None)
 	else:
-		ironing_excess_list[stock_entry.name] = now_datetime().strftime("%d-%m-%Y %H:%M:%S")
+		ironing_excess_list[stock_entry.name] = new_entry()
 	finishing_doc.ironing_excess_list = frappe.json.dumps(ironing_excess_list)
 	finishing_doc.save(ignore_permissions=True)
 

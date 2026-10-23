@@ -2,7 +2,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import flt, now_datetime
+from frappe.utils import flt
 from yrp.attribute_links import value as _attribute_value
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant
@@ -11,6 +11,7 @@ from essdee_yrp.finishing.old_lot_history import (
 	get_old_lot_source_balance,
 )
 from essdee_yrp.finishing.parsing import json_object
+from essdee_yrp.finishing.source_entries import new_entry
 from essdee_yrp.finishing.state import get_finishing_plan_dict, get_finishing_plan_list
 from essdee_yrp.finishing.status import apply_auto_fp_status
 from essdee_yrp.finishing.views import reshape_old_lot_rows_for_ui
@@ -262,7 +263,7 @@ def _apply_lot_transfer_to_finishing(transfer, *, cancelled):
 	if cancelled:
 		transfer_list.pop(transfer.name, None)
 	else:
-		transfer_list[transfer.name] = now_datetime().strftime("%d-%m-%Y %H:%M:%S")
+		transfer_list[transfer.name] = new_entry()
 	finishing_doc.lot_transfer_list = frappe.as_json(transfer_list)
 	finishing_doc.set("finishing_plan_details", get_finishing_plan_list(finishing_items))
 	apply_auto_fp_status(finishing_doc)

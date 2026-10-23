@@ -350,6 +350,7 @@ def create_delivery_challan(
 	fp_name,
 	actual_date,
 	quantity_field="balance_dc",
+	source_entry=None,
 ):
 	"""Create a Finishing DC for the typed quantities in ``quantity_field``.
 
@@ -405,6 +406,7 @@ def create_delivery_challan(
 			"from_finishing": 1,
 			"loose_piece_dc": 1 if selected_type == "return_qty" else 0,
 			"pack_piece_dc": 1 if selected_type == "pack_return" else 0,
+			"finishing_source_entry": source_entry,
 		}
 	)
 	delivery_challan.set("items", items)

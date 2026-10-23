@@ -2,15 +2,19 @@
 
 import frappe
 
+from essdee_yrp.finishing.source_entries import set_entry_dc
+
 
 def on_submit(delivery_challan, method=None):
 	del method
 	_sync_finishing_plan(delivery_challan)
+	set_entry_dc(delivery_challan, cancelled=False)
 
 
 def on_cancel(delivery_challan, method=None):
 	del method
 	_sync_finishing_plan(delivery_challan)
+	set_entry_dc(delivery_challan, cancelled=True)
 
 
 def _sync_finishing_plan(delivery_challan):

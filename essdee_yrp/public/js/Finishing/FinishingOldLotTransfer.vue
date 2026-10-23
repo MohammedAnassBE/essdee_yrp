@@ -21,7 +21,7 @@
                 <tbody class="dark-border">
                     <tr v-for="(date, lt) in lt_list">
                         <td style="cursor: pointer;" @click="redirect_to('SD YRP Lot Transfer', lt)">{{ lt }}</td>
-                        <td>{{ date }}</td>
+                        <td>{{ date?.datetime ?? date }}</td>
                         <td>
                             <button class="btn btn-primary" @click="cancel_doc('SD YRP Lot Transfer', lt)">Cancel</button>
                         </td>

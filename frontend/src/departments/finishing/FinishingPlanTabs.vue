@@ -38,6 +38,17 @@
 							<div v-if="entry.loading" class="finishing-stack" :aria-label="`Loading ${currentTab.label}`"><Skeleton height="40px" /><Skeleton height="220px" /></div>
 							<WorkspaceLoadError v-else-if="entry.error" :title="`${currentTab.label} unavailable`" :message="entry.error" @retry="load(true)" />
 							<template v-else-if="entry.data">
+								<FinishingSourceEntries
+									v-if="currentTab.sourceEntries"
+									v-bind="currentTab.sourceEntries"
+									:entries="entry.data.entries || []"
+									:can-create="Boolean(workspace.actions?.create_entries)"
+									:can-cancel="Boolean(workspace.actions?.cancel_linked_document)"
+									:busy="busy"
+									@open="(doctype, name) => emit('open', doctype, name)"
+									@cancel="(doctype, name) => emit('cancel', doctype, name)"
+									@create-dc="createDc"
+								/>
 								<dl v-if="facts.length" class="finishing-facts">
 									<div v-for="fact in facts" :key="fact.label"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
 								</dl>
@@ -90,6 +101,7 @@ import { formatDate } from "../../components/reports/reportUtils.js"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import FinishingLinkedDocuments from "./components/FinishingLinkedDocuments.vue"
 import FinishingMatrix from "./components/FinishingMatrix.vue"
+import FinishingSourceEntries from "./plan/FinishingSourceEntries.vue"
 import { ENTRY_DEFINITIONS } from "./finishingEntryDefinitions.js"
 import { detailsMatrix, inwardMatrix, quantityMatrix, reworkMatrix, singleMetricMatrix } from "./finishingViews.js"
 import { getActiveFinishingPlanTab, getVisibleFinishingPlanTabs, hasAlternativeRows, hasRole } from "./plan/finishingPlanTabVisibility.js"
@@ -116,9 +128,9 @@ const allTabs = computed(() => [
 	{ value: "item-details", label: "Item Details", source: "item_details", linked: ["dc_list", "return_grn_list"], entries: ["create_delivery_challan", "return_items", "convert_to_loose_piece"] },
 	{ value: "grn", label: "GRN", source: "grn", linked: ["grn_list", "stock_entry_list"], entries: ["create_grn", "dispatch_box"] },
 	{ value: "inward", label: "Inward", source: "inward" },
-	{ value: "old-lot", label: "Fetch From Old Lot", source: "old_lot", linked: ["lot_transfer_list"] },
+	{ value: "old-lot", label: "Fetch From Old Lot", source: "old_lot", sourceEntries: { title: "Lot Transfers", documentLabel: "Lot Transfer" } },
 	{ value: "dispatch-history", label: "Dispatch History" },
-	{ value: "ironing-excess", label: "Ironing Excess", source: "ironing_excess", linked: ["ironing_excess_list"], entries: ["add_ironing_excess"] },
+	{ value: "ironing-excess", label: "Ironing Excess", source: "ironing_excess", sourceEntries: { title: "Ironing Excess", documentLabel: "Stock Entry" }, entries: ["add_ironing_excess"] },
 	{ value: "pack-return", label: "Pack Return", source: "pack_return", linked: ["pack_return_list"], entries: ["return_pack"] },
 	{ value: "ocr", label: "OCR", source: "ocr" },
 	...(props.workspace.actions?.view_p_and_l ? [{ value: "p-and-l", label: "P & L", source: "p_and_l" }] : []),
@@ -164,6 +176,10 @@ async function load(force = false, tab = currentTab.value) {
 	} finally {
 		state.loading = false
 	}
+}
+
+function createDc(sourceEntry) {
+	emit("entry", "create_delivery_challan", { prefill: sourceEntry.quantities, sourceEntry: sourceEntry.name })
 }
 
 function loadAlternatives() {

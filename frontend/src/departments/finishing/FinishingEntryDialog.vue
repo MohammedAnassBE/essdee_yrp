@@ -27,6 +27,7 @@
 				<label class="common-field"><span class="finishing-entry-dialog__label">Choose Type</span><Select v-model="form.selected_type" :options="deliveryTypes" option-label="label" option-value="value" :disabled="busy" @change="resetQuantities" /></label>
 				<Button label="Fill" icon="pi pi-download" severity="secondary" outlined :disabled="busy" @click="fill" />
 			</div>
+			<p v-if="sourceEntry" class="finishing-entry-dialog__source">Quantities from <strong>{{ sourceEntry }}</strong></p>
 			<FinishingPackingEntry v-if="definition.component === 'packing'" ref="custom" :sizes="source.primary_values || []" :config="source.packing_config || {}" :disabled="busy" />
 			<FinishingDispatchEntry v-else-if="definition.component === 'dispatch'" ref="custom" :label="name" :sizes="source.primary_values || []" :packed="source.packed || {}" :config="source.packing_config || {}" :disabled="busy" />
 			<FinishingEntryMatrix v-else :payload="matrixPayload" :model-value="entry" :references="references" :input-label="definition.inputLabel" :checkable="Boolean(definition.checkable)" :disabled="busy" />
@@ -59,6 +60,7 @@ import FinishingEntryMatrix from "./components/FinishingEntryMatrix.vue"
 import FinishingPackingEntry from "./components/FinishingPackingEntry.vue"
 import { ENTRY_DEFINITIONS, entryPayload, missingFields } from "./finishingEntryDefinitions.js"
 import { fillEntry, initialEntry } from "./finishingEntries.js"
+import { prefilledEntry } from "./plan/finishingSourceEntries.js"
 import { setDispatchSupplier, warehouseFilters } from "./supplierWarehouse.js"
 
 const props = defineProps({
@@ -67,6 +69,8 @@ const props = defineProps({
 	name: { type: String, required: true },
 	workspace: { type: Object, required: true },
 	busy: { type: Boolean, default: false },
+	prefill: { type: Object, default: null },
+	sourceEntry: { type: String, default: "" },
 })
 const emit = defineEmits(["update:visible", "submit"])
 const deliveryTypes = [
@@ -124,7 +128,7 @@ async function load() {
 		const data = await getFinishingPlanTab(props.name, definition.value.source)
 		if (token !== loadToken) return
 		source.value = data || {}
-		entry.value = initialEntry(source.value)
+		resetQuantities()
 	} catch (reason) {
 		if (token === loadToken) loadError.value = reason?.message || "Unable to load this entry."
 	} finally {
@@ -143,7 +147,9 @@ function setAlternativeItem(item) {
 	form.production_detail = ""
 }
 
-function resetQuantities() { entry.value = initialEntry(source.value) }
+function resetQuantities() {
+	entry.value = props.prefill ? prefilledEntry(source.value, props.prefill) : initialEntry(source.value)
+}
 
 function fill() {
 	fillEntry(source.value, entry.value, form.selected_type)
@@ -161,10 +167,11 @@ function submit() {
 		validationError.value = message
 		return
 	}
-	emit("submit", props.action, entryPayload(props.action, form, entry.value, custom.value?.values?.(), requestId))
+	const payload = entryPayload(props.action, form, entry.value, custom.value?.values?.(), requestId)
+	emit("submit", props.action, props.sourceEntry ? { ...payload, source_entry: props.sourceEntry } : payload)
 }
 
-watch(() => [props.visible, props.action], ([visible]) => {
+watch(() => [props.visible, props.action, props.sourceEntry], ([visible]) => {
 	if (!visible || !definition.value) return
 	resetForm()
 	if (definition.value.fields.includes("from_supplier")) setSupplier("from", options.value.delivery_location)
@@ -178,4 +185,5 @@ watch(() => [props.visible, props.action], ([visible]) => {
 .finishing-entry-dialog__type .common-field { min-width: 220px; }
 .finishing-entry-dialog__label { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .finishing-entry-dialog .common-field { display: grid; gap: 6px; }
+.finishing-entry-dialog__source { margin: 0; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); }
 </style>

@@ -64,3 +64,9 @@ test("Item Summary Lot filter renders lot options with item descriptions", () =>
 	assert.match(source, /description: options\.value\.lotItems\[lot\]/)
 	assert.match(source, /lotItems: result\?\.lot_items \|\| \{\}/)
 })
+
+test("Status Summary marks FI, Input and Last Sewing Output columns as dates", () => {
+	const state = setup({ header1: ["Item", "FI Date", "Input Date", "Last Sewing Output", "Total Running Days"], header2: [], header3: [], data: [] })
+	const types = Object.fromEntries(state.columns.value.map(column => [column.label, column.fieldtype]))
+	assert.deepEqual(types, { Item: undefined, "FI Date": "Date", "Input Date": "Date", "Last Sewing Output": "Date", "Total Running Days": undefined })
+})

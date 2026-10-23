@@ -19,7 +19,7 @@
 							<td>
 								<button type="button" class="finishing-linked__open" :title="`Open ${document.name}`" @click="emit('open', group.doctype, document.name)">{{ document.name }}</button>
 							</td>
-							<td v-if="group.documents.some((entry) => entry.date)" class="finishing-linked__date">{{ document.date || "—" }}</td>
+							<td v-if="group.documents.some((entry) => entry.date)" class="finishing-linked__date">{{ formatDisplayDatetime(document.date, { seconds: true }) }}</td>
 							<td v-if="showCancel(group)" class="finishing-linked__action">
 								<Button label="Cancel" icon="pi pi-ban" severity="danger" text size="small" :disabled="busy" :aria-label="`Cancel ${document.name}`" @click="emit('cancel', group.doctype, document.name)" />
 							</td>
@@ -34,6 +34,8 @@
 <script setup>
 import Button from "primevue/button"
 import { computed } from "vue"
+
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },

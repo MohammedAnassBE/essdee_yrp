@@ -1,7 +1,4 @@
-export function formatIsoDate(value) {
-	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value || "")
-}
+import { formatDisplayDate } from "./dateFormat.js"
 
 export function addDaysToIsoDate(value, days) {
 	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
@@ -20,7 +17,7 @@ export function validatePurchaseOrderItems(form, groups) {
 				return `${item} needs a Required By date. Edit this item and select the date.`
 			}
 			if (form?.transaction_date && requiredBy < form.transaction_date) {
-				return `${item} has Required By ${formatIsoDate(requiredBy)}, which is before Order Date ${formatIsoDate(form.transaction_date)}. Edit this item and choose a Required By date on or after the Order Date.`
+				return `${item} has Required By ${formatDisplayDate(requiredBy, "")}, which is before Order Date ${formatDisplayDate(form.transaction_date, "")}. Edit this item and choose a Required By date on or after the Order Date.`
 			}
 		}
 	}

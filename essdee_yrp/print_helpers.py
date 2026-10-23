@@ -47,7 +47,7 @@ def get_created_date(value):
 
 
 def get_current_user_time():
-	return [frappe.session.user, datetime.now().strftime("%c")]
+	return [frappe.session.user, datetime.now().strftime("%d-%m-%Y %H:%M")]
 
 
 def get_user_signature(user):
@@ -238,7 +238,7 @@ def fetch_item_details(items, include_id=False):
 		details = get_attribute_details(item["name"])
 		details = dict(details, attributes=list(details.get("attributes") or []))
 		delivery_date = delivery_dates.get(str(item.get("row_index") or "")) or item.get("schedule_date")
-		item["delivery_date"] = str(delivery_date)
+		item["delivery_date"] = str(delivery_date) if delivery_date else ""
 		item["secondary_uom"] = item.get("secondary_uom") or details.get("secondary_uom")
 		for detail in (item.get("values") or {}).values():
 			detail["pending_qty"] = detail.get("pending_quantity", 0)

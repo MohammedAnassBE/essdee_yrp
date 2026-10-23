@@ -1,3 +1,5 @@
+import { formatDisplayByFieldtype } from "../../../utils/dateFormat.js"
+
 export function validateWipFilters(filters) {
 	const errors = {}
 	if (!filters.category && !filters.product_season && !filters.lot?.length && !filters.item?.length) {
@@ -26,7 +28,7 @@ export function cellText(row, column) {
 	if (column.stage && !row.is_total_row && row.process_stages?.[column.process] !== column.stage) return ""
 	const value = row[column.fieldname]
 	if (value == null) return ""
-	if (column.fieldtype === "Date") return String(value).slice(0, 10).split("-").reverse().join("-")
+	if (["Date", "Datetime"].includes(column.fieldtype)) return formatDisplayByFieldtype(value, column.fieldtype, { fallback: "" })
 	return typeof value === "number" ? value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : String(value)
 }
 

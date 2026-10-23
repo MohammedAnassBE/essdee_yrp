@@ -197,10 +197,12 @@
 			</section>
 		</div>
 
+		<DocumentActivity :doctype="'SD YRP Box Sticker Print'" :name="record?.name || ''" :record="record" />
 		<template #footer>
 			<div class="box-sticker-dialog__footer">
 				<span :class="{ 'box-sticker-print-hint': printHint }" role="status">{{ printHint || footerSummary }}</span>
 				<div>
+					<DocumentShortcuts :busy="busy || confirmationVisible" :can-save="canEdit && canSave && (!record?.name || dirty)" :can-submit="Boolean(documentPermissions.can_submit && !dirty && rows.length)" submit-confirms :can-cancel="Boolean(documentPermissions.can_cancel && !pendingPrintConfirmation)" cancel-confirms @save="save" @submit="requestCommand('submit')" @cancel="requestCommand('cancel')" />
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
 					<Button
 						v-if="['reserving', 'reserved'].includes(pendingPrintConfirmation?.phase)"
@@ -262,9 +264,9 @@
 						:disabled="busy"
 						@click="startPrint"
 					/>
-					<Button v-if="documentPermissions.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :disabled="busy || Boolean(pendingPrintConfirmation)" @click="requestCommand('cancel')" />
-					<Button v-if="documentPermissions.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty || !rows.length" @click="requestCommand('submit')" />
-					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !canSave" @click="save" />
+					<Button v-if="documentPermissions.can_cancel" label="Cancel Document" :title="withShortcutHint('Cancel Document', 'cancel')" icon="pi pi-ban" severity="danger" outlined :disabled="busy || Boolean(pendingPrintConfirmation)" @click="requestCommand('cancel')" />
+					<Button v-if="documentPermissions.can_submit" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty || !rows.length" @click="requestCommand('submit')" />
+					<Button v-if="canEdit" label="Save" :title="withShortcutHint('Save', 'save')" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !canSave" @click="save" />
 				</div>
 			</div>
 		</template>
@@ -295,9 +297,12 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
@@ -323,6 +328,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import PrinterDialog from "./PrinterDialog.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({
 	visible: Boolean,
@@ -421,16 +427,25 @@ async function load() {
 	error.value = ""
 	resetEditorState()
 	try {
+		const isNew = !props.documentName
+		const filterDefaults = isNew ? filterDefaultsFor("SD YRP Box Sticker Print", ["lot", "fg_item", "size", "use_item_name", "print_format"]) : {}
 		const payload = await getBoxStickerEditor(props.documentName)
 		if (sequence !== loadSequence || !props.visible) return
-		applyEditorPayload(payload)
+		applyEditorPayload(isNew && payload && !payload.record ? { ...payload, defaults: withNewDocumentDefaults(payload.defaults, filterDefaults) } : payload)
 		if (record.value?.name) void loadPreview()
+		else if (Object.keys(filterDefaults).length && !rows.value.length) await loadSourceRows()
 	} catch (reason) {
 		if (sequence !== loadSequence || !props.visible) return
 		error.value = messageOf(reason, "Unable to load the Box Sticker Print.")
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
+}
+
+/** Staged list filters for a new document, limited to the fields this form holds. */
+function filterDefaultsFor(doctype, keys) {
+	const staged = takeNewDocumentDefaults(doctype)
+	return Object.fromEntries(keys.filter((key) => key in staged).map((key) => [key, staged[key]]))
 }
 
 function resetEditorState() {
@@ -598,6 +613,7 @@ async function save() {
 		acting.value = ""
 	}
 }
+
 
 function requestCommand(command) {
 	pendingAction.value = command

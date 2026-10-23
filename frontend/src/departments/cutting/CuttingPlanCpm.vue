@@ -39,6 +39,7 @@ import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import CpmMovementDialog from "./CpmMovementDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { getCpmWorkspace } from "./cpmApi.js"
+import { formatDisplayDate, formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({ cuttingPlan: { type: String, required: true } })
 const emit = defineEmits(["changed"])
@@ -85,9 +86,8 @@ async function load(force = false) {
 
 function openMovement(name) { selectedMovement.value = name; movementOpen.value = true }
 async function changed(value) { await load(true); emit("changed", value) }
-function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 function formatTime(value) { const match = String(value || "").match(/^(\d{1,2}):(\d{2})/); return match ? `${match[1].padStart(2, "0")}:${match[2]}` : "" }
-function movementDateTime(movement) { const date = formatDate(movement.movement_date || movement.posting_date); const time = formatTime(movement.posting_time); return time ? `${date} · ${time}` : formatDate(movement.modified, true) }
+function movementDateTime(movement) { const date = formatDisplayDate(movement.movement_date || movement.posting_date); const time = formatTime(movement.posting_time); return time ? `${date} ${time}` : formatDisplayDatetime(movement.modified) }
 
 defineExpose({ load, activate: () => load(true) })
 </script>

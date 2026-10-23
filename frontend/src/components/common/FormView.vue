@@ -40,6 +40,7 @@
 						v-else-if="mode === 'edit'"
 						icon="pi pi-save"
 						:label="documentName ? 'Save' : 'Create'"
+						:title="withShortcutHint(documentName ? 'Save' : 'Create', 'save')"
 						:loading="saving"
 						:disabled="loading || readonly"
 						@click="save"
@@ -224,7 +225,10 @@ import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
 import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"
 import { plainTextFromHtml } from "../../utils/documentValues.js"
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
+import { useDocumentShortcuts } from "../../composables/useDocumentShortcuts.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -528,6 +532,7 @@ function readLinkTarget(field) {
 function displayValue(value, field) {
 	if (value === null || value === undefined || value === "") return "—"
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(value, field.fieldtype)
 	if (Array.isArray(value)) return value.join(", ")
 	if (typeof value === "object") return JSON.stringify(value)
 	return typeof value === "string" ? plainTextFromHtml(value) : value
@@ -583,6 +588,12 @@ function payload() {
 	if (requiresPromptName.value && form.name) values.name = form.name
 	return values
 }
+
+useDocumentShortcuts({
+	isBusy: () => saving.value,
+	canSave: () => mode.value === "edit" && !loading.value && !loadFailed.value && !props.readonly,
+	save,
+})
 
 async function save() {
 	if (loading.value || saving.value || loadFailed.value || props.readonly || !meta.value) return

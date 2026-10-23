@@ -107,6 +107,7 @@ import DocumentFieldGroupGrid from "../../components/documents/DocumentFieldGrou
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import DeliveryPersonSuggestion from "./components/DeliveryPersonSuggestion.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const FIELD_GROUPS = [
 	{
@@ -175,6 +176,7 @@ let allowNavigation = false
 let pendingNavigation = null
 let requestSequence = 0
 let isAlive = true
+let filterDefaults = takeNewDocumentDefaults("YRP Bill Tracking")
 
 const currentName = computed(() => String(props.billTrackingId || route.params.billTrackingId || ""))
 const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
@@ -204,6 +206,7 @@ async function load() {
 		editor.value = payload
 		for (const fieldname of FORM_FIELDS) form[fieldname] = payload.values?.[fieldname] ?? ""
 		form.received_date ||= today()
+		applyFilterDefaults(request)
 		cleanSignature.value = signature.value
 	} catch (reason) {
 		if (!isCurrentRequest(request)) return
@@ -212,6 +215,14 @@ async function load() {
 	} finally {
 		if (isCurrentRequest(request)) loading.value = false
 	}
+}
+
+/** Fills the list's filter values into a blank new bill once. */
+function applyFilterDefaults(request) {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => FORM_FIELDS.includes(fieldname)))
+	filterDefaults = {}
+	if (request.name || duplicateFrom.value) return
+	Object.assign(form, withNewDocumentDefaults({ ...form }, defaults))
 }
 
 async function fetchSupplierTaxIds(supplier, previous) {

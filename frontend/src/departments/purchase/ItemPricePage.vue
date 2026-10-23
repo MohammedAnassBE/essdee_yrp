@@ -9,7 +9,7 @@
 						<div class="item-price-page__facts" role="region" aria-label="Item Price context" tabindex="0">
 							<div><span>{{ fieldLabel("item_name", "Item") }}</span><strong :title="header.item_name"><DocumentLink doctype="Item" :name="header.item_name" :label="header.item_name || '—'" /></strong></div>
 							<div><span>{{ fieldLabel("supplier", "Supplier") }}</span><strong :title="header.supplier_name || header.supplier"><DocumentLink doctype="Supplier" :name="header.supplier" :label="header.supplier_name || header.supplier || '—'" /></strong></div>
-							<div><span>{{ fieldLabel("from_date", "From Date") }}</span><strong>{{ formatDate(header.from_date) }}</strong></div>
+							<div><span>{{ fieldLabel("from_date", "From Date") }}</span><strong>{{ formatDisplayDate(header.from_date) }}</strong></div>
 						</div>
 					</div>
 				</template>
@@ -45,8 +45,8 @@
 						<header><span>Timeline</span><strong>{{ workspace.timeline?.length || 0 }}</strong></header>
 						<div v-if="workspace.timeline?.length" class="price-timeline__list">
 							<article v-for="entry in workspace.timeline" :key="entry.name">
-								<div><strong>{{ entry.label }}</strong><small>{{ timelineDate(entry.creation) }}</small></div>
-								<p>{{ entry.content }}</p>
+								<div><strong>{{ entry.label }}</strong><small>{{ formatDisplayDatetime(entry.creation, { fallback: "" }) }}</small></div>
+								<p>{{ formatDatesInText(entry.content) }}</p>
 								<small v-if="entry.by && !entry.content?.includes(entry.by)">{{ entry.by }}</small>
 							</article>
 						</div>
@@ -57,7 +57,7 @@
 						<div v-if="workspace.history?.length" class="price-history__list">
 							<RouterLink v-for="entry in workspace.history" :key="entry.name" :to="historyPath(entry.name)">
 								<div><strong>{{ entry.name }}</strong><DocumentStatusBadge :label="entry.workflow_state" /></div>
-								<span>{{ formatDate(entry.from_date) }} → {{ entry.to_date ? formatDate(entry.to_date) : "Open" }}</span>
+								<span>{{ formatDisplayDate(entry.from_date) }} → {{ formatDisplayDate(entry.to_date, "Open") }}</span>
 								<small v-if="itemPriceApprovedBy(entry)">Approved by {{ itemPriceApprovedBy(entry) }}</small>
 							</RouterLink>
 						</div>
@@ -87,7 +87,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
-import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+import { formatDatesInText, formatDisplayDate, formatDisplayDatetime } from "../../utils/dateFormat.js"
 import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import { ITEM_PRICE_SECTIONS, PURCHASE_ROUTES, activePriceTiers, captureRecordTarget, isCurrentRecordRequest, itemPriceActionItems, itemPriceApprovedBy, itemPriceFieldLabel, itemPriceOverviewFields, itemPriceTierValue } from "./purchaseViews.js"
@@ -217,16 +217,6 @@ function tierLabel(fieldname, fallback) {
 
 function formatTier(fieldname, value) {
 	return itemPriceTierValue(workspace.value.tier_fields?.[fieldname], value)
-}
-
-function formatDate(value) {
-	return formatDocumentOverviewValue({ fieldtype: "Date", value })
-}
-
-function timelineDate(value) {
-	if (!value) return ""
-	const date = new Date(String(value).replace(" ", "T"))
-	return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date)
 }
 
 watch(() => props.priceId, load, { immediate: true })

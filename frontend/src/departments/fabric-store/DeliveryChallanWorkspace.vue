@@ -246,7 +246,7 @@ import {
 } from "../../api/fabricStore.js"
 import { searchLinkedDocument } from "../../api/frappe.js"
 import { deliveredQuantity, getTableTotals, isTableFilled, pendingQuantity, rowTotal, setTableQuantities } from "../../engine/stock/deliveryChallanTotals.js"
-import { fillSupplierDefaults } from "../../utils/supplierDefaults.js"
+import { autofillSingleOptions, forgetAutofill } from "../../composables/useSingleOptionAutofill.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -254,6 +254,8 @@ import DocumentFieldGroupGrid from "../../components/documents/DocumentFieldGrou
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
+import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import DeliveryChallanReturnPanel from "./DeliveryChallanReturnPanel.vue"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
@@ -265,6 +267,7 @@ const props = defineProps({
 	presentation: { type: String, default: "page" },
 	name: { type: String, default: "" },
 	sourceContext: { type: Object, default: () => ({}) },
+	newDefaults: { type: Object, default: () => ({}) },
 	duplicateRouteName: { type: String, default: "fabric-delivery-challan-new" },
 })
 const emit = defineEmits(["changed", "closed"])
@@ -301,6 +304,10 @@ const serverValueTotals = new Set(["stock_value", "total_value"])
 const headerFieldnames = new Set(["process_name", "item", "lot", "supplier_name", "from_location_name"])
 const sourceOwnedFieldnames = new Set(["from_finishing", "cutting_bulk_lay_sheet", "cutting_bulk_lay_sheet_detail", "cut_panel_movement", "loose_piece_dc", "pack_piece_dc"])
 const presentationHiddenFieldnames = new Set(["received_type"])
+const locationAutofills = {
+	from_location: { trigger: "from_location", targets: { warehouse: "from_warehouse", address: "from_address", address_display: "from_address_details" } },
+	supplier: { trigger: "supplier", targets: { warehouse: "to_warehouse", address: "supplier_address", address_display: "supplier_address_details" } },
+}
 const afterMatrixFieldnames = new Set(["is_internal_unit", "includes_packing", "additional_goods_value", "ste_transferred", "ste_transferred_percent", "is_rework"])
 
 const capabilities = computed(() => workspace.value.capabilities || {})
@@ -313,7 +320,7 @@ const deliveryChallanActions = computed(() => {
 	}
 	if (editingSubmitted.value) {
 		actions.push({ key: "cancel_edit", label: "Cancel Edit", icon: "pi pi-times", command: cancelSubmittedEdit, disabled: busy })
-		if (dirty.value) actions.push({ key: "save", label: "Save", icon: "pi pi-save", command: () => save(false), disabled: busy, loading: acting.value === "save", primary: true })
+		if (dirty.value) actions.push({ key: "save", label: "Save", icon: "pi pi-save", command: () => save(false), disabled: busy, loading: acting.value === "save", primary: true, shortcut: "save" })
 		return actions
 	}
 	add("complete_transfer", "Complete Transfer", "pi pi-check-circle", completeTransfer)
@@ -327,7 +334,7 @@ const deliveryChallanActions = computed(() => {
 		actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateDeliveryChallan, disabled: busy, loading: acting.value === "duplicate", menuOnly: true })
 	}
 	const primaryKey = capabilities.value.complete_transfer ? "complete_transfer" : actions.some((action) => action.key === "submit") ? "submit" : actions.some((action) => action.key === "save") ? "save" : actions.some((action) => action.key === "amend") ? "amend" : ""
-	return actions.map((action) => ({ ...action, primary: action.key === primaryKey }))
+	return actions.map((action) => ({ ...action, primary: action.key === primaryKey, shortcut: ["save", "submit", "cancel"].includes(action.key) ? action.key : undefined }))
 })
 const hasWorkspace = computed(() => Boolean(Object.keys(workspace.value || {}).length))
 const duplicateLabel = computed(() => props.sourceContext?.duplicate_from ? `Duplicate of ${props.sourceContext.duplicate_from}` : "")
@@ -512,16 +519,12 @@ function applyWorkspace(nextWorkspace) {
 		const defaults = currentPostingDefaults()
 		if (!form.posting_date) form.posting_date = defaults.date
 		if (!form.posting_time) form.posting_time = defaults.time
+		Object.assign(form, withNewDocumentDefaults(form, knownFieldDefaults(props.newDefaults)))
 	}
-	if (!form.from_location) {
-		form.from_warehouse = ""
-		form.from_address = ""
-		form.from_address_details = ""
-	}
-	if (!form.supplier) {
-		form.to_warehouse = ""
-		form.supplier_address = ""
-		form.supplier_address_details = ""
+	forgetAutofill(form)
+	for (const [trigger, { targets }] of Object.entries(locationAutofills)) {
+		if (!form[trigger]) for (const field of Object.values(targets)) form[field] = ""
+		else if (!currentName.value && canEditDraft.value) autofillLocation(trigger)
 	}
 	itemGroups.value = normalizeGroups(workspace.value.matrices?.items || workspace.value.item_groups || [])
 	correctionGroups.value = clone(workspace.value.matrices?.correction_items || workspace.value.correction_item_groups || [])
@@ -532,6 +535,10 @@ function applyWorkspace(nextWorkspace) {
 	returnOpen.value = false
 	returnError.value = ""
 	activeTab.value = "overview"
+}
+
+function knownFieldDefaults(defaults) {
+	return Object.fromEntries(Object.entries(defaults || {}).filter(([fieldname]) => fieldname in form))
 }
 
 async function setField(fieldname, value) {
@@ -547,25 +554,14 @@ async function setField(fieldname, value) {
 		return
 	}
 	form[fieldname] = value
-	if (fieldname === "supplier") {
-		form.to_warehouse = ""
-		form.supplier_address = ""
-		form.supplier_address_details = ""
-	}
-	if (fieldname === "from_location") {
-		form.from_warehouse = ""
-		form.from_address = ""
-		form.from_address_details = ""
-	}
+	if (locationAutofills[fieldname]) for (const field of Object.values(locationAutofills[fieldname].targets)) form[field] = ""
 	if (["posting_date", "posting_time"].includes(fieldname)) form.edit_posting_date_and_time = 1
 	markDirty()
-	if (["supplier", "from_location"].includes(fieldname)) {
-		const fields = fieldname === "supplier"
-			? { addressField: "supplier_address", warehouseField: "to_warehouse" }
-			: { addressField: "from_address", warehouseField: "from_warehouse" }
-		try { await fillSupplierDefaults(form, { partyField: fieldname, ...fields, preferPrimary: true }) }
-		catch (reason) { error.value = reason?.message || "Unable to load location defaults." }
-	}
+	if (locationAutofills[fieldname]) await autofillLocation(fieldname, markDirty)
+}
+async function autofillLocation(trigger, onChange) {
+	try { await autofillSingleOptions(form, { ...locationAutofills[trigger], preferPrimaryAddress: true, onChange }) }
+	catch (reason) { error.value = reason?.message || "Unable to load location defaults." }
 }
 async function applySourceChange(value) {
 	if (value) {
@@ -833,10 +829,7 @@ function formatTotal(total) { return Number(total.value || 0).toLocaleString("en
 function totalIsPositive(total) { return Number(total?.value || 0) > 0 }
 function formatFieldValue(field) {
 	const value = form[field.fieldname] ?? field.value
-	if (["Date", "Datetime"].includes(field.fieldtype)) {
-		const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(.*)$/)
-		if (match) return `${match[3]}-${match[2]}-${match[1]}${field.fieldtype === "Datetime" ? match[4] : ""}`
-	}
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(value, field.fieldtype, { seconds: true })
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return value === null || value === undefined || value === "" ? "—" : plainTextFromHtml(value)

@@ -29,7 +29,7 @@
 			</div>
 			<div>
 				<dt>PPO Delivery Date</dt>
-				<dd>{{ formatLotDate(ppo.delivery_date) }}</dd>
+				<dd>{{ formatDisplayDate(ppo.delivery_date) }}</dd>
 			</div>
 			<div>
 				<dt>PPO Quantity</dt>
@@ -112,7 +112,7 @@ import { computed, ref, watch } from "vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import { MERCH_ROUTES } from "../merchViews.js"
-import { formatLotDate } from "../../purchase/lot/lotViews.js"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 const props = defineProps({
 	ppo: { type: Object, default: null },
 	item: { type: String, default: "" },

@@ -39,7 +39,7 @@
 							<DocumentLink doctype="Supplier" :name="payload.record.supplier" :label="payload.record.supplier_name || payload.record.supplier || '—'" />
 						</strong>
 					</div>
-					<small>Updated {{ formatLotDate(payload.record.modified, true) }}</small>
+					<small>Updated {{ formatDisplayDatetime(payload.record.modified) }}</small>
 				</div>
 				<section class="lot-document-summary-strip" aria-label="Document totals">
 					<div
@@ -119,6 +119,7 @@
 				/>
 			</template>
 		</div>
+		<DocumentActivity :doctype="doctype" :name="name" />
 		<template #footer>
 			<div class="lot-document-dialog__footer">
 				<Button
@@ -140,6 +141,7 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../../components/documents/DocumentActivity.vue"
 import Button from "primevue/button"
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import { linkFieldTarget } from "../../../utils/linkTarget.js"
@@ -151,13 +153,13 @@ import { getLotDocument } from "../../../api/purchase.js"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../../components/stock/StockItemMatrix.vue"
 import { webDocumentPath } from "../../../router/webDocumentRoutes.js"
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 import { formatDocumentOverviewValue } from "../../../utils/documentOverview.js"
 import WorkOrderItemMatrix from "../../fabric-store/WorkOrderItemMatrix.vue"
 import LotEmptyState from "./LotEmptyState.vue"
 import {
 	LOT_DOCUMENT_SECTIONS,
 	countLabel,
-	formatLotDate,
 	formatLotSummaryValue,
 	formatLotTime,
 } from "./lotViews.js"
@@ -184,7 +186,7 @@ const details = computed(() =>
 	),
 )
 function formatField(field) {
-	if (field.fieldtype === "Datetime") return formatLotDate(field.value, true)
+	if (field.fieldtype === "Datetime") return formatDisplayDatetime(field.value)
 	if (field.fieldtype === "Time") return formatLotTime(field.value)
 	return field.display_value || formatDocumentOverviewValue(field)
 }

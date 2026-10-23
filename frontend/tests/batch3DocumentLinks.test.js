@@ -6,6 +6,7 @@ import test from 'node:test'
 import { Vue, findNodes, loadComponent, mountComponent } from '../../scripts/helpers/vue_renderer.mjs'
 import * as targets from '../src/utils/linkTarget.js'
 import * as productionOrderDisplay from '../src/departments/sales/productionOrderDisplay.js'
+import { formatDisplayDatetime } from '../src/utils/dateFormat.js'
 
 const require = createRequire(new URL('../package.json', import.meta.url))
 const { parse } = require('@vue/compiler-sfc')
@@ -80,7 +81,7 @@ const directCases = [
  ['D15', 'finishing/plan/FinishingOldLotTab', 'td', 'group.fp', { group: { fp: 'FP/1', lot: 'LOT/1' }, buckets: () => [1] }, [['FP/1','/web/planning/finishing-plans/FP%2F1'],['LOT/1','/web/planning/lots/LOT%2F1']]],
  ['D15', 'finishing/plan/FinishingAlternativesTab', 'h3', 'lot.name', { lot: { name: 'LOT/1', item: 'ITEM/1' } }, [['LOT/1','/web/planning/lots/LOT%2F1'],['ITEM/1','/web/purchase/items/ITEM%2F1']]],
  ['D15', 'finishing/plan/FinishingDispatchHistoryTab', 'td', 'log.source_name', { log: { source_doctype: 'YRP Work Order', source_name: 'WO/1' } }, [['YRP Work Order WO/1','/web/planning/work-orders/WO%2F1']]],
- ['D15', 'finishing/plan/FinishingProfitAndLossTab', 'small', 'document.owner', { document: { modified: 'Today', owner: 'USER/1' } }, [pair('USER/1','user')]],
+ ['D15', 'finishing/plan/FinishingProfitAndLossTab', 'small', 'document.owner', { document: { modified: '2026-10-23 14:05:09', owner: 'USER/1' }, formatDisplayDatetime }, [pair('USER/1','user')]],
  ['D16', 'finishing/FinishingDispatch', 'h2', 'row.doc_name', { row: { lot: 'LOT/1', item: 'ITEM/1', doc_name: 'FP/1' } }, [['LOT/1','/web/planning/lots/LOT%2F1'],['ITEM/1','/web/purchase/items/ITEM%2F1'],['FP/1','/web/planning/finishing-plans/FP%2F1']]],
 ]
 for (const [id, path, tag, needle, context, expected] of directCases) {

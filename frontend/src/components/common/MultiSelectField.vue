@@ -22,7 +22,7 @@
 			<template #option="{ option }">
 				<span class="multi-select-field__option">
 					<strong>{{ optionText(option) }}</strong>
-					<small v-if="option?.description">{{ option.description }}</small>
+					<small v-if="option?.description">{{ formatDatesInText(option.description) }}</small>
 				</span>
 			</template>
 		</MultiSelect>
@@ -32,6 +32,7 @@
 
 <script setup>
 import MultiSelect from "primevue/multiselect"
+import { formatDatesInText } from "../../utils/dateFormat.js"
 
 defineOptions({ inheritAttrs: false })
 

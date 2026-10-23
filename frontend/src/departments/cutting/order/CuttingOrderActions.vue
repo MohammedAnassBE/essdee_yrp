@@ -61,6 +61,7 @@ import { updateCuttingOrderCompleted } from "../../../api/cuttingOrder.js"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "../CuttingCompletedReport.vue"
 import { copyCompletedReportImage } from "../completedReportExport.js"
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 
 const props = defineProps({ doc: { type: Object, required: true }, data: { type: Object, default: () => ({}) }, extraActions: { type: Array, default: () => [] } })
 const emit = defineEmits(["refresh"])
@@ -101,7 +102,7 @@ async function calculate() {
 }
 
 function openCompletedReport() {
-	generatedAt.value = formatTimestamp(new Date())
+	generatedAt.value = formatDisplayDatetime(new Date(), { seconds: true })
 	copyFeedback.value = ""; copyError.value = false; reportOpen.value = true
 }
 
@@ -132,7 +133,6 @@ function normaliseGroups(value) {
 function inferredAttributes(group) { return Object.keys(group.items?.[0]?.attributes || {}) }
 function quantity(value) { if (value && typeof value === "object") return Object.values(value).reduce((total, entry) => total + Number(entry || 0), 0) || "—"; return Number(value || 0) || "—" }
 function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
-function formatTimestamp(value) { const pad = (part) => String(part).padStart(2, "0"); return `${pad(value.getDate())}-${pad(value.getMonth() + 1)}-${value.getFullYear()} · ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}` }
 function toggleMoreActions(event) { moreActionsMenu.value?.toggle(event) }
 </script>
 

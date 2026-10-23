@@ -30,6 +30,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import { formatDisplayDatetime as formatDateTime } from "../../utils/dateFormat.js"
 defineProps({
 	rows: { type: Array, default: () => [] },
 	viewRouteName: { type: String, default: "sales-production-order" },
@@ -41,13 +42,6 @@ function movementClass(movement) {
 function formatNumber(value) {
 	if (value === null || value === undefined || value === "") return "—"
 	return Number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 })
-}
-function formatDateTime(value) {
-	if (!value) return "—"
-	const [date, time = ""] = String(value).split(" ")
-	const [year, month, day] = date.split("-")
-	if (!day) return String(value)
-	return `${day}-${month}-${year}${time ? ` ${time.slice(0, 5)}` : ""}`
 }
 </script>
 

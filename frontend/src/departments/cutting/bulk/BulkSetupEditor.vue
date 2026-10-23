@@ -54,11 +54,15 @@ import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null } })
 const emit = defineEmits(["saved", "cancel", "loaded"])
 const form = reactive({ main_lot: "", from_location: "", posting_date: "", cutting_spreader: "", cutter: "", lot_details: [] })
 const permissions = reactive({ can_create: false, can_write: false })
+const stagedDefaults = takeNewDocumentDefaults("SD YRP Cutting Bulk Lay Sheets")
+const filterDefaults = props.name || props.initialPayload ? {} : stagedDefaults
+const HEADER_FIELDS = ["main_lot", "from_location", "posting_date", "cutting_spreader", "cutter"]
 const modified = ref("")
 const setupLocked = ref(false)
 const loading = ref(true)
@@ -79,7 +83,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value ?? null)) }
 function rowKey(row) { return row.name || `new-row-${++rowSequence}` }
 function applyPayload(payload) {
 	const record = payload?.record || {}
-	for (const key of ["main_lot", "from_location", "posting_date", "cutting_spreader", "cutter"]) form[key] = record[key] || ""
+	for (const key of HEADER_FIELDS) form[key] = record[key] || ""
 	form.lot_details = (record.lot_details || []).map((row) => ({ ...clone(row), _row_key: rowKey(row) }))
 	Object.assign(permissions, payload?.permissions || {})
 	modified.value = record.modified || ""
@@ -89,7 +93,11 @@ function applyPayload(payload) {
 }
 async function load() {
 	loading.value = true; error.value = ""
-	try { applyPayload(props.initialPayload || await getBulkLaySheetsEditor(props.name)) }
+	try {
+		const payload = props.initialPayload || await getBulkLaySheetsEditor(props.name)
+		const defaults = props.name ? {} : Object.fromEntries(HEADER_FIELDS.filter((key) => key in filterDefaults).map((key) => [key, filterDefaults[key]]))
+		applyPayload({ ...payload, record: withNewDocumentDefaults(payload?.record, defaults) })
+	}
 	catch (reason) { error.value = reason?.message || "Unable to load Bulk LaySheets setup." }
 	finally { loading.value = false }
 }

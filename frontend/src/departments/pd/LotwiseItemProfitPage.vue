@@ -6,6 +6,9 @@
 		:show-title="false"
 		flat
 		full-width
+		activity-doctype="SD YRP Lotwise Item Profit"
+		:activity-name="isNew ? '' : form.name || ''"
+		:activity-record="workspace"
 	>
 		<section class="lotwise-workspace" aria-label="Lotwise Item Profit workspace">
 			<div v-if="loading" class="lotwise-workspace__loading" aria-label="Loading costing sheet">
@@ -88,7 +91,9 @@ import {
 	saveLotwiseItemProfit,
 } from "../../api/pd.js"
 import { getMeta } from "../../api/frappe.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
+import { usePageTitle } from "../../composables/usePageTitle.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -114,6 +119,7 @@ const route = useRoute()
 const router = useRouter()
 const workspace = ref({})
 const form = ref({})
+usePageTitle(() => form.value.name, () => form.value.item)
 const metadataByName = ref({})
 const loading = ref(true)
 const saving = ref(false)
@@ -130,6 +136,8 @@ let mutationSequence = 0
 let isUnmounted = false
 
 const isNew = computed(() => route.name === PD_ROUTES.lotwiseNew)
+const takenDefaults = takeNewDocumentDefaults(LOTWISE_DOCTYPE)
+let filterDefaults = isNew.value && !route.query.copy && !route.query.product ? takenDefaults : {}
 const permissions = computed(() => workspace.value.permissions || {})
 const hasWorkspace = computed(() => Boolean(
 	Object.keys(workspace.value).length && metadataByName.value[LOTWISE_DOCTYPE],
@@ -240,7 +248,7 @@ async function load() {
 		const copyName = isNew.value ? String(route.query.copy || "").trim() : ""
 		const request = getLotwiseWorkspace({
 			name: isNew.value ? null : props.profitId,
-			product: isNew.value ? String(route.query.product || "") || null : null,
+			product: isNew.value ? String(route.query.product || filterDefaults.product || "") || null : null,
 		})
 		const [payload, metadata, source] = await Promise.all([
 			request,
@@ -250,6 +258,7 @@ async function load() {
 		if (isUnmounted || sequence !== loadSequence) return
 		metadataByName.value = indexMetadata(metadata)
 		applyWorkspace(payload || {}, source)
+		if (isNew.value && !source) applyFilterDefaults()
 	} catch (reason) {
 		if (isUnmounted || sequence !== loadSequence) return
 		workspace.value = {}
@@ -259,6 +268,14 @@ async function load() {
 	} finally {
 		if (!isUnmounted && sequence === loadSequence) loading.value = false
 	}
+}
+
+/** Fills list filter values the new sheet left empty; Product goes to the server, which loads its sizes. */
+function applyFilterDefaults() {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname !== "product" && fieldname in form.value))
+	filterDefaults = {}
+	const filled = withNewDocumentDefaults(form.value, defaults)
+	for (const fieldname of Object.keys(defaults)) if (filled[fieldname] !== form.value[fieldname]) updateField(fieldname, filled[fieldname])
 }
 
 function updateField(fieldname, value) {

@@ -97,6 +97,7 @@ import ItemMasterFields from "./item/ItemMasterFields.vue"
 import ItemUomConversions from "./item/ItemUomConversions.vue"
 import ItemYarnRatio from "./item/ItemYarnRatio.vue"
 import { itemAttributeEditing, itemTableProblems, itemTableWarnings, stockUomRows } from "./item/itemTables.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { PURCHASE_ROUTES, dependentDetailRows, itemCanSave, itemCodeHint, itemCombinationAttributes, itemDependentProblem, itemDependentValues, itemEditorValues, itemKindLabel, itemSaveValues, resetAttributeRow, storedAttributeMappings } from "./purchaseViews.js"
 
 const props = defineProps({ itemId: { type: String, default: "" } })
@@ -115,6 +116,8 @@ const valuesAttribute = ref("")
 const attributeFields = {}
 let rowSequence = 0
 let loadSequence = 0
+const takenDefaults = takeNewDocumentDefaults("Item")
+let filterDefaults = props.itemId || route.params.itemId || route.query.duplicate_from ? {} : takenDefaults
 
 const isEdit = computed(() => Boolean(props.itemId || route.params.itemId))
 const currentName = computed(() => String(props.itemId || route.params.itemId || ""))
@@ -174,12 +177,21 @@ async function load() {
 	try {
 		const duplicateFrom = currentName.value ? null : route.query.duplicate_from || null
 		const payload = await getItemEditor(currentName.value || null, duplicateFrom)
-		if (sequence === loadSequence) applyEditor(payload)
+		if (sequence === loadSequence) {
+			applyEditor(payload)
+			if (!currentName.value) applyFilterDefaults()
+		}
 	} catch (reason) {
 		if (sequence === loadSequence) loadError.value = reason?.message || "Unable to load the Item editor."
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
+}
+
+function applyFilterDefaults() {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([key]) => key !== "name" && key in form && !Array.isArray(form[key])))
+	filterDefaults = {}
+	Object.assign(form, withNewDocumentDefaults(form, defaults))
 }
 
 function otherAttributeFilter(row) {

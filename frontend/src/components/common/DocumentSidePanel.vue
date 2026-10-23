@@ -31,7 +31,7 @@
 				</div>
 				<div v-if="doc.modified" class="side-panel-row">
 					<span>Last updated</span>
-					<strong>{{ doc.modified }}</strong>
+					<strong>{{ formatDisplayDatetime(doc.modified) }}</strong>
 				</div>
 			</div>
 			<Button
@@ -56,6 +56,7 @@ import { computed } from "vue"
 import { useRouter } from "vue-router"
 
 import { webDocumentPath } from "../../router/webDocumentRoutes.js"
+import { formatDisplayByFieldtype, formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -73,7 +74,7 @@ function display(item) {
 	if (item.formatter) return item.formatter(value, props.doc)
 	if (value === null || value === undefined || value === "") return "—"
 	if (item.fieldtype === "Check") return Number(value) ? "Yes" : "No"
-	return value
+	return formatDisplayByFieldtype(value, item.fieldtype)
 }
 
 function openDocument() { router.push(webDocumentPath(props.doctype, props.doc.name).replace(/^\/web(?=\/)/, "")) }

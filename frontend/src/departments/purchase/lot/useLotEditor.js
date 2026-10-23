@@ -6,6 +6,7 @@ import { getLotForm, getLotProductionDetailContext, getLotProductionOrderItem, s
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import { PURCHASE_ROUTES } from "../purchaseViews.js"
 import { clearedLotContext, clone, lotEditorCleanSignature, lotEditorTabs, lotSavePayload } from "./lotEditor.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 export function useLotEditor(lotId) {
 	const route = useRoute()
@@ -34,6 +35,8 @@ export function useLotEditor(lotId) {
 	let mutationSequence = 0
 	let isUnmounted = false
 	const isNew = !lotId
+	const takenDefaults = takeNewDocumentDefaults("SD YRP Lot")
+	let filterDefaults = isNew && !route.query.duplicate_from ? takenDefaults : {}
 	const signature = computed(() => JSON.stringify({ form, itemDetails: itemDetails.value, orderItemDetails: orderItemDetails.value }))
 	const isDirty = computed(() => Boolean(record.value) && signature.value !== cleanSignature.value)
 	const canSave = computed(() => isDirty.value && Boolean(form.lot_name) && (isNew || Boolean(record.value?.modified)))
@@ -46,7 +49,7 @@ export function useLotEditor(lotId) {
 	})
 	const editorActions = computed(() => [
 		{ key: "cancel", label: "Cancel", icon: "pi pi-times", command: cancel, disabled: Boolean(acting.value) },
-		{ key: "save", label: isNew ? "Create Lot" : "Save", icon: "pi pi-save", primary: true,
+		{ key: "save", label: isNew ? "Create Lot" : "Save", icon: "pi pi-save", primary: true, shortcut: "save",
 			loading: acting.value === "save", disabled: !canSave.value || Boolean(acting.value), command: save },
 	])
 
@@ -72,6 +75,15 @@ export function useLotEditor(lotId) {
 		attemptedSave.value = false
 		showMessages(payload.messages)
 	}
+	function applyFilterDefaults() {
+		const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname in form))
+		filterDefaults = {}
+		const filled = withNewDocumentDefaults(form, defaults)
+		const changed = Object.keys(defaults).filter((fieldname) => filled[fieldname] !== form[fieldname])
+		for (const fieldname of changed) form[fieldname] = filled[fieldname]
+		const cascade = ["production_order", "production_detail"].find((fieldname) => changed.includes(fieldname))
+		if (cascade) applyField(cascade, form[cascade])
+	}
 	async function load() {
 		const sequence = ++loadSequence
 		++eventSequence
@@ -82,7 +94,7 @@ export function useLotEditor(lotId) {
 		actionError.value = ""
 		try {
 			const [payload, metadata] = await Promise.all([getLotForm(lotId || null, lotId ? null : route.query.duplicate_from || null), getMeta("SD YRP Lot")])
-			if (isCurrentLoad(sequence)) applyForm(payload, metadata)
+			if (isCurrentLoad(sequence)) { applyForm(payload, metadata); applyFilterDefaults() }
 		} catch (reason) {
 			if (isCurrentLoad(sequence)) { record.value = null; loadError.value = reason.message }
 		} finally {

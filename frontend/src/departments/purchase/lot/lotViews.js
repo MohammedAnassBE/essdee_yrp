@@ -1,3 +1,5 @@
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
+
 export const LOT_DETAIL_GROUPS = [
 	{
 		key: "order",
@@ -226,7 +228,7 @@ export function planBadge(entry = {}) {
 	if (!status) return null
 	if (status === "Built")
 		return {
-			text: `Plan ready ${(entry.plan_built_on || "").slice(0, 10)}`,
+			text: `Plan ready ${formatDisplayDate(entry.plan_built_on, "")}`,
 			severity: "success",
 		}
 	if (status === "Pending Approval")
@@ -364,13 +366,6 @@ export function formatLotTime(value) {
 
 export function countLabel(count, singular, plural = `${singular}s`) {
 	return `${count} ${Number(count) === 1 ? singular : plural}`
-}
-
-export function formatLotDate(value, includeTime = false) {
-	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
-	if (!match) return value || "—"
-	const date = `${match[3]}-${match[2]}-${match[1]}`
-	return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date
 }
 
 export function conversionProcesses(rows = []) {

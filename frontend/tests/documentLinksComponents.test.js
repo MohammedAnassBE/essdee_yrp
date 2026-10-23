@@ -173,7 +173,6 @@ for (const department of ["purchase", "planning"]) {
 	test(`${department} LotIdentity links the header Item with unchanged display text`, () => readable(["Item"], () => {
 		const root = mountComponent(component(`departments/${department}/lot/LotIdentity`, undefined, {
 			"../../../components/documents/DocumentStatusBadge.vue": control,
-			"./lotViews.js": { formatLotDate: value => value },
 		}), { name: "LOT", item: "A/B", headingId: "lot-title" })
 		assert.equal(nodes(root, "a")[0].props.href, "/web/purchase/items/A%2FB")
 		assert.equal(text(nodes(root, "a")[0]), "A/B")

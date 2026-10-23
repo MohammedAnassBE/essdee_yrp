@@ -1,3 +1,5 @@
+import { formatDisplayDatetime, getDateParts } from "./dateFormat.js"
+
 const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{1,2}))?)?/
 const DAY = 86400000
 
@@ -51,10 +53,5 @@ export function prettyDate(value, { now = new Date(), mini = true } = {}) {
 
 /** Server datetime as "DD-MM-YYYY HH:MM:SS", the /web day-first format. */
 export function formatFullDateTime(value) {
-	const match = String(value || "").match(DATETIME_PATTERN)
-	if (!match) return ""
-	const date = `${match[3]}-${match[2]}-${match[1]}`
-	if (!match[4]) return date
-	const pad = (part) => String(part || 0).padStart(2, "0")
-	return `${date} ${pad(match[4])}:${match[5]}:${pad(match[6])}`
+	return getDateParts(value) ? formatDisplayDatetime(value, { seconds: true }) : ""
 }

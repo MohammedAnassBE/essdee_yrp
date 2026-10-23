@@ -63,13 +63,13 @@ const PURCHASE_INVOICE_FALLBACK_SCHEMA = {
 }
 
 const PURCHASE_INVOICE_ACTIONS = [
-	{ key: "submit", label: "Submit", icon: "pi pi-check" },
+	{ key: "submit", label: "Submit", icon: "pi pi-check", shortcut: "submit" },
 	{ key: "approve", label: "Approve Invoice", icon: "pi pi-check-circle" },
 	{ key: "edit", label: "Edit", icon: "pi pi-pencil" },
 	{ key: "fetch_expense_head", label: "Fetch Expense Head", icon: "pi pi-book" },
 	{ key: "show_erp_bill", label: "Show ERP Bill", icon: "pi pi-external-link" },
 	{ key: "submit_erp_bill", label: "Submit ERP Bill", icon: "pi pi-send" },
-	{ key: "cancel", label: "Cancel", icon: "pi pi-ban", menuOnly: true },
+	{ key: "cancel", label: "Cancel", icon: "pi pi-ban", menuOnly: true, shortcut: "cancel" },
 	{ key: "amend", label: "Amend", icon: "pi pi-copy", menuOnly: true },
 	{ key: "delete", label: "Delete", icon: "pi pi-trash", menuOnly: true },
 ]

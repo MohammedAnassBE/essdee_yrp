@@ -143,7 +143,7 @@ import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
 import { callMethod } from "../../api/frappe.js"
-import { mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
+import { getEntryPrimaryValues, mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
 import { cellAmount, getEntryTotals, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
 
 const props = defineProps({
@@ -357,7 +357,7 @@ async function stageItem() {
 			primary_attribute: activePrimary.value,
 			dependent_attribute: dependentAttribute.value,
 			dependent_attribute_details: clone(itemSchema.value.dependent_attribute_details || {}),
-			primary_attribute_values: clone(activePrimaryValues.value),
+			primary_attribute_values: getEntryPrimaryValues(activePrimaryValues.value, row),
 		}
 
 		if (editing.value) {

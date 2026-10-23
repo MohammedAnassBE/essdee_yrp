@@ -24,7 +24,7 @@
 		</div>
 		<footer>
 			<Button label="Reset" severity="secondary" text :disabled="saving || !dirty" @click="reset" />
-			<Button label="Save Quantity" icon="pi pi-save" :disabled="!dirty || hasErrors" :loading="saving" @click="save" />
+			<DocumentShortcuts :busy="saving" :can-save="dirty && !hasErrors" @save="save" /><Button label="Save Quantity" :title="withShortcutHint('Save Quantity', 'save')" icon="pi pi-save" :disabled="!dirty || hasErrors" :loading="saving" @click="save" />
 		</footer>
 		<DocumentErrorDialog :message="error" title="Lot Transfer quantity was not saved" @dismiss="error = ''" />
 	</section>
@@ -36,7 +36,9 @@ import InputNumber from "primevue/inputnumber"
 import { computed, ref, watch } from "vue"
 
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import { updateLotTransferQuantities } from "./cpmApi.js"
 import { hasQuantityChanges, quantityDraft, quantityErrors, quantityPayload } from "./lotTransferQuantities.js"
 

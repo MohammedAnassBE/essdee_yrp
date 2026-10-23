@@ -41,6 +41,7 @@ import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
+import { usePageTitle } from "../../composables/usePageTitle.js"
 import { chooseReport, readRememberedReport, rememberReport, reportGroups, stepReport } from "./reportWorkspace.js"
 
 /** Master-detail report picker: searchable list on the left, selected report on the right, kept in the URL. */
@@ -73,6 +74,7 @@ const selected = computed({
 	},
 })
 const current = computed(() => props.reports.find(report => report.value === selected.value))
+usePageTitle(() => current.value?.label)
 
 watch(search, () => { highlighted.value = visibleValues.value[0] || "" })
 

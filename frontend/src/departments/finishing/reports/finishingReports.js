@@ -1,5 +1,7 @@
 /** Totals, grouping and formatting rules of the Frappe 15 Finishing report pages. */
 
+import { formatDisplayByFieldtype } from "../../../utils/dateFormat.js"
+
 const number = (value) => Number(value) || 0
 
 export const FROZEN_COLUMNS = ["item", "description", "lot", "pieces_per_box"]
@@ -78,7 +80,7 @@ export function formatReportCell(column, row) {
 	if (column.fieldtype === "Percent") return `${Math.round((Number(value) + Number.EPSILON) * 100) / 100}%`
 	if (column.fieldtype === "Int") return Number(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })
 	if (["Float", "Currency"].includes(column.fieldtype)) return Number(value).toLocaleString("en-IN", { maximumFractionDigits: 3 })
-	return String(value)
+	return String(formatDisplayByFieldtype(value, column.fieldtype))
 }
 
 export function reportCellTone(column, row) {

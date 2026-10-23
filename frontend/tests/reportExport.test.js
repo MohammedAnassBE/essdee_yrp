@@ -50,6 +50,8 @@ test("Applied filter labels follow Desk: skip empty and hidden filters, label ch
 	]
 	assert.deepEqual(helpers.appliedFilterLabels(fields, { lot: "L1", item: "", from_date: "2026-01-01", warehouse_wise: 1 }), { Lot: "L1", "Warehouse Wise": "Yes" })
 	assert.deepEqual(helpers.appliedFilterLabels(undefined, { product_category: "Tops" }), { "Product Category": "Tops" })
+	const dates = [{ fieldname: "from_date", label: "From Date", fieldtype: "Date" }, { fieldname: "period", label: "Period", fieldtype: "Date" }]
+	assert.deepEqual(helpers.appliedFilterLabels(dates, { from_date: "2026-10-23", period: ["2026-10-01", "2026-10-23"] }), { "From Date": "23-10-2026", Period: ["01-10-2026", "23-10-2026"] })
 })
 
 test("Table grid expands colspan and rowspan and keeps numbers numeric", () => {

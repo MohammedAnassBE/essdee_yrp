@@ -14,6 +14,7 @@ import {
 	lotSavePayload,
 } from "../../purchase/lot/lotEditor.js"
 import { boxGridErrors } from "./merchLotViews.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 export function useMerchLotEditor(lotId) {
 	const route = useRoute()
@@ -49,6 +50,8 @@ export function useMerchLotEditor(lotId) {
 	let mutationSequence = 0
 	let isUnmounted = false
 	const isNew = !lotId
+	const takenDefaults = takeNewDocumentDefaults("SD YRP Lot")
+	let filterDefaults = isNew && !route.query.duplicate_from ? takenDefaults : {}
 	const signature = computed(() =>
 		JSON.stringify({
 			form,
@@ -103,6 +106,7 @@ export function useMerchLotEditor(lotId) {
 			label: isNew ? "Create Lot" : "Save",
 			icon: "pi pi-save",
 			primary: true,
+			shortcut: "save",
 			loading: acting.value === "save",
 			disabled: !canSave.value || Boolean(acting.value),
 			command: save,
@@ -144,6 +148,15 @@ export function useMerchLotEditor(lotId) {
 		attemptedSave.value = false
 		showMessages(payload.messages)
 	}
+	function applyFilterDefaults() {
+		const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname in form))
+		filterDefaults = {}
+		const filled = withNewDocumentDefaults(form, defaults)
+		const changed = Object.keys(defaults).filter((fieldname) => filled[fieldname] !== form[fieldname])
+		for (const fieldname of changed) form[fieldname] = filled[fieldname]
+		const cascade = ["production_order", "production_detail"].find((fieldname) => changed.includes(fieldname))
+		if (cascade) applyField(cascade, form[cascade])
+	}
 	async function load() {
 		const sequence = ++loadSequence
 		++eventSequence
@@ -157,7 +170,10 @@ export function useMerchLotEditor(lotId) {
 				getLotForm(lotId || null, lotId ? null : route.query.duplicate_from || null),
 				getMeta("SD YRP Lot"),
 			])
-			if (isCurrentLoad(sequence)) applyForm(payload, metadata)
+			if (isCurrentLoad(sequence)) {
+				applyForm(payload, metadata)
+				applyFilterDefaults()
+			}
 		} catch (reason) {
 			if (isCurrentLoad(sequence)) {
 				record.value = null

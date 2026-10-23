@@ -12,7 +12,7 @@
 				:aria-label="actionAriaLabel(primaryAction)"
 				:aria-describedby="disabledReasonId(primaryAction)"
 				:class="{ 'document-action-strip__reason-disabled': primaryAction.disabled && primaryAction.disabledReason }"
-				:title="primaryAction.disabledReason || primaryAction.label"
+				:title="primaryAction.disabledReason || withShortcutHint(primaryAction.label, primaryAction.shortcut)"
 				@focus="showDisabledReason(primaryAction)"
 				@click="run(primaryAction)"
 			/>
@@ -31,7 +31,7 @@
 			:aria-disabled="Boolean(action.disabled)"
 			:aria-label="actionAriaLabel(action)"
 			:aria-describedby="disabledReasonId(action)"
-			:title="action.disabledReason || action.label"
+			:title="action.disabledReason || withShortcutHint(action.label, action.shortcut)"
 			@focus="showDisabledReason(action)"
 			@click="run(action)"
 		/>
@@ -77,6 +77,9 @@ import Button from "primevue/button"
 import Menu from "primevue/menu"
 import { computed, ref } from "vue"
 
+import { useDocumentShortcuts } from "../../composables/useDocumentShortcuts.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
+
 const props = defineProps({
 	actions: { type: Array, default: () => [] },
 })
@@ -91,12 +94,26 @@ const visibleActions = computed(() => secondaryActions.value.filter((action) => 
 const visibleActionKeys = computed(() => new Set(visibleActions.value.map((action) => action.key)))
 const desktopOverflowActions = computed(() => secondaryActions.value.filter((action) => action.menuOnly || !visibleActionKeys.value.has(action.key)))
 const menuItems = computed(() => activeOverflowActions.value.map((action) => ({
-	label: action.disabled && action.disabledReason ? `${action.label} — ${action.disabledReason}` : action.label,
+	label: action.disabled && action.disabledReason ? `${action.label} — ${action.disabledReason}` : withShortcutHint(action.label, action.shortcut),
 	icon: action.icon,
 	class: action.severity === "danger" ? "document-action-menu__item--danger" : undefined,
 	disabled: Boolean(action.disabled),
 	command: () => run(action),
 })))
+
+const shortcutAction = (command) => props.actions.find((action) => action.shortcut === command)
+const isRunnable = (action) => Boolean(action && !action.disabled && !action.loading)
+useDocumentShortcuts({
+	isBusy: () => props.actions.some((action) => action.loading),
+	canSave: () => isRunnable(shortcutAction("save")),
+	save: () => run(shortcutAction("save")),
+	canSubmit: () => isRunnable(shortcutAction("submit")),
+	submit: () => run(shortcutAction("submit")),
+	submitConfirms: () => shortcutAction("submit")?.confirms !== false,
+	canCancel: () => isRunnable(shortcutAction("cancel")),
+	cancel: () => run(shortcutAction("cancel")),
+	cancelConfirms: () => shortcutAction("cancel")?.confirms !== false,
+})
 
 function run(action) {
 	if (!action) return

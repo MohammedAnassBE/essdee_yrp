@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { buildStockHeaderFields, clearMismatchedWarehouse, createWarehouseCheck } from "../src/departments/fabric-store/stockHeaderFields.js"
+import { buildStockHeaderFields, clearMismatchedWarehouse, createSupplierAutofill, createWarehouseCheck } from "../src/departments/fabric-store/stockHeaderFields.js"
 
 const editor = { purpose_options: ["Stock Reconciliation", "Opening Stock"], update_type_options: ["Add", "Remove"], posting_fields: [] }
 const names = (fields) => fields.map((field) => field.fieldname)
@@ -72,4 +72,103 @@ test("a failed supplier check clears the warehouse and reports the error", async
 	await check.settled()
 	assert.equal(form.warehouse, "")
 	assert.deepEqual(errors, ["lookup failed"])
+})
+
+const singleOptions = { "One WH": { warehouse: "W-ONE" }, "Two WH": { warehouse: null }, "Other One": { warehouse: "W-OTHER" } }
+const autofillFor = (form, check = { settled: async () => {} }) => createSupplierAutofill(form, check, { fetchOptions: async ({ supplier }) => singleOptions[supplier], onError: assert.fail })
+
+test("stock reconciliation fills the only warehouse of the chosen supplier", async () => {
+	const form = { default_supplier: "One WH", default_warehouse: "" }
+	const autofill = autofillFor(form)
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "W-ONE")
+})
+
+test("stock reconciliation leaves the warehouse empty when the supplier has several", async () => {
+	const form = { default_supplier: "Two WH", default_warehouse: "" }
+	const autofill = autofillFor(form)
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "")
+})
+
+test("stock reconciliation replaces or clears a stale auto-filled warehouse but keeps a picked one", async () => {
+	const form = { default_supplier: "One WH", default_warehouse: "" }
+	const autofill = autofillFor(form)
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	form.default_supplier = "Other One"
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "W-OTHER")
+	form.default_supplier = "Two WH"
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "")
+	form.default_warehouse = "W-PICKED"
+	form.default_supplier = "One WH"
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "W-PICKED")
+})
+
+test("supplier autofill runs after the mismatch check clears a foreign warehouse", async () => {
+	const form = { default_supplier: "One WH", default_warehouse: "W-FOREIGN" }
+	const check = createWarehouseCheck(form, async () => false, assert.fail)
+	const autofill = autofillFor(form, check)
+	check.supplierChanged("default_supplier")
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "W-ONE")
+})
+
+test("supplier autofill ignores operations and fields without a mapping", async () => {
+	const form = { supplier: "One WH", warehouse: "", default_supplier: "One WH", default_warehouse: "" }
+	const autofill = autofillFor(form)
+	autofill.supplierChanged("stock_reconciliation", "purpose")
+	autofill.supplierChanged("lot_transfer", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "")
+})
+
+test("stock update fills the only warehouse of the chosen supplier and reports the change", async () => {
+	const form = { supplier: "One WH", warehouse: "" }
+	const changes = []
+	const autofill = createSupplierAutofill(form, { settled: async () => {} }, { fetchOptions: async ({ supplier }) => singleOptions[supplier], onChange: (change) => changes.push(change), onError: assert.fail })
+	autofill.supplierChanged("stock_update", "supplier")
+	await autofill.settled()
+	assert.equal(form.warehouse, "W-ONE")
+	assert.deepEqual(changes, [{ warehouse: "W-ONE" }])
+})
+
+test("stock update replaces or clears a stale auto-filled warehouse but keeps a picked one", async () => {
+	const form = { supplier: "One WH", warehouse: "" }
+	const autofill = autofillFor(form)
+	autofill.supplierChanged("stock_update", "supplier")
+	await autofill.settled()
+	form.supplier = "Other One"
+	autofill.supplierChanged("stock_update", "supplier")
+	await autofill.settled()
+	assert.equal(form.warehouse, "W-OTHER")
+	form.supplier = "Two WH"
+	autofill.supplierChanged("stock_update", "supplier")
+	await autofill.settled()
+	assert.equal(form.warehouse, "")
+	form.warehouse = "W-PICKED"
+	form.supplier = "One WH"
+	autofill.supplierChanged("stock_update", "supplier")
+	await autofill.settled()
+	assert.equal(form.warehouse, "W-PICKED")
+})
+
+test("forget drops the auto-fill record so a loaded warehouse counts as the user's", async () => {
+	const form = { default_supplier: "One WH", default_warehouse: "" }
+	const autofill = autofillFor(form)
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	autofill.forget()
+	form.default_supplier = "Two WH"
+	autofill.supplierChanged("stock_reconciliation", "default_supplier")
+	await autofill.settled()
+	assert.equal(form.default_warehouse, "W-ONE")
 })

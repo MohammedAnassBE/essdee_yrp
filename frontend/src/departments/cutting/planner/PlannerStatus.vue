@@ -2,18 +2,18 @@
 	<section class="planner-status" :class="`planner-status--${slug(status)}`" aria-label="Optimization status">
 		<div class="planner-status__icon"><i :class="icon"></i></div>
 		<div class="planner-status__copy"><span>Optimization</span><strong>{{ status }}</strong><small>{{ message }}</small></div>
-		<div v-if="started || completed" class="planner-status__times"><span v-if="started">Started <strong>{{ formatDateTime(started) }}</strong></span><span v-if="completed">Completed <strong>{{ formatDateTime(completed) }}</strong></span></div>
+		<div v-if="started || completed" class="planner-status__times"><span v-if="started">Started <strong>{{ formatDisplayDatetime(started, { fallback: "" }) }}</strong></span><span v-if="completed">Completed <strong>{{ formatDisplayDatetime(completed, { fallback: "" }) }}</strong></span></div>
 	</section>
 </template>
 
 <script setup>
 import { computed } from "vue"
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 
 const props = defineProps({ status: { type: String, default: "Not Started" }, error: { type: String, default: "" }, started: { type: String, default: "" }, completed: { type: String, default: "" } })
 const icon = computed(() => props.status === "Completed" ? "pi pi-check-circle" : props.status === "Failed" ? "pi pi-exclamation-triangle" : ["Queued", "Running"].includes(props.status) ? "pi pi-spin pi-spinner" : "pi pi-sliders-h")
 const message = computed(() => props.status === "Failed" ? props.error || "No feasible lay plan was found." : props.status === "Completed" ? "The strategy portfolio is ready for comparison." : props.status === "Running" ? "Strategies are running on the long worker." : props.status === "Queued" ? "Waiting for the long worker to start." : "Save the inputs, then run Optimize.")
 function slug(value) { return String(value).toLowerCase().replaceAll(" ", "-") }
-function formatDateTime(value) { if (!value) return ""; const date = new Date(String(value).replace(" ", "T")); if (Number.isNaN(date.getTime())) return value; return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date).replace(",", " ·") }
 </script>
 
 <style scoped>

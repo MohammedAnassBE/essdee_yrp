@@ -6,6 +6,9 @@
 		:show-title="false"
 		flat
 		full-width
+		activity-doctype="SD YRP Product Release"
+		:activity-name="record.name || ''"
+		:activity-record="record"
 	>
 		<section class="pd-product-workspace" aria-label="Product Release workspace">
 			<div v-if="loading" class="pd-product-workspace__loading" aria-label="Loading Product Release">

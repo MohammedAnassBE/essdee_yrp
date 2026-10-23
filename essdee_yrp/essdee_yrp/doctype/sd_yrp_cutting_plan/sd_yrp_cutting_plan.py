@@ -506,7 +506,7 @@ def get_items(lot):
 def get_cloth1(cutting_plan):
 	cutting_plan_doc = _get_submitted_cutting_plan(cutting_plan)
 	counts = _generate_cloth_requirements(cutting_plan_doc)
-	text = f"Cloth Generated on {datetime.now()} by {frappe.session.user}"
+	text = f"Cloth Generated on {datetime.now().strftime('%d-%m-%Y %H:%M')} by {frappe.session.user}"
 	cutting_plan_doc.add_comment("Comment", text=text)
 	if counts["substituted_rows"] > 0:
 		n = counts["substituted_rows"]
@@ -1134,7 +1134,7 @@ def rebuild_received_cloth(cp_doc, add_repair_comment=False):
 	if generated_requirements and add_repair_comment:
 		cp_doc.add_comment(
 			"Comment",
-			text=f"Missing cloth requirements regenerated while fetching received cloth on {datetime.now()} by {frappe.session.user}",
+			text=f"Missing cloth requirements regenerated while fetching received cloth on {datetime.now().strftime('%d-%m-%Y %H:%M')} by {frappe.session.user}",
 		)
 	cp_doc.save(ignore_permissions=True)
 	return {

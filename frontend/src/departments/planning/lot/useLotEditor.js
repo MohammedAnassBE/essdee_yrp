@@ -46,7 +46,7 @@ export function useLotEditor(lotId) {
 	})
 	const editorActions = computed(() => [
 		{ key: "cancel", label: "Cancel", icon: "pi pi-times", command: cancel, disabled: Boolean(acting.value) },
-		...(record.value && !loadError.value ? [{ key: "save", label: isNew ? "Create Lot" : "Save", icon: "pi pi-save", primary: true,
+		...(record.value && !loadError.value ? [{ key: "save", label: isNew ? "Create Lot" : "Save", icon: "pi pi-save", primary: true, shortcut: "save",
 			loading: acting.value === "save", disabled: !canSave.value || Boolean(acting.value), command: save }] : []),
 	])
 

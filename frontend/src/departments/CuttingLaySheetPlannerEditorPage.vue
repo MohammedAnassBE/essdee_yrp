@@ -21,6 +21,7 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import PlannerInputs from "./cutting/planner/PlannerInputs.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../utils/newDocumentDefaults.js"
 
 const router = useRouter()
 const payload = ref({})
@@ -29,11 +30,17 @@ const saving = ref(false)
 const error = ref("")
 const actionError = ref("")
 const plannerInputs = ref(null)
+const PLANNER_FIELDS = ["lot", "item", "description", "max_plies", "max_pieces", "tolerance_pct", "max_lays", "tubular"]
+const stagedDefaults = takeNewDocumentDefaults("SD YRP Cutting Laysheet Planner")
+const filterDefaults = Object.fromEntries(PLANNER_FIELDS.filter((key) => key in stagedDefaults).map((key) => [key, stagedDefaults[key]]))
 const loadFailed = computed(() => Boolean(error.value && !payload.value?.record))
 async function load() {
 	loading.value = true
 	error.value = ""
-	try { payload.value = await getLaySheetPlannerEditor() }
+	try {
+		const editor = await getLaySheetPlannerEditor()
+		payload.value = { ...editor, record: withNewDocumentDefaults(editor?.record, filterDefaults) }
+	}
 	catch (reason) { error.value = reason?.message || "Unable to start a LaySheet Plan." }
 	finally { loading.value = false }
 }

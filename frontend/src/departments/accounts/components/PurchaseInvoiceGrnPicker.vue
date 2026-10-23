@@ -60,7 +60,7 @@
 						<template #body="{ data }"><strong>{{ data.name }}</strong></template>
 					</Column>
 					<Column field="posting_date" header="Date" style="min-width: 112px">
-						<template #body="{ data }">{{ displayDate(data.posting_date) }}</template>
+						<template #body="{ data }">{{ formatDisplayDate(data.posting_date) }}</template>
 					</Column>
 					<Column field="against_id" header="Against" style="min-width: 150px">
 						<template #body="{ data }">{{ data.against_id || "—" }}</template>
@@ -105,6 +105,7 @@ import Tag from "primevue/tag"
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue"
 
 import { getEligibleGrns } from "../../../api/accounts.js"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 import {
 	addGrnsWithinLimit,
 	filterEligibleGrns,
@@ -249,12 +250,6 @@ function number(value) {
 	return Number.isFinite(numericValue)
 		? numericValue.toLocaleString("en-IN", { maximumFractionDigits: 3 })
 		: "—"
-}
-
-function displayDate(value) {
-	if (!value) return "—"
-	const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}` : String(value)
 }
 </script>
 

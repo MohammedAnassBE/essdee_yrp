@@ -7,6 +7,7 @@
 		:loading="loading"
 		:aria-busy="loading"
 		:disabled="actionDisabled"
+		:title="withShortcutHint(action === 'submit' ? submitLabel : saveLabel, action === 'submit' ? 'submit' : 'save')"
 		@click="performAction"
 	/>
 </template>
@@ -15,6 +16,8 @@
 import Button from "primevue/button"
 import { computed } from "vue"
 import { getDocumentPrimaryAction } from "./documentPrimaryAction.js"
+import { useDocumentShortcuts } from "../../composables/useDocumentShortcuts.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 
 const props = defineProps({
@@ -37,6 +40,14 @@ const emit = defineEmits(["save", "submit"])
 const confirmAction = useActionConfirmation()
 const action = computed(() => getDocumentPrimaryAction(props))
 const actionDisabled = computed(() => props.loading || props.disabled || action.value === "save-disabled" || (action.value === "submit" ? props.submitDisabled : props.saveDisabled))
+useDocumentShortcuts({
+	isBusy: () => props.loading,
+	canSave: () => !actionDisabled.value && action.value === "save",
+	save: performAction,
+	canSubmit: () => !actionDisabled.value && action.value === "submit",
+	submit: performAction,
+	submitConfirms: () => props.confirmSubmit,
+})
 function performAction() {
 	if (actionDisabled.value || action.value === "none") return
 	if (action.value !== "submit") return emit("save")

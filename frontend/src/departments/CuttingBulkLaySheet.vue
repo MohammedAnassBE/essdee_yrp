@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Bulk LaySheets" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Bulk LaySheets" back-to="/cutting/bulk-lay-sheets" back-label="Bulk LaySheets" :show-title="false" flat full-width inline-navigation activity-doctype="SD YRP Cutting Bulk Lay Sheets" :activity-name="record.name || ''" :activity-record="record">
 		<div class="bulk-workspace erp-workspace">
 			<div v-if="loading && !workspace.record" class="bulk-workspace__loading"><Skeleton height="76px" /><Skeleton height="560px" /></div>
 			<WorkspaceLoadError v-else-if="error && !record.name" title="Bulk LaySheets unavailable" :message="error" :loading="loading" @retry="loadWorkspace" />
@@ -97,7 +97,9 @@ import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../components/navigation/InlinePageNavigation.vue"
+import { usePageTitle } from "../composables/usePageTitle.js"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
+import { formatDisplayDate } from "../utils/dateFormat.js"
 import BulkActions from "./cutting/bulk/BulkActions.vue"
 import BulkActiveLaySheet from "./cutting/bulk/BulkActiveLaySheet.vue"
 import BulkBundleTable from "./cutting/bulk/BulkBundleTable.vue"
@@ -129,10 +131,11 @@ let loadSequence = 0
 let actionSequence = 0
 let disposed = false
 const record = computed(() => workspace.value.record || {})
+usePageTitle(() => record.value.name, () => record.value.main_lot)
 const activeRow = computed(() => (workspace.value.rows || []).find((row) => row.cutting_laysheet === record.value.active_cutting_laysheet) || null)
 const deliveryRows = computed(() => (workspace.value.rows || []).filter((row) => row.delivery_challan))
 const setupSummary = computed(() => [
-	{ label: "Posting Date", value: formatDate(record.value.posting_date) }, { label: "Cutting Spreader", value: record.value.cutting_spreader, doctype: "SD YRP Cutting Spreader" }, { label: "Cutter", value: record.value.cutter, doctype: "SD YRP Cutter" },
+	{ label: "Posting Date", value: formatDisplayDate(record.value.posting_date, "") }, { label: "Cutting Spreader", value: record.value.cutting_spreader, doctype: "SD YRP Cutting Spreader" }, { label: "Cutter", value: record.value.cutter, doctype: "SD YRP Cutter" },
 ])
 
 async function loadWorkspace() {
@@ -278,7 +281,6 @@ async function generate() {
 function actionSaved(payload, message) { applyWorkspace(payload); feedback.value = message }
 function setupSaved(payload) { applyWorkspace(payload); editSetupOpen.value = false; feedback.value = "Bulk setup updated." }
 function today() { const value = new Date(); const pad = (part) => String(part).padStart(2, "0"); return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` }
-function formatDate(value) { if (!value) return ""; const [year, month, day] = String(value).split("-"); return day && month && year ? `${day}-${month}-${year}` : value }
 watch(bulkName, () => {
 	activeEditorDirty.value = false
 	workspace.value = {}

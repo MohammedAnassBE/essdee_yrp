@@ -14,6 +14,7 @@
 			<DeliveryChallanWorkspace
 				:name="documentName"
 				:source-context="resolvedSourceContext"
+				:new-defaults="newDefaults"
 				:duplicate-route-name="duplicateRouteName"
 				@changed="workspaceChanged"
 				@closed="emit('closed')"
@@ -25,6 +26,7 @@
 		presentation="embedded"
 		:name="documentName"
 		:source-context="resolvedSourceContext"
+		:new-defaults="newDefaults"
 		:duplicate-route-name="duplicateRouteName"
 		@changed="workspaceChanged"
 		@closed="emit('closed')"
@@ -37,6 +39,7 @@ import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
+import { takeNewDocumentDefaults } from "../utils/newDocumentDefaults.js"
 import DeliveryChallanWorkspace from "./fabric-store/DeliveryChallanWorkspace.vue"
 
 const props = defineProps({
@@ -53,9 +56,13 @@ const route = useRoute()
 const router = useRouter()
 
 const documentName = computed(() => props.name || String(route.params.deliveryChallanId || ""))
+const filterDefaults = takeNewDocumentDefaults("YRP Delivery Challan")
+const isPlainNew = !documentName.value && !Object.keys(props.sourceContext || {}).length && !Object.keys(compactSource(route.query)).length
+// A Work Order filter loads the Work Order source, as Make DC does; other filters prefill the draft.
+const { work_order: filterWorkOrder = "", ...newDefaults } = isPlainNew ? filterDefaults : {}
 const resolvedSourceContext = computed(() => Object.keys(props.sourceContext || {}).length
 	? props.sourceContext
-	: compactSource(route.query))
+	: compactSource({ ...(filterWorkOrder && !documentName.value ? { work_order: filterWorkOrder } : {}), ...route.query }))
 
 async function workspaceChanged(workspace) {
 	emit("changed", workspace)

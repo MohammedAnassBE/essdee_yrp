@@ -40,5 +40,22 @@ export function mergeStockItemDraft(existingRow, draftRow) {
 	for (const [key, value] of Object.entries(draft.values || {})) {
 		values[key] = { ...(existing.values?.[key] || {}), ...value }
 	}
+	if (isSameEntryShape(existing, draft)) {
+		for (const [key, value] of Object.entries(existing.values || {})) values[key] ??= value
+	}
 	return { ...existing, ...draft, values }
+}
+
+/** Saved sizes the Item no longer lists cannot be edited in the grid, so an edit must keep them. */
+function isSameEntryShape(existing, draft) {
+	return Boolean(existing.name && existing.primary_attribute)
+		&& existing.name === draft.name
+		&& existing.primary_attribute === draft.primary_attribute
+		&& JSON.stringify(existing.attributes || {}) === JSON.stringify(draft.attributes || {})
+}
+
+/** Grid values for a group: the Item's listed values plus any saved value the row still carries. */
+export function getEntryPrimaryValues(listedValues, row) {
+	if (!row?.primary_attribute) return [...(listedValues || [])]
+	return [...new Set([...(listedValues || []), ...Object.keys(row.values || {})])]
 }

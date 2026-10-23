@@ -21,7 +21,7 @@
 			<template #option="{ option }">
 				<span class="async-multi__option">
 					<strong>{{ option.label }}</strong>
-					<small v-if="option.description">{{ option.description }}</small>
+					<small v-if="option.description">{{ formatDatesInText(option.description) }}</small>
 				</span>
 			</template>
 		</AutoComplete>
@@ -35,6 +35,7 @@ import { computed, nextTick, ref, watch } from "vue"
 
 import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "../../../components/common/autocompleteKeys.js"
 import { searchLink } from "../../../api/frappe.js"
+import { formatDatesInText } from "../../../utils/dateFormat.js"
 
 const AutoComplete = withAutocompleteCompositionGuard(PrimeAutoComplete)
 

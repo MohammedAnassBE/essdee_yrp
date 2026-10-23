@@ -67,7 +67,7 @@
 						@click="clearFilters"
 					/>
 				</div>
-				<div class="list-toolbar__primary"><slot name="toolbar-actions"></slot></div>
+				<div class="list-toolbar__primary" @click.capture="stageFilterDefaults"><slot name="toolbar-actions"></slot></div>
 			</div>
 		</header>
 
@@ -255,20 +255,33 @@
 								:alt="columnLabel(column)"
 								loading="lazy"
 							/>
-							<DocumentStatusBadge
+							<span
 								v-else-if="isStatusColumn(column) && hasFilterValue(data[column.fieldname])"
-								:docstatus="column.fieldname === 'docstatus' ? data[column.fieldname] : null"
-								:label="column.fieldname === 'docstatus' ? '' : String(data[column.fieldname])"
-							/>
+								class="list-status-value"
+								:class="{ 'list-filter-value': canClickFilter(column, data) }"
+								@click="cellValueClicked($event, column, data)"
+							>
+								<DocumentStatusBadge
+									:docstatus="column.fieldname === 'docstatus' ? data[column.fieldname] : null"
+									:label="column.fieldname === 'docstatus' ? '' : String(data[column.fieldname])"
+								/>
+							</span>
 							<span
 								v-else-if="column.fieldtype === 'Link'"
 								class="list-link-value"
-								:class="`list-link-value--${column.fieldname}`"
+								:class="[`list-link-value--${column.fieldname}`, { 'list-filter-value': canClickFilter(column, data) }]"
 								:title="displayValue(data[column.fieldname], column, data)"
+								@click="cellValueClicked($event, column, data)"
 							>
 								{{ displayValue(data[column.fieldname], column, data) }}
 							</span>
-							<span v-else class="list-plain-value" :title="displayValue(data[column.fieldname], column, data)">
+							<span
+								v-else
+								class="list-plain-value"
+								:class="{ 'list-filter-value': canClickFilter(column, data) }"
+								:title="displayValue(data[column.fieldname], column, data)"
+								@click="cellValueClicked($event, column, data)"
+							>
 								{{ displayValue(data[column.fieldname], column, data) }}
 							</span>
 						</slot>
@@ -511,9 +524,12 @@ import {
 	navigationStorageKey,
 	readNavigationState,
 } from "../../utils/listNavigation.js"
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
 import { formatFullDateTime, prettyDate } from "../../utils/prettyDate.js"
 import { listStatusTone } from "../../utils/statusTone.js"
 import { listStandardFilterFields, listStatusFilters } from "./listStatusFilters.js"
+import { clickFilterValue, isClickFilterColumn, replaceEqualityFilter } from "./listClickFilters.js"
+import { equalityFilterDefaults, stageNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -941,10 +957,10 @@ function initialStatusQuickFilters() {
 	return props.statusField && hasFilterValue(props.initialStatus) ? { [props.statusField]: props.initialStatus } : {}
 }
 
-function allFilters({ expand = true } = {}) {
+function allFilters({ expand = true, includeBase = true } = {}) {
 	const option = effectiveStatusOptions.value.find((candidate) => String(candidate?.value) === String(activeStatus.value))
 	const usesOptionFilters = Array.isArray(option?.filters)
-	const filters = [...baseFilters(), ...advancedFilters.value, ...quickFilterTuples({ excludeStatus: usesOptionFilters })]
+	const filters = [...(includeBase ? baseFilters() : []), ...advancedFilters.value, ...quickFilterTuples({ excludeStatus: usesOptionFilters })]
 	if (
 		effectiveStatusField.value &&
 		hasFilterValue(activeStatus.value) &&
@@ -1369,6 +1385,56 @@ async function runBulkAction(action, candidates) {
 	}
 }
 
+const clickFilterFieldnames = computed(() => new Set([
+	...filterFields.value.filter((field) => field.doctype === props.doctype).map((field) => field.fieldname),
+	...standardFilterFields.value.map((field) => field.fieldname),
+	effectiveStatusField.value,
+].filter(Boolean)))
+
+function canClickFilter(column, row) {
+	return Boolean(
+		metadataReady.value &&
+		hasFilterValue(row?.[column.fieldname]) &&
+		clickFilterFieldnames.value.has(column.fieldname) &&
+		isClickFilterColumn(column, { isStatus: isStatusColumn(column) }),
+	)
+}
+
+/** Desk's click-to-filter: the clicked value becomes `field = value`, replacing that field's equality filter. */
+function cellValueClicked(event, column, row) {
+	if (!canClickFilter(column, row)) return
+	event.stopPropagation()
+	const fieldname = column.fieldname
+	const value = clickFilterValue(column, row[fieldname])
+	if (fieldname === effectiveStatusField.value && statusTabs.value.length) return selectStatus(String(value))
+	const advanced = replaceEqualityFilter(advancedFilters.value, props.doctype, fieldname, value)
+	if (!standardFilterFields.value.some((field) => field.fieldname === fieldname)) return filtersApplied(advanced)
+	const remaining = advanced.slice(0, -1)
+	if (remaining.length !== advancedFilters.value.length) {
+		advancedFilters.value = remaining
+		emit("update:advancedFilters", cloneFilters(remaining))
+	}
+	applyQuickFilter(fieldname, value)
+}
+
+function applyQuickFilter(fieldname, value) {
+	if (quickFilterTimer) {
+		clearTimeout(quickFilterTimer)
+		quickFilterTimer = null
+	}
+	quickFilters.value = { ...quickFilters.value, [fieldname]: value }
+	appliedQuickFilters.value = { ...quickFilters.value }
+	first.value = 0
+	reload(true)
+}
+
+/** Stages the visible equality filters for a new document opened from the toolbar, like Desk's route_options. */
+function stageFilterDefaults() {
+	const excludedFieldnames = [activeWorkflow.value?.state_field].filter(Boolean)
+	const filters = allFilters({ expand: false, includeBase: false })
+	stageNewDocumentDefaults(props.doctype, equalityFilterDefaults(filters, props.doctype, metaFields.value, { excludedFieldnames }), route.fullPath)
+}
+
 function rowClicked(event) {
 	const target = event?.originalEvent?.target
 	if (target?.closest?.(".p-checkbox, .p-selection-column, button, a, input, textarea, select")) return
@@ -1453,13 +1519,7 @@ function displayValue(value, column, row = {}) {
 	if (value === null || value === undefined || value === "") return "—"
 	if (column.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (Array.isArray(value)) return value.join(", ")
-	if (["Date", "Datetime"].includes(column.fieldtype)) {
-		const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
-		if (match) {
-			const date = `${match[3]}-${match[2]}-${match[1]}`
-			return column.fieldtype === "Datetime" && match[4] ? `${date} · ${match[4]}:${match[5]}` : date
-		}
-	}
+	if (["Date", "Datetime"].includes(column.fieldtype)) return formatDisplayByFieldtype(value, column.fieldtype)
 	if (column.fieldtype === "Currency") {
 		const reference = currencyReferenceField(column, currencyFields.value)
 		const currency = reference ? row?.[reference] : ""
@@ -2095,6 +2155,30 @@ defineExpose({ refresh: reload })
 .list-plain-value {
 	color: var(--erp-text-secondary);
 	font-weight: 400;
+}
+
+.list-status-value {
+	display: inline-flex;
+	max-width: 100%;
+}
+
+.list-filter-value {
+	width: fit-content;
+	cursor: pointer;
+	border-radius: 4px;
+	text-decoration-color: transparent;
+	transition: color .12s ease, text-decoration-color .12s ease;
+}
+
+.list-filter-value:hover {
+	color: var(--erp-accent-ink);
+	text-decoration: underline dotted;
+	text-decoration-color: currentColor;
+	text-underline-offset: 3px;
+}
+
+.list-status-value.list-filter-value:hover {
+	opacity: .82;
 }
 
 .list-image-value {

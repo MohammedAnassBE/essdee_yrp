@@ -53,7 +53,9 @@ import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { mapFieldError, requiredFieldErrors } from "../../utils/fieldErrors.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import { prepareStockUpdateRow, refreshStockUpdateGroupRates } from "../../utils/stockItemComposer.js"
-import { buildStockHeaderFields, createWarehouseCheck } from "./stockHeaderFields.js"
+import { buildStockHeaderFields, createSupplierAutofill, createWarehouseCheck } from "./stockHeaderFields.js"
+import { createStockEntryAutofill } from "./stockEntryAutofill.js"
+import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -62,6 +64,7 @@ const props = defineProps({
 	expectedModified: { type: String, default: "" },
 	initialEditor: { type: Object, default: null },
 	sourceContext: { type: Object, default: () => ({}) },
+	newDefaults: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(["update:visible", "changed"])
 const confirmAction = useActionConfirmation()
@@ -93,10 +96,20 @@ const warehouseCheck = createWarehouseCheck(
 	async (warehouse, supplier) => Boolean(await getCount("Warehouse", [["name", "=", warehouse], ["supplier", "=", supplier]])),
 	(reason) => { error.value = reason?.message || "Unable to check the Warehouse for this Supplier." },
 )
+const supplierAutofill = createSupplierAutofill(form, warehouseCheck, {
+	onChange: (changes) => { if ("warehouse" in changes) refreshStockUpdateRates() },
+	onError: (reason) => { error.value = reason?.message || "Unable to fill the Warehouse for this Supplier." },
+})
+const stockEntryAutofill = createStockEntryAutofill(form, warehouseCheck, () => headerFields.value, {
+	onChange: (changes) => { for (const fieldname in changes) delete fieldErrors.value[fieldname] },
+	onError: (reason) => { error.value = reason?.message || "Unable to fill the Warehouse for this Location." },
+})
 function updateField(fieldname, value) {
 	form[fieldname] = value
 	delete fieldErrors.value[fieldname]
 	warehouseCheck.supplierChanged(fieldname)
+	supplierAutofill.supplierChanged(props.operation, fieldname)
+	stockEntryAutofill.locationChanged(props.operation, fieldname)
 	if (fieldname === "purpose" && value === "Material Receipt") form.from_warehouse = ""
 	if (fieldname === "warehouse") refreshStockUpdateRates()
 }
@@ -117,13 +130,24 @@ async function load(reload = false) {
 	fieldErrors.value = {}
 	itemDetails.value = []
 	Object.assign(form, emptyForm())
+	supplierAutofill.forget()
+	stockEntryAutofill.forget()
 	try {
 		editor.value = (!reload && props.initialEditor) || await getFabricStockOperationEditor(props.operation, { name: currentName.value, sourceContext: props.sourceContext }) || { dimensions: [], permissions: {} }
 		Object.assign(form, editor.value.defaults || {})
 		itemDetails.value = clone(editor.value.item_groups || [])
+		if (!currentName.value && !props.initialEditor && !Object.keys(props.sourceContext || {}).length) await applyNewDefaults()
 		cleanSignature.value = signature.value
 	} catch (reason) { error.value = reason?.message || "Unable to prepare this stock document." }
 	finally { loading.value = false }
+}
+
+/** Fills the list's filter values into empty header fields, with the autofill a field change runs. */
+async function applyNewDefaults() {
+	const known = Object.fromEntries(Object.entries(props.newDefaults || {}).filter(([fieldname]) => fieldname in form))
+	const next = withNewDocumentDefaults(form, known)
+	for (const fieldname of Object.keys(known)) if (next[fieldname] !== form[fieldname]) updateField(fieldname, next[fieldname])
+	await Promise.all([warehouseCheck.settled(), supplierAutofill.settled(), stockEntryAutofill.settled()])
 }
 
 function loadSchema(operation, item) { return getFabricStockItemSchema(operation, item) }
@@ -142,6 +166,8 @@ async function refreshStockUpdateRates() {
 async function save(submit) {
 	if (!canSave.value) return
 	await warehouseCheck.settled()
+	await supplierAutofill.settled()
+	await stockEntryAutofill.settled()
 	fieldErrors.value = requiredFieldErrors(headerFields.value, form)
 	if (Object.keys(fieldErrors.value).length) return
 	if (!itemDetails.value.some((group) => group.items?.length)) { error.value = "Add at least one Item."; return }

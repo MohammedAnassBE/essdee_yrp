@@ -51,7 +51,7 @@
 					<header><div><span>Schedule</span><h2>Planning dates & quantity</h2></div><small>Set the planned window and expected delivery.</small></header>
 					<div class="work-order-editor__fields work-order-editor__planning-fields">
 						<DateField v-model="form.planned_start_date" class="work-order-editor__schedule-field" :label="fieldLabel('planned_start_date', 'Planned start', false)" :required="isRequired('planned_start_date')" :disabled="busy || isReadOnly('planned_start_date')" @update:model-value="markDirty" />
-						<DateField v-model="form.planned_end_date" class="work-order-editor__schedule-field" :label="fieldLabel('planned_end_date', 'Planned end', false)" :required="isRequired('planned_end_date')" :disabled="busy || isReadOnly('planned_end_date')" @update:model-value="markDirty" />
+						<DateField :model-value="form.planned_end_date" class="work-order-editor__schedule-field" :label="fieldLabel('planned_end_date', 'Planned end', false)" :required="isRequired('planned_end_date')" :disabled="busy || isReadOnly('planned_end_date')" @update:model-value="changePlannedEndDate" />
 						<DateField v-model="form.expected_delivery_date" class="work-order-editor__schedule-field" :label="fieldLabel('expected_delivery_date', 'Expected delivery', false)" :required="isRequired('expected_delivery_date')" :disabled="busy || isReadOnly('expected_delivery_date')" @update:model-value="markDirty" />
 						<div class="work-order-editor__identity work-order-editor__quantity"><span>{{ fieldLabel('planned_quantity', 'Planned quantity', false) }}</span><strong>{{ numberText(form.planned_quantity) }}</strong><small>Calculated from the item setup</small></div>
 					</div>
@@ -112,15 +112,19 @@ import { onBeforeRouteLeave } from "vue-router"
 
 import { getWorkOrderEditor, getWorkOrderSelectionContext, saveWorkOrder } from "../../api/fabricStore.js"
 import { getDoc, searchLinkedDocument } from "../../api/frappe.js"
-import { defaultOption, fillSupplierDefaults } from "../../utils/supplierDefaults.js"
+import { forgetAutofill } from "../../composables/useSingleOptionAutofill.js"
+import { defaultOption } from "../../utils/supplierDefaults.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import WorkOrderActionPanel from "./WorkOrderActionPanel.vue"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
+import { applyPlannedEndDate } from "./workOrderDates.js"
+import { changeWorkOrderParty } from "./workOrderAddresses.js"
+import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
-const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) } })
+const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) }, newDefaults: { type: Object, default: () => ({}) } })
 const emit = defineEmits(["saved", "cancel"])
 const toast = useToast()
 const loading = ref(true)
@@ -205,6 +209,7 @@ async function load() {
 	try {
 		editor.value = await getWorkOrderEditor(props.name, props.source) || {}
 		for (const key of Object.keys(form)) delete form[key]
+		forgetAutofill(form)
 		Object.assign(form, editor.value.values || {})
 		for (const dimension of (editor.value.dimensions || [])) {
 			if (dimension?.fieldname && !standardFieldnames.has(dimension.fieldname)) form[dimension.fieldname] = dimension.value ?? ""
@@ -212,23 +217,30 @@ async function load() {
 		deliverableDetails.value = clone(editor.value.deliverable_details)
 		receivableDetails.value = clone(editor.value.receivable_details)
 		selectionContext.value = clone(editor.value.selection_context || {})
+		if (!props.name && !duplicateFrom.value) await applyNewDefaults()
 		dirty.value = false
 	} catch (reason) { loadFailed.value = true; error.value = reason?.message || "Unable to load the Work Order editor." }
 	finally { loading.value = false }
 }
+/** Fills the list's filter values into an empty new Work Order, through the same source and party changes a user makes. */
+async function applyNewDefaults() {
+	const known = Object.fromEntries(Object.entries(props.newDefaults || {}).filter(([fieldname]) => fieldname in form))
+	const { lot, process_name, item, production_detail: _productionDetail, supplier, delivery_location, ...plain } = known
+	const isEmpty = (fieldname, value) => value && !hasValue(form[fieldname])
+	Object.assign(form, withNewDocumentDefaults(form, plain))
+	for (const [fieldname, value] of Object.entries({ process_name, lot })) if (isEmpty(fieldname, value)) await applySourceChange(fieldname, value)
+	if (isEmpty("item", item) && (selectionContext.value.options || []).some((row) => row.item === item)) applyItemChange(item)
+	for (const [fieldname, value] of Object.entries({ supplier, delivery_location })) if (isEmpty(fieldname, value)) await changeParty(fieldname, value)
+}
 function markDirty() { if (!loading.value) dirty.value = true }
-async function changeSupplier(value) {
-	if (value === form.supplier) return
-	form.supplier = value || ""; form.supplier_address = ""; markDirty()
-	await fillAddress("supplier", "supplier_address")
-}
-async function changeDeliveryLocation(value) {
-	if (value === form.delivery_location) return
-	form.delivery_location = value || ""; form.delivery_address = ""; markDirty()
-	await fillAddress("delivery_location", "delivery_address")
-}
-async function fillAddress(partyField, addressField) {
-	try { await fillSupplierDefaults(form, { partyField, addressField }) }
+function changePlannedEndDate(value) { applyPlannedEndDate(form, value); markDirty() }
+function changeSupplier(value) { return changeParty("supplier", value) }
+function changeDeliveryLocation(value) { return changeParty("delivery_location", value) }
+async function changeParty(partyField, value) {
+	if ((value || "") === (form[partyField] || "")) return
+	const change = changeWorkOrderParty(form, partyField, value)
+	markDirty()
+	try { await change }
 	catch (reason) { error.value = reason?.message || "Unable to load supplier addresses." }
 }
 function searchSupplierAddresses(text) { return searchLinkedDocument("Address", "Supplier", form.supplier, text) }

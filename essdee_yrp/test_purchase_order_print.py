@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -78,6 +79,29 @@ class TestPurchaseOrderPrint(IntegrationTestCase):
 		self.assertIn("doc.supplier_address", template)
 		self.assertNotIn("po_date", template)
 		self.assertNotIn("supplier_address_display", template)
+		self.assertIn("get_created_date(j.delivery_date)", template)
+		self.assertNotIn("{{ j.delivery_date }}", template)
+
+	def test_missing_schedule_date_leaves_delivery_date_blank(self):
+		rows = [frappe._dict(row_index="2", schedule_date=None, secondary_uom=None)]
+		entry = dict(_entry("Tape", "2"), schedule_date=None)
+		groups = self._fetch([entry], rows, _attribute_details)
+
+		self.assertEqual(groups[0]["items"][0]["delivery_date"], "")
+
+	def test_print_dates_render_day_first(self):
+		from essdee_yrp import print_helpers
+
+		self.assertEqual(print_helpers.get_created_date("2026-10-23 14:05:09"), "23-10-2026")
+		self.assertRegex(print_helpers.get_current_user_time()[1], r"^\d{2}-\d{2}-\d{4} \d{2}:\d{2}$")
+
+	def test_print_formats_do_not_print_raw_iso_dates(self):
+		raw_date = re.compile(r"\{\{\s*[\w.]*(?:\.|\[')\w*date'?\]?\s*\}\}")
+		app = Path(frappe.get_app_path("essdee_yrp"))
+		sources = [*app.glob("essdee_yrp/print_format/*/*.json"), *app.glob("templates/print_formats/*.html")]
+		offenders = [f"{path.name}: {match}" for path in sources for match in raw_date.findall(path.read_text())]
+
+		self.assertEqual(offenders, [])
 
 	def test_migrated_order_renders_without_missing_fields(self):
 		name = "PO-2627-1082"

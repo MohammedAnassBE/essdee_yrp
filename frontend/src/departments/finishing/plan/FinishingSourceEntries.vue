@@ -15,7 +15,7 @@
 				<tbody>
 					<tr v-for="entry in entries" :key="entry.name">
 						<td><button type="button" class="source-entries__open" :title="`Open ${entry.name}`" @click="emit('open', entry.doctype, entry.name)">{{ entry.name }}</button></td>
-						<td class="source-entries__date">{{ entry.date || "—" }}</td>
+						<td class="source-entries__date">{{ formatDisplayDatetime(entry.date, { seconds: true }) }}</td>
 						<td class="erp-number" :title="quantitySummary(entry)">{{ formatQuantity(entry.total_qty) }}</td>
 						<td>
 							<Button v-if="canCreateDc(entry, canCreate)" label="Create DC" icon="pi pi-truck" size="small" :disabled="busy" :aria-label="`Create DC for ${entry.name}`" @click="emit('create-dc', entry)" />
@@ -36,6 +36,7 @@
 <script setup>
 import Button from "primevue/button"
 
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 import { formatQuantity } from "../finishingViews.js"
 import { canCreateDc, isExistingDc } from "./finishingSourceEntries.js"
 

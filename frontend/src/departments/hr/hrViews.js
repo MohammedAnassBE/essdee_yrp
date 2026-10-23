@@ -24,7 +24,7 @@ const BILL_TRACKING_ACTIONS = [
 	{ key: "approve_cancel", label: "Approve Cancel Request", icon: "pi pi-check-circle" },
 	{ key: "assign", label: "Assign", icon: "pi pi-send" },
 	{ key: "bill_received", label: "Bill Received", icon: "pi pi-inbox" },
-	{ key: "submit", label: "Submit", icon: "pi pi-check" },
+	{ key: "submit", label: "Submit", icon: "pi pi-check", shortcut: "submit" },
 	{ key: "edit", label: "Edit", icon: "pi pi-pencil" },
 	{ key: "request_cancel", label: "Request for Cancel", icon: "pi pi-times-circle" },
 	{ key: "create_purchase_invoice", label: "Create YRP Purchase Invoice", icon: "pi pi-plus" },
@@ -35,7 +35,7 @@ const BILL_TRACKING_ACTIONS = [
 		label: "Show ERP Purchase Invoice",
 		icon: "pi pi-external-link",
 	},
-	{ key: "cancel", label: "Cancel", icon: "pi pi-ban", menuOnly: true },
+	{ key: "cancel", label: "Cancel", icon: "pi pi-ban", menuOnly: true, shortcut: "cancel" },
 	{ key: "delete", label: "Delete", icon: "pi pi-trash", menuOnly: true },
 ]
 

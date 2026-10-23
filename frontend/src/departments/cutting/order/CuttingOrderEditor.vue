@@ -61,10 +61,13 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 import CuttingOrderDetailDialog from "./CuttingOrderDetailDialog.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null }, duplicateFrom: { type: String, default: "" } })
 const emit = defineEmits(["saved", "cancel", "loaded"])
 const form = reactive({ cutting_order_detail: "", item: "", cutting_location: "", maximum_no_of_plys: null, maximum_allow_percent: null })
+const stagedDefaults = takeNewDocumentDefaults("SD YRP Cutting Order")
+const filterDefaults = props.name || props.duplicateFrom || props.initialPayload ? {} : stagedDefaults
 const groups = ref([])
 const permissions = reactive({ can_create: false, can_write: false, can_submit: false })
 const detailPermissions = reactive({ can_create: false, can_write: false })
@@ -114,11 +117,19 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
-		const payload = props.initialPayload || await getCuttingOrderEditor(props.name, "", props.duplicateFrom)
-		applyPayload(payload)
+		const detail = props.name ? "" : filterDefaults.cutting_order_detail || ""
+		const payload = props.initialPayload || await getCuttingOrderEditor(props.name, detail, props.duplicateFrom)
+		applyPayload(props.name ? payload : { ...payload, record: withNewDocumentDefaults(payload?.record, orderFilterDefaults()) })
+		if (detail) form.item = payload?.detail?.item || form.item
 		await loadDetailPermissions(payload?.record?.cutting_order_detail)
 	} catch (reason) { error.value = reason?.message || "Unable to load the Cutting Order editor." }
 	finally { loading.value = false; cleanSignature.value = signature.value }
+}
+
+/** Staged list filters the new order's form holds; the Item stays derived from the Cutting Order Detail. */
+function orderFilterDefaults() {
+	const keys = ["cutting_order_detail", "cutting_location", "maximum_no_of_plys", "maximum_allow_percent"]
+	return Object.fromEntries(keys.filter((key) => key in filterDefaults).map((key) => [key, filterDefaults[key]]))
 }
 
 async function loadDetailPermissions(name = "") {

@@ -51,16 +51,18 @@
 			</div>
 		</div>
 
+		<DocumentActivity :doctype="'SD YRP Cut Panel Movement'" :name="record?.name || ''" :record="record" />
 		<template #footer>
 			<div class="movement-dialog__footer">
+				<DocumentShortcuts :busy="busy || confirmationVisible" :can-save="canEdit && generated" :can-submit="Boolean(record?.permissions?.can_submit && hasSelection)" submit-confirms :can-cancel="Boolean(record?.permissions?.can_cancel)" cancel-confirms @save="save" @submit="requestCommand('submit')" @cancel="requestCommand('cancel')" />
 				<span>{{ hasSelection ? selectionSummaryText : "Generate current stock, then select what is moving." }}</span>
 				<div>
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="emit('update:visible', false)" />
 					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" document-label="Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
-					<Button v-if="record?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
-					<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !hasSelection" @click="requestCommand('submit')" />
-					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !generated" @click="save" />
+					<Button v-if="record?.permissions?.can_cancel" label="Cancel" :title="withShortcutHint('Cancel', 'cancel')" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
+					<Button v-if="record?.permissions?.can_submit" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !hasSelection" @click="requestCommand('submit')" />
+					<Button v-if="canEdit" label="Save" :title="withShortcutHint('Save', 'save')" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !generated" @click="save" />
 				</div>
 			</div>
 		</template>
@@ -111,9 +113,12 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import { useRouter } from "vue-router"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import { webDocumentRoute } from "../../router/webDocumentRoutes.js"
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
@@ -133,6 +138,7 @@ import CutPanelMovementEditor from "../cutting/CutPanelMovementEditor.vue"
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"
 import StockDocumentDialog from "../fabric-store/StockDocumentDialog.vue"
 import CutPanelMovementRail from "./CutPanelMovementRail.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const router = useRouter()
 const props = defineProps({ visible: Boolean, movement: { type: String, default: "" } })
@@ -196,6 +202,7 @@ async function load() {
 		if (loadIsStale(sequence, requestedMovement)) return
 		Object.assign(editor, payload || {})
 		Object.assign(form, payload?.defaults || {})
+		if (!requestedMovement) Object.assign(form, withNewDocumentDefaults({ ...form }, filterDefaultsFor("SD YRP Cut Panel Movement", ["lot", "from_warehouse", "posting_date", "posting_time", "edit_posting_date_and_time"])))
 		form.edit_posting_date_and_time = Boolean(form.edit_posting_date_and_time)
 		replaceMovement(payload?.movement_data || payload?.record?.movement_data || {})
 		generated.value = Boolean(payload?.record)
@@ -206,6 +213,12 @@ async function load() {
 	} finally {
 		if (!loadIsStale(sequence, requestedMovement)) loading.value = false
 	}
+}
+
+/** Staged list filters for a new document, limited to the fields this form holds. */
+function filterDefaultsFor(doctype, keys) {
+	const staged = takeNewDocumentDefaults(doctype)
+	return Object.fromEntries(keys.filter((key) => key in staged).map((key) => [key, staged[key]]))
 }
 
 function loadIsStale(sequence, requestedMovement) {

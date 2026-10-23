@@ -1,5 +1,5 @@
 <template>
-	<FabricStockOperationDialog v-if="editing" :visible="visible" :operation="operation" :name="editorName" :expected-modified="editorModified" @update:visible="emit('update:visible', $event)" @changed="emit('changed', $event)" />
+	<FabricStockOperationDialog v-if="editing" :visible="visible" :operation="operation" :name="editorName" :expected-modified="editorModified" :new-defaults="newDefaults" @update:visible="emit('update:visible', $event)" @changed="emit('changed', $event)" />
 	<DocumentTransactionDialog v-else :visible="visible" :doctype="doctype" :name="name" @update:visible="viewVisibility" @changed="emit('changed', $event)" @edit="edit" @amended="edit" />
 </template>
 
@@ -16,6 +16,7 @@ const props = defineProps({
 	name: { type: String, default: "" },
 	docstatus: { type: Number, default: 0 },
 	expectedModified: { type: String, default: "" },
+	newDefaults: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(["update:visible", "changed"])
 const editing = ref(false)

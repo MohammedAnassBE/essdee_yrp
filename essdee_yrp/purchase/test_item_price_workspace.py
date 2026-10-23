@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.model.workflow import apply_workflow, get_transitions, has_approval_access
-from frappe.utils import add_days, format_date, nowdate
+from frappe.utils import add_days, formatdate, nowdate
 from yrp.concurrency_test_support import commit_connection
 
 
@@ -447,7 +447,7 @@ class TestPurchaseItemPriceWorkspace(TestCase):
 		self.assertEqual([row["action"] for row in payload["actions"]], expected)
 		approve = next(row for row in payload["actions"] if row["action"] == "Approve")
 		self.assertIn(predecessor, approve["preview"])
-		self.assertIn(format_date(add_days(doc.from_date, -1)), approve["preview"])
+		self.assertIn(formatdate(add_days(doc.from_date, -1), "dd-mm-yyyy"), approve["preview"])
 		self.assertTrue(payload["can_edit"])
 		self.assertTrue(payload["can_delete"])
 		self.assertIn(predecessor, [row["name"] for row in payload["history"]])

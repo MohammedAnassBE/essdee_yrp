@@ -71,6 +71,7 @@ import InspectionStatTiles from "./components/InspectionStatTiles.vue"
 import { INSPECTION_GROUPS, visibleInspectionFields } from "./inspectionFields.js"
 import { INSPECTION_DOCTYPE, INSPECTION_EDITABLE_FIELDS, cleanSelection, inspectionCalculationNotes, inspectionEditorResultState, inspectionPayload, linkLabel, inspectionResultPreview, validAqlInputs } from "./qualityViews.js"
 import "./quality.css"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ inspectionId: { type: String, default: "" } })
 const route = useRoute()
@@ -96,6 +97,7 @@ let active = true
 let loadSequence = 0
 let workOrderSequence = 0
 let aqlSequence = 0
+let filterDefaults = takeNewDocumentDefaults(INSPECTION_DOCTYPE)
 const currentName = computed(() => props.inspectionId || String(route.params.inspectionId || ""))
 const amendFrom = computed(() => String(route.query.amend_from || ""))
 const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
@@ -141,9 +143,11 @@ async function load() {
 			against: "YRP Work Order", is_third_party: 0, major_defect_found: 0, minor_defect_found: 0, spi_found: 0,
 		}, payload.record || payload)
 		delete form.against_details
+		const defaultedWorkOrder = applyFilterDefaults()
 		if (payload.against_details) applyAgainstDetails(payload.against_details)
 		else selection.value = cleanSelection(payload.colour_size_data || {})
 		workOrderReady.value = Boolean(form.against_id)
+		if (defaultedWorkOrder) await refreshWorkOrder(form.against_id)
 		await nextTick()
 		cleanSignature.value = signature.value
 	} catch (reason) {
@@ -154,6 +158,17 @@ async function load() {
 			if (!loadError.value) refreshAql()
 		}
 	}
+}
+
+/** Fills the list's filter values into a blank new inspection once; returns whether it set the Work Order. */
+function applyFilterDefaults() {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => INSPECTION_EDITABLE_FIELDS.includes(fieldname)))
+	filterDefaults = {}
+	const sourced = currentName.value || route.query.against_id || route.query.grn || amendFrom.value || duplicateFrom.value
+	if (sourced || !Object.keys(defaults).length) return false
+	const workOrder = form.against_id
+	Object.assign(form, withNewDocumentDefaults({ ...form }, defaults))
+	return Boolean(form.against_id && form.against_id !== workOrder)
 }
 
 function applyAgainstDetails(details = {}) {

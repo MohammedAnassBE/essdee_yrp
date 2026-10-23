@@ -24,7 +24,7 @@
 							<tbody>
 								<tr v-for="grn in workspace.grns" :key="grn.grn">
 									<td><button type="button" class="purchase-invoice-link" @click="emit('open-grn', grn.grn)">{{ grn.grn }}</button></td>
-									<td>{{ date(grn.posting_date) }}</td>
+									<td>{{ formatDisplayDate(grn.posting_date) }}</td>
 									<td><DocumentLink :doctype="grn.against" :name="grn.against_id" :label="grn.against_id || '—'" /></td>
 									<td>{{ grn.supplier_document_no || "—" }}</td>
 									<td class="purchase-invoice-number">{{ number(grn.total_received_quantity) }}</td>
@@ -57,6 +57,7 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 import PurchaseInvoiceGroupedItems from "./PurchaseInvoiceGroupedItems.vue"
 import PurchaseInvoiceOverview from "./PurchaseInvoiceOverview.vue"
 import PurchaseInvoiceVerification from "./PurchaseInvoiceVerification.vue"
@@ -81,12 +82,6 @@ function number(input) {
 	return Number.isFinite(numericValue)
 		? numericValue.toLocaleString("en-IN", { maximumFractionDigits: 3 })
 		: "—"
-}
-
-function date(input) {
-	if (!input) return "—"
-	const match = String(input).match(/^(\d{4})-(\d{2})-(\d{2})/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}` : String(input)
 }
 </script>
 

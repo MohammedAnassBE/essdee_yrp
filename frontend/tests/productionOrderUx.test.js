@@ -158,3 +158,21 @@ test("F-A19 Lot picker requires same item and no linked PPO", async () => {
 	const view = salesSource("ProductionOrder.vue")
 	assert.match(view, /:item="workspace\.record\?\.item/)
 })
+
+test("sales date displays use the shared DD-MM-YYYY helper", async () => {
+	assert.equal(productionOrderDisplay.productionOrderFieldDisplay({ fieldname: "delivery_date", value: "2026-10-23" }), "23-10-2026")
+	const history = loadComponent(resolve("frontend/src/departments/sales/ProductionOrderTransferHistory.vue"), {
+		"../../components/common/DocumentLink.vue": (props) => Vue.h("a", {}, props.label),
+	})
+	const text = (node) => node.type === "comment" ? "" : node.text + node.children.map(text).join("")
+	const content = text(mountComponent(history, { rows: [{ movement: "Added", requested_by: "a@x", requested_on: "2026-10-23 14:05:09.123", approved_on: "" }] }))
+	assert.ok(content.includes("23-10-2026 14:05"), content)
+	assert.ok(!content.includes("2026-10-23"))
+	for (const name of ["ProductionOrder.vue", "ProductionOrderTransferHistory.vue", "PpoReport.vue", "productionOrderDisplay.js"]) {
+		const code = salesSource(name)
+		assert.match(code, /utils\/dateFormat\.js|reportUtils\.js/, name)
+		assert.doesNotMatch(code, /function formatDate(Time)?\(/, name)
+	}
+	assert.match(salesSource("ProductionOrder.vue"), /formatDatesInText\(workspace\.histories\.comments\)/)
+	assert.match(salesSource("PpoReport.vue"), /formatDatesInText\(order\.comments\)/)
+})

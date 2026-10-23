@@ -139,6 +139,7 @@
 				<section v-if="$slots.panel" class="fabric-document-workspace__panel">
 					<slot name="panel" :workspace="workspace" />
 				</section>
+				<DocumentActivity v-if="showActivity" :doctype="record.doctype || doctype" :name="record.name || ''" :record="record" />
 			</template>
 		</div>
 
@@ -165,6 +166,7 @@ import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref } from "v
 import { onBeforeRouteLeave } from "vue-router"
 
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -184,6 +186,7 @@ const props = defineProps({
 	showDelete: { type: Boolean, default: true },
 	showLifecycleActions: { type: Boolean, default: true },
 	compactMobileRail: { type: Boolean, default: false },
+	showActivity: { type: Boolean, default: true },
 })
 const emit = defineEmits(["reload", "action", "close", "deleted"])
 const instance = getCurrentInstance()

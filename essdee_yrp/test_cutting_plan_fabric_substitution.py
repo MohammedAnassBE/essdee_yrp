@@ -216,6 +216,7 @@ class TestCuttingPlanFabricSubstitution(TestCase):
 		self.assertEqual(doc.cutting_plan_cloth_details, [cloth_row()])
 		doc.add_comment.assert_called_once()
 		self.assertTrue(doc.add_comment.call_args.kwargs["text"].startswith("Cloth Generated on "))
+		self.assertRegex(doc.add_comment.call_args.kwargs["text"], r"^Cloth Generated on \d{2}-\d{2}-\d{4} \d{2}:\d{2} by ")
 
 	def test_second_generate_preserves_actual_dia_operational_values(self):
 		doc = CuttingPlanStub()

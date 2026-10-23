@@ -75,6 +75,7 @@ import { normaliseCompletedGroups } from "../../departments/cutting/cuttingCompl
 import AsyncLinkMultiSelect from "../../departments/cutting/reports/AsyncLinkMultiSelect.vue"
 import ReportShell from "./ReportShell.vue"
 import { errorMessage, number } from "./reportUtils.js"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	canReadCuttingPlan: { type: Boolean, default: false },
@@ -116,7 +117,7 @@ async function generate() {
 	try {
 		const response = await getLotCutQuantity(selectedLots.value) || {}
 		resultLots.value = response.lots || []
-		generatedAt.value = new Date().toLocaleString("en-IN")
+		generatedAt.value = formatDisplayDatetime(new Date())
 		generated.value = true
 	} catch (exception) {
 		error.value = errorMessage(exception, "Unable to generate the Lot Cut Quantity report.")

@@ -14,6 +14,7 @@ frappe.ui.form.on("YRP Work Order", {
 		});
 	},
 	refresh(frm) {
+		frm._previous_planned_end_date = frm.doc.planned_end_date || "";
 		frm._work_order_process_is_cloth = null;
 		update_calculate_button(frm);
 		frm.set_df_property("supplier", "label", __("Supplier"));
@@ -49,6 +50,9 @@ frappe.ui.form.on("YRP Work Order", {
 	},
 	item(frm) {
 		apply_selected_work_order_item(frm);
+	},
+	planned_end_date(frm) {
+		sync_expected_delivery_date(frm);
 	},
 	async apply_lot_process_selection(frm) {
 		const request_id = (frm._work_order_selection_request || 0) + 1;
@@ -1458,4 +1462,13 @@ function planning_description(row, qty_row, show_exact_source = false) {
 		`${__("Already ordered")}: ${kg(qty_row.ordered)}`,
 		`${__("Balance")}: ${kg(qty_row.balance)}`,
 	].join(" · ");
+}
+
+function sync_expected_delivery_date(frm) {
+	const previous = frm._previous_planned_end_date || "";
+	const expected = frm.doc.expected_delivery_date || "";
+	frm._previous_planned_end_date = frm.doc.planned_end_date || "";
+	if (!expected || expected === previous) {
+		frm.set_value("expected_delivery_date", frm.doc.planned_end_date || "");
+	}
 }

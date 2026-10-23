@@ -42,18 +42,20 @@
 			<div v-else-if="!canEdit || previewed" class="cut-bundle-empty">No input and output bundles are available.</div>
 		</div>
 
+		<DocumentActivity :doctype="'SD YRP Cut Bundle Edit'" :name="record?.name || ''" :record="record" />
 		<template #footer>
 			<div class="cut-bundle-dialog__footer">
 				<span>{{ quantitySummary }}</span>
 				<div>
+					<DocumentShortcuts :busy="busy || confirmationVisible" :can-save="canEdit && Boolean(inputs.length && outputs.length) && (!record?.name || dirty)" :can-submit="Boolean(record?.permissions?.can_submit && !dirty && inputs.length && outputs.length)" submit-confirms :can-cancel="Boolean(record?.permissions?.can_cancel)" cancel-confirms @save="save" @submit="requestCommand('submit')" @cancel="requestCommand('cancel')" />
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
 					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Bundle Edit" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Cut Bundle Edit" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="record?.permissions?.can_print" label="Print Labels" icon="pi pi-print" severity="secondary" outlined :disabled="busy" @click="printerVisible = true" />
 					<Button v-if="record?.docstatus === 2 && record?.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :disabled="busy" @click="requestCommand('amend')" />
-					<Button v-if="record?.permissions?.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
-					<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !inputs.length || !outputs.length" @click="requestCommand('submit')" />
-					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !inputs.length || !outputs.length" @click="save" />
+					<Button v-if="record?.permissions?.can_cancel" label="Cancel Document" :title="withShortcutHint('Cancel Document', 'cancel')" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="requestCommand('cancel')" />
+					<Button v-if="record?.permissions?.can_submit" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" severity="secondary" outlined :disabled="busy || !inputs.length || !outputs.length" @click="requestCommand('submit')" />
+					<Button v-if="canEdit" label="Save" :title="withShortcutHint('Save', 'save')" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !inputs.length || !outputs.length" @click="save" />
 				</div>
 			</div>
 		</template>
@@ -73,9 +75,12 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import Dialog from "primevue/dialog"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
@@ -89,7 +94,9 @@ import TimeField from "../../components/common/TimeField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 import PrinterDialog from "./PrinterDialog.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const BundleTable = defineComponent({
 	props: { title: String, eyebrow: String, rows: Array, editable: Boolean, choices: { type: Object, default: () => ({}) } },
@@ -138,7 +145,7 @@ let actionSequence = 0
 const record = computed(() => editor.record)
 const busy = computed(() => Boolean(acting.value))
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
-const formattedPrintedTime = computed(() => formatDateTime(record.value?.printed_time) || "Not printed")
+const formattedPrintedTime = computed(() => formatDisplayDatetime(record.value?.printed_time, { fallback: "Not printed" }))
 const availableRows = computed(() => flattenAvailable(available.value))
 const panelOptions = computed(() => Array.isArray(choices.panels) ? choices.panels : Object.values(choices.panels || {}).flat())
 const quantitySummary = computed(() => `Input ${formatNumber(totalQty(inputs.value))} · Output ${formatNumber(totalQty(outputs.value))}`)
@@ -168,19 +175,27 @@ async function load() {
 		if (loadIsStale(sequence, requestedDocumentName)) return
 		Object.assign(editor, payload || {})
 		Object.assign(form, payload?.defaults || {}, payload?.record || {})
+		const filterDefaults = requestedDocumentName ? {} : filterDefaultsFor("SD YRP Cut Bundle Edit", ["lot", "warehouse"])
+		Object.assign(form, withNewDocumentDefaults({ lot: form.lot, warehouse: form.warehouse }, filterDefaults))
 		form.selected_colour = payload?.record?.colour || payload?.defaults?.selected_colour || ""
 		inputs.value = clone(payload?.record?.inputs || [])
 		outputs.value = clone(payload?.record?.outputs || [])
 		if (payload?.record?.docstatus === 0) {
 			if (form.selected_colour) await preview(sequence, requestedDocumentName)
 			else await preview(sequence, requestedDocumentName, true)
-		}
+		} else if (!payload?.record && Object.keys(filterDefaults).length && form.lot && form.warehouse) await preview(sequence, requestedDocumentName, true)
 		if (!loadIsStale(sequence, requestedDocumentName)) dirty.value = false
 	} catch (reason) {
 		if (!loadIsStale(sequence, requestedDocumentName)) error.value = reason.message || "Unable to load the Cut Bundle Edit."
 	} finally {
 		if (!loadIsStale(sequence, requestedDocumentName)) loading.value = false
 	}
+}
+
+/** Staged list filters for a new document, limited to the fields this form holds. */
+function filterDefaultsFor(doctype, keys) {
+	const staged = takeNewDocumentDefaults(doctype)
+	return Object.fromEntries(keys.filter((key) => key in staged).map((key) => [key, staged[key]]))
 }
 
 function loadIsStale(sequence, requestedDocumentName) {
@@ -333,7 +348,6 @@ function stableJson(value) { if (!value || typeof value !== "object") return Str
 function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 function totalQty(rows) { return (rows || []).reduce((sum, row) => sum + Number(row.qty || 0) * Math.max(1, String(row.panel || "").split(",").filter(Boolean).length), 0) }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-function formatDateTime(value) { if (!value) return ""; const [date, time = ""] = String(value).split(" "); const [year, month, day] = date.split("-"); return year && month && day ? `${day}-${month}-${year}${time ? ` ${time.slice(0, 5)}` : ""}` : String(value) }
 function documentDeleted() {
 	emit("update:visible", false)
 	emit("changed")

@@ -17,7 +17,7 @@
 
 			<div class="marker-status-row">
 				<DocumentStatusBadge :docstatus="record?.docstatus" :label="statusLabel" />
-				<span v-if="record?.modified" class="modified-text">Updated {{ formatDate(record.modified, true) }}</span>
+				<span v-if="record?.modified" class="modified-text">Updated {{ formatDisplayDatetime(record.modified) }}</span>
 			</div>
 
 			<template v-if="canEdit">
@@ -79,11 +79,13 @@
 			</template>
 		</div>
 
+		<DocumentActivity :doctype="'SD YRP Cutting Marker'" :name="record?.name || ''" :record="record" />
 		<template #footer>
+			<DocumentShortcuts :busy="saving" :can-cancel="Boolean(record?.permissions?.can_cancel)" cancel-confirms @cancel="cancelMarker" />
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
 			<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cutting Marker" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cutting Marker" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
-			<Button v-if="record?.permissions?.can_cancel" label="Cancel Marker" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="cancelMarker" />
+			<Button v-if="record?.permissions?.can_cancel" label="Cancel Marker" :title="withShortcutHint('Cancel Marker', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="cancelMarker" />
 			<Button v-if="canStartEdit" label="Edit Marker" icon="pi pi-pencil" severity="secondary" outlined :disabled="saving" @click="editingExisting = true" />
 			<DocumentSaveButton :saved="Boolean(record?.name)" :dirty="dirty" :docstatus="Number(record?.docstatus || 0)" :document-label="`Cutting Marker ${record?.name || ''}`.trim()" :show-save="canWrite" :show-submit="canSubmit" :loading="saving" @save="save(false)" @submit="save(true)" />
 		</template>
@@ -92,6 +94,7 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
@@ -105,8 +108,11 @@ import { computed, reactive, ref, watch } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
@@ -333,7 +339,6 @@ function clone(value) {
 	return JSON.parse(JSON.stringify(value || []))
 }
 
-function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 
 function markerMethod(name) {
 	return `essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_marker.sd_yrp_cutting_marker.${name}`

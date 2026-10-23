@@ -13,7 +13,7 @@ const tick = async () => { await new Promise(resolve => setImmediate(resolve)); 
 function script(path, bindings, expose) {
 	const source = read(path).split("<script setup>")[1].split("</script>")[0].replace(/^import[\s\S]*?from ["'][^"']+["'];?$/gm, "").replace(/^import ["'][^"']+["'];?$/gm, "")
 	const { computed, ref, reactive, watch, toRefs, nextTick } = Vue
-	const injections = { computed, ref, reactive, watch, toRefs, nextTick, onMounted: () => {}, onUnmounted: () => {}, onBeforeUnmount: () => {}, defineExpose: () => {}, ...bindings }
+	const injections = { computed, ref, reactive, watch, toRefs, nextTick, onMounted: () => {}, onUnmounted: () => {}, onBeforeUnmount: () => {}, defineExpose: () => {}, usePageTitle: () => {}, ...bindings }
 	return new Function(...Object.keys(injections), `${source}\nreturn { ${expose} }`)(...Object.values(injections))
 }
 function sewingContext() {

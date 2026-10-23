@@ -131,6 +131,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "./CuttingCompletedReport.vue"
 import { copyCompletedReportImage } from "./completedReportExport.js"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	doc: { type: Object, required: true },
@@ -227,7 +228,7 @@ async function runPlanAction(action) {
 }
 
 function openCompletedReport() {
-	completedReportGeneratedAt.value = formatCompletionTimestamp(new Date())
+	completedReportGeneratedAt.value = formatDisplayDatetime(new Date(), { seconds: true })
 	completedCopyFeedback.value = ""
 	completedCopyError.value = false
 	completedReportOpen.value = true
@@ -246,11 +247,6 @@ async function copyCompletedReport() {
 	} finally {
 		copyingCompleted.value = false
 	}
-}
-
-function formatCompletionTimestamp(value) {
-	const pad = (part) => String(part).padStart(2, "0")
-	return `${pad(value.getDate())}-${pad(value.getMonth() + 1)}-${value.getFullYear()} · ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
 }
 
 function openCompleted() {

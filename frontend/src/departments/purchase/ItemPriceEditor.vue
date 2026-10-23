@@ -101,6 +101,7 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { PURCHASE_ROUTES, itemPriceAttributeHint, itemPriceAttributeValues, itemPriceCanSave, itemPriceDateLimit, itemPriceFieldLabel, itemPriceEditorRequestKey, itemPriceEditorValues, itemPriceSaveAction, itemPriceSaveValues, itemPriceTierPrecision, savedItemPriceIdentity } from "./purchaseViews.js"
 
 const props = defineProps({ priceId: { type: String, default: "" } })
@@ -126,6 +127,9 @@ let itemSequence = 0
 let allowNavigation = false
 let pendingNavigation = null
 let isAlive = true
+const takenDefaults = takeNewDocumentDefaults("YRP Item Price")
+let filterDefaults = props.priceId || route.params.priceId || route.query.duplicate_from ? {} : takenDefaults
+const ITEM_COMPUTED_FIELDS = new Set(["item_name", "supplier", "uom", "attribute", "depends_on_attribute"])
 
 const isEdit = computed(() => Boolean(props.priceId || route.params.priceId))
 const currentName = computed(() => String(props.priceId || route.params.priceId || ""))
@@ -184,6 +188,8 @@ function applyEditor(payload, requestedName = "", context = {}) {
 	if (!isEdit.value) {
 		if (context.item) form.item_name = context.item
 		if (context.supplier) form.supplier = context.supplier
+		const defaults = Object.fromEntries(Object.entries(context.defaults || {}).filter(([key]) => key in form && !ITEM_COMPUTED_FIELDS.has(key) && !Array.isArray(form[key])))
+		Object.assign(form, withNewDocumentDefaults(form, defaults))
 	}
 	if (!form.item_price_values.length) addTier()
 	cleanSignature.value = context.duplicateFrom ? "" : formSignature.value
@@ -194,10 +200,13 @@ async function load() {
 	const sequence = ++loadSequence
 	const requestedName = currentName.value
 	const requestedKey = requestKey.value
+	const defaults = requestedName ? {} : filterDefaults
+	filterDefaults = {}
 	const context = {
-		item: requestedName ? "" : String(route.query.item || ""),
-		supplier: requestedName ? "" : String(route.query.supplier || ""),
+		item: requestedName ? "" : String(route.query.item || defaults.item_name || ""),
+		supplier: requestedName ? "" : String(route.query.supplier || defaults.supplier || ""),
 		duplicateFrom: requestedName ? "" : String(route.query.duplicate_from || ""),
+		defaults,
 	}
 	itemSequence += 1
 	itemLoading.value = false

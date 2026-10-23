@@ -45,6 +45,7 @@ import { getList } from "../../api/frappe.js"
 import LinkField from "../../components/common/LinkField.vue"
 import { goodsReceivedNoteSource } from "./grnSource.js"
 
+const props = defineProps({ initialSource: { type: Object, default: () => ({}) } })
 const emit = defineEmits(["select"])
 const AGAINST_OPTIONS = [{ label: "Work Order", value: "YRP Work Order" }, { label: "Purchase Order", value: "Purchase Order" }]
 const against = ref("YRP Work Order")
@@ -84,6 +85,15 @@ async function changeSource(name) {
 		if (sequence === checkSequence) checking.value = false
 	}
 }
+
+async function preselectSource({ against: initialAgainst, against_id: initialId, delivery_challan: initialChallan } = {}) {
+	if (AGAINST_OPTIONS.some((option) => option.value === initialAgainst)) against.value = initialAgainst
+	if (!initialId) return
+	await changeSource(initialId)
+	if (initialChallan && isWorkOrder.value) deliveryChallan.value = initialChallan
+}
+
+preselectSource(props.initialSource)
 </script>
 
 <style scoped>

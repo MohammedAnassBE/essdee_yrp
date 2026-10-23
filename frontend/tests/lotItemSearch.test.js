@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs"
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8")
 
 test("link suggestions show the search-field description, such as a Lot's Item", () => {
-	assert.match(source("../src/components/common/LinkField.vue"), /<small v-if="option\.description">\{\{ option\.description \}\}<\/small>/)
-	assert.match(source("../src/departments/cutting/reports/AsyncLinkMultiSelect.vue"), /<small v-if="option\.description">\{\{ option\.description \}\}<\/small>/)
+	assert.match(source("../src/components/common/LinkField.vue"), /<small v-if="option\.description">\{\{ formatDatesInText\(option\.description\) \}\}<\/small>/)
+	assert.match(source("../src/departments/cutting/reports/AsyncLinkMultiSelect.vue"), /<small v-if="option\.description">\{\{ formatDatesInText\(option\.description\) \}\}<\/small>/)
 })
 
 test("sewing supplier Lot suggestions describe each Lot by its Item", async () => {

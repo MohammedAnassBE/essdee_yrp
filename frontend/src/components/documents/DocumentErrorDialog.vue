@@ -11,7 +11,7 @@
 	>
 		<div class="document-error-dialog__body" role="alert" aria-live="assertive">
 			<span class="document-error-dialog__icon" aria-hidden="true"><i class="pi pi-exclamation-circle" /></span>
-			<div><strong>{{ summary }}</strong><p>{{ message }}</p></div>
+			<div><strong>{{ summary }}</strong><p>{{ formatDatesInText(message) }}</p></div>
 		</div>
 		<template #footer>
 			<Button v-if="retryLabel" label="Dismiss" severity="secondary" text @click="close" />
@@ -24,6 +24,7 @@
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import { nextTick, ref, watch } from "vue"
+import { formatDatesInText } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	message: { type: String, default: "" },

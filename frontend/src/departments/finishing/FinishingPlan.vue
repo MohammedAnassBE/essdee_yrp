@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation activity-doctype="SD YRP Finishing Plan" :activity-name="record.name || ''" :activity-record="record">
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan"><Skeleton height="64px" /><Skeleton height="420px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -85,6 +85,7 @@ import DocumentPrintButton from "../../components/documents/DocumentPrintButton.
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import DocumentTransactionDialog from "../../components/documents/DocumentTransactionDialog.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
+import { usePageTitle } from "../../composables/usePageTitle.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"
 import { webDocumentPath } from "../../router/webDocumentRoutes.js"
@@ -105,6 +106,7 @@ const confirmAction = useActionConfirmation()
 const finishingPlanId = computed(() => String(route.params.finishingPlanId || ""))
 const workspace = ref({})
 const record = computed(() => workspace.value.record || {})
+usePageTitle(() => record.value.name, () => record.value.item)
 const loading = ref(true)
 const ready = ref(false)
 const loadError = ref("")

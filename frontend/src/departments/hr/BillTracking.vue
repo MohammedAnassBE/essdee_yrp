@@ -30,7 +30,7 @@
 							<div><dt>Supplier</dt><dd :title="record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier" :label="record.supplier || '—'" /></dd></div>
 							<div><dt>GSTIN / UIN</dt><dd :title="record.gstin || '—'">{{ record.gstin || "—" }}</dd></div>
 							<div><dt>Bill No</dt><dd :title="record.bill_no || '—'">{{ record.bill_no || "—" }}</dd></div>
-							<div><dt>Bill Date</dt><dd>{{ dateTime(record.bill_date) }}</dd></div>
+							<div><dt>Bill Date</dt><dd>{{ formatDisplayDate(record.bill_date) }}</dd></div>
 							<div><dt>Invoice Value</dt><dd>{{ money(record.invoice_value) }}</dd></div>
 						</dl>
 					</div>
@@ -57,7 +57,7 @@
 											<td>{{ row.action || "—" }}</td>
 											<td><DocumentLink doctype="Department" :name="row.assigned_to" :label="row.assigned_to || '—'" /></td>
 											<td><DocumentLink doctype="User" :name="row.assigned_by" :label="row.assigned_by || '—'" /></td>
-											<td>{{ dateTime(row.assigned_on) }}</td>
+											<td>{{ formatDisplayDatetime(row.assigned_on) }}</td>
 											<td>{{ Number(row.received) ? "Yes" : "No" }}</td>
 											<td>{{ row.remarks || "—" }}</td>
 										</tr>
@@ -125,6 +125,7 @@ import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
+import { formatDisplayDate, formatDisplayDatetime } from "../../utils/dateFormat.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import BillTrackingAssignDialog from "./components/BillTrackingAssignDialog.vue"
 import BillTrackingCancelDialog from "./components/BillTrackingCancelDialog.vue"
@@ -426,12 +427,6 @@ function money(input) {
 	return Number.isFinite(value)
 		? value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 		: "—"
-}
-
-function dateTime(input) {
-	if (!input) return "—"
-	const match = String(input).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}${match[4] ? ` · ${match[4]}:${match[5]}` : ""}` : String(input)
 }
 
 watch(currentName, () => {

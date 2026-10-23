@@ -43,6 +43,7 @@
 			:name="selectedDocument.name"
 			:docstatus="selectedDocument.docstatus"
 			:expected-modified="selectedDocument.modified"
+			:new-defaults="newDefaults"
 			@changed="documentChanged"
 		/>
 	</section>
@@ -54,6 +55,7 @@ import { computed, ref, watch } from "vue"
 
 import ListView from "../../components/common/ListView.vue"
 import StockDocumentDialog from "./StockDocumentDialog.vue"
+import { takeNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ capability: { type: Object, required: true } })
 
@@ -73,6 +75,7 @@ const activeOperation = ref(operations.value[0]?.key || "")
 const listView = ref(null)
 const documentVisible = ref(false)
 const selectedDocument = ref({ name: "", docstatus: 0, modified: "" })
+const newDefaults = ref({})
 const activeCapability = computed(() => props.capability.operations?.[activeOperation.value] || null)
 const activeDefinition = computed(() => definitions[activeOperation.value] || { mark: "ST", columns: [], minWidth: "900px" })
 
@@ -81,10 +84,12 @@ watch(operations, (available) => {
 })
 
 function createDocument() {
+	newDefaults.value = takeNewDocumentDefaults(activeCapability.value.doctype)
 	selectedDocument.value = { name: "", docstatus: 0, modified: "" }
 	documentVisible.value = true
 }
 function openDocument(row) {
+	newDefaults.value = {}
 	selectedDocument.value = { name: row.name, docstatus: Number(row.docstatus || 0), modified: row.modified || "" }
 	documentVisible.value = true
 }

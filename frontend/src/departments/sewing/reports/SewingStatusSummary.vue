@@ -29,10 +29,11 @@ const data = ref({}), loading = ref(false), generated = ref(false), error = ref(
 let mounted = true
 const identities = [{ key: "lot", label: "Lot" }, { key: "item", label: "Item" }, { key: "colour", label: "Colour" }, { key: "part", label: "Part" }]
 const identityKeys = { Item: "item", "SD YRP Lot": "lot", Colour: "colour", Part: "part" }
+const dateColumns = new Set(["FI Date", "Input Date", "Last Sewing Output"])
 const frozenWidths = { Item: 224, "SD YRP Lot": 120, Colour: 128, Part: 76, "FI Date": 104, "Input Date": 104, "Last Sewing Output": 108, "Total Running Days": 80 }
 const rows = computed(() => (data.value.data || []).filter(row => !row.is_total))
 const columns = computed(() => [
-	...(data.value.header1 || []).map(label => ({ key: identityKeys[label] || label, label, frozen: true, width: frozenWidths[label], numeric: label === "Total Running Days" })),
+	...(data.value.header1 || []).map(label => ({ key: identityKeys[label] || label, label, frozen: true, width: frozenWidths[label], numeric: label === "Total Running Days", fieldtype: dateColumns.has(label) ? "Date" : undefined })),
 	...(data.value.header2 || []).map(label => ({ key: label, label, numeric: true })),
 	...(data.value.header3 || []).map(label => ({ key: label === "Work Order Status" ? "work_order_status" : label, label })),
 ])

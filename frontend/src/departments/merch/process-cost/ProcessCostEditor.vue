@@ -56,6 +56,7 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 import ProcessCostGrid from "./ProcessCostGrid.vue"
 import { PROCESS_COST_DETAILS, PROCESS_COST_LIST_PATH, mergeProcessCostRows, processCostFieldError, processCostPath, validateProcessCostRows } from "./processCostViews.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ processCostId: { type: String, default: "" } })
 const route = useRoute()
@@ -96,6 +97,8 @@ let contextSequence = 0
 let supplierSequence = 0
 let allowNavigation = false
 let resolveNavigation = null
+const takenDefaults = takeNewDocumentDefaults("YRP Process Cost")
+let filterDefaults = props.processCostId || route.query.duplicate_from || route.query.lot ? {} : takenDefaults
 
 function isDisabled(field) {
 	if (saving.value || contextLoading.value || field.read_only) return true
@@ -121,7 +124,7 @@ async function load() {
 	gridErrors.value = {}
 	try {
 		const duplicateFrom = props.processCostId ? null : route.query.duplicate_from || null
-		const result = await getProcessCostEditor(props.processCostId || null, route.query.lot || null, duplicateFrom)
+		const result = await getProcessCostEditor(props.processCostId || null, route.query.lot || filterDefaults.lot || null, duplicateFrom)
 		if (sequence !== requestSequence) return
 		editor.value = result
 		context.value = result.context
@@ -131,10 +134,22 @@ async function load() {
 		gridVersion.value++
 		fieldResetVersion.value++
 		cleanSignature.value = duplicateFrom ? "" : JSON.stringify(form)
+		applyFilterDefaults()
 	} catch (reason) { if (sequence === requestSequence) loadError.value = reason.message }
 	finally { if (sequence === requestSequence) loading.value = false }
 }
 
+/** Fills list filter values the editor left empty; the server-loaded Lot context, Item and UOM stay computed. */
+function applyFilterDefaults() {
+	const editable = new Set(PROCESS_COST_DETAILS.filter((key) => !["lot", "item", "uom", "supplier_name"].includes(key)))
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([key]) => editable.has(key)))
+	filterDefaults = {}
+	const filled = withNewDocumentDefaults(form, defaults)
+	const changed = Object.keys(defaults).filter((key) => filled[key] !== form[key])
+	for (const key of changed) form[key] = filled[key]
+	if (changed.includes("supplier")) updateSupplier(form.supplier)
+	if (form.lot && changed.some((key) => ["process_name", "attribute"].includes(key))) refreshContext(true)
+}
 function change(key, value) {
 	if (["lot", "process_name", "item", "attribute"].includes(key)) {
 		if (value === form[key]) return

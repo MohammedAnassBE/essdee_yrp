@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan Dispatch" :back-to="`${basePath}/dispatches`" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan Dispatch" :back-to="`${basePath}/dispatches`" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation activity-doctype="SD YRP Finishing Plan Dispatch" :activity-name="record.name || ''" :activity-record="record">
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan Dispatch"><Skeleton height="64px" /><Skeleton height="360px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan Dispatch unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -16,6 +16,7 @@
 					</div>
 				</div>
 				<div class="finishing-dispatch__actions">
+					<DocumentShortcuts :busy="busy" :can-cancel="!draft && Boolean(permissions.can_cancel)" cancel-confirms @cancel="confirmCancel" />
 					<CustomPrintButtons v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :record="record" :permissions="permissions" :disabled="busy" />
 					<DocumentPrintButton v-if="dispatchId && record.name && permissions.can_print" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :formats="workspace.print_formats || []" :disabled="busy" />
 					<DocumentPrintButton v-if="dispatchId && record.stock_entry" doctype="YRP Stock Entry" :name="record.stock_entry" label="Print Stock Entry" :disabled="busy" />
@@ -26,7 +27,7 @@
 					</template>
 					<template v-else>
 						<Button v-if="permissions.can_dispatch_stock" label="Dispatch Stock" icon="pi pi-truck" :disabled="busy" @click="openDispatch" />
-						<Button v-if="permissions.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="confirmCancel" />
+						<Button v-if="permissions.can_cancel" label="Cancel" :title="withShortcutHint('Cancel', 'cancel')" icon="pi pi-ban" severity="danger" outlined :disabled="busy" @click="confirmCancel" />
 					</template>
 				</div>
 			</header>
@@ -93,6 +94,8 @@ import DocumentTransactionDialog from "../../components/documents/DocumentTransa
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import FinishingDispatchEntry from "./components/FinishingDispatchEntry.vue"
 import { dispatchEntrySource, dispatchInitialState } from "./finishingEntries.js"
 import { setDispatchSupplier, warehouseFilters } from "./supplierWarehouse.js"
@@ -222,6 +225,7 @@ function dispatchStock() {
 		dispatchOpen.value = false
 	})
 }
+
 
 function confirmCancel() {
 	confirmAction({ header: "Cancel dispatch?", message: `Cancel ${record.value.name}? Its submitted Stock Entry is cancelled too.`, acceptLabel: "Cancel Dispatch", acceptIcon: "pi pi-ban", accept: () => run(() => executeDispatchCommand(record.value.name, "cancel", {}, record.value.modified), "Finishing Plan Dispatch cancelled", applyWorkspace) })

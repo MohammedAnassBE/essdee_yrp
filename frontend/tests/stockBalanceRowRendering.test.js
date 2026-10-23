@@ -16,8 +16,8 @@ const Button = (props) => Vue.h("button", props, props.label)
 const columns = [{ fieldname: "item", label: "Item", fieldtype: "Data" }, { fieldname: "bal_qty", label: "Balance Qty", fieldtype: "Float" }, { fieldname: "in_qty", label: "In Qty", fieldtype: "Float" }]
 const stockRows = (count) => Array.from({ length: count }, (_, index) => ({ item: `ITEM-${index}`, bal_qty: 1, in_qty: 2 }))
 
-function mountReport(sourceRows) {
-	const sourceColumns = Vue.ref(columns)
+function mountReport(sourceRows, reportColumns = columns) {
+	const sourceColumns = Vue.ref(reportColumns)
 	const report = loadComponent(resolve(import.meta.dirname, "../src/components/reports/StockBalanceReport.vue"), {
 		"primevue/button": Button, "@primevue/core/api": { FilterService },
 		"../common/DateField.vue": control, "../common/LinkField.vue": control, "../common/MultiSelectField.vue": control,
@@ -86,4 +86,12 @@ test("Stock Balance mounts the next step when the end of the table scrolls into 
 test("Stock Balance exports through the server so deferred rows are still exported", () => {
 	const source = reportExport.deskExportSource("stock-balance", { from_date: "2026-09-22" }, columns)
 	assert.ok(source.desk, "Desk-source exports rebuild every row on the server instead of reading the table DOM")
+})
+
+test("Stock Balance shows inward split dates as DD-MM-YYYY", async () => {
+	const splitColumns = [...columns, { fieldname: "inward_split", label: "Inward Date Split", fieldtype: "Data" }]
+	const root = mountReport(Vue.ref([{ item: "ITEM-1", bal_qty: 5, in_qty: 5, inward_split: "2026-10-23: 3\n2026-09-01: 2" }]), splitColumns)
+	await tick()
+	const cell = nodes(dataRows(root)[0], "span").find((node) => node.props.class === "multiline-cell")
+	assert.equal(cell.text, "23-10-2026: 3\n01-09-2026: 2")
 })

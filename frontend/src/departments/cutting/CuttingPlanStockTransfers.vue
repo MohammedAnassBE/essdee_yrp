@@ -27,7 +27,7 @@
 
 				<div v-if="activeTransactions.length" class="erp-transaction-list">
 					<button v-for="record in activeTransactions" :key="record.name" type="button" class="erp-transaction-card" @click="openTransaction(record)">
-						<i :class="activeItem.icon"></i><span><strong>{{ record.name }}</strong><small>{{ record.purpose || record.update_type || activeItem.label }} · {{ formatDate(record.modified, true) }}</small></span><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><i class="pi pi-chevron-right"></i>
+						<i :class="activeItem.icon"></i><span><strong>{{ record.name }}</strong><small>{{ record.purpose || record.update_type || activeItem.label }} · {{ formatDisplayDatetime(record.modified) }}</small></span><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><i class="pi pi-chevron-right"></i>
 					</button>
 				</div>
 				<div v-else class="erp-empty-state"><i :class="activeItem.icon"></i><strong>No {{ activeItem.label.toLowerCase() }} records</strong><span>{{ activeItem.emptyText }}</span></div>
@@ -55,6 +55,7 @@ import CpmTransactionDialog from "./CpmTransactionDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import WorkOrderDeliveryDialog from "./WorkOrderDeliveryDialog.vue"
 import { getCpmWorkspace } from "./cpmApi.js"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({ cuttingPlan: { type: String, required: true } })
 const emit = defineEmits(["changed"])
@@ -132,7 +133,6 @@ async function showTransaction(record, operation) {
 	await load(true)
 }
 async function changed(value) { await load(true); emit("changed", value) }
-function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date }
 
 defineExpose({ load, showTransaction, activate: () => load(true) })
 </script>

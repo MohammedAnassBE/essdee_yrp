@@ -19,7 +19,7 @@ const ACTIONS = [
 	{ key: "edit", label: "Edit", icon: "pi pi-pencil" },
 	{ key: "amend", label: "Amend", icon: "pi pi-copy" },
 	{ key: "share", label: "Share", icon: "pi pi-share-alt" },
-	{ key: "cancel", label: "Cancel", icon: "pi pi-ban", menuOnly: true },
+	{ key: "cancel", label: "Cancel", icon: "pi pi-ban", menuOnly: true, shortcut: "cancel" },
 	{ key: "delete", label: "Delete", icon: "pi pi-trash", menuOnly: true },
 ]
 

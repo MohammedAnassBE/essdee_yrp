@@ -7,6 +7,9 @@
 		flat
 		full-width
 		:inline-navigation="!checkingEditor && !showEditor"
+		activity-doctype="SD YRP Cutting Plan"
+		:activity-name="checkingEditor ? '' : cuttingPlanId"
+		:activity-record="currentDocument || editorProbe?.record"
 	>
 		<div v-if="checkingEditor" class="cutting-plan-probe erp-workspace" aria-label="Loading Cutting Plan">
 			<Skeleton height="76px" />
@@ -69,7 +72,8 @@
 						:disabled="workspaceLoading"
 					/>
 					<DocumentDeleteButton doctype="SD YRP Cutting Plan" document-label="Cutting Plan" :name="doc.name" :docstatus="doc.docstatus" :disabled="workspaceLoading" :redirect-to="backTo" />
-					<Button v-if="currentDocument?.docstatus === 1 && editorProbe?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :disabled="workspaceLoading || Boolean(lifecycleBusy)" @click="requestLifecycleAction('cancel')" />
+					<DocumentShortcuts :busy="workspaceLoading || Boolean(lifecycleBusy)" :can-cancel="currentDocument?.docstatus === 1 && Boolean(editorProbe?.permissions?.can_cancel)" cancel-confirms @cancel="requestLifecycleAction('cancel')" />
+					<Button v-if="currentDocument?.docstatus === 1 && editorProbe?.permissions?.can_cancel" label="Cancel" :title="withShortcutHint('Cancel', 'cancel')" icon="pi pi-ban" severity="danger" outlined :disabled="workspaceLoading || Boolean(lifecycleBusy)" @click="requestLifecycleAction('cancel')" />
 					<Button v-if="currentDocument?.docstatus === 2 && editorProbe?.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :disabled="workspaceLoading || Boolean(lifecycleBusy)" @click="requestLifecycleAction('amend')" />
 					<CuttingPlanActions
 						:doc="doc"
@@ -137,6 +141,8 @@ import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import { useDuplicateAction } from "../composables/useDuplicateAction.js"
+import DocumentShortcuts from "../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../utils/documentShortcuts.js"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import CuttingPlanActions from "./cutting/CuttingPlanActions.vue"

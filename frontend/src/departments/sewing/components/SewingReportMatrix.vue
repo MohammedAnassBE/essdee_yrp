@@ -3,7 +3,7 @@
 		<table class="erp-table">
 			<caption>{{ label }}</caption>
 			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="cellClass(column, index)" :style="cellStyle(index)">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="columns" :filter="inlineFilter" :cell-class="cellClass" :cell-style="(column, index) => cellStyle(index)" /></thead>
-			<tbody><tr v-for="(row, rowIndex) in visibleRows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key]) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key]) }}</slot></td></tr></tbody>
+			<tbody><tr v-for="(row, rowIndex) in visibleRows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key], column) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key], column) }}</slot></td></tr></tbody>
 			<tfoot v-if="footerTotals"><tr><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(footerTotals[column.key]) }}</th></tr></tfoot>
 		</table>
 	</div>
@@ -15,6 +15,7 @@ import { computed } from "vue"
 import { columnTotal } from "../../../components/reports/inlineFilters.js"
 import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
+import { formatDisplayByFieldtype } from "../../../utils/dateFormat.js"
 
 const props = defineProps({
 	label: { type: String, required: true },
@@ -26,7 +27,7 @@ const props = defineProps({
 	/** Off for reports that render one matrix per group. */
 	inlineFilters: { type: Boolean, default: false },
 })
-const inlineFilter = useInlineFilters(() => props.rows, () => props.columns, { cellValue: (row, column) => row[column.key], cellText: (row, column) => format(row[column.key]) })
+const inlineFilter = useInlineFilters(() => props.rows, () => props.columns, { cellValue: (row, column) => row[column.key], cellText: (row, column) => format(row[column.key], column) })
 const visibleRows = computed(() => props.inlineFilters ? inlineFilter.filteredRows.value : props.rows)
 // Footer totals are sums of the shown rows, so a column filter recomputes them like Desk's total row.
 const footerTotals = computed(() => {
@@ -54,8 +55,9 @@ function cellStyle(index) {
 	const width = `${column.width}px`
 	return { width, minWidth: width, maxWidth: width, left: index < frozenOffsets.value.length ? `${frozenOffsets.value[index]}px` : undefined }
 }
-function format(value) {
-	return typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : value ?? "—"
+function format(value, column) {
+	if (typeof value === "number") return value.toLocaleString(undefined, { maximumFractionDigits: 3 })
+	return formatDisplayByFieldtype(value, column?.fieldtype) ?? "—"
 }
 </script>
 

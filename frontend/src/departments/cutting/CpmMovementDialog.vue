@@ -35,14 +35,16 @@
 			/>
 		</div>
 
+		<DocumentActivity :doctype="'SD YRP Cut Panel Movement'" :name="record?.name || ''" :record="record" />
 		<template #footer>
 			<div class="erp-dialog-footer">
 				<div class="erp-footer-summary" :class="{ 'erp-footer-summary--active': hasSelection }"><i :class="hasSelection ? 'pi pi-check-circle' : 'pi pi-info-circle'" /><span>{{ hasSelection ? selectionSummaryText : "Select at least one bundle, panel, collapsed quantity, or accessory weight." }}</span></div>
 				<div class="erp-footer-actions">
+					<DocumentShortcuts :busy="saving" :can-cancel="Boolean(record?.permissions?.can_cancel)" cancel-confirms @cancel="cancelMovement" />
 					<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
 					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Cut Panel Movement" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" doctype="SD YRP Cut Panel Movement" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
-					<Button v-if="record?.permissions?.can_cancel" label="Cancel Movement" icon="pi pi-ban" severity="danger" outlined :loading="saving && saveMode === 'cancel'" @click="cancelMovement" />
+					<Button v-if="record?.permissions?.can_cancel" label="Cancel Movement" :title="withShortcutHint('Cancel Movement', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="saving && saveMode === 'cancel'" @click="cancelMovement" />
 					<DocumentSaveButton :saved="Boolean(record?.name)" :dirty="dirty" :docstatus="Number(record?.docstatus || 0)" :document-label="`Cut Panel Movement ${record?.name || ''}`.trim()" :show-save="canEdit" :show-submit="canSubmit" :save-disabled="!generated" :submit-disabled="!hasSelection" :loading="saving" @save="save(false)" @submit="save(true)" />
 				</div>
 			</div>
@@ -52,6 +54,7 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
@@ -62,8 +65,10 @@ import { computed, reactive, ref, watch } from "vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import CutPanelMovementEditor from "./CutPanelMovementEditor.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import { changeMovementStatus, generateMovementBundles, getMovementEditor, saveMovement } from "./cpmApi.js"
 

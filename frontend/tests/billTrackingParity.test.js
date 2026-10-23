@@ -6,6 +6,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 
 const hrViews = await import("../src/departments/hr/hrViews.js")
 const duplicate = await import("../src/composables/useDuplicateAction.js")
+const dateFormat = await import("../src/utils/dateFormat.js")
 const tick = async () => { await new Promise((done) => setImmediate(done)); await Vue.nextTick() }
 const stub = (tag) => (props, { slots }) => Vue.h(tag, props, slots?.default?.())
 const helpers = new Proxy({}, { get: () => () => ({}) })
@@ -36,6 +37,7 @@ async function mountView(workspace) {
 		"../../components/common/DocumentLink.vue": (props) => Vue.h("link", props, props.label),
 		"../../composables/useDuplicateAction.js": duplicate,
 		"./hrViews.js": hrViews,
+		"../../utils/dateFormat.js": dateFormat,
 		"../../api/hr.js": { getBillTrackingWorkspace: async () => workspace },
 		"vue-router": routerModule(Vue.reactive({ params: { billTrackingId: "VBT-1" }, query: {}, fullPath: "/view" })),
 	})
@@ -48,12 +50,14 @@ test("Bill Tracking view shows GSTIN and Bill No in the header and every Desk se
 	const root = await mountView({
 		record: { name: "VBT-1", supplier: "Sun Knit", gstin: "33CQXPP8124R1ZP", bill_no: "335", bill_date: "2026-09-19", invoice_value: 54656 },
 		details: [detail("gstin", "33CQXPP8124R1ZP"), detail("department", null), detail("cancel_reason", ""), detail("amended_from", "VBT-0")],
-		history: [{ action: "Open", assigned_by: "a@example.test" }],
+		history: [{ action: "Open", assigned_by: "a@example.test", assigned_on: "2026-09-20 14:05:09.123456" }],
 		permissions: {},
 		capabilities: {},
 	})
 	const text = textOf(root)
-	for (const value of ["33CQXPP8124R1ZP", "335", "19-09-2026", "GSTIN / UIN", "Bill No", "Bill Tracking History", "Assigned By"]) {
+	assert.ok(!text.includes("2026-09-19"), "bill date must not render as ISO")
+	assert.ok(!text.includes("2026 · 14"), "datetimes must use a single space separator")
+	for (const value of ["33CQXPP8124R1ZP", "335", "19-09-2026", "20-09-2026 14:05", "GSTIN / UIN", "Bill No", "Bill Tracking History", "Assigned By"]) {
 		assert.ok(text.includes(value), `${value} should render`)
 	}
 	const overview = findNodes(root, (node) => node.type === "overview")[0]

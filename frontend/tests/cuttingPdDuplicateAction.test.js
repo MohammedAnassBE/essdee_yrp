@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Vue } from "../../scripts/helpers/vue_renderer.mjs"
 import { useDuplicateAction } from "../src/composables/useDuplicateAction.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../src/utils/newDocumentDefaults.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
 import * as pdViews from "../src/departments/pd/pdViews.js"
 
@@ -12,7 +13,7 @@ const script = path => read(path).split("<script setup>")[1].split("</script>")[
 function setup(path, bindings, names) {
 	const values = {
 		...Vue, ...Object.fromEntries(Object.entries(pdViews).filter(([key]) => key !== "default")), watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {},
-		defineProps: () => ({}), defineEmits: () => () => {}, useActionConfirmation: () => () => {}, useDuplicateAction, PLANNING_ROUTES, ...bindings,
+		defineProps: () => ({}), defineEmits: () => () => {}, useActionConfirmation: () => () => {}, useDuplicateAction, PLANNING_ROUTES, takeNewDocumentDefaults, withNewDocumentDefaults, ...bindings,
 	}
 	return new Function(...Object.keys(values), `${script(path)}\nreturn { ${names} }`)(...Object.values(values))
 }

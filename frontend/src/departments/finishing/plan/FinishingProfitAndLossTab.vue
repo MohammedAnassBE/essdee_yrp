@@ -11,7 +11,7 @@
 				<li v-for="document in documents" :key="document.name" class="profit-loss__item">
 					<div class="profit-loss__body">
 						<a :href="document.file" target="_blank" rel="noopener">{{ fileName(document.file) }}</a>
-						<small>{{ document.modified }} · <DocumentLink doctype="User" :name="document.owner" :label="document.owner" /></small>
+						<small>{{ formatDisplayDatetime(document.modified, { seconds: true }) }} · <DocumentLink doctype="User" :name="document.owner" :label="document.owner" /></small>
 						<p v-if="document.comments">{{ document.comments }}</p>
 					</div>
 					<Button v-if="canManage" icon="pi pi-trash" severity="danger" text size="small" :aria-label="`Delete ${fileName(document.file)}`" :disabled="busy" @click="emit('delete', document)" />
@@ -38,6 +38,8 @@ import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Textarea from "primevue/textarea"
 import { ref, watch } from "vue"
+
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 
 const props = defineProps({
 	documents: { type: Array, default: () => [] },

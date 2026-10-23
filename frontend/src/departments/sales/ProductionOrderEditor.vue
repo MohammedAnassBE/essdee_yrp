@@ -44,9 +44,12 @@ import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vu
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import { productionOrderItemFilters } from "./productionOrderOptions.js"
 import { productionOrderDeliveryWarning, productionOrderSaveBlockers } from "./productionOrderSaveBlockers.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ name: { type: String, default: "" }, duplicateFrom: { type: String, default: "" } })
 const emit = defineEmits(["saved", "cancel"])
+const stagedDefaults = takeNewDocumentDefaults("YRP Production Order")
+let filterDefaults = props.name || props.duplicateFrom ? {} : stagedDefaults
 const form = reactive({ naming_series: "PPO-", item: "", production_detail: "", production_term: "", delivery_date: "", dont_deliver_after: "", gsm: null, fabric: "", dia: "", comments: "", skip_box_sticker_print: false })
 const schemas = ref([])
 const matrix = ref({})
@@ -78,8 +81,17 @@ function apply(payload) {
 	loaded.value = true
 	cleanSignature.value = signature.value
 }
-async function load() { loading.value = true; error.value = ""; try { apply(await getProductionOrderEditor(props.name || null, null, props.name ? null : props.duplicateFrom || null) || {}) } catch (reason) { error.value = reason?.message || "Unable to load the Production Order editor." } finally { loading.value = false } }
+async function load() { loading.value = true; error.value = ""; try { apply(await getProductionOrderEditor(props.name || null, null, props.name ? null : props.duplicateFrom || null) || {}); await applyFilterDefaults() } catch (reason) { error.value = reason?.message || "Unable to load the Production Order editor." } finally { loading.value = false } }
 async function itemSelected() { if (props.name || !form.item) return; loadingMatrix.value = true; error.value = ""; try { const payload = await getProductionOrderEditor(null, { item: form.item }); const retained = { ...form }; apply(payload || {}); Object.assign(form, retained, { item: retained.item }) } catch (reason) { error.value = reason?.message || "Unable to load the Item size matrix." } finally { loadingMatrix.value = false } }
+/** Fills list filter values into the blank new form once; a defaulted Item loads its size matrix. */
+async function applyFilterDefaults() {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname in form))
+	filterDefaults = {}
+	if (!Object.keys(defaults).length || props.name || props.duplicateFrom) return
+	Object.assign(form, withNewDocumentDefaults({ ...form }, defaults))
+	if (defaults.item && form.item === defaults.item) await itemSelected()
+	cleanSignature.value = signature.value
+}
 function updateMatrix({ size, field, value }) { if (!matrix.value.items?.[size]) return; matrix.value.items[size][field === "quantity" ? "qty" : "ratio"] = value }
 function itemDetails() { return [{ item: form.item, entries: matrixRows.value.map((row) => ({ attributes: { [matrix.value.primary_attribute || "Size"]: row.size }, qty: row.quantity, ratio: row.ratio, mrp: row.prices.mrp, wholesale: row.prices.wholesale_price, retail: row.prices.retail_price })) }] }
 async function save(submit) { saving.value = submit ? "submit" : "save"; error.value = ""; try { const payload = await saveProductionOrder({ ...form, item_details: itemDetails() }, { name: record.value.name || props.name || null, submit, expectedModified: modified.value }); record.value = payload?.record || {}; modified.value = record.value.modified || modified.value; cleanSignature.value = signature.value; emit("saved", payload?.record || {}) } catch (reason) { error.value = reason?.message || "Unable to save this Production Order." } finally { saving.value = "" } }

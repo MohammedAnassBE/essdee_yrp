@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Work Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="fabric-work-order-editor-page erp-workspace">
-			<WorkOrderEditor :key="`${workOrderId || 'new'}-${duplicateFrom}`" :name="workOrderId" :source="duplicateSource" @saved="saved" @cancel="cancel" />
+			<WorkOrderEditor :key="`${workOrderId || 'new'}-${duplicateFrom}`" :name="workOrderId" :source="duplicateSource" :new-defaults="newDefaults" @saved="saved" @cancel="cancel" />
 		</div>
 	</DepartmentPage>
 </template>
@@ -13,6 +13,7 @@ import { useRoute, useRouter } from "vue-router"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import WorkOrderEditor from "./fabric-store/WorkOrderEditor.vue"
+import { takeNewDocumentDefaults } from "../utils/newDocumentDefaults.js"
 
 const props = defineProps({
 	backTo: { type: String, default: "/fabric-store/work-orders" },
@@ -26,6 +27,8 @@ const router = useRouter()
 const workOrderId = computed(() => String(route.params.workOrderId || ""))
 const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
 const duplicateSource = computed(() => duplicateFrom.value ? { duplicate_from: duplicateFrom.value } : {})
+const filterDefaults = takeNewDocumentDefaults("YRP Work Order")
+const newDefaults = workOrderId.value || duplicateFrom.value ? {} : filterDefaults
 
 function saved(record) {
 	if (!record?.name) return

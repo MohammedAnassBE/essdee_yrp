@@ -55,7 +55,7 @@
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
 					<tr v-for="(row, rowIndex) in renderedRows" :key="rowIndex" :class="{ 'report-total-row': row.is_total_row }">
-						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ stockCellValue(cellValue(row, column), column) }}</span></td>
+						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ displayCell(row, column) }}</span></td>
 					</tr>
 					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="stock-more"><td :colspan="columns.length"><div class="stock-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
@@ -86,6 +86,7 @@ import ReportMoreFilters from "./ReportMoreFilters.vue"
 import ReportShell from "./ReportShell.vue"
 import { deskExportSource } from "./reportExport.js"
 import { number, oneMonthAgoIso, stockCellValue, todayIso } from "./reportUtils.js"
+import { formatDatesInText } from "../../utils/dateFormat.js"
 
 // The server searches document-specific fields (for example Lot.item).
 FilterService.register("stock-balance-server", () => true)
@@ -110,7 +111,9 @@ const {
 	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "stock-balance", sourceColumns, sourceRows })
-const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => stockCellValue(cellValue(row, column), column) })
+// The inward split cell is server text like "2026-10-23: 5", one line per date.
+const displayCell = (row, column) => column.fieldname === "inward_split" ? formatDatesInText(cellValue(row, column)) : stockCellValue(cellValue(row, column), column)
+const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: displayCell })
 const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
 // Export rebuilds rows on the server, so only the mounted table is stepped.
 const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows } = useIncrementalRows(inlineFilter.filteredRows, { resetOn: [sourceRows, inlineFilter.keywords] })

@@ -1,0 +1,227 @@
+<template>
+	<section v-if="isSaved" class="document-activity" :aria-labelledby="headingId" :aria-busy="loading">
+		<header class="document-activity__header">
+			<button type="button" class="document-activity__toggle" :aria-expanded="expanded" :aria-controls="bodyId" @click="expanded = !expanded">
+				<i :class="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" aria-hidden="true" />
+				<h2 :id="headingId">Activity</h2>
+			</button>
+			<span v-if="!expanded && activity?.modified?.at" class="document-activity__summary">
+				Last modified {{ formatDisplayDatetime(activity.modified.at) }}
+			</span>
+		</header>
+		<div v-if="expanded" :id="bodyId" class="document-activity__body">
+			<p v-if="error" class="document-activity__error" role="alert">
+				{{ error }}
+				<Button label="Retry" severity="secondary" text size="small" @click="load" />
+			</p>
+			<p v-else-if="loading && !activity" class="document-activity__muted" role="status">Loading activity…</p>
+			<template v-else-if="activity">
+				<p class="document-activity__stamp document-activity__stamp--modified">
+					<strong>{{ activity.modified.user_name }}</strong> modified this
+					<span class="document-activity__time">· {{ formatDisplayDatetime(activity.modified.at) }}</span>
+				</p>
+				<ol v-if="entries.length" class="document-activity__versions" aria-label="Version history">
+					<li v-for="entry in entries" :key="entry.name" class="document-activity__version">
+						<div class="document-activity__version-head">
+							<strong>{{ entry.user_name || entry.user }}</strong>
+							<span class="document-activity__time">· {{ formatDisplayDatetime(entry.at) }}</span>
+						</div>
+						<ul class="document-activity__lines">
+							<li v-for="(line, index) in describeActivityEntry(entry)" :key="index">
+								<template v-for="(segment, segmentIndex) in line" :key="segmentIndex"><strong v-if="segment.strong">{{ segment.text }}</strong><template v-else>{{ segment.text }}</template></template>
+							</li>
+						</ul>
+					</li>
+				</ol>
+				<p v-else-if="!hasMore" class="document-activity__muted">No changes recorded since creation.</p>
+				<Button
+					v-if="hasMore"
+					class="document-activity__more"
+					label="Show more"
+					icon="pi pi-angle-down"
+					severity="secondary"
+					text
+					size="small"
+					:loading="loadingMore"
+					@click="loadMore"
+				/>
+				<p class="document-activity__stamp document-activity__stamp--created">
+					<strong>{{ activity.created.user_name }}</strong>
+					{{ activity.created.amended_from ? "amended this from" : "created this" }}
+					<strong v-if="activity.created.amended_from">{{ activity.created.amended_from }}</strong>
+					<span class="document-activity__time">· {{ formatDisplayDatetime(activity.created.at) }}</span>
+				</p>
+			</template>
+		</div>
+	</section>
+</template>
+
+<script setup>
+import Button from "primevue/button"
+import { computed, ref, watch } from "vue"
+
+import { getDocumentActivity } from "../../api/frappe.js"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
+import { activityRefreshKey, describeActivityEntry, isSavedDocumentName } from "../../utils/documentActivity.js"
+
+const props = defineProps({
+	doctype: { type: String, required: true },
+	name: { type: String, default: "" },
+	record: { type: Object, default: null },
+	pageLength: { type: Number, default: 10 },
+})
+
+const isSaved = computed(() => Boolean(props.doctype) && isSavedDocumentName(props.name))
+const headingId = computed(() => `document-activity-${String(props.name).replace(/[^A-Za-z0-9_-]+/g, "-")}`)
+const bodyId = computed(() => `${headingId.value}-body`)
+const expanded = ref(true)
+const activity = ref(null)
+const entries = ref([])
+const hasMore = ref(false)
+const nextStart = ref(0)
+const loading = ref(false)
+const loadingMore = ref(false)
+const error = ref("")
+let sequence = 0
+
+async function fetchPage(start) {
+	return getDocumentActivity(props.doctype, props.name, { start, pageLength: props.pageLength })
+}
+
+function applyPage(result, append) {
+	activity.value = { created: result.created, modified: result.modified }
+	entries.value = append ? [...entries.value, ...result.versions] : result.versions
+	hasMore.value = Boolean(result.has_more)
+	nextStart.value = result.next_start
+}
+
+async function load() {
+	const current = ++sequence
+	error.value = ""
+	if (!isSaved.value) {
+		activity.value = null
+		entries.value = []
+		return
+	}
+	loading.value = true
+	try {
+		const result = await fetchPage(0)
+		if (current === sequence) applyPage(result, false)
+	} catch (reason) {
+		if (current === sequence) error.value = reason?.message || "Activity could not be loaded."
+	} finally {
+		if (current === sequence) loading.value = false
+	}
+}
+
+async function loadMore() {
+	const current = sequence
+	loadingMore.value = true
+	try {
+		const result = await fetchPage(nextStart.value)
+		if (current === sequence) applyPage(result, true)
+	} catch (reason) {
+		if (current === sequence) error.value = reason?.message || "Older activity could not be loaded."
+	} finally {
+		loadingMore.value = false
+	}
+}
+
+watch(() => [props.doctype, props.name, activityRefreshKey(props.record)], ([doctype, name, key], previous = []) => {
+	const sameDocument = previous[0] === doctype && previous[1] === name
+	if (!sameDocument || (previous[2] && key !== previous[2])) load()
+}, { immediate: true })
+</script>
+
+<style scoped>
+.document-activity {
+	margin-top: var(--erp-space-4, 16px);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-panel-radius);
+	background: var(--erp-surface);
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+}
+
+.document-activity__header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--erp-space-2, 8px);
+	padding: 8px 12px;
+}
+
+.document-activity__toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--erp-space-2, 8px);
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--erp-text-secondary);
+	font: inherit;
+	cursor: pointer;
+}
+
+.document-activity__toggle h2 {
+	margin: 0;
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-bold);
+	letter-spacing: .02em;
+}
+
+.document-activity__summary,
+.document-activity__time,
+.document-activity__muted {
+	color: var(--erp-text-muted);
+}
+
+.document-activity__body {
+	display: grid;
+	gap: var(--erp-space-2, 8px);
+	padding: 4px 12px 12px;
+	border-top: 1px solid var(--erp-border-subtle, var(--erp-border));
+}
+
+.document-activity__body p {
+	margin: 0;
+}
+
+.document-activity__stamp {
+	padding-top: 8px;
+}
+
+.document-activity__error {
+	display: flex;
+	align-items: center;
+	gap: var(--erp-space-2, 8px);
+	color: var(--erp-danger);
+}
+
+.document-activity__versions {
+	display: grid;
+	gap: 10px;
+	margin: 0;
+	padding: 0 0 0 12px;
+	border-left: 2px solid var(--erp-border);
+	list-style: none;
+}
+
+.document-activity__version-head {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.document-activity__lines {
+	margin: 2px 0 0;
+	padding-left: 16px;
+	color: var(--erp-text-secondary);
+	overflow-wrap: anywhere;
+}
+
+.document-activity__more {
+	justify-self: start;
+}
+</style>

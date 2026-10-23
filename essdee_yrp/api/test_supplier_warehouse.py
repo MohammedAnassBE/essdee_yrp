@@ -9,7 +9,7 @@ import frappe
 from frappe.permissions import add_user_permission
 from frappe.tests import IntegrationTestCase
 
-from essdee_yrp.api.supplier_warehouse import get_supplier_warehouse_context
+from essdee_yrp.api.supplier_warehouse import get_single_location_options, get_supplier_warehouse_context
 
 
 class TestSupplierWarehouseContext(IntegrationTestCase):
@@ -234,6 +234,98 @@ eval(fs.readFileSync(process.argv[1], "utf8"));
 		)
 
 		self.assertIn('frappe.model.can_create("Warehouse")', source)
+
+
+class TestSingleLocationOptions(IntegrationTestCase):
+	def setUp(self):
+		super().setUp()
+		frappe.set_user("Administrator")
+		self.addCleanup(frappe.db.rollback)
+		self.company = _make_company("_Test SWH Company")
+		self.supplier = _make_supplier(f"_Test SLO Supplier {frappe.generate_hash(length=6)}")
+
+	def test_returns_only_warehouse_and_address(self):
+		warehouse = _make_warehouse(self.supplier, self.company, disabled=0)
+		_make_warehouse(self.supplier, self.company, disabled=1)
+		address = _make_address(self.supplier)
+
+		options = get_single_location_options(supplier=self.supplier)
+
+		self.assertEqual(options["supplier"], self.supplier)
+		self.assertEqual(options["warehouse"], warehouse)
+		self.assertEqual(options["address"], address)
+		self.assertIn("12 Mill Road", options["address_display"])
+
+	def test_returns_none_when_several_or_none(self):
+		self.assertEqual(
+			get_single_location_options(supplier=self.supplier),
+			{"supplier": self.supplier, "warehouse": None, "address": None, "address_display": None},
+		)
+		_make_warehouse(self.supplier, self.company, disabled=0)
+		_make_warehouse(self.supplier, self.company, disabled=0)
+		_make_address(self.supplier)
+		_make_address(self.supplier)
+
+		options = get_single_location_options(supplier=self.supplier)
+
+		self.assertIsNone(options["warehouse"])
+		self.assertIsNone(options["address"])
+		self.assertIsNone(options["address_display"])
+
+	def test_disabled_address_is_not_an_option(self):
+		address = _make_address(self.supplier)
+		frappe.db.set_value("Address", _make_address(self.supplier), "disabled", 1)
+
+		self.assertEqual(get_single_location_options(supplier=self.supplier)["address"], address)
+
+	def test_prefer_primary_picks_primary_among_several_addresses(self):
+		primary = _make_address(self.supplier)
+		_make_address(self.supplier)
+		self.assertIsNone(get_single_location_options(supplier=self.supplier, prefer_primary=1)["address"])
+		frappe.db.set_value("Address", primary, "is_primary_address", 1)
+
+		options = get_single_location_options(supplier=self.supplier, prefer_primary=1)
+
+		self.assertEqual(options["address"], primary)
+		self.assertIn("12 Mill Road", options["address_display"])
+		self.assertIsNone(get_single_location_options(supplier=self.supplier)["address"])
+
+	def test_warehouse_resolves_its_location_address(self):
+		warehouse = _make_warehouse(self.supplier, self.company, disabled=0)
+		_make_warehouse(self.supplier, self.company, disabled=0)
+		address = _make_address(self.supplier)
+
+		options = get_single_location_options(warehouse=warehouse)
+
+		self.assertEqual(options["supplier"], self.supplier)
+		self.assertEqual(options["warehouse"], warehouse)
+		self.assertEqual(options["address"], address)
+
+	def test_empty_trigger_returns_nothing(self):
+		self.assertEqual(
+			get_single_location_options(),
+			{"supplier": None, "warehouse": None, "address": None, "address_display": None},
+		)
+
+	def test_unreadable_only_options_are_hidden(self):
+		_make_warehouse(self.supplier, self.company, disabled=0)
+		_make_address(self.supplier)
+		user = _make_stock_user()
+		add_user_permission(
+			"Warehouse", _make_warehouse(None, self.company, disabled=0), user, ignore_permissions=True
+		)
+		other_address = _make_address(_make_supplier(f"_Test SLO Other {frappe.generate_hash(length=6)}"))
+		add_user_permission("Address", other_address, user, ignore_permissions=True, applicable_for="Address")
+
+		with self.set_user(user):
+			options = get_single_location_options(supplier=self.supplier)
+
+		self.assertIsNone(options["warehouse"])
+		self.assertIsNone(options["address"])
+
+	def test_requires_supplier_read_permission(self):
+		with self.set_user("Guest"), self.assertRaises(frappe.PermissionError):
+			get_single_location_options(supplier=self.supplier)
 
 
 def _make_company(name):

@@ -30,7 +30,7 @@
 					<span class="link-field__option">
 						<strong>{{ option.label }}</strong>
 						<small v-if="option.name && option.name !== option.label">{{ option.name }}</small>
-						<small v-if="option.description">{{ option.description }}</small>
+						<small v-if="option.description">{{ formatDatesInText(option.description) }}</small>
 					</span>
 				</template>
 				<template #empty>
@@ -87,6 +87,7 @@ import { canCreateDoctype, canReadDoctype } from "../../utils/linkTarget.js"
 import { linkCreateValues } from "../../utils/quickEntry.js"
 import QuickEntryDialog from "./asyncQuickEntryDialog.js"
 import DocumentLink from "./DocumentLink.vue"
+import { formatDatesInText } from "../../utils/dateFormat.js"
 import { handleAutocompleteKey, withAutocompleteCompositionGuard } from "./autocompleteKeys.js"
 
 const AutoComplete = withAutocompleteCompositionGuard(PrimeAutoComplete)

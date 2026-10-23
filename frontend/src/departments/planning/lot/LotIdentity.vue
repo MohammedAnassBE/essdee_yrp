@@ -5,7 +5,7 @@
 				<div class="lot-page__meta">
 					<span>{{ name ? `Lot · ${name}` : "New Lot" }}</span>
 					<span v-if="editing" class="lot-page__editing">· Editing</span>
-					<span v-if="deliveryDate" class="lot-page__date"><span>Delivery</span><strong>{{ formatLotDate(deliveryDate) }}</strong></span>
+					<span v-if="deliveryDate" class="lot-page__date"><span>Delivery</span><strong>{{ formatDisplayDate(deliveryDate) }}</strong></span>
 				</div>
 				<h1 class="erp-doc-title" :id="headingId" :aria-label="[name || draftName || 'New Lot', item].filter(Boolean).join(' · ')">
 					<span class="lot-page__lot">{{ name || draftName || "New Lot" }}</span>
@@ -19,7 +19,7 @@
 <script setup>
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
-import { formatLotDate } from "./lotViews.js"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 defineProps({
 	name: { type: String, default: "" },
 	draftName: { type: String, default: "" },

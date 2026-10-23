@@ -23,7 +23,7 @@
 								<div class="ppo-details">
 									<ProductionOrderOverview :fields="workspace.fields || []" />
 									<ProductionOrderPendingRequest :request="workspace.pending_request" />
-									<section v-if="workspace.histories?.comments" class="ppo-comment-log erp-card"><h2>Comment Log</h2><p>{{ workspace.histories.comments }}</p></section>
+									<section v-if="workspace.histories?.comments" class="ppo-comment-log erp-card"><h2>Comment Log</h2><p>{{ formatDatesInText(workspace.histories.comments) }}</p></section>
 									<ProductionOrderMatrix :rows="workspace.matrix || []" :ordered="workspace.ordered || []" lot-clickable @open-lot="openLotOcr" />
 									<section v-if="dateActivity.length" class="ppo-activity erp-card"><header><span>DATE CHANGES</span><h2>Schedule history</h2></header><div v-for="entry in dateActivity" :key="entry.key"><strong>{{ entry.label }}</strong><span>{{ entry.value }}</span></div></section>
 								</div>
@@ -68,6 +68,7 @@ import DocumentActionStrip from "../../components/documents/DocumentActionStrip.
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
+import { formatDatesInText, formatDisplayDate as formatDate } from "../../utils/dateFormat.js"
 import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import FabricDocumentWorkspace from "../fabric-store/FabricDocumentWorkspace.vue"
 import ProductionOrderActionDialog from "./ProductionOrderActionDialog.vue"
@@ -120,7 +121,7 @@ const duplicateAction = useDuplicateAction({
 const actions = computed(() => [...priority.flatMap((key) => {
 	const capability = workspace.value.capabilities?.[key]
 	if (!capability?.allowed) return []
-	return [{ key, label: capability.label, icon: iconMap[key], primary: key === priority.find((candidate) => workspace.value.capabilities?.[candidate]?.allowed), menuOnly: ["cancel", "delete", "amend", "reopen", "create_lot", "link_lot"].includes(key), command: () => beginAction(key) }]
+	return [{ key, label: capability.label, icon: iconMap[key], primary: key === priority.find((candidate) => workspace.value.capabilities?.[candidate]?.allowed), menuOnly: ["cancel", "delete", "amend", "reopen", "create_lot", "link_lot"].includes(key), shortcut: key === "cancel" ? "cancel" : undefined, command: () => beginAction(key) }]
 }), ...(duplicateAction.value ? [duplicateAction.value] : [])])
 const dateActivity = computed(() => (workspace.value.histories?.dates || []).map((row, index) => ({
 	key: `date-${index}`,
@@ -170,7 +171,6 @@ async function runCommand(command, payload = {}) {
 	finally { acting.value = "" }
 }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
 watch(() => route.params.productionOrderId, () => { priceVisible.value = false; lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
 </script>
 

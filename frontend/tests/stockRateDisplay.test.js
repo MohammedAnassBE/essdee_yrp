@@ -6,6 +6,7 @@ import { Vue, findNodes, loadComponent, mountComponent, typeInto } from "../../s
 import * as stockItemComposer from "../src/utils/stockItemComposer.js"
 import * as stockItemTotals from "../src/engine/stock/stockItemTotals.js"
 import * as stockHeaderFields from "../src/departments/fabric-store/stockHeaderFields.js"
+import * as stockEntryAutofill from "../src/departments/fabric-store/stockEntryAutofill.js"
 import * as fieldErrors from "../src/utils/fieldErrors.js"
 import * as linkTarget from "../src/utils/linkTarget.js"
 import * as displayGroups from "../src/engine/stock/groupItemsForDisplay.js"
@@ -226,6 +227,7 @@ test("case 13: fabric dialog prepares rates only for Stock Update with warehouse
 		"../../utils/fieldErrors.js": fieldErrors,
 		"../../utils/useActionConfirmation.js": { useActionConfirmation: () => () => {} },
 		"./stockHeaderFields.js": stockHeaderFields,
+		"./stockEntryAutofill.js": stockEntryAutofill,
 	})
 	for (const [operation, warehouse] of [["stock_update", "Stores"], ["stock_entry", "Stores"], ["stock_entry", ""]]) {
 		const root = mountComponent(component, { visible: true, operation, initialEditor: { defaults: { warehouse }, dimensions: [] } })
@@ -256,6 +258,7 @@ test("Stock Update staged Valuation Rates refresh when the Warehouse changes", a
 		"../../utils/fieldErrors.js": fieldErrors,
 		"../../utils/useActionConfirmation.js": { useActionConfirmation: () => () => {} },
 		"./stockHeaderFields.js": stockHeaderFields,
+		"./stockEntryAutofill.js": stockEntryAutofill,
 	})
 	const root = mountComponent(component, { visible: true, operation: "stock_update", initialEditor: { defaults: { warehouse: "Stores", update_type: "Add" }, update_type_options: ["Add", "Reduce"], dimensions: [], item_groups: [groupFor("single")] } })
 	await tick()

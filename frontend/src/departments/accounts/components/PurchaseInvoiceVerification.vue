@@ -117,7 +117,7 @@
 					<tbody>
 						<tr v-for="(approval, index) in approvals" :key="`${approval.user}-${approval.approved_time}-${index}`">
 							<td><DocumentLink doctype="User" :name="approval.user" :label="value(approval.user)" /></td>
-							<td>{{ dateTime(approval.approved_time) }}</td>
+							<td>{{ formatDisplayDatetime(approval.approved_time) }}</td>
 							<td>{{ value(approval.comments) }}</td>
 						</tr>
 					</tbody>
@@ -140,6 +140,7 @@ import Button from "primevue/button"
 import { computed, ref } from "vue"
 
 import { webDocumentPath } from "../../../router/webDocumentRoutes.js"
+import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 import WorkOrderActionPanel from "../../fabric-store/WorkOrderActionPanel.vue"
 
 const props = defineProps({
@@ -229,12 +230,6 @@ function money(input) {
 	return Number.isFinite(numericValue)
 		? numericValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 		: "—"
-}
-
-function dateTime(input) {
-	if (!input) return "—"
-	const match = String(input).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}${match[4] ? ` · ${match[4]}:${match[5]}` : ""}` : String(input)
 }
 </script>
 

@@ -45,7 +45,7 @@
 					<div class="lot-documents-card__meta">
 						<span>
 							<i class="pi pi-calendar" />
-							{{ formatLotDate(row[section.dateField]) }}
+							{{ formatDisplayDate(row[section.dateField]) }}
 						</span>
 						<span>
 							<i class="pi pi-box" />
@@ -87,10 +87,10 @@ import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vu
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import {
 	countLabel,
-	formatLotDate,
 	lotDocumentQuantityLine,
 	lotDocumentSections,
 } from "./lotViews.js"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 
 const props = defineProps({
 	documents: { type: Object, default: () => ({}) },

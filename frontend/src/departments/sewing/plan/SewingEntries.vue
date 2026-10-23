@@ -15,10 +15,10 @@
 			<p v-if="loading && loaded" role="status">Refreshing entries…</p>
 			<Message v-if="state.refreshRequired" severity="warn" :closable="false">Refresh entries before cancelling another entry.</Message>
 			<p v-if="!groups.length" class="erp-empty-state">No entries match these filters.</p>
-			<section v-for="group in groups" :key="group.date" :data-entry-date="group.date" class="sewing-entries__date" :aria-label="`Entries on ${formatDate(group.date)}`">
-				<h3>{{ formatDate(group.date) }}</h3>
+			<section v-for="group in groups" :key="group.date" :data-entry-date="group.date" class="sewing-entries__date" :aria-label="`Entries on ${formatDisplayDate(group.date)}`">
+				<h3>{{ formatDisplayDate(group.date) }}</h3>
 				<article v-for="entry in group.entries" :key="entry.id" :data-entry-id="entry.id" class="sewing-entries__record">
-					<div class="sewing-entries__record-heading"><div class="sewing-entries__context"><span>{{ entry.entry_time }}</span><span>{{ entry.lot }}</span><span>{{ entry.item_name }}</span><span class="sewing-entries__meta--strong">{{ entry.work_station }}</span><span class="sewing-entries__meta--strong">{{ entry.input_type }}</span><span class="sewing-entries__meta--strong">{{ entry.received_type }}</span></div><Button v-if="entry.is_cancellable" label="Cancel entry" :aria-label="`Cancel entry from ${formatDate(group.date)} ${entry.entry_time} for ${entry.lot} at ${entry.work_station}`" severity="danger" outlined :disabled="loading || state.busy || state.refreshRequired" @click="selected = entry.id" /></div>
+					<div class="sewing-entries__record-heading"><div class="sewing-entries__context"><span>{{ entry.entry_time }}</span><span>{{ entry.lot }}</span><span>{{ entry.item_name }}</span><span class="sewing-entries__meta--strong">{{ entry.work_station }}</span><span class="sewing-entries__meta--strong">{{ entry.input_type }}</span><span class="sewing-entries__meta--strong">{{ entry.received_type }}</span></div><Button v-if="entry.is_cancellable" label="Cancel entry" :aria-label="`Cancel entry from ${formatDisplayDate(group.date)} ${entry.entry_time} for ${entry.lot} at ${entry.work_station}`" severity="danger" outlined :disabled="loading || state.busy || state.refreshRequired" @click="selected = entry.id" /></div>
 					<SewingQuantityMatrix :colours="matrix(entry).colours" :model-value="matrix(entry).quantities" :primary-values="entry.primary_values" label="Saved Sewing entry" :show-caption="false" quantity-label="Quantity" :editable="false" />
 				</article>
 			</section>
@@ -43,6 +43,7 @@ import DocumentConfirmationDialog from "../../../components/documents/DocumentCo
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 
 const props = defineProps({ state: { type: Object, required: true }, mutate: { type: Function, required: true } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
@@ -68,10 +69,6 @@ function matrix(entry) {
 		return [size, { order_detail: identity }]
 	})) }]))
 	return { colours, quantities }
-}
-function formatDate(value) {
-	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}` : value
 }
 async function search(doctype, text) {
 	if (!mounted || loading.value || props.state.busy || !supplier.value) return []

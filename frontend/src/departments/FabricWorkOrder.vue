@@ -85,6 +85,7 @@ import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
+import { formatDisplayDate } from "../utils/dateFormat.js"
 import { hasDocumentDisplayValue } from "../utils/documentValues.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import FabricStockOperationDialog from "./fabric-store/FabricStockOperationDialog.vue"
@@ -155,7 +156,7 @@ const fieldValues = computed(() => new Map(
 		.map((field) => [field.fieldname, field.value]),
 ))
 const railTotals = computed(() => workspace.value.totals || [])
-const woDate = computed(() => formatDate(fieldValues.value.get("wo_date")))
+const woDate = computed(() => formatDisplayDate(fieldValues.value.get("wo_date")))
 const deliverables = computed(() => workspace.value.matrices?.deliverables || workspace.value.deliverables || [])
 const receivables = computed(() => workspace.value.matrices?.receivables || workspace.value.receivables || [])
 const deliverableCount = computed(() => itemCount(deliverables.value))
@@ -194,6 +195,7 @@ const workOrderActions = computed(() => {
 			disabledReason: options.disabledReason || "",
 			loading: acting.value === key,
 			menuOnly: Boolean(options.menuOnly),
+			shortcut: options.shortcut,
 		})
 	}
 	add("create_delivery_challan", "Make DC", "pi pi-truck", () => openRelated("YRP Delivery Challan", "", capabilities.value.create_delivery_challan.source_context))
@@ -202,8 +204,8 @@ const workOrderActions = computed(() => {
 	add("calculate_fabric", "Calculate Fabric Deliverables", "pi pi-calculator", () => openAction("calculate_fabric"))
 	add("create_cutting_plan", "Make Cutting Plan", "pi pi-scissors", openCuttingPlan)
 	add("save", "Edit", "pi pi-pencil", editWorkOrder)
-	add("submit", "Submit", "pi pi-check", () => requestLifecycleAction("submit"))
-	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true })
+	add("submit", "Submit", "pi pi-check", () => requestLifecycleAction("submit"), { shortcut: "submit" })
+	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true, shortcut: "cancel" })
 	add("amend", "Amend", "pi pi-copy", () => requestLifecycleAction("amend"), { menuOnly: true })
 	if (props.showEditorActions && workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateWorkOrder, disabled: busy, loading: false, menuOnly: true })
 	add("create_debit", "Create Debit", "pi pi-wallet", () => openAction("create_debit"), { menuOnly: true })
@@ -274,7 +276,6 @@ async function loadWorkspace(refresh = false) {
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
 function itemCount(groups) { return groups.reduce((count, group) => count + (group.items?.length || 0), 0) }
 function editWorkOrder() { router.push({ name: props.editRouteName, params: { workOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) }) }
 function duplicateWorkOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }

@@ -11,11 +11,12 @@
 		data-domain-root="goods-received-note-workspace"
 	>
 		<section class="fabric-goods-received-note-frame">
-			<GoodsReceivedNoteSourcePicker v-if="needsSource" @select="chooseSource" />
+			<GoodsReceivedNoteSourcePicker v-if="needsSource" :initial-source="filterSource" @select="chooseSource" />
 			<GoodsReceivedNoteWorkspace
 				v-else
 				:name="documentName"
 				:source-context="resolvedSourceContext"
+				:new-defaults="newDefaults"
 				:duplicate-route-name="duplicateRouteName"
 				@changed="workspaceChanged"
 				@closed="emit('closed')"
@@ -27,6 +28,7 @@
 		presentation="embedded"
 		:name="documentName"
 		:source-context="resolvedSourceContext"
+		:new-defaults="newDefaults"
 		:duplicate-route-name="duplicateRouteName"
 		@changed="workspaceChanged"
 		@closed="emit('closed')"
@@ -42,6 +44,7 @@ import { preserveListNavigationState } from "../router/listDocumentNavigation.js
 import GoodsReceivedNoteSourcePicker from "./fabric-store/GoodsReceivedNoteSourcePicker.vue"
 import GoodsReceivedNoteWorkspace from "./fabric-store/GoodsReceivedNoteWorkspace.vue"
 import { hasGoodsReceivedNoteSource } from "./fabric-store/grnSource.js"
+import { takeNewDocumentDefaults } from "../utils/newDocumentDefaults.js"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },
@@ -60,6 +63,11 @@ const documentName = computed(() => props.name || String(route.params.goodsRecei
 const resolvedSourceContext = computed(() => Object.keys(props.sourceContext || {}).length
 	? props.sourceContext
 	: compactSource(route.query))
+const filterDefaults = takeNewDocumentDefaults("YRP Goods Received Note")
+const isPlainNew = !documentName.value && !hasGoodsReceivedNoteSource(resolvedSourceContext.value)
+// Source filters preselect the source picker; the rest prefill the draft once a source is chosen.
+const { against = "", against_id = "", delivery_challan = "", ...newDefaults } = isPlainNew ? filterDefaults : {}
+const filterSource = { against, against_id, delivery_challan }
 const needsSource = computed(() => !documentName.value && !hasGoodsReceivedNoteSource(resolvedSourceContext.value))
 
 function chooseSource(source) {

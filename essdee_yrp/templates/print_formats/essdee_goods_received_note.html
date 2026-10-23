@@ -193,7 +193,7 @@
                 {{doc.delivery_address_display}}
             </div>
             <div class="border-style" style="width:33%;">
-                <div class="border-group" style="height:15px;">Date : {{doc.posting_date}}</div>
+                <div class="border-group" style="height:15px;">Date : {{get_created_date(doc.posting_date)}}</div>
                 <div class="border-group" style="height:15px;">
                     Vehicle No: 
                     {% if doc.vehicle_no %}

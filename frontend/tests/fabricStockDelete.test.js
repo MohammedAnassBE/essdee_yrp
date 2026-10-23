@@ -24,7 +24,8 @@ function setup(operation, editor, name = "STOCK-1") {
 		"../../components/stock/StockItemComposer.vue": () => null,
 		"../../utils/fieldErrors.js": {}, "../../utils/stockItemComposer.js": {},
 		"../../utils/useActionConfirmation.js": { useActionConfirmation: () => options => confirmations.push(options) },
-		"./stockHeaderFields.js": { buildStockHeaderFields: () => [], createWarehouseCheck: () => ({}) },
+		"./stockHeaderFields.js": { buildStockHeaderFields: () => [], createWarehouseCheck: () => ({}), createSupplierAutofill: () => ({ forget() {} }) },
+		"./stockEntryAutofill.js": { createStockEntryAutofill: () => ({ forget() {} }) },
 	}), { visible: true, operation, name, initialEditor: editor, onChanged: value => events.push(["changed", value]), "onUpdate:visible": value => events.push(["visible", value]) })
 	return { root, confirmations, discarded, events }
 }

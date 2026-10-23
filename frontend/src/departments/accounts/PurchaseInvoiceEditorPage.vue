@@ -113,6 +113,7 @@ import {
 } from "./accountsViews.js"
 import PurchaseInvoiceEditorBody from "./components/PurchaseInvoiceEditorBody.vue"
 import PurchaseInvoiceEditorHeader from "./components/PurchaseInvoiceEditorHeader.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const FORM_FIELDS = PURCHASE_INVOICE_EDITOR_GROUPS.flatMap((group) => group.fields)
 
@@ -145,6 +146,7 @@ let allowNavigation = false
 let pendingNavigation = null
 let requestSequence = 0
 let isAlive = true
+let filterDefaults = takeNewDocumentDefaults("YRP Purchase Invoice")
 
 const currentName = computed(() => String(props.purchaseInvoiceId || route.params.purchaseInvoiceId || ""))
 const backTo = computed(() => currentName.value
@@ -185,6 +187,7 @@ async function load() {
 		const payload = await getPurchaseInvoiceEditor(request.name || null, billTracking.value || null, request.name ? null : duplicateFrom.value || null) || {}
 		if (!isCurrentRequest(request)) return
 		applyEditor(payload)
+		applyFilterDefaults(request)
 		cleanSignature.value = signature.value
 		if (shouldFetchExpenseHeads.value && items.value.length) await loadExpenseHeads(request)
 	} catch (reason) {
@@ -194,6 +197,14 @@ async function load() {
 	} finally {
 		if (isCurrentRequest(request)) loading.value = false
 	}
+}
+
+/** Fills the list's filter values into a blank new invoice once; Bill Tracking and duplicate sources skip them. */
+function applyFilterDefaults(request) {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => FORM_FIELDS.includes(fieldname)))
+	filterDefaults = {}
+	if (request.name || billTracking.value || duplicateFrom.value) return
+	Object.assign(form, withNewDocumentDefaults({ ...form }, defaults))
 }
 
 function startLoad() {

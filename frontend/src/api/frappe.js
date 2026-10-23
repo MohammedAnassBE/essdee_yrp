@@ -249,6 +249,13 @@ export function getRawPrintCommands(doctype, name, format) {
 	return callMethod("frappe.www.printview.get_rendered_raw_commands", { doc: doctype, name, print_format: format })
 }
 
+/** Created/modified stamps plus one page of parsed Version history, newest first. */
+export async function getDocumentActivity(doctype, name, { start = 0, pageLength = 10 } = {}) {
+	const args = { doctype, name, start, page_length: pageLength }
+	const payload = await request(`/api/method/essdee_yrp.api.document_activity.get_document_activity${queryString(args)}`, { method: "GET" })
+	return payload.message
+}
+
 export async function getDocPermissions(doctype, name) {
 	const payload = await request(`/api/method/frappe.client.get_doc_permissions${queryString({ doctype, docname: name })}`, { method: "GET" })
 	return payload.message.permissions

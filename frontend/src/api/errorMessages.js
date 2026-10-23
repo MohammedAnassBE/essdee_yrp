@@ -1,3 +1,4 @@
+import { formatDatesInText } from "../utils/dateFormat.js"
 import { plainTextFromHtml } from "../utils/documentValues.js"
 
 function parseJson(value) {
@@ -66,8 +67,8 @@ export function extractServerMessage(payload, fallback = "Something went wrong."
 	]
 	for (const source of sources) {
 		const messages = uniqueMessages(source)
-		if (messages.length) return messages.join("\n")
+		if (messages.length) return formatDatesInText(messages.join("\n"))
 	}
 	const traceback = uniqueMessages([payload?.exc], { traceback: true })
-	return traceback.length ? traceback.join("\n") : fallback
+	return traceback.length ? formatDatesInText(traceback.join("\n")) : fallback
 }

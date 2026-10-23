@@ -11,7 +11,7 @@ from frappe.model.workflow import (
 	has_approval_access,
 	is_transition_condition_satisfied,
 )
-from frappe.utils import add_days, cint, flt, format_date, nowdate
+from frappe.utils import add_days, cint, flt, formatdate, nowdate
 from yrp.attribute_links import value as actual_attribute_value
 from yrp.attribute_value_identity import attribute_value_name
 from yrp.attribute_values import MASTER, get_mapping_values
@@ -300,7 +300,7 @@ def _action_preview(doc, action: str) -> str:
 		return ""
 	return _("Approving will end {0} on {1}.").format(
 		predecessor.name,
-		format_date(add_days(doc.from_date, -1)),
+		formatdate(add_days(doc.from_date, -1), "dd-mm-yyyy"),
 	)
 
 

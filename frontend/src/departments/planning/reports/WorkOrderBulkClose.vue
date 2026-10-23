@@ -22,7 +22,7 @@
 					<tbody><tr v-for="row in visibleRows" :key="row.name">
 						<td><input v-model="selection" type="checkbox" :value="row.name" :aria-label="`Select Work Order ${row.name}`" :disabled="busy" /></td>
 						<td><RouterLink :to="'/planning/work-orders/' + encodeURIComponent(row.name)">{{ row.name }}</RouterLink></td>
-						<td>{{ row.wo_date }}</td><td>{{ row.item }}</td><td>{{ row.lot }}</td><td>{{ row.process_name }}</td>
+						<td>{{ formatDisplayDate(row.wo_date, "") }}</td><td>{{ row.item }}</td><td>{{ row.lot }}</td><td>{{ row.process_name }}</td>
 						<td>{{ quantity(row.total_delivered) }}</td><td>{{ quantity(row.total_received) }}</td><td>{{ quantity(row.difference) }}</td>
 						<td><Button label="View" text @click="viewDetails(row.name)" /></td>
 					</tr></tbody>
@@ -83,6 +83,7 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 import AsyncLinkMultiSelect from "../../cutting/reports/AsyncLinkMultiSelect.vue"
 import WorkOrderItemMatrix from "../../fabric-store/WorkOrderItemMatrix.vue"
 import { CLOSE_REASONS, bulkCloseFilterHint, closeReasonHint, pendingSummary, sortedWorkOrders } from "./workOrderBulkClose.js"
@@ -104,7 +105,7 @@ const filterColumns = [
 ]
 const inlineFilter = useInlineFilters(listedRows, filterColumns, {
 	cellValue: (row, column) => row[column.fieldname],
-	cellText: (row, column) => column.fieldtype === "Float" ? quantity(row[column.fieldname]) : row[column.fieldname],
+	cellText: (row, column) => cellText(row, column),
 })
 const visibleRows = inlineFilter.filteredRows
 // Selection acts on the shown rows only, so a column filter never closes a hidden Work Order.
@@ -135,6 +136,10 @@ watch(filters, () => {
 }, { deep: true, flush: "sync" })
 
 function selectAll(checked) { selection.value = checked ? visibleRows.value.map((row) => row.name) : [] }
+function cellText(row, column) {
+	if (column.fieldtype === "Float") return quantity(row[column.fieldname])
+	return column.fieldtype === "Date" ? formatDisplayDate(row[column.fieldname], "") : row[column.fieldname]
+}
 function quantity(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
 
 async function loadWorkOrders() {

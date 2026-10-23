@@ -1,3 +1,5 @@
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
+
 export const EXPORT_FORMATS = ["Excel", "CSV"]
 export const CSV_QUOTING_OPTIONS = [
 	{ value: 0, label: "Minimal" },
@@ -19,7 +21,8 @@ export function appliedFilterLabels(fields, filters = {}) {
 		if (field.depends_on && !filters?.[field.depends_on]) continue
 		const value = filters?.[field.fieldname]
 		if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) continue
-		applied[field.label] = field.fieldtype === "Check" ? (Number(value) ? "Yes" : "No") : value
+		if (field.fieldtype === "Check") applied[field.label] = Number(value) ? "Yes" : "No"
+		else applied[field.label] = Array.isArray(value) ? value.map(entry => formatDisplayByFieldtype(entry, field.fieldtype)) : formatDisplayByFieldtype(value, field.fieldtype)
 	}
 	return applied
 }

@@ -1,3 +1,4 @@
+import { formatDatesInText } from "../utils/dateFormat.js"
 import { plainTextFromHtml } from "../utils/documentValues.js"
 
 let handler = null
@@ -17,7 +18,7 @@ function parseJson(value) {
 
 function messageText(value) {
 	if (Array.isArray(value)) return value.map((row) => (Array.isArray(row) ? row.map(messageText).join(" | ") : messageText(row))).join("\n")
-	return plainTextFromHtml(value).replace(/<[^>]*>/g, "").trim()
+	return formatDatesInText(plainTextFromHtml(value).replace(/<[^>]*>/g, "").trim())
 }
 
 /** Normalise the non-error Frappe `_server_messages` into {title, message, indicator, alert} entries. */

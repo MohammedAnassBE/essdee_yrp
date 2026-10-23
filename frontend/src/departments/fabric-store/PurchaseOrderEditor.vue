@@ -137,9 +137,10 @@ import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
+import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { applyPurchaseOrderPricePreview, applyPurchaseOrderPriceSchedule, createPurchaseOrderDraftRevision, createPurchaseOrderPreviewController, currentPurchaseOrderPreview, loadPurchaseOrderGroups, validatePurchaseOrderItems } from "../../utils/purchaseOrder.js"
 
-const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) } })
+const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) }, newDefaults: { type: Object, default: () => ({}) } })
 const emit = defineEmits(["saved", "cancel"])
 const toast = useToast()
 const loading = ref(true)
@@ -223,6 +224,9 @@ async function load() {
 		if (!draftRevision.isCurrent(loadRevision)) return
 		editor.value = loadedEditor
 		Object.assign(form, editor.value.values || {})
+		if (!props.name && !props.source?.duplicate_from) {
+			Object.assign(form, withNewDocumentDefaults(form, Object.fromEntries(Object.entries(props.newDefaults || {}).filter(([fieldname]) => fieldname in form))))
+		}
 		itemGroups.value = loadPurchaseOrderGroups(editor.value.item_groups)
 		dirty.value = false
 	} catch (reason) {

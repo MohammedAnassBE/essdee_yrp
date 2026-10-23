@@ -126,8 +126,8 @@
 						</div>
 					</div>
 					<div class="lay-meta">
-						<span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDate(sheet.bundle_generated_date, false, "Not generated") }}</b></span></span>
-						<span v-if="sheet.printed_time" class="print-state"><i class="pi pi-print"></i><span><small>Printed on</small><b>{{ formatDate(sheet.printed_time, true) }}</b></span></span>
+						<span><i class="pi pi-box"></i><span><small>Bundle date</small><b>{{ formatDisplayDate(sheet.bundle_generated_date, "Not generated") }}</b></span></span>
+						<span v-if="sheet.printed_time" class="print-state"><i class="pi pi-print"></i><span><small>Printed on</small><b>{{ formatDisplayDatetime(sheet.printed_time) }}</b></span></span>
 					</div>
 				</button>
 			</div>
@@ -190,6 +190,7 @@ import RelatedRecordsDialog from "../../components/documents/RelatedRecordsDialo
 import CuttingLaySheetDialog from "./CuttingLaySheetDialog.vue"
 import CuttingMarkerDialog from "./CuttingMarkerDialog.vue"
 import { adjacentRecordNames, listSnapshotNames } from "./recordSequence.js"
+import { formatDisplayDate, formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	cuttingPlan: { type: String, default: "" },
@@ -507,14 +508,6 @@ function filteredCount(total, shown, activeFilters) {
 
 function decimal(value, precision) {
 	return Number(value || 0).toFixed(precision)
-}
-
-function formatDate(value, includeTime = false, fallback = "—") {
-	if (!value) return fallback
-	const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/)
-	if (!match) return String(value)
-	const date = `${match[3]}-${match[2]}-${match[1]}`
-	return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date
 }
 
 function statusClass(status) {

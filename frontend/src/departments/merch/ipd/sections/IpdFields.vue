@@ -28,6 +28,7 @@ import { computed, inject, onBeforeUnmount, onMounted } from "vue"
 
 import DocumentLink from "../../../../components/common/DocumentLink.vue"
 import { linkFieldTarget } from "../../../../utils/linkTarget.js"
+import { formatDisplayByFieldtype } from "../../../../utils/dateFormat.js"
 
 import FormField from "../../../../components/common/FormField.vue"
 import { ipdAttributeLinkName } from "../ipdLinks.js"
@@ -61,7 +62,7 @@ function target(field) {
 function display(field) {
 	const current = value(field)
 	if (field.fieldtype === "Check") return Number(current) ? "Yes" : "No"
-	return current === null || current === undefined || current === "" ? "—" : String(current)
+	return current === null || current === undefined || current === "" ? "—" : String(formatDisplayByFieldtype(current, field.fieldtype))
 }
 function problem(fieldname) {
 	return (editor.checks?.problems || []).find((entry) => entry.field === fieldname && !entry.row_key)?.message || ""

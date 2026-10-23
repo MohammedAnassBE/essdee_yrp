@@ -30,7 +30,7 @@ const { supplier, beginRequest, isCurrent } = useSewingContext()
 const data = ref({}), loading = ref(false), generated = ref(false), error = ref("")
 let mounted = true
 const columns = computed(() => [
-	{ key: "date", label: "Date" }, ...(data.value.styles || []).map(style => ({ key: style, label: style, numeric: true })), { key: "total", label: "Total", numeric: true },
+	{ key: "date", label: "Date", fieldtype: "Date" }, ...(data.value.styles || []).map(style => ({ key: style, label: style, numeric: true })), { key: "total", label: "Total", numeric: true },
 ])
 async function load() {
 	if (loading.value || !supplier.value) return

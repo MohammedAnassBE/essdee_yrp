@@ -83,6 +83,7 @@
 			</Tabs>
 		</div>
 
+		<DocumentActivity :doctype="'SD YRP Cutting LaySheet'" :name="sheet?.name || ''" :record="sheet" />
 		<template #footer>
 			<div class="laysheet-footer">
 				<div class="laysheet-footer__secondary">
@@ -97,11 +98,12 @@
 					/>
 				</div>
 				<div class="laysheet-footer__primary">
+					<DocumentShortcuts :busy="loading || Boolean(busy)" :can-save="!sheet && canCreate" :can-cancel="Boolean(sheet?.permissions?.can_cancel)" cancel-confirms @save="createLaySheet" @cancel="cancelLaySheet" />
 					<Button label="Close" severity="secondary" text :disabled="Boolean(busy)" @click="emit('update:visible', false)" />
-					<Button v-if="!sheet && canCreate" label="Create Lay Sheet" icon="pi pi-plus" :loading="busy === 'create'" @click="createLaySheet" />
+					<Button v-if="!sheet && canCreate" label="Create Lay Sheet" :title="withShortcutHint('Create Lay Sheet', 'save')" icon="pi pi-plus" :loading="busy === 'create'" @click="createLaySheet" />
 					<Button v-if="sheet?.permissions?.can_revert_labels" label="Revert Labels" severity="warn" outlined :loading="busy === 'revert'" @click="revertLabels" />
 					<Button v-if="sheet?.permissions?.can_restore_labels" label="Update Status" severity="secondary" outlined :loading="busy === 'restore'" @click="runStatusAction('update_label_print_status', 'restore')" />
-					<Button v-if="sheet?.permissions?.can_cancel" label="Cancel Lay Sheet" icon="pi pi-ban" severity="danger" outlined :loading="busy === 'cancel'" @click="cancelLaySheet" />
+					<Button v-if="sheet?.permissions?.can_cancel" label="Cancel Lay Sheet" :title="withShortcutHint('Cancel Lay Sheet', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="busy === 'cancel'" @click="cancelLaySheet" />
 					<Button v-if="sheet?.permissions?.can_approve" label="Approve Grammage" icon="pi pi-check" :loading="busy === 'approve'" @click="runStatusAction('approve_grammage', 'approve')" />
 					<Button v-if="sheet?.permissions?.can_generate" label="Generate Bundles" icon="pi pi-box" outlined @click="openGenerate" />
 					<Button v-if="sheet?.permissions?.can_print_labels" label="Print Labels" icon="pi pi-print" @click="openPrinter" />
@@ -177,6 +179,7 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
@@ -202,6 +205,8 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
 import RecordDialogHeader from "./RecordDialogHeader.vue"
@@ -603,7 +608,7 @@ async function generateBundles() {
 			items: generationParts.value,
 			max_plys: Number(maximumPlys.value || 0),
 			maximum_allow: Number(maximumAllow.value || 0),
-			bundle_generated_date: formatDate(bundleDate.value),
+			bundle_generated_date: toIsoDate(bundleDate.value),
 		})
 		generateOpen.value = false
 		success.value = "Bundles generated."
@@ -715,7 +720,7 @@ function bitsDisplay(value, row) { return row?.effective_bits && row.effective_b
 function number(value, precision) { return value === null || value === undefined || value === "" ? "—" : Number(value).toFixed(precision) }
 function column(field, label, format = display, numeric = false) { return { field, label, format, numeric } }
 function parseDate(value) { if (!value) return null; const [year, month, day] = String(value).split("-").map(Number); return new Date(year, month - 1, day) }
-function formatDate(value) { const pad = (part) => String(part).padStart(2, "0"); return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` }
+function toIsoDate(value) { const pad = (part) => String(part).padStart(2, "0"); return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` }
 function fieldOptions(field) {
 	if (Array.isArray(field?.options)) return field.options.filter((value) => value !== "")
 	return String(field?.options || "").split("\n").filter(Boolean)

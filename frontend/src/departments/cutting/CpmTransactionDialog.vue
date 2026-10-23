@@ -2,24 +2,27 @@
 	<Dialog :visible="visible" modal dismissable-mask maximizable :header="record ? `${record.doctype} · ${record.name}` : 'Transaction'" class="erp-transaction-dialog erp-entity-dialog erp-dialog--lg" @update:visible="emit('update:visible', $event)">
 		<div v-if="loading" class="erp-transaction-loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 		<div v-else class="erp-transaction-detail">
-			<div v-if="record" class="erp-transaction-status"><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><small>Updated {{ formatDate(record.modified, true) }}</small></div>
+			<div v-if="record" class="erp-transaction-status"><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><small>Updated {{ formatDisplayDatetime(record.modified) }}</small></div>
 			<section v-if="record?.details?.length" class="erp-detail-grid"><div v-for="row in record.details" :key="row.fieldname"><span>{{ row.label }}</span><strong>{{ display(row.value) }}</strong></div></section>
 			<LotTransferQuantityEditor v-if="record?.quantity_rows?.length" :cutting-plan="cuttingPlan" :record="record" @dirty="quantityDirty = $event" @saved="quantitiesSaved" />
 			<StockItemMatrix :dimensions="record.dimensions || []" v-if="record?.item_groups?.length" :groups="record.item_groups" :doctype="record.doctype" :physical-row-count="record.item_row_count || 0" />
 			<section v-else-if="record?.item_row_count" class="erp-items-empty"><i class="pi pi-exclamation-circle"></i><div><strong>Item matrix unavailable</strong><span>The transaction has item rows, but their parent-item attributes could not be resolved.</span></div></section>
 		</div>
+		<DocumentActivity :doctype="record?.doctype || ''" :name="record?.name || ''" :record="record" />
 		<template #footer>
+			<DocumentShortcuts :busy="loading || saving" :can-submit="Boolean(record?.permissions?.can_submit && !quantityDirty)" submit-confirms :can-cancel="Boolean(record?.permissions?.can_cancel)" cancel-confirms @submit="changeStatus('submit')" @cancel="changeStatus('cancel')" />
 			<Button label="Close" severity="secondary" text :disabled="saving" @click="emit('update:visible', false)" />
 			<DocumentDeleteButton v-if="record?.name" :doctype="record.doctype" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" :doctype="record.doctype" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
-			<Button v-if="record?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="changeStatus('cancel')" />
-			<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" :disabled="quantityDirty" :title="quantityDirty ? 'Save or reset the quantity before submitting.' : undefined" :loading="saving" @click="changeStatus('submit')" />
+			<Button v-if="record?.permissions?.can_cancel" label="Cancel" :title="withShortcutHint('Cancel', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="changeStatus('cancel')" />
+			<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" :disabled="quantityDirty" :title="quantityDirty ? 'Save or reset the quantity before submitting.' : withShortcutHint('Submit', 'submit')" :loading="saving" @click="changeStatus('submit')" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" title="Transaction could not be updated" />
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
@@ -27,7 +30,10 @@ import Skeleton from "primevue/skeleton"
 import { ref, watch } from "vue"
 
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
+import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { changeLinkedTransactionStatus, getLinkedTransaction } from "./cpmApi.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
@@ -96,7 +102,6 @@ function quantitiesSaved(value) {
 	emit("changed", value)
 }
 function display(value) { return value === null || value === undefined || value === "" ? "—" : String(value) }
-function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date }
 function documentDeleted() {
 	emit("update:visible", false)
 	emit("changed")

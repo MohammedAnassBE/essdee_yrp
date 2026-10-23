@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Cutting Order" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width :inline-navigation="!checking && !showDraftEditor">
+	<DepartmentPage title="Cutting Order" back-to="/cutting/orders" back-label="Cutting Orders" :show-title="false" flat full-width :inline-navigation="!checking && !showDraftEditor" activity-doctype="SD YRP Cutting Order" :activity-name="checking ? '' : record.name || ''" :activity-record="record">
 		<div v-if="checking" class="order-probe erp-workspace" aria-label="Loading Cutting Order"><Skeleton height="76px" /><Skeleton height="420px" /></div>
 		<div v-else-if="showDraftEditor" class="order-editor-route erp-workspace">
 			<CuttingOrderEditor :name="cuttingOrderId" :initial-payload="editorProbe" @saved="editorSaved" @cancel="router.push('/cutting/orders')">
@@ -36,10 +36,11 @@
 						</div>
 					</div>
 					<div class="order-record-actions">
+						<DocumentShortcuts :busy="workspaceLoading || Boolean(lifecycleBusy)" :can-cancel="Boolean(workspace.permissions?.can_cancel)" cancel-confirms @cancel="changeStatus('cancel')" />
 						<DocumentPrintButton v-if="workspace.permissions?.can_print" doctype="SD YRP Cutting Order" :name="cuttingOrderId" :formats="workspace.print_formats || []" :disabled="workspaceLoading" />
 						<DocumentDeleteButton doctype="SD YRP Cutting Order" :name="cuttingOrderId" :docstatus="record.docstatus" :disabled="workspaceLoading || Boolean(lifecycleBusy)" redirect-to="/cutting/orders" />
 						<CuttingOrderActions v-if="record.name" :doc="record" :data="workspace" :extra-actions="duplicateActions" @refresh="loadWorkspace" />
-						<Button v-if="workspace.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="lifecycleBusy === 'cancel'" @click="changeStatus('cancel')" />
+						<Button v-if="workspace.permissions?.can_cancel" label="Cancel" :title="withShortcutHint('Cancel', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="lifecycleBusy === 'cancel'" @click="changeStatus('cancel')" />
 						<Button v-if="workspace.permissions?.can_amend" label="Amend" icon="pi pi-copy" :loading="lifecycleBusy === 'amend'" @click="changeStatus('amend')" />
 					</div>
 				</header>
@@ -80,6 +81,8 @@ import InlinePageNavigation from "../components/navigation/InlinePageNavigation.
 import { useDuplicateAction } from "../composables/useDuplicateAction.js"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
+import DocumentShortcuts from "../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../utils/documentShortcuts.js"
 import CuttingOrderActions from "./cutting/order/CuttingOrderActions.vue"
 import CuttingOrderEditor from "./cutting/order/CuttingOrderEditor.vue"
 import CuttingOrderTabs from "./cutting/order/CuttingOrderTabs.vue"
@@ -158,6 +161,7 @@ async function editorSaved(saved) {
 	editorProbe.value = { ...editorProbe.value, record: { ...(editorProbe.value?.record || {}), ...saved } }
 	if (saved?.docstatus !== 0) await loadWorkspace()
 }
+
 
 async function changeStatus(action) {
 	const requestedId = cuttingOrderId.value

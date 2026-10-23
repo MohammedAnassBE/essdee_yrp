@@ -39,6 +39,7 @@ import { createFocusRegistry } from "./ipdFocus.js"
 import { toggleRememberedRow } from "./sections/garmentGrids.js"
 import { problemTab, tabLabel } from "./ipdTabs.js"
 import { ipdCommandSuccess } from "./ipdCommandSuccess.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 export const IPD_EDITOR_KEY = Symbol("ipd-editor")
 const GRID_DEBOUNCE_MS = 400
@@ -49,6 +50,8 @@ export function useIpdEditor(initialName) {
 	const router = useRouter()
 	const toast = useToast()
 	const duplicateFrom = initialName ? null : route.query.duplicate_from || null
+	const takenDefaults = takeNewDocumentDefaults("YRP Item Production Detail")
+	let filterDefaults = initialName || duplicateFrom ? {} : takenDefaults
 	const payload = shallowRef(null)
 	const draft = reactive({})
 	const cleanValues = shallowRef({})
@@ -134,12 +137,19 @@ export function useIpdEditor(initialName) {
 			if (!isCurrent(sequence, loadSequence)) return
 			if (redirectIfReadOnly(result)) return
 			applyPayload(result)
+			if (isNew.value) applyFilterDefaults()
 			if (!isNew.value) runChecks()
 		} catch (reason) {
 			if (isCurrent(sequence, loadSequence)) loadError.value = reason?.message || "Unable to load this IPD."
 		} finally {
 			if (isCurrent(sequence, loadSequence)) loading.value = false
 		}
+	}
+	function applyFilterDefaults() {
+		const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname in draft))
+		filterDefaults = {}
+		const filled = withNewDocumentDefaults(draft, defaults)
+		for (const fieldname of Object.keys(defaults)) if (filled[fieldname] !== draft[fieldname]) setValue(fieldname, filled[fieldname])
 	}
 	function redirectIfReadOnly(result) {
 		const recordName = result?.record?.name

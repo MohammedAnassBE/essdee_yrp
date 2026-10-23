@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Item" back-to="/purchase/items" back-label="Items" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Item" back-to="/purchase/items" back-label="Items" :show-title="false" flat full-width inline-navigation activity-doctype="Item" :activity-name="workspace.values ? itemId : ''" :activity-record="workspace">
 		<div class="purchase-record-page erp-workspace">
 		<section class="purchase-record erp-card" aria-label="Item page" :aria-busy="loading">
 			<header class="purchase-record__header erp-page-header">
@@ -77,13 +77,14 @@ import { RouterLink, useRouter } from "vue-router"
 import { getItemEditor, getPurchaseCapabilities, setItemDisabled } from "../../api/purchase.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import { useDuplicateAction } from "../../composables/useDuplicateAction.js"
+import { usePageTitle } from "../../composables/usePageTitle.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
-import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+import { formatDisplayDate } from "../../utils/dateFormat.js"
 import ItemAttributeValues from "./item/ItemAttributeValues.vue"
 import ItemDependentAttributeTable from "./item/ItemDependentAttributeTable.vue"
 import ItemAdditionalParameters from "./item/ItemAdditionalParameters.vue"
@@ -106,6 +107,7 @@ const pendingToggle = ref(null)
 let loadSequence = 0
 
 const values = computed(() => workspace.value.values || {})
+usePageTitle(() => workspace.value.values && props.itemId, () => values.value.name)
 const hasAttributes = computed(() => Boolean(values.value.attributes?.length))
 const itemPrices = computed(() => workspace.value.item_prices || [])
 const dependentRows = computed(() => dependentDetailRows(itemEditorValues(values.value), values.value.stock_uom, { preserveExisting: true }))
@@ -205,8 +207,7 @@ async function toggleDisabled() {
 }
 
 function dateRange(fromDate, toDate) {
-	const format = (value) => formatDocumentOverviewValue({ fieldtype: "Date", value })
-	return `${fromDate ? format(fromDate) : "—"} → ${toDate ? format(toDate) : "Open"}`
+	return `${formatDisplayDate(fromDate)} → ${formatDisplayDate(toDate, "Open")}`
 }
 
 watch(() => props.itemId, load, { immediate: true })

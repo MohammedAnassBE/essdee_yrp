@@ -1,5 +1,11 @@
+import { autofillSingleOptions, forgetAutofill } from "../../composables/useSingleOptionAutofill.js"
+
 const warehouseBySupplier = { from_supplier: "from_warehouse", to_supplier: "to_warehouse", default_supplier: "default_warehouse", supplier: "warehouse" }
 const supplierByWarehouse = Object.fromEntries(Object.entries(warehouseBySupplier).map(([supplier, warehouse]) => [warehouse, supplier]))
+const autofillTargetsByOperation = {
+	stock_reconciliation: { default_supplier: { warehouse: "default_warehouse" } },
+	stock_update: { supplier: { warehouse: "warehouse" } },
+}
 
 /** Header fields for a Fabric Store stock operation; each Supplier precedes the Warehouse it filters, as in Desk set_query. */
 export function buildStockHeaderFields(operation, form, editor) {
@@ -61,5 +67,22 @@ export function createWarehouseCheck(form, warehouseBelongsTo, onError) {
 				})
 		},
 		settled: () => pending,
+	}
+}
+
+/** Fills the paired Warehouse when the Supplier has exactly one, after the mismatch check has settled. */
+export function createSupplierAutofill(form, warehouseCheck, { fetchOptions, onChange, onError }) {
+	let pending = Promise.resolve()
+	return {
+		supplierChanged(operation, supplierField) {
+			const targets = autofillTargetsByOperation[operation]?.[supplierField]
+			if (!targets) return
+			pending = pending
+				.then(() => warehouseCheck.settled())
+				.then(() => autofillSingleOptions(form, { trigger: supplierField, targets, fetchOptions, onChange }))
+				.catch(onError)
+		},
+		settled: () => pending,
+		forget: () => forgetAutofill(form),
 	}
 }

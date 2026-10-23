@@ -30,6 +30,7 @@ import { computed } from "vue"
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 
 const props = defineProps({ details: { type: Array, default: () => [] } })
@@ -95,10 +96,7 @@ function isWide(field) {
 }
 
 function formatValue(field) {
-	if (["Date", "Datetime"].includes(field.fieldtype) && field.value) {
-		const [year, month, day] = String(field.value).slice(0, 10).split("-")
-		if (day) return `${day}-${month}-${year}${field.fieldtype === "Datetime" ? ` · ${String(field.value).slice(11, 19)}` : ""}`
-	}
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(field.value, field.fieldtype, { seconds: true })
 	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return field.value === null || field.value === undefined || field.value === "" ? "—" : plainTextFromHtml(field.value)

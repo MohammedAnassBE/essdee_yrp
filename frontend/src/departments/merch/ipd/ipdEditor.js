@@ -386,7 +386,7 @@ function approveAction(capabilities, { dirty, problemCount, busy, acting }) {
 export function editorActions({ isNew, capabilities = {}, dirty = false, acting = "", problemCount = 0, hasItem = false, copiedFrom = "" }) {
 	const busy = Boolean(acting)
 	const actions = [action("save", isNew ? "Create IPD" : "Save", "pi pi-save", {
-		primary: true, loading: acting === "save", disabled: busy || (isNew ? !hasItem : !dirty),
+		primary: true, shortcut: "save", loading: acting === "save", disabled: busy || (isNew ? !hasItem : !dirty),
 	})]
 	if (!isNew && capabilities.run_checks?.allowed) actions.push(action("run_checks", "Run checks", "pi pi-check-circle", { disabled: busy, loading: acting === "checks" }))
 	if (!isNew && capabilities.approve?.allowed) actions.push(approveAction(capabilities, { dirty, problemCount, busy, acting }))

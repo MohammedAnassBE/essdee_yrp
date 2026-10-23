@@ -18,7 +18,7 @@
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="purchaseOrderStatusLabel(record)" :tone="purchaseOrderStatusTone(purchaseOrderStatusLabel(record))" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
 							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier" :label="record.supplier_name || record.supplier || '—'" /></strong></div>
-							<div><span>Order date</span><strong>{{ formatDate(record.transaction_date) }}</strong></div>
+							<div><span>Order date</span><strong>{{ formatDisplayDate(record.transaction_date) }}</strong></div>
 							<div><span>Grand total</span><strong>{{ formatAmount(record.grand_total, record.currency) }}</strong></div>
 						</div>
 					</div>
@@ -115,6 +115,7 @@ import { useRoute, useRouter } from "vue-router"
 
 import { changeFabricStoreDocumentStatus, executePurchaseOrderCommand, getPurchaseOrderWorkspace } from "../api/fabricStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { usePageTitle } from "../composables/usePageTitle.js"
 import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../components/documents/DocumentConfirmationDialog.vue"
@@ -122,6 +123,7 @@ import DocumentOverview from "../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../components/stock/StockItemMatrix.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
+import { formatDisplayDate } from "../utils/dateFormat.js"
 import { purchaseOrderStatusLabel, purchaseOrderStatusTone } from "../utils/purchaseOrderStatus.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
@@ -143,6 +145,7 @@ const acting = ref("")
 const error = ref("")
 const actionError = ref("")
 const workspace = ref({})
+usePageTitle(() => workspace.value.record?.name, () => workspace.value.record?.supplier_name)
 const relatedVisible = ref(false)
 const relatedDoctype = ref("YRP Goods Received Note")
 const relatedName = ref("")
@@ -193,6 +196,7 @@ const purchaseOrderActions = computed(() => {
 			key, label: capabilityLabel(key, fallback), icon, command,
 			disabled: busy, loading: acting.value === key,
 			menuOnly: Boolean(options.menuOnly),
+			shortcut: options.shortcut, confirms: options.confirms,
 		})
 	}
 	add("create_goods_received_note", "Create GRN", "pi pi-plus", () => openRelated("YRP Goods Received Note", capabilities.value.create_goods_received_note.source_context))
@@ -202,8 +206,8 @@ const purchaseOrderActions = computed(() => {
 	add("reopen", "Reopen", "pi pi-lock-open", () => runDomainCommand("reopen"))
 	add("update_linked_lots", "Manage Linked Lots", "pi pi-link", openLotEditor)
 	add("save", "Edit", "pi pi-pencil", editPurchaseOrder)
-	add("submit", "Submit", "pi pi-check", () => changeStatus("submit"))
-	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true })
+	add("submit", "Submit", "pi pi-check", () => changeStatus("submit"), { shortcut: "submit", confirms: false })
+	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true, shortcut: "cancel" })
 	add("amend", "Amend", "pi pi-copy", () => requestLifecycleAction("amend"), { menuOnly: true })
 	if (workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicatePurchaseOrder, disabled: busy, loading: false, menuOnly: true })
 	add("reject", "Reject PO", "pi pi-times-circle", beginRejection, { menuOnly: true })
@@ -350,7 +354,6 @@ async function submitRejection() {
 	if (succeeded) rejectVisible.value = false
 }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
-function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—" }
 function formatAmount(value, currency = "") { return `${currency ? `${currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
 function formatTotal(total) {
 	if (total.fieldname === "total_qty") return Number(total.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })

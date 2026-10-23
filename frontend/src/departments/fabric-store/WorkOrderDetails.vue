@@ -21,6 +21,7 @@
 <script setup>
 import { computed } from "vue"
 
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
 
@@ -39,10 +40,7 @@ const multilineFieldtypes = new Set(["Small Text", "Text", "Long Text", "Text Ed
 function itemCount(groups) { return (groups || []).reduce((count, group) => count + (group.items?.length || 0), 0) }
 function isWide(field) { return multilineFieldtypes.has(field.fieldtype) && /address|comments?|notes?|remarks?|terms?/i.test(field.fieldname) }
 function formatValue(field) {
-	if (["Date", "Datetime"].includes(field.fieldtype) && field.value) {
-		const [year, month, day] = String(field.value).slice(0, 10).split("-")
-		if (day) return `${day}-${month}-${year}${field.fieldtype === "Datetime" ? ` · ${String(field.value).slice(11, 19)}` : ""}`
-	}
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(field.value, field.fieldtype, { seconds: true })
 	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return field.value === null || field.value === undefined || field.value === "" ? "—" : plainTextFromHtml(field.value)

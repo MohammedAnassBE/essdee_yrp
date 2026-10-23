@@ -45,7 +45,7 @@
 					<div class="lot-documents-card__meta">
 						<span>
 							<i class="pi pi-calendar" />
-							{{ formatLotDate(row[section.dateField]) }}
+							{{ formatDisplayDate(row[section.dateField]) }}
 						</span>
 						<span>
 							<i class="pi pi-box" />
@@ -83,12 +83,12 @@ import Button from "primevue/button"
 import LotDocumentContext from "./LotDocumentContext.vue"
 import Skeleton from "primevue/skeleton"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { formatDisplayDate } from "../../../utils/dateFormat.js"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import {
 	LOT_DOCUMENT_SECTIONS,
 	countLabel,
-	formatLotDate,
 	lotDocumentQuantityLine,
 	lotDocumentSections,
 } from "./lotViews.js"

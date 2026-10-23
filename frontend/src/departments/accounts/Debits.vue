@@ -3,7 +3,7 @@
 		<ListView v-if="isListInLayout" doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" clickable @row-click="openDebit" />
 		<Dialog v-model:visible="visible" modal header="Debit" class="erp-dialog--md">
 			<div v-if="loading">Loading debit…</div>
-			<template v-else-if="record"><DocumentStatusBadge :label="record.status" :docstatus="record.docstatus" /><dl><template v-for="field in fields" :key="field"><dt>{{ field.replaceAll('_', ' ') }}</dt><dd><DocumentLink v-if="fieldTarget(field)" v-bind="fieldTarget(field)" :label="record[field] || '—'" /><template v-else>{{ record[field] || '—' }}</template></dd></template></dl><div class="debit-actions"><Button v-if="record.work_order" label="Open Work Order" severity="secondary" @click="openWorkOrder" /><Button v-if="permissions?.create" label="Duplicate" icon="pi pi-clone" severity="secondary" outlined @click="duplicateDebit" /></div></template>
+			<template v-else-if="record"><DocumentStatusBadge :label="record.status" :docstatus="record.docstatus" /><dl><template v-for="field in fields" :key="field"><dt>{{ field.replaceAll('_', ' ') }}</dt><dd><DocumentLink v-if="fieldTarget(field)" v-bind="fieldTarget(field)" :label="record[field] || '—'" /><template v-else>{{ record[field] || '—' }}</template></dd></template></dl><div class="debit-actions"><Button v-if="record.work_order" label="Open Work Order" severity="secondary" @click="openWorkOrder" /><Button v-if="permissions?.create" label="Duplicate" icon="pi pi-clone" severity="secondary" outlined @click="duplicateDebit" /></div><DocumentActivity doctype="YRP Debit" :name="record.name" :record="record" /></template>
 		</Dialog>
 		<Dialog :visible="Boolean(duplicateFrom)" modal header="New Debit" class="erp-dialog--md" @update:visible="closeDuplicate">
 			<div v-if="!draft">Loading debit…</div>
@@ -27,6 +27,7 @@ import FormView from "../../components/common/FormView.vue"
 import ListView from "../../components/common/ListView.vue"
 import { useDocumentPermissions } from "../../composables/useDocumentPermissions.js"
 import { loadDuplicateValues } from "../../composables/useDuplicateAction.js"
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { getHomePath, isOutsideLayout } from "../../router/departmentLock.js"

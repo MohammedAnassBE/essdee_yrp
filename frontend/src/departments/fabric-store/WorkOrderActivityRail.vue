@@ -47,7 +47,7 @@
 				>
 					<div class="activity-card__top"><strong>{{ row.name }}</strong><DocumentStatusBadge :docstatus="row.docstatus" :label="row.status" /></div>
 					<span v-if="row.item || row.lot" class="activity-card__context">{{ [row.item, row.lot].filter(Boolean).join(" · ") }}</span>
-					<div class="activity-card__meta"><span><i class="pi pi-calendar" /> {{ formatDate(row.posting_date) }}</span><span><i class="pi pi-clock" /> {{ formatTime(row.posting_time) }}</span></div>
+					<div class="activity-card__meta"><span><i class="pi pi-calendar" /> {{ formatDisplayDate(row.posting_date) }}</span><span><i class="pi pi-clock" /> {{ formatTime(row.posting_time) }}</span></div>
 					<i class="pi pi-chevron-right activity-card__chevron" />
 				</button>
 				<div v-if="!filteredRows(section).length" class="activity-empty"><i class="pi pi-inbox" /><span>No records</span></div>
@@ -102,6 +102,7 @@ import Button from "primevue/button"
 import { computed, nextTick, reactive, ref, watch } from "vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import RelatedRecordsDialog from "../../components/documents/RelatedRecordsDialog.vue"
+import { formatDisplayDate } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	deliveryChallans: { type: Array, default: () => [] },
@@ -168,7 +169,6 @@ function filteredRows(section) {
 	if (!query) return section.rows
 	return section.rows.filter((row) => [row.name, row.item, row.lot, row.status].some((value) => String(value || "").toLowerCase().includes(query)))
 }
-function formatDate(value) { if (!value) return "—"; const [year, month, day] = String(value).slice(0, 10).split("-"); return day ? `${day}-${month}-${year}` : value }
 function formatTime(value) { return value ? String(value).slice(0, 5) : "—" }
 
 watch(() => props.workOrder, () => {

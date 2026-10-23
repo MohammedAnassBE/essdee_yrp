@@ -6,6 +6,9 @@
 		:show-title="false"
 		flat
 		full-width
+		activity-doctype="SD YRP Product"
+		:activity-name="isNew ? '' : record.name || ''"
+		:activity-record="workspace"
 	>
 		<ProductWorkspaceContent
 			:workspace="workspace" :record="record" :form="form" :images="images"
@@ -55,6 +58,7 @@ import {
 	saveProduct,
 } from "../../api/pd.js"
 import { getMeta } from "../../api/frappe.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import ProductActionDialogs from "./components/ProductActionDialogs.vue"
 import ProductWorkspaceContent from "./components/ProductWorkspaceContent.vue"
@@ -102,6 +106,8 @@ let sizeRangeSequence = 0
 let isUnmounted = false
 
 const isNew = computed(() => route.name === "pd-product-new")
+const takenDefaults = takeNewDocumentDefaults("SD YRP Product")
+let filterDefaults = isNew.value && !route.query.copy ? takenDefaults : {}
 const record = computed(() => form.value || {})
 const permissions = computed(() => workspace.value.permissions || {})
 const hasWorkspace = computed(() => Boolean(Object.keys(workspace.value).length))
@@ -227,6 +233,7 @@ async function load() {
 		if (!isCurrentLoad(sequence)) return
 		metaByName.value = Object.fromEntries(metas.filter((meta) => meta?.name).map((meta) => [meta.name, meta]))
 		applyWorkspace(payload, source)
+		if (isNew.value && !source) applyFilterDefaults()
 	} catch (reason) {
 		if (!isCurrentLoad(sequence)) return
 		workspace.value = {}
@@ -240,6 +247,13 @@ async function load() {
 			allowNavigation = false
 		}
 	}
+}
+
+function applyFilterDefaults() {
+	const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname in form.value))
+	filterDefaults = {}
+	const filled = withNewDocumentDefaults(form.value, defaults)
+	for (const fieldname of Object.keys(defaults)) if (filled[fieldname] !== form.value[fieldname]) updateField(fieldname, filled[fieldname])
 }
 
 function updateField(fieldname, value) {

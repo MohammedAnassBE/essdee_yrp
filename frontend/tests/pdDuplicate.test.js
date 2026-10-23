@@ -3,6 +3,7 @@ import test from "node:test"
 import { readFileSync } from "node:fs"
 import * as Vue from "vue"
 import * as pdViews from "../src/departments/pd/pdViews.js"
+import * as newDocumentDefaults from "../src/utils/newDocumentDefaults.js"
 import { findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 
 const { LOTWISE_SECTIONS, LOTWISE_TABLE_COLUMNS, PD_ROUTES, copiedLotwiseDraft, copiedProductDraft } = pdViews
@@ -40,9 +41,9 @@ function setupPage(filename, route, bindings = {}) {
 		.replace(/^import "[^"]+"\n/gm, "")
 	const watches = []
 	const values = {
-		ref: Vue.ref, computed: Vue.computed, nextTick: Vue.nextTick, ...pdViews,
+		ref: Vue.ref, computed: Vue.computed, nextTick: Vue.nextTick, ...pdViews, ...newDocumentDefaults,
 		watch: (getter, callback) => watches.push({ getter, callback }),
-		onMounted() {}, onBeforeUnmount() {}, onBeforeRouteLeave() {}, onBeforeRouteUpdate() {},
+		onMounted() {}, onBeforeUnmount() {}, onBeforeRouteLeave() {}, onBeforeRouteUpdate() {}, usePageTitle() {},
 		defineProps: () => ({ profitId: "SOURCE", productId: "PRODUCT" }),
 		useRoute: () => route, useRouter: () => ({ push() {}, replace() {} }),
 		...bindings,

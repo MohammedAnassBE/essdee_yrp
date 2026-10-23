@@ -5,6 +5,20 @@ import { dirname, resolve } from "node:path"
 const require = createRequire(new URL("../../frontend/package.json", import.meta.url))
 export const Vue = require("vue")
 const { parse, compileScript } = require("@vue/compiler-sfc")
+// Pure display helpers every component may import; resolved to the real module by default.
+const sharedModules = {
+	"dateFormat.js": await import("../../frontend/src/utils/dateFormat.js"),
+	"listClickFilters.js": await import("../../frontend/src/components/common/listClickFilters.js"),
+	"newDocumentDefaults.js": await import("../../frontend/src/utils/newDocumentDefaults.js"),
+	// Tab titles need the app router; components under test only report them.
+	"usePageTitle.js": { usePageTitle() {} },
+	// The activity footer loads its own data; tests that cover it pass the real component explicitly.
+	"DocumentActivity.vue": () => null,
+	"documentShortcuts.js": await import("../../frontend/src/utils/documentShortcuts.js"),
+	// Keyboard shortcuts bind to window; tests that cover them pass the real composable explicitly.
+	"useDocumentShortcuts.js": { useDocumentShortcuts() {} },
+}
+const sharedModule = (specifier) => sharedModules[specifier.split("/").pop()]
 
 // Compile the real SFCs, substituting only platform controls and API calls.
 export function loadComponent(filename, modules) {
@@ -13,6 +27,7 @@ export function loadComponent(filename, modules) {
 	const compiled = compileScript(descriptor, { id: path, inlineTemplate: true, templateOptions: { compilerOptions: { hoistStatic: false } } })
 	const dependencies = { vue: Vue, ...modules }
 	const source = compiled.content.replace(/^import\s+["'][^"']+\.css["'];?$/gm, "").replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];?/g, (_, names, specifier) => {
+		if (!(specifier in dependencies) && sharedModule(specifier)) dependencies[specifier] = sharedModule(specifier)
 		if (!(specifier in dependencies)) {
 			if (!specifier.endsWith(".vue")) throw new Error(`Missing test module: ${specifier}`)
 			dependencies[specifier] = loadComponent(resolve(dirname(path), specifier), modules)

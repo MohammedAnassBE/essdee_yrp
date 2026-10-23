@@ -52,13 +52,15 @@
 <script setup>
 import ConfirmDialog from "primevue/confirmdialog"
 import Toast from "primevue/toast"
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, watch, watchEffect } from "vue"
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
 import ServerMessageDialog from "./components/common/ServerMessageDialog.vue"
 import AccountMenu from "./components/navigation/AccountMenu.vue"
+import { reportedPageTitle } from "./composables/usePageTitle.js"
 import { departments } from "./departments/registry.js"
 import { getHomePath, isOutsideLayout, lockedDepartment } from "./router/departmentLock.js"
+import { resolvePageTitle } from "./utils/pageTitle.js"
 import { currentTheme, toggleTheme } from "./utils/themePreference.js"
 
 const route = useRoute()
@@ -101,17 +103,13 @@ const activeDepartment = computed(() => {
 	return lockedDepartment?.combines?.includes(owner?.key) && !isOutsideLayout(route.path) ? lockedDepartment : owner
 })
 
-function routeTitle() {
-	if (route.name === "administrator") return "Workspaces"
-	if (activeDepartment.value && route.path === activeDepartment.value.path) return activeDepartment.value.label
-	const name = String(route.name || "Essdee YRP")
-	return name.split("-").filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
-}
+watchEffect(() => {
+	document.title = resolvePageTitle(route, departments, reportedPageTitle.value)
+})
 
 watch(
 	() => route.path,
 	async () => {
-		document.title = `${routeTitle()} · Essdee YRP`
 		await nextTick()
 		window.requestAnimationFrame(() => document.getElementById("app-main")?.focus({ preventScroll: true }))
 	},

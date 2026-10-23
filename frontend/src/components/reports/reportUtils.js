@@ -1,3 +1,5 @@
+import { formatDisplayByFieldtype, formatDisplayDate } from "../../utils/dateFormat.js"
+
 export function todayIso() {
 	const now = new Date()
 	const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
@@ -20,11 +22,7 @@ export function oneMonthAgoIso() {
 	].join("-")
 }
 
-export function formatDate(value) {
-	if (!value) return "—"
-	const date = String(value).slice(0, 10).split("-")
-	return date.length === 3 ? `${date[2]}-${date[1]}-${date[0]}` : String(value)
-}
+export const formatDate = (value) => formatDisplayDate(value)
 
 const numberFormats = new Map()
 
@@ -70,7 +68,7 @@ export function errorMessage(error, fallback = "Unable to generate this report."
 
 export function stockCellValue(value, column) {
 	if (value === null || value === undefined || value === "") return "—"
-	if (column?.fieldtype === "Date") return formatDate(value)
+	if (["Date", "Datetime"].includes(column?.fieldtype)) return formatDisplayByFieldtype(value, column.fieldtype)
 	if (["Float", "Currency", "Int"].includes(column?.fieldtype)) {
 		return number(value, column.fieldtype === "Int" ? 0 : 3)
 	}

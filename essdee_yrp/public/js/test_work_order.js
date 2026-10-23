@@ -46,4 +46,20 @@ assert.deepEqual(
 	"clearing the cloth quantity clears its yarn inputs",
 );
 
+function dateForm(doc, previous) {
+	const values = [];
+	const frm = { doc, _previous_planned_end_date: previous, set_value: (field, value) => { values.push([field, value]); doc[field] = value; } };
+	return { frm, values };
+}
+const blank = dateForm({ planned_end_date: "2026-11-10", expected_delivery_date: "" }, "");
+form.sync_expected_delivery_date(blank.frm);
+assert.deepEqual(blank.values, [["expected_delivery_date", "2026-11-10"]], "an empty expected delivery date copies the end date");
+const following = dateForm({ planned_end_date: "2026-11-12", expected_delivery_date: "2026-11-10" }, "2026-11-10");
+form.sync_expected_delivery_date(following.frm);
+assert.equal(following.frm.doc.expected_delivery_date, "2026-11-12", "a copied expected delivery date follows the end date");
+const overridden = dateForm({ planned_end_date: "2026-11-12", expected_delivery_date: "2026-11-20" }, "2026-11-10");
+form.sync_expected_delivery_date(overridden.frm);
+assert.deepEqual(overridden.values, [], "a manual expected delivery date is kept");
+assert.equal(overridden.frm._previous_planned_end_date, "2026-11-12");
+
 console.log("work order dialog tests passed");

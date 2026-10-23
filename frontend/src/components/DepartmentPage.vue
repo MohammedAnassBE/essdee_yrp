@@ -1,5 +1,5 @@
 <template>
-	<div v-if="embedded" class="department-page-embedded"><slot /></div>
+	<div v-if="embedded" class="department-page-embedded"><slot /><DocumentActivity v-if="activityDoctype" :doctype="activityDoctype" :name="activityName" :record="activityRecord" /></div>
 	<main
 		v-else
 		class="department-page erp-page-shell"
@@ -20,6 +20,7 @@
 				<h1 v-if="showTitle">{{ title }}</h1>
 				<div class="department-page__content" :class="{ 'department-page__content--inline-navigation': inlineNavigation }">
 					<slot />
+					<DocumentActivity v-if="activityDoctype" :doctype="activityDoctype" :name="activityName" :record="activityRecord" />
 				</div>
 			</template>
 		</Card>
@@ -30,6 +31,7 @@
 import Card from "primevue/card"
 import { computed, provide } from "vue"
 
+import DocumentActivity from "./documents/DocumentActivity.vue"
 import BackLink from "./navigation/BackLink.vue"
 import { pageNavigationKey } from "./navigation/pageNavigationContext.js"
 import { isLockedExit } from "../router/departmentLock.js"
@@ -68,6 +70,9 @@ const props = defineProps({
 		default: false,
 	},
 	embedded: { type: Boolean, default: false },
+	activityDoctype: { type: String, default: "" },
+	activityName: { type: String, default: "" },
+	activityRecord: { type: Object, default: null },
 })
 
 provide(pageNavigationKey, {

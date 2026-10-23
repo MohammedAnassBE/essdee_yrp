@@ -8,12 +8,12 @@
 		class="document-transaction-dialog erp-entity-dialog erp-dialog--lg"
 		@update:visible="requestVisibility"
 	>
-		<div class="document-transaction-dialog__content">
+		<div ref="content" class="document-transaction-dialog__content">
 			<div v-if="loading" class="document-transaction-dialog__loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 			<template v-else>
 				<div v-if="payload.record" class="document-transaction-dialog__status-row">
 					<DocumentStatusBadge :docstatus="payload.record.docstatus" :label="payload.record.status" />
-					<small>Updated {{ formatDate(payload.record.modified, true) }}</small>
+					<small>Updated {{ formatDisplayDatetime(payload.record.modified) }}</small>
 				</div>
 				<section v-if="payload.transit?.status" class="document-transit-status">
 					<strong>{{ payload.transit.status }}</strong>
@@ -30,6 +30,7 @@
 			</template>
 		</div>
 
+		<DocumentActivity :doctype="payload.record?.doctype || doctype" :name="payload.record?.name || ''" :record="payload.record" />
 		<template #footer>
 			<div class="document-transaction-dialog__footer">
 				<Button label="Close" severity="secondary" text :disabled="Boolean(acting)" @click="requestVisibility(false)" />
@@ -42,8 +43,8 @@
 					<Button v-if="payload.actions?.can_return" label="Return" icon="pi pi-replay" severity="secondary" outlined :disabled="Boolean(acting)" @click="emit('return', payload)" />
 					<Button v-if="showEdit && payload.permissions?.can_write" label="Edit" icon="pi pi-pencil" severity="secondary" outlined :disabled="Boolean(acting)" @click="editDocument" />
 					<Button v-if="payload.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :loading="acting === 'amend'" @click="changeStatus('amend')" />
-					<Button v-if="payload.permissions?.can_cancel && workflowReady && !activeWorkflow" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="changeStatus('cancel')" />
-					<Button v-if="payload.permissions?.can_submit && workflowReady && !activeWorkflow" label="Submit" icon="pi pi-check" :loading="acting === 'submit'" @click="changeStatus('submit')" />
+					<Button v-if="payload.permissions?.can_cancel && workflowReady && !activeWorkflow" label="Cancel Document" :title="withShortcutHint('Cancel Document', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="changeStatus('cancel')" />
+					<Button v-if="payload.permissions?.can_submit && workflowReady && !activeWorkflow" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" :loading="acting === 'submit'" @click="changeStatus('submit')" />
 				</div>
 			</div>
 		</template>
@@ -59,6 +60,7 @@
 </template>
 
 <script setup>
+import DocumentActivity from "./DocumentActivity.vue"
 import DocumentDeleteButton from "./DocumentDeleteButton.vue"
 import { useRouter } from "vue-router"
 import StockEntryMakeDcModal from "../../views/dynamic/StockEntryMakeDcModal.vue"
@@ -71,6 +73,9 @@ import { changeFabricStoreDocumentStatus, endStockEntryTransit, completeWorkOrde
 import { getActiveWorkflow } from "../../api/frappe.js"
 import FabricStockOperationDialog from "../../departments/fabric-store/FabricStockOperationDialog.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { useDocumentShortcuts } from "../../composables/useDocumentShortcuts.js"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
+import { formatDisplayByFieldtype, formatDisplayDatetime } from "../../utils/dateFormat.js"
 import StockItemMatrix from "../stock/StockItemMatrix.vue"
 import DocumentErrorDialog from "./DocumentErrorDialog.vue"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
@@ -129,6 +134,18 @@ async function load() {
 	catch (reason) { error.value = reason?.message || `Unable to load ${props.doctype}.` }
 	finally { loading.value = false }
 }
+
+const content = ref(null)
+const canChangeStatus = (permission) => Boolean(!loading.value && payload.value.record && payload.value.permissions?.[permission] && workflowReady.value && !activeWorkflow.value)
+useDocumentShortcuts({
+	element: () => content.value,
+	isBusy: () => loading.value || Boolean(acting.value),
+	canSubmit: () => canChangeStatus("can_submit"),
+	submit: () => changeStatus("submit"),
+	canCancel: () => canChangeStatus("can_cancel"),
+	cancel: () => changeStatus("cancel"),
+	cancelConfirms: true,
+})
 
 async function changeStatus(action) {
 	if (["submit", "cancel"].includes(action) && (!workflowReady.value || activeWorkflow.value)) return
@@ -203,11 +220,10 @@ function editDocument() { emit("edit", payload.value); emit("update:visible", fa
 function closeNow() { closeConfirmationVisible.value = false; dirty.value = false; emit("update:visible", false) }
 function markDirty(value = true) { dirty.value = Boolean(value) }
 function formatField(field) {
-	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDate(field.value, field.fieldtype === "Datetime")
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(field.value, field.fieldtype)
 	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
 	return field.value === null || field.value === undefined || field.value === "" ? "—" : String(field.value)
 }
-function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 
 defineExpose({ markDirty, reload: load })
 function documentDeleted() {

@@ -80,7 +80,7 @@
 								<td v-for="position in maxColumns" :key="`${order.name}-${position}`" class="erp-number ppo-report__quantity">{{ displayQuantity(order.qty_by_position?.[position - 1]) }}</td>
 								<td class="erp-number ppo-report__total">{{ number(order.total) }}</td>
 								<td class="ppo-report__transfer">{{ order.transfer_summary || "—" }}</td>
-								<td class="ppo-report__comments">{{ order.comments || "—" }}</td>
+								<td class="ppo-report__comments">{{ formatDatesInText(order.comments) || "—" }}</td>
 							</tr>
 							<tr v-if="isExpanded(order.name) && dispatchLoading === order.name" class="ppo-report__summary-status"><td :colspan="fixedBeforeGroup + 1">Loading dispatch quantities…</td><td v-for="position in maxColumns" :key="`loading-${order.name}-${position}`"></td><td></td><td></td><td></td></tr>
 							<tr v-else-if="isExpanded(order.name) && !dispatchRows(order.name).length" class="ppo-report__summary-status"><td :colspan="columnCount">No submitted dispatches for this Production Order.</td></tr>
@@ -126,6 +126,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import ReportShell from "../../components/reports/ReportShell.vue"
 import { formatDate, number } from "../../components/reports/reportUtils.js"
+import { formatDatesInText } from "../../utils/dateFormat.js"
 import AsyncLinkMultiSelect from "../cutting/reports/AsyncLinkMultiSelect.vue"
 
 defineProps({ canExport: { type: Boolean, default: false } })

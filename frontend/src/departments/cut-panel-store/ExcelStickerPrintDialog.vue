@@ -98,16 +98,18 @@
 			</div>
 		</div>
 
+		<DocumentActivity :doctype="'YRP Excel Sticker Print'" :name="record?.name || ''" :record="record" />
 		<template #footer>
 			<div class="excel-sticker-dialog__footer">
 				<span>{{ footerSummary }}</span>
 				<div>
+					<DocumentShortcuts :busy="busy || confirmationVisible" :can-save="canEdit && canSave && (!record?.name || dirty)" :can-submit="Boolean(documentPermissions.can_submit && !dirty)" submit-confirms @save="save" @submit="requestCommand('submit')" />
 					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
 					<DocumentDeleteButton v-if="record?.name" doctype="YRP Excel Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.name" doctype="YRP Excel Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
 					<Button v-if="canPrint" label="Print Labels" icon="pi pi-print" severity="secondary" outlined :disabled="busy" @click="printerVisible = true" />
-					<Button v-if="documentPermissions.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty" @click="requestCommand('submit')" />
-					<Button v-if="canEdit" label="Save" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !canSave" @click="save" />
+					<Button v-if="documentPermissions.can_submit" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty" @click="requestCommand('submit')" />
+					<Button v-if="canEdit" label="Save" :title="withShortcutHint('Save', 'save')" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !canSave" @click="save" />
 				</div>
 			</div>
 		</template>
@@ -137,9 +139,12 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import Dialog from "primevue/dialog"
 import Skeleton from "primevue/skeleton"
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue"
@@ -158,6 +163,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import PrinterDialog from "./PrinterDialog.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({
 	visible: Boolean,
@@ -225,15 +231,22 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
+		const filterDefaults = props.documentName ? {} : filterDefaultsFor("YRP Excel Sticker Print", ["print_format"])
 		const payload = await getExcelStickerEditor(props.documentName)
 		if (sequence !== loadSequence) return
-		applyEditorPayload(payload)
+		applyEditorPayload(payload && !payload.record ? { ...payload, defaults: withNewDocumentDefaults(payload.defaults, filterDefaults) } : payload)
 		if (record.value?.docstatus === 1) void loadPreview()
 	} catch (reason) {
 		if (sequence === loadSequence) error.value = messageOf(reason, "Unable to load the Excel Sticker Print.")
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
+}
+
+/** Staged list filters for a new document, limited to the fields this form holds. */
+function filterDefaultsFor(doctype, keys) {
+	const staged = takeNewDocumentDefaults(doctype)
+	return Object.fromEntries(keys.filter((key) => key in staged).map((key) => [key, staged[key]]))
 }
 
 function applyEditorPayload(payload = {}) {
@@ -358,6 +371,7 @@ async function save() {
 		acting.value = ""
 	}
 }
+
 
 function requestCommand(command) {
 	pendingAction.value = command

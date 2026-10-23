@@ -1,3 +1,4 @@
+import { formatDisplayByFieldtype } from "./dateFormat.js"
 import { normaliseFrappeTime, plainTextFromHtml } from "./documentValues.js"
 
 export function documentOverviewHasValue(value) {
@@ -35,10 +36,7 @@ export function buildDocumentOverviewGroups(fields = [], definitions = [], optio
 
 export function formatDocumentOverviewValue(field = {}) {
 	const value = field.value
-	if (["Date", "Datetime"].includes(field.fieldtype) && documentOverviewHasValue(value)) {
-		const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/)
-		if (match) return `${match[3]}-${match[2]}-${match[1]}${field.fieldtype === "Datetime" && match[4] ? ` · ${match[4]}:${match[5]}${match[6] ? `:${match[6]}` : ""}` : ""}`
-	}
+	if (["Date", "Datetime"].includes(field.fieldtype) && documentOverviewHasValue(value)) return formatDisplayByFieldtype(value, field.fieldtype)
 	if (field.fieldtype === "Time" && documentOverviewHasValue(value)) return normaliseFrappeTime(value) || String(value)
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) {

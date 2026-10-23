@@ -293,6 +293,9 @@ import DocumentFieldGroupGrid from "../../components/documents/DocumentFieldGrou
 import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
+import { forgetAutofill } from "../../composables/useSingleOptionAutofill.js"
+import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
+import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { normaliseFrappeTime, hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
 import { getTableTotals } from "../../engine/stock/deliveryChallanTotals.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
@@ -300,6 +303,7 @@ import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
 import { additionalGrnFieldState, additionalGrnSourceContext } from "./grnAdditional.js"
+import { autofillGoodsReceivedNoteLocation, GRN_LOCATION_AUTOFILL } from "./grnLocationAutofill.js"
 import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, lotNamesInOptions, unusedLotsForEntry } from "./grnLotOptions.js"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
@@ -308,6 +312,7 @@ const props = defineProps({
 	presentation: { type: String, default: "page" },
 	name: { type: String, default: "" },
 	sourceContext: { type: Object, default: () => ({}) },
+	newDefaults: { type: Object, default: () => ({}) },
 	duplicateRouteName: { type: String, default: "fabric-goods-received-note-new" },
 })
 const emit = defineEmits(["changed", "closed"])
@@ -343,7 +348,8 @@ const addressDefaults = reactive({
 	delivery_address: { sequence: 0, pending: false },
 	supplier_address: { sequence: 0, pending: false },
 })
-const addressPending = computed(() => Object.values(addressDefaults).some((state) => state.pending))
+const locationAutofillPending = ref(0)
+const addressPending = computed(() => locationAutofillPending.value > 0 || Object.values(addressDefaults).some((state) => state.pending))
 const primaryTotals = new Set(["total_received_quantity", "total", "grand_total", "total_receivable_cost"])
 const headerFieldnames = new Set(["against", "against_id", "delivery_challan", "process_name", "item", "supplier", "supplier_name"])
 const sourceFieldnames = new Set(["against", "against_id", "delivery_challan"])
@@ -361,21 +367,21 @@ const goodsReceivedNoteActions = computed(() => {
 		actions.push({
 			key, label: capabilityLabel(key, fallback), icon, command,
 			disabled: busy || Boolean(options.disabled), disabledReason: options.disabledReason || "",
-			loading: acting.value === (options.loadingKey || key), menuOnly: Boolean(options.menuOnly),
+			loading: acting.value === (options.loadingKey || key), menuOnly: Boolean(options.menuOnly), shortcut: options.shortcut,
 		})
 	}
 	if (editingSubmitted.value) {
 		actions.push({ key: "cancel_edit", label: "Cancel Edit", icon: "pi pi-times", command: cancelSubmittedEdit, disabled: busy })
-		if (dirty.value) actions.push({ key: "save", label: "Save", icon: "pi pi-save", command: () => save(false), disabled: busy, loading: acting.value === "save", primary: true })
+		if (dirty.value) actions.push({ key: "save", label: "Save", icon: "pi pi-save", command: () => save(false), disabled: busy, loading: acting.value === "save", primary: true, shortcut: "save" })
 		return actions
 	}
 	add("complete_transfer", "Complete Transfer", "pi pi-check-circle", completeTransfer)
 	add("calculate", "Calculate", "pi pi-calculator", openCalculation, { disabled: dirty.value, disabledReason: dirty.value ? "Save the Goods Received Note before calculating." : "", loadingKey: "load_calculation" })
 	add("create_inspection", "Create Inspection Entry", "pi pi-search", () => { inspectionOpen.value = true })
 	if (canOfferSubmittedEdit.value) actions.push({ key: "edit", label: "Edit", icon: "pi pi-pencil", command: startSubmittedEdit, disabled: busy })
-	if (!currentName.value || dirty.value) add("save", "Save", "pi pi-save", () => runWorkspaceAction("save"))
-	if (currentName.value && !dirty.value) add("submit", "Submit", "pi pi-check", () => runWorkspaceAction("submit"))
-	add("cancel", "Cancel Document", "pi pi-ban", () => runWorkspaceAction("cancel"), { menuOnly: true })
+	if (!currentName.value || dirty.value) add("save", "Save", "pi pi-save", () => runWorkspaceAction("save"), { shortcut: "save" })
+	if (currentName.value && !dirty.value) add("submit", "Submit", "pi pi-check", () => runWorkspaceAction("submit"), { shortcut: "submit" })
+	add("cancel", "Cancel Document", "pi pi-ban", () => runWorkspaceAction("cancel"), { menuOnly: true, shortcut: "cancel" })
 	add("amend", "Amend", "pi pi-copy", () => runWorkspaceAction("amend"), { menuOnly: true })
 	if (currentName.value && workspace.value.permissions?.can_create && !workspace.value.special_source?.active) {
 		actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicateGoodsReceivedNote, disabled: busy, loading: acting.value === "duplicate", menuOnly: true })
@@ -538,6 +544,7 @@ function actionIsStale(sequence, requestedRouteName) {
 
 function clearWorkspaceState(name = "") {
 	invalidateAddresses()
+	forgetAutofill(form)
 	workspace.value = {}
 	currentName.value = name
 	for (const key of Object.keys(form)) delete form[key]
@@ -554,6 +561,7 @@ function clearWorkspaceState(name = "") {
 
 function applyWorkspace(nextWorkspace) {
 	invalidateAddresses()
+	forgetAutofill(form)
 	workspace.value = nextWorkspace || {}
 	currentName.value = workspace.value.record?.name || ""
 	for (const key of Object.keys(form)) delete form[key]
@@ -563,6 +571,7 @@ function applyWorkspace(nextWorkspace) {
 		const defaults = currentPostingDefaults()
 		if (!form.posting_date) form.posting_date = defaults.date
 		if (!form.posting_time) form.posting_time = defaults.time
+		applyNewDefaults()
 	}
 	itemGroups.value = prepareActualDiaGroups(normalizeGroups(workspace.value.matrices?.items || workspace.value.item_groups || []), actualDia.value)
 	correctionGroups.value = clone(workspace.value.matrices?.correction_items || workspace.value.correction_item_groups || [])
@@ -576,6 +585,19 @@ function applyWorkspace(nextWorkspace) {
 	panelError.value = ""
 }
 
+/** Fills the list's filter values into empty draft fields, with the same party follow-ups a field change runs. */
+function applyNewDefaults() {
+	const known = Object.fromEntries(Object.entries(props.newDefaults || {}).filter(([fieldname]) => fieldname in form))
+	const next = withNewDocumentDefaults(form, known)
+	const changed = Object.keys(known).filter((fieldname) => next[fieldname] !== form[fieldname])
+	Object.assign(form, next)
+	for (const fieldname of changed) {
+		const addressField = { delivery_location: "delivery_address", supplier: "supplier_address" }[fieldname]
+		if (addressField) defaultAddress(addressField, form[fieldname])
+		fillSingleLocationOptions(fieldname)
+	}
+}
+
 async function setField(fieldname, value) {
 	if (editingSubmitted.value && !allowOnSubmitFields.value.has(fieldname)) return
 	if (fieldname === "additional_grn" && !currentName.value) return reloadAdditionalGrnSource(value)
@@ -584,8 +606,21 @@ async function setField(fieldname, value) {
 	if (fieldname in addressDefaults) invalidateAddress(fieldname)
 	if (["posting_date", "posting_time"].includes(fieldname)) form.edit_posting_date_and_time = 1
 	markDirty()
-	if (fieldname === "delivery_location") await defaultAddress("delivery_address", value)
-	if (fieldname === "supplier") await defaultAddress("supplier_address", value)
+	const addressField = { delivery_location: "delivery_address", supplier: "supplier_address" }[fieldname]
+	await Promise.all([addressField && defaultAddress(addressField, value), fillSingleLocationOptions(fieldname)])
+}
+
+async function fillSingleLocationOptions(fieldname) {
+	if (editingSubmitted.value || !(fieldname in GRN_LOCATION_AUTOFILL)) return
+	const requestedLoad = loadSequence
+	locationAutofillPending.value += 1
+	try {
+		await autofillGoodsReceivedNoteLocation(form, fieldname, { onChange: markDirty })
+	} catch (reason) {
+		if (requestedLoad === loadSequence) error.value = reason?.message || "Unable to fill the only warehouse or address."
+	} finally {
+		locationAutofillPending.value -= 1
+	}
 }
 
 // The Additional GRN source lists every Work Order receivable, so rebuild the draft from it.
@@ -871,10 +906,7 @@ function totalIsPositive(total) { return Number(total?.value || 0) > 0 }
 function formatFieldValue(field) {
 	const value = form[field.fieldname] ?? field.value
 	if (field.fieldtype === "Time") return normaliseFrappeTime(value) || "—"
-	if (["Date", "Datetime"].includes(field.fieldtype)) {
-		const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(.*)$/)
-		if (match) return `${match[3]}-${match[2]}-${match[1]}${field.fieldtype === "Datetime" ? match[4] : ""}`
-	}
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(value, field.fieldtype, { seconds: true })
 	if (field.fieldtype === "Check") return Number(value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype)) return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return value === null || value === undefined || value === "" ? "—" : plainTextFromHtml(value)

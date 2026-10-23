@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as fieldErrors from "../src/utils/fieldErrors.js"
 import * as stockHeaders from "../src/departments/fabric-store/stockHeaderFields.js"
+import * as stockEntryAutofill from "../src/departments/fabric-store/stockEntryAutofill.js"
 
 const component = (path, modules) => loadComponent(resolve(`frontend/src/${path}.vue`), modules)
 const Button = props => Vue.h("button", props, props.label)
@@ -111,6 +112,7 @@ test("Fabric stock draft stays open, adopts saved identity, and tracks header an
 		"../../utils/useActionConfirmation.js": { useActionConfirmation: () => () => {} },
 		"../../utils/stockItemComposer.js": { applyStockUpdateRates: row => row },
 		"./stockHeaderFields.js": { ...stockHeaders, buildStockHeaderFields: () => [{ fieldname: "comments" }] },
+		"./stockEntryAutofill.js": stockEntryAutofill,
 	}), Vue.reactive({ visible: true, operation: "stock_entry", expectedModified: "stale", onChanged: doc => changed.push(doc), "onUpdate:visible": value => visibility.push(value) }))
 	await tick()
 	const primary = () => nodes(root, "button").find(n => ["Save", "Submit"].includes(n.props.label))

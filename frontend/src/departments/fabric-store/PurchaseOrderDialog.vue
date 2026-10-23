@@ -13,7 +13,7 @@
 			<template v-else>
 				<div v-if="payload.record" class="purchase-order-status-row">
 					<div><DocumentStatusBadge :docstatus="payload.record.docstatus" :label="payload.record.status" /><strong>{{ payload.record.supplier_name || payload.record.supplier || "—" }}</strong></div>
-					<small>Updated {{ formatDate(payload.record.modified, true) }}</small>
+					<small>Updated {{ formatDisplayDatetime(payload.record.modified) }}</small>
 				</div>
 				<section v-if="payload.details?.length" class="purchase-order-detail-grid">
 					<div v-for="field in payload.details" :key="field.fieldname"><span>{{ field.label }}</span><strong :class="{ 'purchase-order-detail-link': field.fieldtype === 'Link' }" :title="formatField(field)">{{ formatField(field) }}</strong></div>
@@ -24,14 +24,16 @@
 			</template>
 		</div>
 
+		<DocumentActivity :doctype="'Purchase Order'" :name="payload.record?.name || ''" :record="payload.record" />
 		<template #footer>
 			<div class="purchase-order-footer">
+				<DocumentShortcuts :busy="loading || Boolean(acting)" :can-submit="Boolean(payload.permissions?.can_submit)" :can-cancel="Boolean(payload.permissions?.can_cancel)" cancel-confirms @submit="changeStatus('submit')" @cancel="changeStatus('cancel')" />
 				<Button label="Close" severity="secondary" text :disabled="acting" @click="requestVisibility(false)" />
 				<div>
 					<DocumentPrintButton v-if="payload.permissions?.can_print" doctype="Purchase Order" :name="payload.record?.name || currentName" :formats="payload.print_formats || []" :disabled="Boolean(acting)" />
 					<Button v-if="payload.permissions?.can_amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined :loading="acting === 'amend'" @click="changeStatus('amend')" />
-					<Button v-if="payload.permissions?.can_cancel" label="Cancel Document" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="changeStatus('cancel')" />
-					<Button v-if="payload.permissions?.can_submit" label="Submit" icon="pi pi-check" severity="secondary" outlined :loading="acting === 'submit'" @click="changeStatus('submit')" />
+					<Button v-if="payload.permissions?.can_cancel" label="Cancel Document" :title="withShortcutHint('Cancel Document', 'cancel')" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="changeStatus('cancel')" />
+					<Button v-if="payload.permissions?.can_submit" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" severity="secondary" outlined :loading="acting === 'submit'" @click="changeStatus('submit')" />
 					<Button v-if="payload.grn?.can_create" label="Create GRN" icon="pi pi-plus" @click="grnVisible = true" />
 				</div>
 			</div>
@@ -48,6 +50,7 @@
 </template>
 
 <script setup>
+import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"
@@ -59,7 +62,10 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
+import { formatDisplayByFieldtype, formatDisplayDatetime } from "../../utils/dateFormat.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
+import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
 
 const props = defineProps({
@@ -90,6 +96,7 @@ async function load() {
 	catch (reason) { error.value = reason?.message || "Unable to load this Purchase Order." }
 	finally { loading.value = false }
 }
+
 
 async function changeStatus(action) {
 	if (["cancel", "amend"].includes(action)) {
@@ -125,12 +132,11 @@ async function grnChanged(saved) {
 }
 function requestVisibility(value) { if (!value) emit("update:visible", false) }
 function formatField(field) {
-	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDate(field.value, field.fieldtype === "Datetime")
+	if (["Date", "Datetime"].includes(field.fieldtype)) return formatDisplayByFieldtype(field.value, field.fieldtype)
 	if (field.fieldtype === "Check") return Number(field.value) ? "Yes" : "No"
 	if (["Currency", "Float", "Int", "Percent"].includes(field.fieldtype) && field.value !== "") return Number(field.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })
 	return field.value === null || field.value === undefined || field.value === "" ? "—" : String(field.value)
 }
-function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} · ${match[4]}:${match[5]}` : date }
 </script>
 
 <style scoped>

@@ -6,23 +6,19 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import { defaultOption } from "../src/utils/supplierDefaults.js"
 import { normaliseFrappeTime } from "../src/utils/documentValues.js"
 import { useDuplicateAction } from "../src/composables/useDuplicateAction.js"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../src/utils/newDocumentDefaults.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
 
 const read = path => readFileSync(resolve(`frontend/src/${path}`), "utf8")
 const script = path => read(path).split("<script setup>")[1].split("</script>")[0].replace(/^import[\s\S]*? from ["'][^"']+["'];?\n/gm, "")
 function setup(path, bindings, names) {
-	const values = { ...Vue, watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {}, defineProps: () => ({}), defineEmits: () => () => {}, useToast: () => ({ add() {} }), useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }), useDuplicateAction, PLANNING_ROUTES, ...bindings }
+	const values = { ...Vue, watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {}, defineProps: () => ({}), defineEmits: () => () => {}, useToast: () => ({ add() {} }), useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }), useDuplicateAction, PLANNING_ROUTES, takeNewDocumentDefaults, withNewDocumentDefaults, ...bindings }
 	return new Function(...Object.keys(values), `${script(path)}\nreturn { ${names} }`)(...Object.values(values))
 }
 const nodes = (root, type) => findNodes(root, node => node.type === type)
 const Button = props => Vue.h("button", props, props.label)
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
-
-function supplierDefaults(bindings) {
-	const source = read("utils/supplierDefaults.js").replace(/^import .*\n/, "").replaceAll("export ", "")
-	return new Function(...Object.keys(bindings), `${source}\nreturn { fillSupplierDefaults }`)(...Object.values(bindings))
-}
 
 test("F-C15 reason-disabled rail actions", async () => {
 	const creates = []
@@ -141,49 +137,16 @@ test("F-C02 Lot item default", async () => {
 	assert.equal(state.form.production_detail, "IPD-2")
 })
 
-test("F-C02 supplier address defaults", async () => {
-	const response = deferred()
-	const { fillSupplierDefaults } = supplierDefaults({ searchLinkedDocument: () => response.promise, searchLink: () => [], callMethod: () => "" })
-	const form = { supplier: "SUP", supplier_address: "", delivery_location: "UNIT", delivery_address: "" }
-	const filling = fillSupplierDefaults(form, { partyField: "supplier", addressField: "supplier_address" })
-	form.supplier_address = "User choice"
-	response.resolve([{ name: "Only address" }]); await filling
-	assert.equal(form.supplier_address, "User choice")
-	await fillSupplierDefaults(form, { partyField: "delivery_location", addressField: "delivery_address" })
-	assert.equal(form.delivery_address, "Only address")
+test("F-C02 supplier address defaults", () => {
 	assert.equal(defaultOption("", [{ name: "A" }, { name: "B" }]), "")
-	const pending = deferred()
-	const newer = supplierDefaults({ searchLinkedDocument: () => pending.promise, searchLink: () => [], callMethod: () => "" })
-	form.supplier_address = ""
-	const stale = newer.fillSupplierDefaults(form, { partyField: "supplier", addressField: "supplier_address" })
-	form.supplier = "NEW"
-	pending.resolve([{ name: "OLD address" }]); await stale
-	assert.equal(form.supplier_address, "")
+	assert.equal(defaultOption("", [{ name: "Only" }]), "Only")
 	const source = read("departments/fabric-store/WorkOrderEditor.vue")
-	assert.match(source, /fillAddress\("supplier", "supplier_address"\)/)
-	assert.match(source, /fillAddress\("delivery_location", "delivery_address"\)/)
+	assert.match(source, /changeParty\("supplier", value\)/)
+	assert.match(source, /changeParty\("delivery_location", value\)/)
 })
 
-test("F-D15/F-B16 Delivery Challan defaults and Comments", async () => {
-	const requests = []
-	const { fillSupplierDefaults } = supplierDefaults({
-		searchLinkedDocument: async () => [{ name: "Other" }, { name: "Primary" }],
-		searchLink: async (...args) => { requests.push(args); return [{ name: "Only warehouse" }] },
-		callMethod: async (method, args) => { assert.equal(method, "yrp.yrp.doctype.yrp_supplier.yrp_supplier.get_primary_address"); return args.supplier === "FROM" ? "Primary" : "" },
-	})
-	const form = {}
-	const state = setup("departments/fabric-store/DeliveryChallanWorkspace.vue", { fillSupplierDefaults, useRouter: () => ({}) }, "setField, form")
-	await state.setField("from_location", "FROM")
-	assert.equal(state.form.from_address, "Primary")
-	assert.equal(state.form.from_warehouse, "Only warehouse")
-	await state.setField("supplier", "TO")
-	assert.equal(state.form.supplier_address, "")
-	assert.equal(state.form.to_warehouse, "Only warehouse")
-	assert.deepEqual(requests.map(args => args[2]), [{ disabled: 0, supplier: "FROM" }, { disabled: 0, supplier: "TO" }])
-	const fallback = supplierDefaults({ searchLinkedDocument: async () => [{ name: "Only address" }], searchLink: async () => [], callMethod: async () => "" })
-	form.from_location = "NO-PRIMARY"
-	await fallback.fillSupplierDefaults(form, { partyField: "from_location", addressField: "from_address", preferPrimary: true })
-	assert.equal(form.from_address, "Only address")
+test("F-D15/F-B16 supplier primary-address default and Delivery Challan Comments", () => {
+	assert.match(read("departments/fabric-store/DeliveryChallanWorkspace.vue"), /preferPrimaryAddress: true/)
 	assert.match(read("departments/fabric-store/DeliveryChallanWorkspace.vue"), /<th>Comments<\/th><th class="erp-number">Total/)
 })
 

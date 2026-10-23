@@ -104,6 +104,7 @@ import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
+import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 
 const props = defineProps({
@@ -114,6 +115,8 @@ const props = defineProps({
 })
 const emit = defineEmits(["saved", "cancel", "loaded"])
 const form = reactive({ is_manual_entry: 0, lot: "", item: "", production_detail: "", maximum_no_of_plys: null, maximum_allow_percent: null, cutting_location: "", work_order: "" })
+const stagedDefaults = takeNewDocumentDefaults("SD YRP Cutting Plan")
+const filterDefaults = props.name || props.duplicateFrom || props.initialPayload ? {} : stagedDefaults
 const groups = ref([])
 const permissions = reactive({ can_create: false, can_write: false, can_update_after_submit: false, can_submit: false })
 const fields = reactive({ show_work_order: false, can_edit_work_order: false, allow_on_submit_fields: [] })
@@ -179,10 +182,12 @@ async function load() {
 	loading.value = true
 	error.value = ""
 	try {
-		const payload = clone(props.initialPayload || await getCuttingPlanEditor(props.name, props.name ? "" : props.initialSource.lot || "", props.duplicateFrom))
+		const lot = props.name ? "" : props.initialSource.lot || filterDefaults.lot || ""
+		const payload = clone(props.initialPayload || await getCuttingPlanEditor(props.name, lot, props.duplicateFrom))
 		if (!props.name && props.initialSource.work_order && payload?.fields?.can_edit_work_order) {
 			payload.record = { ...(payload.record || {}), work_order: props.initialSource.work_order }
 		}
+		if (!props.name && payload) payload.record = withNewDocumentDefaults(payload.record, planFilterDefaults(payload))
 		applyPayload(payload)
 	} catch (reason) {
 		error.value = reason?.message || "Unable to load the Cutting Plan editor."
@@ -190,6 +195,12 @@ async function load() {
 		loading.value = false
 		cleanSignature.value = signature.value
 	}
+}
+
+/** Staged list filters the new plan's form holds; the Lot's Item and Production Detail stay server-derived. */
+function planFilterDefaults(payload) {
+	const keys = ["is_manual_entry", "lot", "maximum_no_of_plys", "maximum_allow_percent", "cutting_location", ...(payload?.fields?.can_edit_work_order ? ["work_order"] : [])]
+	return Object.fromEntries(keys.filter((key) => key in filterDefaults).map((key) => [key, filterDefaults[key]]))
 }
 
 async function loadLot() {

@@ -92,6 +92,7 @@ import DocumentLink from "../common/DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 import { stockRateLabels } from "../../utils/stockItemComposer.js"
 import { cellAmount, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
+import { formatDisplayDate } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
@@ -198,7 +199,7 @@ function fulfillmentTotalLabel(row) { const quantity = rowMetricTotal(row, pendi
 function rowMetricTotal(row, getter) { return Object.values(row.values || {}).reduce((total, value) => total + getter(value), 0) }
 function secondaryQty(value) { return Number(value?.secondary_qty || 0) !== 0 }
 function display(value) { return value === null || value === undefined || value === "" ? "—" : String(value) }
-function formatDate(value) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[3]}-${match[2]}-${match[1]}` : display(value) }
+function formatDate(value) { return formatDisplayDate(value, display(value)) }
 function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
 function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
 function normalizedComment(value) { return String(value || "").trim() }

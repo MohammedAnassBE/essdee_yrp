@@ -92,6 +92,7 @@ import FinishingLinkedDocuments from "./components/FinishingLinkedDocuments.vue"
 import FinishingMatrix from "./components/FinishingMatrix.vue"
 import { ENTRY_DEFINITIONS } from "./finishingEntryDefinitions.js"
 import { detailsMatrix, inwardMatrix, quantityMatrix, reworkMatrix, singleMetricMatrix } from "./finishingViews.js"
+import { getActiveFinishingPlanTab, getVisibleFinishingPlanTabs, hasAlternativeRows, hasRole } from "./plan/finishingPlanTabVisibility.js"
 
 const FinishingGrnTab = defineAsyncComponent(() => import("./plan/FinishingGrnTab.vue"))
 const FinishingOldLotTab = defineAsyncComponent(() => import("./plan/FinishingOldLotTab.vue"))
@@ -110,7 +111,7 @@ const props = defineProps({
 const emit = defineEmits(["open", "cancel", "upload", "delete-document", "entry", "transfer"])
 const route = useRoute()
 const router = useRouter()
-const tabs = computed(() => [
+const allTabs = computed(() => [
 	{ value: "details", label: "Details", source: "details" },
 	{ value: "item-details", label: "Item Details", source: "item_details", linked: ["dc_list", "return_grn_list"], entries: ["create_delivery_challan", "return_items", "convert_to_loose_piece"] },
 	{ value: "grn", label: "GRN", source: "grn", linked: ["grn_list", "stock_entry_list"], entries: ["create_grn", "dispatch_box"] },
@@ -125,8 +126,11 @@ const tabs = computed(() => [
 	{ value: "alternatives", label: "Alternatives", source: "alternatives" },
 	{ value: "rejection", label: "Rejection", source: "rejection" },
 ])
+const isSystemManager = hasRole("System Manager")
+const hasAlternatives = ref(false)
+const tabs = computed(() => getVisibleFinishingPlanTabs(allTabs.value, { isSystemManager, hasAlternatives: hasAlternatives.value }))
 const active = computed({
-	get: () => (tabs.value.some((tab) => tab.value === route.query.tab) ? route.query.tab : "details"),
+	get: () => getActiveFinishingPlanTab(tabs.value, route.query.tab),
 	set: (tab) => router.replace({ query: { ...route.query, tab }, hash: route.hash, state: preserveListNavigationState() }),
 })
 const currentTab = computed(() => tabs.value.find((tab) => tab.value === active.value) || tabs.value[0])
@@ -146,8 +150,7 @@ const facts = computed(() => {
 	]
 })
 
-async function load(force = false) {
-	const tab = currentTab.value
+async function load(force = false, tab = currentTab.value) {
 	if (!tab.source || (store.value[tab.value] && !force)) return
 	const target = store.value
 	const plan = props.name
@@ -163,11 +166,24 @@ async function load(force = false) {
 	}
 }
 
-watch(() => [props.name, props.version], () => {
+function loadAlternatives() {
+	load(false, allTabs.value.find((tab) => tab.value === "alternatives"))
+}
+
+watch(() => [props.name, props.version], ([name], [previousName]) => {
+	if (name !== previousName) hasAlternatives.value = false
 	store.value = {}
 	load()
+	loadAlternatives()
+})
+watch(() => {
+	const alternatives = store.value.alternatives
+	return !alternatives || alternatives.loading ? null : hasAlternativeRows(alternatives.data)
+}, (value) => {
+	if (value !== null) hasAlternatives.value = value
 })
 watch(active, () => load(), { immediate: true })
+loadAlternatives()
 </script>
 
 <style scoped>

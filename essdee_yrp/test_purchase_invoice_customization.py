@@ -170,6 +170,34 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		self.assertEqual(grouped[0]["amount"], 105)
 		self.assertTrue(all(row["essdee_group_key"] == grouped[0]["group_key"] for row in direct))
 
+	def test_purchase_order_payload_takes_tax_from_po_item_when_grn_row_has_none(self):
+		grn_item = frappe._dict(
+			item_variant="YARN-1",
+			quantity=10,
+			rate=100,
+			uom="Kg",
+			tax=None,
+			ref_doctype="Purchase Order Item",
+			ref_docname="PO-ITEM-1",
+		)
+		grn = frappe._dict(name="GRN-1", supplier="SUPPLIER-1", items=[grn_item])
+		module = "essdee_yrp.purchase_invoice"
+		with (
+			patch(f"{module}._validate_selected_grn"),
+			patch(f"{module}.frappe.get_doc", return_value=grn),
+			patch(f"{module}._get_po_material_rate", return_value=100),
+			patch(f"{module}._get_item_group", return_value="Yarn"),
+			patch(f"{module}._get_tax_rate", side_effect=lambda tax: float(tax or 0)),
+			patch(f"{module}.frappe.db.get_value", return_value="5") as get_value,
+		):
+			payload = build_purchase_order_invoice_payload(["GRN-1"], supplier="SUPPLIER-1")
+
+		get_value.assert_called_once_with("Purchase Order Item", "PO-ITEM-1", "tax")
+		self.assertEqual(payload["items"][0]["tax"], "5")
+		self.assertEqual(payload["commercial_items"][0]["tax"], "5")
+		self.assertAlmostEqual(payload["tax_total"], 50)
+		self.assertAlmostEqual(payload["total"], 1050)
+
 	def test_purchase_order_payload_caps_selected_grns_at_server_boundary(self):
 		with self.assertRaises(frappe.ValidationError):
 			build_purchase_order_invoice_payload(

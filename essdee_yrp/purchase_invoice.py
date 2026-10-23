@@ -122,6 +122,13 @@ def project_purchase_order_items(items, *, final_rates=None, expense_heads=None)
 	return direct_rows, list(commercial.values())
 
 
+def get_purchase_order_item_tax(grn_item):
+	"""Return the PO item tax for GRNs received before GRN rows copied it."""
+	if grn_item.get("ref_doctype") != "Purchase Order Item" or not grn_item.get("ref_docname"):
+		return None
+	return frappe.db.get_value("Purchase Order Item", grn_item.ref_docname, "tax")
+
+
 def build_purchase_order_invoice_payload(
 	grns,
 	*,
@@ -149,7 +156,7 @@ def build_purchase_order_invoice_payload(
 			qty = flt(grn_item.quantity)
 			rate = flt(_get_po_material_rate(grn, grn_item))
 			stock_rate = flt(grn_item.rate)
-			tax = grn_item.get("tax")
+			tax = grn_item.get("tax") or get_purchase_order_item_tax(grn_item)
 			lot = grn_item.get("lot") or grn.get("lot")
 			set_combination = _normal_json(grn_item.get("set_combination"))
 			key = (

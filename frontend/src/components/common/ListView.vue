@@ -490,10 +490,12 @@ import {
 	cancelDoc,
 	getBulkEditFields,
 	getCount,
+	getCounts,
 	getItemFilterValues,
 	getList,
 	getMeta,
 	getActiveWorkflow,
+	getReadScope,
 	getUserListview,
 	submitDoc,
 } from "../../api/frappe.js"
@@ -605,6 +607,8 @@ const showColumns = ref(false)
 const showFilters = ref(false)
 const activeStatus = ref("")
 const statusCounts = ref({})
+// Total of the last row load, reused by page/sort changes under the same filters and read scope.
+let lastTotal = null
 const selectedRows = ref([])
 const bulkActing = ref("")
 const bulkNotice = ref("")
@@ -984,6 +988,7 @@ async function initialise() {
 	const sequence = ++loadSequence
 	loading.value = true
 	error.value = ""
+	lastTotal = null
 	metadataReady.value = false
 	first.value = 0
 	advancedFilters.value = cloneFilters(props.initialAdvancedFilters)
@@ -1048,12 +1053,10 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 			typeof option === "string" ? option : option.value,
 		)
 		const countOptions = { distinct: hasChildTableFilter(filters, props.doctype) }
-		const counts = await Promise.all([
-			getCount(props.doctype, filters, countOptions),
-			...values.map((value) =>
-				getCount(props.doctype, [...filters, ...listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)], countOptions),
-			),
-		])
+		const counts = await getCounts(props.doctype, [
+			filters,
+			...values.map((value) => [...filters, ...listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)]),
+		], countOptions)
 		if (existingSequence !== loadSequence) return
 		statusCounts.value = Object.fromEntries([
 			["__all__", counts[0]],
@@ -1064,14 +1067,19 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 	}
 }
 
-async function loadRows(existingSequence = null) {
+async function loadRows(existingSequence = null, { reuseTotal = false } = {}) {
 	const sequence = existingSequence || ++loadSequence
+	// A reload that refetches the total must also stop later page/sort loads from reusing the old one.
+	if (!reuseTotal) lastTotal = null
 	loading.value = true
 	error.value = ""
 	try {
 		const filters = await resolveItemFilters(allFilters({ expand: false }))
 		if (sequence !== loadSequence) return
 		const orderBy = deterministicOrder(sortField.value, sortOrder.value === 1 ? "asc" : "desc")
+		const countOptions = { distinct: hasChildTableFilter(filters, props.doctype) }
+		const totalKey = JSON.stringify([getReadScope(), props.doctype, filters, countOptions.distinct])
+		const knownTotal = reuseTotal && lastTotal?.key === totalKey
 		const [data, count] = await Promise.all([
 			getList(props.doctype, {
 				fields: fetchFields.value,
@@ -1081,9 +1089,10 @@ async function loadRows(existingSequence = null) {
 				pageLength: pageSize.value,
 				groupBy: parentGroupBy(filters, props.doctype),
 			}),
-			getCount(props.doctype, filters, { distinct: hasChildTableFilter(filters, props.doctype) }),
+			knownTotal ? lastTotal.total : getCount(props.doctype, filters, countOptions),
 		])
 		if (sequence !== loadSequence) return
+		lastTotal = { key: totalKey, total: count }
 		rows.value = data
 		total.value = count
 		now.value = new Date()
@@ -1091,6 +1100,7 @@ async function loadRows(existingSequence = null) {
 		emit("loaded", { rows: data, total: count })
 	} catch (reason) {
 		if (sequence !== loadSequence) return
+		lastTotal = null
 		error.value = reason.message || `Unable to load ${props.doctype}.`
 		rows.value = []
 		total.value = 0
@@ -1099,11 +1109,11 @@ async function loadRows(existingSequence = null) {
 	}
 }
 
-function reload(includeCounts = false) {
+function reload(includeCounts = false, { reuseTotal = false } = {}) {
 	if (!metadataReady.value) return Promise.resolve([])
 	const sequence = ++loadSequence
 	for (const item of Object.keys(variantsByItem)) delete variantsByItem[item]
-	const tasks = [loadRows(sequence)]
+	const tasks = [loadRows(sequence, { reuseTotal })]
 	if (includeCounts) tasks.push(loadStatusCounts(sequence))
 	return Promise.all(tasks)
 }
@@ -1147,14 +1157,14 @@ async function columnsSaved() {
 function pageChanged(event) {
 	first.value = event.first
 	pageSize.value = event.rows
-	reload()
+	reload(false, { reuseTotal: true })
 }
 
 function sortChanged(event) {
 	sortField.value = event.sortField || "modified"
 	sortOrder.value = event.sortOrder || -1
 	first.value = 0
-	reload()
+	reload(false, { reuseTotal: true })
 }
 
 function selectStatus(value) {

@@ -37,6 +37,8 @@ async function quickFilterFields(doctype, fields) {
 		getItemFilterValues: async () => ({}),
 		getList: async () => [],
 		getCount: async () => 0,
+		getCounts: async (doctype, filterSets) => filterSets.map(() => 0),
+		getReadScope: () => "scope",
 	}
 	const modules = {
 		"vue-router": { useRoute: () => ({ fullPath: "/fabric-store" }) },

@@ -8,12 +8,19 @@ const METADATA_LIMIT = 20
 const LINK_RESULT_LIMIT = 50
 const LINK_RESULT_MS = 30000
 const SHORT_LINK_QUERY = 2
+// Matches MAX_FILTER_SETS in essdee_yrp/api/list_counts.py.
+const COUNT_BATCH_LIMIT = 100
 let readGeneration = 0
 
 export function invalidatePendingReads() {
 	readGeneration += 1
 	pendingReads.clear()
 	linkResults.clear()
+}
+
+/** Changes on every write, explicit invalidation or session change: results read under one scope may be reused. */
+export function getReadScope() {
+	return JSON.stringify([...sessionIdentity(), readGeneration])
 }
 
 /** Drops every session read cache, including DocType metadata. */
@@ -359,6 +366,19 @@ export function getItemFilterValues(items) {
 export async function getCount(doctype, filters = [], { distinct = false } = {}) {
 	const value = await callRead("frappe.desk.reportview.get_count", distinct ? { doctype, filters, distinct } : { doctype, filters })
 	return Number(value || 0)
+}
+
+/** `get_count` per filter set in one request per COUNT_BATCH_LIMIT sets; resolves in the same order. */
+export async function getCounts(doctype, filterSets = [], { distinct = false } = {}) {
+	const batches = []
+	for (let start = 0; start < filterSets.length; start += COUNT_BATCH_LIMIT) batches.push(filterSets.slice(start, start + COUNT_BATCH_LIMIT))
+	const answers = await Promise.all(batches.map(async (batch) => {
+		const args = { doctype, filter_sets: batch }
+		const values = await callRead("essdee_yrp.api.list_counts.get_counts", distinct ? { ...args, distinct } : args)
+		if (!Array.isArray(values) || values.length !== batch.length) throw new Error("The server returned an incomplete set of counts.")
+		return values
+	}))
+	return answers.flat().map((value) => Number(value || 0))
 }
 
 export async function searchLink(

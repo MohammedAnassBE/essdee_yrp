@@ -7,11 +7,17 @@ function rowsOf(payload) {
 	return payload?.data?.data || {}
 }
 
+/** Sizes the colour row actually has, in the plan's size order. */
+export function rowSizes(payload, row) {
+	const present = Object.keys(row?.values || {})
+	const ordered = (payload?.primary_values || []).filter((size) => present.includes(size))
+	return [...ordered, ...present.filter((size) => !ordered.includes(size))]
+}
+
 export function initialEntry(payload) {
-	const sizes = payload?.primary_values || []
 	return Object.fromEntries(Object.entries(rowsOf(payload)).map(([colour, row]) => [
 		colour,
-		{ checked: row.check_value ?? true, sizes: Object.fromEntries(sizes.map((size) => [size, 0])) },
+		{ checked: row.check_value ?? true, sizes: Object.fromEntries(rowSizes(payload, row).map((size) => [size, 0])) },
 	]))
 }
 

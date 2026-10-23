@@ -2,12 +2,13 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
+import { initialEntry } from "../src/departments/finishing/finishingEntries.js"
 import { canCreateDc, isExistingDc, prefilledEntry } from "../src/departments/finishing/plan/finishingSourceEntries.js"
 
 const read = (file) => readFileSync(new URL(`../src/departments/finishing/${file}`, import.meta.url), "utf8")
 const payload = {
 	primary_values: ["S", "M", "L"],
-	data: { data: { Blue: { check_value: true }, Red: { check_value: true } } },
+	data: { data: { Blue: { check_value: true, values: { L: {}, S: {}, M: {} } }, Red: { check_value: true, values: { S: {}, M: {}, L: {} } } } },
 }
 
 test("Create DC shows only for entries without a DC when entries can be created", () => {
@@ -26,6 +27,23 @@ test("prefill fills the entry quantities and checks only its colours", () => {
 		Blue: { checked: true, sizes: { S: 0, M: 3, L: 2 } },
 		Red: { checked: false, sizes: { S: 0, M: 0, L: 0 } },
 	})
+})
+
+test("each colour only gets the sizes it has, in the plan's size order", () => {
+	const mixed = {
+		primary_values: ["S", "M", "L", "XL", "2XL"],
+		data: { data: { Olive: { check_value: false, values: { S: {} } }, Navy: { values: { XL: {}, M: {} } } } },
+	}
+	assert.deepEqual(initialEntry(mixed), {
+		Olive: { checked: false, sizes: { S: 0 } },
+		Navy: { checked: true, sizes: { M: 0, XL: 0 } },
+	})
+	assert.deepEqual(prefilledEntry(mixed, { Olive: { S: 5, M: 2 } }), {
+		Olive: { checked: true, sizes: { S: 5 } },
+		Navy: { checked: false, sizes: { M: 0, XL: 0 } },
+	})
+	const matrix = read("components/FinishingEntryMatrix.vue")
+	assert.match(matrix, /<span v-if="!\(size in modelValue\[colour\]\.sizes\)" class="finishing-entry-matrix__off"[^>]*>—<\/span>/)
 })
 
 test("source entry rows switch from the button to the DC link once a DC exists", () => {

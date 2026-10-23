@@ -55,11 +55,9 @@ def get_entry_matrix(doc, view, field, quantities, checked_default=None):
 	for colour, row in rows.items():
 		entry = parse_json_object(entries.get(colour), label=colour)
 		sizes = parse_json_object(entry.get("sizes"), label=colour)
-		unknown_sizes = set(sizes) - set(row.get("values") or {})
-		if unknown_sizes:
-			frappe.throw(
-				_("Size {0} does not belong to {1}.").format(", ".join(sorted(unknown_sizes)), colour)
-			)
+		for size in sorted(set(sizes) - set(row.get("values") or {})):
+			if quantity(sizes[size], f"{colour} {size}"):
+				frappe.throw(_("No stock for {0} {1} in this Finishing Plan.").format(colour, size))
 		for size, values in (row.get("values") or {}).items():
 			values[field] = quantity(sizes.get(size), f"{colour} {size}")
 		if checked_default is not None:

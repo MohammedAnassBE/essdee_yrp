@@ -36,8 +36,9 @@
 					</template>
 					<td class="finishing-table__type"><strong>{{ inputLabel }}</strong></td>
 					<td v-for="size in sizes" :key="size" class="finishing-entry-matrix__cell">
+						<span v-if="!(size in modelValue[colour].sizes)" class="finishing-entry-matrix__off" :aria-label="`${colourLabel(colour)} has no ${size}`">—</span>
 						<input
-							v-if="!checkable || modelValue[colour].checked"
+							v-else-if="!checkable || modelValue[colour].checked"
 							v-model="modelValue[colour].sizes[size]"
 							type="number"
 							min="0"

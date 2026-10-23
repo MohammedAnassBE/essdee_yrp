@@ -114,6 +114,35 @@ class TestFinishingWebEntries(TestCase):
 					services={"essdee_yrp.finishing.transactions.return_items": "GRN-1"},
 				)
 
+	def test_zero_quantity_for_a_size_the_colour_lacks_is_ignored(self):
+		result, mocks = self._run(
+			"create_delivery_challan",
+			{
+				"from_location": "S-FROM",
+				"actual_date": "2026-10-09",
+				"selected_type": "balance",
+				"quantities": {"Red": {"checked": True, "sizes": {"S": 4, "XL": 0, "2XL": ""}}},
+			},
+			services={"essdee_yrp.finishing.transactions.create_delivery_challan": "DC-1"},
+		)
+		row = mocks["create_delivery_challan"].call_args.args[0]["items"]["data"]["data"]["Red"]
+		self.assertEqual(set(row["values"]), {"S", "M"})
+		self.assertEqual(row["values"]["S"]["balance_dc"], 4)
+		self.assertEqual(result["result"]["name"], "DC-1")
+
+	def test_quantity_for_a_size_the_colour_lacks_reports_no_stock(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "No stock for Red XL"):
+			self._run(
+				"create_delivery_challan",
+				{
+					"from_location": "S-FROM",
+					"actual_date": "2026-10-09",
+					"selected_type": "balance",
+					"quantities": {"Red": {"checked": True, "sizes": {"XL": 2}}},
+				},
+				services={"essdee_yrp.finishing.transactions.create_delivery_challan": "DC-1"},
+			)
+
 	def test_delivery_challan_type_must_be_a_frappe_15_option(self):
 		with self.assertRaises(frappe.ValidationError):
 			self._run(

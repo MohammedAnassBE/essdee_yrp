@@ -217,6 +217,12 @@ class EssdeeDeliveryChallan(DeliveryChallan):
 			)
 		return result
 
+	def get_item_details_for_ui(self):
+		# delivery_challan_hooks.onload regroups a cut-panel DC after the controller.
+		if self.get("cut_panel_movement"):
+			return []
+		return super().get_item_details_for_ui()
+
 	def before_validate(self):
 		super().before_validate()
 		# Base sync intentionally keeps zero matrix cells for ordinary drafts.

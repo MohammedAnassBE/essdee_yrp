@@ -1297,3 +1297,38 @@ class TestDeliveryChallanCustomization(FrappeTestCase):
 		self.assertEqual([row.qty for row in overlaid], [12, 18])
 		self.assertEqual({row.row_index for row in overlaid}, {3})
 		self.assertEqual({row.table_index for row in overlaid}, {2})
+
+
+class TestDeliveryChallanItemDetailsOnload(FrappeTestCase):
+	"""A cut-panel DC groups its matrix once, without the base grouping or the draft excess adapter."""
+
+	def onload(self, **fields):
+		doc = EssdeeDeliveryChallan(
+			{"doctype": "YRP Delivery Challan", "docstatus": 0, "items": [{"item_variant": "V-S", "qty": 2}], **fields}
+		)
+		grouped = [{"items": [{"values": {"S": {"qty": 2, "pending_quantity": 0}}}]}]
+		with (
+			patch(
+				"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan.DeliveryChallan.get_item_details_for_ui",
+				return_value=grouped,
+			) as base,
+			patch("yrp.stock.save_stock_items.group_items_for_ui", return_value=grouped) as group,
+			patch("essdee_yrp.item_matrix.normalize_item_matrix_row_indexes", side_effect=lambda rows: rows),
+			patch("essdee_yrp.print_helpers.get_dc_grn_letter_head", return_value="LH"),
+		):
+			doc.run_method("onload")
+		return doc, base.call_count, group.call_count
+
+	def test_cut_panel_dc_groups_once_without_excess_adapter(self):
+		doc, base_calls, group_calls = self.onload(cut_panel_movement="CPM-1")
+
+		self.assertEqual((base_calls, group_calls), (0, 1))
+		self.assertEqual(doc.get_onload("item_details")[0]["items"][0]["values"]["S"]["pending_quantity"], 0)
+		self.assertEqual(doc.letter_head, "LH")
+
+	def test_plain_draft_dc_keeps_base_grouping_and_excess_adapter(self):
+		doc, base_calls, group_calls = self.onload()
+
+		self.assertEqual((base_calls, group_calls), (1, 0))
+		self.assertIsNone(doc.get_onload("item_details")[0]["items"][0]["values"]["S"]["pending_quantity"])
+		self.assertEqual(doc.letter_head, "LH")

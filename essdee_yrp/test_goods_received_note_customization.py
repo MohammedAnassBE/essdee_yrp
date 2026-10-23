@@ -917,7 +917,6 @@ class TestDefaultKnittingActualDia(unittest.TestCase):
 				document.__dict__.update(
 					docstatus=0, against="YRP Work Order", against_id="WO-1",
 					items=saved, delivery_challan=None,
-					__onload=frappe._dict(),
 				)
 				planned = [
 					frappe._dict(item_variant=variant, row_index=f"{index}::Accepted", ref_docname=ref,
@@ -939,7 +938,6 @@ class TestDefaultKnittingActualDia(unittest.TestCase):
 					"value_fields": ["ref_docname", "received_type", "secondary_uom", "secondary_qty"],
 				}
 				with (
-					patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.GoodsReceivedNote.onload"),
 					patch.object(frappe, "get_doc", side_effect=get_doc),
 					patch("essdee_yrp.overrides.goods_received_note._default_received_type", return_value="Accepted"),
 					patch("yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note._pending_receivable_rows", return_value=planned),
@@ -958,11 +956,9 @@ class TestDefaultKnittingActualDia(unittest.TestCase):
 						"primary_attribute_values": ["14", "14.5", "19"],
 					}),
 				):
-					document.onload()
-					matrix = document.get_onload("item_details")
+					matrix = document.get_item_details_for_ui()
 					browser_rows = ungroup_items_from_ui(matrix, "YRP Goods Received Note")
 					merged = _merge_authoritative_rows(saved, browser_rows)
-				matrix = document.get_onload("item_details")
 				order = [
 					(dia, value["ref_docname"], value["qty"])
 					for group in matrix for row in group["items"] for dia, value in row["values"].items()
@@ -1065,3 +1061,44 @@ class TestFabricReceiptExcess(unittest.TestCase):
 		document.get.return_value = [row]
 		with patch.object(frappe, "get_doc", return_value=correction), self.assertRaisesRegex(frappe.ValidationError, "exceeds allowance"):
 			GoodsReceivedNote.validate_against_correction_pending(document, 0)
+
+
+class TestItemDetailsGroupedOnce(unittest.TestCase):
+	"""An Essdee GRN mode builds the onload matrix itself; base grouping runs only when none applies."""
+
+	MODULE = "essdee_yrp.overrides.goods_received_note"
+
+	def onload(self, **fields):
+		from essdee_yrp.overrides.goods_received_note import EssdeeGoodsReceivedNote
+
+		values = {"doctype": "YRP Goods Received Note", "against": "YRP Work Order", "docstatus": 1}
+		document = EssdeeGoodsReceivedNote({**values, "items": [{"item_variant": "V-S", "quantity": 1}], **fields})
+		with (
+			patch(
+				"yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note.GoodsReceivedNote.get_item_details_for_ui",
+				return_value=["base"],
+			) as base,
+			patch("yrp.stock.save_stock_items.group_items_for_ui", return_value=["essdee"]) as group,
+			patch(f"{self.MODULE}.normalize_cutting_grn_row_indexes", side_effect=lambda rows: rows),
+			patch(f"{self.MODULE}.aggregate_packing_grn_rows_for_ui", side_effect=lambda rows: rows),
+			patch(f"{self.MODULE}._selected_draft_receivable_rows", return_value=[{"item_variant": "V-S"}]),
+			patch("essdee_yrp.fabric_grn.get_actual_dia_context", return_value={"enabled": False}),
+			patch.object(frappe, "get_doc", return_value=frappe._dict(name="WO-1")),
+		):
+			document.onload()
+		return document.get_onload("item_details"), base.call_count, group.call_count
+
+	def test_essdee_modes_skip_the_base_grouping(self):
+		for fields in (
+			{"additional_grn": 1},
+			{"includes_packing": 1},
+			{"cutting_laysheet": "CLS-1"},
+			{"allow_non_bundle": 1},
+			{"docstatus": 0, "against_id": "WO-1"},
+		):
+			with self.subTest(fields=fields):
+				self.assertEqual(self.onload(**fields), (["essdee"], 0, 1))
+
+	def test_plain_receipt_keeps_the_base_grouping(self):
+		self.assertEqual(self.onload(), (["base"], 1, 0))
+		self.assertEqual(self.onload(docstatus=0, is_return=1, against_id="WO-1"), (["base"], 1, 0))

@@ -39,19 +39,14 @@ QTY_TOLERANCE = 0.0001
 class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 	"""Use base YRP normally; specialize only an Essdee return GRN."""
 
-	def onload(self):
-		super().onload()
+	def get_item_details_for_ui(self):
 		if self.get("additional_grn") and self.against == "YRP Work Order":
 			from yrp.stock.save_stock_items import group_items_for_ui
 
 			rows = [frappe._dict(row.as_dict()) for row in self.items]
 			for row in rows:
 				row.max_receivable_quantity = -1
-			self.set_onload(
-				"item_details",
-				group_items_for_ui(normalize_cutting_grn_row_indexes(rows), "YRP Goods Received Note"),
-			)
-			return
+			return group_items_for_ui(normalize_cutting_grn_row_indexes(rows), "YRP Goods Received Note")
 		display_rows = self.get("items") or []
 		if (
 			self.docstatus == 0
@@ -84,23 +79,16 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 			# row with the split quantities added together.
 			from yrp.stock.save_stock_items import group_items_for_ui
 
-			self.set_onload(
-				"item_details",
-				group_items_for_ui(
-					aggregate_packing_grn_rows_for_ui(display_rows),
-					"YRP Goods Received Note",
-				),
+			return group_items_for_ui(
+				aggregate_packing_grn_rows_for_ui(display_rows),
+				"YRP Goods Received Note",
 			)
-			return
 		if not (self.get("cutting_laysheet") or self.get("allow_non_bundle") or self.get("additional_grn")):
 			if display_rows is not self.get("items"):
 				from yrp.stock.save_stock_items import group_items_for_ui
 
-				self.set_onload(
-					"item_details",
-					group_items_for_ui(display_rows, "YRP Goods Received Note"),
-				)
-			return
+				return group_items_for_ui(display_rows, "YRP Goods Received Note")
+			return super().get_item_details_for_ui()
 
 		# Cutting and collapsed-bundle GRNs can inherit a different Work Order
 		# row_index for every size. Rebuild the display indexes from the actual
@@ -108,12 +96,9 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		# production_api, without mutating saved transaction rows.
 		from yrp.stock.save_stock_items import group_items_for_ui
 
-		self.set_onload(
-			"item_details",
-			group_items_for_ui(
-				normalize_cutting_grn_row_indexes(display_rows),
-				"YRP Goods Received Note",
-			),
+		return group_items_for_ui(
+			normalize_cutting_grn_row_indexes(display_rows),
+			"YRP Goods Received Note",
 		)
 
 	def submit(self):

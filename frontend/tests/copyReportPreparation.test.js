@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { resolve } from "node:path"
 import test from "node:test"
 import { useIncrementalRows } from "../src/composables/useIncrementalRows.js"
+import { useCopyFeedback } from "../src/composables/useCopyFeedback.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 
 const nodes = (root, predicate) => findNodes(root, predicate)
@@ -12,7 +13,8 @@ function mountShell(beforeCopy, copyElementAsImage) {
 	globalThis.window ??= { setTimeout, clearTimeout }
 	const shell = loadComponent(resolve("frontend/src/components/reports/ReportShell.vue"), {
 		"primevue/button": Button, "primevue/message": () => null, "primevue/skeleton": () => null,
-		"./copyElementAsImage.js": { copyElementAsImage },
+		"./copyElementAsImage.js": { copyElementAsImage, copyPendingImage: () => false },
+		"../../composables/useCopyFeedback.js": { useCopyFeedback: options => useCopyFeedback({ ...options, toast: { add() {} } }) },
 		"./ReportActions.vue": () => null, "./ReportExportButton.vue": () => null,
 		"./reportExport.js": { renderedReportRows: () => [] },
 		"../navigation/InlinePageNavigation.vue": () => null,
@@ -27,7 +29,7 @@ test("Copy Report runs beforeCopy first and undoes it after the capture, even wh
 		const calls = []
 		const root = mountShell(async () => { calls.push("prepare"); return () => calls.push("restore") }, async (element, options) => {
 			calls.push("copy")
-			assert.deepEqual(options.hide, [".report-shell__filters", ".report-shell__copy-notice", ".report-shell__refreshing"])
+			assert.deepEqual(options.hide, [".report-shell__filters", ".report-shell__refreshing"])
 			if (failure) throw failure
 		})
 		copyButton(root).props.onClick()

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
+import { useCopyFeedback } from "../src/composables/useCopyFeedback.js"
 
 globalThis.window ??= globalThis
 const tick = async () => { await new Promise(done => setImmediate(done)); await Vue.nextTick() }
 const nodes = (root, type) => findNodes(root, node => node.type === type)
 
-function mountShell(props, { copy = () => new Promise(() => {}) } = {}) {
+function mountShell(props, { copy = () => new Promise(() => {}), toast = { add() {} } } = {}) {
 	const opened = [], emitted = []
 	const ExportStub = Vue.defineComponent({
 		setup(_props, { expose }) {
@@ -19,7 +20,8 @@ function mountShell(props, { copy = () => new Promise(() => {}) } = {}) {
 		"primevue/menu": props => Vue.h("menu", props),
 		"primevue/message": () => null,
 		"primevue/skeleton": () => null,
-		"./copyElementAsImage.js": { copyElementAsImage: copy },
+		"./copyElementAsImage.js": { copyElementAsImage: copy, copyPendingImage: () => false },
+		"../../composables/useCopyFeedback.js": { useCopyFeedback: options => useCopyFeedback({ ...options, toast }) },
 		"./ReportExportButton.vue": ExportStub,
 		"./reportExport.js": { renderedReportRows: () => [] },
 		"../navigation/InlinePageNavigation.vue": () => null,
@@ -67,6 +69,25 @@ test("menu items keep their disabled state and Copy keeps its progress state", a
 		assert.deepEqual([copy.props.label, copy.props.loading], ["Copying", true])
 		assert.deepEqual(menuItems(ready.root).map(item => item.label), ["Reset"])
 	} finally { ready.root.__vue_app__.unmount() }
+})
+
+test("Copy shows a check and Copied with a toast after success, and an error toast on failure", async () => {
+	for (const failure of [null, new Error("The browser blocked the clipboard.")]) {
+		const toasts = []
+		const { root } = mountShell({ copyable: true, generated: true, hasResults: true }, {
+			copy: async () => { if (failure) throw failure },
+			toast: { add: message => toasts.push(message) },
+		})
+		try {
+			await tick()
+			buttons(root)[1].props.onClick()
+			await tick()
+			const copy = buttons(root)[1]
+			const expected = failure ? ["Copy Report", "pi pi-copy", "error"] : ["Copied", "pi pi-check", "success"]
+			assert.deepEqual([copy.props.label, copy.props.icon, toasts[0]?.severity], expected)
+			if (failure) assert.equal(toasts[0].detail, failure.message)
+		} finally { root.__vue_app__.unmount() }
+	}
 })
 
 test("optional report filters share the report grid and fold behind an accessible toggle", async () => {

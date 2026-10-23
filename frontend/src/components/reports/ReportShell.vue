@@ -18,9 +18,9 @@
 				<Button
 					v-if="copyable"
 					type="button"
-					:label="copying ? 'Copying' : 'Copy Report'"
-					icon="pi pi-copy"
-					severity="secondary"
+					:label="copying ? 'Copying' : copied ? 'Copied' : 'Copy Report'"
+					:icon="copied ? 'pi pi-check' : 'pi pi-copy'"
+					:severity="copied ? 'success' : 'secondary'"
 					outlined
 					class="erp-action-button report-shell__copy-button"
 					:loading="copying"
@@ -39,17 +39,6 @@
 				/>
 			</div>
 		</form>
-		<div
-			v-if="copyNotice"
-			class="report-shell__copy-notice"
-			:class="{ 'report-shell__copy-notice--error': copyNoticeIsError }"
-			role="status"
-			aria-live="polite"
-		>
-			<i :class="copyNoticeIsError ? 'pi pi-exclamation-circle' : 'pi pi-check-circle'" />
-			{{ copyNotice }}
-		</div>
-
 		<Message v-if="error" severity="error" :closable="false" class="report-shell__message">
 			{{ error }}
 		</Message>
@@ -84,12 +73,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from "vue"
+import { computed, nextTick, ref } from "vue"
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 
-import { copyElementAsImage } from "./copyElementAsImage.js"
+import { copyElementAsImage, copyPendingImage } from "./copyElementAsImage.js"
+import { useCopyFeedback } from "../../composables/useCopyFeedback.js"
 import ReportActions from "./ReportActions.vue"
 import ReportExportButton from "./ReportExportButton.vue"
 import { renderedReportRows } from "./reportExport.js"
@@ -132,24 +122,12 @@ const moreActions = computed(() => [
 const reportRoot = ref(null)
 const resultsRoot = ref(null)
 const getRenderedRows = () => renderedReportRows(resultsRoot.value)
-const copying = ref(false)
-const copyNotice = ref("")
-const copyNoticeIsError = ref(false)
-let noticeTimer
-const COPY_HIDDEN = [".report-shell__filters", ".report-shell__copy-notice", ".report-shell__refreshing"]
+const { copying, copied, runCopy } = useCopyFeedback({ success: "Report copied to clipboard" })
+const COPY_HIDDEN = [".report-shell__filters", ".report-shell__refreshing"]
 
-function showCopyNotice(message, isError = false) {
-	copyNotice.value = message
-	copyNoticeIsError.value = isError
-	window.clearTimeout(noticeTimer)
-	noticeTimer = window.setTimeout(() => { copyNotice.value = "" }, 3200)
-}
-
-async function copyReport() {
-	if (copying.value) return
-	copying.value = true
-	copyNotice.value = ""
-	try {
+function copyReport() {
+	return runCopy(async () => {
+		if (copyPendingImage(reportRoot.value)) return
 		const restoreState = props.beforeCopy ? await props.beforeCopy() : null
 		await nextTick()
 		try {
@@ -157,15 +135,8 @@ async function copyReport() {
 		} finally {
 			restoreState?.()
 		}
-		showCopyNotice("Report copied to clipboard")
-	} catch (exception) {
-		showCopyNotice(exception?.message || "Could not copy the report.", true)
-	} finally {
-		copying.value = false
-	}
+	})
 }
-
-onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 </script>
 
 <style scoped>
@@ -218,24 +189,6 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 
 .report-shell__copy-button {
 	min-width: 108px;
-}
-
-.report-shell__copy-notice {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: var(--erp-space-2) var(--erp-space-4);
-	color: var(--erp-success-text);
-	font-size: var(--erp-font-size-caption);
-	font-weight: var(--erp-font-weight-semibold);
-	background: var(--erp-success-soft);
-	border-bottom: 1px solid var(--erp-success-soft);
-}
-
-.report-shell__copy-notice--error {
-	color: var(--erp-danger);
-	background: var(--erp-danger-soft);
-	border-bottom-color: var(--erp-danger-soft);
 }
 
 .report-shell__message {

@@ -9,6 +9,11 @@ const PLAIN_INPUT_SELECTOR = "td input, td textarea, th input, th textarea"
 const MAX_CANVAS_SIDE = 32_767
 const MAX_CANVAS_AREA = 268_000_000
 export const TOO_LARGE_MESSAGE = "Report is too large to copy as one image. Narrow the filters or use Export."
+export const COPY_BLOCKED_MESSAGE = "The browser blocked the clipboard. Try Copy again or use Export."
+export const COPY_AGAIN_MESSAGE = "The report image is ready. Click Copy again to put it on the clipboard."
+// Browsers allow execCommand("copy") only for about 5 s after a click; a slower capture waits for the next click.
+const PENDING_COPY_MS = 30_000
+let pendingCopy = null
 
 function isVisuallyHidden(style) {
 	return (style.clip && style.clip !== "auto") || (style.clipPath && style.clipPath !== "none")
@@ -67,24 +72,70 @@ export function assertCanvasFits(width, height) {
 
 export async function copyElementAsImage(element, { hide = [] } = {}) {
 	if (!element) throw new Error("Nothing available to copy.")
-	if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-		throw new Error("Image clipboard is not supported by this browser.")
-	}
-
 	if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
 
 	const restore = expandForCapture(element, window, { hide })
-	let blob
+	let blob, text
 	try {
 		const width = Math.max(element.scrollWidth, element.clientWidth)
 		const height = Math.max(element.scrollHeight, element.clientHeight)
 		assertCanvasFits(width, height)
 		// html-to-image otherwise shrinks anything past 16384px until it is unreadable.
 		blob = await toBlob(element, { backgroundColor: "#ffffff", pixelRatio: 1, width, height, skipAutoScale: true })
+		text = element.innerText || ""
 	} finally {
 		restore()
 	}
 	if (!blob) throw new Error(TOO_LARGE_MESSAGE)
 
-	await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+	await writeImageToClipboard(blob, text, { key: element })
+}
+
+/** Finishes a capture that outlived the click; call synchronously from the next click. */
+export function copyPendingImage(key, doc = globalThis.document, now = Date.now()) {
+	const ready = pendingCopy?.key === key && now - pendingCopy.at < PENDING_COPY_MS ? pendingCopy : null
+	pendingCopy = null
+	return Boolean(ready) && copyWithCommand(doc, ready.data)
+}
+
+/** The async image clipboard needs HTTPS; on plain http copy the PNG as an HTML image through execCommand. */
+export async function writeImageToClipboard(blob, text = "", { key = null, clipboard = globalThis.navigator?.clipboard, doc = globalThis.document } = {}) {
+	if (clipboard?.write && typeof ClipboardItem !== "undefined") {
+		await clipboard.write([new ClipboardItem({ "image/png": blob })])
+		return
+	}
+	const data = { "text/html": `<img src="${await blobToDataUrl(blob)}" alt="Report">`, "text/plain": text }
+	if (copyWithCommand(doc, data)) return
+	if (key && globalThis.navigator?.userActivation?.isActive === false) {
+		pendingCopy = { key, data, at: Date.now() }
+		throw Object.assign(new Error(COPY_AGAIN_MESSAGE), { retryable: true })
+	}
+	throw new Error(COPY_BLOCKED_MESSAGE)
+}
+
+/** Writes `data` (mime type to string) to the clipboard from a synthetic copy event. */
+export function copyWithCommand(doc, data) {
+	let written = false
+	const onCopy = event => {
+		event.preventDefault()
+		for (const [type, value] of Object.entries(data)) event.clipboardData.setData(type, value)
+		written = true
+	}
+	doc.addEventListener("copy", onCopy, true)
+	try {
+		return Boolean(doc.execCommand("copy")) && written
+	} catch {
+		return false
+	} finally {
+		doc.removeEventListener("copy", onCopy, true)
+	}
+}
+
+function blobToDataUrl(blob) {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader()
+		reader.onload = () => resolve(reader.result)
+		reader.onerror = () => reject(reader.error)
+		reader.readAsDataURL(blob)
+	})
 }

@@ -1,4 +1,4 @@
-/** /web departments. `sections` maps each launcher workspace key to the route segment(s) under `path` it owns; `combines` adds the sections of other departments. */
+/** /web departments. `sections` maps each launcher workspace key to the route segment(s) under `path` it owns; `combines` adds the sections of other departments, limited to `combinedSections` when set. */
 export const departments = [
 	{
 		key: "cutting",
@@ -82,6 +82,16 @@ export const departments = [
 		component: () => import("./MerchPurchase.vue"),
 	},
 	{
+		key: "merch-pd",
+		label: "Merch PD",
+		shortLabel: "MD",
+		path: "/merch-pd",
+		combines: ["merch", "purchase", "pd"],
+		combinedSections: ["lots", "item_production_details", "purchase_orders", "lotwise_item_profits"],
+		sections: {},
+		component: () => import("./MerchPd.vue"),
+	},
+	{
 		key: "sales",
 		label: "Sales",
 		shortLabel: "SA",
@@ -123,12 +133,13 @@ export const departments = [
 	},
 ]
 
-/** Route paths each workspace key of `department` owns, including the sections of the departments it combines. */
+/** Route paths each workspace key of `department` owns, including the sections of the departments it combines (only `combinedSections` when set). */
 export function getWorkspacePaths(department) {
 	const sources = [department, ...(department.combines || []).map((key) => departments.find((item) => item.key === key))]
 	const paths = {}
 	for (const source of sources) {
 		for (const [key, segments] of Object.entries(source.sections)) {
+			if (source !== department && department.combinedSections && !department.combinedSections.includes(key)) continue
 			paths[key] = [...(paths[key] || []), ...[segments].flat().map((segment) => `${source.path}/${segment}`)]
 		}
 	}

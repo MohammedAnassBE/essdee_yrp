@@ -16,6 +16,32 @@ const RECORD_BASES = {
 	lotwise: "/web/pd/lotwise-item-profits",
 }
 
+export function pdLauncherItems() {
+	return [
+		{
+			key: "products",
+			label: "Products",
+			description: "Style master, silhouettes, trims, colours, graphics and tech pack release.",
+			icon: "pi pi-palette",
+			to: "/pd/products",
+		},
+		{
+			key: "product_releases",
+			label: "Product Releases",
+			description: "Released tech pack snapshots, read-only with print.",
+			icon: "pi pi-send",
+			to: "/pd/product-releases",
+		},
+		{
+			key: "lotwise_item_profits",
+			label: "Lotwise Item Profit",
+			description: "Costing sheets: size rates, cloth, production cost, discounts and profit.",
+			icon: "pi pi-calculator",
+			to: "/pd/lotwise-item-profits",
+		},
+	]
+}
+
 export function pdRecordPath(kind, name) {
 	if (!RECORD_BASES[kind]) throw new Error(`Unknown PD record kind: ${kind}`)
 	return `${RECORD_BASES[kind]}/${encodeURIComponent(String(name))}`

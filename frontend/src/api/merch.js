@@ -35,6 +35,10 @@ export function getMerchPurchaseCapabilities() {
 	return callMethod("essdee_yrp.merch_purchase.web_workspace.get_capabilities")
 }
 
+export function getMerchPdCapabilities() {
+	return callMethod("essdee_yrp.merch_pd.web_workspace.get_capabilities")
+}
+
 export function getIpdListCapabilities() {
 	return callMethod(`${IPD_METHOD}.get_ipd_list_capabilities`)
 }

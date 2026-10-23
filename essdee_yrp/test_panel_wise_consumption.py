@@ -319,3 +319,74 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 		matrix = _blank_matrix(context)
 		with self.assertRaises(frappe.ValidationError):
 			expand_panel_wise_matrix(matrix, context)
+
+
+def _contrast_collar_ipd():
+	"""Navy polo whose Collar was Navy when saved; the stitching tab now sends White."""
+	doc = frappe.new_doc("YRP Item Production Detail")
+	doc.flags.skip_ipd_settings_defaults = True
+	doc.is_set_item = 0
+	doc.enable_panel_wise_consumption_matrix = 1
+	for panel in ("Front", "Collar"):
+		doc.append("stiching_item_details", {"stiching_attribute_value": panel, "quantity": 1})
+		doc.append(
+			"stiching_item_combination_details",
+			{
+				"index": 0,
+				"major_attribute_value": "Navy",
+				"set_item_attribute_value": panel,
+				"attribute_value": "Navy",
+			},
+		)
+	doc.stiching_item_detail = {
+		"attributes": ["Front", "Collar"],
+		"values": [{"major_attribute": "Navy", "val": {"Front": "Navy", "Collar": "White"}}],
+	}
+	return doc
+
+
+def _panel_colours(doc):
+	return {
+		row.set_item_attribute_value: row.attribute_value for row in doc.stiching_item_combination_details
+	}
+
+
+class TestPanelWiseMatrixSyncOrder(IntegrationTestCase):
+	"""production_api syncs the matrices after the stitching rows are rebuilt."""
+
+	def test_save_syncs_matrices_from_current_stitching_colours(self):
+		from essdee_yrp import ipd_validations
+
+		doc = _contrast_collar_ipd()
+		seen = {}
+
+		def capture(name):
+			return lambda ipd: seen.setdefault(name, _panel_colours(ipd))
+
+		with (
+			patch.object(ipd_validations, "is_cloth_ipd", return_value=False),
+			patch(
+				"essdee_yrp.panel_wise_consumption.sync_panel_wise_consumption_matrix",
+				side_effect=capture("consumption"),
+			),
+			patch(
+				"essdee_yrp.panel_wise_cloth_mapping.sync_panel_wise_cloth_mapping_matrix",
+				side_effect=capture("cloth_mapping"),
+			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_compacting.sd_yrp_ipd_compacting.stage_compacting_details_from_ipd"
+			),
+		):
+			ipd_validations.before_validate(doc)
+
+		expected = {"Front": "Navy", "Collar": "White"}
+		self.assertEqual(seen["consumption"], expected)
+		self.assertEqual(seen["cloth_mapping"], expected)
+
+	def test_web_checks_sync_matrices_after_stitching_rows(self):
+		from essdee_yrp.merch.ipd.checks import garment_steps
+
+		names = [name for name, _step in garment_steps(_contrast_collar_ipd())]
+		combinations = names.index("save_combination_detail_fields")
+		self.assertGreater(names.index("sync_panel_wise_consumption_matrix"), combinations)
+		self.assertGreater(names.index("sync_panel_wise_cloth_mapping_matrix"), combinations)

@@ -62,14 +62,14 @@ def garment_steps(doc):
 	from essdee_yrp.panel_wise_consumption import sync_panel_wise_consumption_matrix
 
 	return [
-		("sync_panel_wise_consumption_matrix", lambda: sync_panel_wise_consumption_matrix(doc)),
-		("sync_panel_wise_cloth_mapping_matrix", lambda: sync_panel_wise_cloth_mapping_matrix(doc)),
 		("validate_duplicate_bom_items", lambda: rules.validate_duplicate_bom_items(doc)),
 		("save_combination_detail_fields", lambda: rules.save_combination_detail_fields(doc)),
 		("clear_set_item_fields_when_disabled", lambda: rules.clear_set_item_fields_when_disabled(doc)),
 		("validate_cloth_detail_names", lambda: rules.validate_cloth_detail_names(doc)),
 		("sync_cutting_cloth_select_list", lambda: rules.sync_cutting_cloth_select_list(doc)),
 		("validate_set_item_defaults", lambda: rules.validate_set_item_defaults(doc)),
+		("sync_panel_wise_consumption_matrix", lambda: sync_panel_wise_consumption_matrix(doc)),
+		("sync_panel_wise_cloth_mapping_matrix", lambda: sync_panel_wise_cloth_mapping_matrix(doc)),
 	]
 
 

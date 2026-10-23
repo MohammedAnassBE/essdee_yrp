@@ -48,12 +48,6 @@ def before_validate(doc, method=None):
 	# Synced garment IPDs keep only the panel/process/accessory definition.
 	if doc.meta.get_field("colour_yarn_recipes"):
 		doc.set("colour_yarn_recipes", [])
-	from essdee_yrp.panel_wise_consumption import sync_panel_wise_consumption_matrix
-
-	sync_panel_wise_consumption_matrix(doc)
-	from essdee_yrp.panel_wise_cloth_mapping import sync_panel_wise_cloth_mapping_matrix
-
-	sync_panel_wise_cloth_mapping_matrix(doc)
 	validate_duplicate_bom_items(doc)
 	save_combination_detail_fields(doc)
 	clear_set_item_fields_when_disabled(doc)
@@ -61,6 +55,13 @@ def before_validate(doc, method=None):
 	sync_cutting_cloth_select_list(doc)
 	sync_marker_groups(doc)
 	validate_set_item_defaults(doc)
+	# The matrices read the panel colours, so they sync after the stitching rows are rebuilt.
+	from essdee_yrp.panel_wise_consumption import sync_panel_wise_consumption_matrix
+
+	sync_panel_wise_consumption_matrix(doc)
+	from essdee_yrp.panel_wise_cloth_mapping import sync_panel_wise_cloth_mapping_matrix
+
+	sync_panel_wise_cloth_mapping_matrix(doc)
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_compacting.sd_yrp_ipd_compacting import (
 		stage_compacting_details_from_ipd,
 	)

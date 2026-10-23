@@ -33,9 +33,16 @@
 								<td class="erp-number">{{ formatQty(row.consumed_quantity) }}</td>
 								<td class="erp-number">{{ formatQty(row.already_returned) }}</td>
 								<td class="erp-number dc-return-available">{{ formatQty(row.returnable_quantity) }}</td>
-								<td class="erp-number"><InputNumber v-model="row.return_quantity" :aria-label="`Return quantity for ${row.item_variant || 'item'}`" :min="0" :max="Number(row.returnable_quantity || 0)" :max-fraction-digits="3" fluid /></td>
+								<td class="erp-number"><InputNumber v-model="row.return_quantity" @input="row.return_quantity = $event.value" :aria-label="`Return quantity for ${row.item_variant || 'item'}`" :min="0" :max="Number(row.returnable_quantity || 0)" :max-fraction-digits="3" fluid /></td>
 							</tr>
 						</tbody>
+						<tfoot>
+							<tr v-for="total in returnTotals" :key="`total-${total.uom}`" class="dc-return-footer-total">
+								<th scope="row">Total</th><td>{{ total.uom || "—" }}</td>
+								<td class="erp-number">{{ formatQty(total.delivered_quantity) }}</td><td class="erp-number">{{ formatQty(total.consumed_quantity) }}</td><td class="erp-number">{{ formatQty(total.already_returned) }}</td>
+								<td class="erp-number">{{ formatQty(total.returnable_quantity) }}</td><td class="erp-number">{{ formatQty(total.return_quantity) }}</td>
+							</tr>
+						</tfoot>
 					</table>
 				</div>
 				<div v-if="!rows.length" class="dc-return-empty"><i class="pi pi-inbox" /><span>No quantity is available to return.</span></div>
@@ -61,6 +68,7 @@ import { computed, ref, watch } from "vue"
 import { createDeliveryChallanReturn, getDeliveryChallanReturnEditor } from "../../api/fabricStore.js"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import { getReturnTotalsByUom } from "../../engine/stock/deliveryChallanTotals.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -74,6 +82,7 @@ const error = ref("")
 const editor = ref({ permissions: {} })
 const rows = ref([])
 const receivedType = ref("")
+const returnTotals = computed(() => getReturnTotalsByUom(rows.value))
 const selectedQuantity = computed(() => rows.value.reduce((sum, row) => sum + Number(row.return_quantity || 0), 0))
 const canCreate = computed(() => selectedQuantity.value > 0 && (!editor.value.has_received_type || receivedType.value))
 
@@ -131,4 +140,6 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .dc-return-footer { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
 @media (max-width: 560px) { .dc-return-context { grid-template-columns: 1fr; } .dc-return-footer { align-items: stretch; flex-direction: column; } }
 @media (max-width: 1024px), (pointer: coarse) { .dc-return-table :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; } }
+.dc-return-footer-total th, .dc-return-footer-total td { color: var(--erp-text); font-weight: 800; text-align: left; background: var(--erp-surface-muted); border-top: 1px solid var(--erp-border-strong); }
+.dc-return-footer-total td.erp-number { text-align: right; font-variant-numeric: tabular-nums; }
 </style>

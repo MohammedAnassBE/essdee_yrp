@@ -49,7 +49,7 @@
 						<td class="erp-number delivery-challan-return-panel__available">{{ formatQty(row.returnable_quantity) }}</td>
 						<td class="erp-number">
 							<InputNumber
-								v-model="row.return_quantity"
+								v-model="row.return_quantity" @input="row.return_quantity = $event.value"
 								:aria-label="`Return quantity for ${row.item_variant || row.item || `item ${index + 1}`}`"
 								:min="0"
 								:max="Number(row.returnable_quantity || 0)"
@@ -60,6 +60,13 @@
 						</td>
 					</tr>
 				</tbody>
+				<tfoot>
+					<tr v-for="total in returnTotals" :key="`total-${total.uom}`" class="delivery-challan-return-panel__footer">
+						<th scope="row">Total</th><td>{{ total.uom || "—" }}</td>
+						<td class="erp-number">{{ formatQty(total.delivered_quantity) }}</td><td class="erp-number">{{ formatQty(total.consumed_quantity) }}</td><td class="erp-number">{{ formatQty(total.already_returned) }}</td>
+						<td class="erp-number">{{ formatQty(total.returnable_quantity) }}</td><td class="erp-number">{{ formatQty(total.return_quantity) }}</td>
+					</tr>
+				</tfoot>
 			</table>
 		</div>
 		<div v-else class="delivery-challan-return-panel__empty"><i class="pi pi-inbox" /><span>No quantity is available to return.</span></div>
@@ -81,6 +88,7 @@ import { computed, ref, watch } from "vue"
 import { getDeliveryChallanReturnMovement } from "../../api/fabricStore.js"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import { getReturnTotalsByUom } from "../../engine/stock/deliveryChallanTotals.js"
 
 const props = defineProps({
 	context: { type: Object, default: () => ({}) },
@@ -97,6 +105,7 @@ const movementRows = ref(null)
 const movementError = ref("")
 const loadingMovement = ref(false)
 const variants = computed(() => props.context.variants || {})
+const returnTotals = computed(() => getReturnTotalsByUom(rows.value))
 const selectedQuantity = computed(() => rows.value.reduce((total, row) => total + Number(row.return_quantity || 0), 0))
 const canCreate = computed(() => Boolean(
 	selectedQuantity.value > 0
@@ -189,4 +198,6 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 @media (max-width: 900px) { .delivery-challan-return-panel__controls { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .delivery-challan-return-panel footer { align-items: stretch; flex-direction: column; } }
 @media (max-width: 1024px), (pointer: coarse) { .delivery-challan-return-panel :deep(.p-button) { min-width: 44px; min-height: 44px; } .delivery-challan-return-panel__table :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; } }
+.delivery-challan-return-panel__footer th, .delivery-challan-return-panel__footer td { color: var(--erp-text); font-weight: 800; text-align: left; background: var(--erp-surface-muted); border-top: 1px solid var(--erp-border-strong); }
+.delivery-challan-return-panel__footer td.erp-number { text-align: right; font-variant-numeric: tabular-nums; }
 </style>

@@ -133,22 +133,36 @@
 											<td v-for="column in identityColumns(section.group)" :key="column.key">{{ identityValue(row, column) }}</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number delivery-challan-matrix__quantity delivery-challan-matrix__primary-cell">
-												<InputNumber :model-value="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, value, $event)" />
+												<InputNumber :model-value="row.values[value].qty" :aria-label="matrixInputLabel('Deliver', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, value, $event)" @input="setDisplayQuantity(row, value, $event.value)" />
 												<small>Pending {{ formatQty(pendingQuantity(row.values[value])) }}</small>
-												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber :model-value="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, value, $event)" /><span><DocumentLink doctype="UOM" :name="secondaryUom(row, value)" :label="secondaryUom(row, value)" /></span></div>
+												<div v-if="secondaryUom(row, value)" class="delivery-challan-matrix__secondary-inline"><InputNumber :model-value="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, value, $event)" @input="setDisplaySecondaryQuantity(row, value, $event.value)" /><span><DocumentLink doctype="UOM" :name="secondaryUom(row, value)" :label="secondaryUom(row, value)" /></span></div>
 											</td>
 										</template>
 										<template v-else>
 											<td class="erp-number delivery-challan-matrix__pending">{{ formatQty(pendingQuantity(row.values.default)) }}</td>
-											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber :model-value="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, 'default', $event)" /></td>
+											<td class="erp-number delivery-challan-matrix__quantity"><InputNumber :model-value="row.values.default.qty" :aria-label="matrixInputLabel('Deliver', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplayQuantity(row, 'default', $event)" @input="setDisplayQuantity(row, 'default', $event.value)" /></td>
 											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number delivery-challan-matrix__secondary">
-												<InputNumber :model-value="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, 'default', $event)" /><small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
+												<InputNumber :model-value="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, 'default', $event)" @input="setDisplaySecondaryQuantity(row, 'default', $event.value)" /><small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
 											<td><InputText :model-value="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="setDisplayComment(row, $event)" /></td><td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>
 									</tbody>
+									<tfoot>
+										<tr v-for="totals in [tableTotals(section)]" :key="`total-${section.key}`" class="delivery-challan-matrix__footer">
+											<th v-if="identityColumns(section.group).length" :colspan="identityColumns(section.group).length" scope="row">Total</th>
+										<template v-if="hasPrimaryAttribute(section.group)">
+											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number">{{ formatTotalQty(totals.quantities[value]) }}<small v-if="hasSecondaryForValue(section, value)">{{ formatTotalQty(totals.secondary[value]) }} {{ totals.secondary[value] === null ? "" : secondaryUnit(section, value) }}</small></td>
+										</template>
+										<template v-else>
+											<td class="erp-number">{{ formatTotalQty(totals.pending.default) }}</td>
+											<td class="erp-number">{{ formatTotalQty(totals.quantities.default) }}</td>
+											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number">{{ formatTotalQty(totals.secondary.default) }}</td>
+										</template>
+											<th scope="row">{{ identityColumns(section.group).length ? "" : "Total" }}</th><td class="erp-number delivery-challan-matrix__total">{{ formatTotalQty(totals.total) }}</td><td />
+										</tr>
+									</tfoot>
 								</table>
 							</div>
 						</article>
@@ -231,7 +245,7 @@ import {
 	saveDeliveryChallan,
 } from "../../api/fabricStore.js"
 import { searchLinkedDocument } from "../../api/frappe.js"
-import { deliveredQuantity, isTableFilled, pendingQuantity, rowTotal, setTableQuantities } from "../../engine/stock/deliveryChallanTotals.js"
+import { deliveredQuantity, getTableTotals, isTableFilled, pendingQuantity, rowTotal, setTableQuantities } from "../../engine/stock/deliveryChallanTotals.js"
 import { fillSupplierDefaults } from "../../utils/supplierDefaults.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
@@ -841,6 +855,10 @@ function normalizeGroups(groups) {
 }
 function setDisplayQuantity(row, value, quantity) { setAggregatedCellQuantity(row, value, quantity); markDirty() }
 function fillTable(section, fill) { setTableQuantities(section.items, primaryValues(section.group), fill, setDisplayQuantity) }
+function tableTotals(section) { return getTableTotals(section.items, primaryValues(section.group)) }
+function hasSecondaryForValue(section, value) { return section.items.some((row) => secondaryUom(row, value)) }
+function secondaryUnit(section, value) { return section.items.map((row) => secondaryUom(row, value)).find(Boolean) || "" }
+function formatTotalQty(value) { return value === null ? "—" : formatQty(value) }
 function setDisplaySecondaryQuantity(row, value, quantity) { setAggregatedCellQuantity(row, value, quantity, "secondary_qty"); markDirty() }
 function setDisplayComment(row, comment) { setAggregatedItemField(row, "comments", comment); markDirty() }
 function itemSections(groups) {
@@ -952,6 +970,9 @@ function documentDeleted() {
 .delivery-challan-matrix__secondary-inline { display: grid; grid-template-columns: minmax(72px, 1fr) auto; align-items: center; gap: 5px; margin-top: 5px; }
 .delivery-challan-matrix__secondary-inline span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .delivery-challan-matrix__total { color: var(--erp-accent); font-weight: 800; }
+.delivery-challan-matrix__footer th, .delivery-challan-matrix__footer td { color: var(--erp-text); font-weight: 800; text-align: left; background: var(--erp-surface-muted); border-top: 1px solid var(--erp-border-strong); }
+.delivery-challan-matrix__footer td.erp-number { text-align: right; font-variant-numeric: tabular-nums; }
+.delivery-challan-matrix__footer small { display: block; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .delivery-challan-matrix__empty { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .delivery-challan-total, .delivery-challan-transfer-progress { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--erp-border); border-radius: 0; background: var(--erp-surface); }
 .delivery-challan-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--erp-border); }

@@ -156,16 +156,16 @@
 											</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity goods-received-note-matrix__primary-cell">
-												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Receive', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
+												<InputNumber v-model="row.values[value].qty" :aria-label="matrixInputLabel('Receive', section, row, value)" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" @input="row.values[value].qty = $event.value; markDirty()" />
 												<small>Available {{ formatQty(availableQuantity(row.values[value])) }}</small>
-												<div v-if="secondaryUom(row, value)" class="goods-received-note-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /><span><DocumentLink doctype="UOM" :name="secondaryUom(row, value)" :label="secondaryUom(row, value)" /></span></div>
+												<div v-if="secondaryUom(row, value)" class="goods-received-note-matrix__secondary-inline"><InputNumber v-model="row.values[value].secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, value, secondaryUom(row, value))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" @input="row.values[value].secondary_qty = $event.value; markDirty()" /><span><DocumentLink doctype="UOM" :name="secondaryUom(row, value)" :label="secondaryUom(row, value)" /></span></div>
 											</td>
 										</template>
 										<template v-else>
 											<td class="erp-number goods-received-note-matrix__available">{{ formatQty(availableQuantity(row.values.default)) }}</td>
-											<td class="erp-number goods-received-note-matrix__quantity"><InputNumber v-model="row.values.default.qty" :aria-label="matrixInputLabel('Receive', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" /></td>
+											<td class="erp-number goods-received-note-matrix__quantity"><InputNumber v-model="row.values.default.qty" :aria-label="matrixInputLabel('Receive', section, row, 'default')" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" @input="row.values.default.qty = $event.value; markDirty()" /></td>
 											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number goods-received-note-matrix__secondary">
-												<InputNumber v-model="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" />
+												<InputNumber v-model="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="markDirty" @input="row.values.default.secondary_qty = $event.value; markDirty()" />
 												<small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
@@ -174,6 +174,21 @@
 											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>
 									</tbody>
+									<tfoot>
+										<tr v-for="totals in [tableTotals(section)]" :key="`total-${section.key}`" class="goods-received-note-matrix__footer">
+											<th v-if="leadingColumnCount(section, block)" :colspan="leadingColumnCount(section, block)" scope="row">Total</th>
+										<template v-if="hasPrimaryAttribute(section.group)">
+											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number">{{ formatTotalQty(totals.quantities[value]) }}<small v-if="hasSecondaryForValue(section, value)">{{ formatTotalQty(totals.secondary[value]) }} {{ totals.secondary[value] === null ? "" : secondaryUnit(section, value) }}</small></td>
+										</template>
+										<template v-else>
+											<td class="erp-number">{{ formatTotalQty(totals.pending.default) }}</td>
+											<td class="erp-number">{{ formatTotalQty(totals.quantities.default) }}</td>
+											<td v-if="hasSecondaryQuantity(section.group)" class="erp-number">{{ formatTotalQty(totals.secondary.default) }}</td>
+										</template>
+											<th scope="row">{{ leadingColumnCount(section, block) ? "" : "Total" }}</th><td class="erp-number goods-received-note-matrix__total">{{ formatTotalQty(totals.total) }}</td>
+											<td class="erp-number goods-received-note-matrix__value">{{ formatMoney(totals.amount) }}</td><td />
+										</tr>
+									</tfoot>
 								</table>
 							</div>
 						</article>
@@ -278,6 +293,7 @@ import DocumentOverview from "../../components/documents/DocumentOverview.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import StockItemMatrix from "../../components/stock/StockItemMatrix.vue"
 import { normaliseFrappeTime, hasDocumentDisplayValue, plainTextFromHtml } from "../../utils/documentValues.js"
+import { getTableTotals } from "../../engine/stock/deliveryChallanTotals.js"
 import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
@@ -835,6 +851,11 @@ function hasSecondaryQuantity(group) { return (group.items || []).some((row) => 
 function logicalRowCount(groups) { return (groups || []).reduce((total, group) => total + (group.items?.length || 0), 0) }
 function rowTotal(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.qty || 0), 0) }
 function rowValue(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || row.rate || 0))), 0) }
+function tableTotals(section) { return getTableTotals(section.items, primaryValues(section.group), { pending: availableQuantity, amount: rowValue }) }
+function leadingColumnCount(section, block) { return identityColumns(section.group).length + (block.kind === "items" ? (hasActualDia.value ? 2 : 0) + (canEditLots.value ? 1 : 0) : 0) }
+function hasSecondaryForValue(section, value) { return section.items.some((row) => secondaryUom(row, value)) }
+function secondaryUnit(section, value) { return section.items.map((row) => secondaryUom(row, value)).find(Boolean) || "" }
+function formatTotalQty(value) { return value === null ? "—" : formatQty(value) }
 function rowKey(row, index) { return [row.item_variant || row.name, row.row_index, row.received_type || row.dimensions?.received_type, row.delivery_challan_item, index].filter((value) => value !== undefined && value !== "").join("-") }
 function matrixInputLabel(action, section, row, value, uom = "") {
 	const item = section.name || row.item_variant || row.name || "item"
@@ -1025,6 +1046,9 @@ function documentDeleted() {
 .goods-received-note-matrix__secondary-inline { display: grid; grid-template-columns: minmax(72px, 1fr) auto; align-items: center; gap: 5px; margin-top: 5px; }
 .goods-received-note-matrix__secondary-inline span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .goods-received-note-matrix__total, .goods-received-note-matrix__value { color: var(--erp-accent-dark); font-weight: 800; }
+.goods-received-note-matrix__footer th, .goods-received-note-matrix__footer td { color: var(--erp-text); font-weight: 800; text-align: left; background: var(--erp-surface-muted); border-top: 1px solid var(--erp-border-strong); }
+.goods-received-note-matrix__footer td.erp-number { text-align: right; font-variant-numeric: tabular-nums; }
+.goods-received-note-matrix__footer small { display: block; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .goods-received-note-matrix__empty { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 6px; color: var(--erp-text-muted); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); }
 .goods-received-note-total, .goods-received-note-transfer-progress { display: grid; min-height: 58px; align-content: center; gap: 2px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--erp-border); border-radius: 0; background: var(--erp-surface); }
 .goods-received-note-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--erp-border); }

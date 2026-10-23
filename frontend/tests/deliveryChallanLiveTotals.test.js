@@ -36,5 +36,5 @@ test("F-B16 rail uses live quantities and additional value while server values w
 	assert.match(source, /dirty && serverValueTotals\.has\(total.fieldname\)/)
 	assert.match(source, /const serverValueTotals = new Set\(\["stock_value", "total_value"\]\)/)
 	assert.match(source, />Updates on save<\/small>/)
-	assert.match(source, /import \{ deliveredQuantity, isTableFilled, pendingQuantity, rowTotal, setTableQuantities \}/)
+	assert.match(source, /import \{ deliveredQuantity, getTableTotals, isTableFilled, pendingQuantity, rowTotal, setTableQuantities \}/)
 })

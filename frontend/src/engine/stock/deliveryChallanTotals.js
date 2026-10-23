@@ -28,3 +28,59 @@ export function setTableQuantities(rows, primaryValues, fill, setQuantity) {
 		}
 	}
 }
+
+function roundQuantity(value) {
+	return Math.round(Number(value || 0) * 1000) / 1000
+}
+
+function sum(values) {
+	return roundQuantity(values.reduce((total, value) => total + Number(value || 0), 0))
+}
+
+function hasOneUnit(units) {
+	return new Set(units.filter(Boolean)).size <= 1
+}
+
+/**
+ * Footer totals for one item table. Quantity totals are null when rows use different UOMs;
+ * a size's secondary total is null when its cells use different secondary UOMs.
+ */
+export function getTableTotals(rows, primaryValues, { uom = rowUom, secondaryUom = cellSecondaryUom, pending = pendingQuantity, amount } = {}) {
+	const items = rows || []
+	const sameUom = hasOneUnit(items.map(uom))
+	const cells = (value) => items.map((row) => row.values?.[value]).filter(Boolean)
+	const totals = { quantities: {}, pending: {}, secondary: {}, total: null, amount: amount ? sum(items.map(amount)) : null }
+	for (const value of primaryValues) {
+		totals.quantities[value] = sameUom ? sum(cells(value).map((cell) => cell.qty)) : null
+		totals.pending[value] = sameUom ? sum(cells(value).map(pending)) : null
+		const secondaryRows = items.filter((row) => row.values?.[value] && secondaryUom(row, value))
+		totals.secondary[value] = hasOneUnit(secondaryRows.map((row) => secondaryUom(row, value)))
+			? sum(secondaryRows.map((row) => row.values[value].secondary_qty))
+			: null
+	}
+	if (sameUom) totals.total = sum(items.map(rowTotal))
+	return totals
+}
+
+function rowUom(row) {
+	return String(row.default_uom || row.uom || "").trim()
+}
+
+function cellSecondaryUom(row, value) {
+	return String(row.values?.[value]?.secondary_uom || row.secondary_uom || "").trim()
+}
+
+const returnQuantityFields = ["delivered_quantity", "consumed_quantity", "already_returned", "returnable_quantity", "return_quantity"]
+
+/** Return popup totals, one entry per UOM so different units are never added together. */
+export function getReturnTotalsByUom(rows) {
+	const byUom = new Map()
+	for (const row of rows || []) {
+		const uom = String(row.uom || "").trim()
+		if (!byUom.has(uom)) byUom.set(uom, { uom, rows: [] })
+		byUom.get(uom).rows.push(row)
+	}
+	return [...byUom.values()].map(({ uom, rows: uomRows }) => Object.fromEntries([
+		["uom", uom], ...returnQuantityFields.map((field) => [field, sum(uomRows.map((row) => row[field]))]),
+	]))
+}

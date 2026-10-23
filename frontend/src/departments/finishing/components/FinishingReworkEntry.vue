@@ -7,17 +7,19 @@
 		<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`${title} sizes`">
 			<table class="finishing-table">
 				<thead>
-					<tr><th>Size</th><th v-for="item in items" :key="item.row_name" class="erp-number">{{ item[sizeField] }}</th></tr>
+					<tr><th>Size</th><th v-for="item in items" :key="item.row_name" class="erp-number">{{ item[sizeField] }}</th><th class="erp-number">Total</th></tr>
 				</thead>
 				<tbody>
-					<tr><td>Total {{ receivedType }}</td><td v-for="item in items" :key="item.row_name" class="erp-number"><strong>{{ formatQuantity(item.rework_qty) }}</strong></td></tr>
+					<tr><td>Total {{ receivedType }}</td><td v-for="item in items" :key="item.row_name" class="erp-number"><strong>{{ formatQuantity(item.rework_qty) }}</strong></td><td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.rework_qty) }}</td></tr>
 					<tr v-if="editable">
 						<td>Rejection</td>
 						<td v-for="item in items" :key="item.row_name"><input v-model="item.rejected" type="number" min="0" :max="item.rework_qty" class="finishing-entry-input" :aria-label="`${title} ${item[sizeField]} rejection`" :disabled="busy" @input="emit('changed')" /></td>
+						<td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.rejected) }}</td>
 					</tr>
 					<tr v-if="editable">
 						<td>Reworked</td>
 						<td v-for="item in items" :key="item.row_name"><input v-model="item.rework" type="number" min="0" :max="item.rework_qty" class="finishing-entry-input" :aria-label="`${title} ${item[sizeField]} reworked`" :disabled="busy" @input="emit('changed')" /></td>
+						<td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.rework) }}</td>
 					</tr>
 				</tbody>
 			</table>
@@ -33,9 +35,12 @@
 <script setup>
 import Button from "primevue/button"
 
+import { computed } from "vue"
+
+import { reworkTotals } from "../finishingEntryTotals.js"
 import { formatQuantity } from "../finishingViews.js"
 
-defineProps({
+const props = defineProps({
 	title: { type: String, required: true },
 	subtitle: { type: String, default: "" },
 	receivedType: { type: String, default: "" },
@@ -45,6 +50,7 @@ defineProps({
 	busy: { type: Boolean, default: false },
 })
 const emit = defineEmits(["changed", "update-rejection", "update-reworked", "complete"])
+const totals = computed(() => reworkTotals(props.items))
 </script>
 
 <style scoped>

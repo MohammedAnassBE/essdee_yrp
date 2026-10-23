@@ -83,6 +83,20 @@
 								</td>
 							</tr>
 						</tbody>
+						<tfoot>
+							<tr v-for="bucket in bucketTotals(row)" :key="bucket.key" class="finishing-table__total-row">
+								<th :colspan="2 + (canTransfer ? 1 : 0) + (row.is_set_item ? 1 : 0)" scope="row">Total</th>
+								<td><span class="old-lot__bucket" :class="`old-lot__bucket--${bucket.key}`">{{ bucket.label }}</span></td>
+								<td v-for="size in row.primary_values" :key="size" class="erp-number">
+									<span class="old-lot__balance">{{ formatQuantity(bucket.totals.balance.sizes[size]) }}</span>
+									<span v-if="canTransfer">{{ formatQuantity(bucket.totals.transfer.sizes[size]) }}</span>
+								</td>
+								<td class="erp-number finishing-table__row-total">
+									<span class="old-lot__balance">{{ formatQuantity(bucket.totals.balance.total) }}</span>
+									<span v-if="canTransfer">{{ formatQuantity(bucket.totals.transfer.total) }}</span>
+								</td>
+							</tr>
+						</tfoot>
 					</table>
 				</div>
 			</div>
@@ -99,6 +113,7 @@ import { computed, ref, watch } from "vue"
 
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import { lotTransferErrors, lotTransferKey, lotTransferPayload } from "../finishingEntries.js"
+import { lotTransferTotals } from "../finishingEntryTotals.js"
 import { formatQuantity } from "../finishingViews.js"
 
 const props = defineProps({
@@ -133,6 +148,14 @@ function availableBuckets(row, colour) {
 		{ key: "lp", label: "Loose Piece", field: "loose_piece", values: values("balance_loose_piece"), total: Number(entry.colour_total?.balance_loose_piece || 0) },
 		{ key: "lps", label: "Loose Piece Set", field: "loose_piece_set", values: values("balance_loose_piece_set"), total: Number(entry.colour_total?.balance_loose_piece_set || 0) },
 	].filter((bucket) => bucket.total > 0)
+}
+
+function bucketTotals(row) {
+	return [
+		{ key: "lp", label: "Loose Piece", field: "loose_piece", balanceField: "balance_loose_piece" },
+		{ key: "lps", label: "Loose Piece Set", field: "loose_piece_set", balanceField: "balance_loose_piece_set" },
+	].map((bucket) => ({ ...bucket, totals: lotTransferTotals(row, transfers.value[lotTransferKey(row)], bucket.field, bucket.balanceField) }))
+		.filter((bucket) => bucket.totals.balance.total > 0)
 }
 
 function initialTransfers(rows) {

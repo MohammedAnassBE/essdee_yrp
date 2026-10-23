@@ -53,6 +53,20 @@
 					<td class="erp-number finishing-table__row-total">{{ formatQuantity(inputTotal(colour)) }}</td>
 				</tr>
 			</tbody>
+			<tfoot>
+				<tr v-for="reference in references" :key="reference.key" class="finishing-table__total-row">
+					<th :colspan="labelSpan" scope="row">Total</th>
+					<td class="finishing-table__type">{{ reference.label }}</td>
+					<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(totals.references[reference.key].sizes[size]) }}</td>
+					<td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.references[reference.key].total) }}</td>
+				</tr>
+				<tr class="finishing-table__total-row finishing-entry-matrix__total-input">
+					<th :colspan="labelSpan" scope="row">Total</th>
+					<td class="finishing-table__type"><strong>{{ inputLabel }}</strong></td>
+					<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(totals.input.sizes[size]) }}</td>
+					<td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.input.total) }}</td>
+				</tr>
+			</tfoot>
 		</table>
 	</div>
 </template>
@@ -60,6 +74,7 @@
 <script setup>
 import { computed } from "vue"
 
+import { inputTotals, referenceTotals } from "../finishingEntryTotals.js"
 import { colourLabel, formatQuantity } from "../finishingViews.js"
 
 const props = defineProps({
@@ -74,6 +89,11 @@ const rows = computed(() => props.payload.data?.data || {})
 const colours = computed(() => Object.keys(rows.value).filter((colour) => props.modelValue[colour]))
 const sizes = computed(() => props.payload.primary_values || [])
 const rowSpan = computed(() => props.references.length + 1)
+const labelSpan = computed(() => (props.payload.is_set_item ? 3 : 2))
+const totals = computed(() => ({
+	references: Object.fromEntries(props.references.map((reference) => [reference.key, referenceTotals(rows.value, colours.value, sizes.value, reference.key)])),
+	input: inputTotals(props.modelValue, colours.value, sizes.value, props.checkable),
+}))
 
 function referenceTotal(colour, key) {
 	return sizes.value.reduce((sum, size) => sum + (Number(rows.value[colour].values?.[size]?.[key]) || 0), 0)
@@ -96,5 +116,7 @@ function invalid(value) {
 .finishing-entry-matrix__input-row > td { background: color-mix(in srgb, var(--erp-accent-soft) 45%, var(--erp-surface)); }
 .finishing-entry-matrix__cell { padding: 4px 6px !important; }
 .finishing-entry-input[aria-invalid="true"] { border-color: var(--erp-danger); }
+.finishing-entry-matrix tfoot th { text-align: left; }
+.finishing-entry-matrix tfoot tr:first-child > * { border-top: 2px solid var(--erp-border-strong); }
 .finishing-entry-matrix__off { display: block; color: var(--erp-text-muted); text-align: right; }
 </style>

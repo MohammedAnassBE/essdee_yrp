@@ -145,6 +145,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import { callMethod } from "../../api/frappe.js"
 import { getEntryPrimaryValues, mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
 import { cellAmount, getEntryTotals, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
+import { formatDisplayDate } from "../../utils/dateFormat.js"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -453,10 +454,7 @@ function footerLabelSpan(group) { return 2 + dimensions.value.length + (group.at
 function footerLabel(group, bucket) { return groupTotals(group).length > 1 ? `Total · ${bucket.uom || "No UOM"}` : "Total" }
 function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
 function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
-function formatDate(value) {
-	const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
-	return match ? `${match[3]}-${match[2]}-${match[1]}` : value || "—"
-}
+const formatDate = (value) => formatDisplayDate(value)
 function resetEntryValues(source = props.entryDefaults) {
 	clearReactive(entryValues)
 	Object.assign(entryValues, clone(props.entryDefaults || {}))

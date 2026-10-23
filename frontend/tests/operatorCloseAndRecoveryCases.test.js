@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import test from "node:test"
 import { Vue, loadComponent, mountComponent, findNodes } from "../../scripts/helpers/vue_renderer.mjs"
 import { pendingWorkOrderGroups } from "../src/departments/fabric-store/workOrderClose.js"
+import * as workOrderTotals from "../src/departments/fabric-store/workOrderTotals.js"
 import { initialEntry, fillEntry } from "../src/departments/finishing/finishingEntries.js"
 import { normaliseFrappeTime } from "../src/utils/documentValues.js"
 import { getQzPrinters } from "../src/api/qzPrinter.js"
@@ -23,7 +24,7 @@ test("F-G01: close shows only pending combinations and the existing size summary
 	const result = pendingWorkOrderGroups(groups)
 	assert.deepEqual(result[0].items, [pending])
 	assert.equal(groups[0].items.length, 3)
-	const Matrix = loadComponent("frontend/src/departments/fabric-store/WorkOrderItemMatrix.vue", { "../../components/common/DocumentLink.vue": Link })
+	const Matrix = loadComponent("frontend/src/departments/fabric-store/WorkOrderItemMatrix.vue", { "../../components/common/DocumentLink.vue": Link, "./workOrderTotals.js": workOrderTotals })
 	const root = mountComponent(Matrix, { groups: result, mode: "summary" })
 	for (const label of ["Red", "S", "Planned", "Delivered", "Received", "Pending", "5"]) assert.ok(text(root).includes(label), label)
 	const recut = mountComponent(Matrix, { groups: result, mode: "recut" })

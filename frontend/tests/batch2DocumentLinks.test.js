@@ -10,6 +10,7 @@ import * as overview from '../src/utils/documentOverview.js'
 import * as grid from '../src/components/common/entryGrid.js'
 import * as childFields from '../src/components/common/childTableFields.js'
 import * as groups from '../src/engine/stock/groupItemsForDisplay.js'
+import * as workOrderTotals from '../src/departments/fabric-store/workOrderTotals.js'
 import * as stockItemComposer from '../src/utils/stockItemComposer.js'
 import * as lotViews from '../src/departments/purchase/lot/lotViews.js'
 import * as lotEditor from '../src/departments/purchase/lot/lotEditor.js'
@@ -114,7 +115,7 @@ test('B3 StockItemMatrix links item, lot, UOM and typed contextual dimensions on
 }))
 
 test('B4 WorkOrderItemMatrix links Item, Lot and Process Cost outside Merch', () => readable(() => {
- const root = mountComponent(component('departments/fabric-store/WorkOrderItemMatrix'), { groups: [{ items: [{ name: 'A/B', lot: 'LOT/1', process_cost: 'PC/1', values: { default: { qty: 1 } } }] }] })
+ const root = mountComponent(component('departments/fabric-store/WorkOrderItemMatrix', { './workOrderTotals.js': workOrderTotals }), { groups: [{ items: [{ name: 'A/B', lot: 'LOT/1', process_cost: 'PC/1', values: { default: { qty: 1 } } }] }] })
  assert.deepEqual(links(root), [['A/B', '/web/purchase/items/A%2FB'], ['LOT/1', '/web/purchase/lots/LOT%2F1'], ['PC/1', '/web/merch/process-costs/PC%2F1']])
 }))
 

@@ -65,6 +65,7 @@
 						</section>
 					</div>
 					<div v-if="row.kind === 'knitting' && !row.manual_io && !row.reference_routed && (row.yarns || []).length <= 1" class="work-order-action-panel__field"><label>Yarn deliverable quantity</label><InputNumber v-model="row.yarn_qty" :aria-label="`Yarn deliverable quantity for ${row.cloth_item || row.treated_item || 'fabric row'}`" :min="0" :max-fraction-digits="2" fluid /></div>
+					<div class="work-order-fabric-row__yarns" role="status" aria-label="Cloth total"><strong>Cloth total · {{ number(fabricClothTotal(row)) }} Kg</strong></div>
 					<div v-if="row.kind === 'knitting'" class="work-order-fabric-row__yarns" role="status" aria-label="Yarn totals"><span>Yarn totals</span><strong v-for="yarn in fabricYarnTotals(row).items" :key="yarn.item">{{ yarn.item }} · {{ number(yarn.qty) }} Kg</strong><strong>Total · {{ number(fabricYarnTotals(row).total) }} Kg</strong></div>
 				</div>
 			</template>
@@ -107,7 +108,7 @@
 			<template v-else-if="mode === 'create_rework'">
 				<div class="work-order-action-panel__fields"><label><span>Supplier type</span><Select v-model="draft.supplier_type" :options="['Same Supplier', 'Different Supplier']" fluid /></label><LinkField v-if="draft.supplier_type === 'Different Supplier'" v-model="draft.supplier" label="Supplier *" doctype="Supplier" :show-open-button="false" /></div>
 				<Message v-if="!reworkRows.length && !error" severity="secondary" :closable="false">No rework items. Rework rows come from this Work Order's submitted GRNs received in a rework type such as Printing Mistake.</Message>
-				<div v-else class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody></table></div>
+				<div v-else class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody><tfoot><tr><th colspan="3">Total</th><td class="erp-number">{{ number(reworkTotals(reworkRows).available) }}</td><td class="erp-number">{{ number(reworkTotals(reworkRows).qty) }}</td></tr></tfoot></table></div>
 			</template>
 
 			<template v-else-if="mode === 'create_recut'">
@@ -118,7 +119,9 @@
 							<div><strong>{{ row.item_variant || row.name }}</strong><small>{{ attributeText(row.attributes) }}</small></div>
 							<label v-for="value in primaryValues(group)" :key="value"><span>{{ value === 'default' ? 'Quantity' : value }}</span><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${row.item_variant || row.name || `recut row ${rowIndex + 1}`}`" :min="0" :max-fraction-digits="3" fluid /></label>
 						</div>
+						<div class="work-order-recut-row work-order-recut-row--total" :style="{ '--recut-size-count': primaryValues(group).length }"><strong>Total · {{ number(recutGroupTotals(group, primaryValues(group)).total) }}</strong><span v-for="value in primaryValues(group)" :key="value">{{ number(recutGroupTotals(group, primaryValues(group)).values[value]) }}</span></div>
 					</section>
+					<p class="work-order-recut-pieces" role="status">Total recut pieces · <strong>{{ number(recutQuantity) }}</strong></p>
 				</div>
 				<label v-if="recutCanSubmit" class="work-order-action-panel__check"><Checkbox v-model="draft.submit_recut" binary /><span>Submit the Recut immediately</span></label>
 			</template>
@@ -174,6 +177,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
 import { pendingWorkOrderGroups } from "./workOrderClose.js"
+import { fabricClothTotal, recutGroupTotals, recutPieces, reworkTotals } from "./workOrderTotals.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -216,7 +220,7 @@ const changeItemPreview = ref({})
 const baselinePayload = ref("")
 const baselineFabricEntries = ref("")
 const discardVisible = ref(false)
-const recutQuantity = computed(() => recutGroups.value.reduce((total, group) => total + (group.items || []).reduce((rowTotal, row) => rowTotal + Object.values(row.values || {}).reduce((cellTotal, value) => cellTotal + Number(value?.qty || 0), 0), 0), 0))
+const recutQuantity = computed(() => recutPieces(recutGroups.value))
 const garmentGrandTotal = computed(() => garmentPrimaryValues.value.reduce((total, value) => total + garmentColumnTotal(value), 0))
 const dirty = computed(() => Boolean(baselinePayload.value && (JSON.stringify(buildPayload()) !== baselinePayload.value || JSON.stringify(fabricRows.value.map((row) => row.entries)) !== baselineFabricEntries.value)))
 
@@ -392,6 +396,10 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-recut-group { display: grid; overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 4px 14px rgb(28 61 45 / 3%); }
 .work-order-recut-row { display: grid; grid-template-columns: minmax(150px, 2fr) repeat(var(--recut-size-count), minmax(64px, 1fr)); align-items: end; gap: var(--erp-space-3); padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
 .work-order-recut-row:last-child { border-bottom: 0; }
+.work-order-recut-row--total { align-items: center; color: var(--erp-text); font-weight: 800; background: var(--erp-accent-soft); }
+.work-order-recut-row--total span { text-align: right; font-variant-numeric: tabular-nums; }
+.work-order-recut-pieces { margin: 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); text-align: right; }
+.work-order-recut-pieces strong { color: var(--erp-text); }
 .work-order-recut-row > div, .work-order-recut-row label { display: grid; gap: 4px; }
 .work-order-recut-row small, .work-order-recut-row label span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-fabric-row { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 54%, var(--erp-surface)); background: color-mix(in srgb, var(--erp-surface-soft) 70%, var(--erp-surface)); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }

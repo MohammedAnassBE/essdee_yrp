@@ -71,6 +71,24 @@
 							</tr>
 						</template>
 					</tbody>
+					<tfoot v-if="section.items.length > 1 && mode === 'items' && !hasPrimaryBreakdown(section.group)" class="work-order-item-matrix__footer">
+						<tr>
+							<th v-if="identityAttributes(section.group).length" :colspan="identityAttributes(section.group).length">Total</th>
+							<td class="erp-number">{{ quantity(sectionTotal(section, "planned")?.total) }}</td>
+							<td class="erp-number matrix-pending">{{ pendingQuantity(sectionTotal(section, "pending")?.total) }}</td>
+							<td v-if="hasCost(section.group)" class="erp-number matrix-cost" />
+							<td v-if="hasTotalCost(section.group)" class="erp-number matrix-cost">{{ money(sectionTotal(section, "total_cost")?.total) }}</td>
+							<td v-if="hasProcessCost(section.group)" />
+						</tr>
+					</tfoot>
+					<tfoot v-else-if="section.items.length > 1" class="work-order-item-matrix__footer">
+						<tr v-for="(stage, stageIndex) in sectionTotals.get(section.key)" :key="stage.key" :class="`matrix-stage matrix-stage--${stage.key}`">
+							<th v-if="stageIndex === 0 && identityAttributes(section.group).length" :colspan="identityAttributes(section.group).length" :rowspan="sectionTotals.get(section.key).length">Total</th>
+							<td class="matrix-stage-label"><span>{{ identityAttributes(section.group).length ? stage.label : `Total ${stage.label}` }}</span></td>
+							<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number">{{ stageValue(stage, value) }}</td>
+							<td class="erp-number matrix-total">{{ stageTotal(stage) }}</td>
+						</tr>
+					</tfoot>
 				</table>
 			</div>
 		</section>
@@ -83,6 +101,7 @@
 <script setup>
 import { computed } from "vue"
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import { sumStageRows } from "./workOrderTotals.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
@@ -101,6 +120,13 @@ const itemSections = computed(() => props.groups.flatMap((group, groupIndex) => 
 	}
 	return Array.from(sections.values())
 }))
+
+const sectionTotals = computed(() => new Map(itemSections.value.map((section) => {
+	const stages = props.mode === "items" ? (item) => itemStages(item, section.group) : (item) => stageRows(item, section.group)
+	return [section.key, sumStageRows(section.items.map(stages), primaryValues(section.group))]
+})))
+
+function sectionTotal(section, key) { return sectionTotals.value.get(section.key)?.find((stage) => stage.key === key) }
 
 function primaryValues(group) {
 	return group.primary_attribute_values?.length ? group.primary_attribute_values : ["default"]
@@ -235,6 +261,8 @@ function money(value) {
 .matrix-stage--received .matrix-stage-label span,
 .matrix-stage--delivered .matrix-stage-label span { color: var(--erp-success-text); }
 .matrix-total { color: var(--erp-text); font-weight: 800; }
+.work-order-item-matrix__footer :is(th, td) { color: var(--erp-text); font-weight: 800; background: var(--erp-accent-soft); }
+.work-order-item-matrix__footer th { text-align: left; vertical-align: top; }
 .work-order-matrix-empty { min-height: 130px; }
 .work-order-matrix-empty div { display: grid; justify-items: center; gap: 6px; }
 @media (max-width: 620px) {

@@ -8,6 +8,7 @@ import * as Vue from "vue"
 import { collectManualKnittingContract, createFabricEntries } from "../src/composables/useFabricDeliverableContext.js"
 
 import { fabricColourError, fabricEntryError, fabricEntryLabel, fabricPlanningHint, fabricUnavailableMessage, fabricWarnings, fabricYarnTotals, hydrateFabricRows } from "../src/departments/fabric-store/fabricCalculate.js"
+import { fabricClothTotal } from "../src/departments/fabric-store/workOrderTotals.js"
 
 const source = fs.readFileSync(new URL("../src/departments/fabric-store/WorkOrderActionPanel.vue", import.meta.url), "utf8")
 const template = parse(source).descriptor.template.content
@@ -28,7 +29,7 @@ async function renderPanel(row, sourceProcess = {}) {
 			fabricQuantityWarnings() { return fabricWarnings(this.fabricRows) },
 		},
 		methods: {
-			fabricColourError, fabricEntryError, fabricEntryLabel, fabricPlanningHint, fabricYarnTotals,
+			fabricColourError, fabricEntryError, fabricEntryLabel, fabricPlanningHint, fabricYarnTotals, fabricClothTotal,
 			discardAction() {}, submit() {}, requestVisibility() {}, refreshFabricSource() {}, apply() {}, discardAndClose() {},
 			attributeText: (attrs) => Object.values(attrs || {}).join(" · "),
 			number: (value) => String(value || 0), sourcePreview: () => "",
@@ -51,6 +52,7 @@ test("current fabric panel edits physical knitting inputs and outputs with exact
 	const html = await renderPanel(row)
 	assert.match(html, /Enter the yarn quantities to deliver/)
 	assert.match(html, /Cloth quantity expected back/)
+	assert.match(html, /Cloth total · 7 Kg/)
 	const contract = collectManualKnittingContract(row, row.manualEntry)
 	assert.equal(contract.routes[0].qr.key, "opaque-route:1")
 	assert.deepEqual(contract.routes[0].manualInputs, [{ key: "opaque-yarn:1", qty: 8 }])

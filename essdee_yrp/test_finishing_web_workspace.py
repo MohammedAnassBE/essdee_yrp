@@ -123,6 +123,7 @@ class TestFinishingWebWorkspace(TestCase):
 				"rejection_details",
 				"rework_completion",
 				"lot_cut_quantity",
+				"inhouse_quantity",
 				"grn_report",
 				"grn_summary",
 				"dc_report",
@@ -154,6 +155,17 @@ class TestFinishingWebWorkspace(TestCase):
 		with self._permissions(allowed={("SD YRP Cutting Plan", "read")}):
 			self.assertFalse(self._workspace().has_report_access())
 			self.assertNotIn("reports", self._workspace().get_capabilities()["sections"])
+
+	def test_inhouse_quantity_requires_work_order_and_lot_read(self):
+		with self._permissions():
+			reports = self._workspace().get_capabilities()["sections"]["reports"]["reports"]
+		self.assertEqual(
+			reports["inhouse_quantity"], {"label": "In-house Quantity", "can_read": True, "can_report": True}
+		)
+		for missing in ("YRP Work Order", "SD YRP Lot"):
+			with self.subTest(missing=missing), self._permissions(denied={(missing, "read")}):
+				reports = self._workspace().get_capabilities()["sections"]["reports"]["reports"]
+				self.assertNotIn("inhouse_quantity", reports)
 
 	def test_capabilities_omit_unreadable_sections(self):
 		with self._permissions(allowed=set()):

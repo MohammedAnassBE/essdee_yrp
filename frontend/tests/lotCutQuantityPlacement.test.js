@@ -98,3 +98,28 @@ test("Finishing reports list Lot Cut Quantity", async () => {
 		assert.equal(canReadCuttingPlan(report[0]), true)
 	} finally { root.__vue_app__.unmount() }
 })
+
+test("Finishing reports list In-house Quantity only with capability", async () => {
+	const mount = async (reports) => mountComponent(loadComponent(new URL("../src/departments/finishing/FinishingReports.vue", import.meta.url).pathname, {
+		...tabMocks, ...workspaceMocks, vue: vueWithStubs,
+		"vue-router": { useRoute: () => ({ path: "/finishing/reports", query: { report: "inhouse-quantity" } }), useRouter: () => ({ replace() {} }) },
+		"../../api/finishing.js": { getFinishingCapabilities: async () => ({ sections: { reports: { reports } } }) },
+		"../../components/DepartmentPage.vue": shell,
+		"../../components/reports/DeskBackedReport.vue": () => null,
+		"../../components/reports/deskReportConfig.js": await import("../src/components/reports/deskReportConfig.js"),
+		"../../components/common/WorkspaceLoadError.vue": () => null,
+	}), {})
+	const packingDpr = { label: "Packing DPR", can_read: true }
+	let root = await mount({ packing_dpr: packingDpr, inhouse_quantity: { label: "In-house Quantity", can_read: true, can_report: true } })
+	try {
+		await flush()
+		assert.ok(text(root).includes("In-house Quantity"))
+		assert.equal(findNodes(root, node => node.type === "InhouseQuantityReport").length, 1)
+	} finally { root.__vue_app__.unmount() }
+	root = await mount({ packing_dpr: packingDpr })
+	try {
+		await flush()
+		assert.ok(!text(root).includes("In-house Quantity"))
+		assert.equal(findNodes(root, node => node.type === "InhouseQuantityReport").length, 0)
+	} finally { root.__vue_app__.unmount() }
+})

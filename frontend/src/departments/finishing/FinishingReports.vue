@@ -31,6 +31,7 @@ const REPORTS = [
 	{ key: "rejection_details", value: "rejection-details", label: "Rejection Details", icon: "pi pi-ban", component: defineAsyncComponent(() => import("./reports/FinishingRejectionReport.vue")) },
 	{ key: "rework_completion", value: "rework-completion", label: "Rework Completion", icon: "pi pi-check-square", component: defineAsyncComponent(() => import("./reports/FinishingReworkCompletion.vue")) },
 	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")), capabilityProps: (report) => ({ canReadCuttingPlan: Boolean(report.can_read_cutting_plan) }) },
+	{ key: "inhouse_quantity", value: "inhouse-quantity", label: "In-house Quantity", icon: "pi pi-building", component: defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue")) },
 ]
 
 const route = useRoute()

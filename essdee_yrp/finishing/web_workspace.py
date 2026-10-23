@@ -23,6 +23,7 @@ from essdee_yrp.finishing import (
 from essdee_yrp.finishing.alternative import get_alternative_details
 from essdee_yrp.finishing.parsing import json_object
 from essdee_yrp.finishing.web_entries import ENTRY_COMMANDS
+from essdee_yrp.planning.reports import inhouse_quantity
 from essdee_yrp.print_registry import get_document_print_formats
 from essdee_yrp.purchase.lot_cut_quantity import get_lot_cut_quantity_capability
 
@@ -118,6 +119,8 @@ def _readable_reports() -> dict:
 	}
 	if reports:
 		reports["lot_cut_quantity"] = get_lot_cut_quantity_capability()
+		if inhouse_quantity.can_view():
+			reports["inhouse_quantity"] = {"label": _("In-house Quantity"), "can_read": True, "can_report": True}
 
 	from essdee_yrp.desk_web_reports import department_report_capabilities
 

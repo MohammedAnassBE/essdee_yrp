@@ -1,15 +1,18 @@
 """Regression coverage for deterministic Work Order piece replay."""
 
+from unittest import TestCase
 from unittest.mock import MagicMock, call, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from essdee_yrp import work_order_piece_tracking as piece_tracking
 from essdee_yrp.finishing.rebuild import (
 	get_configured_cutting_process,
 	get_process_work_orders,
 	rebuild_finishing_plan,
 )
+from essdee_yrp.test_packing_grn_loose_piece import SIZE_M, attributes
 from essdee_yrp.work_order_piece_tracking import (
 	audit_migrated_piece_tracking,
 	compare_work_order_piece_tracking,
@@ -79,14 +82,15 @@ class TestWorkOrderPieceTracking(IntegrationTestCase):
 		)
 		self.assertEqual(result["finishing_plans"], ["FP-1"])
 
-	def test_migrated_cutting_printing_packing_types_and_returns_match(self):
+	def test_migrated_cutting_printing_types_and_returns_match(self):
+		# Packing oracles (WO-2627-00478, WO-2526-02687-1) intentionally diverge from F15:
+		# F15 credited each packing GRN's box count to every packing colour, while replay
+		# records the GRN's real pieces. See TestMigratedPackingReceipt.
 		oracles = (
 			"WO-2526-02637-2",  # cutting panels -> completed pieces
 			"WO-2627-00005",  # direct printing DC/GRN
-			"WO-2627-00478",  # grouped ironing + packing
 			"WO-2526-02445",  # multiple GRN received types
 			"WO-2627-00365",  # accumulated panel return GRNs
-			"WO-2526-02687-1",  # set-item packing expansion + returns
 			"WO-2627-00604-1",  # fractional legacy quantities in Int counters
 		)
 		missing = [name for name in oracles if not frappe.db.exists("YRP Work Order", name)]
@@ -251,3 +255,124 @@ def _source_totals(work_orders):
 			delivered += row.delivered_quantity
 			received += row.received_qty
 	return delivered, received
+
+
+class TestMigratedPackingReceipt(TestCase):
+	"""F15 packing GRNs stored box counts per packing colour; replay uses real pieces."""
+
+	def _state(self, received_snapshot=()):
+		calculated = [
+			frappe._dict(
+				name=f"CALC-{colour}",
+				idx=idx,
+				item_variant=f"VEST-{colour}-M",
+				quantity=planned,
+				set_combination=f'{{"major_colour":"{colour}"}}',
+			)
+			for colour, idx, planned, _delivered, _received in SIZE_M
+		]
+		work_order = frappe._dict(
+			work_order_calculated_items=calculated, work_order_track_pieces=list(received_snapshot)
+		)
+		ipd = frappe._dict(primary_item_attribute="Size", is_set_item=0)
+		with (
+			patch.object(piece_tracking, "get_variant_attr_details", side_effect=attributes),
+			patch.object(piece_tracking, "get_parent_item", return_value="VEST"),
+			patch.object(piece_tracking.PieceState, "_initial_panel_structures", return_value=({}, {})),
+		):
+			return piece_tracking.PieceState(work_order, ipd)
+
+	@staticmethod
+	def _deliver(state, name, posting_time, quantities):
+		challan = frappe._dict(name=name, posting_date="2026-10-14", posting_time=posting_time)
+		for colour, quantity in quantities.items():
+			state.add_delivery(f"VEST-{colour}-M", {"major_colour": colour}, quantity, challan)
+
+	@staticmethod
+	def _grn(name, posting_time, pieces, mapped=False):
+		return frappe._dict(
+			name=name,
+			posting_date="2026-10-14",
+			posting_time=posting_time,
+			includes_packing=1,
+			items=[
+				frappe._dict(
+					item_variant="BOX-M", quantity=pieces / 5, stock_qty=pieces, received_type="Accepted"
+				)
+			],
+			grn_deliverables=[
+				frappe._dict(
+					item_variant="VEST-Loose Piece-M",
+					quantity=pieces,
+					goods_received_note_item="OUT-M" if mapped else None,
+				)
+			],
+		)
+
+	def _replay_fp_2627_00244(self, snapshot=()):
+		state = self._state(snapshot)
+		colours = ("Soft Orange", "Liver", "Wenge", "Dark Grey", "Olive", "Black")
+		with (
+			patch.object(piece_tracking, "get_variant_attr_details", side_effect=attributes),
+			patch.object(piece_tracking, "is_dynamic_packing_grn", return_value=False),
+		):
+			self._deliver(state, "DC-2627-05831", "09:43:41", dict.fromkeys(colours, 350))
+			piece_tracking._apply_packing_receipt(state, self._grn("GRN-2627-08000", "09:45:25", 2090))
+			self._deliver(
+				state,
+				"DC-2627-05832",
+				"09:49:11",
+				{"Soft Orange": 100, "Wenge": 100, "Olive": 115, "Black": 200},
+			)
+			piece_tracking._apply_packing_receipt(state, self._grn("GRN-2627-08001", "09:49:42", 525))
+			self._deliver(
+				state,
+				"DC-2026-00012",
+				"12:16:14",
+				{"Soft Orange": 300, "Liver": 386, "Wenge": 154, "Dark Grey": 66, "Olive": 439, "Black": 453},
+			)
+		return {data["item_variant"].split("-")[1]: data for data in state.rows}
+
+	def test_migrated_box_history_is_replayed_as_real_pieces(self):
+		box_history = [
+			frappe._dict(
+				against="YRP Goods Received Note",
+				against_id="GRN-2627-08000",
+				item_variant=f"VEST-{colour}-M",
+				received_qty=418,
+				set_combination=f'{{"major_colour":"{colour}"}}',
+			)
+			for colour, *_rest in SIZE_M
+		]
+		rows = self._replay_fp_2627_00244(box_history)
+
+		self.assertEqual(
+			[rows[colour]["received"] for colour, *_rest in SIZE_M], [450, 350, 450, 350, 0, 465, 550]
+		)
+		self.assertEqual(
+			[rows[colour]["delivered"] - rows[colour]["received"] for colour, *_rest in SIZE_M],
+			[300, 386, 154, 66, 0, 439, 453],
+		)
+
+	def test_mapped_packing_grn_keeps_its_consumed_rows(self):
+		state = self._state()
+		grn = self._grn("YRP-GRN-1", "10:00:00", 500, mapped=True)
+		grn.grn_deliverables = [
+			frappe._dict(
+				item_variant="VEST-Black-M", set_combination='{"major_colour":"Black"}', quantity=453
+			),
+			frappe._dict(
+				item_variant="VEST-Olive-M", set_combination='{"major_colour":"Olive"}', quantity=47
+			),
+		]
+		for row in grn.grn_deliverables:
+			row.goods_received_note_item = "OUT-M"
+		with (
+			patch.object(piece_tracking, "get_variant_attr_details", side_effect=attributes),
+			patch.object(piece_tracking, "is_dynamic_packing_grn", return_value=False),
+			patch.object(piece_tracking.frappe.db, "get_single_value", return_value="Accepted"),
+		):
+			piece_tracking._apply_packing_receipt(state, grn)
+
+		received = {data["item_variant"]: data["received"] for data in state.rows if data["received"]}
+		self.assertEqual(received, {"VEST-Black-M": 453, "VEST-Olive-M": 47})

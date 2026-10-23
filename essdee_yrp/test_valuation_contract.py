@@ -2478,8 +2478,14 @@ class TestEssdeeValuationContract(UnitTestCase):
 				"essdee_yrp.finishing.packing_grn._allocate_to_work_order_deliverables",
 				return_value=mapped_accessories,
 			) as allocate_accessories,
+			patch("essdee_yrp.finishing.packing_grn.validate_supplier_input_stock") as validate_stock,
 		):
 			plan = _calculate_packing_inputs(grn, work_order, ipd)
+
+		self.assertEqual(
+			[(row["item_variant"], row["stock_qty"]) for row in validate_stock.call_args.args[2]],
+			[(garment_s.item_variant, 2), (garment_m.item_variant, 3)],
+		)
 
 		self.assertEqual(
 			[(row["item_variant"], row["stock_qty"]) for row in plan[:2]],

@@ -19,6 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 from yrp.attribute_links import value as _attribute_value
+from yrp.stock.utils import get_combine_datetime
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_create_variant, get_parent_item
 
@@ -117,6 +118,7 @@ class PieceState:
 				"delivered": 0.0,
 				"received": 0.0,
 				"received_types": defaultdict(float),
+				"deliveries": [],
 			}
 			self.rows.append(data)
 			self.by_identity[(row.item_variant, _json_key(row.set_combination))] = data
@@ -169,6 +171,7 @@ class PieceState:
 		if not row:
 			return False
 		row["delivered"] += quantity
+		row["deliveries"].append((_voucher_time(voucher), quantity))
 		self.tracking.append(
 			{
 				"item_variant": row["item_variant"],
@@ -370,7 +373,62 @@ def _apply_direct_receipt(state, grn):
 		)
 
 
+def _voucher_time(voucher):
+	if not voucher.get("posting_date"):
+		return None
+	return get_combine_datetime(voucher.posting_date, voucher.get("posting_time") or "00:00:00")
+
+
+def _is_migrated_packing_grn(grn):
+	"""F15 packing GRNs consumed Loose Piece rows without a received-item link."""
+	rows = grn.get("grn_deliverables") or []
+	return bool(
+		rows
+		and not is_dynamic_packing_grn(grn)
+		and not any(row.get("goods_received_note_item") for row in rows)
+	)
+
+
+def _delivered_before(data, received_at):
+	return sum(
+		quantity
+		for delivered_at, quantity in data["deliveries"]
+		if received_at is None or delivered_at is None or delivered_at <= received_at
+	)
+
+
+def _apply_migrated_packing_receipt(state, grn):
+	"""Split a migrated packing GRN's real pieces over the colours delivered before it.
+
+	F15 credited the box count to every packing colour, so its tracking rows are
+	not pieces and are ignored here.
+	"""
+	from essdee_yrp.finishing.packing_grn import _allocate_best_effort
+
+	received_at = _voucher_time(grn)
+	primary = state.ipd.primary_item_attribute
+	for output in grn.get("items") or []:
+		pieces = flt(output.get("stock_qty"))
+		if pieces <= 0:
+			continue
+		size = get_variant_attr_details(output.item_variant).get(primary)
+		rows = [data for data in state.rows if data["attributes"].get(primary) == size]
+		if not rows:
+			continue
+		remaining = {
+			data["row"].name: max(_delivered_before(data, received_at) - data["received"], 0) for data in rows
+		}
+		for allocated_rows, quantity in _allocate_best_effort(
+			[data["row"] for data in rows], pieces, remaining, state.ipd.is_set_item
+		):
+			for row in allocated_rows:
+				state.add_received(row.item_variant, row.set_combination, quantity, output.received_type, grn)
+
+
 def _apply_packing_receipt(state, grn):
+	if _is_migrated_packing_grn(grn):
+		_apply_migrated_packing_receipt(state, grn)
+		return
 	ipd = state.ipd
 	default_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 	# Packing configuration is mutable, while a submitted GRN is historical.

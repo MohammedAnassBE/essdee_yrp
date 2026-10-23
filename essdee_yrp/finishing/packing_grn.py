@@ -13,6 +13,7 @@ from essdee_yrp.dynamic_packing import is_dynamic_packing_grn
 from essdee_yrp.fabric_grn import (
 	_allocate_to_work_order_deliverables,
 	populate_grn_deliverables,
+	validate_supplier_input_stock,
 )
 from essdee_yrp.finishing.loose_piece import get_loose_piece_stock_variant
 from essdee_yrp.finishing.parsing import json_object
@@ -45,6 +46,7 @@ def _calculate_packing_inputs(grn, work_order, ipd):
 		if is_dynamic_packing_grn(grn)
 		else _allocate_consumed_garments(grn, work_order, ipd)
 	)
+	validate_loose_piece_stock(grn, work_order, garments)
 	accessories = _allocate_consumed_accessories(grn, work_order, ipd, garments)
 	return [*garments, *accessories]
 
@@ -65,29 +67,23 @@ def _is_legacy_packing_grn(grn):
 
 
 def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
-	"""Allocate each batch colour/size to every available garment part.
+	"""Allocate each batch colour/size to every garment part.
 
 	Dynamic packing stores physical boxes and ratios separately while the GRN
 	output rows store their resulting piece quantities.  The batch is therefore
 	the immutable colour identity; output rows alone are intentionally not used
 	to guess which Work Order garment colour was packed.
 	"""
-	from yrp.stock.utils import get_conversion_factor
-	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
-
 	calculated = list(work_order.get("work_order_calculated_items") or [])
 	deliverables = list(work_order.get("deliverables") or [])
 	attributes = {_row_key(row): get_variant_attr_details(row.item_variant) for row in calculated}
-	remaining_by_row = {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in calculated
-	}
+	remaining_by_row = _remaining_by_row(calculated)
 	outputs_by_size = _positive_outputs_by_size(grn, ipd)
 	output_remaining = {
 		row.name: flt(row.get("stock_qty") or row.get("quantity"))
 		for rows in outputs_by_size.values()
 		for row in rows
 	}
-	source_remaining = {}
 	valuation_cache = {}
 	result = []
 
@@ -102,104 +98,97 @@ def _allocate_dynamic_consumed_garments(grn, work_order, ipd):
 			requested = boxes * flt(per_box)
 			if requested <= 0:
 				continue
+			rows = [
+				row
+				for row in calculated
+				if attributes[_row_key(row)].get(ipd.primary_item_attribute) == size
+				and attributes[_row_key(row)].get(ipd.packing_attribute) == colour
+			]
+			if not rows:
+				frappe.throw(
+					_("Work Order {0} has no {1} / {2} garment row to pack.").format(
+						work_order.name, colour, size
+					)
+				)
 			for output, output_quantity in _take_output_chunks(
 				outputs_by_size, output_remaining, size, requested
 			):
-				candidates = [
-					row
-					for row in calculated
-					if attributes[_row_key(row)].get(ipd.primary_item_attribute) == size
-					and attributes[_row_key(row)].get(ipd.packing_attribute) == colour
-					and flt(remaining_by_row.get(_row_key(row))) > QTY_TOLERANCE
-				]
-				if not candidates:
-					frappe.throw(
-						_("Packing needs {0} delivered pieces for {1} / {2}, but none are available.").format(
-							output_quantity, colour, size
-						)
-					)
-
-				groups = [candidates]
-				if ipd.is_set_item:
-					by_part = defaultdict(list)
-					for row in candidates:
-						row_attributes = attributes[_row_key(row)]
-						part = row_attributes.get(ipd.set_item_attribute) or json_object(
-							row.set_combination
-						).get("major_part")
-						by_part[part or ""].append(row)
-					groups = list(by_part.values())
-
-				for group in groups:
-					allocations = _allocate_rows(group, output_quantity, remaining_by_row)
-					allocated = sum(quantity for _rows, quantity in allocations)
-					if allocated + QTY_TOLERANCE < output_quantity:
-						frappe.throw(
-							_(
-								"Packing needs {0} delivered pieces for {1} / {2}, but only {3} are available."
-							).format(output_quantity, colour, size, allocated)
-						)
-					for rows, quantity in allocations:
-						for calculated_row in rows:
-							source = _find_deliverable(deliverables, calculated_row)
-							conversion = get_conversion_factor(source.item_variant, source.uom)
-							factor = flt(conversion.get("conversion_factor")) or 1
-							if source.name not in source_remaining:
-								source_remaining[source.name] = max(
-									(
-										flt(source.qty)
-										- flt(source.pending_quantity)
-										- flt(source.stock_update)
-									)
-									* factor,
-									0,
-								)
-							if source_remaining[source.name] + QTY_TOLERANCE < quantity:
-								frappe.throw(
-									_(
-										"Work Order input {0} has only {1} delivered, unconsumed stock available; packing needs {2}."
-									).format(
-										source.item_variant,
-										source_remaining[source.name],
-										quantity,
-									)
-								)
-							source_remaining[source.name] -= quantity
-							dimensions = _stock_dimension_values(work_order, source)
-							valuation_key = (
-								calculated_row.item_variant,
-								tuple(sorted(dimensions.items())),
+				for group in _part_groups(rows, attributes, ipd):
+					for allocated_rows, quantity in _allocate_best_effort(
+						group, output_quantity, remaining_by_row, False
+					):
+						result.extend(
+							_garment_plan_row(
+								grn, work_order, deliverables, row, output, quantity, valuation_cache
 							)
-							if valuation_key not in valuation_cache:
-								_balance, valuation_cache[valuation_key] = get_stock_balance(
-									get_loose_piece_stock_variant(grn, calculated_row.item_variant),
-									grn.from_warehouse,
-									posting_date=grn.posting_date,
-									posting_time=grn.posting_time,
-									with_valuation_rate=True,
-									**dimensions,
-								)
-							result.append(
-								{
-									"item_variant": calculated_row.item_variant,
-									"goods_received_note_item": output.name,
-									"received_item_variant": output.item_variant,
-									"quantity": quantity / factor,
-									"stock_qty": quantity,
-									"uom": source.uom,
-									"stock_uom": conversion.get("stock_uom") or source.uom,
-									"conversion_factor": factor,
-									"work_order_deliverable": source.name,
-									"valuation_rate": valuation_cache[valuation_key],
-									"set_combination": json_object(calculated_row.set_combination),
-									"dimensions": dimensions,
-								}
-							)
+							for row in allocated_rows
+						)
 
 	leftover = sum(max(flt(quantity), 0) for quantity in output_remaining.values())
 	if leftover > QTY_TOLERANCE:
 		frappe.throw(_("Packing batch ratios do not account for {0} received pieces.").format(leftover))
 	return result
+
+
+def _part_groups(rows, attributes, ipd):
+	"""Split a colour's rows per set part; every part consumes the full quantity."""
+	if not ipd.is_set_item:
+		return [rows]
+	by_part = defaultdict(list)
+	for row in rows:
+		part = attributes[_row_key(row)].get(ipd.set_item_attribute) or json_object(row.set_combination).get(
+			"major_part"
+		)
+		by_part[part or ""].append(row)
+	return list(by_part.values())
+
+
+def _garment_plan_row(grn, work_order, deliverables, calculated_row, output, quantity, valuation_cache):
+	"""Map one allocated colour quantity to its Work Order input and Loose Piece valuation."""
+	from yrp.stock.utils import get_conversion_factor
+	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
+
+	source = _find_deliverable(deliverables, calculated_row)
+	conversion = get_conversion_factor(source.item_variant, source.uom)
+	factor = flt(conversion.get("conversion_factor")) or 1
+	dimensions = _stock_dimension_values(work_order, source)
+	stock_variant = get_loose_piece_stock_variant(grn, calculated_row.item_variant)
+	valuation_key = (stock_variant, tuple(sorted(dimensions.items())))
+	if valuation_key not in valuation_cache:
+		_balance, valuation_cache[valuation_key] = get_stock_balance(
+			stock_variant,
+			grn.from_warehouse,
+			posting_date=grn.posting_date,
+			posting_time=grn.posting_time,
+			with_valuation_rate=True,
+			**dimensions,
+		)
+	return {
+		"item_variant": calculated_row.item_variant,
+		"goods_received_note_item": output.name,
+		"received_item_variant": output.item_variant,
+		"quantity": quantity / factor,
+		"stock_qty": quantity,
+		"uom": source.uom,
+		"stock_uom": conversion.get("stock_uom") or source.uom,
+		"conversion_factor": factor,
+		"work_order_deliverable": source.name,
+		"lot": dimensions.get("lot"),
+		"received_type": dimensions.get("received_type"),
+		"valuation_rate": valuation_cache[valuation_key],
+		"set_combination": json_object(calculated_row.set_combination),
+		"dimensions": dimensions,
+	}
+
+
+def validate_loose_piece_stock(grn, work_order, garments):
+	"""Gate packing on the colourless Loose Piece stock the GRN consumes, per lot and type."""
+	if (getattr(grn, "flags", None) or {}).get("skip_input_stock_check"):
+		return
+	stock_plan = [
+		{**row, "item_variant": get_loose_piece_stock_variant(grn, row["item_variant"])} for row in garments
+	]
+	validate_supplier_input_stock(work_order, grn, stock_plan, {})
 
 
 def _positive_outputs_by_size(grn, ipd):
@@ -314,14 +303,10 @@ def _split_quantity_across_outputs(quantity, outputs):
 
 
 def _allocate_consumed_garments(grn, work_order, ipd):
-	from yrp.stock.utils import get_conversion_factor
-	from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _stock_dimension_values
-
 	deliverables = list(work_order.get("deliverables") or [])
 	calculated = list(work_order.get("work_order_calculated_items") or [])
-	remaining_by_row = {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in calculated
-	}
+	remaining_by_row = _remaining_by_row(calculated)
+	valuation_cache = {}
 	result = []
 
 	for output in grn.get("items") or []:
@@ -335,72 +320,81 @@ def _allocate_consumed_garments(grn, work_order, ipd):
 					output.item_variant, ipd.primary_item_attribute
 				)
 			)
-		candidates = [
+		rows = [
 			row
 			for row in calculated
 			if get_variant_attr_details(row.item_variant).get(ipd.primary_item_attribute) == size
-			and flt(remaining_by_row.get(_row_key(row))) > 0
 		]
-		allocations = (
-			_allocate_set_rows(candidates, output_stock_qty, remaining_by_row)
-			if ipd.is_set_item
-			else _allocate_rows(candidates, output_stock_qty, remaining_by_row)
-		)
-		allocated_output = sum(quantity for _rows, quantity in allocations)
-		if allocated_output + 0.001 < output_stock_qty:
-			frappe.throw(
-				_("Packing needs {0} delivered pieces for {1}, but only {2} are available.").format(
-					output_stock_qty, size, allocated_output
-				)
+		if not rows:
+			frappe.throw(_("Work Order {0} has no {1} garment row to pack.").format(work_order.name, size))
+		for allocated_rows, quantity in _allocate_best_effort(
+			rows, output_stock_qty, remaining_by_row, ipd.is_set_item
+		):
+			result.extend(
+				_garment_plan_row(grn, work_order, deliverables, row, output, quantity, valuation_cache)
+				for row in allocated_rows
 			)
-
-		for rows, quantity in allocations:
-			for calculated_row in rows:
-				source = _find_deliverable(deliverables, calculated_row)
-				conversion = get_conversion_factor(source.item_variant, source.uom)
-				factor = flt(conversion.get("conversion_factor")) or 1
-				combination = json_object(calculated_row.set_combination)
-				dimensions = _stock_dimension_values(work_order, source)
-				_balance, valuation_rate = get_stock_balance(
-					get_loose_piece_stock_variant(grn, calculated_row.item_variant),
-					grn.from_warehouse,
-					posting_date=grn.posting_date,
-					posting_time=grn.posting_time,
-					with_valuation_rate=True,
-					**dimensions,
-				)
-				result.append(
-					{
-						"item_variant": calculated_row.item_variant,
-						"goods_received_note_item": output.name,
-						"received_item_variant": output.item_variant,
-						"quantity": quantity / factor,
-						"stock_qty": quantity,
-						"uom": source.uom,
-						"stock_uom": conversion.get("stock_uom") or source.uom,
-						"conversion_factor": factor,
-						"work_order_deliverable": source.name,
-						"lot": dimensions.get("lot"),
-						"received_type": dimensions.get("received_type"),
-						"valuation_rate": valuation_rate,
-						"set_combination": combination,
-						"dimensions": dimensions,
-					}
-				)
 	return result
 
 
-def _allocate_set_rows(rows, requested, remaining_by_row=None):
-	remaining_by_row = remaining_by_row or {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in rows
-	}
+def _remaining_by_row(calculated):
+	return {_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in calculated}
+
+
+def _allocate_best_effort(rows, requested, remaining_by_row, is_set_item):
+	"""Fill each colour's delivered remaining, then spread any excess by planned quantity.
+
+	Packing consumes colourless Loose Piece stock, so the colour split only links
+	inputs to Work Order rows and never limits the receipt.
+	"""
+	allocate = _allocate_set_rows if is_set_item else _allocate_rows
+	allocations = allocate(rows, requested, remaining_by_row)
+	excess = flt(flt(requested) - sum(quantity for _rows, quantity in allocations), 6)
+	if excess <= QTY_TOLERANCE:
+		return allocations
+	groups = (
+		[group for group in _set_groups(rows) if len(group) > 1] if is_set_item else [[row] for row in rows]
+	)
+	return allocations + _spread_by_planned(excess, groups)
+
+
+def _spread_by_planned(excess, groups):
+	"""Split by planned quantity (evenly when none is planned) with cumulative rounding."""
+	if not groups:
+		frappe.throw(
+			_("Packing needs {0} more pieces, but no complete garment set is on the Work Order.").format(
+				excess
+			)
+		)
+	weights = [flt(group[0].get("quantity")) for group in groups]
+	if sum(weights) <= QTY_TOLERANCE:
+		weights = [1] * len(groups)
+	total = sum(weights)
+	digits = 0 if excess.is_integer() else 6
+	result = []
+	cumulative = previous = 0
+	for group, weight in zip(groups, weights, strict=True):
+		cumulative += weight
+		upto = flt(excess * cumulative / total, digits)
+		if upto - previous > QTY_TOLERANCE:
+			result.append((group, upto - previous))
+		previous = upto
+	return result
+
+
+def _set_groups(rows):
 	groups = {}
 	for row in rows:
 		key = tuple(sorted(json_object(row.set_combination).items()))
 		groups.setdefault(key, []).append(row)
+	return sorted(groups.values(), key=lambda values: min(flt(row.idx) for row in values))
+
+
+def _allocate_set_rows(rows, requested, remaining_by_row=None):
+	remaining_by_row = remaining_by_row or _remaining_by_row(rows)
 	remaining = flt(requested)
 	allocations = []
-	for group_rows in sorted(groups.values(), key=lambda values: min(flt(row.idx) for row in values)):
+	for group_rows in _set_groups(rows):
 		if len(group_rows) < 2:
 			continue
 		available = min(flt(remaining_by_row.get(_row_key(row))) for row in group_rows)
@@ -417,9 +411,7 @@ def _allocate_set_rows(rows, requested, remaining_by_row=None):
 
 
 def _allocate_rows(rows, requested, remaining_by_row=None):
-	remaining_by_row = remaining_by_row or {
-		_row_key(row): max(flt(row.delivered_quantity) - flt(row.received_qty), 0) for row in rows
-	}
+	remaining_by_row = remaining_by_row or _remaining_by_row(rows)
 	remaining = flt(requested)
 	allocations = []
 	for row in sorted(rows, key=lambda value: flt(value.idx)):

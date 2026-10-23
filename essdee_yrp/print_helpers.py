@@ -16,6 +16,8 @@ from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
+from essdee_yrp.merch.ipd.payload import prime_attribute_values
+
 
 def get_value_with_pad(value, pad):
 	"""Pad like MRP: ``ljust(pad - len(value))``; ZPL layouts were positioned against that width."""
@@ -542,9 +544,14 @@ def fetch_order_item_details(
 def set_attribute_display_values(doc):
 	"""Replace stored IAV links with their display values on a document being printed."""
 	registered = attribute_db.fields()
-	for row in (doc, *doc.get_all_children()):
-		for fieldname in registered.get(row.doctype, ()):
-			row.set(fieldname, _attribute_value(row.get(fieldname)))
+	targets = [
+		(row, fieldname)
+		for row in (doc, *doc.get_all_children())
+		for fieldname in registered.get(row.doctype, ())
+	]
+	prime_attribute_values(row.get(fieldname) for row, fieldname in targets)
+	for row, fieldname in targets:
+		row.set(fieldname, _attribute_value(row.get(fieldname)))
 
 
 def get_dc_grn_letter_head(doc):

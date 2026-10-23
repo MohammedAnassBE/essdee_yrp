@@ -105,3 +105,36 @@ class TestCuttingLaySheetPrint(TestCase):
 			items = get_bundle_items("CLS-TEST")
 
 		self.assertEqual([item["size"] for item in items], ["S", "M"])
+
+	def test_cutting_plan_print_resolves_cloth_rows_in_one_query(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "SD YRP Cutting Plan",
+				"cutting_plan_cloth_details": [{"colour": "IAV-BLACK", "dia": "IAV-DIA-60"}],
+				"cutting_plan_accessory_details": [{"colour": "IAV-RED", "dia": "IAV-DIA-60"}],
+			}
+		)
+		rows = [
+			frappe._dict(name="IAV-BLACK", attribute_name="Colour", attribute_value="Black"),
+			frappe._dict(name="IAV-RED", attribute_name="Colour", attribute_value="Red"),
+			frappe._dict(name="IAV-DIA-60", attribute_name="Dia", attribute_value="60 Dia"),
+		]
+		get_all = frappe.get_all
+		value_queries = []
+
+		def fake_get_all(doctype, *args, **kwargs):
+			if doctype != "YRP Item Attribute Value":
+				return get_all(doctype, *args, **kwargs)
+			value_queries.append(kwargs["filters"])
+			return rows
+
+		with (
+			patch.object(frappe.local, "attribute_link_values", {}, create=True),
+			patch("essdee_yrp.merch.ipd.payload.frappe.get_all", side_effect=fake_get_all),
+		):
+			doc.run_method("before_print")
+
+		self.assertEqual(value_queries, [{"name": ["in", ["IAV-BLACK", "IAV-DIA-60", "IAV-RED"]]}])
+		cloth, accessory = doc.cutting_plan_cloth_details[0], doc.cutting_plan_accessory_details[0]
+		self.assertEqual((cloth.colour, cloth.dia), ("Black", "60 Dia"))
+		self.assertEqual((accessory.colour, accessory.dia), ("Red", "60 Dia"))

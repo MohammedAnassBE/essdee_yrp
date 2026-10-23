@@ -24,6 +24,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
 from essdee_yrp.fabric_requirement import calculate_cloth, get_cloth_combination, get_stitching_combination
 from essdee_yrp.fabric_substitution import substitution_index
+from essdee_yrp.print_helpers import set_attribute_display_values
 
 DEFAULT_PIECE_WEIGHT_TOLERANCE = 0.003
 
@@ -144,6 +145,9 @@ def change_approval_grammage(doc_name, piece_weight_tolerance):
 
 
 class SDYRPCuttingPlan(Document):
+	def before_print(self, settings=None):
+		set_attribute_display_values(self)
+
 	def on_cancel(self):
 		self.db_set("cp_status", "Cancelled")
 

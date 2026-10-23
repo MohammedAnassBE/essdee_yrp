@@ -17,6 +17,7 @@ from frappe.model import get_permitted_fields
 from frappe.utils import flt, getdate, sbool
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_read_context import attribute_read_scope
 
 from essdee_yrp.ipd_attribute_links import major_stitching_value
 
@@ -270,7 +271,9 @@ def _cutting_plan_documents(stats_by_parent, document_cache):
 	}
 
 
-def _planned_quantities(cutting_plan_docs, document_cache):
+def _planned_quantities(cutting_plan_docs, document_cache, keep_first_variant_row=False):
+	"""Map variants to Work Order quantities; the Detail report keeps the first duplicate row, the DPR the last."""
+
 	planned_by_cutting_plan = {}
 	for name, cutting_plan in cutting_plan_docs.items():
 		if not _can_read_doc(cutting_plan):
@@ -278,9 +281,11 @@ def _planned_quantities(cutting_plan_docs, document_cache):
 		work_order = _readable_plan_work_order(cutting_plan, document_cache)
 		if not work_order:
 			continue
+		rows = work_order.work_order_calculated_items
+		if keep_first_variant_row:
+			rows = reversed(rows)
 		planned_by_cutting_plan[name] = {
-			row.item_variant: {"planned": row.quantity, "cumulative": row.received_qty}
-			for row in work_order.work_order_calculated_items
+			row.item_variant: {"planned": row.quantity, "cumulative": row.received_qty} for row in rows
 		}
 	return planned_by_cutting_plan
 
@@ -310,18 +315,19 @@ def _prepare_production_parent(
 			sources.cutting_plans[parent_name],
 			location,
 			sources.planned.get(parent_name, {}),
+			sources.document_cache,
 		)
 	return _prepare_cutting_order_parent(parent_name, location, sources.document_cache)
 
 
-def _prepare_cutting_plan_parent(cutting_plan, location, planned_quantities):
+def _prepare_cutting_plan_parent(cutting_plan, location, planned_quantities, document_cache=None):
 	if not _can_read_doc(cutting_plan):
 		return None
-	if cutting_plan.version == "V1":
-		frappe.throw("Can't get report for Cutting Plan Version V1")
 	if location and cutting_plan.cutting_location != location:
 		return None
-	detail, completed, incomplete = _cutting_plan_structures(cutting_plan)
+	if cutting_plan.version == "V1":
+		frappe.throw(f"Can't get report for Cutting Plan {cutting_plan.name}: it uses Version V1")
+	detail, completed, incomplete = _cached_cutting_plan_structures(cutting_plan, document_cache)
 	return frappe._dict(
 		detail=detail,
 		completed=update_if_string_instance(completed),
@@ -333,14 +339,25 @@ def _prepare_cutting_plan_parent(cutting_plan, location, planned_quantities):
 	)
 
 
+def _cached_cutting_plan_structures(cutting_plan, document_cache):
+	"""Build a plan's matrix once per report run; summary runs revisit plans across days."""
+
+	if document_cache is None:
+		return _cutting_plan_structures(cutting_plan)
+	key = ("cutting-plan-structures", cutting_plan.name)
+	if key not in document_cache:
+		document_cache[key] = _cutting_plan_structures(cutting_plan)
+	return document_cache[key]
+
+
 def _cutting_plan_structures(cutting_plan):
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
 		get_complete_incomplete_structure,
 	)
-	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
+	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import build_order_item_details
 
 	detail = frappe.get_cached_doc("YRP Item Production Detail", cutting_plan.production_detail)
-	item_details = fetch_order_item_details(cutting_plan.items, cutting_plan.production_detail)
+	item_details = build_order_item_details(cutting_plan.items, detail)
 	completed, incomplete = get_complete_incomplete_structure(cutting_plan.production_detail, item_details)
 	return detail, completed, incomplete
 
@@ -435,7 +452,7 @@ def _merge_incomplete_panels(completed, incomplete, detail, major_panels, panel_
 		completed_row["values1"] = {}
 		panel = _major_panel_for_row(completed_row, detail, major_panels)
 		for size, values in incomplete_row["values"].items():
-			if values[panel] <= 0:
+			if values.get(panel, 0) <= 0:
 				continue
 			completed_row["values"][size] += values[panel]
 			completed_row["values1"][size] = get_less_qty_panels(values, panel, panel_quantities)
@@ -512,16 +529,15 @@ def _add_parent_counts(counters, stats):
 
 @frappe.whitelist()
 def get_daily_production_summary_report(items=None, lots=None, location=None, from_date=None, to_date=None):
+	"""Request-bound summary; ranges the cutting-dpr web report would background are refused."""
+	from yrp.web_reports.background import needs_background
+	from yrp.web_reports.registry import get_web_report
+
 	require_cutting_report_access()
-	return build_daily_production_summary(
-		{
-			"items": items,
-			"lots": lots,
-			"location": location,
-			"from_date": from_date,
-			"to_date": to_date,
-		}
-	)
+	filters = {"mode": "summary", "items": items, "lots": lots, "location": location, "from_date": from_date, "to_date": to_date}
+	if needs_background(get_web_report("cutting-dpr"), filters):
+		frappe.throw("This range is too long to run here. Use the Daily Production Report summary, which runs it in the background.")
+	return build_daily_production_summary(filters)
 
 
 def build_daily_production_summary(filters, progress=None):
@@ -535,11 +551,12 @@ def build_daily_production_summary(filters, progress=None):
 	dates = _summary_dates(items, lots, from_date, to_date)
 	result = []
 	document_cache = {}
-	for index, date in enumerate(dates, start=1):
-		if day := _build_summary_day(date, items, lots, location, document_cache):
-			result.append(day)
-		if progress:
-			progress(index, len(dates))
+	with attribute_read_scope():
+		for index, date in enumerate(dates, start=1):
+			if day := _build_summary_day(date, items, lots, location, document_cache):
+				result.append(day)
+			if progress:
+				progress(index, len(dates))
 	return result
 
 
@@ -622,141 +639,97 @@ def _list_filter(value):
 @frappe.whitelist()
 def get_cutting_detail_report(start_date, end_date, location):
 	require_cutting_report_access()
-	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
-		get_complete_incomplete_structure,
-	)
-	from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import fetch_order_item_details
-	from essdee_yrp.stock_dimensions import find_variant
+	with attribute_read_scope():
+		return build_cutting_detail_report([getdate(start_date), getdate(end_date)], location)
 
-	generated_rows = _accessible_laysheets(
-		[
-			["bundle_generated_date", "between", [getdate(start_date), getdate(end_date)]],
-			["status", "=", "Label Printed"],
-		],
-		["name", "cutting_plan"],
-	)
-	created_rows = _accessible_laysheets(
-		[
-			["posting_date", "between", [getdate(start_date), getdate(end_date)]],
-			["status", "=", "Label Printed"],
-		],
-		["name", "cutting_plan"],
-	)
-	cutting_plans = [{"cutting_plan": name} for name in sorted({row.get("cutting_plan") for row in generated_rows if row.get("cutting_plan")})]
+
+def build_cutting_detail_report(date_range, location):
+	generated = _laysheet_names_by_plan("bundle_generated_date", date_range)
+	created = _laysheet_names_by_plan("posting_date", date_range)
+	sources = _cutting_detail_sources(generated)
 	report = []
-	bundle_generated = 0
-	label_printed = 0
-	created = 0
-	for cutting_plan in cutting_plans:
-		cp_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan["cutting_plan"])
-		if not _can_read_doc(cp_doc):
+	counters = {"bundle_generated": 0, "label_printed": 0, "created": 0}
+	for name in sorted(generated):
+		parent = _prepare_production_parent("SD YRP Cutting Plan", name, location, sources)
+		if not parent:
 			continue
-		if cp_doc.version == "V1":
-			frappe.throw("Can't get report for Cutting Plan Version V1")
-		if location and cp_doc.cutting_location != location:
-			continue
-		item_details = fetch_order_item_details(cp_doc.items, cp_doc.production_detail)
-		completed, incomplete = get_complete_incomplete_structure(cp_doc.production_detail, item_details)
-		incomplete_items = update_if_string_instance(incomplete)
-		completed_items = update_if_string_instance(completed)
-		production_detail = cp_doc.production_detail
-		ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", production_detail)
-		cls_list = [
-			{"name": row["name"]}
-			for row in generated_rows
-			if row.get("cutting_plan") == cutting_plan["cutting_plan"]
-		]
-		bundle_generated += len(cls_list)
-		cls_list2 = cls_list
-		label_printed += len(cls_list2)
-		cls_list3 = [row for row in created_rows if row.get("cutting_plan") == cutting_plan["cutting_plan"]]
-		created += len(cls_list3)
-		completed_items, incomplete_items = calculate_completed(
-			cls_list, ipd_doc, completed_items, incomplete_items
-		)
-		major_panel = {}
-		panel_qty = {}
-		for row in ipd_doc.stiching_item_details:
-			if row.is_default:
-				major_panel[_attribute_value(row.set_item_attribute_value)] = _attribute_value(
-					row.stiching_attribute_value
-				)
-			panel_qty[_attribute_value(row.stiching_attribute_value)] = row.quantity
+		counters["bundle_generated"] += len(generated[name])
+		counters["label_printed"] += len(generated[name])
+		counters["created"] += len(created.get(name, []))
+		if result := _build_detail_plan_report(parent, generated[name], sources):
+			report.append(result)
+	return {"report_data": report, **counters}
 
-		if not ipd_doc.is_set_item:
-			major_panel["panel"] = major_stitching_value(ipd_doc)
 
-		for row1, row2 in zip_longest(completed_items["items"], incomplete_items["items"]):
-			row1["values1"] = {}
-			if ipd_doc.is_set_item:
-				part = row1["attributes"][ipd_doc.set_item_attribute]
-				panel = major_panel[part]
-				for size in row1["values"]:
-					if row2["values"][size][panel] > 0:
-						row1["values"][size] += row2["values"][size][panel]
-						x = get_less_qty_panels(row2["values"][size], panel, panel_qty)
-						row1["values1"][size] = x
-			else:
-				for size in row1["values"]:
-					if row2["values"][size][_attribute_value(major_panel["panel"])] > 0:
-						row1["values"][size] += row2["values"][size][_attribute_value(major_panel["panel"])]
-						x = get_less_qty_panels(
-							row2["values"][size], _attribute_value(major_panel["panel"]), panel_qty
-						)
-						row1["values1"][size] = x
-
-		items_list = []
-		total = 0
-		total_planned_qty = 0
-		total_received_qty = 0
-		planned_dict = {}
-		wo_doc = _readable_plan_work_order(cp_doc)
-		if wo_doc:
-			for row in wo_doc.work_order_calculated_items:
-				planned_dict.setdefault(
-					row.item_variant, {"planned": row.quantity, "cumulative": row.received_qty}
-				)
-		for row in completed_items["items"]:
-			total_qty = 0
-			total_planned = 0
-			total_received = 0
-			for val in row["values"]:
-				if row["values"][val] > 0:
-					total_qty += row["values"][val]
-					attrs = row["attributes"].copy()
-					attrs[row["primary_attribute"]] = val
-					variant = find_variant(cp_doc.item, attrs)
-					if planned_dict and variant in planned_dict:
-						total_planned += planned_dict[variant]["planned"]
-						total_received += planned_dict[variant]["cumulative"]
-
-			if total_qty > 0:
-				row["total_qty"] = total_qty
-				row["planned"] = total_planned
-				row["cumulative"] = total_received
-				items_list.append(row)
-				total += total_qty
-				total_planned_qty += total_planned
-				total_received_qty += total_received
-
-		if len(items_list) == 0:
-			continue
-		else:
-			completed_items["items"] = items_list
-		completed_items["total_sum"] = total
-		completed_items["total_planned_sum"] = total_planned_qty
-		completed_items["total_received_sum"] = total_received_qty
-		completed_items["style_no"] = cp_doc.item
-		completed_items["lot_no"] = cp_doc.lot
-		completed_items["location"] = cp_doc.cutting_location
-		report.append(completed_items)
-
-	return {
-		"report_data": report,
-		"bundle_generated": bundle_generated,
-		"label_printed": label_printed,
-		"created": created,
+def _cutting_detail_sources(laysheets_by_plan):
+	document_cache = {}
+	stats_by_parent = {
+		("SD YRP Cutting Plan", name): {"names": names} for name, names in laysheets_by_plan.items()
 	}
+	cutting_plans = _cutting_plan_documents(stats_by_parent, document_cache)
+	return frappe._dict(
+		bundles=_bundle_rows_by_laysheet(stats_by_parent),
+		cutting_plans=cutting_plans,
+		planned=_planned_quantities(cutting_plans, document_cache, keep_first_variant_row=True),
+		find_variant=_variant_lookup(),
+		document_cache=document_cache,
+	)
+
+
+def _laysheet_names_by_plan(date_field, date_range):
+	rows = _accessible_laysheets(
+		[[date_field, "between", date_range], ["status", "=", "Label Printed"]],
+		["name", "cutting_plan"],
+	)
+	names_by_plan = {}
+	for row in rows:
+		if row.get("cutting_plan"):
+			names_by_plan.setdefault(row["cutting_plan"], []).append(row["name"])
+	return names_by_plan
+
+
+def _build_detail_plan_report(parent, laysheet_names, sources):
+	"""Aggregate every lay sheet of one plan into a single section, without the cutter split."""
+
+	completed, incomplete = calculate_completed(
+		[{"name": name} for name in laysheet_names],
+		parent.detail,
+		copy.deepcopy(parent.completed),
+		copy.deepcopy(parent.incomplete),
+		sources.bundles,
+	)
+	major_panels, panel_quantities = _panel_configuration(parent.detail)
+	_merge_incomplete_panels(completed, incomplete, parent.detail, major_panels, panel_quantities)
+	items = []
+	totals = {"quantity": 0, "planned": 0, "received": 0}
+	for row in completed["items"]:
+		quantities = _row_quantities(row, parent, sources.find_variant)
+		if quantities["quantity"] <= 0:
+			continue
+		row.update(
+			{
+				"total_qty": quantities["quantity"],
+				"planned": quantities["planned"],
+				"cumulative": quantities["received"],
+			}
+		)
+		items.append(row)
+		for key in totals:
+			totals[key] += quantities[key]
+	if not items:
+		return None
+	completed.update(
+		{
+			"items": items,
+			"total_sum": totals["quantity"],
+			"total_planned_sum": totals["planned"],
+			"total_received_sum": totals["received"],
+			"style_no": parent.item,
+			"lot_no": parent.lot,
+			"location": parent.location,
+		}
+	)
+	return completed
 
 
 def get_less_qty_panels(values, major_panel, panel_qty):
@@ -895,6 +868,19 @@ def _add_non_set_bundle(incomplete_by_colour, bundle):
 			size_values[part] += bundle.quantity
 
 
+def _add_set_bundle(incomplete_by_colour, bundle, stich_details):
+	"""Rows are keyed by the set's major colour; a set-part bundle only switches the part."""
+	set_combination = update_if_string_instance(bundle.set_combination)
+	values_by_part = incomplete_by_colour[set_combination["major_colour"]]
+	set_part = set_combination.get("set_part") or set_combination["major_part"]
+	size = _attribute_value(bundle.size)
+	for part in _attribute_value(bundle.part).split(","):
+		try:
+			values_by_part[set_part][size][part] += bundle.quantity
+		except KeyError, TypeError:
+			values_by_part[stich_details[part]][size][part] += bundle.quantity
+
+
 @frappe.whitelist()
 def get_cut_sheet_report(date, location):
 	require_cutting_report_access()
@@ -999,24 +985,7 @@ def get_cut_sheet_report(date, location):
 				else:
 					stich_details = get_stich_details(detail_doc)
 					for item in cls_doc.cutting_laysheet_bundles:
-						parts = _attribute_value(item.part).split(",")
-						set_combination = update_if_string_instance(item.set_combination)
-						major_part = set_combination["major_part"]
-						major_colour = set_combination["major_colour"]
-						if set_combination.get("set_part"):
-							major_part = set_combination["set_part"]
-							major_colour = set_combination["set_colour"]
-
-						for part in parts:
-							try:
-								alter_incomplete_items[major_colour][major_part][
-									_attribute_value(item.size)
-								][part] += item.quantity
-							except (KeyError, TypeError):
-								secondary_part = stich_details[part]
-								alter_incomplete_items[major_colour][secondary_part][
-									_attribute_value(item.size)
-								][part] += item.quantity
+						_add_set_bundle(alter_incomplete_items, item, stich_details)
 
 			if not detail_doc.is_set_item:
 				for item in cutter_items["items"]:
@@ -1072,8 +1041,8 @@ def _lots_in_category(rows, category):
 def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None):
 	require_cutting_report_access()
 	from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
-		get_ccr,
-		get_recut_print_panel_details,
+		_get_recut_print_panel_details,
+		build_ccr,
 	)
 
 	lot_list = update_if_string_instance(lot_list)
@@ -1113,22 +1082,13 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 		for cp in cp_list:
 			if lot not in output_lots:
 				output_lots.append(lot)
-			cp_fields = [
-				"item",
-				"lay_no",
-				"no_of_colours",
-				"completed_items_json",
-				"version",
-				"production_detail",
-			]
-			(
-				item_name,
-				lay_no,
-				no_of_colours,
-				completed,
-				version,
-				production_detail,
-			) = frappe.get_value("SD YRP Cutting Plan", cp, cp_fields)
+			cp_doc = frappe.get_doc("SD YRP Cutting Plan", cp)
+			item_name = cp_doc.item
+			lay_no = cp_doc.lay_no
+			no_of_colours = cp_doc.no_of_colours
+			completed = cp_doc.completed_items_json
+			version = cp_doc.version
+			production_detail = cp_doc.production_detail
 			if item_name not in output_items:
 				output_items.append(item_name)
 			completed = [update_if_string_instance(completed)]
@@ -1175,12 +1135,12 @@ def get_multiccr(open_status=None, lot_list=None, item_list=None, category=None)
 			lot_data = get_lot_data(
 				lot, lot_data, cloth_details, completed, item_name, lay_no, no_of_colours, version, total_qty
 			)
-			ccr_data = get_ccr(cp)
+			ccr_data = build_ccr(cp_doc)
 			panel_groups.extend(serialize_multiccr_panel_groups(cp, ccr_data))
 			recut_details = (
 				ccr_data.get("recut_details")
 				if ccr_data
-				else get_recut_print_panel_details(cp, "Recut")
+				else _get_recut_print_panel_details(cp_doc, "Recut")
 			)
 			merge_multiccr_recut_rows(recut_rows, recut_details)
 

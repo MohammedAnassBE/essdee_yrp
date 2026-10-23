@@ -2,7 +2,6 @@
 # For license information, please see license.txt
 
 import frappe
-from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 
 def execute(filters=None):
@@ -36,24 +35,24 @@ def get_data(filters):
 		conditions += " AND t2.supplier = %(supplier)s"
 		d["supplier"] = filters.supplier
 
-	data = frappe.db.sql(
+	return frappe.db.sql(
 		f"""
 			SELECT
 				t2.name as delivery_challan, t2.from_location, t2.from_location_name, t2.supplier,
-				t2.supplier_name, t2.lot, t2.process_name, t1.item_variant, t1.delivered_quantity as qty,
-				t1.uom, t1.received_type
+				t2.supplier_name, t2.lot, t2.process_name,
+				COALESCE(NULLIF(item.variant_of, ''), item.name) as item,
+				t1.item_variant, t1.delivered_quantity as qty, t1.uom, t1.received_type
 			FROM `tabYRP Delivery Challan Item` as t1
 			JOIN `tabYRP Delivery Challan` as t2
 			ON t2.name = t1.parent
+			LEFT JOIN `tabItem` as item
+			ON item.name = t1.item_variant
 			WHERE t1.docstatus = 1 AND t1.delivered_quantity > 0 {conditions}
+			ORDER BY t2.posting_date, t2.name, t1.idx
 		""",
 		d,
 		as_dict=True,
 	)
-	for row in data:
-		row["item"] = get_parent_item(row["item_variant"])
-
-	return data
 
 
 def get_columns():

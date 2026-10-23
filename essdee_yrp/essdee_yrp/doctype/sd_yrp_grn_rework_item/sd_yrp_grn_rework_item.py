@@ -196,24 +196,14 @@ def get_rework_items(
 		"total_reworked_detail": {},
 		"permissions": permissions,
 	}
-	for name in frappe.get_all(
-		"SD YRP GRN Rework Item", filters=filters, pluck="name", order_by="creation desc"
-	):
-		doc = frappe.get_doc("SD YRP GRN Rework Item", name)
-		doc.check_permission("read")
-		ipd = attribute_db.get_cached_value("SD YRP Lot", doc.lot, "production_detail")
-		if not ipd:
+	ipd_fields_by_lot = {}
+	for doc in get_rework_sources(filters):
+		name = doc.name
+		if doc.lot not in ipd_fields_by_lot:
+			ipd_fields_by_lot[doc.lot] = _lot_ipd_fields(doc.lot)
+		if not ipd_fields_by_lot[doc.lot]:
 			continue
-		pack_attr, primary_attr, is_set_item, set_attr = attribute_db.get_cached_value(
-			"YRP Item Production Detail",
-			ipd,
-			[
-				"packing_attribute",
-				"primary_item_attribute",
-				"is_set_item",
-				"set_item_attribute",
-			],
-		)
+		pack_attr, primary_attr, is_set_item, set_attr = ipd_fields_by_lot[doc.lot]
 		detail = {
 			"grn_number": doc.grn_number,
 			"date": doc.creation,
@@ -281,6 +271,52 @@ def get_rework_items(
 	if grn_number:
 		return data, next(iter(data["report_detail"]), None)
 	return data
+
+
+def get_rework_sources(filters, order_by="creation desc"):
+	"""Readable Rework Items with their detail rows loaded in one query."""
+	docs = frappe.get_list(
+		"SD YRP GRN Rework Item",
+		filters=filters,
+		fields=["name", "grn_number", "creation", "lot", "item", "warehouse"],
+		order_by=order_by,
+		limit_page_length=0,
+	)
+	rows_by_parent = {}
+	if docs:
+		for row in frappe.get_all(
+			"SD YRP GRN Rework Item Detail",
+			filters={"parenttype": "SD YRP GRN Rework Item", "parent": ["in", [doc.name for doc in docs]]},
+			fields=[
+				"name",
+				"parent",
+				"item_variant",
+				"received_type",
+				"quantity",
+				"reworked",
+				"rejection",
+				"completed",
+				"uom",
+				"set_combination",
+			],
+			order_by="parent asc, idx asc",
+			limit_page_length=0,
+		):
+			rows_by_parent.setdefault(row.parent, []).append(row)
+	for doc in docs:
+		doc.grn_rework_item_details = rows_by_parent.get(doc.name, [])
+	return docs
+
+
+def _lot_ipd_fields(lot):
+	ipd = attribute_db.get_cached_value("SD YRP Lot", lot, "production_detail")
+	if not ipd:
+		return None
+	return attribute_db.get_cached_value(
+		"YRP Item Production Detail",
+		ipd,
+		["packing_attribute", "primary_item_attribute", "is_set_item", "set_item_attribute"],
+	)
 
 
 def add_reworked(data, detail, row):

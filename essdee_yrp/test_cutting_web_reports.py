@@ -7,6 +7,8 @@ from yrp.web_reports.jobs import execute_report_job, get_report_job, run_web_rep
 from yrp.web_reports.registry import clear_web_report_cache, get_web_report
 
 from essdee_yrp.cutting.reports import (
+	_merge_incomplete_panels,
+	_planned_quantities,
 	build_daily_production_summary,
 	calculate_completed,
 	get_cutting_detail_report,
@@ -239,6 +241,58 @@ class TestCuttingWebReports(IntegrationTestCase):
 
 		self.assertEqual(actual_completed["items"][0]["values"]["M"], 0)
 		self.assertEqual(actual_incomplete["items"][0]["values"]["M"]["Front"], 0)
+
+	def test_stale_major_panel_adds_no_incomplete_quantity(self):
+		completed = {"items": [{"attributes": {"Colour": "Black"}, "values": {"M": 5}}]}
+		incomplete = {"items": [{"attributes": {"Colour": "Black"}, "values": {"M": {"Pouch": 2}}}]}
+		detail = frappe._dict(is_set_item=0)
+
+		_merge_incomplete_panels(completed, incomplete, detail, {"panel": "Front"}, {"Pouch": 1})
+
+		self.assertEqual(completed["items"][0]["values"], {"M": 5})
+		self.assertEqual(completed["items"][0]["values1"], {})
+
+	def test_detail_planned_quantities_keep_the_first_duplicate_variant_row(self):
+		rows = [
+			frappe._dict(item_variant="V-M", quantity=10, received_qty=1),
+			frappe._dict(item_variant="V-M", quantity=20, received_qty=2),
+		]
+		plan = frappe._dict(work_order="WO-1")
+		with (
+			patch("essdee_yrp.cutting.reports._can_read_doc", return_value=True),
+			patch(
+				"essdee_yrp.cutting.reports._readable_plan_work_order",
+				return_value=frappe._dict(work_order_calculated_items=rows),
+			),
+		):
+			first = _planned_quantities({"CP-1": plan}, {}, keep_first_variant_row=True)
+			last = _planned_quantities({"CP-1": plan}, {})
+
+		self.assertEqual(first["CP-1"]["V-M"], {"planned": 10, "cumulative": 1})
+		self.assertEqual(last["CP-1"]["V-M"], {"planned": 20, "cumulative": 2})
+
+	def test_detail_report_loads_lay_sheet_bundles_in_one_query(self):
+		dates = frappe.get_all(
+			"SD YRP Cutting LaySheet",
+			filters={"status": "Label Printed", "bundle_generated_date": ("is", "set")},
+			pluck="bundle_generated_date",
+			order_by="bundle_generated_date desc",
+			limit=50,
+		)
+		if not dates:
+			self.skipTest("No labelled Cutting LaySheet dates are available")
+		loaded = []
+		get_doc = frappe.get_doc
+
+		def tracking_get_doc(*args, **kwargs):
+			loaded.append(args[0] if args else None)
+			return get_doc(*args, **kwargs)
+
+		with patch("frappe.get_doc", side_effect=tracking_get_doc):
+			detail = get_cutting_detail_report(str(min(dates)), str(max(dates)), "")
+
+		self.assertTrue(detail["bundle_generated"])
+		self.assertNotIn("SD YRP Cutting LaySheet", loaded)
 
 
 def _summary_filters(from_date, to_date):

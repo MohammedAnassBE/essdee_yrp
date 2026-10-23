@@ -236,6 +236,38 @@ test("FI Updates passes the company-location restriction to its supplier lookup"
 	} finally { root.__vue_app__.unmount() }
 })
 
+test("Desk report offers Download only for a background result", async () => {
+	const empty = () => Vue.ref([])
+	const isBackgroundResult = Vue.ref(false)
+	const download = () => {}
+	const component = loadComponent(new URL("../src/components/reports/DeskBackedReport.vue", import.meta.url).pathname, {
+		"vue-router": { useRoute: () => ({ query: {} }) },
+		"primevue/inputnumber": () => null, "primevue/button": () => null, "primevue/checkbox": () => null, "primevue/select": () => null,
+		"../common/DateField.vue": () => null, "../common/LinkField.vue": () => null,
+		"./reportExport.js": reportExportModule,
+		"./ReportShell.vue": props => Vue.h("report-shell", props),
+		"./ReportColumnPicker.vue": () => null, "./ReportRunStatus.vue": () => null,
+		"./deskReportConfig.js": await config(),
+		"./reportUtils.js": { todayIso: () => "2026-03-31", stockCellValue: value => value },
+		"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
+		"../../composables/useWebReport.js": { useWebReport: () => ({
+			sourceColumns: empty(), sourceRows: empty(), activeFilters: Vue.ref(null), filtersChanged() {}, isBackgroundResult, download,
+		}) },
+		"../../composables/useReportColumns.js": { useReportColumns: () => ({
+			columns: empty(), displayColumns: empty(), rows: empty(), loadLayout() {},
+		}) },
+	})
+	const root = mountComponent(component, { reportKey: "dc-report" })
+	try {
+		const downloadAction = () => findNodes(root, node => node.type === "report-shell")[0].props.actions.find(action => action.label === "Download")
+		assert.equal(downloadAction().visible, false)
+		assert.equal(downloadAction().command, download)
+		isBackgroundResult.value = true
+		await Vue.nextTick()
+		assert.equal(downloadAction().visible, true)
+	} finally { root.__vue_app__.unmount() }
+})
+
 test("report capability alone cannot open an otherwise unavailable department report area", async () => {
 	const { departmentDeskReports } = await config()
 	assert.deepEqual(departmentDeskReports("fabric-store", { grn_report: { can_read: true } }, false), [])

@@ -1221,6 +1221,46 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 			"Success",
 		)
 
+	def test_monthly_summary_over_a_long_range_is_set_based(self):
+		sample = frappe.db.sql(
+			"""
+				select sp.supplier, entry.input_type, min(entry.entry_date) from_date, max(entry.entry_date) to_date
+				from `tabSD YRP Sewing Plan Entry Detail` entry
+				join `tabSD YRP Sewing Plan` sp on sp.name = entry.sewing_plan
+				where ifnull(sp.item, '') != ''
+				group by sp.supplier, entry.input_type
+				order by count(*) desc
+				limit 1
+			""",
+			as_dict=True,
+		)
+		if not sample:
+			self.skipTest("Monthly summary parity requires migrated entries")
+		sample = sample[0]
+		expected = flt(
+			frappe.db.sql(
+				"""
+					select coalesce(sum(detail.quantity), 0)
+					from `tabSD YRP Sewing Plan Detail` detail
+					join `tabSD YRP Sewing Plan Entry Detail` entry on entry.name = detail.parent
+					join `tabSD YRP Sewing Plan` sp on sp.name = entry.sewing_plan
+					where sp.supplier = %s and entry.input_type = %s and entry.entry_date between %s and %s
+				""",
+				(sample.supplier, sample.input_type, sample.from_date, sample.to_date),
+			)[0][0]
+		)
+		with patch(
+			"essdee_yrp.sewing.read_models.get_variant_attr_details",
+			side_effect=AssertionError("per-variant lookup"),
+		):
+			monthly = get_monthly_summary_data(
+				sample.supplier, sample.from_date, sample.to_date, sample.input_type
+			)
+		self.assertAlmostEqual(flt(monthly["grand_total"]["total"]), expected, places=3)
+		self.assertTrue(
+			all(sample.from_date <= getdate(row["date"]) <= sample.to_date for row in monthly["rows"])
+		)
+
 	def test_sewing_read_models_match_persisted_entry_quantities(self):
 		samples = frappe.db.sql(
 			"""

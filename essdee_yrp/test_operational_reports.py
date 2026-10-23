@@ -1,6 +1,7 @@
 import importlib
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
@@ -45,6 +46,41 @@ class TestOperationalReports(IntegrationTestCase):
 			self.skipTest("Historical cutting-plan parity runs after data migration")
 		result = get_multiccr(lot_list=json.dumps(["F1024-54"]))
 		self.assertIn("F1024-54", result["output_lots"])
+
+	def test_multiccr_loads_laysheets_without_full_documents(self):
+		lot = frappe.db.get_value(
+			"SD YRP Cutting Plan",
+			{"docstatus": 1, "lot": ["in", frappe.get_all("SD YRP Lot", {"production_detail": ["is", "set"]}, pluck="name")]},
+			"lot",
+		)
+		if not lot:
+			self.skipTest("No submitted cutting plan with a production lot")
+		original_get_doc = frappe.get_doc
+		with patch.object(frappe, "get_doc", wraps=original_get_doc) as get_doc:
+			result = get_multiccr(lot_list=json.dumps([lot]))
+		self.assertIn(lot, result["output_lots"])
+		loaded = {call.args[0] for call in get_doc.call_args_list if call.args and isinstance(call.args[0], str)}
+		self.assertNotIn("SD YRP Cutting LaySheet", loaded)
+		self.assertNotIn("SD YRP Recut and Print Panel", loaded)
+
+	def test_ccr_laysheet_rows_match_documents(self):
+		from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
+			CCR_LAYSHEET_CHILDREN,
+			get_ccr_laysheets,
+		)
+
+		laysheet = frappe.db.get_value(
+			"SD YRP Cutting LaySheet", {"status": "Label Printed", "cutting_plan": ["is", "set"]}, "name"
+		)
+		if not laysheet:
+			self.skipTest("No label-printed lay sheet")
+		document = frappe.get_doc("SD YRP Cutting LaySheet", laysheet)
+		rows = {row.name: row for row in get_ccr_laysheets(document.cutting_plan, include_bundles=True)}
+		self.assertEqual(rows[laysheet].calculated_parts, document.calculated_parts)
+		for parentfield, (_doctype, fields) in CCR_LAYSHEET_CHILDREN.items():
+			expected = [[child.get(field) for field in fields] for child in document.get(parentfield)]
+			actual = [[child.get(field) for field in fields] for child in rows[laysheet][parentfield]]
+			self.assertEqual(actual, expected, parentfield)
 
 	def test_multiccr_item_merge_accepts_different_size_ranges(self):
 		def lot_payload(size, quantity):

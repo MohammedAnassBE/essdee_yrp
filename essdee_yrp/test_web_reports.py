@@ -1,10 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 import frappe
 from frappe.desk.query_report import run as run_query_report
 from frappe.tests import IntegrationTestCase
 from yrp.web_reports.jobs import run_web_report
-from yrp.web_reports.registry import clear_web_report_cache
+from yrp.web_reports.registry import clear_web_report_cache, get_web_report
 
 from essdee_yrp.cut_panel_store.report_workspace import get_cut_bundle_balance
 
@@ -170,7 +171,9 @@ class TestEssdeeWebReportParity(IntegrationTestCase):
 	def test_cut_bundle_balance_matches_existing_endpoint(self):
 		filters = {"lot": self.fixture_lot, "supplier": ""}
 		expected = get_cut_bundle_balance(filters)
-		actual = run_web_report("cut-bundle-balance", filters)
+		self.assertEqual(get_web_report("cut-bundle-balance").background, "always")
+		with patch("yrp.web_reports.jobs.needs_background", return_value=False):
+			actual = run_web_report("cut-bundle-balance", filters)
 		self.assertEqual([row["name"] for row in expected["result"]], [self.cut_bundle_ledger])
 		self.assertEqual(actual["columns"], expected["columns"])
 		self.assertEqual(actual["result"], expected["result"])

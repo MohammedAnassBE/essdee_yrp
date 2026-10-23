@@ -29,6 +29,7 @@ from essdee_yrp.cutting.movement import (
 	validate_transaction_link,
 )
 from essdee_yrp.cutting.reports import (
+	_add_set_bundle,
 	get_cut_sheet_report,
 	get_cutting_detail_report,
 	get_daily_production_report,
@@ -92,6 +93,53 @@ class TestCuttingLaySheetWebProjection(UnitTestCase):
 
 		self.assertEqual(projected["item"], "Fulldull Fabric With Wicking New")
 		self.assertEqual(projected["cloth_type"], "Main Fabric")
+
+
+class TestCutSheetSetBundles(UnitTestCase):
+	def set_structure(self):
+		return {
+			"Black": {"Top": {"M": {"Front": 0}}, "Bottom": {"M": {"Leg": 0}}},
+			"Sea Foam": {"Top": {"M": {"Front": 0}}, "Bottom": {"M": {"Leg": 0}}},
+		}
+
+	def bundle(self, part, set_combination):
+		return frappe._dict(part=part, size="M", quantity=5, set_combination=json.dumps(set_combination))
+
+	def test_set_part_bundle_stays_under_major_colour(self):
+		structure = self.set_structure()
+		combination = {
+			"major_part": "Top",
+			"major_colour": "Sea Foam",
+			"set_part": "Bottom",
+			"set_colour": "Navy",
+		}
+
+		_add_set_bundle(structure, self.bundle("Leg", combination), {})
+
+		self.assertEqual(structure["Sea Foam"]["Bottom"]["M"]["Leg"], 5)
+		self.assertEqual(structure["Black"]["Bottom"]["M"]["Leg"], 0)
+
+	def test_set_colour_matching_other_set_does_not_borrow_its_row(self):
+		structure = self.set_structure()
+		combination = {
+			"major_part": "Top",
+			"major_colour": "Sea Foam",
+			"set_part": "Bottom",
+			"set_colour": "Black",
+		}
+
+		_add_set_bundle(structure, self.bundle("Leg", combination), {})
+
+		self.assertEqual(structure["Sea Foam"]["Bottom"]["M"]["Leg"], 5)
+		self.assertEqual(structure["Black"]["Bottom"]["M"]["Leg"], 0)
+
+	def test_unknown_major_part_panel_uses_stitching_part(self):
+		structure = self.set_structure()
+		combination = {"major_part": "Top", "major_colour": "Black"}
+
+		_add_set_bundle(structure, self.bundle("Leg", combination), {"Leg": "Bottom"})
+
+		self.assertEqual(structure["Black"]["Bottom"]["M"]["Leg"], 5)
 
 
 class TestCutBundleMovementTransactionFiltering(UnitTestCase):

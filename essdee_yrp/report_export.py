@@ -7,7 +7,9 @@ from frappe.permissions import can_export
 from frappe.utils import cint
 from frappe.utils.xlsxutils import handle_html, make_xlsx
 from yrp.web_reports.access import check_report_access
+from yrp.web_reports.background import needs_background
 from yrp.web_reports.filters import authorize_filters
+from yrp.web_reports.jobs import run_web_report
 from yrp.web_reports.link_columns import get_linked_values
 from yrp.web_reports.registry import get_web_report
 
@@ -47,7 +49,7 @@ def export_web_report(report_key, columns, filters=None, file_format_type="Excel
 	can_export(get_export_doctype(report_key), raise_exception=True)
 	validate_file_format(file_format_type)
 	filters = authorize_filters(entry.filters, filters)
-	data = frappe._dict(run_query_report(entry.report, filters, ignore_prepared_report=True, are_default_filters=False))
+	data = frappe._dict(get_export_data(entry, filters))
 	if not data.columns:
 		frappe.throw(_("No data to export. You can try changing the filters of your report."))
 	keep_visible_rows(data, frappe.parse_json(visible_idx))
@@ -68,6 +70,16 @@ def export_report_rows(title, rows, report_key=None, doctype=None, file_format_t
 	filter_rows = get_filter_rows(frappe.parse_json(applied_filters)) if cint(include_filters) else []
 	csv_options = {"csv_delimiter": csv_delimiter, "csv_quoting": csv_quoting, "csv_decimal_sep": csv_decimal_sep}
 	write_report_file(title, filter_rows + rows, file_format_type, csv_options)
+
+
+def get_export_data(entry, filters) -> dict:
+	"""Export a background-sized report from its finished YRP Report Job instead of re-running it here."""
+	if not needs_background(entry, filters):
+		return run_query_report(entry.report, filters, ignore_prepared_report=True, are_default_filters=False)
+	envelope = run_web_report(entry.key, filters)
+	if envelope["job"]["status"] != "Completed":
+		frappe.throw(_("This report is still being prepared in the background. Export again once it is ready."))
+	return envelope
 
 
 def keep_visible_rows(data, visible_idx) -> None:

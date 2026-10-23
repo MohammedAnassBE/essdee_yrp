@@ -26,6 +26,17 @@ PLACEMENT_REPORTS = (
 	("lot-wise-stock-ageing", "SD YRP Lot Wise Stock Ageing"),
 	("stock-ageing", "YRP Stock Ageing"),
 )
+QUARTER = {"days": 92, "from_field": "from_date", "to_field": "to_date", "when": {}, "missing_bound": "background"}
+BACKGROUND = {
+	"stock-entry-report": QUARTER,
+	"stock-reconciliation-report": {**QUARTER, "days": 366},
+	"dc-report": QUARTER,
+	"jobwork-issued-items": QUARTER,
+	"non-jobwork-issued-items": QUARTER,
+	"non-grn-received-items": QUARTER,
+	"lot-wise-stock-ageing": "always",
+	"stock-ageing": "always",
+}
 PLACEMENT_DEPARTMENTS = ("purchase", "accessory-store", "fabric-store", "accounts")
 CONVERSION_DEPARTMENTS = ("purchase", "accessory-store", "fabric-store", "cutting")
 
@@ -52,7 +63,7 @@ class TestDeskWebReports(IntegrationTestCase):
 			with self.subTest(report=name):
 				self.assertIn(key, reports)
 				entry = reports[key]
-				self.assertEqual((entry.kind, entry.report, entry.background), ("frappe_report", name, "never"))
+				self.assertEqual((entry.kind, entry.report, entry.background), ("frappe_report", name, BACKGROUND.get(key, "never")))
 				self.assertEqual(entry.filters, schema)
 				filters, voucher_field, voucher = self.make_stock_report_fixture(key)
 				desk = run_desk_report(name, filters=filters, ignore_prepared_report=True, are_default_filters=True)
@@ -364,7 +375,7 @@ class TestDeskWebReports(IntegrationTestCase):
 			with self.subTest(report=name):
 				entry = get_web_reports().get(key)
 				self.assertIsNotNone(entry)
-				self.assertEqual((entry.kind, entry.report, entry.background), ("frappe_report", name, "never"))
+				self.assertEqual((entry.kind, entry.report, entry.background), ("frappe_report", name, BACKGROUND.get(key, "never")))
 				schema = {**common, **({"item": ("Link", "Item")} if key == "jobwork-issued-items" else {})}
 				self.assertEqual(entry.filters, schema)
 				self.assertEqual(entry.link_sources["supplier"], "Supplier")
@@ -493,12 +504,13 @@ class TestDeskWebReports(IntegrationTestCase):
 			with self.subTest(report=name):
 				entry = get_web_reports().get(key)
 				self.assertIsNotNone(entry)
-				self.assertEqual((entry.kind, entry.report, entry.background), ("frappe_report", name, "never"))
+				self.assertEqual((entry.kind, entry.report, entry.background), ("frappe_report", name, BACKGROUND.get(key, "never")))
 				self.assertEqual(entry.filters, schema)
 				for location_value, expect_rows in ((supplier, True), (other, False)):
 					request = {**filters, location: location_value}
 					desk = run_desk_report(name, filters=request, ignore_prepared_report=True, are_default_filters=True)
-					web = run_web_report(key, request)
+					with patch("yrp.web_reports.jobs.needs_background", return_value=False):
+						web = run_web_report(key, request)
 					rows = [row for row in desk["result"] if isinstance(row, dict) and not row.get("is_total_row")]
 					self.assertEqual(bool(rows), expect_rows)
 					if expect_rows:

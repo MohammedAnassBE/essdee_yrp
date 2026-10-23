@@ -71,8 +71,7 @@ def rework_row(name, variant):
 def patched_rework(source, mapped_sizes=("S", "M", "L", "XL")):
 	with (
 		patch.object(frappe, "has_permission", return_value=True),
-		patch.object(frappe, "get_all", return_value=[source.name]),
-		patch.object(frappe, "get_doc", return_value=source),
+		patch.object(rework_items, "get_rework_sources", return_value=[source]),
 		patch.object(
 			rework_items.attribute_db,
 			"get_cached_value",

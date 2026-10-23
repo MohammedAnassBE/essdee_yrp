@@ -8,10 +8,10 @@ import frappe
 import openpyxl
 from frappe import _
 from frappe.utils import cint, getdate
+from yrp.attribute_read_context import attribute_read_scope
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item import sd_yrp_grn_rework_item as rework_items
 from essdee_yrp.finishing import report_sources, reports
-
 
 DISPATCH_REPORT_PERMISSIONS = (
 	("SD YRP Finishing Plan", "read"),
@@ -72,20 +72,22 @@ def get_rework_completion(lot, process):
 
 @frappe.whitelist()
 def get_rework_details(lot=None, item=None, colour=None, received_type=None, show_reworked=0):
-	return rework_items.get_rework_items(
-		lot=lot or None,
-		item=item or None,
-		colour=colour or None,
-		received_type=received_type or None,
-		show_reworked=cint(show_reworked),
-	)
+	with attribute_read_scope():
+		return rework_items.get_rework_items(
+			lot=lot or None,
+			item=item or None,
+			colour=colour or None,
+			received_type=received_type or None,
+			show_reworked=cint(show_reworked),
+		)
 
 
 @frappe.whitelist()
 def get_rework_groups(lot=None, item=None, colour=None, show_reworked=0):
-	return report_sources.get_rework_group_items(
-		lot or None, item or None, colour or None, cint(show_reworked)
-	)
+	with attribute_read_scope():
+		return report_sources.get_rework_group_items(
+			lot or None, item or None, colour or None, cint(show_reworked)
+		)
 
 
 def report_date(value):

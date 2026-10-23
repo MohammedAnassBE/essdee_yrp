@@ -837,22 +837,58 @@ def get_cutting_plan_laysheets_report(cutting_plan):
 	return panels, final_data, ipd_doc.is_set_item
 
 
+CCR_LAYSHEET_CHILDREN = {
+	"cutting_marker_ratios": ("SD YRP Cutting Marker Ratio", ["size", "ratio"]),
+	"cutting_laysheet_details": (
+		"SD YRP Cutting LaySheet Detail",
+		["colour", "cloth_type", "used_weight", "effective_bits"],
+	),
+	"cutting_laysheet_bundles": ("SD YRP Cutting LaySheet Bundle", ["colour", "size", "quantity"]),
+}
+
+
 @frappe.whitelist()
 def get_ccr(doc_name):
-	frappe.get_doc("SD YRP Cutting Plan", doc_name).check_permission("read")
 	cp_doc = frappe.get_doc("SD YRP Cutting Plan", doc_name)
-	cls_list = frappe.get_all(
+	cp_doc.check_permission("read")
+	return build_ccr(cp_doc)
+
+
+def get_ccr_laysheets(cutting_plan, include_bundles):
+	"""Label-printed lay sheets of a plan with only the child rows the CCR reads."""
+	laysheets = frappe.get_all(
 		"SD YRP Cutting LaySheet",
-		filters={"cutting_plan": doc_name, "status": "Label Printed"},
-		pluck="name",
+		filters={"cutting_plan": cutting_plan, "status": "Label Printed"},
+		fields=["name", "calculated_parts", "required_pcs_weight"],
 		order_by="lay_no asc",
 	)
-	print_panel_details = get_recut_print_panel_details(doc_name, "Print Panel")
-	recut_details = get_recut_print_panel_details(doc_name, "Recut")
+	by_name = {row.name: row for row in laysheets}
+	for parentfield, (doctype, fields) in CCR_LAYSHEET_CHILDREN.items():
+		for row in laysheets:
+			row[parentfield] = []
+		if not by_name or (parentfield == "cutting_laysheet_bundles" and not include_bundles):
+			continue
+		for child in frappe.get_all(
+			doctype,
+			filters={
+				"parent": ["in", list(by_name)],
+				"parenttype": "SD YRP Cutting LaySheet",
+				"parentfield": parentfield,
+			},
+			fields=["parent", *fields],
+			order_by="idx asc",
+			limit_page_length=0,
+		):
+			by_name[child.parent][parentfield].append(child)
+	return laysheets
+
+
+def build_ccr(cp_doc):
+	print_panel_details = _get_recut_print_panel_details(cp_doc, "Print Panel")
+	recut_details = _get_recut_print_panel_details(cp_doc, "Recut")
 	markers = {}
 	keys = []
-	for cls in cls_list:
-		cls_doc = frappe.get_doc("SD YRP Cutting LaySheet", cls)
+	for cls_doc in get_ccr_laysheets(cp_doc.name, cp_doc.is_manual_entry):
 		sizes = {}
 		for row in cls_doc.cutting_marker_ratios:
 			if _attribute_value(row.size) not in sizes:
@@ -1249,10 +1285,23 @@ def _get_recut_print_panel_details(cutting_plan_doc, type):
 		filters={"cutting_plan": cutting_plan_doc.name, "docstatus": 1, "type": type},
 		pluck="name",
 	)
+	rows_by_doc = {doc: [] for doc in doc_list}
+	if doc_list:
+		for row in frappe.get_all(
+			"SD YRP Recut and Print Panel Detail",
+			filters={
+				"parent": ["in", doc_list],
+				"parenttype": "SD YRP Recut and Print Panel",
+				"parentfield": "recut_and_print_panel_details",
+			},
+			fields=["parent", "cloth_type", "colour", "dia", "shade", "weight", "panel_count", "no_of_rolls"],
+			order_by="idx asc",
+			limit_page_length=0,
+		):
+			rows_by_doc[row.parent].append(row)
 	items = {}
 	for doc in doc_list:
-		recut_print_panel_doc = frappe.get_doc("SD YRP Recut and Print Panel", doc)
-		for row in recut_print_panel_doc.recut_and_print_panel_details:
+		for row in rows_by_doc[doc]:
 			key = (
 				row.cloth_type
 				+ "-"

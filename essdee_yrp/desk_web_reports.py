@@ -33,6 +33,9 @@ DESK_REPORTS = {
 }
 # Base columns for saved layouts; the report pivots one Date/Result pair per inspection.
 RFT_MAX_INSPECTIONS = 50
+# Long or open ranges return 50k+ rows, so they run as a YRP Report Job.
+QUARTER_BACKGROUND = {"days": 92, "from_field": "from_date", "to_field": "to_date", "missing_bound": "background"}
+YEAR_BACKGROUND = {**QUARTER_BACKGROUND, "days": 366}
 FI_COLUMNS = [
 	{"fieldname": "lot", "label": "Lot", "fieldtype": "Link", "options": "SD YRP Lot", "width": 160},
 	{"fieldname": "item", "label": "Item", "fieldtype": "Link", "options": "Item", "width": 180},
@@ -178,27 +181,28 @@ def get_reports():
 			"lot": ("Link", "SD YRP Lot"), "start_date": "Date", "end_date": "Date",
 			"item_group": ("Link", "Item Group"),
 		}, consumption_columns()),
-		_desk_entry("dc-report", "SD YRP DC Report", issued_filters, dc_columns()),
+		_desk_entry("dc-report", "SD YRP DC Report", issued_filters, dc_columns(), background=QUARTER_BACKGROUND),
 		_desk_entry("jobwork-issued-items", "SD YRP Jobwork Issued Items", {
 			**issued_filters, "item": ("Link", "Item"),
-		}, jobwork_columns()),
+		}, jobwork_columns(), background=QUARTER_BACKGROUND),
 		_desk_entry("non-jobwork-issued-items", "SD YRP Non Jobwork Issued Items", {
 			**issued_filters, "purpose": "Select", "item": ("Link", "Item"),
-		}, non_jobwork_columns()),
+		}, non_jobwork_columns(), background=QUARTER_BACKGROUND),
 		_desk_entry("non-grn-received-items", "SD YRP Non-GRN Received Items", {
 			"from_date": "Date", "to_date": "Date", "lot": ("Link", "SD YRP Lot"),
 			"supplier": ("Link", "Supplier"), "purpose": "Select", "item": ("Link", "Item"),
 			"received_location": ("Link", "Supplier"),
-		}, non_grn_columns()),
+		}, non_grn_columns(), background=QUARTER_BACKGROUND),
+		# Ageing walks the whole ledger up to an As On date, so no day threshold applies.
 		_desk_entry("lot-wise-stock-ageing", "SD YRP Lot Wise Stock Ageing", {
 			**ageing_filters, "lot": ("Link", "SD YRP Lot"), "brand": ("Link", "Brand"),
-		}, lot_ageing_columns(ageing_defaults)),
+		}, lot_ageing_columns(ageing_defaults), background="always"),
 		_desk_entry("stock-ageing", "YRP Stock Ageing", ageing_filters,
-			ageing_columns(ageing_defaults, get_stock_dimensions())),
-		_desk_entry("grn-report", "SD YRP GRN Report", common_filters, grn_columns()),
+			ageing_columns(ageing_defaults, get_stock_dimensions()), background="always"),
+		_desk_entry("grn-report", "SD YRP GRN Report", common_filters, grn_columns(), background=QUARTER_BACKGROUND),
 		_desk_entry("grn-summary", "SD YRP GRN Summary", {
 			**common_filters, "item": ("Link", "Item"), "only_show_stock_item": "Check", "status": "Select",
-		}, summary_columns()),
+		}, summary_columns(), background=YEAR_BACKGROUND),
 		_desk_entry("purchase-order-log", "SD YRP Purchase Order Log", {
 			"purchase_order": ("Link", "Purchase Order"), "po_date": "Date", "supplier": ("Link", "Supplier"),
 		}, log_columns()),
@@ -207,10 +211,10 @@ def get_reports():
 		}, lot_purchase_columns()),
 		_desk_entry("stock-entry-report", "SD YRP Stock Entry Report", {
 			**stock_filters, "from_warehouse": ("Link", "Supplier"), "to_warehouse": ("Link", "Supplier"),
-		}, stock_entry_columns()),
+		}, stock_entry_columns(), background=QUARTER_BACKGROUND),
 		_desk_entry("stock-reconciliation-report", "SD YRP Stock Reconciliation Report", {
 			**stock_filters, "supplier": ("Link", "Supplier"),
-		}, reconciliation_columns()),
+		}, reconciliation_columns(), background=YEAR_BACKGROUND),
 		_desk_entry("stock-update-report", "SD YRP Stock Update Report", {
 			**stock_filters, "warehouse": ("Link", "Supplier"),
 		}, stock_update_columns()),
@@ -234,11 +238,15 @@ def get_reports():
 	]
 
 
-def _desk_entry(key, name, filters, columns, *, permission_doctypes=(), dependency_doctypes=None, link_sources=None):
+def _desk_entry(key, name, filters, columns, *, permission_doctypes=(), dependency_doctypes=None, link_sources=None, background="never"):
+	column_links = {column["fieldname"]: column["options"] for column in columns if column.get("fieldtype") == "Link"}
+	if background != "never":
+		# A background result is stamped against every doctype its Link columns show.
+		permission_doctypes = tuple(sorted({*permission_doctypes, *column_links.values()}))
 	return WebReport(
 		key=key, kind="frappe_report", report=name, filters=filters,
 		base_columns={column["fieldname"]: column["label"] for column in columns},
-		link_sources={**{column["fieldname"]: column["options"] for column in columns if column.get("fieldtype") == "Link"}, **(link_sources or {})},
+		link_sources={**column_links, **(link_sources or {})},
 		permission_doctypes=permission_doctypes, dependency_doctypes=dependency_doctypes,
-		background="never",
+		background=background,
 	)

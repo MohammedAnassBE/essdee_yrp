@@ -216,6 +216,9 @@ let item_multiselect = ref(null)
 let lot_multiselect = ref(null)
 let from_date_filter = ref(null)
 let to_date_filter = ref(null)
+const SUMMARY_REPORT_KEY = 'cutting-dpr'
+const SUMMARY_POLL_MS = 3000
+let summaryRequest = 0
 
 onMounted(() => {
     let el = root.value
@@ -356,26 +359,23 @@ function get_report(){
             frappe.msgprint(__('Please select at least one Item or Lot, or a From Date and To Date range'));
             return;
         }
+        const request = ++summaryRequest;
         frappe.call({
-            method: 'essdee_yrp.cutting.reports.get_daily_production_summary_report',
+            method: 'yrp.api.web_reports.run_web_report',
             args: {
-                items: JSON.stringify(selItems),
-                lots: JSON.stringify(selLots),
-                location: cutting_location.value.get_value(),
-                from_date: fromDate || null,
-                to_date: toDate || null,
+                report_key: SUMMARY_REPORT_KEY,
+                filters: {
+                    mode: 'summary',
+                    items: selItems,
+                    lots: selLots,
+                    location: cutting_location.value.get_value(),
+                    from_date: fromDate || null,
+                    to_date: toDate || null,
+                },
             },
             freeze: true,
             freeze_message: "Fetching Summary Report",
-            callback: function (r) {
-                if (r.message && r.message.length > 0) {
-                    summaryData.value = r.message;
-                    summaryFetched.value = true;
-                } else {
-                    summaryData.value = [];
-                    summaryFetched.value = true;
-                }
-            }
+            callback: (r) => show_summary(r.message, request),
         });
     } else {
         if (!date_filter.value.get_value()) {
@@ -409,6 +409,34 @@ function get_report(){
             }
         });
     }
+}
+
+// Long summary ranges run as a background job; poll it until the result is ready.
+function show_summary(envelope, request) {
+    if (request !== summaryRequest || !envelope) return;
+    const job = envelope.job;
+    if (job && ['Queued', 'Started'].includes(job.status)) {
+        frappe.show_progress(__('Summary Report'), job.progress || 0, 100, __('Building in the background'));
+        setTimeout(() => poll_summary(job.name, request), SUMMARY_POLL_MS);
+        return;
+    }
+    frappe.hide_progress();
+    if (job && job.status !== 'Completed') {
+        frappe.msgprint(envelope.message || __('The summary report could not be built. Please try again.'));
+        return;
+    }
+    summaryData.value = Array.isArray(envelope.payload) ? envelope.payload : [];
+    summaryFetched.value = true;
+}
+
+function poll_summary(jobName, request) {
+    if (request !== summaryRequest) return;
+    frappe.call({
+        method: 'yrp.api.web_reports.get_report_job',
+        args: { report_key: SUMMARY_REPORT_KEY, job_name: jobName, include_result: 1 },
+        callback: (r) => show_summary(r.message, request),
+        error: () => frappe.hide_progress(),
+    });
 }
 
 </script>

@@ -38,35 +38,23 @@ def get_data(filters):
 			LEFT JOIN `tabSupplier` s ON s.name = COALESCE(NULLIF(w.supplier, ''), p.default_warehouse)
 			WHERE p.docstatus = 1 AND p.posting_date BETWEEN %(from_date)s AND %(to_date)s
 			{" ".join(conditions)}
-		), history AS (
-			SELECT h.item, h.warehouse, h.lot, h.posting_datetime,
-				h.qty_after_transaction, h.stock_queue, h.valuation_rate,
-				ROW_NUMBER() OVER (
-					PARTITION BY h.item, h.warehouse, h.lot, h.posting_datetime ORDER BY h.name
-				) AS time_rank
-			FROM `tabYRP Stock Ledger Entry` h
-			JOIN (
-				SELECT item_variant, supplier, lot, MAX(posting_datetime) AS last_datetime
-				FROM selected WHERE detail_rank = 1 GROUP BY item_variant, supplier, lot
-			) keys_used ON keys_used.item_variant = h.item
-				AND keys_used.supplier = h.warehouse AND keys_used.lot = h.lot
-				AND h.posting_datetime <= keys_used.last_datetime
-		), previous AS (
-			SELECT item, warehouse, lot, posting_datetime,
-				LAG(qty_after_transaction) OVER stock_history AS previous_quantity,
-				LAG(stock_queue) OVER stock_history AS previous_queue,
-				LAG(valuation_rate) OVER stock_history AS previous_rate
-			FROM history WHERE time_rank = 1
-			WINDOW stock_history AS (PARTITION BY item, warehouse, lot ORDER BY posting_datetime)
+		), ranked AS (
+			SELECT selected.*, (
+				SELECT h.name FROM `tabYRP Stock Ledger Entry` h
+				WHERE h.item = selected.item_variant AND h.warehouse = selected.supplier
+					AND h.lot = selected.lot AND h.posting_datetime < selected.posting_datetime
+				ORDER BY h.posting_datetime DESC, h.name
+				LIMIT 1
+			) AS previous_entry
+			FROM selected WHERE detail_rank = 1
 		)
 		SELECT s.owner, s.creation, s.modified_by, s.modified, s.posting_date,
 			s.stock_reconciliation, s.purpose, s.supplier, s.supplier_name, s.lot,
-			s.item, s.item_variant, COALESCE(p.previous_quantity, 0) AS previous_quantity,
-			s.updated_quantity, p.previous_queue, s.updated_queue, p.previous_rate,
-			s.updated_rate, s.updated_quantity - COALESCE(p.previous_quantity, 0) AS difference, s.uom
-		FROM selected s LEFT JOIN previous p ON p.item = s.item_variant
-			AND p.warehouse = s.supplier AND p.lot = s.lot AND p.posting_datetime = s.posting_datetime
-		WHERE s.detail_rank = 1
+			s.item, s.item_variant, COALESCE(p.qty_after_transaction, 0) AS previous_quantity,
+			s.updated_quantity, p.stock_queue AS previous_queue, s.updated_queue,
+			p.valuation_rate AS previous_rate, s.updated_rate,
+			s.updated_quantity - COALESCE(p.qty_after_transaction, 0) AS difference, s.uom
+		FROM ranked s LEFT JOIN `tabYRP Stock Ledger Entry` p ON p.name = s.previous_entry
 		""",
 		filters,
 		as_dict=True,

@@ -420,21 +420,21 @@ class FIFOSlots:
 
 		return aggregated
 
-	def __get_stock_ledger_entries(self) -> list[dict]:
+	def __get_stock_ledger_entries(self):
+		items = self.get_item_details()
+		if not items:
+			return
+		item_filtered = any(self.filters.get(key) for key in ("item", "parent_item", "brand"))
 		sle = frappe.qb.DocType("YRP Stock Ledger Entry")
-		item = self.__get_item_query()
-
 		sle_query = (
 			frappe.qb.from_(sle)
-			.from_(item)
 			.select(
-				item.name,
-				item.item_name,
-				item.item_group,
-				item.brand,
-				item.stock_uom,
+				sle.item.as_("name"),
 				sle.qty,
 				sle.posting_date,
+				sle.posting_time,
+				sle.posting_datetime,
+				sle.creation,
 				sle.voucher_type,
 				sle.voucher_no,
 				sle.lot,
@@ -444,12 +444,12 @@ class FIFOSlots:
 				sle.valuation_rate,
 				sle.stock_value_difference,
 			)
-			.where(
-				(sle.item == item.name)
-				& (sle.posting_date <= self.filters.get("to_date"))
-				& (sle.is_cancelled != 1)
-			)
+			.where((sle.posting_date <= self.filters.get("to_date")) & (sle.is_cancelled != 1))
+			.orderby(sle.posting_datetime)
+			.orderby(sle.creation)
 		)
+		if item_filtered:
+			sle_query = sle_query.where(sle.item.isin(list(items)))
 		if self.filters.get("warehouse"):
 			# /web selects a Supplier; also retain existing Warehouse and migrated Supplier IDs.
 			warehouse = frappe.qb.DocType("Warehouse")
@@ -459,13 +459,20 @@ class FIFOSlots:
 			sle_query = sle_query.where(
 				(sle.warehouse == self.filters.get("warehouse")) | sle.warehouse.isin(linked_warehouses)
 			)
-
 		if self.filters.get("lot"):
 			sle_query = sle_query.where(sle.lot == self.filters.get("lot"))
+		elif not (item_filtered or self.filters.get("warehouse")) and frappe.db.db_type == "mariadb":
+			# A full-ledger filesort is far slower than streaming the ordered index.
+			sle_query = sle_query.force_index("posting_datetime_creation_index")
 
-		sle_query = sle_query.orderby(sle.posting_date, sle.posting_time, sle.creation, sle.qty)
+		frappe.get_cached_doc("System Settings")
+		with frappe.db.unbuffered_cursor():
+			rows = sle_query.run(as_dict=True, as_iterator=True)
+			yield from order_within_second(attach_item_details(rows, items))
 
-		return sle_query.run(as_dict=True)
+	def get_item_details(self) -> dict:
+		"Item variant -> parent item fields shown by the report."
+		return {row.pop("name"): row for row in self.__get_item_query().run(as_dict=True)}
 
 	def __get_item_query(self) -> str:
 		item_table = frappe.qb.DocType("Item")
@@ -496,3 +503,30 @@ class FIFOSlots:
 			item = item.where(item_table.brand == self.filters.get("brand"))
 
 		return item
+
+
+def attach_item_details(rows, items: dict):
+	"Inner-join streamed ledger rows with their item details."
+	for row in rows:
+		item = items.get(row.name)
+		if item:
+			row.update(item)
+			yield row
+
+
+def order_within_second(rows):
+	"Restore posting_date, posting_time, creation, qty order inside each posting second."
+	group, group_second = [], None
+	for row in rows:
+		# posting_datetime is stored either exact or truncated to the second.
+		second = row.posting_datetime.replace(microsecond=0)
+		if group and second != group_second:
+			yield from sorted(group, key=ledger_sort_key)
+			group = []
+		group_second = second
+		group.append(row)
+	yield from sorted(group, key=ledger_sort_key)
+
+
+def ledger_sort_key(row):
+	return tuple((value is not None, value) for value in (row.posting_time, row.creation, row.qty))

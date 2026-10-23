@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }]" :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" :export-source="exportSource" @generate="generate" @reset="reset">
+	<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]" :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" :export-source="exportSource" @generate="generate" @reset="reset">
 		<template #filters>
 			<template v-for="field in visibleFilters" :key="field.fieldname">
 				<LinkField v-if="field.fieldtype === 'Link'" v-model="filters[field.fieldname]" :doctype="field.options" :fieldname="field.fieldname" :label="field.label" :filters="field.filters" :required="Boolean(field.reqd)" :show-open-button="false" show-clear />
@@ -54,7 +54,7 @@ const filterError = ref("")
 const pickerVisible = ref(false)
 const {
 	state, sourceColumns, sourceRows, job, error: reportError, activeFilters,
-	loading, isBusy, generated, statusOnly, generate: generateReport, filtersChanged, clear,
+	loading, isBusy, generated, isBackgroundResult, statusOnly, generate: generateReport, filtersChanged, clear, download,
 } = useWebReport({ reportKey: props.reportKey })
 const {
 	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,

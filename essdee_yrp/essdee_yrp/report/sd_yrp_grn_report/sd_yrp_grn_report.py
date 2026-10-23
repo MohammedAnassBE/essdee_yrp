@@ -3,7 +3,6 @@
 
 import frappe
 from frappe.utils import cint
-from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.dynamic_packing import packing_batch_label
 
@@ -74,9 +73,10 @@ def get_data(filters):
 			)
 			batches_by_grn.setdefault(batch.parent, []).append(label)
 
+	parent_items = get_parent_items({row.item_variant for row in data})
 	shown_batch_totals = set()
 	for row in data:
-		row["item"] = get_parent_item(row["item_variant"])
+		row["item"] = parent_items.get(row["item_variant"])
 		if cint(row.packing_calculation_version) >= 2 and row.goods_received_note not in shown_batch_totals:
 			row["packing_ratio_details"] = "\n".join(batches_by_grn.get(row.goods_received_note, []))
 			shown_batch_totals.add(row.goods_received_note)
@@ -90,6 +90,17 @@ def get_data(filters):
 			row["packing_ratio_details"] = ""
 
 	return data
+
+
+def get_parent_items(item_variants):
+	"""Batch `get_parent_item`: variant -> variant_of, or itself for standalone Items."""
+	item_variants = [name for name in item_variants if name]
+	if not item_variants:
+		return {}
+	items = frappe.get_all(
+		"Item", filters={"name": ["in", item_variants]}, fields=["name", "variant_of"], limit_page_length=0
+	)
+	return {item.name: item.variant_of or item.name for item in items}
 
 
 def get_columns():

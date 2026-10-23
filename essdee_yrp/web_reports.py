@@ -155,7 +155,7 @@ def get_reports() -> list[WebReport]:
 			base_columns=_column_labels(CUT_BUNDLE_COLUMNS),
 			permission_doctypes=("SD YRP Cut Bundle Movement Ledger",),
 			dependency_doctypes="essdee_yrp.web_reports.cut_bundle_dependency_doctypes",
-			background="never",
+			background="always",
 		),
 		WebReport(
 			key="cutting-dpr",

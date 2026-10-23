@@ -2,7 +2,10 @@
 # For license information, please see license.txt
 
 import frappe
-from frappe.query_builder.functions import Coalesce, CombineDatetime, Max, Sum
+from frappe.query_builder import CustomFunction
+from frappe.query_builder.functions import Coalesce, Sum
+
+Timestamp = CustomFunction("TIMESTAMP", ["date", "time"])
 
 
 def execute(filters=None):
@@ -153,58 +156,76 @@ def get_data(filters):
 
 
 def get_stock_data(filters):
-	sle = frappe.qb.DocType("YRP Stock Ledger Entry")
-	warehouse = frappe.qb.DocType("Warehouse")
-	item_variant = frappe.qb.DocType("Item")
-	query1 = (
-		frappe.qb.from_(sle)
-		.where((sle.docstatus < 2) & (sle.is_cancelled == 0))
-		.groupby(sle.item)
-		.groupby(sle.warehouse)
-		.groupby(sle.lot)
-		.select(
-			sle.item,
-			sle.warehouse,
-			sle.lot,
-			Max(CombineDatetime(sle.posting_date, sle.posting_time)).as_("date"),
+	"""Balance rows at each item/warehouse/lot's latest active posting time."""
+	parents = get_parent_items(filters)
+	warehouses = dict(frappe.get_all("Warehouse", fields=["name", "warehouse_name"], as_list=True))
+	item_filtered = bool(filters.get("item") or filters.get("parent_item"))
+	if item_filtered and not parents:
+		return []
+	entries = get_stock_entries(filters, list(parents) if item_filtered else None)
+	return [
+		frappe._dict(
+			item=item,
+			parent_item=parents[item],
+			warehouse=warehouse,
+			warehouse_name=warehouses[warehouse],
+			lot=lot,
+			qty=qty,
 		)
-	)
+		for (item, warehouse, lot), qty in get_latest_balances(entries)
+		if item in parents and warehouse in warehouses
+	]
 
-	if filters.get("lot"):
-		query1 = query1.where(sle.lot == filters.get("lot"))
 
-	query = (
-		frappe.qb.from_(sle)
-		.from_(query1)
-		.from_(warehouse)
-		.from_(item_variant)
-		.select(
-			sle.item,
-			Coalesce(item_variant.variant_of, item_variant.name).as_("parent_item"),
-			sle.warehouse,
-			warehouse.warehouse_name,
-			sle.lot,
-			sle.qty_after_transaction.as_("qty"),
-		)
-		.where(
-			(sle.item == query1.item)
-			& (sle.warehouse == query1.warehouse)
-			& (sle.lot == query1.lot)
-			& (CombineDatetime(sle.posting_date, sle.posting_time) == query1.date)
-			& (warehouse.name == sle.warehouse)
-			& (sle.item == item_variant.name)
-		)
-	)
+def get_parent_items(filters):
+	item = frappe.qb.DocType("Item")
+	query = frappe.qb.from_(item).select(item.name, Coalesce(item.variant_of, item.name))
 	if filters.get("item"):
-		query = query.where(sle.item == filters.get("item"))
+		query = query.where(item.name == filters.get("item"))
 	if filters.get("parent_item"):
 		query = query.where(
-			(item_variant.variant_of == filters.get("parent_item"))
-			| ((item_variant.variant_of.isnull()) & (item_variant.name == filters.get("parent_item")))
+			(item.variant_of == filters.get("parent_item"))
+			| ((item.variant_of.isnull()) & (item.name == filters.get("parent_item")))
 		)
+	return dict(query.run())
 
-	d = query.run(as_dict=True)
-	return d
+
+def get_stock_entries(filters, items=None):
+	"""Stream ledger rows; a GROUP BY over item, warehouse and lot is far slower on the full ledger."""
+	sle = frappe.qb.DocType("YRP Stock Ledger Entry")
+	query = (
+		frappe.qb.from_(sle)
+		.select(
+			sle.item,
+			sle.warehouse,
+			sle.lot,
+			Timestamp(sle.posting_date, sle.posting_time),
+			sle.qty_after_transaction,
+			(sle.docstatus < 2) & (sle.is_cancelled == 0),
+		)
+		.where(sle.item.isnotnull() & sle.warehouse.isnotnull() & sle.lot.isnotnull())
+	)
+	if filters.get("lot"):
+		query = query.where(sle.lot == filters.get("lot"))
+	if items is not None:
+		query = query.where(sle.item.isin(items))
+	with frappe.db.unbuffered_cursor():
+		yield from query.run(as_list=True, as_iterator=True)
+
+
+def get_latest_balances(entries):
+	"""Yield every row posted at its bucket's latest active time, cancelled rows included."""
+	buckets = {}
+	for item, warehouse, lot, posted_at, qty, is_active in entries:
+		bucket = buckets.setdefault((item, warehouse, lot), [None, {}])
+		if is_active and (bucket[0] is None or posted_at > bucket[0]):
+			bucket[0] = posted_at
+			bucket[1] = {at: rows for at, rows in bucket[1].items() if at >= posted_at}
+		if bucket[0] is None or posted_at >= bucket[0]:
+			bucket[1].setdefault(posted_at, []).append(qty)
+	for key, (latest_at, candidates) in buckets.items():
+		for qty in candidates.get(latest_at, []) if latest_at is not None else []:
+			yield key, qty
 
 
 def get_po_qty(filters, docstatus):

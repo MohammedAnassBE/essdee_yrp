@@ -115,6 +115,36 @@ class TestFinishingReportSources(TestCase):
 			data = sources.build_rejection_report([(doc, PLAIN_IPD)], None, None, "Red")
 		self.assertEqual(data["report_detail"], {})
 
+	def test_rejection_sources_load_rows_and_ipds_in_batches(self):
+		sources = self._sources()
+		docs = [
+			row(name="RW-1", grn_number="GRN-1", creation="2026-10-01", lot="LOT-1", item="TSHIRT"),
+			row(name="RW-2", grn_number="GRN-2", creation="2026-10-01", lot="LOT-NO-IPD", item="TSHIRT"),
+		]
+		rejected = [
+			row(
+				parent="RW-1", item_variant="TS-S-Red", received_type="Stain", quantity=2, rejected_time=None
+			),
+			row(
+				parent="RW-2", item_variant="TS-S-Red", received_type="Stain", quantity=1, rejected_time=None
+			),
+		]
+		lot_ipds = {"LOT-1": ("IPD-1", PLAIN_IPD), "LOT-NO-IPD": (None, None)}
+		with (
+			patch.object(frappe, "get_list", return_value=docs) as get_list,
+			patch.object(frappe, "get_all", return_value=rejected) as get_all,
+			patch(f"{MODULE}.get_lot_ipds", return_value=lot_ipds),
+			patch.object(frappe, "get_doc", side_effect=AssertionError("per-document load")),
+		):
+			entries = sources.readable_rework_entries(["RW-1", "RW-2"])
+		get_list.assert_called_once()
+		get_all.assert_called_once()
+		self.assertEqual([(doc.name, ipd) for doc, ipd in entries], [("RW-1", PLAIN_IPD)])
+		self.assertEqual(entries[0][0].grn_rejected_item_details, [rejected[0]])
+		with patch.object(frappe, "get_list") as get_list:
+			self.assertEqual(sources.readable_rework_entries([]), [])
+		get_list.assert_not_called()
+
 	def test_rework_completion_uses_major_colour_and_default_received_type(self):
 		sources = self._sources()
 		rows = [
@@ -215,8 +245,7 @@ class TestFinishingReportSources(TestCase):
 				"primary_values": ["S", "M"],
 			}
 		}
-		with self._attrs():
-			report = sources.build_ironing_report(challans, ipds, "Colour", "Part")
+		report = sources.build_ironing_report(challans, ipds, "Colour", "Part", VARIANTS)
 		self.assertEqual(len(report), 1)
 		block = report[0]
 		self.assertEqual(
@@ -227,6 +256,39 @@ class TestFinishingReportSources(TestCase):
 			block["rows"][0], {"colour": "Red", "part": "Top", "S": 5, "M": 0, "total_qty": 5, "s_no": 1}
 		)
 		self.assertEqual(block["rows"][1]["s_no"], 2)
+
+	def test_lot_ipds_load_lots_and_ipds_in_two_queries(self):
+		sources = self._sources()
+		lots = [row(name="LOT-1", production_detail="IPD-1"), row(name="LOT-NO-IPD", production_detail=None)]
+		ipds = [row(name="IPD-1", **PLAIN_IPD)]
+		with (
+			patch(f"{MODULE}.attribute_db.get_all", side_effect=[lots, ipds]) as get_all,
+			patch(f"{MODULE}.attribute_db.get_cached_value", side_effect=AssertionError("per-lot load")),
+		):
+			lot_ipds = sources.get_lot_ipds(["LOT-1", "LOT-NO-IPD", "LOT-1", None])
+		self.assertEqual(get_all.call_count, 2)
+		self.assertEqual(lot_ipds, {"LOT-1": ("IPD-1", PLAIN_IPD), "LOT-NO-IPD": (None, None)})
+		with patch(f"{MODULE}.attribute_db.get_all") as get_all:
+			self.assertEqual(sources.get_lot_ipds([None]), {})
+		get_all.assert_not_called()
+
+	def test_variant_attributes_load_every_variant_in_one_query(self):
+		sources = self._sources()
+		rows = [
+			row(parent="TS-S-Red", attribute="Size", attribute_value="S"),
+			row(parent="TS-S-Red", attribute="Colour", attribute_value="IAV-RED"),
+		]
+		with (
+			patch.object(frappe.db, "sql", return_value=rows) as query,
+			patch(f"{MODULE}.attribute_db.value", side_effect=lambda raw: {"IAV-RED": "Red"}.get(raw, raw)),
+		):
+			attributes = sources.get_variant_attributes({"TS-S-Red", "MISSING"})
+		query.assert_called_once()
+		self.assertEqual(set(query.call_args.args[1]["variants"]), {"TS-S-Red", "MISSING"})
+		self.assertEqual(attributes, {"TS-S-Red": {"Size": "S", "Colour": "Red"}, "MISSING": {}})
+		with patch.object(frappe.db, "sql") as query:
+			self.assertEqual(sources.get_variant_attributes(set()), {})
+		query.assert_not_called()
 
 	def test_packed_details_summary_groups_by_date_then_lot(self):
 		self._sources()
@@ -251,6 +313,7 @@ class TestFinishingReportSources(TestCase):
 				return_value=frappe._dict(item="TSHIRT", production_detail="IPD-1"),
 			),
 			patch.object(frappe, "get_cached_doc", return_value=frappe._dict(name="IPD-1")),
+			patch(f"{REPORTS}.load_packing_grns", return_value={}),
 			patch(f"{REPORTS}.get_packing_grn_report_values", return_value=packing),
 			patch(
 				f"{REPORTS}.apply_set_item_multiplier_to_packing_report",
@@ -268,6 +331,48 @@ class TestFinishingReportSources(TestCase):
 			[("2026-10-01", "LOT-1"), ("2026-10-02", "LOT-1"), ("2026-10-02", "LOT-2")],
 		)
 
+	def test_packing_grn_values_use_batched_grn_items(self):
+		reports = import_module(REPORTS)
+		grns = [row(name="GRN-A", packing_calculation_version=0, total_packing_boxes=0)]
+		items = [
+			row(parent="GRN-A", item_variant="TS-S-Red", quantity=2),
+			row(parent="GRN-A", item_variant="TS-M-Red", quantity=3),
+		]
+		attributes = [
+			row(parent=variant, attribute=attribute, attribute_value=value)
+			for variant, values in VARIANTS.items()
+			for attribute, value in values.items()
+		]
+		ipd = frappe._dict(name="IPD-1", packing_combo=4, primary_item_attribute="Size")
+		original_get_all = frappe.get_all
+		original_sql = frappe.db.sql
+		attribute_queries = []
+		records = {"YRP Goods Received Note": grns, "YRP Goods Received Note Item": items}
+
+		def get_all(doctype, *args, **kwargs):
+			if doctype in records:
+				return records[doctype]
+			return original_get_all(doctype, *args, **kwargs)
+
+		def sql(query, *args, **kwargs):
+			if "Item Variant Attribute" not in query:
+				return original_sql(query, *args, **kwargs)
+			attribute_queries.append(args[0])
+			return attributes
+
+		with (
+			patch.object(frappe, "get_all", side_effect=get_all),
+			patch.object(frappe.db, "sql", side_effect=sql),
+			patch(f"{REPORTS}.get_ipd_primary_values", return_value=["S", "M"]),
+			patch(f"{REPORTS}._attribute_value", side_effect=lambda value: value),
+		):
+			packing = reports.get_packing_grn_report_values(["GRN-A"], ipd)
+		self.assertEqual(
+			[set(values["variants"]) for values in attribute_queries], [{"TS-S-Red", "TS-M-Red"}]
+		)
+		self.assertEqual(packing.size_pieces, {"S": 8, "M": 12})
+		self.assertEqual((packing.total_boxes, packing.total_pieces), (5, 20))
+
 	def test_packed_details_summary_requires_an_ordered_range(self):
 		reports = import_module(REPORTS)
 		for kwargs in (
@@ -277,3 +382,76 @@ class TestFinishingReportSources(TestCase):
 		):
 			with self.subTest(kwargs=kwargs), self.assertRaises(frappe.ValidationError):
 				reports.get_finishing_packed_details(**kwargs)
+
+	def test_dispatch_report_loads_every_source_in_batches(self):
+		reports = import_module(REPORTS)
+		records = {
+			"YRP Goods Received Note": [
+				row(name="GRN-A", packing_calculation_version=0, total_packing_boxes=0)
+			],
+			"YRP Goods Received Note Item": [
+				row(parent="GRN-A", item_variant="TS-S-Red", quantity=2),
+				row(parent="GRN-A", item_variant="TS-M-Red", quantity=3),
+			],
+			"YRP Stock Entry": [
+				row(name="SE-1", packing_batch_dispatch_json=None),
+				row(
+					name="SE-2",
+					packing_batch_dispatch_json='[{"finishing_plan": "FP-2", "box_quantity": 2}]',
+				),
+			],
+			"SD YRP Finishing Plan": [row(name="FP-2", lot="LOT-2")],
+			"YRP Stock Entry Detail": [
+				row(parent="SE-1", item="TS-S-Red", qty=1, lot="LOT-1"),
+				row(parent="SE-2", item="TS-M-Red", qty=6, lot="LOT-2"),
+			],
+		}
+		lots = [
+			row(name="LOT-1", item="TSHIRT", production_detail="IPD-1"),
+			row(name="LOT-2", item="TSHIRT", production_detail="IPD-1"),
+		]
+		attributes = [
+			row(parent=variant, attribute=attribute, attribute_value=value)
+			for variant, values in VARIANTS.items()
+			for attribute, value in values.items()
+		]
+		queried = []
+		attribute_queries = []
+		original_sql = frappe.db.sql
+
+		original_get_all = frappe.get_all
+
+		def get_all(doctype, *args, **kwargs):
+			if doctype not in records:
+				return original_get_all(doctype, *args, **kwargs)
+			queried.append(doctype)
+			return records[doctype]
+
+		def sql(query, *args, **kwargs):
+			if "Item Variant Attribute" not in query:
+				return original_sql(query, *args, **kwargs)
+			attribute_queries.append(query)
+			return attributes
+
+		ipd = frappe._dict(name="IPD-1", packing_combo=4, primary_item_attribute="Size")
+		with (
+			patch.object(frappe, "get_list", return_value=[row(name="GRN-A", lot="LOT-1")]),
+			patch.object(frappe, "get_all", side_effect=get_all),
+			patch(f"{REPORTS}.attribute_db.get_all", return_value=lots) as lot_query,
+			patch.object(frappe.db, "sql", side_effect=sql),
+			patch.object(frappe, "get_cached_doc", return_value=ipd),
+			patch(f"{REPORTS}.get_ipd_primary_values", side_effect=lambda _name: ["S", "M"]),
+			patch(f"{REPORTS}._attribute_value", side_effect=lambda value: value),
+		):
+			result = reports.get_finishing_dispatch_report("2026-10-01", "2026-10-31")
+		self.assertEqual(sorted(queried), sorted(set(queried)))
+		lot_query.assert_called_once()
+		self.assertEqual(len(attribute_queries), 2)
+		by_lot = {entry["lot"]: entry for entry in result["data"]}
+		self.assertEqual(by_lot["LOT-1"]["packed_qty"], {"S": 8, "M": 12})
+		self.assertEqual(by_lot["LOT-1"]["dispatched_qty"], {"S": 4, "M": 0})
+		self.assertEqual(by_lot["LOT-1"]["dispatched_total_boxes"], 1)
+		self.assertEqual(by_lot["LOT-2"]["dispatched_qty"], {"S": 0, "M": 6})
+		self.assertEqual(by_lot["LOT-2"]["dispatched_total_boxes"], 2)
+		self.assertEqual(by_lot["LOT-2"]["pieces_per_box"], "Mixed")
+		self.assertEqual(result["sizes"], ["S", "M"])

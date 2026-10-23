@@ -72,6 +72,7 @@ def _entries(
 	plans,
 	*,
 	entry_date=None,
+	date_range=None,
 	work_station=None,
 	input_type=None,
 	start=0,
@@ -84,6 +85,8 @@ def _entries(
 	filters = {"sewing_plan": ["in", [row.name for row in plans]]}
 	if entry_date:
 		filters["entry_date"] = getdate(entry_date)
+	if date_range:
+		filters["entry_date"] = ["between", list(date_range)]
 	if work_station:
 		filters["work_station"] = work_station
 	if input_type:
@@ -494,42 +497,44 @@ def get_monthly_summary_data(supplier, start_date, end_date, input_type=None, sh
 				limit_page_length=0,
 			)
 			grn_map = {row.name: row for row in grns}
-			for row in frappe.get_all(
-				"YRP Goods Received Note Item",
-				filters={"parent": ["in", list(grn_map)]},
-				fields=["parent", "item_variant", "quantity"],
-				limit_page_length=0,
-			):
+			grn_items = (
+				frappe.get_all(
+					"YRP Goods Received Note Item",
+					filters={"parent": ["in", list(grn_map)]},
+					fields=["parent", "item_variant", "quantity"],
+					limit_page_length=0,
+				)
+				if grn_map
+				else []
+			)
+			attributes = _variant_attributes({row.item_variant for row in grn_items})
+			for row in grn_items:
 				grn = grn_map[row.parent]
 				lot = lots.get(grn.lot)
 				ipd = ipds.get(lot.production_detail) if lot else None
-				part = (
-					get_variant_attr_details(row.item_variant).get(ipd.set_item_attribute)
-					if ipd and ipd.is_set_item
-					else ""
-				)
+				part = _set_part(row.item_variant, ipd, attributes)
 				rows.append((grn.posting_date, lot.item if lot else "", part, row.quantity))
 	else:
 		if not input_type:
 			frappe.throw(_("Input Type is required."))
-		entries = [
-			row
-			for row in _entries(plans, input_type=input_type)
-			if start_date <= getdate(row.entry_date) <= end_date
-		]
+		entries = _entries(plans, input_type=input_type, date_range=(start_date, end_date))
 		entry_map = {row.name: row for row in entries}
-		for row in _details(entries):
+		details = _details(entries)
+		attributes = _variant_attributes({row.item_variant for row in details})
+		for row in details:
 			entry = entry_map[row.parent]
 			plan = plan_map[entry.sewing_plan]
 			lot = lots.get(plan.lot)
 			ipd = ipds.get(lot.production_detail) if lot else None
-			part = (
-				get_variant_attr_details(row.item_variant).get(ipd.set_item_attribute)
-				if ipd and ipd.is_set_item
-				else ""
-			)
+			part = _set_part(row.item_variant, ipd, attributes)
 			rows.append((entry.entry_date, plan.item, part, row.quantity))
 	return _monthly_pivot(rows)
+
+
+def _set_part(item_variant, ipd, attributes):
+	if not (ipd and ipd.is_set_item):
+		return ""
+	return attributes.get(item_variant, {}).get(ipd.set_item_attribute)
 
 
 def _monthly_pivot(rows):

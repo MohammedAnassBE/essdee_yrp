@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import frappe
-from yrp.attribute_read_context import attribute_read_scope
 from frappe import _
 from frappe.utils import cint, flt, getdate
 from yrp import attribute_links as attribute_db
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
 )
 
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_grn_rework_item.sd_yrp_grn_rework_item import get_rework_sources
 from essdee_yrp.report_helpers import _normalize_multiselect_filter
 
 REWORK_DOCTYPE = "SD YRP GRN Rework Item"
@@ -30,6 +31,32 @@ def lot_ipd(lot):
 		return None, None
 	values = attribute_db.get_cached_value("YRP Item Production Detail", ipd, list(IPD_FIELDS))
 	return ipd, dict(zip(IPD_FIELDS, values, strict=True))
+
+
+def get_lot_ipds(lots):
+	"""Batch `lot_ipd` for many lots without loading full Lot or IPD documents."""
+	lots = {lot for lot in lots if lot}
+	lot_ipds = {lot: (None, None) for lot in lots}
+	if not lots:
+		return lot_ipds
+	ipd_by_lot = {
+		row.name: row.production_detail
+		for row in attribute_db.get_all(
+			"SD YRP Lot", filters={"name": ["in", list(lots)]}, fields=["name", "production_detail"]
+		)
+		if row.production_detail
+	}
+	settings = {
+		row.pop("name"): dict(row)
+		for row in attribute_db.get_all(
+			"YRP Item Production Detail",
+			filters={"name": ["in", list(set(ipd_by_lot.values()))]},
+			fields=["name", *IPD_FIELDS],
+		)
+	} if ipd_by_lot else {}
+	for lot, ipd in ipd_by_lot.items():
+		lot_ipds[lot] = (ipd, settings[ipd])
+	return lot_ipds
 
 
 def colour_key(received_type, attributes, ipd):
@@ -135,13 +162,31 @@ def _read_get_rejection_items(start_date=None, end_date=None, lot=None, item=Non
 
 
 def readable_rework_entries(names):
+	"""Readable sources with their rejected rows, loaded in batched queries."""
+	if not names:
+		return []
+	docs = frappe.get_list(
+		REWORK_DOCTYPE,
+		filters={"name": ["in", names]},
+		fields=["name", "grn_number", "creation", "lot", "item"],
+		order_by="name asc",
+		limit_page_length=0,
+	)
+	rows_by_parent = {}
+	for row in frappe.get_all(
+		"SD YRP GRN Rejected Item Detail",
+		filters={"parenttype": REWORK_DOCTYPE, "parent": ["in", [doc.name for doc in docs]]},
+		fields=["parent", "item_variant", "received_type", "quantity", "rejected_time"],
+		order_by="parent asc, idx asc",
+		limit_page_length=0,
+	) if docs else []:
+		rows_by_parent.setdefault(row.parent, []).append(row)
+	lot_ipds = get_lot_ipds(doc.lot for doc in docs)
 	entries = []
-	for name in names:
-		doc = frappe.get_doc(REWORK_DOCTYPE, name)
-		if not frappe.has_permission(doc.doctype, "read", doc=doc):
-			continue
-		_ipd_name, ipd = lot_ipd(doc.lot)
+	for doc in docs:
+		_ipd_name, ipd = lot_ipds[doc.lot] if doc.lot else (None, None)
 		if ipd:
+			doc.grn_rejected_item_details = rows_by_parent.get(doc.name, [])
 			entries.append((doc, ipd))
 	return entries
 
@@ -306,9 +351,11 @@ def get_rework_group_items(lot=None, item=None, colour=None, show_reworked=0):
 		filters["item"] = item
 	entries = []
 	primary_values = {}
-	for name in frappe.get_list(REWORK_DOCTYPE, filters=filters, pluck="name", order_by="name asc"):
-		doc = frappe.get_doc(REWORK_DOCTYPE, name)
-		ipd_name, ipd = lot_ipd(doc.lot)
+	lot_ipds = {}
+	for doc in get_rework_sources(filters, order_by="name asc"):
+		if doc.lot not in lot_ipds:
+			lot_ipds[doc.lot] = lot_ipd(doc.lot)
+		ipd_name, ipd = lot_ipds[doc.lot]
 		if not ipd:
 			continue
 		if ipd_name not in primary_values:
@@ -327,7 +374,22 @@ def ironing_row_key(attributes, colour_attr, part_attr, is_set_item):
 	return ((part, colour) if is_set_item else colour), colour, part
 
 
-def build_ironing_report(challans, ipds, colour_attr, default_part_attr):
+def get_variant_attributes(variants):
+	"""Attribute maps for many variants in one query, matching get_variant_attr_details."""
+	attributes = {variant: {} for variant in variants}
+	if not attributes:
+		return attributes
+	for row in frappe.db.sql(
+		"""SELECT parent, attribute, attribute_value FROM `tabItem Variant Attribute`
+		WHERE parent IN %(variants)s ORDER BY parent, idx""",
+		{"variants": tuple(attributes)},
+		as_dict=True,
+	):
+		attributes[row.parent][row.attribute] = attribute_db.value(row.attribute_value)
+	return attributes
+
+
+def build_ironing_report(challans, ipds, colour_attr, default_part_attr, variant_attributes):
 	"""Lot blocks of colour (and part) x size delivered quantities (Frappe 15 Ironing DPR)."""
 	blocks = {}
 	for challan in challans:
@@ -347,13 +409,12 @@ def build_ironing_report(challans, ipds, colour_attr, default_part_attr):
 		)
 		block["attributes"] = [colour_attr, part_attr] if is_set_item else [colour_attr]
 		for item in challan["items"]:
-			key, colour, part = ironing_row_key(
-				get_variant_attr_details(item.item_variant), colour_attr, part_attr, is_set_item
-			)
+			attributes = variant_attributes[item.item_variant]
+			key, colour, part = ironing_row_key(attributes, colour_attr, part_attr, is_set_item)
 			if key is None:
 				continue
 			target = block["rows"].setdefault(key, {"colour": colour, "part": part, "total_qty": 0})
-			size = get_variant_attr_details(item.item_variant).get(ipd.get("primary_item_attribute") or "")
+			size = attributes.get(ipd.get("primary_item_attribute") or "")
 			for value in sizes:
 				target[value] = target.get(value, 0) + (flt(item.delivered_quantity) if value == size else 0)
 			target["total_qty"] += flt(item.delivered_quantity) if size in sizes else 0
@@ -425,8 +486,9 @@ def _read_get_ironing_dpr(date=None, lot=None, item=None, dc_name=None, from_dat
 	) if rows else []:
 		items.setdefault(row.parent, []).append(row)
 	ipds, challans = {}, []
+	lot_ipds = get_lot_ipds(row.lot for row in rows)
 	for row in rows:
-		ipd_name, ipd = lot_ipd(row.lot)
+		ipd_name, ipd = lot_ipds.get(row.lot, (None, None))
 		if ipd_name and ipd_name not in ipds:
 			ipds[ipd_name] = {**ipd, "primary_values": get_ipd_primary_values(ipd_name)}
 		challans.append(
@@ -440,6 +502,7 @@ def _read_get_ironing_dpr(date=None, lot=None, item=None, dc_name=None, from_dat
 			}
 		)
 	settings = frappe.get_cached_doc("SD YRP IPD Settings")
+	variant_attributes = get_variant_attributes({item.item_variant for rows in items.values() for item in rows})
 	return build_ironing_report(
-		challans, ipds, settings.default_packing_attribute, settings.default_set_item_attribute
+		challans, ipds, settings.default_packing_attribute, settings.default_set_item_attribute, variant_attributes
 	)

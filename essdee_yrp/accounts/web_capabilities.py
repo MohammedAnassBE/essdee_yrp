@@ -8,6 +8,7 @@ from essdee_yrp.fabric_store.web_workspace import can_run_report
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
 from essdee_yrp.finishing.web_workspace import get_capabilities as get_finishing_capabilities
 from essdee_yrp.sewing.web_workspace import get_capabilities as get_sewing_capabilities
+from essdee_yrp.web_common import report_access_scope
 
 ACCOUNTS_REPORT_ROLES = frozenset({"Accounts User", "Accounts Manager", "System Manager"})
 
@@ -40,6 +41,7 @@ REPORT_GATES = {
 
 
 @frappe.whitelist()
+@report_access_scope()
 def get_capabilities() -> dict:
 	reports = {}
 	if can_view_accounts_reports():

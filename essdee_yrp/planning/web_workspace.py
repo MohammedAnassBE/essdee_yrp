@@ -17,7 +17,7 @@ from essdee_yrp.planning.reports import (
 from essdee_yrp.planning.reports.desk_adapters import can_run_desk_report
 from essdee_yrp.sales import web_workspace as sales_workspace
 from essdee_yrp.sewing import web_workspace as sewing_workspace
-from essdee_yrp.web_common import permission_flags
+from essdee_yrp.web_common import permission_flags, report_access_scope
 
 
 def _with_label(label, flags):
@@ -69,6 +69,7 @@ def _reports_section(sewing_sections, finishing_sections):
 
 
 @frappe.whitelist()
+@report_access_scope()
 def get_capabilities() -> dict:
 	sewing_sections = sewing_workspace.get_capabilities()["sections"]
 	finishing_sections = finishing_workspace.get_capabilities()["sections"]

@@ -5,6 +5,7 @@ from essdee_yrp.cut_panel_store import web_workspace as cut_panel_store
 from essdee_yrp.fabric_store import web_workspace as fabric_store
 from essdee_yrp.merch import web_workspace as merch
 from essdee_yrp.purchase import web_capabilities as purchase
+from essdee_yrp.web_common import report_access_scope
 
 # Fabric Store sections the Purchase department shows; its reports come with them.
 PURCHASE_STORE_SECTIONS = ("purchase_orders", "stock_transfers")
@@ -12,6 +13,7 @@ CUT_PANEL_SECTIONS = ("box_stickers", "excel_stickers")
 
 
 @frappe.whitelist()
+@report_access_scope()
 def get_capabilities() -> dict:
 	"""Merch and Purchase capabilities in one payload; each section keeps its source's DocType checks."""
 	merch_capabilities = merch.get_capabilities()

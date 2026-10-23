@@ -6,7 +6,7 @@ from essdee_yrp.merch.ipd_workspace import DOCTYPE
 from essdee_yrp.merch.reports import can_view_work_in_progress
 from essdee_yrp.planning.reports import inward_quantity, size_wise_stock, work_in_progress
 from essdee_yrp.planning.reports.desk_adapters import can_run_desk_report
-from essdee_yrp.web_common import permission_flags
+from essdee_yrp.web_common import permission_flags, report_access_scope
 
 SECTIONS = {
 	"lots": ("Lot", "SD YRP Lot"),
@@ -32,6 +32,7 @@ REPORTS = {
 
 
 @frappe.whitelist()
+@report_access_scope()
 def get_capabilities() -> dict:
 	reports = {key: {"label": _(label), "can_read": bool(access())} for key, (label, access) in REPORTS.items()}
 	from essdee_yrp.desk_web_reports import department_report_capabilities

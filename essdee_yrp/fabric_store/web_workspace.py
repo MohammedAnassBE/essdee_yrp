@@ -45,6 +45,7 @@ from essdee_yrp.fabric_store.documents.common import (
 )
 from essdee_yrp.print_registry import get_document_print_formats
 from essdee_yrp.purchase.lot_cut_quantity import can_view_lot_cut_quantity
+from essdee_yrp.web_common import get_scoped_report_access, report_access_scope
 
 DOCUMENT_KEYS = {
 	"work_orders": "YRP Work Order",
@@ -1448,6 +1449,7 @@ def execute_work_order_command(
 
 
 @frappe.whitelist()
+@report_access_scope()
 def get_capabilities() -> dict:
 	"""Return the current user's unscoped Fabric Store UI capabilities.
 
@@ -1512,6 +1514,11 @@ def get_capabilities() -> dict:
 
 def can_run_report(report_name: str) -> bool:
 	"""Mirror query-report access checks without queueing permission errors."""
+	return get_scoped_report_access(report_name, is_report_runnable)
+
+
+def is_report_runnable(report_name: str) -> bool:
+	"""Uncached `can_run_report`; loads a fresh Report so no mutated instance is shared."""
 	try:
 		report = frappe.get_doc("Report", report_name)
 	except frappe.DoesNotExistError:

@@ -11,7 +11,9 @@
 		data-domain-root="goods-received-note-workspace"
 	>
 		<section class="fabric-goods-received-note-frame">
+			<GoodsReceivedNoteSourcePicker v-if="needsSource" @select="chooseSource" />
 			<GoodsReceivedNoteWorkspace
+				v-else
 				:name="documentName"
 				:source-context="resolvedSourceContext"
 				:duplicate-route-name="duplicateRouteName"
@@ -37,7 +39,9 @@ import { useRoute, useRouter } from "vue-router"
 
 import DepartmentPage from "../components/DepartmentPage.vue"
 import { preserveListNavigationState } from "../router/listDocumentNavigation.js"
+import GoodsReceivedNoteSourcePicker from "./fabric-store/GoodsReceivedNoteSourcePicker.vue"
 import GoodsReceivedNoteWorkspace from "./fabric-store/GoodsReceivedNoteWorkspace.vue"
+import { hasGoodsReceivedNoteSource } from "./fabric-store/grnSource.js"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },
@@ -56,6 +60,11 @@ const documentName = computed(() => props.name || String(route.params.goodsRecei
 const resolvedSourceContext = computed(() => Object.keys(props.sourceContext || {}).length
 	? props.sourceContext
 	: compactSource(route.query))
+const needsSource = computed(() => !documentName.value && !hasGoodsReceivedNoteSource(resolvedSourceContext.value))
+
+function chooseSource(source) {
+	return router.replace({ query: { ...route.query, ...source } })
+}
 
 async function workspaceChanged(workspace) {
 	emit("changed", workspace)

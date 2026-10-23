@@ -94,7 +94,7 @@ const Debits = () => import("../departments/accounts/Debits.vue")
 /** Delivery Challan and GRN lists of a Work Orders department at `listPaths`; `pages` adds the document pages, `editable` their new and edit pages. */
 function departmentDocumentRoutes(prefix, storeName, listPaths, { pages = true, editable = true } = {}) {
 	const basePath = listPaths[0].slice(0, listPaths[0].lastIndexOf("/"))
-	const viewRoutes = { deliveryChallanViewRouteName: `${prefix}-delivery-challan`, goodsReceivedNoteViewRouteName: `${prefix}-goods-received-note` }
+	const viewRoutes = { deliveryChallanViewRouteName: `${prefix}-delivery-challan`, goodsReceivedNoteViewRouteName: `${prefix}-goods-received-note`, goodsReceivedNoteNewRouteName: editable ? `${prefix}-goods-received-note-new` : "" }
 	const documents = [
 		["delivery-challans", "delivery-challan", "deliveryChallanId", FabricDeliveryChallan, "Delivery Challans"],
 		["goods-received-notes", "goods-received-note", "goodsReceivedNoteId", FabricGoodsReceivedNote, "Goods Received Notes"],

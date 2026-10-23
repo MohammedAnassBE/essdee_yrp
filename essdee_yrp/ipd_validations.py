@@ -16,6 +16,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 	get_colour_attribute,
 	get_dia_attribute,
 )
+from essdee_yrp.fabric_requirement import get_unmapped_accessories
 
 
 def is_cloth_ipd(doc):
@@ -1142,6 +1143,16 @@ def validate_accessory_fields(doc):
 		return
 	if not update_if_string_instance(doc.stiching_accessory_json):
 		frappe.throw("Enter the Details for Stitching Accessory Combination")
+	for fieldname, key, label in (
+		("cloth_accessory_json", "Accessory", _("Accessory consumption")),
+		("stiching_accessory_json", "accessory", _("Accessory colour and cloth")),
+	):
+		if unmapped := get_unmapped_accessories(doc, fieldname, key):
+			frappe.throw(
+				_("Accessory {0} has no row in {1}. Refresh that grid and fill it.").format(
+					", ".join(unmapped), label
+				)
+			)
 
 
 def sync_emblishment_processes(doc):

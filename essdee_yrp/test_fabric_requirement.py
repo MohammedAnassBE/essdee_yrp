@@ -16,7 +16,9 @@ from essdee_yrp.fabric_requirement import (
 	calculate_cloth,
 	get_cloth_combination,
 	get_stitching_combination,
+	get_unmapped_accessories,
 )
+from essdee_yrp.ipd_validations import validate_accessory_fields
 
 
 def _set_item_garment_ipd():
@@ -352,3 +354,55 @@ class TestFabricRequirement(IntegrationTestCase):
 		self.assertEqual(len(acc), 1)
 		self.assertEqual((acc[0]["dia"], acc[0]["colour"]), ("34 Dia", "Navy"))
 		self.assertAlmostEqual(acc[0]["quantity"], 0.01, places=4)
+
+	def test_renamed_accessory_without_consumption_raises(self):
+		# POLO FLAT KNIT T SHIRT_FK72_B-1: the accessory was renamed to NECK SERI FOLDING
+		# but its consumption and colour rows still say FOLDING FABRIC, so Generate
+		# returned no accessory rows instead of failing.
+		ipd = _renamed_accessory_ipd()
+		with self.assertRaisesRegex(frappe.ValidationError, "NECK SERI FOLDING"):
+			get_cloth_combination(ipd)
+
+	def test_unmapped_accessories_lists_names_missing_from_each_grid(self):
+		ipd = _renamed_accessory_ipd()
+		self.assertEqual(
+			get_unmapped_accessories(ipd, "cloth_accessory_json", "Accessory"), ["NECK SERI FOLDING"]
+		)
+		self.assertEqual(
+			get_unmapped_accessories(ipd, "stiching_accessory_json", "accessory"), ["NECK SERI FOLDING"]
+		)
+		ipd.accessory_clothtype_json = json.dumps({"FOLDING FABRIC": None})
+		self.assertEqual(get_unmapped_accessories(ipd, "cloth_accessory_json", "Accessory"), [])
+
+	def test_ipd_save_rejects_renamed_accessory_without_consumption(self):
+		ipd = _renamed_accessory_ipd()
+		ipd.accessory_attributes = [frappe._dict(attribute="Colour")]
+		with self.assertRaisesRegex(frappe.ValidationError, "NECK SERI FOLDING"):
+			validate_accessory_fields(ipd)
+		ipd.accessory_clothtype_json = json.dumps({"FOLDING FABRIC": None})
+		validate_accessory_fields(ipd)
+
+
+def _renamed_accessory_ipd():
+	ipd = _aishwarya_garment_ipd()
+	ipd.name = "POLO FLAT KNIT T SHIRT_FK72_B-1"
+	ipd.accessory_clothtype_json = json.dumps({"NECK SERI FOLDING": None})
+	ipd.cloth_accessory_json = json.dumps(
+		{
+			"attributes": ["Colour", "Accessory", "Dia", "Weight"],
+			"items": [{"Colour": "Navy", "Accessory": "FOLDING FABRIC", "Dia": "58 Dia", "Weight": 0.008}],
+		}
+	)
+	ipd.stiching_accessory_json = json.dumps(
+		{
+			"items": [
+				{
+					"accessory": "FOLDING FABRIC",
+					"major_colour": "Navy",
+					"accessory_colour": "Navy",
+					"cloth_type": "MAIN FABRIC",
+				}
+			]
+		}
+	)
+	return ipd

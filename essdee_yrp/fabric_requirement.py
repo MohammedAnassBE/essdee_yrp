@@ -87,6 +87,13 @@ def get_cloth_combination(ipd_doc):
 	for item in cutting_cloths.get("items") or []:
 		cloth_combination[get_key(item, cloth_attributes)] = item["Cloth"]
 	accessory_attributes.append("Accessory")
+	if unmapped := get_unmapped_accessories(ipd_doc, "cloth_accessory_json", "Accessory"):
+		frappe.throw(
+			_(
+				"Accessory {0} on IPD {1} has no Accessory consumption row, so no accessory cloth "
+				"can be calculated. Refresh the Accessory consumption grid in the IPD and fill it."
+			).format(", ".join(unmapped), ipd_doc.get("name") or "")
+		)
 	if accessory_items:
 		for item in accessory_items["items"]:
 			accessory_combination[get_key(item, accessory_attributes)] = (item["Dia"], item["Weight"])
@@ -99,6 +106,15 @@ def get_cloth_combination(ipd_doc):
 		"cloth_combination": cloth_combination,
 		"accessory_combination": accessory_combination,
 	}
+
+
+def get_unmapped_accessories(ipd_doc, fieldname, accessory_key):
+	"""Named accessories missing from a filled accessory grid, e.g. after a rename."""
+	rows = _as_json(ipd_doc.get(fieldname)).get("items") or []
+	if not rows:
+		return []
+	mapped = {row.get(accessory_key) for row in rows}
+	return [name for name in _as_json(ipd_doc.get("accessory_clothtype_json")) if name not in mapped]
 
 
 def get_stitching_combination(ipd_doc):

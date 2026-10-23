@@ -770,8 +770,10 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 	)
 	for row in items:
 		row["received_type"] = default_received_type
+		# Ironing excess pieces have no known cost; use the last rate when one exists, else 0.
+		row["allow_zero_valuation_rate"] = 1
 		stock_entry.append("items", row)
-	populate_stock_rates(stock_entry, location, require_positive=True)
+	populate_stock_rates(stock_entry, location)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name
@@ -800,7 +802,7 @@ def _validate_work_order_context(work_order_doc, lot, item_name):
 		frappe.throw(f"Work Order {work_order_doc.name} does not belong to Item {item_name}")
 
 
-def populate_stock_rates(stock_entry, warehouse, *, require_positive=False):
+def populate_stock_rates(stock_entry, warehouse):
 	"""Apply YRP's dimension-aware last valuation rate to programmatic rows."""
 	from yrp.stock.dimensions import get_dimension_fieldnames
 	from yrp.stock.utils import get_last_sle_rate
@@ -814,8 +816,3 @@ def populate_stock_rates(stock_entry, warehouse, *, require_positive=False):
 			**dimensions,
 		)
 		row.rate = flt(rate)
-		if require_positive and row.rate <= 0:
-			frappe.throw(
-				f"No valuation rate is available for {row.item}; "
-				"create the source valuation before receiving ironing excess"
-			)

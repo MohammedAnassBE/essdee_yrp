@@ -3,10 +3,11 @@
 		<div class="sewing-quantity-matrix__scroll" role="region" :aria-label="`${label} quantity matrix`" tabindex="0">
 			<table>
 				<caption v-if="showCaption">{{ label }} · Quantities by colour and size</caption>
-				<thead><tr><th scope="col">Colour / Part</th><th v-for="size in sizes" :key="size" scope="col">{{ size }}</th><th scope="col" class="sewing-quantity-matrix__total">Total</th></tr></thead>
+				<thead><tr><th scope="col">Colour</th><th v-if="partHeader" scope="col" class="sewing-quantity-matrix__part">{{ partHeader }}</th><th v-for="size in sizes" :key="size" scope="col">{{ size }}</th><th scope="col" class="sewing-quantity-matrix__total">Total</th></tr></thead>
 				<tbody>
 					<tr v-for="(colour, key) in colours" :key="key">
-						<th scope="row">{{ colour.colour || key }}<small v-if="colour.part">{{ colour.part }}</small><slot name="colour-actions" :colour="colour" :colour-key="key" /></th>
+						<th scope="row">{{ colour.colour || key }}<slot name="colour-actions" :colour="colour" :colour-key="key" /></th>
+						<td v-if="partHeader" class="sewing-quantity-matrix__part"><span v-if="colour.part" class="sewing-quantity-matrix__part-pill">{{ colour.part }}</span></td>
 						<td v-for="size in sizes" :key="colour.values?.[size]?.order_detail || size">
 							<template v-if="colour.values?.[size]">
 								<small v-for="column in contextColumns" :key="column.key">{{ column.label }} <b>{{ format(colour.values[size][column.key]) }}</b></small>
@@ -22,6 +23,7 @@
 				<tfoot>
 					<tr>
 						<th scope="row">Total</th>
+						<td v-if="partHeader" class="sewing-quantity-matrix__part" />
 						<td v-for="size in sizes" :key="size"><small v-for="column in contextColumns" :key="column.key">{{ column.label }} <b>{{ format(totals.sizes[size].context[column.key]) }}</b></small><strong>{{ format(totals.sizes[size].quantity) }}</strong></td>
 						<td class="sewing-quantity-matrix__total"><small v-for="column in contextColumns" :key="column.key">{{ column.label }} <b>{{ format(totals.grand.context[column.key]) }}</b></small><strong>{{ format(totals.grand.quantity) }}</strong></td>
 					</tr>
@@ -34,15 +36,18 @@
 <script setup>
 import { computed, useId } from "vue"
 import { sewingMatrixTotals } from "../sewingQuantityTotals.js"
+import { sewingPartLabel } from "../setItemParts.js"
 const props = defineProps({
 	colours: { type: Object, default: () => ({}) }, primaryValues: { type: Array, default: () => [] },
 	modelValue: { type: Object, default: () => ({}) }, contextColumns: { type: Array, default: () => [] },
+	partLabel: { type: String, default: "" },
 	label: { type: String, default: "Sewing Plan" }, quantityLabel: { type: String, default: "Entry quantity" },
 	disabled: Boolean, editable: { type: Boolean, default: true }, showCaption: { type: Boolean, default: true },
 })
 const emit = defineEmits(["update:modelValue"])
 const matrixId = useId()
 const sizes = computed(() => [...new Set([...props.primaryValues, ...Object.values(props.colours).flatMap(colour => Object.keys(colour.values || {}))])])
+const partHeader = computed(() => props.partLabel || sewingPartLabel({}, props.colours))
 const totals = computed(() => sewingMatrixTotals(props.colours, sizes.value, props.modelValue, props.contextColumns))
 function edit(identity, value) { emit("update:modelValue", { ...props.modelValue, [identity]: value }) }
 function invalid(identity) { const value = props.modelValue[identity]; return value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0) }
@@ -70,5 +75,7 @@ input[aria-invalid="true"] { border-color: var(--erp-danger); }
 input:disabled { opacity: .65; }
 tfoot th, tfoot td { background: color-mix(in srgb, var(--erp-accent) 8%, var(--erp-surface-soft)); color: var(--erp-text); font-weight: 700; border-top: 2px solid var(--erp-border-strong); }
 .sewing-quantity-matrix__total { text-align: right; font-weight: 700; }
+.sewing-quantity-matrix__part { min-width: 90px; vertical-align: middle; }
+.sewing-quantity-matrix__part-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--erp-accent-soft); color: var(--erp-text); font-weight: 700; font-size: 12px; white-space: nowrap; }
 td strong { display: block; text-align: right; font-variant-numeric: tabular-nums; color: var(--erp-text); }
 </style>

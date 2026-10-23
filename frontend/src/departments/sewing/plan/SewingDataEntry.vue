@@ -20,6 +20,7 @@
 							<header><div><h4 class="sewing-data-entry__work-order">{{ plan.data.details?.work_order || 'No Work Order' }}</h4><strong class="sewing-data-entry__item">{{ plan.data.details?.item || 'Item unavailable' }}</strong><p class="sewing-data-entry__plan-reference">{{ plan.name }} · {{ plan.data.details?.work_order_status || 'Status unavailable' }}</p></div><span class="erp-status erp-status--success">Ready</span></header>
 							<div class="sewing-data-entry__stats">
 								<span><small>Colours</small><strong>{{ Object.keys(plan.data.colours || {}).length }}</strong></span>
+								<span v-if="sewingPartLabel(plan.data.details, plan.data.colours)" class="sewing-data-entry__parts"><small>{{ sewingPartLabel(plan.data.details, plan.data.colours) }}</small><strong>{{ sewingColourParts(plan.data.colours).join(', ') || '—' }}</strong></span>
 								<span><small>Sizes</small><strong>{{ plan.data.details?.primary_values?.length || 0 }}</strong></span>
 								<span><small>Ordered</small><strong>{{ planTotal(plan.data).toLocaleString(undefined, { maximumFractionDigits: 3 }) }}</strong></span>
 							</div>
@@ -45,7 +46,7 @@
 						<TimeField v-model="filters.time" label="Time" input-id="sewing-entry-time" required :invalid="missing('time')" :disabled="loading || busy" :error="missing('time') ? 'Choose a Time.' : ''" />
 					</div>
 					<p id="sewing-entry-help" class="sewing-data-entry__help">{{ inputContext }} Remaining quantities are server-provided context; the server validates each save.</p>
-					<SewingQuantityMatrix v-model="entryQuantities" :colours="entryColours" :primary-values="currentPlan.details.primary_values" :context-columns="contextColumns" :label="filters.plan" :disabled="busy || loading" :editable="canCreate">
+					<SewingQuantityMatrix v-model="entryQuantities" :colours="entryColours" :primary-values="currentPlan.details.primary_values" :part-label="sewingPartLabel(currentPlan.details, currentPlan.colours)" :context-columns="contextColumns" :label="filters.plan" :disabled="busy || loading" :editable="canCreate">
 						<template #colour-actions="{ colourKey }"><label v-if="canCreate && inputKey"><input type="checkbox" :checked="Boolean(filledColours[`${entryDraftKey}:${colourKey}`])" :aria-label="`${colourKey} Fill remaining`" :disabled="busy || loading" @change="fillColourQuantities(colourKey, $event.target.checked)" /> Fill remaining</label></template>
 					</SewingQuantityMatrix>
 				</form>
@@ -59,7 +60,7 @@
 				</div>
 				<section v-if="currentPlan" class="sewing-data-entry__dialog-body" aria-label="Inspection update">
 					<div class="sewing-data-entry__inspection-heading"><div><h3>Inspection quantities</h3><p>Update saved totals. Revert clears the selected inspection for every row in this plan.</p></div><div class="common-field"><label for="sewing-inspection">Inspection Type</label><Select input-id="sewing-inspection" v-model="filters.inspectionType" :options="inspectionTypes" option-label="label" option-value="value" aria-label="Inspection Type" :disabled="busy || loading" fluid /></div></div>
-					<SewingQuantityMatrix v-model="inspectionQuantities" :colours="currentPlan.colours" :primary-values="currentPlan.details.primary_values" :context-columns="[{ key: 'order_qty', label: 'Ordered' }]" :label="`${filters.plan} inspection`" quantity-label="Inspection quantity" :disabled="busy || loading" :editable="canWrite" />
+					<SewingQuantityMatrix v-model="inspectionQuantities" :colours="currentPlan.colours" :primary-values="currentPlan.details.primary_values" :part-label="sewingPartLabel(currentPlan.details, currentPlan.colours)" :context-columns="[{ key: 'order_qty', label: 'Ordered' }]" :label="`${filters.plan} inspection`" quantity-label="Inspection quantity" :disabled="busy || loading" :editable="canWrite" />
 				</section>
 				<template #footer><div class="sewing-data-entry__actions"><small v-if="!canWrite">You do not have permission to update inspections.</small><Button label="Close inspection" severity="secondary" text :disabled="busy" @click="inspectionVisible = false" /><Button label="Update inspection" severity="secondary" :disabled="busy || loading || refreshRequired || !canWrite" @click="saveInspection('update')" /><Button label="Revert inspection" severity="danger" outlined :disabled="busy || loading || refreshRequired || !canWrite" @click="revertConfirmVisible = true" /></div></template>
 			</Dialog>
@@ -86,6 +87,7 @@ import DocumentConfirmationDialog from "../../../components/documents/DocumentCo
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
+import { sewingColourParts, sewingPartLabel } from "../setItemParts.js"
 
 const props = defineProps({ state: { type: Object, required: true }, mutate: { type: Function, required: true }, filters: { type: Object, required: true }, actions: { type: Object, default: () => ({}) } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
@@ -293,7 +295,7 @@ p { margin: 5px 0 0; font-size: var(--erp-font-size-caption); color: var(--erp-t
 .sewing-data-entry__work-order { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .sewing-data-entry__item { display: block; min-width: 0; margin-top: 3px; overflow: hidden; color: var(--erp-text-secondary); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .sewing-data-entry__plan-reference { overflow: hidden; color: var(--erp-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.sewing-data-entry__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; background: var(--erp-surface-soft); border: 1px solid var(--erp-border-subtle); border-radius: var(--erp-control-radius); }
+.sewing-data-entry__stats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); overflow: hidden; background: var(--erp-surface-soft); border: 1px solid var(--erp-border-subtle); border-radius: var(--erp-control-radius); }
 .sewing-data-entry__stats > span { display: grid; gap: 2px; min-width: 0; padding: 9px 10px; border-right: 1px solid var(--erp-border-subtle); }
 .sewing-data-entry__stats > span:last-child { border-right: 0; }
 .sewing-data-entry__stats small { text-transform: uppercase; letter-spacing: 0.035em; }

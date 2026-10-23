@@ -37,7 +37,7 @@
 
 		<div id="app-main" class="app-main" tabindex="-1">
 			<RouterView v-slot="{ Component }">
-				<Transition name="app-route" mode="out-in">
+				<Transition name="app-route">
 					<component :is="Component" />
 				</Transition>
 			</RouterView>

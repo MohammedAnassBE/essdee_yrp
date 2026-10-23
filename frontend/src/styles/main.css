@@ -286,15 +286,17 @@ a {
 	.app-route-progress.is-active {
 		animation: erp-route-progress 1.2s ease-out forwards;
 	}
-	.app-route-enter-active,
-	.app-route-leave-active {
+	.app-route-enter-active {
 		transition: opacity 150ms ease;
+	}
+	.app-route-enter-from {
+		opacity: 0;
 	}
 }
 
-.app-route-enter-from,
-.app-route-leave-to {
-	opacity: 0;
+/* Hide the old page at once so the new page mounts and loads without waiting for a leave animation. */
+.app-route-leave-active {
+	display: none;
 }
 
 .administrator-page {
@@ -620,11 +622,6 @@ a {
 
 	.app-route-progress {
 		transform: none;
-		transition: none;
-	}
-
-	.app-route-enter-active,
-	.app-route-leave-active {
 		transition: none;
 	}
 }

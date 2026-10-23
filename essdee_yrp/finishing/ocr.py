@@ -214,6 +214,8 @@ def get_ocr_details(doc):
 def _apply_packing(doc, ocr_data, parts, primary_attribute):
 	packing = get_finishing_packing_summary(doc)
 	for row in doc.get("finishing_plan_grn_details") or []:
+		if not flt(row.quantity) and not flt(row.dispatched):
+			continue
 		size = get_variant_attr_details(row.item_variant).get(primary_attribute)
 		if packing.dynamic_ratio_packing:
 			packed_pieces = flt(row.quantity)

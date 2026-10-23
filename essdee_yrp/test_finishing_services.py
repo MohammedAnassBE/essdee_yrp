@@ -785,6 +785,12 @@ class TestFinishingOCRParity(TestCase):
 		with self.assertRaises(KeyError):
 			get_unaccountable_quantity(self.doc)
 
+	def test_zero_packing_rows_for_sizes_outside_the_plan_are_ignored(self):
+		self.attributes["Placeholder"] = {"Part": "Top", "Colour": "Blue", "Size": "75 cm"}
+		self.doc.finishing_plan_grn_details.append(_row(item_variant="Placeholder", quantity=0, dispatched=0))
+		self.assertNotIn("75 cm", get_ocr_details(self.doc)["Top"]["total"])
+		self.assertEqual(compute_received_status(self.doc), "Fully Dispatched")
+
 	def test_set_packing_missing_mapping_raises(self):
 		self.ipd.item_attributes = []
 		with self.assertRaises(TypeError):

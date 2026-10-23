@@ -19,6 +19,13 @@ from essdee_yrp.finishing.packing import get_dynamic_packed_qty
 from essdee_yrp.finishing.parsing import json_object
 
 
+def order_item_sizes(item, sizes):
+	"""Sort sizes by the Item's primary attribute mapping; unmapped sizes keep their order at the end."""
+	mapped = get_attribute_details(item).get("primary_attribute_values") or []
+	position = {size: index for index, size in enumerate(mapped)}
+	return sorted(sizes, key=lambda size: position.get(size, len(position)))
+
+
 def build_plan_views(doc):
 	context = _get_ipd_context(doc)
 	views = _build_quantity_views(doc, context)

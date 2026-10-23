@@ -22,6 +22,8 @@ from yrp import attribute_links as attribute_db
 from yrp.utils import get_variant_attr_details
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
+from essdee_yrp.finishing.views import order_item_sizes
+
 QTY_TOLERANCE = 0.0001
 
 
@@ -271,7 +273,8 @@ def get_rework_items(
 			detail["total_rejection"] += flt(row.rejection)
 			add_reworked(data, detail, row)
 		for group in detail["rework_detail"].values():
-			group["items"].sort(key=lambda row: _size_sort_key(row.get(primary_attr)))
+			sizes = order_item_sizes(doc.item, [row.get(primary_attr) for row in group["items"]])
+			group["items"].sort(key=lambda row: sizes.index(row.get(primary_attr)))
 		if detail["rework_detail"]:
 			data["report_detail"][name] = detail
 
@@ -287,14 +290,6 @@ def add_reworked(data, detail, row):
 		totals[row.received_type] = totals.get(row.received_type, 0) + qty
 	data["total_reworked"] += qty
 	detail["total_reworked"] += qty
-
-
-def _size_sort_key(value):
-	text = str(value or "")
-	try:
-		return (0, float(text.split()[0]))
-	except TypeError, ValueError:
-		return (1, text)
 
 
 def _load_action_rows(payload):

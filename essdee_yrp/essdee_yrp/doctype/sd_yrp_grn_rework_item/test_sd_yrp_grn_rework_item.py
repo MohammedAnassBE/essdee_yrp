@@ -10,13 +10,6 @@ from essdee_yrp.finishing import rebuild
 
 
 class TestGRNReworkItem(IntegrationTestCase):
-	def test_size_sort_matches_ipd_order_shape(self):
-		values = ["80 cm", "45 cm", "S", "50 cm"]
-		self.assertEqual(
-			sorted(values, key=grn_rework_item._size_sort_key),
-			["45 cm", "50 cm", "80 cm", "S"],
-		)
-
 	def test_source_warehouse_follows_completed_internal_transfer(self):
 		parent = frappe._dict(warehouse="Transit", grn_number="GRN-1")
 		row = frappe._dict(item_variant="Variant-1")

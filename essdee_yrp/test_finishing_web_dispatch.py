@@ -223,3 +223,14 @@ class TestFinishingWebDispatch(TestCase):
 		):
 			module.execute_dispatch_command(doc.name, "cancel", {}, doc.modified)
 		doc.cancel.assert_called_once()
+
+	def test_dispatch_sizes_follow_item_mapping_order(self):
+		service = import_module(SERVICE)
+		row = {"item": "TSHIRT", "values": {size: {"qty": 1} for size in ("XL", "Free", "2XL", "S", "M")}}
+		with patch(
+			"essdee_yrp.finishing.views.get_attribute_details",
+			return_value={"primary_attribute_values": ["S", "M", "L", "XL", "2XL"]},
+		):
+			service.order_row_sizes(row)
+		self.assertEqual(row["sizes"], ["S", "M", "XL", "2XL", "Free"])
+		self.assertEqual(list(row["values"]), row["sizes"])

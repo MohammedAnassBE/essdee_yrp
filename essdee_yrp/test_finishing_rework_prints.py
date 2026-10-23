@@ -1,5 +1,6 @@
 import json
 import os
+from contextlib import contextmanager
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -52,7 +53,60 @@ def rework_source():
 	)
 
 
+def rework_row(name, variant):
+	return frappe._dict(
+		name=name,
+		item_variant=variant,
+		received_type="Oil Mark",
+		quantity=1,
+		reworked=0,
+		rejection=0,
+		completed=0,
+		uom="Nos",
+		set_combination="{}",
+	)
+
+
+@contextmanager
+def patched_rework(source, mapped_sizes=("S", "M", "L", "XL")):
+	with (
+		patch.object(frappe, "has_permission", return_value=True),
+		patch.object(frappe, "get_all", return_value=[source.name]),
+		patch.object(frappe, "get_doc", return_value=source),
+		patch.object(
+			rework_items.attribute_db,
+			"get_cached_value",
+			side_effect=lambda doctype, _name, fields: (
+				"IPD" if doctype == "SD YRP Lot" else ("Colour", "Size", 0, None)
+			),
+		),
+		patch.object(
+			rework_items,
+			"get_variant_attr_details",
+			side_effect=lambda variant: {"Colour": "Red", "Size": variant.split("-", 1)[1]},
+		),
+		patch(
+			"essdee_yrp.finishing.views.get_attribute_details",
+			return_value={"primary_attribute_values": list(mapped_sizes)},
+		),
+	):
+		yield
+
+
 class TestFinishingReworkPrints(TestCase):
+	def test_rework_sizes_follow_item_mapping_order(self):
+		source = rework_source()
+		source.grn_rework_item_details = [
+			rework_row("d1", "V-XL"),
+			rework_row("d2", "V-L"),
+			rework_row("d3", "V-S"),
+			rework_row("d4", "V-M"),
+		]
+		with patched_rework(source):
+			data = rework_items.get_rework_items()
+		items = data["report_detail"]["RW-1"]["rework_detail"]["Oil Mark-Red"]["items"]
+		self.assertEqual([row["Size"] for row in items], ["S", "M", "L", "XL"])
+
 	def test_formats_are_standard_grn_formats(self):
 		for folder, name in FORMATS.items():
 			with self.subTest(name=name):
@@ -83,23 +137,7 @@ class TestFinishingReworkPrints(TestCase):
 		)
 
 	def test_rework_items_report_reworked_totals_like_frappe_15(self):
-		with (
-			patch.object(frappe, "has_permission", return_value=True),
-			patch.object(frappe, "get_all", return_value=["RW-1"]),
-			patch.object(frappe, "get_doc", return_value=rework_source()),
-			patch.object(
-				rework_items.attribute_db,
-				"get_cached_value",
-				side_effect=lambda doctype, _name, fields: (
-					"IPD" if doctype == "SD YRP Lot" else ("Colour", "Size", 0, None)
-				),
-			),
-			patch.object(
-				rework_items,
-				"get_variant_attr_details",
-				side_effect=lambda variant: {"Colour": "Red", "Size": variant[-1]},
-			),
-		):
+		with patched_rework(rework_source()):
 			data, series = rework_items.get_rework_items(grn_number="GRN-1", show_reworked=1)
 		detail = data["report_detail"]["RW-1"]
 		self.assertEqual(series, "RW-1")

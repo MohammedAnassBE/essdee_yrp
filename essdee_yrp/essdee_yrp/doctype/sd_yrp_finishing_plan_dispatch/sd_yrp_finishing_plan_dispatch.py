@@ -24,6 +24,7 @@ from essdee_yrp.finishing.packing import (
 	prepare_dynamic_batch_dispatch,
 )
 from essdee_yrp.finishing.transactions import populate_stock_rates
+from essdee_yrp.finishing.views import order_item_sizes
 
 
 class SDYRPFinishingPlanDispatch(Document):
@@ -207,6 +208,7 @@ def _build_saved_item_view(doc):
 			value["dispatch_qty"] += piece_quantity
 			row["total"]["total_dispatch"] += piece_quantity
 		row["total"]["total_qty"] = sum(flt(value["qty"]) for value in row["values"].values())
+		order_row_sizes(row)
 		item_details.append(row)
 
 	colour_map = {}
@@ -438,8 +440,15 @@ def _read_fetch_fp_items():
 			}
 			row["total"]["total_qty"] += balance
 		if row["total"]["total_qty"] > 0:
+			order_row_sizes(row)
 			item_details.append(row)
 	return item_details
+
+
+def order_row_sizes(row):
+	"""Order a dispatch row's size values by the Item's mapping and expose them as `sizes`."""
+	row["sizes"] = order_item_sizes(row["item"], row["values"])
+	row["values"] = {size: row["values"][size] for size in row["sizes"]}
 
 
 def merge_saved_finishing_items(fresh_items, saved_items):

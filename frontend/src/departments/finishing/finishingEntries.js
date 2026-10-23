@@ -147,8 +147,13 @@ export function lotTransferErrors(rows, transfers) {
 	return errors
 }
 
+/** Server sends `sizes` in Item mapping order; object keys would put numeric sizes first. */
+export function dispatchRowSizes(row) {
+	return row.sizes || Object.keys(row.values || {})
+}
+
 export function dispatchEntrySource(row) {
-	const sizes = Object.keys(row.values || {})
+	const sizes = dispatchRowSizes(row)
 	return {
 		sizes,
 		packed: {
@@ -162,7 +167,7 @@ export function dispatchEntrySource(row) {
 }
 
 export function dispatchInitialState(row) {
-	const sizes = Object.keys(row.values || {})
+	const sizes = dispatchRowSizes(row)
 	const colours = row.packing_config?.colours || []
 	const grid = row.colour_grid || {}
 	const mode = packingMode(row.packing_config)

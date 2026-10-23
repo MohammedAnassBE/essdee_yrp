@@ -217,7 +217,7 @@ const isTextArea = computed(() =>
 	["Small Text", "Text", "Long Text", "Text Editor", "Code"].includes(props.field.fieldtype),
 )
 const isWide = computed(() => isTextArea.value)
-const textAreaRows = computed(() => props.compact
+const textAreaRows = computed(() => isDisabled.value ? 1 : props.compact
 	? (props.field.fieldtype === "Small Text" ? 2 : 3)
 	: (props.field.fieldtype === "Small Text" ? 3 : 5))
 const textAreaValue = computed(() => isDisabled.value && typeof props.modelValue === "string"

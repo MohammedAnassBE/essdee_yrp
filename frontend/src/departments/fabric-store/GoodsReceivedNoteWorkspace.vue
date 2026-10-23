@@ -47,6 +47,7 @@
 								v-for="field in group.fields"
 								:key="fieldKey(field)"
 								:field="field"
+								:data-fieldname="field.fieldname"
 								:model-value="form[field.fieldname]"
 								:form="form"
 								:required="Boolean(field.reqd || field.mandatory)"
@@ -446,8 +447,9 @@ const fieldGroups = computed(() => {
 	}
 	return [...groups.values()].filter((group) => group.fields.length)
 })
-const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => ["posting", "movement"].includes(group.key)))
-const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !["posting", "movement"].includes(group.key)))
+const primaryGroupKeys = ["posting", "movement", "addresses"]
+const primaryFieldGroups = computed(() => fieldGroups.value.filter((group) => primaryGroupKeys.includes(group.key)))
+const secondaryFieldGroups = computed(() => fieldGroups.value.filter((group) => !primaryGroupKeys.includes(group.key)))
 const afterMatrixFields = computed(() => visibleFields.value.filter((field) => afterMatrixFieldnames.has(field.fieldname)))
 const overviewDefinitions = [
 	{ key: "identity", label: "Receipt identity", description: "Source and production references", icon: "pi pi-id-card", fields: ["naming_series", "against", "against_id", "delivery_challan", "production_detail", "is_return", "is_rework", "additional_grn"] },
@@ -805,8 +807,8 @@ const grnFieldGroups = [
 	{ key: "source", eyebrow: "Source", label: "Receipt source", description: "Source document and production references." },
 	{ key: "posting", eyebrow: "Receipt", label: "Posting details", description: "Series, posting date and receipt timing." },
 	{ key: "movement", eyebrow: "Movement", label: "Stock movement", description: "Warehouses and delivery destination." },
+	{ key: "addresses", eyebrow: "Parties", label: "Addresses & contact", description: "Supplier, billing and delivery addresses with the supplier contact." },
 	{ key: "supplier-document", eyebrow: "Reference", label: "Supplier document & transport", description: "Supplier reference and vehicle details." },
-	{ key: "addresses", eyebrow: "Parties", label: "Addresses & contact", description: "Billing, supplier and delivery contacts." },
 	{ key: "charges", eyebrow: "Commercial", label: "Charges & notes", description: "Receipt charges and operational notes." },
 	{ key: "transfer", eyebrow: "Status", label: "Internal transfer", description: "Internal transfer completion state." },
 	{ key: "additional", eyebrow: "Additional", label: "Additional details", description: "Other permitted Goods Received Note fields." },
@@ -814,9 +816,9 @@ const grnFieldGroups = [
 const grnGroupFields = {
 	source: ["against", "against_id", "delivery_challan", "production_detail"],
 	posting: ["additional_grn", "naming_series", "posting_date", "posting_time", "edit_posting_date_and_time", "actual_date"],
-	movement: ["from_warehouse", "billing_address", "contact_person", "delivery_location", "to_warehouse", "delivery_address", "delivery_location_name"],
+	movement: ["from_warehouse", "delivery_location", "to_warehouse", "delivery_location_name"],
+	addresses: ["supplier_address", "supplier_address_display", "billing_address", "billing_address_display", "delivery_address", "delivery_address_display", "contact_person", "contact_display", "contact_mobile"],
 	"supplier-document": ["supplier_document_no", "supplier_document_date", "dc_no", "vehicle_no"],
-	addresses: ["billing_address_display", "supplier_address", "supplier_address_display", "contact_display", "contact_mobile", "delivery_address_display"],
 	charges: ["freight_charges", "comments", "purchase_invoice"],
 	transfer: ["is_internal_unit", "transfer_complete", "ste_transferred", "ste_transferred_percent", "total_delivered_qty"],
 }
@@ -1020,6 +1022,26 @@ function documentDeleted() {
 .goods-received-note-header__identity--embedded { width: 100%; overflow: hidden; }
 .goods-received-note-header__identity--embedded .goods-received-note-header__facts { overflow-x: auto; flex-wrap: nowrap; padding-left: 0; border-left: 0; scrollbar-width: thin; }
 .goods-received-note-header__identity--embedded .goods-received-note-header__facts > div { flex: 0 0 auto; }
+.goods-received-note-fields :deep(.document-field-group-grid__card[data-group="addresses"]) { grid-column: 1 / -1; }
+.goods-received-note-fields :deep([data-group="addresses"] .goods-received-note-field-group__grid) {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-areas: "supplier_address billing_address delivery_address" "supplier_address_display billing_address_display delivery_address_display" "contact_person contact_display contact_mobile";
+	align-items: start;
+}
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname]) { grid-column: auto; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="supplier_address"]) { grid-area: supplier_address; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="supplier_address_display"]) { grid-area: supplier_address_display; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="billing_address"]) { grid-area: billing_address; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="billing_address_display"]) { grid-area: billing_address_display; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="delivery_address"]) { grid-area: delivery_address; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="delivery_address_display"]) { grid-area: delivery_address_display; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="contact_person"]) { grid-area: contact_person; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="contact_display"]) { grid-area: contact_display; }
+.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname="contact_mobile"]) { grid-area: contact_mobile; }
+@media (max-width: 760px) {
+	.goods-received-note-fields :deep([data-group="addresses"] .goods-received-note-field-group__grid) { grid-template-columns: 1fr; grid-template-areas: none; }
+	.goods-received-note-fields :deep([data-group="addresses"] [data-fieldname]) { grid-area: auto; }
+}
 .goods-received-note-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, var(--erp-surface)); }
 .goods-received-note-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .goods-received-note-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }

@@ -4,7 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import flt, nowtime, today
 
-from essdee_yrp.finishing import views, web_entries
+from essdee_yrp.finishing import transactions, views, web_entries
 
 
 def _ironing_target():
@@ -53,10 +53,12 @@ class TestFinishingZeroValuation(IntegrationTestCase):
 		self.received_type = frappe.db.get_single_value("YRP Stock Settings", "default_received_type")
 
 	def add_ironing_excess(self, quantity, last_rate):
-		with patch("yrp.stock.utils.get_last_sle_rate", return_value=(last_rate, None)):
+		with patch.object(transactions, "get_lot_valuation_rate", return_value=last_rate) as lookup:
 			result = web_entries.add_ironing_excess(
 				self.doc, {"quantities": {self.colour: {"sizes": {self.size: quantity}}}}
 			)
+		lookup.assert_called_once()
+		self.assertEqual(lookup.call_args.args[1], self.doc.lot)
 		stock_entry = frappe.get_doc("YRP Stock Entry", result["name"])
 		ledger = frappe.get_all(
 			"YRP Stock Ledger Entry",
@@ -84,6 +86,65 @@ class TestFinishingZeroValuation(IntegrationTestCase):
 
 		self.assertEqual(stock_entry.items[0].rate, 12.5)
 		self.assertEqual([(row.qty, row.rate) for row in ledger], [(2, 12.5)])
+
+	def unused_lot(self, variant, exclude=()):
+		used = frappe.get_all("YRP Stock Ledger Entry", filters={"item": variant}, pluck="lot", distinct=True)
+		lot = frappe.db.get_value("SD YRP Lot", {"name": ["not in", [*used, *exclude] or [""]]}, "name")
+		if not lot:
+			self.skipTest("No SD YRP Lot without stock for the test variant")
+		return lot
+
+	def move_stock(self, purpose, variant, lot, warehouse, qty, rate=0):
+		warehouse_field = "from_warehouse" if purpose == "Material Issue" else "to_warehouse"
+		entry = frappe.get_doc(
+			{
+				"doctype": "YRP Stock Entry",
+				"purpose": purpose,
+				warehouse_field: warehouse,
+				"posting_date": today(),
+				"posting_time": nowtime(),
+				"items": [
+					{
+						"item": variant,
+						"qty": qty,
+						"rate": rate,
+						"allow_zero_valuation_rate": 1,
+						"lot": lot,
+						"received_type": self.received_type,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		entry.submit()
+
+	def test_lot_valuation_rate_rules(self):
+		variant = self.doc.finishing_plan_details[0].item_variant
+		lot = self.unused_lot(variant)
+		other_lot = self.unused_lot(variant, exclude=[lot])
+		self.assertEqual(transactions.get_lot_valuation_rate(variant, lot), 0)
+
+		self.move_stock("Material Receipt", variant, other_lot, _test_warehouse(), 4, 9)
+		self.assertEqual(transactions.get_lot_valuation_rate(variant, lot), 0)
+
+		self.move_stock("Material Receipt", variant, lot, _test_warehouse(), 2, 12.5)
+		self.assertEqual(transactions.get_lot_valuation_rate(variant, lot), 12.5)
+
+	def test_lot_valuation_rate_skips_zero_rate_bucket(self):
+		variant = self.doc.finishing_plan_details[0].item_variant
+		lot = self.unused_lot(variant)
+		warehouse = _test_warehouse()
+		self.move_stock("Material Receipt", variant, lot, warehouse, 5, 7)
+		self.move_stock("Material Issue", variant, lot, warehouse, 5)
+		self.move_stock("Material Receipt", variant, lot, warehouse, 3, 0)
+		last = frappe.get_all(
+			"YRP Stock Ledger Entry",
+			filters={"item": variant, "lot": lot, "is_cancelled": 0},
+			pluck="valuation_rate",
+			order_by="posting_datetime desc, creation desc",
+			limit=1,
+		)
+		self.assertEqual(last, [0])
+		self.assertEqual(transactions.get_lot_valuation_rate(variant, lot), 7)
 
 	def test_plain_material_receipt_still_rejects_zero_rate(self):
 		variant = self.doc.finishing_plan_details[0].item_variant

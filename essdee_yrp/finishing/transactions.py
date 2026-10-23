@@ -770,10 +770,9 @@ def create_material_receipt(data, item_name, lot, ipd, doc_name, location):
 	)
 	for row in items:
 		row["received_type"] = default_received_type
-		# Ironing excess pieces have no known cost; use the last rate when one exists, else 0.
+		row["rate"] = get_lot_valuation_rate(row["item"], lot)
 		row["allow_zero_valuation_rate"] = 1
 		stock_entry.append("items", row)
-	populate_stock_rates(stock_entry, location)
 	stock_entry.insert()
 	stock_entry.submit()
 	return stock_entry.name
@@ -800,6 +799,18 @@ def _validate_work_order_context(work_order_doc, lot, item_name):
 		frappe.throw(f"Work Order {work_order_doc.name} does not belong to Lot {lot}")
 	if item_name and work_order_doc.item != item_name:
 		frappe.throw(f"Work Order {work_order_doc.name} does not belong to Item {item_name}")
+
+
+def get_lot_valuation_rate(item, lot):
+	"""Last non-zero valuation of ``item`` in ``lot`` across warehouses and received types, else 0."""
+	rate = frappe.get_all(
+		"YRP Stock Ledger Entry",
+		filters={"item": item, "lot": lot, "is_cancelled": 0, "valuation_rate": [">", 0]},
+		pluck="valuation_rate",
+		order_by="posting_datetime desc, creation desc",
+		limit=1,
+	)
+	return flt(rate[0]) if rate else 0
 
 
 def populate_stock_rates(stock_entry, warehouse):

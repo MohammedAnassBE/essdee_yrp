@@ -1,4 +1,4 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const LOT_METHOD = "essdee_yrp.planning.lot_workspace"
 const BULK_CLOSE_METHOD = "essdee_yrp.essdee_yrp.page.work_order_bulk_close.work_order_bulk_close"
@@ -16,7 +16,7 @@ export function closeWorkOrders(workOrders, values) {
 }
 
 export function getPlanningCapabilities() {
-	return callMethod("essdee_yrp.planning.web_workspace.get_capabilities")
+	return callRead("essdee_yrp.planning.web_workspace.get_capabilities")
 }
 
 export function getLotWorkspace(name) {

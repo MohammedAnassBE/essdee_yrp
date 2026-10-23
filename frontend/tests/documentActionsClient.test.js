@@ -24,8 +24,8 @@ test("document APIs use Frappe permissions, delete, and print options endpoints"
 	} finally { globalThis.window = previousWindow; globalThis.fetch = previousFetch }
 })
 
-test("permission and print reads preserve pending metadata; delete invalidates it", async () => {
-	const { getMeta, invalidatePendingReads } = await import("../src/api/frappe.js")
+test("permission, print and delete calls keep session metadata; logout drops it", async () => {
+	const { clearReadCaches, getMeta } = await import("../src/api/frappe.js")
 	const previousWindow = globalThis.window, previousFetch = globalThis.fetch
 	globalThis.window = { location: { host: "document-actions" }, csrf_token: "token" }
 	const metadata = []
@@ -33,17 +33,19 @@ test("permission and print reads preserve pending metadata; delete invalidates i
 		if (url.includes("getdoctype")) return new Promise(resolve => metadata.push(resolve))
 		return Promise.resolve({ ok: true, status: 200, json: async () => ({ message: { permissions: { print: 1 } } }) })
 	}
-	invalidatePendingReads()
+	clearReadCaches()
 	try {
 		const a = getMeta("Pending")
 		await getDocPermissions("Pending", "DOC-1")
 		await getPrintOptions("Pending", "DOC-1")
 		const b = getMeta("Pending")
-		assert.equal(metadata.length, 1)
 		await deleteDoc("Pending", "DOC-1")
 		const c = getMeta("Pending")
+		assert.equal(metadata.length, 1)
+		clearReadCaches()
+		const d = getMeta("Pending")
 		assert.equal(metadata.length, 2)
 		metadata.forEach(resolve => resolve({ ok: true, status: 200, json: async () => ({ docs: [] }) }))
-		await Promise.all([a, b, c])
-	} finally { invalidatePendingReads(); globalThis.window = previousWindow; globalThis.fetch = previousFetch }
+		await Promise.all([a, b, c, d])
+	} finally { clearReadCaches(); globalThis.window = previousWindow; globalThis.fetch = previousFetch }
 })

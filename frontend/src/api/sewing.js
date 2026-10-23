@@ -1,4 +1,4 @@
-import { callMethod, getMeta } from "./frappe.js"
+import { callMethod, callRead, getMeta } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.sewing.web_workspace"
 const PLAN_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_sewing_plan.sd_yrp_sewing_plan"
@@ -10,7 +10,7 @@ export function getSewingWorkOrderProcesses() {
 }
 
 export function getSewingCapabilities() {
-	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
+	return callRead(`${WORKSPACE_METHOD}.get_capabilities`)
 }
 
 export function getAttendanceStrength(reportDate, fromTime, toTime) {

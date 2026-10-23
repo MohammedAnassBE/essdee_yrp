@@ -1,4 +1,4 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.hr.web_workspace"
 const BILL_TRACKING_METHOD = "yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking"
@@ -9,7 +9,7 @@ const DELIVERY_PERSON_METHOD = (
 )
 
 export function getHrCapabilities() {
-	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
+	return callRead(`${WORKSPACE_METHOD}.get_capabilities`)
 }
 
 export function getBillTrackingWorkspace(name) {

@@ -1,4 +1,4 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const CAPABILITIES_METHOD = "essdee_yrp.accounts.web_capabilities"
 const WORKSPACE_METHOD = "essdee_yrp.accounts.purchase_invoice_workspace"
@@ -27,7 +27,7 @@ export function getAuditPendingDispatchDetail(finishingPlan, history) {
 }
 
 export function getAccountsCapabilities() {
-	return callMethod(`${CAPABILITIES_METHOD}.get_capabilities`)
+	return callRead(`${CAPABILITIES_METHOD}.get_capabilities`)
 }
 
 export function getPurchaseInvoiceWorkspace(name) {

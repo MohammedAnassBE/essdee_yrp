@@ -1,9 +1,9 @@
-import { callMethod, downloadMethodFile } from "./frappe.js"
+import { callMethod, callRead, downloadMethodFile } from "./frappe.js"
 
 const METHOD = "essdee_yrp.sales.web_workspace"
 
 export function getSalesCapabilities() {
-	return callMethod(`${METHOD}.get_capabilities`)
+	return callRead(`${METHOD}.get_capabilities`)
 }
 
 export function getProductionOrderWorkspace(productionOrder) {

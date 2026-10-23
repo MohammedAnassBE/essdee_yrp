@@ -2,13 +2,24 @@ import { extractServerMessage } from "./errorMessages.js"
 import { announceServerMessages } from "./serverMessages.js"
 
 const pendingReads = new Map()
-const pendingMetadata = new Map()
+const metadata = new Map()
+const linkResults = new Map()
+const METADATA_LIMIT = 20
+const LINK_RESULT_LIMIT = 50
+const LINK_RESULT_MS = 30000
+const SHORT_LINK_QUERY = 2
 let readGeneration = 0
 
 export function invalidatePendingReads() {
 	readGeneration += 1
 	pendingReads.clear()
-	pendingMetadata.clear()
+	linkResults.clear()
+}
+
+/** Drops every session read cache, including DocType metadata. */
+export function clearReadCaches() {
+	invalidatePendingReads()
+	metadata.clear()
 }
 
 function csrfToken() {
@@ -32,6 +43,7 @@ function sessionExpired(status, payload = {}) {
 	))
 }
 function redirectToLogin() {
+	clearReadCaches()
 	window.location.assign(`/login?redirect-to=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`)
 }
 
@@ -100,6 +112,7 @@ function requestError(message, status, payload = {}) {
 /** Ends the Frappe session, then leaves /web for the login page. */
 export async function logOut() {
 	await invokeMethod("logout")
+	clearReadCaches()
 	window.location.assign("/login")
 }
 
@@ -130,9 +143,11 @@ export function uploadFile(file, options = {}) {
 
 		const xhr = new XMLHttpRequest()
 		let settled = false
+		invalidatePendingReads()
 		const finish = (callback, value) => {
 			if (settled) return
 			settled = true
+			invalidatePendingReads()
 			signal?.removeEventListener?.("abort", abort)
 			callback(value)
 		}
@@ -183,9 +198,19 @@ function orderedArguments(value) {
 	return value
 }
 
-async function sharedRead(method, args) {
-	const identity = [window.location?.host, window.frappe?.session?.user, window.frappe?.boot?.user?.name, csrfToken()]
-	const key = JSON.stringify([...identity, readGeneration, method, orderedArguments(args)])
+// The user_id cookie follows logins and logouts made in other tabs.
+function sessionIdentity() {
+	const cookieUser = /(?:^|;\s*)user_id=([^;]*)/.exec(globalThis.document?.cookie || "")?.[1] || ""
+	return [window.location?.host, window.frappe?.session?.user, window.frappe?.boot?.user?.name, csrfToken(), cookieUser]
+}
+
+function readKey(method, args) {
+	return JSON.stringify([...sessionIdentity(), readGeneration, method, orderedArguments(args)])
+}
+
+/** Read-only whitelisted method: identical pending calls share one request and never invalidate other reads. */
+export async function callRead(method, args = {}) {
+	const key = readKey(method, args)
 	let pending = pendingReads.get(key)
 	if (!pending) {
 		pending = invokeMethod(method, args).finally(() => pendingReads.delete(key))
@@ -194,23 +219,55 @@ async function sharedRead(method, args) {
 	return structuredClone(await pending)
 }
 
+// Cached reads resolve on a later task, like a network response: PrimeVue overlays opened by the
+// same click close again when results arrive before that click finishes dispatching.
+const nextTask = () => new Promise((done) => setTimeout(done, 0))
+
+function remember(cache, key, value, limit) {
+	cache.delete(key)
+	cache.set(key, value)
+	if (cache.size > limit) cache.delete(cache.keys().next().value)
+}
+
+async function linkRead(method, args) {
+	if (String(args.txt || "").length > SHORT_LINK_QUERY) return callRead(method, args)
+	const key = readKey(method, args)
+	const cached = linkResults.get(key)
+	if (cached && Date.now() - cached.at < LINK_RESULT_MS) {
+		remember(linkResults, key, cached, LINK_RESULT_LIMIT)
+		await nextTask()
+		// A write or session change during the yield must not deliver the older result.
+		return readKey(method, args) === key ? structuredClone(cached.rows) : linkRead(method, args)
+	}
+	linkResults.delete(key)
+	const generation = readGeneration, at = Date.now()
+	const rows = await callRead(method, args)
+	if (generation === readGeneration) remember(linkResults, key, { at, rows: structuredClone(rows) }, LINK_RESULT_LIMIT)
+	return rows
+}
+
 export function getActiveWorkflow(doctype) {
-	return sharedRead("essdee_yrp.api.workflow.get_active_workflow", { doctype })
+	return callRead("essdee_yrp.api.workflow.get_active_workflow", { doctype })
 }
 
 
+const metadataKey = (doctype) => JSON.stringify([...sessionIdentity(), doctype])
+
+/** DocType metadata, cached for the session; each caller gets its own copy. */
 export async function getMeta(doctype) {
-	const identity = [window.location?.host, window.frappe?.session?.user, window.frappe?.boot?.user?.name, csrfToken()]
-	const key = JSON.stringify([...identity, readGeneration, doctype])
-	let pending = pendingMetadata.get(key)
-	if (!pending) {
-		pending = request(
-			`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`,
-			{ method: "GET" },
-		).then((payload) => payload.docs || []).finally(() => pendingMetadata.delete(key))
-		pendingMetadata.set(key, pending)
+	const key = metadataKey(doctype)
+	const cached = metadata.get(key)
+	const docs = cached || request(
+		`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`,
+		{ method: "GET" },
+	).then((payload) => payload.docs || [])
+	if (!cached) docs.catch(() => { if (metadata.get(key) === docs) metadata.delete(key) })
+	remember(metadata, key, docs, METADATA_LIMIT)
+	if (cached) {
+		await nextTask()
+		if (metadataKey(doctype) !== key) return getMeta(doctype)
 	}
-	return structuredClone(await pending)
+	return structuredClone(await docs)
 }
 
 export async function getDoc(doctype, name) {
@@ -290,17 +347,17 @@ export async function getList(
 		limit_page_length: pageLength,
 	}
 	const url = `/api/resource/${encodeURIComponent(doctype)}${queryString(params)}`
-	if (url.length > 6000) return await sharedRead("frappe.client.get_list", { doctype, ...params }) || []
+	if (url.length > 6000) return await callRead("frappe.client.get_list", { doctype, ...params }) || []
 	const payload = await request(url, { method: "GET" })
 	return payload.data || []
 }
 
 export function getItemFilterValues(items) {
-	return sharedRead("essdee_yrp.api.item_filter.get_item_filter_values", { items })
+	return callRead("essdee_yrp.api.item_filter.get_item_filter_values", { items })
 }
 
 export async function getCount(doctype, filters = [], { distinct = false } = {}) {
-	const value = await sharedRead("frappe.desk.reportview.get_count", distinct ? { doctype, filters, distinct } : { doctype, filters })
+	const value = await callRead("frappe.desk.reportview.get_count", distinct ? { doctype, filters, distinct } : { doctype, filters })
 	return Number(value || 0)
 }
 
@@ -313,7 +370,7 @@ export async function searchLink(
 	{ allowVariants = false } = {},
 ) {
 	if (!doctype) return []
-	const rows = await sharedRead("essdee_yrp.api.link_search.link_search", {
+	const rows = await linkRead("essdee_yrp.api.link_search.link_search", {
 		doctype,
 		txt: text,
 		filters,
@@ -332,7 +389,7 @@ export async function searchLinkedDocument(
 	pageLength = 20,
 ) {
 	if (!doctype || !linkDoctype || !linkName) return []
-	const rows = await sharedRead("essdee_yrp.api.link_search.linked_document_search", {
+	const rows = await linkRead("essdee_yrp.api.link_search.linked_document_search", {
 		doctype,
 		link_doctype: linkDoctype,
 		link_name: linkName,
@@ -361,7 +418,7 @@ export function bulkUpdateField(doctype, docnames, field, value) {
 const USER_LISTVIEW_METHOD = "essdee_yrp.api.list_columns"
 
 export async function getUserListview(doctype, viewFields = []) {
-	const settings = await callMethod(`${USER_LISTVIEW_METHOD}.get_user_listview`, {
+	const settings = await callRead(`${USER_LISTVIEW_METHOD}.get_user_listview`, {
 		doctype_name: doctype,
 		view_fields: viewFields,
 	})
@@ -399,12 +456,19 @@ export function resetUserListview(doctype) {
 }
 
 export async function downloadMethodFile(method, args = {}, fallbackName = "download") {
-	const response = await fetch(`/api/method/${method}`, {
-		method: "POST",
-		credentials: "include",
-		headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": csrfToken() },
-		body: JSON.stringify(args),
-	})
+	// Generic methods may write, like callMethod.
+	invalidatePendingReads()
+	let response
+	try {
+		response = await fetch(`/api/method/${method}`, {
+			method: "POST",
+			credentials: "include",
+			headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": csrfToken() },
+			body: JSON.stringify(args),
+		})
+	} finally {
+		invalidatePendingReads()
+	}
 	if (!response.ok) {
 		const payload = await response.json().catch(() => ({}))
 		throw new Error(extractServerMessage(payload, "The file could not be downloaded. Please try again."))

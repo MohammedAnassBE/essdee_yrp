@@ -1,4 +1,4 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const CAPABILITIES_METHOD = "essdee_yrp.purchase.web_capabilities"
 const LOT_METHOD = "essdee_yrp.purchase.lot_workspace"
@@ -6,7 +6,7 @@ const ITEM_METHOD = "essdee_yrp.purchase.item_editor"
 const ITEM_PRICE_METHOD = "essdee_yrp.purchase.item_price_workspace"
 
 export function getPurchaseCapabilities() {
-	return callMethod(`${CAPABILITIES_METHOD}.get_capabilities`)
+	return callRead(`${CAPABILITIES_METHOD}.get_capabilities`)
 }
 
 export function getItemEditor(name = null, duplicateFrom = null) {

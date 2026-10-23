@@ -1,9 +1,9 @@
-import { callMethod, downloadMethodFile } from "./frappe.js"
+import { callMethod, callRead, downloadMethodFile } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.finishing.web_workspace"
 
 export function getFinishingCapabilities() {
-	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
+	return callRead(`${WORKSPACE_METHOD}.get_capabilities`)
 }
 
 export function getFinishingPlanWorkspace(name) {

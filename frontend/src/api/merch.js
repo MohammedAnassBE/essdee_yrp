@@ -1,4 +1,4 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const IPD_METHOD = "essdee_yrp.merch.ipd_workspace"
 const LOT_METHOD = "essdee_yrp.merch.lot_workspace"
@@ -28,19 +28,19 @@ export function getMerchYarnProfile(yarnItem) {
 }
 
 export function getMerchCapabilities() {
-	return callMethod("essdee_yrp.merch.web_workspace.get_capabilities")
+	return callRead("essdee_yrp.merch.web_workspace.get_capabilities")
 }
 
 export function getMerchPurchaseCapabilities() {
-	return callMethod("essdee_yrp.merch_purchase.web_workspace.get_capabilities")
+	return callRead("essdee_yrp.merch_purchase.web_workspace.get_capabilities")
 }
 
 export function getMerchPdCapabilities() {
-	return callMethod("essdee_yrp.merch_pd.web_workspace.get_capabilities")
+	return callRead("essdee_yrp.merch_pd.web_workspace.get_capabilities")
 }
 
 export function getIpdListCapabilities() {
-	return callMethod(`${IPD_METHOD}.get_ipd_list_capabilities`)
+	return callRead(`${IPD_METHOD}.get_ipd_list_capabilities`)
 }
 
 export function getIpdWorkspace(name) {

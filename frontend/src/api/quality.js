@@ -1,10 +1,10 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const WORKSPACE = "essdee_yrp.quality.web_workspace"
 const INSPECTION = "essdee_yrp.essdee_yrp.doctype.sd_yrp_essdee_quality_inspection.sd_yrp_essdee_quality_inspection"
 
 export function getQualityCapabilities() {
-	return callMethod(`${WORKSPACE}.get_capabilities`)
+	return callRead(`${WORKSPACE}.get_capabilities`)
 }
 
 export function getInspectionWorkspace(name) {

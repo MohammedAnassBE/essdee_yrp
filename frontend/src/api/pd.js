@@ -1,4 +1,4 @@
-import { callMethod, uploadFile } from "./frappe.js"
+import { callMethod, callRead, uploadFile } from "./frappe.js"
 
 const PRODUCT_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product"
 const IMAGE_METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_product_image.sd_yrp_product_image"
@@ -6,7 +6,7 @@ const WORKSPACE = "essdee_yrp.product_development.web_workspace"
 const LOTWISE = "essdee_yrp.product_development.lotwise_workspace"
 
 export function getPdCapabilities() {
-	return callMethod(`${WORKSPACE}.get_capabilities`)
+	return callRead(`${WORKSPACE}.get_capabilities`)
 }
 
 export function getProductWorkspace(name) {

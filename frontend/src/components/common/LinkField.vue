@@ -106,7 +106,7 @@ const props = defineProps({
 	showValidationMessage: { type: Boolean, default: true },
 	cellEditor: { type: Boolean, default: false },
 	dropdown: { type: Boolean, default: true },
-	delay: { type: Number, default: 300 },
+	delay: { type: Number, default: 150 },
 	pageLength: { type: Number, default: 20 },
 	matchVisibleOnly: { type: Boolean, default: false },
 	fieldname: { type: String, default: "" },
@@ -187,7 +187,11 @@ const autocompletePt = computed(() => ({
 
 watch(
 	() => [props.modelValue, props.resetVersion],
-	() => { blurredOption = null; cancelSearch(); setValidation(); syncModelValue() },
+	(current, previous) => {
+		// An explicit reset must not reuse searches started before it.
+		if (previous && current[1] !== previous[1]) invalidatePendingReads()
+		blurredOption = null; cancelSearch(); setValidation(); syncModelValue()
+	},
 	{ immediate: true },
 )
 
@@ -315,7 +319,6 @@ function clear() {
 }
 
 function cancelSearch() {
-	invalidatePendingReads()
 	requestSequence += 1
 	suggestionSequence = null
 	suggestions.value = []

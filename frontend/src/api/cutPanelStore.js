@@ -1,4 +1,4 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.cut_panel_store.web_workspace"
 const MOVEMENT_METHOD = "essdee_yrp.cut_panel_store.movement_workspace"
@@ -7,7 +7,7 @@ const BOX_STICKER_METHOD = "essdee_yrp.cut_panel_store.box_sticker_workspace"
 const EXCEL_STICKER_METHOD = "essdee_yrp.cut_panel_store.excel_sticker_workspace"
 
 export function getCutPanelStoreCapabilities() {
-	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
+	return callRead(`${WORKSPACE_METHOD}.get_capabilities`)
 }
 
 export function getCutPanelMovementEditor(name = "", source = {}) {

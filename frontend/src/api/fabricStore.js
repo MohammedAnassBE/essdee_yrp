@@ -1,9 +1,9 @@
-import { callMethod } from "./frappe.js"
+import { callMethod, callRead } from "./frappe.js"
 
 const WORKSPACE_METHOD = "essdee_yrp.fabric_store.web_workspace"
 
 export function getFabricStoreCapabilities() {
-	return callMethod(`${WORKSPACE_METHOD}.get_capabilities`)
+	return callRead(`${WORKSPACE_METHOD}.get_capabilities`)
 }
 
 export function getWorkOrderWorkspace(workOrder) {

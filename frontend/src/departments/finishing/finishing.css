@@ -223,4 +223,10 @@ label.common-field:has(> .finishing-field-label) {
 	background: transparent;
 	border-color: transparent;
 	opacity: 1;
+	padding-right: 0;
+	appearance: textfield;
+}
+
+.finishing-entry--readonly .finishing-entry-input::-webkit-inner-spin-button {
+	display: none;
 }

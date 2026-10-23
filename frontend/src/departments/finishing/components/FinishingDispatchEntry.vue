@@ -16,7 +16,7 @@
 					<tr v-for="batch in batches" :key="batch.batch_row">
 						<td>{{ batch.grn }}</td><td>{{ batch.colour }}</td><td>{{ ratioText(batch.ratio) }}</td>
 						<td class="erp-number">{{ formatQuantity(batch.box_quantity) }}</td><td class="erp-number">{{ formatQuantity(batch.dispatched_boxes) }}</td><td class="erp-number">{{ formatQuantity(batch.available_boxes) }}</td>
-						<td><input v-model="state.batchBoxes[batch.batch_row]" type="number" min="0" step="1" :max="batch.available_boxes" class="finishing-entry-input" :aria-label="`${label} ${batch.batch_id || batch.batch_row} Dispatch boxes ${batch.grn} ${batch.colour}`" :disabled="disabled" /></td>
+						<td class="erp-number"><input v-model="state.batchBoxes[batch.batch_row]" type="number" min="0" step="1" :max="batch.available_boxes" class="finishing-entry-input" :aria-label="`${label} ${batch.batch_id || batch.batch_row} Dispatch boxes ${batch.grn} ${batch.colour}`" :disabled="disabled" /></td>
 						<td class="erp-number">{{ formatQuantity(Number(state.batchBoxes[batch.batch_row] || 0) * Number(batch.pieces_per_box || 0)) }}</td>
 					</tr>
 					<tr class="finishing-table__total-row"><td colspan="6">Total</td><td class="erp-number">{{ formatQuantity(totalBoxes) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>
@@ -29,7 +29,7 @@
 					<tr class="dispatch-entry__reference"><td>Balance</td><td></td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 					<tr v-for="colour in colours" :key="colour">
 						<td>{{ colour }}</td>
-						<td><input v-model="state.colourBoxes[colour]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${colour} boxes`" :disabled="disabled" /></td>
+						<td class="erp-number"><input v-model="state.colourBoxes[colour]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${colour} boxes`" :disabled="disabled" /></td>
 						<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(colourRatioPieces(colour, size)) }}</td>
 						<td class="erp-number">{{ formatQuantity(sizes.reduce((sum, size) => sum + colourRatioPieces(colour, size), 0)) }}</td>
 					</tr>
@@ -43,7 +43,7 @@
 					<tr class="dispatch-entry__reference"><td>Balance</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 					<tr v-for="colour in colours" :key="colour">
 						<td>{{ colour }}</td>
-						<td v-for="size in sizes" :key="size"><input v-model="state.colourSize[colour][size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${colour} ${size} boxes`" :disabled="disabled" /></td>
+						<td v-for="size in sizes" :key="size" class="erp-number"><input v-model="state.colourSize[colour][size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${colour} ${size} boxes`" :disabled="disabled" /></td>
 						<td class="erp-number">{{ formatQuantity(sizes.reduce((sum, size) => sum + Number(state.colourSize[colour][size] || 0), 0)) }}</td>
 					</tr>
 					<tr class="finishing-table__total-row"><td>Dispatch</td><td v-for="size in sizes" :key="size" class="erp-number" :class="{ 'dispatch-entry--over': over(size) }">{{ formatQuantity(bySize[size]) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>
@@ -56,7 +56,7 @@
 					<tr class="dispatch-entry__reference"><td>Balance</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(balance(size)) }}</td><td class="erp-number">{{ formatQuantity(balanceTotal) }}</td></tr>
 					<tr>
 						<td>Dispatch</td>
-						<td v-for="size in sizes" :key="size"><input v-model="state.legacy[size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${size} dispatch boxes`" :disabled="disabled" /></td>
+						<td v-for="size in sizes" :key="size" class="erp-number"><input v-model="state.legacy[size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${label} ${size} dispatch boxes`" :disabled="disabled" /></td>
 						<td class="erp-number">{{ formatQuantity(grandTotal) }}</td>
 					</tr>
 				</tbody>

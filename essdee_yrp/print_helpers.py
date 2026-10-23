@@ -67,12 +67,13 @@ def get_ipd_pf_details(ipd):
 
 
 def get_supplier_address_display(supplier):
-	"""Essdee-owned print adapter for a YRP Supplier's primary address."""
+	"""A YRP Supplier's primary address, else its only (or only Billing/Shipping) address."""
 	if not supplier:
 		return ""
+	from yrp.party_addresses import get_party_address
 	from yrp.yrp.doctype.yrp_supplier.yrp_supplier import get_supplier_address_display as get_address
 
-	return get_address(supplier) or ""
+	return get_address(supplier) or _address_display(get_party_address(supplier))
 
 
 def get_warehouse_name(warehouse):

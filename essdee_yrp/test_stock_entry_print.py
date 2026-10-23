@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 import frappe
-from frappe.tests import UnitTestCase
+from frappe.tests import IntegrationTestCase, UnitTestCase
 
 from essdee_yrp import print_helpers
 
@@ -75,3 +75,33 @@ class TestStockEntryPrint(UnitTestCase):
 		format_data = print_format_data("essdee_stock_transfer")
 		self.assertIn('text-center\\">\\n' + " " * 48 + "0\\n", format_data)
 		self.assertNotIn("---", format_data)
+
+
+class TestStockEntryPrintAddresses(IntegrationTestCase):
+	def test_to_supplier_with_only_a_non_primary_address_prints_that_address(self):
+		group = frappe.get_all("Supplier Group", filters={"is_group": 0}, pluck="name", limit=1)[0]
+		supplier = frappe.get_doc(
+			{
+				"doctype": "Supplier",
+				"supplier_name": f"STE Print {frappe.generate_hash(length=8)}",
+				"supplier_group": group,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Address",
+				"address_title": supplier.supplier_name,
+				"address_type": "Billing",
+				"address_line1": "12 Mill Road",
+				"city": "Tiruppur",
+				"state": "Tamil Nadu",
+				"country": "India",
+				"is_primary_address": 0,
+				"links": [{"link_doctype": "Supplier", "link_name": supplier.name}],
+			}
+		).insert(ignore_permissions=True)
+		doc = frappe.new_doc("YRP Stock Entry", purpose="Send to Warehouse", to_supplier=supplier.name)
+		print_helpers.prepare_stock_entry_print(doc)
+		self.assertEqual(doc.to_location_name, supplier.supplier_name)
+		self.assertIn("12 Mill Road", doc.to_address_details)
+		self.assertIn("Tiruppur", doc.to_address_details)

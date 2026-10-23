@@ -16,11 +16,15 @@ const stub = name => (props) => Vue.h(name, props)
 const yrpFile = path => readFileSync(new URL(`../../../yrp/yrp/${path}`, import.meta.url), "utf8")
 const doctypeFields = folder => JSON.parse(yrpFile(`yrp/doctype/${folder}/${folder}.json`)).fields
 const lotField = { fieldname: "lot", label: "Lot", fieldtype: "Link", options: "SD YRP Lot" }
+const propertySetters = JSON.parse(readFileSync(new URL("../../essdee_yrp/fixtures/property_setter.json", import.meta.url), "utf8"))
+const fixtureFilterNames = readFileSync(new URL("../../essdee_yrp/hooks.py", import.meta.url), "utf8")
 
-function grnLotOverride() {
-	const overrides = yrpFile("stock/dimensions.py").split("OPERATIONAL_DIMENSION_FIELD_OVERRIDES = {")[1].split("\n}")[0]
-	const grn = overrides.split('"YRP Goods Received Note": {')[1].split("}")[0]
-	return { in_standard_filter: /"in_standard_filter": 1/.test(grn) ? 1 : 0 }
+function withPropertySetters(doctype, fields) {
+	return fields.map((field) => {
+		const setters = propertySetters.filter((setter) =>
+			setter.doc_type === doctype && setter.field_name === field.fieldname && fixtureFilterNames.includes(`"${setter.name}"`))
+		return Object.fromEntries([...Object.entries(field), ...setters.map((setter) => [setter.property, setter.property_type === "Check" ? Number(setter.value) : setter.value])])
+	})
 }
 
 async function quickFilterFields(doctype, fields) {
@@ -60,7 +64,7 @@ async function quickFilterFields(doctype, fields) {
 }
 
 test("Delivery Challan list offers a Transfer Complete quick filter", async () => {
-	const fields = await quickFilterFields("YRP Delivery Challan", [...doctypeFields("yrp_delivery_challan"), lotField])
+	const fields = await quickFilterFields("YRP Delivery Challan", withPropertySetters("YRP Delivery Challan", [...doctypeFields("yrp_delivery_challan"), lotField]))
 	const transfer = fields.find(field => field.fieldname === "transfer_complete")
 	assert.equal(transfer?.fieldtype, "Check")
 	assert.equal(transfer.label, "Transfer Complete")
@@ -68,7 +72,7 @@ test("Delivery Challan list offers a Transfer Complete quick filter", async () =
 })
 
 test("GRN list offers Transfer Complete and Lot quick filters", async () => {
-	const fields = await quickFilterFields("YRP Goods Received Note", [...doctypeFields("yrp_goods_received_note"), { ...lotField, ...grnLotOverride() }])
+	const fields = await quickFilterFields("YRP Goods Received Note", withPropertySetters("YRP Goods Received Note", [...doctypeFields("yrp_goods_received_note"), lotField]))
 	assert.equal(fields.find(field => field.fieldname === "transfer_complete")?.fieldtype, "Check")
 	const lot = fields.find(field => field.fieldname === "lot")
 	assert.equal(lot?.fieldtype, "Link")

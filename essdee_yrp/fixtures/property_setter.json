@@ -778,5 +778,53 @@
   "property_type": "Text",
   "row_name": null,
   "value": "Open\nAssigned\nClosed\nReopen\nCancelled\nAmended\nPending Approval\nCancel Request Approved"
+ },
+ {
+  "default_value": null,
+  "doc_type": "YRP Delivery Challan",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "transfer_complete",
+  "is_system_generated": 0,
+  "modified": "2026-10-23 12:00:00",
+  "module": null,
+  "name": "YRP Delivery Challan-transfer_complete-in_standard_filter",
+  "property": "in_standard_filter",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "YRP Goods Received Note",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "lot",
+  "is_system_generated": 0,
+  "modified": "2026-10-23 12:00:00",
+  "module": null,
+  "name": "YRP Goods Received Note-lot-in_standard_filter",
+  "property": "in_standard_filter",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "YRP Goods Received Note",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "transfer_complete",
+  "is_system_generated": 0,
+  "modified": "2026-10-23 12:00:00",
+  "module": null,
+  "name": "YRP Goods Received Note-transfer_complete-in_standard_filter",
+  "property": "in_standard_filter",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
  }
 ]

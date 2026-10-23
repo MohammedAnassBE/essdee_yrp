@@ -12,7 +12,7 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import cint, escape_html, flt
+from frappe.utils import cint, flt
 from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
@@ -747,44 +747,29 @@ def _supplier_stock(item_variant, dimensions, grn, stock_cache):
 def validate_supplier_input_stock(wo, grn, plan, stock_cache):
 	"""Reject the GRN when the supplier lacks stock for its consumed inputs.
 
-	Mirrors Production API's ``validate_deliverable_stock``: one table listing
-	every short item and stock bucket.
+	Mirrors Production API's ``validate_deliverable_stock``: one line per
+	short item and stock bucket.
 	"""
 	need = defaultdict(float)
 	for item in plan:
 		key = (item["item_variant"], tuple(sorted(item["dimensions"].items())))
 		need[key] += flt(item["stock_qty"])
-	rows = []
+	lines = []
 	for key, required_qty in need.items():
 		item_variant, dimensions = key
 		balance = flt(_supplier_stock(item_variant, dict(dimensions), grn, stock_cache)[0])
 		if required_qty - balance <= QTY_TOLERANCE:
 			continue
-		details = [value for _fieldname, value in dimensions if value]
-		rows.append((item_variant, details, required_qty, balance))
-	if rows:
-		frappe.throw(get_stock_short_table(rows), title=_("Not enough stock"))
-
-
-def get_stock_short_table(rows):
-	"""HTML table of (item, dimension values, need, stock) rows."""
-	header = "".join(f"<th>{label}</th>" for label in (_("Item"), _("Need"), _("Stock"), _("Short")))
-	body = "".join(
-		"<tr><td>{0}{1}</td><td>{2}</td><td>{3}</td><td>{4}</td></tr>".format(
-			escape_html(item_variant),
-			f" <small class='text-muted'>{escape_html(' / '.join(map(str, details)))}</small>"
-			if details
-			else "",
-			f"{flt(need, 3):g}",
-			f"{flt(stock, 3):g}",
-			f"{flt(need - stock, 3):g}",
+		lines.append(
+			_("{0} - Need: {1}, Stock: {2}, Short: {3}").format(
+				item_variant,
+				f"{flt(required_qty, 3):g}",
+				f"{flt(balance, 3):g}",
+				f"{flt(required_qty - balance, 3):g}",
+			)
 		)
-		for item_variant, details, need, stock in rows
-	)
-	return (
-		f"<table class='table table-bordered table-sm'><thead><tr>{header}</tr></thead>"
-		f"<tbody>{body}</tbody></table>"
-	)
+	if lines:
+		frappe.throw("<br>".join(lines), title=_("Not enough stock"))
 
 
 def populate_grn_deliverables(grn, plan):

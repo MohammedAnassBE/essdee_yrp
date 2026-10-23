@@ -175,8 +175,7 @@ class TestLoosePieceStockGate(TestCase):
 			self._validate(self._garments([300, 386, 154, 66, 0, 439, 155]), 906)
 
 		message = str(raised.exception)
-		self.assertIn("VEST-Loose Piece-M", message)
-		self.assertIn("<td>1500</td><td>906</td><td>594</td>", message)
+		self.assertIn("VEST-Loose Piece-M - Need: 1500, Stock: 906, Short: 594", message)
 
 	def test_draft_preview_skips_the_gate(self):
 		stock = self._validate(self._garments([1500, 0, 0, 0, 0, 0, 0]), 0, {"skip_input_stock_check": 1})

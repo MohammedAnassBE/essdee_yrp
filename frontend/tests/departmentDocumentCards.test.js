@@ -118,6 +118,7 @@ test("each department routes its Delivery Challan and GRN lists, pages and edito
 			if (segment === "delivery-challans") assert.equal(view.matched.at(-1).components.default, cutPanelPage)
 			if (basePath === "/quality") continue
 			assert.equal(router.resolve(`${basePath}/${segment}/new`).name, `${prefix}-${param}-new`)
+			if (segment === "delivery-challans") assert.equal(list.matched.at(-1).props.default.deliveryChallanNewRouteName, `${prefix}-${param}-new`, basePath)
 			assert.equal(router.resolve(`${basePath}/${segment}/DOC-1/edit`).name, `${prefix}-${param}-edit`)
 		}
 	}
@@ -197,6 +198,7 @@ test("department GRN lists open the department GRN page", async () => {
 	const list = nodes(root, "list")[0]
 	assert.equal(list.props.doctype, "YRP Delivery Challan")
 	const grn = loadComponent(resolve("frontend/src/departments/cut-panel-store/CutPanelDocuments.vue"), {
+		"primevue/button": stub("button"),
 		"vue-router": { useRouter: () => ({}) },
 		"../../components/common/ListView.vue": stub("list"),
 		"../../router/listDocumentNavigation.js": { openListDocument: (_router, row, _snapshot, options) => navigations.push({ name: options.routeName, params: { [options.paramName]: row.name } }) },
@@ -217,6 +219,7 @@ test("department document lists show a permission notice without read access", a
 
 test("the Cut Panel Store document lists keep their Cut Panel Movement scope", () => {
 	const grn = loadComponent(resolve("frontend/src/departments/cut-panel-store/CutPanelDocuments.vue"), {
+		"primevue/button": stub("button"),
 		"vue-router": { useRouter: () => ({}) },
 		"../../components/common/ListView.vue": stub("list"),
 		"../../router/listDocumentNavigation.js": {},

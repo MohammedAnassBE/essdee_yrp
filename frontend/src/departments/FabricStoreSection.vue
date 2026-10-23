@@ -37,6 +37,7 @@ const props = defineProps({
 	purchaseOrderViewRouteName: { type: String, default: "fabric-purchase-order" },
 	purchaseOrderNewRouteName: { type: String, default: "fabric-purchase-order-new" },
 	deliveryChallanViewRouteName: { type: String, default: "fabric-delivery-challan" },
+	deliveryChallanNewRouteName: { type: String, default: "" },
 	goodsReceivedNoteViewRouteName: { type: String, default: "fabric-goods-received-note" },
 	goodsReceivedNoteNewRouteName: { type: String, default: "" },
 	reportKeys: { type: Array, default: () => ["stock_balance"] },
@@ -64,6 +65,7 @@ const sectionProps = computed(() => ({
 		filters: workOrderFilters.value,
 		viewRouteName: props[DOCUMENT_VIEW_ROUTES[props.section]],
 	} : {}),
+	...(props.section === "delivery_challans" ? { newRouteName: props.deliveryChallanNewRouteName } : {}),
 	...(props.section === "goods_received_notes" ? { newRouteName: props.goodsReceivedNoteNewRouteName } : {}),
 	...(props.section === "purchase_orders" ? {
 		viewRouteName: props.purchaseOrderViewRouteName,

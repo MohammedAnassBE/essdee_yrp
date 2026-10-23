@@ -515,7 +515,8 @@ def _source_values(defaults: Mapping, browser_values: Mapping | None = None) -> 
 		if key not in {"items", "item_details", "correction_items", "correction_item_details"}
 	}
 	for fieldname in _editable_header_fieldnames():
-		if browser_values and fieldname in browser_values:
+		# A blank editor field must not erase the Work Order default.
+		if browser_values and browser_values.get(fieldname) not in (None, ""):
 			values[fieldname] = browser_values[fieldname]
 	return values
 
@@ -548,7 +549,7 @@ def get_delivery_challan_workspace(
 			)
 		work_order = source_values.get("work_order")
 		if not work_order:
-			frappe.throw(_("Work Order is required to create a Delivery Challan."))
+			return _blank_delivery_challan_workspace()
 		return preview_delivery_challan_source(work_order, source_values)
 
 	doc = _get_delivery_challan(name)
@@ -589,6 +590,18 @@ def get_delivery_challan_workspace(
 		}
 	)
 	return workspace
+
+
+def _blank_delivery_challan_workspace() -> dict:
+	"""Return a new DC editor that waits for the operator to pick its Work Order."""
+
+	frappe.has_permission("YRP Delivery Challan", ptype="create", throw=True)
+	return _new_delivery_challan_workspace(
+		frappe.new_doc("YRP Delivery Challan"),
+		[],
+		[],
+		bool(frappe.has_permission("YRP Delivery Challan", ptype="submit")),
+	)
 
 
 def preview_delivery_challan_source(work_order: str, values=None) -> dict:

@@ -116,7 +116,10 @@
 					</header>
 					<div class="delivery-challan-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="delivery-challan-matrix__group">
-							<header><div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong></div></header>
+							<header>
+								<div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong></div>
+								<label v-if="canEditMatrixBlock(block.kind)" class="delivery-challan-matrix__fill" :title="isTableFilled(section.items, primaryValues(section.group)) ? 'Untick to remove quantity' : 'Tick to fill pending quantity'"><Checkbox :model-value="isTableFilled(section.items, primaryValues(section.group))" binary :aria-label="`Fill quantity for ${section.name || 'item'}`" @update:model-value="fillTable(section, $event)" /><span>Fill quantity</span></label>
+							</header>
 							<div class="erp-table-wrap delivery-challan-matrix__scroll" tabindex="0" role="region" :aria-label="`Delivery quantities for ${section.name || 'item'}`">
 								<table class="erp-data-table">
 									<thead><tr>
@@ -207,6 +210,7 @@
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import { groupItemsForDisplay, setAggregatedCellQuantity, setAggregatedItemField } from "../../engine/stock/groupItemsForDisplay.js"
 import InputText from "primevue/inputtext"
+import Checkbox from "primevue/checkbox"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
@@ -227,7 +231,7 @@ import {
 	saveDeliveryChallan,
 } from "../../api/fabricStore.js"
 import { searchLinkedDocument } from "../../api/frappe.js"
-import { deliveredQuantity, rowTotal } from "../../engine/stock/deliveryChallanTotals.js"
+import { deliveredQuantity, isTableFilled, pendingQuantity, rowTotal, setTableQuantities } from "../../engine/stock/deliveryChallanTotals.js"
 import { fillSupplierDefaults } from "../../utils/supplierDefaults.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
@@ -801,7 +805,6 @@ function conditionValue(fieldname) {
 }
 function primaryValues(group) { return group.primary_attribute_values?.length ? group.primary_attribute_values : ["default"] }
 function hasPrimaryAttribute(group) { return Boolean(group.primary_attribute && primaryValues(group).some((value) => value !== "default")) }
-function pendingQuantity(value) { return value?.pending_qty ?? value?.pending_quantity ?? 0 }
 function secondaryUom(row, value) { return String(row.values?.[value]?.secondary_uom || row.secondary_uom || "").trim() }
 function hasSecondaryQuantity(group) { return (group.items || []).some((row) => primaryValues(group).some((value) => Boolean(secondaryUom(row, value)))) }
 function logicalRowCount(groups) { return (groups || []).reduce((total, group) => total + (group.items?.length || 0), 0) }
@@ -837,6 +840,7 @@ function normalizeGroups(groups) {
 	return normalized
 }
 function setDisplayQuantity(row, value, quantity) { setAggregatedCellQuantity(row, value, quantity); markDirty() }
+function fillTable(section, fill) { setTableQuantities(section.items, primaryValues(section.group), fill, setDisplayQuantity) }
 function setDisplaySecondaryQuantity(row, value, quantity) { setAggregatedCellQuantity(row, value, quantity, "secondary_qty"); markDirty() }
 function setDisplayComment(row, comment) { setAggregatedItemField(row, "comments", comment); markDirty() }
 function itemSections(groups) {
@@ -931,8 +935,9 @@ function documentDeleted() {
 .delivery-challan-matrix__header > strong { padding: 3px 8px; color: var(--erp-accent); font-size: var(--erp-font-size-min); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
 .delivery-challan-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, var(--erp-surface)); }
 .delivery-challan-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
-.delivery-challan-matrix__group > header { display: flex; min-height: 40px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
+.delivery-challan-matrix__group > header { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .delivery-challan-matrix__group > header div { display: grid; gap: 2px; }
+.delivery-challan-matrix__fill { display: inline-flex; align-items: center; gap: 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; cursor: pointer; }
 .delivery-challan-matrix__group > header strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .delivery-challan-matrix__group > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .delivery-challan-matrix__scroll table { min-width: 760px; }

@@ -432,6 +432,29 @@ class TestFabricStoreDeliveryChallan(TestCase):
 		)
 		loader.assert_called_once_with("WO-1")
 
+	def test_source_preview_keeps_work_order_defaults_over_blank_editor_values(self):
+		defaults = {"work_order": "WO-1", "supplier": "SUPPLIER-1", "supplier_address": "ADDR-1", "to_warehouse": "WH-1", "items": []}
+		with patch(
+			"essdee_yrp.fabric_store.documents.delivery_challan.get_delivery_challan_defaults",
+			return_value=defaults,
+		):
+			preview = preview_delivery_challan_source(
+				"WO-1",
+				{"supplier_address": "", "to_warehouse": None, "vehicle_no": "TN-1"},
+			)
+
+		self.assertEqual(preview["values"]["supplier_address"], "ADDR-1")
+		self.assertEqual(preview["values"]["to_warehouse"], "WH-1")
+		self.assertEqual(preview["values"]["vehicle_no"], "TN-1")
+
+	def test_new_workspace_without_a_work_order_is_a_blank_editor(self):
+		workspace = get_delivery_challan_workspace(source={})
+
+		self.assertIsNone(workspace["record"]["name"])
+		self.assertEqual(workspace["matrices"]["items"], [])
+		self.assertIn("save", workspace["capabilities"])
+		self.assertIn("work_order", {field["fieldname"] for field in workspace["fields"]})
+
 	def test_new_save_merges_only_quantities_onto_authoritative_normal_and_correction_rows(self):
 		doc = self.make_document()
 		doc.name = "DC-NEW"

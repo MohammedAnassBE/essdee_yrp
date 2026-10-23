@@ -15,6 +15,11 @@ frappe.ui.form.on("SD YRP Finishing Plan Dispatch", {
 		}
 		if (frm.doc.docstatus === 1) {
 			frm.add_custom_button(__("Print Dispatch"), () => print_dispatch(frm));
+			if (frm.doc.stock_entry && frappe.model.can_print("YRP Stock Entry")) {
+				frm.add_custom_button(__("Print Stock Entry"), () =>
+					frappe.set_route("print", "YRP Stock Entry", frm.doc.stock_entry),
+				);
+			}
 			if (!frm.doc.stock_entry && can_write) {
 				frm.add_custom_button(__("Dispatch Stock"), () => show_dispatch_dialog(frm));
 			}

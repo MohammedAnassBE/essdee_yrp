@@ -18,6 +18,7 @@
 				<div class="finishing-dispatch__actions">
 					<CustomPrintButtons v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :record="record" :permissions="permissions" :disabled="busy" />
 					<DocumentPrintButton v-if="dispatchId && record.name && permissions.can_print" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :formats="workspace.print_formats || []" :disabled="busy" />
+					<DocumentPrintButton v-if="dispatchId && record.stock_entry" doctype="YRP Stock Entry" :name="record.stock_entry" label="Print Stock Entry" :disabled="busy" />
 					<DocumentDeleteButton v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :docstatus="record.docstatus" :disabled="busy || loading" :redirect-to="`${basePath}/dispatches`" />
 					<template v-if="draft">
 						<Button label="Fetch Items" icon="pi pi-refresh" severity="secondary" outlined :disabled="busy" @click="confirmFetch" />

@@ -58,6 +58,26 @@
 								<td><span class="item-matrix__uom"><DocumentLink doctype="UOM" :name="row.default_uom" :label="row.default_uom || '—'" /></span></td>
 							</tr>
 						</tbody>
+						<tfoot v-if="(group.items || []).length > 1">
+							<tr v-for="bucket in groupTotals(group)" :key="bucket.uom" class="item-matrix__footer">
+								<th v-if="footerLabelSpan(group)" :colspan="footerLabelSpan(group)" scope="row">{{ footerLabel(group, bucket) }}</th>
+								<td v-for="value in primaryValues(group)" :key="value" class="item-matrix__number item-matrix__qty">
+									<strong>{{ formatQty(bucket.values[value].qty) }}</strong>
+									<small v-if="bucket.values[value].secondary_qty">{{ formatQty(bucket.values[value].secondary_qty) }} {{ bucket.secondary_uom }}</small>
+									<small v-if="showFulfillment && showReceived && groupHasFulfillment(group)" class="item-matrix__received">Received {{ formatQty(bucket.values[value].received_qty) }}</small>
+									<small v-if="showFulfillment && groupHasFulfillment(group)" class="item-matrix__pending">{{ fulfillmentLabel(bucket.values[value]) }}</small>
+									<small v-if="displayAmount || (!showTotalColumn(group) && hasFooterAmount(bucket))" class="item-matrix__price">Amount {{ formatMoney(bucket.values[value].amount) }}</small>
+								</td>
+								<td v-if="showTotalColumn(group)" class="item-matrix__number item-matrix__total item-matrix__qty">
+									<strong>{{ formatQty(bucket.total.qty) }}</strong>
+									<small v-if="bucket.total.secondary_qty">{{ formatQty(bucket.total.secondary_qty) }} {{ bucket.secondary_uom }}</small>
+									<small v-if="showFulfillment && showReceived && groupHasFulfillment(group)" class="item-matrix__received">Received {{ formatQty(bucket.total.received_qty) }}</small>
+									<small v-if="showFulfillment && groupHasFulfillment(group)" class="item-matrix__pending">{{ fulfillmentLabel(bucket.total) }}</small>
+									<small v-if="hasFooterAmount(bucket)" class="item-matrix__price">Amount {{ formatMoney(bucket.total.amount) }}</small>
+								</td>
+								<td><strong v-if="!footerLabelSpan(group)">Total · </strong>{{ bucket.uom || "—" }}</td>
+							</tr>
+						</tfoot>
 					</table>
 				</div>
 			</article>
@@ -71,6 +91,7 @@ import { computed } from "vue"
 import DocumentLink from "../common/DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 import { stockRateLabels } from "../../utils/stockItemComposer.js"
+import { cellAmount, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
 
 const props = defineProps({
 	groups: { type: Array, default: () => [] },
@@ -161,8 +182,11 @@ function primaryValues(group) { return group.primary_attribute ? (group.primary_
 function primaryValueLabel(group, value) { return group.primary_attribute ? value : "Quantity" }
 function showTotalColumn(group) { return primaryValues(group).length > 1 }
 function rowTotal(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.qty || 0), 0) }
-function cellAmount(value) { return Number(value?.total_amount ?? value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || 0))) }
-function rowAmount(row) { return Object.values(row.values || {}).reduce((total, value) => total + cellAmount(value), 0) }
+function groupTotals(group) { return getUomTotals(group.items, primaryValues(group)) }
+function hasFooterAmount(bucket) { return displayAmount.value || Boolean(rateLabel.value && bucket.total.amount) }
+function groupHasFulfillment(group) { return (group.items || []).some(rowHasFulfillment) }
+function footerLabelSpan(group) { return (props.groupByItem ? 0 : 2) + leadingContextColumns(group).length + (group.attributes || []).length + trailingContextColumns(group).length }
+function footerLabel(group, bucket) { return groupTotals(group).length > 1 ? `Total · ${bucket.uom || "No UOM"}` : "Total" }
 function hasFulfillment(value) { return value && ["received_qty", "received_quantity", "pending_qty", "pending_quantity"].some((key) => value[key] !== undefined && value[key] !== null) }
 function hasAvailability(value) { return value && ["max_receivable_quantity", "pending_qty", "pending_quantity"].some((key) => value[key] !== undefined && value[key] !== null) }
 function rowHasFulfillment(row) { return Object.values(row.values || {}).some(hasFulfillment) }
@@ -354,6 +378,21 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 
 .item-matrix tbody tr:last-child td {
 	border-bottom: 0;
+}
+
+.item-matrix__footer th,
+.item-matrix__footer td {
+	position: sticky;
+	z-index: 1;
+	top: auto;
+	bottom: 0;
+	border-top: 1px solid var(--erp-border-strong);
+	border-bottom: 0;
+	background: var(--erp-surface-soft);
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+	font-weight: 750;
+	text-transform: none;
 }
 
 .item-matrix tbody tr:hover td {

@@ -80,6 +80,7 @@
 				<div class="stock-composer__quantity-card">
 					<header>
 						<div><h4>{{ activePrimary ? `${activePrimary} quantities` : quantityLabel }}</h4><p>{{ quantityHelp }}</p></div>
+						<strong v-if="activePrimaryValues.length > 1" class="stock-composer__entry-total">Total {{ formatQty(entryTotals.qty) }}<template v-if="rateEditable && entryTotals.amount"> · Amount {{ formatMoney(entryTotals.amount) }}</template></strong>
 						<span>{{ activeUom || "UOM" }}</span>
 					</header>
 					<div v-if="activePrimaryValues.length" class="stock-composer__quantity-grid">
@@ -125,6 +126,7 @@
 						<table>
 							<thead><tr><th>#</th><th>Item</th><th v-for="dimension in dimensions" :key="dimension.fieldname">{{ dimension.label }}</th><th v-for="attribute in group.attributes" :key="attribute">{{ attribute }}</th><template v-if="operation === 'purchase_order'"><th>Delivery location</th><th>Required by</th><th class="stock-composer__number">Discount</th></template><th v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number">{{ value }}</th><th v-if="!group.primary_attribute">{{ quantityLabel }}</th><th class="stock-composer__number">Total</th><th>UOM</th><th v-if="!readOnly"></th></tr></thead>
 								<tbody><tr v-for="(row, itemIndex) in group.items" :key="`${row.name}-${itemIndex}`"><td>{{ itemIndex + 1 }}</td><td><strong>{{ row.name }}</strong><span v-if="operation === 'purchase_order' && row.comments" class="stock-composer__row-note">{{ row.comments }}</span><slot name="row-warning" :row="row" :group="group" :group-index="groupIndex" :item-index="itemIndex" /></td><td v-for="dimension in dimensions" :key="dimension.fieldname">{{ row.dimensions?.[dimension.fieldname] || "—" }}</td><td v-for="attribute in group.attributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><template v-if="operation === 'purchase_order'"><td>{{ row.delivery_location || "—" }}</td><td>{{ formatDate(row.schedule_date) }}</td><td class="stock-composer__number">{{ formatQty(row.discount_percentage) }}%</td></template><td v-for="value in group.primary_attribute_values" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.[value]?.qty) }}</strong><span v-if="rateLabel" class="stock-composer__price">{{ rateLabel }} {{ formatMoney(row.values?.[value]?.rate) }}</span><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</span></template></td><td v-if="!group.primary_attribute" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(row.values?.default?.qty) }}</strong><span v-if="rateLabel" class="stock-composer__price">{{ rateLabel }} {{ formatMoney(row.values?.default?.rate) }}</span><template v-if="operation === 'purchase_order'"><span class="stock-composer__price">Amount {{ formatMoney(cellAmount(row.values?.default)) }}</span></template></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(rowTotal(row)) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(rowAmount(row)) }}</span></td><td>{{ row.default_uom || "—" }}</td><td v-if="!readOnly"><div class="stock-composer__actions"><button type="button" title="Edit item" :aria-label="`Edit ${row.name}`" :disabled="disabled || preparing" @click="editItem(groupIndex, itemIndex)"><i class="pi pi-pencil" aria-hidden="true"></i></button><button type="button" title="Delete item" :aria-label="`Delete ${row.name}`" class="stock-composer__delete" :disabled="disabled || preparing" @click="removeItem(groupIndex, itemIndex)"><i class="pi pi-trash" aria-hidden="true"></i></button></div></td></tr></tbody>
+							<tfoot v-if="group.items.length > 1"><tr v-for="bucket in groupTotals(group)" :key="bucket.uom" class="stock-composer__footer"><th :colspan="footerLabelSpan(group)" scope="row">{{ footerLabel(group, bucket) }}</th><td v-for="value in valueKeys(group)" :key="value" class="stock-composer__number stock-composer__metric"><strong>{{ formatQty(bucket.values[value].qty) }}</strong><span v-if="operation === 'purchase_order'" class="stock-composer__price">Amount {{ formatMoney(bucket.values[value].amount) }}</span></td><td class="stock-composer__number stock-composer__total stock-composer__metric"><strong>{{ formatQty(bucket.total.qty) }}</strong><span v-if="operation === 'purchase_order' || bucket.total.amount" class="stock-composer__price">Amount {{ formatMoney(bucket.total.amount) }}</span></td><td>{{ bucket.uom || "—" }}</td><td v-if="!readOnly"></td></tr></tfoot>
 						</table>
 					</div>
 				</div>
@@ -142,6 +144,7 @@ import { computed, reactive, ref, watch } from "vue"
 import LinkField from "../../components/common/LinkField.vue"
 import { callMethod } from "../../api/frappe.js"
 import { mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
+import { cellAmount, getEntryTotals, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
 
 const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
@@ -207,6 +210,7 @@ const quantityHelp = computed(() => {
 	if (props.operation === "lot_transfer") return "Enter the quantity to move from the source lot to the selected target lot."
 	return "Enter quantity against each applicable item value."
 })
+const entryTotals = computed(() => getEntryTotals(quantities, rateEditable.value ? receiptRates : {}, activePrimaryValues.value))
 const rowCount = computed(() => groups.value.reduce((total, group) => total + (group.items?.length || 0), 0))
 
 watch(() => props.modelValue, (value) => { if (JSON.stringify(value || []) !== JSON.stringify(groups.value)) groups.value = clone(value || []) }, { deep: true })
@@ -443,8 +447,10 @@ function sameGroup(left, right) {
 
 function groupKey(group, index) { return `${group.primary_attribute || "default"}-${(group.attributes || []).join("-")}-${index}` }
 function rowTotal(row) { return Object.values(row.values || {}).reduce((sum, value) => sum + Number(value?.qty || 0), 0) }
-function cellAmount(value) { return Number(value?.total_amount ?? value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || 0))) }
-function rowAmount(row) { return Object.values(row.values || {}).reduce((sum, value) => sum + cellAmount(value), 0) }
+function valueKeys(group) { return [...(group.primary_attribute_values || []), ...(group.primary_attribute ? [] : ["default"])] }
+function groupTotals(group) { return getUomTotals(group.items, valueKeys(group)) }
+function footerLabelSpan(group) { return 2 + dimensions.value.length + (group.attributes || []).length + (props.operation === "purchase_order" ? 3 : 0) }
+function footerLabel(group, bucket) { return groupTotals(group).length > 1 ? `Total · ${bucket.uom || "No UOM"}` : "Total" }
 function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
 function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
 function formatDate(value) {
@@ -878,6 +884,30 @@ function clone(value) { return value === undefined ? {} : JSON.parse(JSON.string
 .stock-composer__total {
 	color: var(--erp-accent) !important;
 	font-weight: 750;
+}
+
+.stock-composer__footer th,
+.stock-composer__footer td {
+	position: sticky;
+	z-index: 1;
+	bottom: 0;
+	border-top: 1px solid var(--erp-border-strong);
+	background: var(--erp-surface-soft);
+	color: var(--erp-text);
+	font-weight: 750;
+}
+
+.stock-composer__footer th {
+	top: auto;
+	font-size: var(--erp-font-size-caption);
+	text-transform: none;
+}
+
+.stock-composer__entry-total {
+	margin: 0 var(--erp-space-2) 0 auto;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-caption);
+	font-variant-numeric: tabular-nums;
 }
 
 .stock-composer__actions {

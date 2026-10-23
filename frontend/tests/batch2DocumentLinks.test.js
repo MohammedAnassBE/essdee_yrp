@@ -12,6 +12,7 @@ import * as childFields from '../src/components/common/childTableFields.js'
 import * as groups from '../src/engine/stock/groupItemsForDisplay.js'
 import * as workOrderTotals from '../src/departments/fabric-store/workOrderTotals.js'
 import * as stockItemComposer from '../src/utils/stockItemComposer.js'
+import * as stockItemTotals from '../src/engine/stock/stockItemTotals.js'
 import * as lotViews from '../src/departments/purchase/lot/lotViews.js'
 import * as lotEditor from '../src/departments/purchase/lot/lotEditor.js'
 import * as program from '../src/engine/lotClothProgram.js'
@@ -34,7 +35,7 @@ const defaults = {
  '../../utils/documentValues.js': values, '../../utils/documentOverview.js': overview,
  './entryGrid.js': grid, './childTableFields.js': childFields,
  '../../engine/stock/groupItemsForDisplay.js': groups,
- '../../utils/stockItemComposer.js': stockItemComposer,
+ '../../utils/stockItemComposer.js': stockItemComposer, '../../engine/stock/stockItemTotals.js': stockItemTotals,
  './lotViews.js': lotViews, './lotEditor.js': lotEditor, '../../purchase/lot/lotEditor.js': lotEditor,
  '../../purchase/lot/lotViews.js': lotViews, '../../../engine/lotClothProgram.js': program,
  './processCostViews.js': costViews, './purchaseViews.js': priceViews, './lotOcrView.js': lotOcrView,

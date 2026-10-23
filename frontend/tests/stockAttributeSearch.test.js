@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as stockItemComposer from "../src/utils/stockItemComposer.js"
+import * as stockItemTotals from "../src/engine/stock/stockItemTotals.js"
 
 const rootPath = fileURLToPath(new URL("../../", import.meta.url))
 const tick = async () => { await new Promise((resolve) => setImmediate(resolve)); await Vue.nextTick() }
@@ -12,7 +13,7 @@ const Composer = loadComponent(resolve(rootPath, "frontend/src/components/stock/
 	"primevue/button": (props) => Vue.h("button", props, props.label),
 	"primevue/message": (props, { slots }) => Vue.h("message", props, slots.default?.()),
 	"../../components/common/LinkField.vue": (props) => Vue.h("link-field", props),
-	"../../utils/stockItemComposer.js": stockItemComposer,
+	"../../utils/stockItemComposer.js": stockItemComposer, "../../engine/stock/stockItemTotals.js": stockItemTotals,
 	"../../api/frappe.js": { callMethod: async (method, args) => { calls.push({ method, args }); return ["White", "White Melange"] } },
 })
 

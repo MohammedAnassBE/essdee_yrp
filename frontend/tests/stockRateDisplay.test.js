@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent, typeInto } from "../../scripts/helpers/vue_renderer.mjs"
 import * as stockItemComposer from "../src/utils/stockItemComposer.js"
+import * as stockItemTotals from "../src/engine/stock/stockItemTotals.js"
 import * as stockHeaderFields from "../src/departments/fabric-store/stockHeaderFields.js"
 import * as fieldErrors from "../src/utils/fieldErrors.js"
 import * as linkTarget from "../src/utils/linkTarget.js"
@@ -22,7 +23,7 @@ const modules = {
 	"primevue/button": Button,
 	"primevue/message": Container,
 	"../../components/common/LinkField.vue": LinkField,
-	"../../utils/stockItemComposer.js": stockItemComposer,
+	"../../utils/stockItemComposer.js": stockItemComposer, "../../engine/stock/stockItemTotals.js": stockItemTotals,
 	"../../api/frappe.js": { callMethod: async () => [] },
 }
 const Composer = loadComponent(resolve(rootPath, "frontend/src/components/stock/StockItemComposer.vue"), modules)
@@ -30,7 +31,7 @@ const Matrix = loadComponent(resolve(rootPath, "frontend/src/components/stock/St
 	"../common/DocumentLink.vue": Control,
 	"../../utils/linkTarget.js": linkTarget,
 	"../../engine/stock/groupItemsForDisplay.js": displayGroups,
-	"../../utils/stockItemComposer.js": stockItemComposer,
+	"../../utils/stockItemComposer.js": stockItemComposer, "../../engine/stock/stockItemTotals.js": stockItemTotals,
 })
 const textContent = (node) => node.type === "comment" ? "" : node.text + node.children.map(textContent).join("")
 const button = (root, label) => findNodes(root, node => node.type === "button" && node.props.label === label)[0]

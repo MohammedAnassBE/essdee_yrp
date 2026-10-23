@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent, typeInto } from "../../scripts/helpers/vue_renderer.mjs"
 import * as stockItemComposer from "../src/utils/stockItemComposer.js"
+import * as stockItemTotals from "../src/engine/stock/stockItemTotals.js"
 
 globalThis.Document ??= class Document {}
 globalThis.ShadowRoot ??= class ShadowRoot {}
@@ -18,7 +19,7 @@ const editor = { dimensions: [{ fieldname: "lot", label: "Lot", options: "SD YRP
 function mountComposer(operation) {
 	const component = loadComponent(resolve(rootPath, "frontend/src/components/stock/StockItemComposer.vue"), {
 		"primevue/button": Button, "primevue/message": Message, "../../components/common/LinkField.vue": LinkField,
-		"../../utils/stockItemComposer.js": stockItemComposer,
+		"../../utils/stockItemComposer.js": stockItemComposer, "../../engine/stock/stockItemTotals.js": stockItemTotals,
 		"../../api/frappe.js": { callMethod: async () => [] },
 	})
 	const lines = []

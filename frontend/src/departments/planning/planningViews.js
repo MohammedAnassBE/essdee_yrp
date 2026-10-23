@@ -67,6 +67,13 @@ export const PLANNING_WORKSPACES = [
 	},
 	...documentWorkspaces("/planning"),
 	{
+		key: "dispatches",
+		label: "Finishing Plan Dispatch",
+		description: "Dispatch packed boxes from several Finishing Plans together.",
+		icon: "pi pi-truck",
+		to: "/planning/dispatches",
+	},
+	{
 		key: "box_stickers",
 		label: "Box Sticker Print",
 		description: "Prepare, preview and print size-based box labels.",
@@ -85,13 +92,6 @@ export const PLANNING_WORKSPACES = [
 export function visiblePlanningWorkspaces(sections = {}) {
 	return PLANNING_WORKSPACES.filter((item) => sections[item.key]?.can_read)
 }
-
-export const REPORT_GROUPS = [
-	{ value: "cutting", label: "Cutting" },
-	{ value: "sewing", label: "Sewing" },
-	{ value: "finishing", label: "Finishing" },
-	{ value: "production", label: "Production / WIP" },
-]
 
 export const PLANNING_PRODUCTION_REPORTS = [
 	{ key: "work_order", value: "work-order", label: "Work Order", icon: "pi pi-briefcase" },
@@ -112,14 +112,6 @@ export const PLANNING_PRODUCTION_REPORTS = [
 
 export function visibleProductionReports(reports = {}) {
 	return PLANNING_PRODUCTION_REPORTS.filter((report) => reports[report.key]?.can_read === true)
-}
-
-export function visibleReportGroups(groups = {}) {
-	return REPORT_GROUPS.filter((group) => groups[group.value] === true)
-}
-
-export function activeReportGroup(visibleGroups, requested) {
-	return visibleGroups.some((group) => group.value === requested) ? requested : visibleGroups[0]?.value || ""
 }
 
 export function isCurrentRecordRequest(requestedName, currentName, sequence, currentSequence) {

@@ -9,6 +9,8 @@
 					:input-id="`quick-filter-${field.fieldname}`"
 					:model-value="modelValue[field.fieldname] || ''"
 					:doctype="field.options"
+					:fieldname="field.fieldname"
+					:aria-label="field.label"
 					:filters="linkFilters(field)"
 					:placeholder="`All ${field.label}`"
 					match-visible-only

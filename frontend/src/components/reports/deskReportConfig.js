@@ -174,9 +174,3 @@ export function combinedDeskReports(departments, capabilities) {
 	const tabs = departments.flatMap((department) => departmentDeskReports(department, capabilities))
 	return tabs.filter((tab, index) => tabs.findIndex((other) => other.value === tab.value) === index)
 }
-
-export function selectReportTab(tabs, current, requested) {
-	if (requested && tabs.some(tab => tab.value === requested)) return requested
-	if (tabs.some(tab => tab.value === current)) return current
-	return tabs[0]?.value || ""
-}

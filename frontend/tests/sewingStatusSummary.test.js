@@ -8,7 +8,7 @@ function setup(payload) {
 		.split("<script setup>")[1].split("</script>")[0].replace(/^import .*$/gm, "")
 	const filters = { lot: [], item: [], colour: [], part: [], fromDate: "", toDate: "" }
 	return new Function("defineProps", "useSewingContext", "ref", "computed", "watch", "onBeforeUnmount", "getSewingStatusSummary",
-		`${source}\ndata.value = arguments[7]; return { columns, visible, totals, filters: props.filters }`)(
+		`${source}\ndata.value = arguments[7]; return { columns, visible, totals, options, filters: props.filters }`)(
 		() => ({ filters }), () => ({ supplier: ref("S-0172"), beginRequest() {}, isCurrent() { return true } }),
 		ref, computed, () => {}, () => {}, () => {}, payload,
 	)
@@ -39,4 +39,28 @@ test("Status Summary preserves readiness and authoritative quantities while filt
 	assert.equal(state.visible.value.length, 1)
 	assert.equal(state.visible.value[0]["Ready for AQL"], "Under AQL")
 	assert.equal(state.totals.value["Order Qty"], 20)
+})
+
+test("Status Summary Lot filter options show the lot's item as a searchable description", () => {
+	const state = setup({
+		header1: ["Item", "SD YRP Lot"], header2: ["Order Qty"], header3: [],
+		data: [{ item: "Maze Capri", lot: "F0325-65", "Order Qty": 1 }, { item: "Maze Capri", lot: "F0325-65", "Order Qty": 2 }, { item: "Tank Top", lot: "C0925-59", "Order Qty": 3 }],
+	})
+	assert.deepEqual(state.options("lot"), [
+		{ label: "F0325-65", value: "F0325-65", description: "Maze Capri" },
+		{ label: "C0925-59", value: "C0925-59", description: "Tank Top" },
+	])
+	assert.deepEqual(state.options("item"), [
+		{ label: "Maze Capri", value: "Maze Capri", description: "" },
+		{ label: "Tank Top", value: "Tank Top", description: "" },
+	])
+	const source = fs.readFileSync(new URL("../src/departments/sewing/reports/SewingStatusSummary.vue", import.meta.url), "utf8")
+	assert.match(source, /<MultiSelectField v-for="field in identities"/)
+})
+
+test("Item Summary Lot filter renders lot options with item descriptions", () => {
+	const source = fs.readFileSync(new URL("../src/departments/sewing/reports/SewingItemSummary.vue", import.meta.url), "utf8")
+	assert.match(source, /<MultiSelectField input-id="item-summary-lots"[^>]*:options="lotOptions"/)
+	assert.match(source, /description: options\.value\.lotItems\[lot\]/)
+	assert.match(source, /lotItems: result\?\.lot_items \|\| \{\}/)
 })

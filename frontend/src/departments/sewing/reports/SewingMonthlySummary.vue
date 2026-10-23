@@ -1,14 +1,11 @@
 <template>
 	<section data-sewing-report="monthly-summary" aria-label="Monthly Summary">
-		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Monthly Summary" :loading="loading" :generated="generated" :has-results="data.rows?.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
+		<ReportShell :actions="[{ label: 'Print', icon: 'pi pi-print', visible: generated && data.rows?.length > 0 && !loading, command: handlePrint }]" :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Monthly Summary" :loading="loading" :generated="generated" :has-results="data.rows?.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
 				<DateField v-model="filters.fromDate" label="From Date" :disabled="loading" />
 				<DateField v-model="filters.toDate" label="To Date" :disabled="loading" />
 				<LinkField v-model="filters.inputType" doctype="SD YRP Sewing Plan Input Type" label="Input Type" :show-open-button="false" show-clear :disabled="loading || filters.showGrn" />
 				<div class="common-field monthly-grn"><label for="monthly-grn">GRN mode</label><Checkbox input-id="monthly-grn" v-model="filters.showGrn" binary :disabled="loading" /></div>
-			</template>
-			<template #actions>
-				<Button v-if="generated && data.rows?.length > 0 && !loading" type="button" label="Print" icon="pi pi-print" severity="secondary" outlined class="erp-action-button" @click="handlePrint" />
 			</template>
 			<SewingReportMatrix label="Monthly quantities by date and Item / Part" :columns="columns" :rows="data.rows || []" :totals="data.grand_total" total-label="Grand Total" inline-filters />
 		</ReportShell>
@@ -17,7 +14,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { getSewingMonthlySummary } from "../../../api/sewing.js"
@@ -66,4 +62,6 @@ onBeforeUnmount(() => { mounted = false; beginRequest() })
 
 <style scoped>
 .monthly-grn { display: grid; align-content: start; gap: 10px; font-size: var(--erp-font-size-caption); font-weight: 650; }
+/* While scrolling, the matrix shrinks to the page; once Copy Report makes it overflow:visible it widens to its table. */
+[data-sewing-report="monthly-summary"] :deep(.sewing-report-matrix) { min-width: auto; }
 </style>

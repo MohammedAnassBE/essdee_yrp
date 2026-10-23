@@ -1,15 +1,11 @@
 <template>
 	<section data-finishing-report="finishing-plan-report" aria-label="Finishing Plan Report">
-		<ReportShell :export-source="deskExportSource('finishing-plan', activeFilters, columns, [], inlineFilter.matchingIndices.value)" title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]" :export-source="deskExportSource('finishing-plan', activeFilters, columns, [], inlineFilter.matchingIndices.value)" title="Finishing Plan Report" :generated="generated" :loading="loading" :error="layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.item" doctype="Item" label="Item" placeholder="Search item…" :filters="{ has_variants: 1 }" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.season" doctype="SD YRP Product Season" label="Season" placeholder="Search season…" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.productCategory" doctype="SD YRP Product Category" label="Product Category" placeholder="Search category…" :show-open-button="false" show-clear />
-			</template>
-			<template #actions>
-				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-				<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
 			</template>
 			<template #status>
 				<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" />
@@ -42,7 +38,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"

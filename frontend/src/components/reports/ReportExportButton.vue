@@ -1,6 +1,6 @@
 <template>
 	<Button
-		v-if="canExport"
+		v-if="canExport && !hideButton"
 		type="button"
 		label="Export"
 		icon="pi pi-download"
@@ -56,6 +56,8 @@ const props = defineProps({
 	source: { type: Object, required: true },
 	getRows: { type: Function, required: true },
 	disabled: { type: Boolean, default: false },
+	/** Opened from a menu through the exposed `open`. */
+	hideButton: { type: Boolean, default: false },
 })
 
 const canExport = ref(false)
@@ -68,6 +70,7 @@ const hasAppliedFilters = computed(() => Object.keys(props.source.appliedFilters
 const preview = computed(() => csvPreview(previewRows.value, settings))
 
 onMounted(async () => { canExport.value = await getExportPermission(props.source) })
+defineExpose({ open, canExport })
 
 function open() {
 	error.value = ""

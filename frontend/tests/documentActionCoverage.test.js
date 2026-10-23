@@ -67,7 +67,7 @@ test("D1–D7 page actions use the saved identity, status, and list destination"
 		["CuttingBulkLaySheet", "SD YRP Cutting Bulk Lay Sheets", 'redirect-to="/cutting/bulk-lay-sheets"'],
 		["CuttingLaySheetPlanner", "SD YRP Cutting Laysheet Planner", 'redirect-to="/cutting/lay-sheet-planner"'],
 		["finishing/FinishingPlan", "SD YRP Finishing Plan", ':redirect-to="backTo"'],
-		["finishing/FinishingDispatch", "SD YRP Finishing Plan Dispatch", 'redirect-to="/finishing/dispatches"'],
+		["finishing/FinishingDispatch", "SD YRP Finishing Plan Dispatch", ':redirect-to="`${basePath}/dispatches`"'],
 		["purchase/ItemPage", "Item", 'redirect-to="/purchase/items"'],
 	]) {
 		const text = source(`departments/${path}`)

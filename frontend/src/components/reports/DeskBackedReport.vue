@@ -1,15 +1,14 @@
 <template>
-	<ReportShell :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" :export-source="exportSource" @generate="generate" @reset="reset">
+	<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }]" :title="config.title" :generated="generated" :loading="loading" :error="filterError || layoutError" :has-results="rows.length > 0" :generate-disabled="isBusy" :status-only="statusOnly" :export-source="exportSource" @generate="generate" @reset="reset">
 		<template #filters>
 			<template v-for="field in visibleFilters" :key="field.fieldname">
-				<LinkField v-if="field.fieldtype === 'Link'" v-model="filters[field.fieldname]" :doctype="field.options" :label="field.label" :filters="field.filters" :required="Boolean(field.reqd)" :show-open-button="false" show-clear />
+				<LinkField v-if="field.fieldtype === 'Link'" v-model="filters[field.fieldname]" :doctype="field.options" :fieldname="field.fieldname" :label="field.label" :filters="field.filters" :required="Boolean(field.reqd)" :show-open-button="false" show-clear />
 				<DateField v-else-if="field.fieldtype === 'Date'" v-model="filters[field.fieldname]" :label="field.label" :required="Boolean(field.reqd)" />
 				<label v-else-if="field.fieldtype === 'Int'" class="desk-report-field"><span>{{ field.label }}</span><InputNumber v-model="filters[field.fieldname]" :required="Boolean(field.reqd)" :use-grouping="false" :max-fraction-digits="0" fluid /></label>
 				<label v-else-if="field.fieldtype === 'Select'" class="desk-report-field"><span>{{ field.label }}</span><Select v-model="filters[field.fieldname]" :options="field.options" option-label="label" option-value="value" fluid /></label>
 				<label v-else-if="field.fieldtype === 'Check'" class="desk-report-check"><Checkbox v-model="filters[field.fieldname]" binary :true-value="1" :false-value="0" /><span>{{ field.label }}</span></label>
 			</template>
 		</template>
-		<template #actions><Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" /></template>
 		<template #status><ReportRunStatus :state="state" :job="job" :error="reportError" @rebuild="generate" /></template>
 		<div class="erp-table-wrap report-table-frame" role="region" :aria-label="`${config.title} results`" tabindex="0">
 			<table class="erp-data-table desk-report-table">

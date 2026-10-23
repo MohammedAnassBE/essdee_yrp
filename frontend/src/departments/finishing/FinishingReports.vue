@@ -1,48 +1,26 @@
 <template>
-	<DepartmentPage title="Finishing Reports" back-to="/finishing" back-label="Finishing" :show-title="false" :embedded="embedded" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Reports" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-reports erp-workspace">
 			<div v-if="loading" class="finishing-reports__loading" aria-label="Loading Finishing reports"><Skeleton height="56px" /><Skeleton height="320px" /></div>
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="!tabs.length" title="Reports unavailable" message="You do not have permission to view Finishing reports." :retryable="false" />
-			<template v-else>
-				<div class="finishing-reports__mobile common-field">
-					<label for="finishing-report-view">Report</label>
-					<Select input-id="finishing-report-view" v-model="active" :options="tabs" option-label="label" option-value="value" aria-label="Report" fluid />
-				</div>
-				<Tabs v-model:value="active" scrollable class="erp-tabs finishing-reports__tabs">
-					<TabList class="finishing-reports__desktop">
-						<Tab v-for="tab in tabs" :key="tab.value" :value="tab.value"><i :class="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></Tab>
-					</TabList>
-					<TabPanels class="finishing-reports__panels">
-						<TabPanel :key="active" :value="active">
-							<component :is="currentTab.component" v-bind="currentTab.props" />
-						</TabPanel>
-					</TabPanels>
-				</Tabs>
-			</template>
+			<ReportWorkspace v-else :reports="tabs" label="Finishing reports" storage-key="finishing" />
 		</div>
 	</DepartmentPage>
 </template>
 
 <script setup>
-import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
-import Tab from "primevue/tab"
-import TabList from "primevue/tablist"
-import TabPanel from "primevue/tabpanel"
-import TabPanels from "primevue/tabpanels"
-import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, onMounted, ref } from "vue"
-import { useRoute, useRouter } from "vue-router"
+import { useRoute } from "vue-router"
 
 import { getFinishingCapabilities } from "../../api/finishing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
 import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
+import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
 import "./finishing.css"
-
-defineProps({ embedded: { type: Boolean, default: false } })
 
 const REPORTS = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue")) },
@@ -56,16 +34,10 @@ const REPORTS = [
 ]
 
 const route = useRoute()
-const router = useRouter()
 const loading = ref(true)
 const loadError = ref("")
 const reports = ref({})
 const tabs = computed(() => [...REPORTS.filter((report) => reports.value[report.key]?.can_read).map((report) => ({ ...report, props: report.capabilityProps?.(reports.value[report.key]) })), ...departmentDeskReports(route.path.split("/")[1], reports.value).map(tab => ({ ...tab, component: DeskBackedReport }))])
-const active = computed({
-	get: () => (tabs.value.some((tab) => tab.value === route.query.report) ? route.query.report : tabs.value[0]?.value),
-	set: (report) => router.replace({ query: { ...route.query, report } }),
-})
-const currentTab = computed(() => tabs.value.find((tab) => tab.value === active.value) || tabs.value[0])
 
 async function load() {
 	loading.value = true
@@ -84,16 +56,6 @@ onMounted(load)
 </script>
 
 <style scoped>
-.finishing-reports { display: grid; min-width: 0; gap: var(--erp-space-2); padding-top: 0; }
+.finishing-reports { display: grid; min-width: 0; gap: var(--erp-space-2); padding-top: var(--erp-space-2); }
 .finishing-reports__loading { display: grid; gap: var(--erp-space-3); }
-.finishing-reports__tabs { min-width: 0; }
-.finishing-reports__tabs :deep(.p-tab) { display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 9px 14px; font-size: 0.86rem; white-space: nowrap; }
-.finishing-reports__panels { padding: 12px 0 0; background: transparent; }
-.finishing-reports__panels :deep(.p-tabpanel) { padding: 0; }
-.finishing-reports__mobile { display: none; }
-@media (max-width: 700px) {
-	.finishing-reports__desktop { display: none; }
-	.finishing-reports__mobile { display: grid; gap: 6px; font-size: var(--erp-font-size-caption); font-weight: 650; }
-	.finishing-reports__panels { padding-top: 6px; }
-}
 </style>

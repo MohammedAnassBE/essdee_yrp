@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Dispatch Percentage">
-		<ReportShell :export-source="{ reportKey: 'planning-dispatch-percentage' }" title="Dispatch Percentage" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }]" :export-source="{ reportKey: 'planning-dispatch-percentage' }" title="Dispatch Percentage" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<label class="common-field"><span class="erp-field-label">Percentage *</span><InputNumber v-model="filters.percentage" :min="1" :max="100" :max-fraction-digits="3" aria-label="Percentage" fluid /></label>
 				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
@@ -8,9 +8,6 @@
 				<Button label="Paste values" severity="secondary" outlined @click="openPaste" />
 				<small>First date each Finishing Plan reached the percentage.</small>
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
-			</template>
-			<template #actions>
-				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" /></template>
 			

@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Rework Details" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-rework erp-workspace" data-finishing-page="rework-details">
-			<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rework Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+			<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rework Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable :before-copy="expandAllForCopy" keep-results-while-loading @generate="generate" @reset="reset">
 				<template #filters>
 					<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
 					<LinkField v-model="filters.item" doctype="Item" label="Item" placeholder="Search item…" :show-open-button="false" show-clear />
@@ -19,7 +19,7 @@
 						<Button label="Download Excel" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" :loading="downloading" @click="download" />
 					</FinishingReportHeading>
 					<p v-if="!canWrite && !appliedShowReworked" class="finishing-empty">You have read-only access. GRN Rework Item write permission is required to clear stock.</p>
-					<FinishingSeriesTable :rows="seriesRows" :types="data.types || []" :expanded="expanded" label="Rework sources" printable @toggle="toggle" @open-grn="openGrn" @print="printRework">
+					<FinishingSeriesTable :rows="seriesRows" :types="data.types || []" :expanded="expanded" :expand-all="copyingAll" label="Rework sources" printable @toggle="toggle" @open-grn="openGrn" @print="printRework">
 						<template #detail="{ detail }">
 							<FinishingReworkEntry
 								v-for="(group, key) in detail.rework_detail"
@@ -29,7 +29,7 @@
 								:received-type="key.split('-')[0]"
 								:size-field="detail.size"
 								:items="group.items"
-								:editable="canWrite && !appliedShowReworked"
+								:editable="canWrite && !appliedShowReworked && !copyingAll"
 								:busy="busy"
 								@changed="group.changed = 1"
 								@update-rejection="updateRejection(group, detail.lot)"
@@ -51,7 +51,7 @@ import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import InputText from "primevue/inputtext"
 import { useToast } from "primevue/usetoast"
-import { computed, reactive, ref } from "vue"
+import { computed, nextTick, reactive, ref } from "vue"
 
 import { downloadReworkDetails, getReworkDetails, updateReworkPartial, updateReworkRejection } from "../../api/finishing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
@@ -152,6 +152,13 @@ async function download() {
 	} finally {
 		downloading.value = false
 	}
+}
+
+const copyingAll = ref(false)
+async function expandAllForCopy() {
+	copyingAll.value = true
+	await nextTick()
+	return () => { copyingAll.value = false }
 }
 
 function toggle(series) {

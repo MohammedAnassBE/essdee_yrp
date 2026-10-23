@@ -204,28 +204,27 @@ async function qualityReports(capabilities, query = {}) {
 		"../../components/DepartmentPage.vue": container,
 		"../../components/common/WorkspaceLoadError.vue": stub("error"),
 		"../../components/reports/DeskBackedReport.vue": stub("desk-report"),
+		"./reportWorkspace.js": await import("../src/components/reports/reportWorkspace.js"),
 	}
-	for (const name of ["select", "skeleton", "tab", "tablist", "tabpanel", "tabpanels", "tabs"]) modules[`primevue/${name}`] = stub(name)
+	for (const name of ["select", "skeleton", "inputtext"]) modules[`primevue/${name}`] = stub(name)
 	const root = mountComponent(component("QualityReports", modules), {})
 	await tick()
 	return { root, route, navigations }
 }
 
-test("Quality report tabs gate the RFT report by its capability and preserve query/hash navigation", async () => {
+test("Quality reports gate the RFT report by its capability and show a lone report without a picker", async () => {
 	for (const capabilities of [{}, { sections: { reports: { can_read: true } } }, { reports: { quality_inspection_rft: { can_read: false } } }]) {
 		const denied = await qualityReports(capabilities)
 		assert.equal(nodes(denied.root, "desk-report").length, 0)
 		assert.equal(nodes(denied.root, "error")[0].props.title, "Reports unavailable")
 	}
 	const page = await qualityReports({ reports: { quality_inspection_rft: { can_read: true } } }, { report: "unknown", lot: "LOT" })
-	assert.equal(nodes(page.root, "desk-report")[0].props["report-key"], "quality-inspection-rft")
-	const select = nodes(page.root, "select")[0]
-	assert.equal(select.props.modelValue, "quality-inspection-rft")
-	assert.deepEqual(select.props.options.map(({ label, value }) => ({ label, value })), [{ label: "Quality Inspection RFT", value: "quality-inspection-rft" }])
-	select.props["onUpdate:modelValue"]("quality-inspection-rft")
-	assert.deepEqual(page.navigations, [{ query: { report: "quality-inspection-rft", lot: "LOT" }, hash: "#report" }])
+	assert.equal(nodes(page.root, "desk-report")[0].props.reportKey, "quality-inspection-rft")
+	assert.equal(nodes(page.root, "select").length, 0)
+	assert.equal(nodes(page.root, "inputtext").length, 0)
 	page.route.query = { report: "quality-inspection-rft" }; await tick()
-	assert.equal(nodes(page.root, "tabs")[0].props.value, "quality-inspection-rft")
+	assert.equal(nodes(page.root, "desk-report")[0].props.reportKey, "quality-inspection-rft")
+	assert.deepEqual(page.navigations, [])
 })
 
 test("RFT config matches optional Desk filters, blank All selection and no date defaults", () => {

@@ -8,11 +8,11 @@ test("Purchase Order options keep the supplier in the label so supplier searches
 	assert.deepEqual(purchaseOrderOption("PO-3"), { value: "PO-3", label: "PO-3" })
 })
 
-test("report tabs open the tab named by the route report query", async () => {
-	const { selectReportTab } = await import("../src/components/reports/deskReportConfig.js")
+test("report pages open the report named by the route report query", async () => {
+	const { chooseReport } = await import("../src/components/reports/reportWorkspace.js")
 	const tabs = [{ value: "stock-balance" }, { value: "lot-purchase-summary" }]
-	assert.equal(selectReportTab(tabs, "", "lot-purchase-summary"), "lot-purchase-summary")
-	assert.equal(selectReportTab(tabs, "", "missing"), "stock-balance")
-	assert.equal(selectReportTab(tabs, "stock-balance", undefined), "stock-balance")
-	assert.equal(selectReportTab([], "stock-balance", "x"), "")
+	assert.equal(chooseReport(tabs, "lot-purchase-summary", ""), "lot-purchase-summary")
+	assert.equal(chooseReport(tabs, "missing", ""), "stock-balance")
+	assert.equal(chooseReport(tabs, undefined, "stock-balance"), "stock-balance")
+	assert.equal(chooseReport([], "x", "stock-balance"), "")
 })

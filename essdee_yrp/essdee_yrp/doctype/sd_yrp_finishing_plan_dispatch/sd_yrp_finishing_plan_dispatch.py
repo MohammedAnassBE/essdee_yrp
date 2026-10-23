@@ -4,11 +4,11 @@ from itertools import groupby
 from operator import itemgetter
 
 import frappe
-from yrp.attribute_read_context import attribute_read_scope
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, nowdate
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import (
 	build_variant_attributes,
@@ -546,74 +546,88 @@ def create_stock_dispatch(
 
 @frappe.whitelist()
 def get_fpd_print_data(doc_name):
+	"""MRP's print rows per lot and item: the frozen snapshot once submitted, live Finishing Plan figures in draft."""
 	dispatch_doc = frappe.get_doc("SD YRP Finishing Plan Dispatch", doc_name)
 	dispatch_doc.check_permission("print")
 	items = [row.as_dict() for row in dispatch_doc.finishing_plan_dispatch_items]
 	items.sort(key=itemgetter("lot", "item"))
-	result = []
-	for (lot, item_name), variants in groupby(items, key=itemgetter("lot", "item")):
-		variants = list(variants)
-		context = _get_dispatch_snapshot_context(variants[0]["against_id"])
-		ordered_sizes = get_attribute_details(item_name).get("primary_attribute_values", [])
-		dispatch_by_size = {}
-		frozen_by_size = {}
-		for row in variants:
-			size = get_variant_attr_details(row["item_variant"]).get(context["primary"], "")
-			dispatch_by_size[size] = dispatch_by_size.get(size, 0) + (
-				flt(row.get("packing_piece_quantity")) or flt(row["quantity"])
-			)
-			if dispatch_doc.docstatus == 1:
-				frozen = frozen_by_size.setdefault(size, {"total_dispatched": 0, "dispatch_pct": 0})
-				frozen["total_dispatched"] = max(
-					flt(frozen["total_dispatched"]), flt(row.get("total_dispatched"))
-				)
-				frozen["dispatch_pct"] = max(flt(frozen["dispatch_pct"]), flt(row.get("dispatch_pct")))
+	return [
+		get_dispatch_print_row(lot, item_name, list(variants), dispatch_doc.docstatus == 1)
+		for (lot, item_name), variants in groupby(items, key=itemgetter("lot", "item"))
+	]
 
-		sizes = [size for size in ordered_sizes if size in dispatch_by_size]
-		size_data = {}
-		for size in sizes:
-			if dispatch_doc.docstatus == 1:
-				frozen = frozen_by_size.get(size, {})
-				total_dispatched = frozen.get("total_dispatched", 0)
-				percentage = frozen.get("dispatch_pct", 0)
-			else:
-				total_dispatched = 0
-				for detail in frappe.get_all(
-					"SD YRP Finishing Plan GRN Detail",
-					filters={"parent": variants[0]["against_id"]},
-					fields=["item_variant", "dispatched"],
-				):
-					if get_variant_attr_details(detail.item_variant).get(context["primary"]) == size:
-						total_dispatched += flt(detail.dispatched)
-				component_count = len(context["components_by_size"].get(size, ())) or 1
-				denominator = component_count
-				if not context["packing_summary"].dynamic_ratio_packing:
-					denominator *= context["pieces_per_box"]
-				cutting = context["cutting_by_size"].get(size, 0) / denominator
-				percentage = total_dispatched / cutting * 100 if cutting else 0
-			size_data[size] = {
-				"dispatch_qty": dispatch_by_size.get(size, 0),
-				"dispatch_pct": round(percentage, 1),
-				"total_dispatched": total_dispatched,
-			}
 
-		result.append(
-			{
-				"lot": lot,
-				"item": item_name,
-				"stage": attribute_db.get_value(
-					"YRP Item Production Detail",
-					attribute_db.get_value("SD YRP Lot", lot, "production_detail"),
-					"pack_out_stage",
-				),
-				"uom": variants[0]["uom"],
-				"sizes": sizes,
-				"size_data": size_data,
-				"total_dispatch": sum(value["dispatch_qty"] for value in size_data.values()),
-				"total_dispatched_all": sum(value["total_dispatched"] for value in size_data.values()),
-			}
+def get_dispatch_print_row(lot, item_name, variants, is_submitted):
+	context = _get_dispatch_snapshot_context(variants[0]["against_id"])
+	dispatch_by_size = {}
+	frozen_by_size = {}
+	for row in variants:
+		size = get_variant_attr_details(row["item_variant"]).get(context["primary"], "")
+		dispatch_by_size[size] = dispatch_by_size.get(size, 0) + (
+			flt(row.get("packing_piece_quantity")) or flt(row["quantity"])
 		)
-	return result
+		frozen = frozen_by_size.setdefault(size, {"total_dispatched": 0.0, "dispatch_pct": 0.0})
+		frozen["total_dispatched"] = max(frozen["total_dispatched"], flt(row.get("total_dispatched")))
+		frozen["dispatch_pct"] = max(frozen["dispatch_pct"], flt(row.get("dispatch_pct")))
+
+	progress = (
+		frozen_by_size if is_submitted else get_live_dispatch_progress(variants[0]["against_id"], context)
+	)
+	shown_sizes = (
+		set(dispatch_by_size) if is_submitted else set(dispatch_by_size) | set(context["cutting_by_size"])
+	)
+	ordered_sizes = get_attribute_details(item_name).get("primary_attribute_values", [])
+	size_data = {
+		size: {
+			"dispatch_qty": dispatch_by_size.get(size, 0),
+			"dispatch_pct": round(progress.get(size, {}).get("dispatch_pct", 0), 1),
+			"total_dispatched": progress.get(size, {}).get("total_dispatched", 0),
+		}
+		for size in ordered_sizes
+		if size in shown_sizes
+	}
+	uom = variants[0]["uom"]
+	if any(row.get("packing_source") == "batch" for row in variants):
+		uom = attribute_db.get_value("SD YRP Lot", lot, "packing_uom") or uom
+	return {
+		"lot": lot,
+		"item": item_name,
+		"stage": attribute_db.get_value(
+			"YRP Item Production Detail",
+			attribute_db.get_value("SD YRP Lot", lot, "production_detail"),
+			"pack_out_stage",
+		)
+		or "",
+		"uom": uom or "",
+		"sizes": list(size_data),
+		"size_data": size_data,
+		"total_dispatch": sum(value["dispatch_qty"] for value in size_data.values()),
+		"total_dispatched_all": sum(value["total_dispatched"] for value in size_data.values()),
+	}
+
+
+def get_live_dispatch_progress(fp_name, context):
+	"""Draft progress per size: dispatched so far against the Finishing Plan's cut boxes."""
+	dispatched_by_size = {}
+	for detail in frappe.get_all(
+		"SD YRP Finishing Plan GRN Detail",
+		filters={"parent": fp_name},
+		fields=["item_variant", "dispatched"],
+	):
+		size = get_variant_attr_details(detail.item_variant).get(context["primary"], "")
+		dispatched_by_size[size] = dispatched_by_size.get(size, 0) + flt(detail.dispatched)
+	progress = {}
+	for size in set(dispatched_by_size) | set(context["cutting_by_size"]):
+		denominator = len(context["components_by_size"].get(size, ())) or 1
+		if not context["packing_summary"].dynamic_ratio_packing:
+			denominator *= context["pieces_per_box"]
+		cutting_boxes = context["cutting_by_size"].get(size, 0) / denominator
+		dispatched = dispatched_by_size.get(size, 0)
+		progress[size] = {
+			"total_dispatched": dispatched,
+			"dispatch_pct": dispatched / cutting_boxes * 100 if cutting_boxes else 0,
+		}
+	return progress
 
 
 FinishingPlanDispatch = SDYRPFinishingPlanDispatch

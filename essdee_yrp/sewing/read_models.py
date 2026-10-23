@@ -600,6 +600,7 @@ def get_item_summary_options(supplier):
 	return {
 		"lots": sorted({row.lot for row in plans if row.lot}),
 		"items": sorted({row.item for row in plans if row.item}),
+		"lot_items": {row.lot: row.item for row in plans if row.lot and row.item},
 	}
 
 

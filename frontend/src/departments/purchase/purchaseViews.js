@@ -19,7 +19,7 @@ export const PURCHASE_ROUTES = {
 	billTrackingEdit: "purchase-bill-tracking-edit",
 }
 
-export const PURCHASE_STORE_WORKSPACE_KEYS = ["purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"]
+export const PURCHASE_STORE_WORKSPACE_KEYS = ["goods_received_notes", "purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"]
 export const PURCHASE_REPORT_KEYS = ["stock_balance", "purchase_order_itemwise", "lot_cut_quantity"]
 
 export function purchaseLauncherItems() {

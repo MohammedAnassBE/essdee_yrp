@@ -78,14 +78,25 @@
 						v-else-if="usesLinkEditor(row)"
 						v-model="row.value"
 						:doctype="linkDoctype(row)"
+						:fieldname="fieldFor(row)?.fieldname"
+						:aria-label="fieldFor(row)?.label"
 						:filters="linkFilters(fieldFor(row))"
 						:placeholder="`Search ${fieldFor(row)?.label || 'record'}…`"
 						match-visible-only
 						show-clear
 						:show-open-button="false"
 					/>
+					<LinkMultiSelectField
+						v-else-if="usesMultiValueEditor(row) && fieldFor(row)?.fieldtype === 'Link'"
+						v-model="row.value"
+						:doctype="linkDoctype(row)"
+						:aria-label="fieldFor(row)?.label"
+						:filters="linkFilters(fieldFor(row))"
+						:allow-variants="/variant/i.test(`${fieldFor(row)?.fieldname} ${fieldFor(row)?.label}`)"
+						:placeholder="`Search ${fieldFor(row)?.label || 'record'}…`"
+					/>
 					<MultiSelectField
-						v-else-if="usesSelectMultiEditor(row)"
+						v-else-if="usesMultiValueEditor(row)"
 						v-model="row.value"
 						:options="selectOptions(fieldFor(row))"
 						placeholder="Select values"
@@ -197,6 +208,7 @@ import { computed, ref, watch } from "vue"
 import DateField from "./DateField.vue"
 import DateTimeField from "./DateTimeField.vue"
 import LinkField from "./LinkField.vue"
+import LinkMultiSelectField from "./LinkMultiSelectField.vue"
 import MultiSelectField from "./MultiSelectField.vue"
 import TimeField from "./TimeField.vue"
 import { normaliseFrappeTime } from "../../utils/documentValues.js"
@@ -378,7 +390,7 @@ function defaultValue(row) {
 	if (row.operator === "is") return "set"
 	if (usesTimespanEditor(row)) return "last 7 days"
 	if (isCheckField(row)) return 1
-	if (usesSelectMultiEditor(row)) return []
+	if (usesMultiValueEditor(row)) return []
 	return null
 }
 
@@ -413,8 +425,8 @@ function usesLinkEditor(row) {
 	return field?.fieldtype === "Link" && LINK_CONDITIONS.has(row.operator)
 }
 
-function usesSelectMultiEditor(row) {
-	return fieldFor(row)?.fieldtype === "Select" && MULTI_CONDITIONS.has(row.operator)
+function usesMultiValueEditor(row) {
+	return ["Select", "Link"].includes(fieldFor(row)?.fieldtype) && MULTI_CONDITIONS.has(row.operator)
 }
 
 function usesSelectEditor(row) {
@@ -441,7 +453,7 @@ function usesNumberEditor(row) {
 
 function usesDataEditor(row) {
 	return ["in", "not in", "like", "not like"].includes(row.operator)
-		&& !usesSelectMultiEditor(row)
+		&& !usesMultiValueEditor(row)
 }
 
 function selectOptions(field) {
@@ -503,7 +515,7 @@ function textValuePlaceholder(row) {
 }
 
 function valueHelp(row) {
-	if (MULTI_CONDITIONS.has(row.operator) && !usesSelectMultiEditor(row)) {
+	if (MULTI_CONDITIONS.has(row.operator) && !usesMultiValueEditor(row)) {
 		return "Enter multiple values separated by commas."
 	}
 	if (["like", "not like"].includes(row.operator)) {
@@ -534,7 +546,7 @@ function clear() {
 function inflateValue(row, value) {
 	if (value === null || value === undefined || value === "") return defaultValue(row)
 	const field = fieldFor(row)
-	if (usesSelectMultiEditor(row)) return Array.isArray(value) ? value : splitValues(value)
+	if (usesMultiValueEditor(row)) return Array.isArray(value) ? value : splitValues(value)
 	if (MULTI_CONDITIONS.has(row.operator)) return Array.isArray(value) ? value.join(", ") : value
 	if (["like", "not like"].includes(row.operator)) return value
 	if (row.operator === "Timespan") return value
@@ -550,7 +562,7 @@ function inflateValue(row, value) {
 		const number = Number(value)
 		return Number.isFinite(number) ? number : value
 	}
-	return Array.isArray(value) && !usesSelectMultiEditor(row) ? value.join(", ") : value
+	return Array.isArray(value) && !usesMultiValueEditor(row) ? value.join(", ") : value
 }
 
 function parseDate(value) {

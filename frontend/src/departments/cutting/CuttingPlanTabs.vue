@@ -322,6 +322,13 @@ function activate(tab) {
 	if (availableTabs.value.includes(tab)) activeTab.value = tab
 }
 
+async function openTransaction(record, operation) {
+	if (!availableTabs.value.includes("stock-transfers")) return
+	activeTab.value = "stock-transfers"
+	await nextTick()
+	await transfersTab.value?.showTransaction(record, operation)
+}
+
 watch(availableTabs, (tabs) => {
 	if (!tabs.includes(activeTab.value)) activeTab.value = tabs[0] || "details"
 })
@@ -332,7 +339,7 @@ watch(activeTab, async () => {
 	if (element) element.scrollTop = 0
 })
 
-defineExpose({ activate })
+defineExpose({ activate, openTransaction })
 
 const DataSection = defineComponent({
 	props: { title: String, count: Number, icon: { type: String, default: "" } },

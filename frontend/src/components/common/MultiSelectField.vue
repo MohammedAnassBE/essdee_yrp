@@ -11,13 +11,21 @@
 			:disabled="disabled"
 			:invalid="invalid"
 			:filter="filter"
+			:filter-fields="filterFields || [optionLabel, 'description']"
 			:display="display"
 			:max-selected-labels="maxSelectedLabels"
 			fluid
 			@update:model-value="$emit('update:modelValue', $event)"
 			@change="$emit('change', $event)"
 			@filter="$emit('filter', $event)"
-		/>
+		>
+			<template #option="{ option }">
+				<span class="multi-select-field__option">
+					<strong>{{ optionText(option) }}</strong>
+					<small v-if="option?.description">{{ option.description }}</small>
+				</span>
+			</template>
+		</MultiSelect>
 		<small v-if="helpText" class="common-field__help">{{ helpText }}</small>
 	</label>
 </template>
@@ -27,7 +35,7 @@ import MultiSelect from "primevue/multiselect"
 
 defineOptions({ inheritAttrs: false })
 
-defineProps({
+const props = defineProps({
 	modelValue: { type: Array, default: () => [] },
 	options: { type: Array, default: () => [] },
 	optionLabel: { type: String, default: "label" },
@@ -40,9 +48,14 @@ defineProps({
 	filter: { type: Boolean, default: true },
 	display: { type: String, default: "chip" },
 	maxSelectedLabels: { type: Number, default: 4 },
+	filterFields: { type: Array, default: null },
 })
 
 defineEmits(["update:modelValue", "change", "filter"])
+
+function optionText(option) {
+	return option && typeof option === "object" ? option[props.optionLabel] : option
+}
 </script>
 
 <style scoped>
@@ -50,6 +63,23 @@ defineEmits(["update:modelValue", "change", "filter"])
 	display: grid;
 	gap: 6px;
 	width: 100%;
+}
+
+.multi-select-field__option {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.multi-select-field__option strong {
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-semibold);
+}
+
+.multi-select-field__option small {
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-min);
 }
 
 .common-field__help {

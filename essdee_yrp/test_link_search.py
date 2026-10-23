@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import frappe
 from frappe.tests import UnitTestCase
 
-from essdee_yrp.api.link_search import link_search, linked_document_search
+from essdee_yrp.api.link_search import get_link_option, link_search, linked_document_search
 
 
 class TestLinkSearch(UnitTestCase):
@@ -130,3 +130,74 @@ class TestLinkSearch(UnitTestCase):
 			self.assertEqual(link_search("Item"), [])
 		get_list.assert_called_once()
 		self.assertIsNone(get_list.call_args.kwargs["or_filters"])
+
+	def test_warehouse_search_matches_and_shows_supplier_name(self):
+		warehouse = frappe._dict(name="Warehouse", title_field=None, search_fields=None)
+		warehouse.has_field = lambda fieldname: fieldname in {"warehouse_name", "supplier"}
+		warehouse.get_field = lambda fieldname: frappe._dict(fieldtype="Link", options="Supplier") if fieldname == "supplier" else None
+		supplier = frappe._dict(name="Supplier")
+		supplier.has_field = lambda fieldname: fieldname == "supplier_name"
+		row = {"name": "WH-0001", "warehouse_name": "Unit 4 Store", "supplier_supplier_name": "Sri Murugan Knits"}
+
+		with (
+			patch("essdee_yrp.api.link_search.frappe.get_meta", side_effect=lambda doctype: supplier if doctype == "Supplier" else warehouse),
+			patch("essdee_yrp.api.link_search.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.api.link_search.frappe.get_list", side_effect=[[row], []]) as get_list,
+		):
+			rows = link_search("Warehouse", "murugan", match_visible_only=True)
+
+		self.assertEqual(rows, [{"name": "WH-0001", "label": "Unit 4 Store", "description": "Sri Murugan Knits"}])
+		self.assertEqual(
+			get_list.call_args_list[0].kwargs["or_filters"],
+			[["name", "like", "%murugan%"], ["warehouse_name", "like", "%murugan%"], ["supplier.supplier_name", "like", "%murugan%"]],
+		)
+		self.assertEqual(
+			get_list.call_args_list[0].kwargs["fields"],
+			["name", "warehouse_name", "supplier.supplier_name as supplier_supplier_name"],
+		)
+
+	def test_description_matching_label_after_trimming_is_dropped(self):
+		option = get_link_option(
+			{"name": "Arihant Store", "supplier_supplier_name": " Arihant Store "}, None, ["supplier.supplier_name"]
+		)
+		self.assertEqual(option, {"name": "Arihant Store", "label": "Arihant Store"})
+
+	def test_warehouse_search_skips_supplier_name_without_supplier_access(self):
+		warehouse = frappe._dict(name="Warehouse", title_field=None, search_fields=None)
+		warehouse.has_field = lambda fieldname: fieldname in {"warehouse_name", "supplier"}
+		warehouse.get_field = lambda fieldname: frappe._dict(fieldtype="Link", options="Supplier") if fieldname == "supplier" else None
+		supplier = frappe._dict(name="Supplier")
+		supplier.has_field = lambda fieldname: fieldname == "supplier_name"
+
+		with (
+			patch("essdee_yrp.api.link_search.frappe.get_meta", side_effect=lambda doctype: supplier if doctype == "Supplier" else warehouse),
+			patch("essdee_yrp.api.link_search.frappe.has_permission", return_value=False),
+			patch("essdee_yrp.api.link_search.frappe.get_list", return_value=[]) as get_list,
+		):
+			link_search("Warehouse", "store")
+
+		self.assertEqual(
+			get_list.call_args_list[0].kwargs["or_filters"],
+			[["name", "like", "%store%"], ["warehouse_name", "like", "%store%"]],
+		)
+
+	def test_item_search_hides_variants_unless_allowed_or_scoped(self):
+		meta = frappe._dict(name="Item", title_field=None, search_fields=None)
+		meta.has_field = lambda _fieldname: False
+		cases = (
+			({}, False, {"variant_of": ["is", "not set"]}),
+			({"disabled": 0}, "false", {"disabled": 0, "variant_of": ["is", "not set"]}),
+			([["disabled", "=", 0]], False, [["disabled", "=", 0], ["variant_of", "is", "not set"]]),
+			({"disabled": 0}, True, {"disabled": 0}),
+			({"disabled": 0}, "1", {"disabled": 0}),
+			({"has_variants": 1}, False, {"has_variants": 1}),
+			([["Item", "variant_of", "is", "set"]], False, [["Item", "variant_of", "is", "set"]]),
+		)
+		for filters, allow_variants, expected in cases:
+			with (
+				self.subTest(filters=filters, allow_variants=allow_variants),
+				patch("essdee_yrp.api.link_search.frappe.get_meta", return_value=meta),
+				patch("essdee_yrp.api.link_search.frappe.get_list", return_value=[]) as get_list,
+			):
+				link_search("Item", filters=filters, allow_variants=allow_variants)
+			self.assertEqual(get_list.call_args.kwargs["filters"], expected)

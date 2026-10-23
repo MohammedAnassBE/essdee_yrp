@@ -70,7 +70,7 @@ for (const configured of [dimensions, []]) {
 			"./ReportRunStatus.vue": control,
 			"./reportFilterState.js": filterState,
 			"./reportUtils.js": { number: String, oneMonthAgoIso: () => "2026-09-20", todayIso: () => "2026-10-20", stockCellValue: String },
-			"../../api/frappe.js": { callMethod: async (method) => { calls.push(method); return configured }, searchLink: async (...args) => { lookups.push(args); return [{ name: "A", label: "Alpha" }] } },
+			"../../api/frappe.js": { callMethod: async (method) => { if (method.endsWith("get_item_filter_options")) return [{ value: "EC-11400", description: "Tank Top" }]; calls.push(method); return configured }, searchLink: async (...args) => { lookups.push(args); return [{ name: "A", label: "Alpha", description: "Maze Capri" }] } },
 			"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
 			"../../composables/useWebReport.js": { useWebReport: () => ({ state: ref("idle"), sourceColumns: ref([]), sourceRows: ref([]), job: ref(null), activeFilters, generate: async (filters) => requests.push(JSON.parse(JSON.stringify(filters))), filtersChanged: (filters) => changes.push(filters), clear() {} }) },
 			"../../composables/useReportColumns.js": { useReportColumns: () => ({ columns: ref([]), displayColumns: ref([]), rows: ref([]), linkSources: ref({}), fieldsBySource: ref({}), loadLayout() {} }) },
@@ -87,11 +87,16 @@ for (const configured of [dimensions, []]) {
 			await selector.props.onFilter({ value: "Al" })
 		}
 		await Vue.nextTick()
+		for (const selector of selectors()) assert.deepEqual(selector.props.options.find((option) => option.value === "A"), { label: "Alpha", value: "A", description: "Maze Capri" }, "lot options keep the item name line")
 		const shellNode = findNodes(root, (node) => node.type === "shell")[0]
 		await shellNode.props.onGenerate()
 		for (const dimension of configured) assert.deepEqual(requests[0][dimension.fieldname], ["A", "B"])
 		const itemSelectors = findNodes(root, (node) => node.type === "control" && node.props["data-item-filter"])
 		assert.deepEqual(itemSelectors.map((node) => node.props.label), ["Item", "Item Variant"])
+		await itemSelectors[0].props.onBeforeShow()
+		await Vue.nextTick()
+		const itemSelector = findNodes(root, (node) => node.type === "control" && node.props["data-item-filter"] === "parentItem")[0]
+		assert.deepEqual(itemSelector.props.options[0], { label: "EC-11400", value: "EC-11400", description: "Tank Top" }, "item name renders as the second line")
 		for (const selector of itemSelectors) selector.props["onUpdate:modelValue"](["I1", "I2"])
 		await Vue.nextTick()
 		await shellNode.props.onGenerate()
@@ -99,6 +104,7 @@ for (const configured of [dimensions, []]) {
 		assert.deepEqual(requests[1].item, ["I1", "I2"])
 		assert.equal(lookups.length, configured.length)
 		assert.deepEqual(lookups.map((args) => args[0]), configured.map((d) => d.dimension_doctype))
+		for (const args of lookups) assert.equal(args[4], true, "dimension pickers match only visible name and description")
 		if (!configured.length) for (const d of dimensions) assert.ok(!(d.fieldname in requests[0]))
 		changes.length = 0
 		activeFilters.value = { from_date: "2026-10-01", to_date: "2026-10-17", lot: ["RESTORED"], quality: "Q1" }

@@ -4,6 +4,7 @@
 		<div v-else class="erp-transaction-detail">
 			<div v-if="record" class="erp-transaction-status"><DocumentStatusBadge :docstatus="record.docstatus" :label="record.status" /><small>Updated {{ formatDate(record.modified, true) }}</small></div>
 			<section v-if="record?.details?.length" class="erp-detail-grid"><div v-for="row in record.details" :key="row.fieldname"><span>{{ row.label }}</span><strong>{{ display(row.value) }}</strong></div></section>
+			<LotTransferQuantityEditor v-if="record?.quantity_rows?.length" :cutting-plan="cuttingPlan" :record="record" @dirty="quantityDirty = $event" @saved="quantitiesSaved" />
 			<StockItemMatrix :dimensions="record.dimensions || []" v-if="record?.item_groups?.length" :groups="record.item_groups" :doctype="record.doctype" :physical-row-count="record.item_row_count || 0" />
 			<section v-else-if="record?.item_row_count" class="erp-items-empty"><i class="pi pi-exclamation-circle"></i><div><strong>Item matrix unavailable</strong><span>The transaction has item rows, but their parent-item attributes could not be resolved.</span></div></section>
 		</div>
@@ -12,7 +13,7 @@
 			<DocumentDeleteButton v-if="record?.name" :doctype="record.doctype" :name="record.name" :docstatus="record.docstatus" :disabled="saving" :redirect="false" @deleted="documentDeleted" />
 					<DocumentPrintButton v-if="record?.permissions?.can_print" :doctype="record.doctype" :name="record.name" :formats="record.print_formats || []" :disabled="saving" />
 			<Button v-if="record?.permissions?.can_cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="saving" @click="changeStatus('cancel')" />
-			<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" :loading="saving" @click="changeStatus('submit')" />
+			<Button v-if="record?.permissions?.can_submit" label="Submit" icon="pi pi-check" :disabled="quantityDirty" :title="quantityDirty ? 'Save or reset the quantity before submitting.' : undefined" :loading="saving" @click="changeStatus('submit')" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" title="Transaction could not be updated" />
@@ -30,6 +31,7 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { changeLinkedTransactionStatus, getLinkedTransaction } from "./cpmApi.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
+import LotTransferQuantityEditor from "./LotTransferQuantityEditor.vue"
 import StockItemMatrix from "./StockItemMatrix.vue"
 
 const props = defineProps({ visible: Boolean, cuttingPlan: { type: String, required: true }, transaction: { type: Object, default: null } })
@@ -39,11 +41,13 @@ const record = ref(null)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref("")
+const quantityDirty = ref(false)
 
 watch(() => [props.visible, props.transaction?.doctype, props.transaction?.name], ([visible]) => { if (visible) load() })
 
 async function load() {
 	if (!props.transaction?.name) return
+	quantityDirty.value = false
 	loading.value = true
 	error.value = ""
 	try {
@@ -87,6 +91,10 @@ async function performStatusChange(action) {
 	}
 }
 
+function quantitiesSaved(value) {
+	record.value = value
+	emit("changed", value)
+}
 function display(value) { return value === null || value === undefined || value === "" ? "—" : String(value) }
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date }
 function documentDeleted() {

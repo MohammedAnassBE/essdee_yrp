@@ -1,6 +1,6 @@
 <template>
 	<section data-finishing-report="rejection-details" aria-label="Rejection Details">
-		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rejection Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
+		<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rejection Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable :before-copy="expandAllForCopy" keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
 				<DateField v-model="filters.startDate" label="Start Date" required />
 				<DateField v-model="filters.endDate" label="End Date" required />
@@ -17,7 +17,7 @@
 				<FinishingReportHeading title="Rejection Details" :period="period">
 					<Button label="Download Excel" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" :loading="downloading" @click="download" />
 				</FinishingReportHeading>
-				<FinishingSeriesTable :rows="seriesRows" :types="data.types || []" :expanded="expanded" @toggle="toggle" @open-grn="openGrn">
+				<FinishingSeriesTable :rows="seriesRows" :types="data.types || []" :expanded="expanded" :expand-all="copyingAll" @toggle="toggle" @open-grn="openGrn">
 					<template #detail="{ detail }">
 						<div v-for="(group, key) in detail.rejection_detail" :key="key" class="finishing-section">
 							<h4 class="rejection-report__group">{{ key }}</h4>
@@ -40,7 +40,7 @@
 <script setup>
 import Button from "primevue/button"
 import InputText from "primevue/inputtext"
-import { computed, reactive, ref } from "vue"
+import { computed, nextTick, reactive, ref } from "vue"
 
 import { downloadRejectionDetails, getRejectionDetails } from "../../../api/finishing.js"
 import DateField from "../../../components/common/DateField.vue"
@@ -108,6 +108,13 @@ async function download() {
 	} finally {
 		downloading.value = false
 	}
+}
+
+const copyingAll = ref(false)
+async function expandAllForCopy() {
+	copyingAll.value = true
+	await nextTick()
+	return () => { copyingAll.value = false }
 }
 
 function toggle(series) {

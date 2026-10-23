@@ -66,10 +66,12 @@ export const DEPARTMENT_RECORD_ROUTES = {
 		"YRP Production Order": (name) => `/web/planning/production-orders/${encodeURIComponent(name)}`,
 		"SD YRP Cutting Plan": (name) => `/web/planning/cutting-plans/${encodeURIComponent(name)}`,
 		"SD YRP Finishing Plan": (name) => `/web/planning/finishing-plans/${encodeURIComponent(name)}`,
+		"SD YRP Finishing Plan Dispatch": (name) => `/web/planning/dispatches/${encodeURIComponent(name)}`,
 		...documentRoutes("/planning"),
 	},
 	"/purchase": {
 		"YRP Bill Tracking": (name) => `/web/purchase/bill-tracking/${encodeURIComponent(name)}`,
+		"YRP Goods Received Note": (name) => `/web/purchase/goods-received-notes/${encodeURIComponent(name)}`,
 	},
 	"/merch": {
 		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,

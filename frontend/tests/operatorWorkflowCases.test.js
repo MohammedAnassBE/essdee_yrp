@@ -133,7 +133,7 @@ test("F-F14: dispatch inputs identify the Finishing Plan and row", () => {
 test("F-F14: Dispatch Stock prefills source through the shared Supplier/Warehouse helper", async () => {
 	const calls = []
 	const page = script("departments/finishing/FinishingDispatch.vue", {
-		useRoute: () => ({ params: {} }), useRouter: () => ({}), useToast: () => ({ add() {} }), useActionConfirmation: () => () => {},
+		defineProps: () => ({ basePath: "/finishing", viewRouteName: "finishing-dispatch" }), useRoute: () => ({ params: {} }), useRouter: () => ({}), useToast: () => ({ add() {} }), useActionConfirmation: () => () => {},
 		watch: () => {}, setDispatchSupplier: async (stock, side, supplier) => { calls.push([side, supplier]); stock.from_supplier = supplier; stock.from_warehouse = "WH-1" },
 	}, "workspace, openDispatch, dispatchOpen, stock")
 	page.workspace.value = { dispatch_defaults: { from_supplier: "SUP-1" } }

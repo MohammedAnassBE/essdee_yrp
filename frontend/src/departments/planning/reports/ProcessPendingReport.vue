@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Process Pending">
-		<ReportShell :export-source="{ reportKey: 'planning-process-pending' }" title="Process Pending" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :actions="[{ label: 'Paste', icon: 'pi pi-clipboard', disabled: isBusy, command: () => { pasteVisible = true } }]" :export-source="{ reportKey: 'planning-process-pending' }" title="Process Pending" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
 				<AsyncLinkMultiSelect v-model="filters.item" doctype="Item" label="Items" :filters="{ has_variants: 1 }" />
@@ -10,9 +10,6 @@
 				<small v-if="defaultProcess">Default process: {{ defaultProcess }}</small>
 				<WorkspaceLoadError v-if="defaultsError" class="process-defaults-error" title="Default process unavailable" :message="defaultsError" @retry="loadDefaults" />
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
-			</template>
-			<template #actions>
-				<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
 			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 			
@@ -26,7 +23,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { callMethod } from "../../../api/frappe.js"

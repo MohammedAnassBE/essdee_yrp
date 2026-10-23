@@ -1,5 +1,5 @@
 <template>
-	<ReportShell
+	<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]"
 		:export-source="deskExportSource('purchase-order-itemwise', activeFilters, columns)"
 		class="purchase-order-itemwise-report"
 		title="Purchase Order Itemwise"
@@ -17,22 +17,15 @@
 			<LinkField v-model="filters.supplier" doctype="Supplier" label="Supplier" placeholder="Search supplier…" :show-open-button="false" show-clear />
 			<LinkField v-model="filters.purchaseOrder" doctype="Purchase Order" label="Purchase Order" placeholder="Search Purchase Order…" :show-open-button="false" show-clear />
 			<label class="purchase-report-select" for="purchase-report-open-status"><span>Open Status</span><Select v-model="filters.openStatus" input-id="purchase-report-open-status" :options="openStatuses" show-clear fluid /></label>
-			<details class="purchase-report-advanced" :open="advancedOpen" @toggle="advancedOpen = $event.currentTarget.open">
-				<summary><span>More filters</span><small>{{ optionalFilterCount ? `${optionalFilterCount} active` : "Optional" }}</small><i class="pi pi-chevron-down" /></summary>
-				<div class="purchase-report-advanced__grid">
-					<LinkField v-model="filters.deliveryLocation" doctype="Supplier" label="Delivery Location" placeholder="Search location…" :show-open-button="false" show-clear />
-					<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
-					<label class="purchase-report-select" for="purchase-report-status"><span>Status</span><Select v-model="filters.status" input-id="purchase-report-status" :options="statuses" show-clear fluid /></label>
-					<label class="purchase-report-select" for="purchase-report-docstatus"><span>Docstatus</span><Select v-model="filters.docstatus" input-id="purchase-report-docstatus" :options="docstatuses" option-label="label" option-value="value" show-clear fluid /></label>
-					<label class="purchase-report-select" for="purchase-report-date-basis"><span>Date Filter Based On</span><Select v-model="filters.dateBasedOn" input-id="purchase-report-date-basis" :options="dateBases" show-clear fluid /></label>
-					<DateField v-if="filters.dateBasedOn" v-model="filters.fromDate" label="From Date" />
-					<DateField v-if="filters.dateBasedOn" v-model="filters.toDate" label="To Date" />
-				</div>
-			</details>
-		</template>
-		<template #actions>
-			<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+			<ReportMoreFilters :active-count="optionalFilterCount">
+				<LinkField v-model="filters.deliveryLocation" doctype="Supplier" label="Delivery Location" placeholder="Search location…" :show-open-button="false" show-clear />
+				<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="Search lot…" :show-open-button="false" show-clear />
+				<label class="purchase-report-select" for="purchase-report-status"><span>Status</span><Select v-model="filters.status" input-id="purchase-report-status" :options="statuses" show-clear fluid /></label>
+				<label class="purchase-report-select" for="purchase-report-docstatus"><span>Docstatus</span><Select v-model="filters.docstatus" input-id="purchase-report-docstatus" :options="docstatuses" option-label="label" option-value="value" show-clear fluid /></label>
+				<label class="purchase-report-select" for="purchase-report-date-basis"><span>Date Filter Based On</span><Select v-model="filters.dateBasedOn" input-id="purchase-report-date-basis" :options="dateBases" show-clear fluid /></label>
+				<DateField v-if="filters.dateBasedOn" v-model="filters.fromDate" label="From Date" />
+				<DateField v-if="filters.dateBasedOn" v-model="filters.toDate" label="To Date" />
+			</ReportMoreFilters>
 		</template>
 		<template #status>
 			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" />
@@ -65,7 +58,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 
@@ -76,13 +68,13 @@ import LinkField from "../common/LinkField.vue"
 import ReportColumnPicker from "./ReportColumnPicker.vue"
 import { purchaseOrderFormFilters } from "./reportFilterState.js"
 import ReportRunStatus from "./ReportRunStatus.vue"
+import ReportMoreFilters from "./ReportMoreFilters.vue"
 import ReportShell from "./ReportShell.vue"
 import { deskExportSource } from "./reportExport.js"
 import { number, stockCellValue, todayIso } from "./reportUtils.js"
 
 const filterError = ref("")
 const pickerVisible = ref(false)
-const advancedOpen = ref(typeof window === "undefined" || !window.matchMedia("(max-width: 430px)").matches)
 const filters = reactive(defaultFilters())
 const today = todayIso()
 const statuses = ["Draft", "Ordered", "Cancelled", "Delivered", "Partially Delivered", "Partially Cancelled"]
@@ -189,21 +181,6 @@ onMounted(loadLayout)
 	font-weight: 680;
 }
 
-.purchase-report-advanced {
-	display: block;
-	grid-column: 1 / -1;
-}
-
-.purchase-report-advanced__grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: var(--erp-space-2) var(--erp-space-3);
-}
-
-.purchase-report-advanced summary {
-	display: none;
-}
-
 .purchase-order-itemwise-report__table {
 	min-width: 2050px;
 }
@@ -252,40 +229,4 @@ onMounted(loadLayout)
 .purchase-order-itemwise-report__pending--overdue { color: var(--erp-danger); font-weight: 800; }
 .purchase-order-itemwise-report__pending--excess { color: #b55c10; font-weight: 800; }
 
-@media (max-width: 800px) {
-	.purchase-report-advanced summary {
-		display: flex;
-		min-height: 44px;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 10px;
-		color: var(--erp-text);
-		font-size: var(--erp-font-size-caption);
-		font-weight: 750;
-		cursor: pointer;
-		background: var(--erp-surface);
-		border: 1px solid var(--erp-border);
-		border-radius: var(--erp-control-radius);
-	}
-
-	.purchase-report-advanced summary small {
-		margin-left: auto;
-		color: var(--erp-text-muted);
-		font-weight: 650;
-	}
-
-	.purchase-report-advanced[open] summary {
-		margin-bottom: var(--erp-space-2);
-	}
-
-	.purchase-report-advanced__grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-}
-
-@media (max-width: 520px) {
-	.purchase-report-advanced__grid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-}
 </style>

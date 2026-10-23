@@ -4,10 +4,11 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 
 const shell = (_props, { slots }) => Vue.h("section", slots.default?.())
 const tabMocks = {
-	"primevue/message": shell, "primevue/select": () => null, "primevue/skeleton": () => null,
+	"primevue/message": shell, "primevue/select": () => null, "primevue/skeleton": () => null, "primevue/inputtext": () => null,
 	"primevue/tab": shell, "primevue/tablist": shell, "primevue/tabpanel": shell,
 	"primevue/tabpanels": shell, "primevue/tabs": shell,
 }
+const workspaceMocks = { "./reportWorkspace.js": await import("../src/components/reports/reportWorkspace.js") }
 const asyncStub = loader => {
 	const name = String(loader).match(/\/([A-Za-z]+)\.vue/)[1]
 	return props => Vue.h(name, props)
@@ -39,7 +40,7 @@ test("Lot Cut Quantity offers Copy Report", async () => {
 
 async function mountSewingReports(reports, tab) {
 	const component = loadComponent(new URL("../src/departments/sewing/SewingReportsWorkspace.vue", import.meta.url).pathname, {
-		...tabMocks, vue: vueWithStubs,
+		...tabMocks, ...workspaceMocks, vue: vueWithStubs,
 		"vue-router": { useRoute: () => ({ path: "/sewing/reports", query: { tab } }), useRouter: () => ({ replace() {} }) },
 		"../../components/reports/DeskBackedReport.vue": () => null,
 		"../../components/reports/deskReportConfig.js": await import("../src/components/reports/deskReportConfig.js"),
@@ -78,7 +79,7 @@ test("Sewing hides Lot Cut Quantity and In-house Quantity without capability", a
 
 test("Finishing reports list Lot Cut Quantity", async () => {
 	const component = loadComponent(new URL("../src/departments/finishing/FinishingReports.vue", import.meta.url).pathname, {
-		...tabMocks, vue: vueWithStubs,
+		...tabMocks, ...workspaceMocks, vue: vueWithStubs,
 		"vue-router": { useRoute: () => ({ path: "/finishing/reports", query: { report: "lot-cut-quantity" } }), useRouter: () => ({ replace() {} }) },
 		"../../api/finishing.js": { getFinishingCapabilities: async () => ({ sections: { reports: { reports: {
 			packing_dpr: { label: "Packing DPR", can_read: true }, lot_cut_quantity: lotCutCapability,

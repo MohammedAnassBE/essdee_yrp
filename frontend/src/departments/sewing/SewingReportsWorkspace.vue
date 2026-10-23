@@ -1,40 +1,28 @@
 <template>
 	<section data-sewing-destination="reports" class="sewing-reports-workspace" aria-label="Sewing Reports workspace">
-		<div class="sewing-reports-workspace__mobile common-field">
-			<label for="sewing-report-view">Report view</label>
-			<Select input-id="sewing-report-view" v-model="active" :options="tabs" option-label="label" option-value="value" aria-label="Report view" fluid />
-		</div>
-		<Tabs v-model:value="active" class="erp-tabs">
-			<TabList class="sewing-reports-workspace__desktop"><Tab v-for="tab in tabs" :key="tab.value" :value="tab.value">{{ tab.label }}</Tab></TabList>
-			<TabPanels><TabPanel :value="active" :key="active">
-				<Message v-if="!allowed" severity="warn" :closable="false">You do not have permission to view this report.</Message>
-				<SewingStatusSummary v-else-if="active === 'status-summary'" :filters="statusFilters" />
-				<SewingDpr v-else-if="active === 'dpr'" :filters="dprFilters" />
-				<SewingScr v-else-if="active === 'scr'" :filters="scrFilters" />
-				<SewingMonthlySummary v-else-if="active === 'monthly-summary'" :filters="monthlyFilters" />
-				<SewingItemSummary v-else-if="active === 'item-summary'" :filters="itemFilters" />
-				<FinishingDispatchReport v-else-if="active === 'finishing-dispatch'" />
-				<LotCutQuantityReport v-else-if="active === 'lot-cut-quantity'" :can-read-cutting-plan="Boolean(props.capabilities.reports?.lot_cut_quantity?.can_read_cutting_plan)" />
-				<InhouseQuantityReport v-else-if="active === 'inhouse-quantity'" />
-				<DeskBackedReport v-else-if="deskTabs.some(tab => tab.value === active)" :key="active" :report-key="active" :supplier="active === 'finishing-inward-updates' ? supplier : ''" />
-			</TabPanel></TabPanels>
-		</Tabs>
+		<ReportWorkspace :reports="tabs" label="Sewing reports" query-key="tab" storage-key="sewing" v-slot="{ report }">
+			<Message v-if="!isAllowed(report)" severity="warn" :closable="false">You do not have permission to view this report.</Message>
+			<SewingStatusSummary v-else-if="report.value === 'status-summary'" :filters="statusFilters" />
+			<SewingDpr v-else-if="report.value === 'dpr'" :filters="dprFilters" />
+			<SewingScr v-else-if="report.value === 'scr'" :filters="scrFilters" />
+			<SewingMonthlySummary v-else-if="report.value === 'monthly-summary'" :filters="monthlyFilters" />
+			<SewingItemSummary v-else-if="report.value === 'item-summary'" :filters="itemFilters" />
+			<FinishingDispatchReport v-else-if="report.value === 'finishing-dispatch'" />
+			<LotCutQuantityReport v-else-if="report.value === 'lot-cut-quantity'" :can-read-cutting-plan="Boolean(props.capabilities.reports?.lot_cut_quantity?.can_read_cutting_plan)" />
+			<InhouseQuantityReport v-else-if="report.value === 'inhouse-quantity'" />
+			<DeskBackedReport v-else :report-key="report.value" :supplier="report.value === 'finishing-inward-updates' ? supplier : ''" />
+		</ReportWorkspace>
 	</section>
 </template>
 
 <script setup>
 import Message from "primevue/message"
-import Select from "primevue/select"
-import Tab from "primevue/tab"
-import TabList from "primevue/tablist"
-import TabPanel from "primevue/tabpanel"
-import TabPanels from "primevue/tabpanels"
-import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, reactive } from "vue"
-import { useRoute, useRouter } from "vue-router"
+import { useRoute } from "vue-router"
 
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
 import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
+import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
 import { useSewingContext } from "./useSewingContext.js"
 
 const { supplier } = useSewingContext()
@@ -47,7 +35,7 @@ const FinishingDispatchReport = defineAsyncComponent(() => import("../finishing/
 const LotCutQuantityReport = defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue"))
 const InhouseQuantityReport = defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue"))
 const props = defineProps({ capabilities: { type: Object, required: true } })
-const route = useRoute(), router = useRouter()
+const route = useRoute()
 const REPORTS = [
 	{ value: "status-summary", key: "status_summary", label: "Status Summary" },
 	{ value: "dpr", key: "dpr", label: "DPR" },
@@ -60,15 +48,11 @@ const REPORTS = [
 ]
 const deskTabs = computed(() => departmentDeskReports(route.path.split("/")[1], props.capabilities.reports))
 const tabs = computed(() => [...REPORTS.filter(tab => props.capabilities.reports?.[tab.key]?.can_read), ...deskTabs.value])
-const active = computed({
-	get: () => tabs.value.some(tab => tab.value === route.query.tab) ? route.query.tab : tabs.value[0]?.value,
-	set: tab => router.replace({ query: { ...route.query, tab }, hash: route.hash }),
-})
-const allowed = computed(() => {
-	const capability = props.capabilities.reports?.[tabs.value.find(tab => tab.value === active.value)?.key]
+function isAllowed(report) {
+	const capability = props.capabilities.reports?.[report.key]
 	return capability?.can_read && capability?.can_report
-})
-// Only filters survive tab switches. Business rows remain owned by the active
+}
+// Only filters survive report switches. Business rows remain owned by the active
 // report; a Supplier change remounts this workspace and clears its local state.
 const statusFilters = reactive({ lot: [], item: [], colour: [], part: [], fromDate: "", toDate: "" })
 const dprFilters = reactive({ mode: "daily", date: "", fromDate: "", toDate: "", workStation: "", inputType: "", lot: "", item: "" })
@@ -78,14 +62,7 @@ const itemFilters = reactive({ lots: [], items: [] })
 </script>
 
 <style scoped>
-.sewing-reports-workspace { min-width: 0; max-width: 100%; }
-.sewing-reports-workspace :deep(.p-tabpanels) { background: transparent; padding: 8px 0 0; }
-.sewing-reports-workspace :deep(.p-tab) { min-height: 42px; padding: 9px 14px; font-size: 0.86rem; white-space: nowrap; }
-.sewing-reports-workspace__mobile { display: none; }
-@media (max-width: 700px) {
-	.sewing-reports-workspace__desktop { display: none; }
-	.sewing-reports-workspace__mobile { display: grid; gap: 6px; font-size: var(--erp-font-size-caption); font-weight: 650; }
-}
+.sewing-reports-workspace { min-width: 0; max-width: 100%; padding-top: var(--erp-space-2); }
 @media (max-width: 430px) {
 	.sewing-reports-workspace :deep(.report-filter-grid .erp-date-time-field) { grid-column: 1 / -1; }
 	.sewing-reports-workspace :deep(.report-shell__commands) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

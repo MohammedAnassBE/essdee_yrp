@@ -1,37 +1,15 @@
 <template>
 	<nav v-if="inline" class="inline-page-navigation" :aria-label="hasContext ? `${documentLabel} navigation` : `Back to ${backLabel}`">
-		<RouterLink
-			v-if="!isLockedExit(resolvedBackTo)"
-			class="inline-page-navigation__back"
-			:to="resolvedBackTo"
-			:aria-label="`Back to ${backLabel}`"
-			:title="`Back to ${backLabel}`"
-			:aria-controls="titleTarget || undefined"
-		>
-			<i class="pi pi-arrow-left" aria-hidden="true" />
-		</RouterLink>
-		<div v-if="showDocumentNavigation && hasContext" class="inline-page-navigation__documents" role="group" :aria-label="`${documentLabel} previous and next`">
-			<button
-				type="button"
-				class="inline-page-navigation__document"
-				:disabled="navigationDisabled || !previousName"
-				:aria-label="`Previous ${documentLabel}`"
-				:title="previousName ? `Previous ${documentLabel}: ${previousName}` : `No previous ${documentLabel}`"
-				@click="move(goPrevious)"
-			>
-				<i class="pi pi-chevron-left" aria-hidden="true" />
-			</button>
-			<button
-				type="button"
-				class="inline-page-navigation__document"
-				:disabled="navigationDisabled || !nextName"
-				:aria-label="`Next ${documentLabel}`"
-				:title="nextName ? `Next ${documentLabel}: ${nextName}` : `No next ${documentLabel}`"
-				@click="move(goNext)"
-			>
-				<i class="pi pi-chevron-right" aria-hidden="true" />
-			</button>
-		</div>
+		<BackLink :to="resolvedBackTo" :label="backLabel" :aria-controls="titleTarget || undefined" />
+		<DocumentStepButtons
+			v-if="showDocumentNavigation && hasContext"
+			:document-label="documentLabel"
+			:previous-name="previousName || ''"
+			:next-name="nextName || ''"
+			:disabled="navigationDisabled"
+			@previous="move(goPrevious)"
+			@next="move(goNext)"
+		/>
 		<span v-if="showDocumentNavigation && changed" class="inline-page-navigation__status" role="status">List changed — return to list</span>
 		<span v-else-if="showDocumentNavigation && error" class="inline-page-navigation__status" role="status">Navigation unavailable</span>
 	</nav>
@@ -39,11 +17,10 @@
 
 <script setup>
 import { computed, nextTick, toRef } from "vue"
-import { RouterLink } from "vue-router"
-
+import BackLink from "./BackLink.vue"
+import DocumentStepButtons from "./DocumentStepButtons.vue"
 import { useDocumentListNavigation } from "../../composables/useDocumentListNavigation.js"
 import { usePageNavigation } from "./pageNavigationContext.js"
-import { isLockedExit } from "../../router/departmentLock.js"
 
 const props = defineProps({
 	showDocumentNavigation: { type: Boolean, default: false },
@@ -94,62 +71,6 @@ async function move(action) {
 	gap: 6px;
 }
 
-.inline-page-navigation__back {
-	display: inline-grid;
-	width: 38px;
-	height: 38px;
-	color: var(--erp-text-muted);
-	text-decoration: none;
-	border: 1px solid var(--erp-border);
-	border-radius: var(--erp-control-radius);
-	background: var(--erp-surface);
-	place-items: center;
-	transition: color var(--erp-transition-fast), border-color var(--erp-transition-fast), background var(--erp-transition-fast);
-}
-
-.inline-page-navigation__back:hover {
-	color: var(--erp-text);
-	border-color: var(--erp-accent-border);
-	background: var(--erp-surface-hover);
-}
-
-
-
-.inline-page-navigation__documents:has(.inline-page-navigation__document:not(:disabled):hover) {
-	border-color: var(--erp-accent-border);
-}
-
-.inline-page-navigation__documents {
-	display: inline-flex;
-	overflow: visible;
-	border: 1px solid var(--erp-border);
-	border-radius: var(--erp-control-radius);
-	background: var(--erp-surface);
-}
-
-.inline-page-navigation__document {
-	display: inline-grid;
-	width: 38px;
-	height: 36px;
-	padding: 0;
-	color: var(--erp-text-muted);
-	border: 0;
-	background: transparent;
-	place-items: center;
-	cursor: pointer;
-	transition: color var(--erp-transition-fast), background var(--erp-transition-fast);
-}
-
-.inline-page-navigation__document + .inline-page-navigation__document { border-left: 1px solid var(--erp-border); }
-.inline-page-navigation__document:not(:disabled):hover {
-	color: var(--erp-text);
-	background: var(--erp-surface-hover);
-}
-.inline-page-navigation__document:disabled {
-	opacity: .5;
-	cursor: not-allowed;
-}
-
 .inline-page-navigation__status {
 	max-width: 190px;
 	color: var(--erp-text-muted);
@@ -159,8 +80,6 @@ async function move(action) {
 }
 
 @media (max-width: 620px), (pointer: coarse) {
-	.inline-page-navigation__back { width: 44px; height: 44px; }
-	.inline-page-navigation__document { width: 44px; height: 44px; }
 	.inline-page-navigation__status { position: absolute; overflow: hidden; width: 1px; height: 1px; padding: 0; white-space: nowrap; clip: rect(0, 0, 0, 0); clip-path: inset(50%); }
 }
 </style>

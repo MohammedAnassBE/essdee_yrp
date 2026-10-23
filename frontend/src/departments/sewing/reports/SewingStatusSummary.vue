@@ -2,10 +2,7 @@
 	<section data-sewing-report="status-summary" aria-label="Status Summary">
 		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Status Summary" :loading="loading" :generated="generated" :has-results="visible.length > 0" copyable keep-results-while-loading @generate="load" @reset="reset">
 			<template #filters>
-				<div v-for="field in identities" :key="field.key" class="common-field">
-					<label :for="`status-${field.key}`">{{ field.label }}</label>
-					<MultiSelect :input-id="`status-${field.key}`" v-model="filters[field.key]" :options="options(field.key)" :aria-label="field.label" :placeholder="`All ${field.label}s`" :max-selected-labels="1" filter fluid />
-				</div>
+				<MultiSelectField v-for="field in identities" :key="field.key" :input-id="`status-${field.key}`" v-model="filters[field.key]" :options="options(field.key)" :label="field.label" :aria-label="field.label" :placeholder="`All ${field.label}s`" :max-selected-labels="1" display="comma" />
 				<DateField v-model="filters.fromDate" label="Input From Date" show-clear />
 				<DateField v-model="filters.toDate" label="Input To Date" show-clear />
 			</template>
@@ -17,10 +14,10 @@
 </template>
 
 <script setup>
-import MultiSelect from "primevue/multiselect"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { getSewingStatusSummary } from "../../../api/sewing.js"
 import DateField from "../../../components/common/DateField.vue"
+import MultiSelectField from "../../../components/common/MultiSelectField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import SewingReportMatrix from "../components/SewingReportMatrix.vue"
@@ -39,7 +36,11 @@ const columns = computed(() => [
 	...(data.value.header2 || []).map(label => ({ key: label, label, numeric: true })),
 	...(data.value.header3 || []).map(label => ({ key: label === "Work Order Status" ? "work_order_status" : label, label })),
 ])
-function options(key) { return [...new Set(rows.value.map(row => row[key]).filter(value => value != null && value !== ""))] }
+function options(key) {
+	const descriptions = new Map()
+	for (const row of rows.value) if (row[key] != null && row[key] !== "" && !descriptions.has(row[key])) descriptions.set(row[key], key === "lot" ? row.item || "" : "")
+	return [...descriptions].map(([value, description]) => ({ label: value, value, description }))
+}
 const visible = computed(() => rows.value.filter(row => identities.every(({ key }) => !props.filters[key].length || props.filters[key].includes(row[key]))
 	&& (!props.filters.fromDate || (row.input_date || row["Input Date"] || "") >= props.filters.fromDate)
 	&& (!props.filters.toDate || Boolean(row.input_date || row["Input Date"]) && (row.input_date || row["Input Date"]) <= props.filters.toDate)))

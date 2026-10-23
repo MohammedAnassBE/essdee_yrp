@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Work In Progress">
-		<ReportShell :export-source="{ reportKey: 'planning-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :actions="[{ label: 'Paste', icon: 'pi pi-clipboard', disabled: isBusy, command: () => { pasteVisible = true } }, { label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]" :export-source="{ reportKey: 'planning-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.category" doctype="SD YRP Product Category" label="Category" :show-open-button="false" show-clear />
 				<LinkField v-model="filters.product_season" doctype="SD YRP Product Season" label="Product Season" :show-open-button="false" show-clear />
@@ -12,11 +12,6 @@
 				<OrderedProcessSelect v-model="filters.process_list" />
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
 			</template>
-			<template #actions>
-				<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
-				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-				<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined @click="download" />
-			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" determinate @rebuild="rebuild" /></template>
 			<template #metrics><div v-for="metric in reportSummary" :key="metric.label" class="report-metric"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></template>
 			<PlanningReportTable title="Work In Progress" :columns="columns" :rows="rows" :cell-value="cellValue" inline-filters :cell-align="cellAlign" :formatted-cell="formattedCell" :cell-link="progressCellLink" />
@@ -27,7 +22,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
 import LinkField from "../../../components/common/LinkField.vue"

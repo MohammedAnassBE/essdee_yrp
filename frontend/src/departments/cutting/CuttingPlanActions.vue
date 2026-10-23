@@ -130,14 +130,14 @@ import { callMethod } from "../../api/frappe.js"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "./CuttingCompletedReport.vue"
-import { copyElementAsImage } from "../../components/reports/copyElementAsImage.js"
+import { copyCompletedReportImage } from "./completedReportExport.js"
 
 const props = defineProps({
 	doc: { type: Object, required: true },
 	data: { type: Object, default: () => ({}) },
 	extraActions: { type: Array, default: () => [] },
 })
-const emit = defineEmits(["refresh"])
+const emit = defineEmits(["refresh", "lot-transfer-created"])
 
 const permissions = computed(() => props.data.permissions || {})
 const busy = ref("")
@@ -238,48 +238,14 @@ async function copyCompletedReport() {
 	copyingCompleted.value = true
 	completedCopyFeedback.value = ""
 	completedCopyError.value = false
-	let exportCapture = null
 	try {
-		exportCapture = createCompletedReportExport(completedReportCapture.value)
-		await new Promise((resolve) => window.requestAnimationFrame(resolve))
-		await copyElementAsImage(exportCapture.element)
+		await copyCompletedReportImage(completedReportCapture.value)
 		completedCopyFeedback.value = "Completed quantities copied to clipboard."
 	} catch (reason) {
 		dialogError.value = reason?.message || "Unable to copy the completed quantities."
 	} finally {
-		exportCapture?.host.remove()
 		copyingCompleted.value = false
 	}
-}
-
-function createCompletedReportExport(source) {
-	if (!source) throw new Error("Nothing available to copy.")
-	const tableWidths = Array.from(source.querySelectorAll(".completed-report__table-wrap"), (element) => element.scrollWidth)
-	const exportWidth = Math.max(source.clientWidth, source.scrollWidth, ...tableWidths)
-	const clone = source.cloneNode(true)
-	const host = document.createElement("div")
-	clone.classList.add("completed-report-capture--export")
-	Object.assign(clone.style, {
-		width: `${exportWidth}px`,
-		maxWidth: "none",
-	})
-	clone.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"))
-	clone.querySelectorAll("[aria-labelledby]").forEach((element) => element.removeAttribute("aria-labelledby"))
-	clone.querySelectorAll(".completed-report__table-wrap").forEach((element) => {
-		element.style.overflow = "visible"
-	})
-	host.className = "completed-report-export-host"
-	host.setAttribute("aria-hidden", "true")
-	Object.assign(host.style, {
-		position: "fixed",
-		left: "-100000px",
-		top: "0",
-		width: `${exportWidth}px`,
-		pointerEvents: "none",
-	})
-	host.appendChild(clone)
-	;(document.querySelector(".app-shell") || document.body).appendChild(host)
-	return { element: clone, host }
 }
 
 function formatCompletionTimestamp(value) {
@@ -366,8 +332,9 @@ async function saveLotTransfer() {
 		})
 		lotTransferOpen.value = false
 		targetLot.value = ""
-		showFeedback(`Lot Transfer ${name} created.`)
+		showFeedback(`Lot Transfer ${name} created as Draft. Review the quantity, then submit it.`)
 		emit("refresh")
+		emit("lot-transfer-created", name)
 	} catch (reason) {
 		dialogError.value = reason.message || "Unable to create the Lot Transfer."
 	} finally {

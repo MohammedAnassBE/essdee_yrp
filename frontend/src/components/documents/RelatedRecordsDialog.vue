@@ -53,8 +53,8 @@ const visible = defineModel("visible", { type: Boolean, default: false })
 const filters = defineModel("filters", { type: Array, default: () => [] })
 const emit = defineEmits(["open", "closed"])
 
-function openRow(row) {
-	emit("open", row)
+function openRow(row, snapshot) {
+	emit("open", row, snapshot)
 }
 </script>
 
@@ -79,8 +79,10 @@ function openRow(row) {
 }
 
 .related-records-dialog__body {
+	box-sizing: border-box;
 	display: flex;
 	width: 100%;
+	padding: 0 20px 16px;
 	height: min(78dvh, 840px);
 	min-height: 420px;
 }
@@ -93,6 +95,10 @@ function openRow(row) {
 	padding: 2px 0 0;
 }
 
+.related-records-dialog .list-title-block {
+	display: none;
+}
+
 @media (max-width: 620px) {
 	.related-records-dialog.p-dialog {
 		width: 100vw;
@@ -103,6 +109,7 @@ function openRow(row) {
 	}
 
 	.related-records-dialog__body {
+		padding: 0 12px 12px;
 		height: auto;
 		min-height: 0;
 		flex: 1 1 auto;

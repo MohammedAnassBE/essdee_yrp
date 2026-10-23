@@ -11,6 +11,7 @@
 			:model-value="modelValue"
 			:reset-version="resetVersion"
 			:doctype="linkDoctype"
+			:fieldname="field.fieldname"
 			:filters="linkFilters"
 			:search-handler="searchHandler"
 			:disabled="isDisabled"

@@ -4,39 +4,20 @@
 			<div v-if="loading" :aria-label="`Loading ${source.label} reports`"><Skeleton height="56px" /><Skeleton height="320px" /></div>
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="!tabs.length" title="Reports unavailable" :message="`You do not have permission to view ${source.label} reports.`" :retryable="false" />
-			<template v-else>
-				<div class="merch-reports__mobile common-field">
-					<label for="merch-report-view">Report</label>
-					<Select input-id="merch-report-view" v-model="active" :options="tabs" option-label="label" option-value="value" aria-label="Report" fluid />
-				</div>
-				<Tabs v-model:value="active" scrollable class="erp-tabs">
-					<TabList class="merch-reports__desktop">
-						<Tab v-for="tab in tabs" :key="tab.value" :value="tab.value"><i :class="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></Tab>
-					</TabList>
-					<TabPanels class="merch-reports__panels">
-						<TabPanel :key="active" :value="active"><component :is="currentTab.component" v-bind="currentTab.props" /></TabPanel>
-					</TabPanels>
-				</Tabs>
-			</template>
+			<ReportWorkspace v-else :reports="tabs" :label="`${source.label} reports`" :storage-key="department" />
 		</div>
 	</DepartmentPage>
 </template>
 
 <script setup>
-import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
-import Tab from "primevue/tab"
-import TabList from "primevue/tablist"
-import TabPanel from "primevue/tabpanel"
-import TabPanels from "primevue/tabpanels"
-import Tabs from "primevue/tabs"
 import { computed, defineAsyncComponent, onMounted, ref } from "vue"
-import { useRoute, useRouter } from "vue-router"
 import { getMerchCapabilities, getMerchPurchaseCapabilities } from "../../api/merch.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
 import { combinedDeskReports } from "../../components/reports/deskReportConfig.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
+import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
 import { departments } from "../registry.js"
 
 const REPORTS = [
@@ -57,8 +38,6 @@ const SOURCES = {
 }
 const props = defineProps({ department: { type: String, default: "merch" } })
 const source = { ...departments.find((item) => item.key === props.department), ...SOURCES[props.department] }
-const route = useRoute()
-const router = useRouter()
 const loading = ref(true)
 const loadError = ref("")
 const reports = ref({})
@@ -68,11 +47,6 @@ const tabs = computed(() => [
 		.map((report) => ({ ...report, props: { ...report.props, ...report.capabilityProps?.(reports.value[report.key]) } })),
 	...deskTabs.value,
 ])
-const active = computed({
-	get: () => tabs.value.some((tab) => tab.value === route.query.report) ? route.query.report : tabs.value[0]?.value,
-	set: (report) => router.replace({ query: { ...route.query, report } }),
-})
-const currentTab = computed(() => tabs.value.find((tab) => tab.value === active.value) || tabs.value[0])
 async function load() {
 	loading.value = true
 	loadError.value = ""
@@ -89,14 +63,5 @@ onMounted(load)
 </script>
 
 <style scoped>
-.merch-reports { display: grid; min-width: 0; gap: var(--erp-space-2); }
-.merch-reports :deep(.p-tabs) { min-width: 0; }
-.merch-reports :deep(.p-tab) { display: inline-flex; align-items: center; gap: 7px; min-height: 42px; }
-.merch-reports__panels { padding: 12px 0 0; background: transparent; }
-.merch-reports__panels :deep(.p-tabpanel) { padding: 0; }
-.merch-reports__mobile { display: none; }
-@media (max-width: 700px) {
-	.merch-reports__desktop { display: none; }
-	.merch-reports__mobile { display: grid; gap: 6px; }
-}
+.merch-reports { display: grid; min-width: 0; gap: var(--erp-space-2); padding-top: var(--erp-space-2); }
 </style>

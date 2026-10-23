@@ -107,3 +107,12 @@ export function changeLinkedTransactionStatus(cuttingPlan, doctype, name, action
 		action,
 	})
 }
+
+export function updateLotTransferQuantities(cuttingPlan, name, rows, expectedModified = "") {
+	return callMethod(`${METHOD}update_lot_transfer_quantities`, {
+		cutting_plan: cuttingPlan,
+		name,
+		rows,
+		expected_modified: expectedModified || undefined,
+	})
+}

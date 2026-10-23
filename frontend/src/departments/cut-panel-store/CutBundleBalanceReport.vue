@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :export-source="{ reportKey: 'cut-bundle-balance' }"
+	<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]" :export-source="{ reportKey: 'cut-bundle-balance' }"
 		title="Cut Bundle Balance"
 		:generated="generated"
 		:loading="loading"
@@ -13,10 +13,6 @@
 		<template #filters>
 			<LinkField v-model="filters.lot" doctype="SD YRP Lot" label="Lot" placeholder="All lots" :show-open-button="false" show-clear />
 			<LinkField v-model="filters.supplier" doctype="Supplier" label="Supplier" placeholder="All suppliers" :show-open-button="false" show-clear />
-		</template>
-		<template #actions>
-			<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
 		</template>
 		<template #status>
 			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" determinate @rebuild="rebuild" />
@@ -51,7 +47,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 
 import { useInlineFilters } from "../../composables/useInlineFilters.js"

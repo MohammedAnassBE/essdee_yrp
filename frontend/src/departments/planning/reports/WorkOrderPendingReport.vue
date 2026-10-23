@@ -1,6 +1,6 @@
 <template>
 	<section aria-label="Work Order Pending">
-		<ReportShell :export-source="{ reportKey: 'planning-work-order-pending' }" title="Work Order Pending" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+		<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }]" :export-source="{ reportKey: 'planning-work-order-pending' }" title="Work Order Pending" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<AsyncLinkMultiSelect v-model="filters.production_order" doctype="YRP Production Order" label="Production Orders" />
 				<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
@@ -12,9 +12,6 @@
 				<label class="common-field"><span class="erp-field-label">Status</span><Select v-model="filters.status" :options="['', 'Open', 'Close Request', 'Close']" aria-label="Status" fluid /></label>
 				<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
 			</template>
-			<template #actions>
-				<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-			</template>
 			<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" /></template>
 			<template #metrics><div v-for="(metric, index) in reportSummary || []" :key="index" class="report-metric"><div><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></div></template>
 			<PlanningReportTable title="Work Order Pending" :columns="columns" :rows="rows" :cell-value="cellValue" inline-filters :cell-align="cellAlign" :formatted-cell="formattedCell" />
@@ -25,7 +22,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, reactive, watch } from "vue"
 import DateField from "../../../components/common/DateField.vue"

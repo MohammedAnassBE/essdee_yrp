@@ -10,17 +10,7 @@
 		}"
 	>
 		<nav v-if="!inlineNavigation && !hideNavigation && !isLockedExit(backTo)" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
-			<RouterLink v-slot="{ navigate }" custom :to="backTo">
-				<Button
-					class="back-link"
-					icon="pi pi-arrow-left"
-					:label="backLabel"
-					:aria-label="`Back to ${backLabel}`"
-					severity="secondary"
-					text
-					@click="navigate"
-				/>
-			</RouterLink>
+			<BackLink :to="backTo" :label="backLabel" />
 		</nav>
 		<Card
 			class="department-page__panel erp-page-surface"
@@ -37,11 +27,10 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Card from "primevue/card"
-import { RouterLink } from "vue-router"
 import { computed, provide } from "vue"
 
+import BackLink from "./navigation/BackLink.vue"
 import { pageNavigationKey } from "./navigation/pageNavigationContext.js"
 import { isLockedExit } from "../router/departmentLock.js"
 

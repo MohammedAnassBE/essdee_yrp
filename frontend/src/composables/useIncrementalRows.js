@@ -15,6 +15,8 @@ export function useIncrementalRows(rows, { step = ROW_RENDER_STEP, resetOn = row
 	let observer = null
 
 	function renderMoreRows() { renderLimit.value += step }
+	/** Mounts every row (for a copy or export capture) until `resetOn` changes. */
+	function renderAllRows() { renderLimit.value = Infinity }
 
 	watch(resetOn, () => { renderLimit.value = step })
 	watch(sentinel, (element) => {
@@ -33,5 +35,5 @@ export function useIncrementalRows(rows, { step = ROW_RENDER_STEP, resetOn = row
 	})
 	onBeforeUnmount(() => observer?.disconnect())
 
-	return { renderedRows, unrenderedCount, sentinel, renderMoreRows }
+	return { renderedRows, unrenderedCount, sentinel, renderMoreRows, renderAllRows }
 }

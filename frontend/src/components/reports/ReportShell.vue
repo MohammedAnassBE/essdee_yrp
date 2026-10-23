@@ -6,7 +6,7 @@
 		</header>
 		<form class="report-shell__filters" @submit.prevent="$emit('generate')">
 			<div class="report-filter-grid"><slot name="filters" /></div>
-			<div class="report-shell__commands erp-command-bar" :class="{ 'report-shell__commands--with-copy': copyable }">
+			<div class="report-shell__commands erp-command-bar">
 				<Button
 					type="submit"
 					:label="generateLabel"
@@ -14,24 +14,6 @@
 					class="erp-action-button erp-action-button--primary"
 					:loading="loading"
 					:disabled="generateDisabled"
-				/>
-				<Button
-					type="button"
-					label="Reset"
-					icon="pi pi-refresh"
-					severity="secondary"
-					outlined
-					class="erp-action-button"
-					:disabled="loading"
-					@click="$emit('reset')"
-				/>
-				<slot name="actions" />
-				<ReportExportButton
-					v-if="exportSource"
-					:title="title"
-					:source="exportSource"
-					:get-rows="getRenderedRows"
-					:disabled="loading || !generated || !hasResults"
 				/>
 				<Button
 					v-if="copyable"
@@ -44,6 +26,16 @@
 					:loading="copying"
 					:disabled="loading || copying || !generated || !hasResults"
 					@click="copyReport"
+				/>
+				<slot name="actions" />
+				<ReportActions :items="moreActions" />
+				<ReportExportButton
+					v-if="exportSource"
+					ref="exporter"
+					hide-button
+					:title="title"
+					:source="exportSource"
+					:get-rows="getRenderedRows"
 				/>
 			</div>
 		</form>
@@ -92,12 +84,13 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref } from "vue"
 import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 
 import { copyElementAsImage } from "./copyElementAsImage.js"
+import ReportActions from "./ReportActions.vue"
 import ReportExportButton from "./ReportExportButton.vue"
 import { renderedReportRows } from "./reportExport.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
@@ -110,6 +103,10 @@ const props = defineProps({
 	error: { type: String, default: "" },
 	hasResults: { type: Boolean, default: false },
 	copyable: { type: Boolean, default: false },
+	/** Runs before Copy Report captures; may mount hidden rows and return a function that undoes it. */
+	beforeCopy: { type: Function, default: null },
+	/** Secondary actions for the "⋯" menu, as PrimeVue Menu items. Keep only record operations in the #actions slot. */
+	actions: { type: Array, default: () => [] },
 	exportSource: { type: Object, default: null },
 	keepResultsWhileLoading: { type: Boolean, default: false },
 	generateDisabled: { type: Boolean, default: false },
@@ -123,7 +120,14 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 const pageNavigation = usePageNavigation()
 const showInlineHeading = computed(() => Boolean(pageNavigation?.inline?.value))
 
-defineEmits(["generate", "reset"])
+const emit = defineEmits(["generate", "reset"])
+
+const exporter = ref(null)
+const moreActions = computed(() => [
+	{ label: "Reset", icon: "pi pi-refresh", disabled: props.loading, command: () => emit("reset") },
+	props.exportSource && { label: "Export", icon: "pi pi-download", visible: Boolean(exporter.value?.canExport), disabled: props.loading || !props.generated || !props.hasResults, command: () => exporter.value.open() },
+	...props.actions,
+])
 
 const reportRoot = ref(null)
 const resultsRoot = ref(null)
@@ -132,6 +136,7 @@ const copying = ref(false)
 const copyNotice = ref("")
 const copyNoticeIsError = ref(false)
 let noticeTimer
+const COPY_HIDDEN = [".report-shell__filters", ".report-shell__copy-notice", ".report-shell__refreshing"]
 
 function showCopyNotice(message, isError = false) {
 	copyNotice.value = message
@@ -145,7 +150,13 @@ async function copyReport() {
 	copying.value = true
 	copyNotice.value = ""
 	try {
-		await copyElementAsImage(reportRoot.value)
+		const restoreState = props.beforeCopy ? await props.beforeCopy() : null
+		await nextTick()
+		try {
+			await copyElementAsImage(reportRoot.value, { hide: COPY_HIDDEN })
+		} finally {
+			restoreState?.()
+		}
 		showCopyNotice("Report copied to clipboard")
 	} catch (exception) {
 		showCopyNotice(exception?.message || "Could not copy the report.", true)
@@ -341,6 +352,10 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 	.report-shell__commands :deep(.p-button) {
 		flex: 1;
 	}
+
+	.report-shell__commands :deep(.report-actions__trigger) {
+		flex: 0 0 auto;
+	}
 }
 
 @media (max-width: 360px) {
@@ -350,7 +365,7 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 
 	.report-shell__commands {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: minmax(0, 1fr) auto;
 	}
 
 	.report-shell__commands :deep(.p-button) {
@@ -359,8 +374,13 @@ onBeforeUnmount(() => window.clearTimeout(noticeTimer))
 		min-height: 44px;
 	}
 
-	.report-shell__commands--with-copy :deep(.p-button:first-child) {
+	.report-shell__commands :deep(.p-button:first-child) {
 		grid-column: 1 / -1;
+	}
+
+	.report-shell__commands :deep(.report-actions__trigger) {
+		width: auto;
+		min-width: 44px;
 	}
 
 	.report-shell__copy-button {

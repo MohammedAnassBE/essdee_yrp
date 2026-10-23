@@ -85,6 +85,7 @@ def get_capabilities() -> dict:
 		"work_orders": fabric_store_sections.get("work_orders") or {},
 		"delivery_challans": fabric_store_sections.get("delivery_challans") or {},
 		"goods_received_notes": fabric_store_sections.get("goods_received_notes") or {},
+		"dispatches": finishing_sections.get("dispatches") or {},
 		"box_stickers": _with_label(
 			"Box Sticker Print",
 			permission_flags("SD YRP Box Sticker Print", ("read", "create", "write", "submit")),

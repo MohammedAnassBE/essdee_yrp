@@ -189,7 +189,7 @@ test("F-D15/F-B16 Delivery Challan defaults and Comments", async () => {
 
 test("F-B19 marker title and ratio error", () => {
 	const source = read("departments/cutting/CuttingMarkerDialog.vue")
-	const header = source.match(/:header="([^"]+)"/)[1]
+	const header = source.match(/<RecordDialogHeader[\s\S]*?:title="([^"]+)"/)[1]
 	const title = new Function("record", "canEdit", `return ${header}`)
 	assert.equal(title({ name: "CM-1" }, false), "Cutting Marker · CM-1")
 	assert.equal(title({ name: "CM-1" }, true), "Edit Cutting Marker · CM-1")

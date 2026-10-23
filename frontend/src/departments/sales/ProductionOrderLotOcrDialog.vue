@@ -43,7 +43,7 @@ import Message from "primevue/message"
 import { computed, ref, watch } from "vue"
 
 import { getLotOcrDetails } from "../../api/sales.js"
-import { copyElementAsImage } from "../../components/reports/copyElementAsImage.js"
+import { copyLotOcrImage } from "./lotOcrExport.js"
 import LotOcrTable from "./LotOcrTable.vue"
 
 const props = defineProps({
@@ -85,28 +85,13 @@ async function copyDetails() {
 	copying.value = true
 	copyFeedback.value = ""
 	copyError.value = false
-	let exportHost = null
 	try {
-		const source = capture.value
-		if (!source) throw new Error("Nothing available to copy.")
-		const table = source.querySelector("table")
-		const exportWidth = Math.max(source.clientWidth, table?.scrollWidth || 0)
-		exportHost = document.createElement("div")
-		Object.assign(exportHost.style, { position: "fixed", left: "-100000px", top: "0", pointerEvents: "none" })
-		const exportNode = source.cloneNode(true)
-		exportNode.dataset.ocrExport = "true"
-		Object.assign(exportNode.style, { width: `${exportWidth}px`, maxWidth: "none", overflow: "visible" })
-		const exportTableWrap = exportNode.querySelector(".ppo-lot-ocr__table-wrap")
-		if (exportTableWrap) Object.assign(exportTableWrap.style, { width: "100%", maxWidth: "none", overflow: "visible" })
-		exportHost.appendChild(exportNode)
-		document.body.appendChild(exportHost)
-		await copyElementAsImage(exportNode)
+		await copyLotOcrImage(capture.value)
 		copyFeedback.value = "Lot OCR details copied to clipboard."
 	} catch (reason) {
 		copyError.value = true
 		copyFeedback.value = reason?.message || "Unable to copy Lot OCR details."
 	} finally {
-		exportHost?.remove()
 		copying.value = false
 	}
 }

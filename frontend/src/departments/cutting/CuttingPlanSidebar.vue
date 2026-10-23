@@ -44,7 +44,7 @@
 			</header>
 			<div v-if="loading" class="rail-loading"><Skeleton v-for="index in 3" :key="index" height="5.2rem" /></div>
 			<div v-else-if="filteredMarkers.length" class="rail-list">
-				<button v-for="marker in filteredMarkers" :key="marker.name" type="button" class="rail-card marker-card" @click="openMarker(marker.name)">
+				<button v-for="marker in filteredMarkers" :key="marker.name" type="button" class="rail-card marker-card" @click="openMarker(marker.name, filteredMarkers)">
 					<div class="rail-card__top"><div><strong :title="marker.marker_name || marker.name">{{ marker.marker_name || marker.name }}</strong><div class="marker-subline"><small>{{ marker.name }}</small><span class="marker-status" :class="`marker-status--${markerStatus(marker).toLowerCase()}`">{{ markerStatus(marker) }}</span></div></div><i class="pi pi-chevron-right"></i></div>
 					<div class="marker-metrics">
 						<span><small>Marker size</small><b>{{ decimal(marker.length, 3) }} m <i class="pi pi-times"></i> {{ decimal(marker.width, 3) }} in</b></span>
@@ -108,7 +108,7 @@
 					type="button"
 					class="rail-card laysheet-card"
 					:class="laySheetCardClass(sheet.status)"
-					@click="openLaySheet(sheet.name)"
+					@click="openLaySheet(sheet.name, filteredLaySheets)"
 				>
 					<div class="rail-card__top">
 						<div class="lay-title">
@@ -174,8 +174,8 @@
 			@closed="expandedListClosed('laysheet')"
 		/>
 
-		<CuttingMarkerDialog v-if="permissions.can_read_marker" v-model:visible="markerOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :marker-name="selectedMarker" @update:visible="recordDialogVisibilityChanged('marker', $event)" @changed="changed" />
-		<CuttingLaySheetDialog v-if="permissions.can_read_laysheet" v-model:visible="laysheetOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :laysheet-name="selectedLaySheet" :can-create="Boolean(permissions.can_create_laysheet)" @update:visible="recordDialogVisibilityChanged('laysheet', $event)" @changed="changed" />
+		<CuttingMarkerDialog v-if="permissions.can_read_marker" v-model:visible="markerOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :marker-name="selectedMarker" :previous-name="markerNeighbours.previousName" :next-name="markerNeighbours.nextName" @navigate="selectedMarker = $event" @update:visible="recordDialogVisibilityChanged('marker', $event)" @changed="changed" />
+		<CuttingLaySheetDialog v-if="permissions.can_read_laysheet" v-model:visible="laysheetOpen" :parent-doctype="resolvedParentDoctype" :parent-name="resolvedParentName" :laysheet-name="selectedLaySheet" :previous-name="laySheetNeighbours.previousName" :next-name="laySheetNeighbours.nextName" :can-create="Boolean(permissions.can_create_laysheet)" @navigate="selectedLaySheet = $event" @update:visible="recordDialogVisibilityChanged('laysheet', $event)" @changed="changed" />
 	</aside>
 </template>
 
@@ -189,6 +189,7 @@ import ListviewFilters from "../../components/common/ListviewFilters.vue"
 import RelatedRecordsDialog from "../../components/documents/RelatedRecordsDialog.vue"
 import CuttingLaySheetDialog from "./CuttingLaySheetDialog.vue"
 import CuttingMarkerDialog from "./CuttingMarkerDialog.vue"
+import { adjacentRecordNames, listSnapshotNames } from "./recordSequence.js"
 
 const props = defineProps({
 	cuttingPlan: { type: String, default: "" },
@@ -205,6 +206,9 @@ const markerOpen = ref(false)
 const selectedMarker = ref("")
 const laysheetOpen = ref(false)
 const selectedLaySheet = ref("")
+const markerSequence = ref([])
+const laySheetSequence = ref([])
+let sequenceRequest = 0
 const markerFiltersOpen = ref(false)
 const laySheetFiltersOpen = ref(false)
 const markerFilters = ref([])
@@ -234,6 +238,8 @@ const markerListLabels = { marker_name: "Marker", selected_type: "Type", require
 const laySheetListColumns = ["lay_no", "cutting_marker", "status", "bundle_generated_date", "printed_time"]
 const laySheetListLabels = { lay_no: "Lay No", cutting_marker: "Marker", bundle_generated_date: "Bundle Date", printed_time: "Printed" }
 const laySheetStatusOptions = ["Started", "Completed", "Bundles Generated", "Approval Pending", "Label Printed", "Cancelled"]
+const markerNeighbours = computed(() => adjacentRecordNames(markerSequence.value, selectedMarker.value))
+const laySheetNeighbours = computed(() => adjacentRecordNames(laySheetSequence.value, selectedLaySheet.value))
 const markersByName = computed(() => new Map(markers.value.map((marker) => [marker.name, marker])))
 const markerFilterFields = computed(() => [
 	{ fieldname: "marker_name", label: "Marker Name", fieldtype: "Data" },
@@ -272,14 +278,29 @@ const laySheetFilterFields = computed(() => [
 const filteredMarkers = computed(() => markers.value.filter((marker) => matchesFilters(marker, markerFilters.value, markerValue)))
 const filteredLaySheets = computed(() => laysheets.value.filter((sheet) => matchesFilters(sheet, laySheetFilters.value, laySheetValue)))
 
-function openMarker(name) {
+function openMarker(name, records = []) {
+	sequenceRequest += 1
+	markerSequence.value = records.map((record) => record.name)
 	selectedMarker.value = name
 	markerOpen.value = true
 }
 
-function openLaySheet(name) {
+function openLaySheet(name, records = []) {
+	sequenceRequest += 1
+	laySheetSequence.value = records.map((record) => record.name)
 	selectedLaySheet.value = name
 	laysheetOpen.value = true
+}
+
+async function loadExpandedSequence(sequence, snapshot) {
+	if (!snapshot) return
+	const request = ++sequenceRequest
+	try {
+		const names = await listSnapshotNames(snapshot)
+		if (request === sequenceRequest) sequence.value = names
+	} catch {
+		if (request === sequenceRequest) sequence.value = []
+	}
 }
 
 function safeRailFilters(filters, fields) {
@@ -301,16 +322,18 @@ function openExpandedList(type) {
 	laySheetListOpen.value = true
 }
 
-function openMarkerFromExpanded(row) {
+function openMarkerFromExpanded(row, snapshot) {
 	expandedRecordOrigin.value = "marker"
 	markerListSuspended.value = true
 	openMarker(row?.name || "")
+	loadExpandedSequence(markerSequence, snapshot)
 }
 
-function openLaySheetFromExpanded(row) {
+function openLaySheetFromExpanded(row, snapshot) {
 	expandedRecordOrigin.value = "laysheet"
 	laySheetListSuspended.value = true
 	openLaySheet(row?.name || "")
+	loadExpandedSequence(laySheetSequence, snapshot)
 }
 
 function recordDialogVisibilityChanged(type, visible) {

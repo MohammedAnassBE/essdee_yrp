@@ -147,7 +147,9 @@
 											</td>
 											<td v-if="hasActualDia && block.kind === 'items'" class="erp-number">{{ formatQty(receivableBalance(section.group, row)) }}</td>
 											<td v-if="canEditLots && block.kind === 'items'">
-												<Select v-if="canEditLotForEntry(row, workspace.lot_options, lotFieldname)" v-model="row.dimensions[lotFieldname]" :options="lotChoicesForEntry(row, workspace.lot_options, lotFieldname)" option-label="label" option-value="value" option-disabled="disabled" placeholder="Choose lot" aria-label="Receipt lot" @update:model-value="markDirty" />
+												<Select v-if="canEditLotForEntry(row, workspace.lot_options, lotFieldname)" v-model="row.dimensions[lotFieldname]" :options="lotChoicesForEntry(row, workspace.lot_options, lotFieldname, lotItems)" option-label="label" option-value="value" option-disabled="disabled" filter :filter-fields="['label', 'description']" placeholder="Choose lot" aria-label="Receipt lot" @update:model-value="markDirty">
+													<template #option="{ option }"><span class="grn-lot-option"><strong>{{ option.label }}</strong><small v-if="option.description">{{ option.description }}</small></span></template>
+												</Select>
 												<span v-else><DocumentLink doctype="SD YRP Lot" :name="row.dimensions?.[lotFieldname]" :label="row.dimensions?.[lotFieldname]" /></span>
 												<Button v-if="unusedLots(section.group, row).length" label="Add lot" text size="small" @click="addLot(section.group, row)" />
 												<Button v-if="canRemoveLot(section.group, row)" label="Remove" text size="small" @click="removeLot(section.group, row)" />
@@ -267,7 +269,7 @@ import {
 	saveGoodsReceivedNote,
 	saveGoodsReceivedNoteInspection,
 } from "../../api/fabricStore.js"
-import { searchLinkedDocument } from "../../api/frappe.js"
+import { getList, searchLinkedDocument } from "../../api/frappe.js"
 import FormField from "../../components/common/FormField.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
@@ -281,7 +283,7 @@ import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import { addActualDia, canRemoveActualDia, changeActualDia, diaSiblings, prepareActualDiaGroups, receivableBalance, setActualDiaRowError, unusedDias } from "./grnActualDia.js"
 import { additionalGrnFieldState, additionalGrnSourceContext } from "./grnAdditional.js"
-import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, unusedLotsForEntry } from "./grnLotOptions.js"
+import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, lotNamesInOptions, unusedLotsForEntry } from "./grnLotOptions.js"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
 
@@ -302,6 +304,7 @@ const panelError = ref("")
 const dirty = ref(false)
 const editingSubmitted = ref(false)
 const workspace = ref({})
+const lotItems = ref({})
 const currentName = ref("")
 const splitVisible = ref(false)
 const splitSource = ref(null)
@@ -943,6 +946,12 @@ function currentPostingDefaults() {
 }
 
 onMounted(() => load())
+watch(() => lotNamesInOptions(workspace.value.lot_options).join("\n"), async (key) => {
+	lotItems.value = {}
+	if (!key) return
+	const lots = await getList("SD YRP Lot", { fields: ["name", "item"], filters: [["name", "in", key.split("\n")]], pageLength: 0 })
+	if (key === lotNamesInOptions(workspace.value.lot_options).join("\n")) lotItems.value = Object.fromEntries(lots.map((lot) => [lot.name, lot.item]))
+})
 watch(() => [props.name, JSON.stringify(props.sourceContext || {})], ([name, source], previous) => {
 	if (!previous || name === previous[0] && source === previous[1]) return
 	loadSequence += 1
@@ -957,6 +966,8 @@ function documentDeleted() {
 </script>
 
 <style scoped>
+.grn-lot-option { display: flex; flex-direction: column; min-width: 0; }
+.grn-lot-option small { color: var(--p-text-muted-color); font-size: 0.75rem; }
 .grn-dia-error { display: block; color: var(--p-red-600, #dc2626); max-width: 280px; white-space: normal; }
 .goods-received-note-workspace { width: 100%; min-width: 0; }
 .goods-received-note-tabs :deep(.p-tabpanels) { padding: 12px 0 0; background: transparent; }

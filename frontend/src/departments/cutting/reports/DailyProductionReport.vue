@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :export-source="{ reportKey: 'cutting-dpr' }"
+	<ReportShell :actions="[{ label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]" :export-source="{ reportKey: 'cutting-dpr' }"
 		title="Daily Production Report"
 		:generated="generated"
 		:loading="loading"
@@ -38,9 +38,6 @@
 					<option value="Manual Cutting">Manual Cutting</option>
 				</select>
 			</label>
-		</template>
-		<template #actions>
-			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
 		</template>
 		<template #status>
 			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :error="reportError" determinate @rebuild="rebuild" />
@@ -81,7 +78,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import { computed, reactive, ref, watch } from "vue"
 
 import { useWebReport } from "../../../composables/useWebReport.js"

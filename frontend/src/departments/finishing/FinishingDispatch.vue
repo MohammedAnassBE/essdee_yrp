@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan Dispatch" back-to="/finishing/dispatches" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan Dispatch" :back-to="`${basePath}/dispatches`" back-label="Finishing Plan Dispatches" :show-title="false" flat full-width inline-navigation>
 		<div v-if="loading && !ready" class="finishing-plan__probe erp-workspace" aria-label="Loading Finishing Plan Dispatch"><Skeleton height="64px" /><Skeleton height="360px" /></div>
 		<div v-else-if="loadError && !ready" class="finishing-plan__probe erp-workspace">
 			<WorkspaceLoadError title="Finishing Plan Dispatch unavailable" :message="loadError" :loading="loading" @retry="load" />
@@ -18,7 +18,7 @@
 				<div class="finishing-dispatch__actions">
 					<CustomPrintButtons v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :record="record" :permissions="permissions" :disabled="busy" />
 					<DocumentPrintButton v-if="dispatchId && record.name && permissions.can_print" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :formats="workspace.print_formats || []" :disabled="busy" />
-					<DocumentDeleteButton v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :docstatus="record.docstatus" :disabled="busy || loading" redirect-to="/finishing/dispatches" />
+					<DocumentDeleteButton v-if="dispatchId && record.name" doctype="SD YRP Finishing Plan Dispatch" :name="record.name" :docstatus="record.docstatus" :disabled="busy || loading" :redirect-to="`${basePath}/dispatches`" />
 					<template v-if="draft">
 						<Button label="Fetch Items" icon="pi pi-refresh" severity="secondary" outlined :disabled="busy" @click="confirmFetch" />
 						<DocumentSaveButton :saved="Boolean(record.name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Finishing Plan Dispatch ${record.name || ''}`.trim()" v-if="permissions.can_write" :show-submit="Boolean(permissions.can_submit)" :loading="busy" @save="save(false)" @submit="save(true)" />
@@ -97,6 +97,11 @@ import { dispatchEntrySource, dispatchInitialState } from "./finishingEntries.js
 import { setDispatchSupplier, warehouseFilters } from "./supplierWarehouse.js"
 import "./finishing.css"
 
+/** `basePath` is the department that owns the dispatch pages. */
+const props = defineProps({
+	basePath: { type: String, default: "/finishing" },
+	viewRouteName: { type: String, default: "finishing-dispatch" },
+})
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -187,7 +192,7 @@ async function run(request, message, after = null) {
 function save(submit) {
 	run(() => saveDispatch(collectItems(), dispatchId.value, submit, record.value.modified), submit ? "Finishing Plan Dispatch submitted" : "Finishing Plan Dispatch saved", async (data) => {
 		applyWorkspace(data)
-		if (!dispatchId.value && data?.record?.name) await router.replace({ name: "finishing-dispatch", params: { dispatchId: data.record.name }, state: preserveListNavigationState(data.record.name, data.record.modified) })
+		if (!dispatchId.value && data?.record?.name) await router.replace({ name: props.viewRouteName, params: { dispatchId: data.record.name }, state: preserveListNavigationState(data.record.name, data.record.modified) })
 	})
 }
 

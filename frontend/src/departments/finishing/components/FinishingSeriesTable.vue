@@ -3,8 +3,8 @@
 		<table class="finishing-table series-table">
 			<thead>
 				<tr>
-					<th class="series-table__toggle"><span class="sr-only">Expand</span></th>
-					<th v-if="printable" class="series-table__toggle">Print</th>
+					<th v-if="!expandAll" class="series-table__toggle"><span class="sr-only">Expand</span></th>
+					<th v-if="printable && !expandAll" class="series-table__toggle">Print</th>
 					<th>Series No</th>
 					<th>Date</th>
 					<th>GRN Number</th>
@@ -17,13 +17,13 @@
 			</thead>
 			<tbody>
 				<template v-for="row in rows" :key="row.series">
-					<tr class="series-table__row" :class="{ 'is-open': expanded === row.series }">
-						<td class="series-table__toggle">
+					<tr class="series-table__row" :class="{ 'is-open': isOpen(row) }">
+						<td v-if="!expandAll" class="series-table__toggle">
 							<button type="button" class="series-table__expand" :aria-expanded="expanded === row.series" :aria-label="`${expanded === row.series ? 'Collapse' : 'Expand'} ${row.series}`" @click="emit('toggle', row.series)">
 								<i :class="expanded === row.series ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" aria-hidden="true" />
 							</button>
 						</td>
-						<td v-if="printable" class="series-table__toggle">
+						<td v-if="printable && !expandAll" class="series-table__toggle">
 							<button type="button" class="series-table__expand" :aria-label="`Print ${row.detail.grn_number}`" :title="`Print ${row.detail.grn_number}`" @click="emit('print', row.detail.grn_number)"><i class="pi pi-print" aria-hidden="true" /></button>
 						</td>
 						<td><strong>{{ row.series }}</strong></td>
@@ -35,8 +35,8 @@
 						<td v-for="type in types" :key="type" class="erp-number">{{ formatQuantity(row.values[type] || 0) }}</td>
 						<td class="erp-number finishing-table__row-total">{{ formatQuantity(row.total) }}</td>
 					</tr>
-					<tr v-if="expanded === row.series" class="series-table__detail">
-						<td :colspan="8 + types.length + (printable ? 1 : 0)"><div class="finishing-stack series-table__detail-panel"><slot name="detail" :detail="row.detail" :series="row.series" /></div></td>
+					<tr v-if="isOpen(row)" class="series-table__detail">
+						<td :colspan="7 + types.length + (expandAll ? 0 : 1 + (printable ? 1 : 0))"><div class="finishing-stack series-table__detail-panel"><slot name="detail" :detail="row.detail" :series="row.series" /></div></td>
 					</tr>
 				</template>
 			</tbody>
@@ -48,14 +48,17 @@
 import { formatDate } from "../../../components/reports/reportUtils.js"
 import { formatQuantity } from "../finishingViews.js"
 
-defineProps({
+const props = defineProps({
 	rows: { type: Array, default: () => [] },
 	types: { type: Array, default: () => [] },
 	expanded: { type: String, default: "" },
 	label: { type: String, default: "Series results" },
 	printable: { type: Boolean, default: false },
+	/** Opens every detail row and drops the toggle columns, for Copy Report. */
+	expandAll: { type: Boolean, default: false },
 })
 const emit = defineEmits(["toggle", "open-grn", "print"])
+const isOpen = row => props.expandAll || props.expanded === row.series
 </script>
 
 <style scoped>

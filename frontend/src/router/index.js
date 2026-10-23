@@ -91,9 +91,10 @@ const idProps = (param, extra) => (route) => ({ [param]: String(route.params[par
 
 const Debits = () => import("../departments/accounts/Debits.vue")
 
-/** Delivery Challan and GRN lists of a Work Orders department at `listPaths`; `pages` adds the document pages, `editable` their new and edit pages. */
+/** Delivery Challan and GRN lists of a department at `listPaths` (null skips one); `pages` adds the document pages, `editable` their new and edit pages. */
 function departmentDocumentRoutes(prefix, storeName, listPaths, { pages = true, editable = true } = {}) {
-	const basePath = listPaths[0].slice(0, listPaths[0].lastIndexOf("/"))
+	const firstPath = listPaths.find(Boolean)
+	const basePath = firstPath.slice(0, firstPath.lastIndexOf("/"))
 	const viewRoutes = { deliveryChallanViewRouteName: `${prefix}-delivery-challan`, deliveryChallanNewRouteName: editable ? `${prefix}-delivery-challan-new` : "", goodsReceivedNoteViewRouteName: `${prefix}-goods-received-note`, goodsReceivedNoteNewRouteName: editable ? `${prefix}-goods-received-note-new` : "" }
 	const documents = [
 		["delivery-challans", "delivery-challan", "deliveryChallanId", FabricDeliveryChallan, "Delivery Challans"],
@@ -101,6 +102,7 @@ function departmentDocumentRoutes(prefix, storeName, listPaths, { pages = true, 
 	]
 	return documents.flatMap(([segment, single, param, component, label], index) => {
 		const listPath = listPaths[index]
+		if (!listPath) return []
 		const list = { path: listPath, name: `${prefix}-${segment}`, component: FabricStoreSection, props: { section: segment.replaceAll("-", "_"), storeName, basePath, ...viewRoutes } }
 		if (!pages) return [list]
 		const pageProps = { backTo: listPath, backLabel: label, viewRouteName: `${prefix}-${single}`, ...(editable ? { duplicateRouteName: `${prefix}-${single}-new` } : {}) }
@@ -251,6 +253,9 @@ const routes = [
 	{ path: "/finishing/dispatches", name: "finishing-dispatches", component: FinishingDispatches },
 	{ path: "/finishing/dispatches/new", name: "finishing-dispatch-new", component: FinishingDispatch },
 	{ path: "/finishing/dispatches/:dispatchId", name: "finishing-dispatch", component: FinishingDispatch },
+	...[["/planning/dispatches", "planning-dispatches", FinishingDispatches], ["/planning/dispatches/new", "planning-dispatch-new", FinishingDispatch], ["/planning/dispatches/:dispatchId", "planning-dispatch", FinishingDispatch]].map(([path, name, component]) => (
+		{ path, name, component, props: { basePath: "/planning", backLabel: "Planning", viewRouteName: "planning-dispatch" } }
+	)),
 	{ path: "/sales/production-orders", name: "sales-production-orders", component: SalesSection },
 	{ path: "/sales/production-orders/new", name: "sales-production-order-new", component: ProductionOrderEditorPage },
 	{ path: "/sales/production-orders/:productionOrderId/edit", name: "sales-production-order-edit", component: ProductionOrderEditorPage, props: true },
@@ -701,6 +706,7 @@ const routes = [
 			purchaseOrderNewRouteName: "purchase-purchase-order-new",
 		},
 	},
+	...departmentDocumentRoutes("purchase", "Purchase", [null, "/purchase/goods-received-notes"]),
 	{ path: "/purchase/lots", name: PURCHASE_ROUTES.lots, component: LotsList },
 	{ path: "/purchase/lots/new", name: PURCHASE_ROUTES.lotNew, component: LotEditorPage },
 	{ path: "/purchase/lots/:lotId", name: PURCHASE_ROUTES.lot, component: LotPage, props: true },

@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :export-source="{ doctype: 'SD YRP Cutting LaySheet' }"
+	<ReportShell :actions="[{ label: 'Paste', icon: 'pi pi-clipboard', disabled: loading, command: () => { pasteVisible = true } }]" :export-source="{ doctype: 'SD YRP Cutting LaySheet' }"
 		title="Multi CCR"
 		:generated="generated"
 		:loading="loading"
@@ -14,7 +14,6 @@
 			<label><span class="erp-field-label">Status</span><select class="erp-native-select" v-model="filters.status"><option value="">All statuses</option><option value="Open">Open</option><option value="Closed">Closed</option></select></label>
 			<LinkField v-model="filters.category" doctype="Product Category" label="Product category" placeholder="Search category…" :show-open-button="false" show-clear />
 		</template>
-		<template #actions><Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="loading" @click="pasteVisible = true" /></template>
 
 		<template #metrics>
 			<div class="report-metric"><i class="pi pi-inbox" /><div><span>Output lots</span><strong>{{ number(result.output_lots?.length) }}</strong></div></div>
@@ -76,7 +75,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import { computed, reactive, ref } from "vue"
 
 import { getMultiCcrReport } from "../../../api/cuttingReports.js"

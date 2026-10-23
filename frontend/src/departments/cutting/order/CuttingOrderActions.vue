@@ -58,9 +58,9 @@ import { computed, ref } from "vue"
 
 import { callMethod } from "../../../api/frappe.js"
 import { updateCuttingOrderCompleted } from "../../../api/cuttingOrder.js"
-import { copyElementAsImage } from "../../../components/reports/copyElementAsImage.js"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "../CuttingCompletedReport.vue"
+import { copyCompletedReportImage } from "../completedReportExport.js"
 
 const props = defineProps({ doc: { type: Object, required: true }, data: { type: Object, default: () => ({}) }, extraActions: { type: Array, default: () => [] } })
 const emit = defineEmits(["refresh"])
@@ -118,7 +118,7 @@ async function saveCompleted() {
 
 async function copyReport() {
 	copying.value = true; copyFeedback.value = ""; copyError.value = false
-	try { await copyElementAsImage(capture.value); copyFeedback.value = "Completed quantities copied to clipboard." }
+	try { await copyCompletedReportImage(capture.value); copyFeedback.value = "Completed quantities copied to clipboard." }
 	catch (reason) { copyError.value = true; copyFeedback.value = reason?.message || "Unable to copy completed quantities." }
 	finally { copying.value = false }
 }

@@ -78,6 +78,14 @@ class TestPlanningWebCapabilities(TestCase):
 		}
 		self.assertEqual(web_workspace.get_capabilities(), {"sections": {}})
 
+	def test_dispatches_follow_finishing_dispatch_capability(self):
+		self.report_permissions.return_value = {"multi-ccr": False}
+		dispatches = {"label": "Finishing Plan Dispatch", "can_read": True, "can_create": True}
+		self.sources["finishing_workspace"].return_value = {"sections": {"dispatches": dispatches}}
+		self.assertEqual(web_workspace.get_capabilities()["sections"]["dispatches"], dispatches)
+		self.sources["finishing_workspace"].return_value = {"sections": {"dispatches": {"can_read": False}}}
+		self.assertNotIn("dispatches", web_workspace.get_capabilities()["sections"])
+
 	def test_cutting_plans_alone_does_not_grant_reports(self):
 		self.report_permissions.return_value = {"cutting-plans": True, "daily-production": False}
 		self.assertNotIn("reports", web_workspace.get_capabilities()["sections"])

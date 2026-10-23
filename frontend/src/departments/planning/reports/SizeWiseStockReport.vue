@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :export-source="{ reportKey: 'planning-size-wise-stock' }" title="Size-wise Stock" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
+	<ReportShell :actions="[{ label: 'Paste', icon: 'pi pi-clipboard', disabled: isBusy, command: () => { pasteVisible = true } }]" :export-source="{ reportKey: 'planning-size-wise-stock' }" title="Size-wise Stock" :generated="generated" :loading="loading" :error="reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 		<template #filters>
 			<AsyncLinkMultiSelect v-model="filters.lot" doctype="SD YRP Lot" label="Lots" />
 			<AsyncLinkMultiSelect v-model="filters.item" doctype="Item" label="Items" :filters="{ has_variants: 1 }" />
@@ -8,7 +8,6 @@
 			<OrderedProcessSelect v-model="filters.process_list" />
 			<small v-if="hint" class="erp-help-text" role="status">{{ hint }}</small>
 		</template>
-		<template #actions><Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" /></template>
 		<template #status><ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="reused" :error="reportError" @rebuild="rebuild" /></template>
 		<section v-for="matrix in matrices" :key="matrix.title" class="finishing-stack">
 			<h3>{{ matrix.title }}</h3>
@@ -19,7 +18,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
 import LinkField from "../../../components/common/LinkField.vue"

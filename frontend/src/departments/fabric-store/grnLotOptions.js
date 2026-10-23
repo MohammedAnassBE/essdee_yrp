@@ -6,12 +6,17 @@ export function allowedLotsForEntry(entry, lotOptions) {
 	return [...new Set(allowed[0])].filter((lot) => lot && allowed.every((lots) => lots.includes(lot)))
 }
 
-export function lotChoicesForEntry(entry, lotOptions, lotFieldname) {
+export function lotChoicesForEntry(entry, lotOptions, lotFieldname, lotItems = {}) {
 	const allowed = allowedLotsForEntry(entry, lotOptions)
-	const choices = allowed.map((lot) => ({ label: lot, value: lot, disabled: false }))
+	const choice = (lot, disabled) => ({ label: lot, value: lot, description: lotItems[lot] || "", disabled })
+	const choices = allowed.map((lot) => choice(lot, false))
 	const current = entry.dimensions?.[lotFieldname]
-	if (current && !allowed.includes(current)) choices.push({ label: current, value: current, disabled: true })
+	if (current && !allowed.includes(current)) choices.push(choice(current, true))
 	return choices
+}
+
+export function lotNamesInOptions(lotOptions) {
+	return [...new Set(Object.values(lotOptions || {}).flat().filter(Boolean))]
 }
 
 export function canEditLotForEntry(entry, lotOptions, lotFieldname) {

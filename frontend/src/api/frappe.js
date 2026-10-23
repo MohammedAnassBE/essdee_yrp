@@ -303,6 +303,7 @@ export async function searchLink(
 	filters = {},
 	pageLength = 20,
 	matchVisibleOnly = false,
+	{ allowVariants = false } = {},
 ) {
 	if (!doctype) return []
 	const rows = await sharedRead("essdee_yrp.api.link_search.link_search", {
@@ -311,6 +312,7 @@ export async function searchLink(
 		filters,
 		page_length: pageLength,
 		match_visible_only: matchVisibleOnly,
+		...(allowVariants ? { allow_variants: 1 } : {}),
 	})
 	return Array.isArray(rows) ? rows : []
 }

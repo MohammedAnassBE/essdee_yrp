@@ -76,6 +76,7 @@
 						:data="workspaceData"
 						:extra-actions="duplicateActions"
 						@refresh="refreshPage"
+						@lot-transfer-created="openLotTransfer"
 					/>
 					<Button
 						v-if="canEditSubmitted"
@@ -92,6 +93,7 @@
 							<div class="cutting-plan-workspace-error"><span>{{ workspaceError }}</span><Button label="Retry" icon="pi pi-refresh" severity="danger" outlined size="small" :loading="workspaceLoading" @click="retryWorkspace" /></div>
 						</Message>
 						<CuttingPlanTabs
+							ref="planTabs"
 							:doc="doc"
 							:meta="meta"
 							:data="workspaceData"
@@ -171,6 +173,7 @@ const workspaceError = ref("")
 const workspaceReady = ref(false)
 const currentDocument = ref(null)
 const formView = ref(null)
+const planTabs = ref(null)
 const lifecycleConfirmVisible = ref(false)
 const pendingLifecycleCommand = ref("")
 const lifecycleBusy = ref("")
@@ -286,6 +289,10 @@ async function confirmLifecycleAction() {
 
 function refreshPage() {
 	formView.value?.reload({ background: true })
+}
+
+function openLotTransfer(name) {
+	planTabs.value?.openTransaction({ doctype: "SD YRP Lot Transfer", name }, "lot_transfer")
 }
 
 async function probeEditor() {

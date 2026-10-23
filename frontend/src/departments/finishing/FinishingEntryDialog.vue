@@ -18,9 +18,9 @@
 					<label v-else-if="field === 'lot_source'" class="common-field"><span class="finishing-entry-dialog__label">Lot Source</span><Select v-model="form.lot_source" :options="['New Lot', 'Existing Lot']" fluid :disabled="busy" /></label>
 					<label v-else-if="field === 'lot_name'" class="common-field"><span class="finishing-entry-dialog__label">Lot Name</span><InputText v-model="form.lot_name" fluid :disabled="busy" /></label>
 					<LinkField v-else-if="field === 'existing_lot'" v-model="form.existing_lot" doctype="SD YRP Lot" label="Existing Lot" required :search-handler="searchUnconfiguredLots" :show-open-button="false" :disabled="busy" />
-					<label v-else-if="field === 'alternative_item'" class="common-field"><span class="finishing-entry-dialog__label">Alternative Item</span><Select v-model="form.alternative_item" :options="options.alternative_items || []" placeholder="Select item" fluid :disabled="busy" @change="form.production_detail = ''" /></label>
+					<LinkField v-else-if="field === 'alternative_item'" :model-value="form.alternative_item" doctype="Item" label="Alternative Item" placeholder="Select item" required :filters="{ name: ['in', options.alternative_items || []] }" :allow-create="false" :show-open-button="false" :disabled="busy" @update:model-value="setAlternativeItem" />
 					<LinkField v-else-if="field === 'production_detail'" :key="form.alternative_item" v-model="form.production_detail" doctype="YRP Item Production Detail" label="Item Production Detail" required :filters="{ item: form.alternative_item }" :show-open-button="false" :disabled="busy || !form.alternative_item" />
-					<label v-else-if="field === 'target_lot'" class="common-field"><span class="finishing-entry-dialog__label">Target Lot</span><Select v-model="form.target_lot" :options="options.alternate_lots || []" placeholder="Select lot" fluid :disabled="busy" /></label>
+					<LinkField v-else-if="field === 'target_lot'" v-model="form.target_lot" doctype="SD YRP Lot" label="Target Lot" placeholder="Select lot" required :filters="{ name: ['in', options.alternate_lots || []] }" :allow-create="false" :show-open-button="false" :disabled="busy" />
 				</template>
 			</div>
 			<div v-if="definition.typeSelect" class="finishing-entry-dialog__type">
@@ -135,6 +135,12 @@ async function load() {
 async function setSupplier(side, supplier) {
 	const message = await setDispatchSupplier(form, side, supplier)
 	if (message) validationError.value = message
+}
+
+function setAlternativeItem(item) {
+	if ((item || "") === form.alternative_item) return
+	form.alternative_item = item || ""
+	form.production_detail = ""
 }
 
 function resetQuantities() { entry.value = initialEntry(source.value) }

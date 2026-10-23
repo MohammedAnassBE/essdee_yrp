@@ -18,7 +18,7 @@ function setup(props, { createGate = null, qzPrinters = async () => [] } = {}) {
 			return { name: args.cutting_laysheet, cutting_marker: "CM-1", status: "Bundles Generated", permissions: {} }
 		}
 	}
-	const api = new Function("computed", "defineComponent", "h", "reactive", "ref", "watch", "defineProps", "defineEmits", "callMethod", "getQzPrinters", "printQzRaw", "useActionConfirmation", `${source}\nreturn { createForm, createLaySheet, generateBundles, generationParts, runStatusAction, sheet, error, actionError, loading, success, revertLabels, laysheetOverviewFields, loadPrinters, printers, subdialogError, clothColumns }`)(
+	const api = new Function("computed", "defineComponent", "h", "reactive", "ref", "watch", "defineProps", "defineEmits", "callMethod", "getQzPrinters", "printQzRaw", "useActionConfirmation", `${source}\nreturn { createForm, createLaySheet, generateBundles, generationParts, runStatusAction, sheet, error, actionError, loading, success, revertLabels, laysheetOverviewFields, loadPrinters, printers, subdialogError, clothColumns, activeTab }`)(
 		computed, defineComponent, h, reactive, ref, watch, () => props, () => () => {}, callMethod, qzPrinters, async () => {}, () => options => confirmations.push(options),
 	)
 	return { ...api, calls, confirmations }
@@ -50,6 +50,47 @@ test("opening an existing Lay Sheet loads the prop name", async () => {
 	await new Promise((resolve) => setTimeout(resolve, 0))
 	assert.deepEqual(state.calls.map((call) => [call.method, call.args.cutting_laysheet]), [["get_web_laysheet", "CLS-9"]])
 	assert.equal(state.sheet.value?.name, "CLS-9")
+	assert.equal(state.activeTab.value, "cloth")
+})
+
+test("moving to the next Lay Sheet keeps the selected tab; reopening lands on Cloth Details", async () => {
+	const props = reactive({ visible: false, cuttingPlan: "CP-1", parentDoctype: "SD YRP Cutting Plan", parentName: "", laysheetName: "CLS-1", canCreate: true })
+	const state = setup(props)
+	props.visible = true
+	await nextTick()
+	await new Promise((resolve) => setTimeout(resolve, 0))
+	state.activeTab.value = "bundles"
+	props.laysheetName = "CLS-2"
+	await nextTick()
+	await new Promise((resolve) => setTimeout(resolve, 0))
+	assert.equal(state.sheet.value?.name, "CLS-2")
+	assert.equal(state.activeTab.value, "bundles")
+	props.visible = false
+	await nextTick()
+	props.visible = true
+	await nextTick()
+	assert.equal(state.activeTab.value, "cloth")
+})
+
+test("a new Lay Sheet keeps Details as the first tab after creation", async () => {
+	const props = reactive({ visible: false, cuttingPlan: "CP-1", parentDoctype: "SD YRP Cutting Plan", parentName: "", laysheetName: "", canCreate: true })
+	const state = setup(props)
+	props.visible = true
+	await nextTick()
+	Object.assign(state.createForm, { cutting_marker: "CM-1", cutting_spreader: "Spreader", cutter: "Cutter" })
+	await state.createLaySheet()
+	assert.equal(state.activeTab.value, "details")
+})
+
+test("reloading an open Lay Sheet keeps the selected tab", async () => {
+	const props = reactive({ visible: false, cuttingPlan: "CP-1", parentDoctype: "SD YRP Cutting Plan", parentName: "", laysheetName: "CLS-9", canCreate: true })
+	const state = setup(props)
+	props.visible = true
+	await nextTick()
+	await new Promise((resolve) => setTimeout(resolve, 0))
+	state.activeTab.value = "bundles"
+	await state.runStatusAction("approve_grammage", "approve")
+	assert.equal(state.activeTab.value, "bundles")
 })
 
 test("a create response arriving after reopening another Lay Sheet is ignored", async () => {

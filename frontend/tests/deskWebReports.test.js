@@ -295,7 +295,8 @@ test("Accounts integrates shared Desk reports and passes the selected report pro
 	const source = readFileSync(new URL("../src/departments/accounts/AccountsReports.vue", import.meta.url), "utf8")
 	assert.match(source, /import DeskBackedReport from/)
 	assert.match(source, /component: REPORT_COMPONENTS\[report.key\] \|\| DeskBackedReport/)
-	assert.match(source, /v-bind="currentTab.componentProps"/)
+	assert.match(source, /props: report.componentProps/)
+	assert.match(source, /<ReportWorkspace /)
 })
 
 test("ageing ranges and warehouse defaults render, reset and reach report generation", async () => {
@@ -347,13 +348,13 @@ test("Purchase uses one shared PO tab and store menus exclude it even if passed 
 	const shared = await config()
 	const shell = (_props, { slots }) => Vue.h("section", slots.default?.())
 	const component = loadComponent(new URL("../src/departments/fabric-store/FabricReports.vue", import.meta.url).pathname, {
-		"primevue/message": shell, "primevue/tab": shell, "primevue/tablist": shell,
-		"primevue/tabpanel": shell, "primevue/tabpanels": shell, "primevue/tabs": shell,
+		"primevue/message": shell, "primevue/inputtext": () => null, "primevue/select": () => null,
+		"./reportWorkspace.js": await import("../src/components/reports/reportWorkspace.js"),
 		"../../components/reports/DeskBackedReport.vue": props => Vue.h("desk-report", props),
 		"../../components/reports/deskReportConfig.js": shared,
 		"../../components/reports/LotCutQuantityReport.vue": () => null,
 		"../../components/reports/StockBalanceReport.vue": () => null,
-		"vue-router": { useRoute: () => ({ query: {} }) },
+		"vue-router": { useRoute: () => ({ path: "/purchase/reports", query: { report: "purchase-order-itemwise" } }), useRouter: () => ({ replace() {} }) },
 	})
 	for (const department of ["purchase", "fabric-store", "accessory-store"]) {
 		const root = mountComponent(component, { department, reportKeys: ["purchase_order_itemwise"], capability: {

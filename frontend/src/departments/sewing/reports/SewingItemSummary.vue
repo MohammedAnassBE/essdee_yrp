@@ -2,7 +2,7 @@
 	<section data-sewing-report="item-summary" aria-label="Item Summary">
 		<ReportShell :export-source="{ doctype: 'SD YRP Sewing Plan' }" title="Item Summary" :loading="loading || optionsLoading" :generated="generated" :has-results="data.groups?.length > 0" copyable keep-results-while-loading @generate="generate" @reset="reset">
 			<template #filters>
-				<div class="common-field"><label for="item-summary-lots">Lot</label><MultiSelect input-id="item-summary-lots" v-model="filters.lots" :options="options.lots" aria-label="Lot" placeholder="Choose Lots" :max-selected-labels="1" filter fluid :disabled="loading || optionsLoading || !optionsReady" /></div>
+				<MultiSelectField input-id="item-summary-lots" v-model="filters.lots" :options="lotOptions" label="Lot" aria-label="Lot" placeholder="Choose Lots" :max-selected-labels="1" display="comma" :disabled="loading || optionsLoading || !optionsReady" />
 				<div class="common-field"><label for="item-summary-items">Item</label><MultiSelect input-id="item-summary-items" v-model="filters.items" :options="options.items" aria-label="Item" placeholder="Choose Items" :max-selected-labels="1" filter fluid :disabled="loading || optionsLoading || !optionsReady" /></div>
 			</template>
 			<article v-for="(group, index) in data.groups || []" :key="index" class="item-summary-group">
@@ -16,8 +16,9 @@
 
 <script setup>
 import MultiSelect from "primevue/multiselect"
-import { onBeforeUnmount, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { getSewingItemSummary, getSewingItemSummaryOptions } from "../../../api/sewing.js"
+import MultiSelectField from "../../../components/common/MultiSelectField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import SewingReportMatrix from "../components/SewingReportMatrix.vue"
@@ -25,8 +26,9 @@ import { useSewingContext } from "../useSewingContext.js"
 
 const props = defineProps({ filters: { type: Object, required: true } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()
-const data = ref({}), options = ref({ lots: [], items: [] }), loading = ref(false), optionsLoading = ref(false), optionsReady = ref(false), generated = ref(false), error = ref("")
+const data = ref({}), options = ref({ lots: [], items: [], lotItems: {} }), loading = ref(false), optionsLoading = ref(false), optionsReady = ref(false), generated = ref(false), error = ref("")
 let mounted = true, optionsSequence = 0
+const lotOptions = computed(() => options.value.lots.map(lot => ({ label: lot, value: lot, description: options.value.lotItems[lot] || "" })))
 function columns(group) {
 	return [
 		{ key: "date", label: "Date" }, { key: "input_type", label: "Input Type" }, { key: "work_station", label: "Work Station" }, { key: "colour", label: "Colour" },
@@ -39,12 +41,12 @@ function rows(group) { return (group.rows || []).map(row => ({ ...row, ...Object
 async function loadOptions() {
 	const unit = supplier.value, generation = requestGeneration.value, sequence = ++optionsSequence
 	optionsReady.value = false; optionsLoading.value = true; error.value = ""
-	options.value = { lots: [], items: [] }
+	options.value = { lots: [], items: [], lotItems: {} }
 	const current = () => mounted && unit === supplier.value && isCurrent(generation) && sequence === optionsSequence
 	try {
 		const result = await getSewingItemSummaryOptions(unit)
 		if (!current()) return
-		options.value = { lots: result?.lots || [], items: result?.items || [] }
+		options.value = { lots: result?.lots || [], items: result?.items || [], lotItems: result?.lot_items || {} }
 		props.filters.lots = props.filters.lots.filter(lot => options.value.lots.includes(lot))
 		props.filters.items = props.filters.items.filter(item => options.value.items.includes(item))
 		optionsReady.value = true
@@ -78,4 +80,6 @@ onBeforeUnmount(() => { mounted = false; optionsSequence++; beginRequest() })
 <style scoped>
 .item-summary-group { display: grid; min-width: 0; gap: 9px; }
 h2 { margin: 0; color: var(--erp-text); font-size: 15px; overflow-wrap: anywhere; }
+/* While scrolling, the matrix shrinks to the page; once Copy Report makes it overflow:visible it widens to its table. */
+.item-summary-group :deep(.sewing-report-matrix) { min-width: auto; }
 </style>

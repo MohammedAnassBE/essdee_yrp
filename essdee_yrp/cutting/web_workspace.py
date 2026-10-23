@@ -20,6 +20,7 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 	_get_warehouse_for_supplier,
 )
 
+from essdee_yrp.cutting.lot_transfer_quantities import apply_quantities, get_quantity_rows
 from essdee_yrp.cutting.movement import (
 	build_delivery_challan_defaults,
 	build_stock_entry_defaults,
@@ -350,7 +351,7 @@ def _transaction_item_groups(doc, table_field):
 	return group_items_for_ui(display_rows, doc.doctype)
 
 
-def _transaction_payload(doc, *, include_items=False):
+def _transaction_payload(doc, *, include_items=False, plan=None):
 	payload = {
 		"doctype": doc.doctype,
 		"operation": DOCTYPE_OPERATIONS.get(doc.doctype),
@@ -380,6 +381,8 @@ def _transaction_payload(doc, *, include_items=False):
 		payload["item_groups"] = (
 			_transaction_item_groups(doc, table_field) if table_field else []
 		)
+		if plan:
+			payload["quantity_rows"] = get_quantity_rows(plan, doc)
 	return payload
 
 
@@ -1582,7 +1585,17 @@ def _get_linked_doc(plan, doctype, name):
 @frappe.whitelist()
 def get_linked_transaction(cutting_plan, doctype, name):
 	plan = _get_plan(cutting_plan)
-	return _transaction_payload(_get_linked_doc(plan, doctype, name), include_items=True)
+	return _transaction_payload(_get_linked_doc(plan, doctype, name), include_items=True, plan=plan)
+
+
+@frappe.whitelist()
+def update_lot_transfer_quantities(cutting_plan, name, rows, expected_modified=None):
+	"""Change only quantities (or drop rows) of a draft balance-cloth Lot Transfer."""
+	plan = _get_plan(cutting_plan)
+	doc = _get_linked_doc(plan, "SD YRP Lot Transfer", name)
+	_assert_not_stale(doc, expected_modified)
+	apply_quantities(plan, doc, rows)
+	return _transaction_payload(doc, include_items=True, plan=plan)
 
 
 @frappe.whitelist()
@@ -1601,4 +1614,4 @@ def change_linked_transaction_status(cutting_plan, doctype, name, action):
 		doc.cancel()
 	else:
 		frappe.throw(_("Unsupported transaction action."))
-	return _transaction_payload(doc, include_items=True)
+	return _transaction_payload(doc, include_items=True, plan=plan)

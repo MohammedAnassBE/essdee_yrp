@@ -19,15 +19,11 @@ test("web sewing consumption wires the Print button and availability to the curr
 	assert.match(page, /window\.open\(url, "_blank", "noopener"\)/)
 })
 
-test("web monthly summary exposes Print in ReportShell actions only for loaded results", () => {
+test("web monthly summary offers Print in the report actions menu only for loaded results", () => {
 	const page = source("../src/departments/sewing/reports/SewingMonthlySummary.vue")
-	assert.match(page, /import Button from "primevue\/button"/)
 	assert.match(page, /import \{ buildMonthlySummaryPrintUrl \} from "[^"\n]*utils\/sewingPrint\.js"/)
 	assert.doesNotMatch(page, /openPrintUrl/)
-	const actions = page.match(/<template #actions>([\s\S]*?)<\/template>/)?.[1] || ""
-	const button = printButton(actions)
-	assert.match(button, /v-if="generated && data\.rows\?\.length > 0 && !loading"/)
-	for (const attribute of ['type="button"', 'icon="pi pi-print"', 'severity="secondary"', 'class="erp-action-button"', 'outlined', '@click="handlePrint"']) assert.ok(button.includes(attribute), attribute)
+	assert.ok(page.includes(":actions=\"[{ label: 'Print', icon: 'pi pi-print', visible: generated && data.rows?.length > 0 && !loading, command: handlePrint }]\""))
 	assert.match(page, /buildMonthlySummaryPrintUrl\(\{ supplier: supplier\.value, filters: props\.filters \}\)/)
 	assert.match(page, /window\.open\(url, "_blank", "noopener"\)/)
 })

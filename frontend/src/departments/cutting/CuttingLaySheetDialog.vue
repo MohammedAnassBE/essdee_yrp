@@ -1,5 +1,15 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable :header="sheet ? `Lay Sheet · ${sheet.name}` : 'Create Lay Sheet'" class="laysheet-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal dismissable-mask maximizable class="laysheet-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
+		<template #header>
+			<RecordDialogHeader
+				:title="sheet ? `Lay Sheet · ${sheet.name}` : 'Create Lay Sheet'"
+				document-label="Lay Sheet"
+				:previous-name="previousName"
+				:next-name="nextName"
+				:disabled="loading || Boolean(busy) || Boolean(detailBusy)"
+				@navigate="emit('navigate', $event)"
+			/>
+		</template>
 		<div v-if="loading" class="laysheet-loading"><Skeleton v-for="index in 8" :key="index" height="3.2rem" /></div>
 		<div v-else-if="!sheet" class="laysheet-create">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
@@ -194,6 +204,7 @@ import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
+import RecordDialogHeader from "./RecordDialogHeader.vue"
 
 const props = defineProps({
 	visible: Boolean,
@@ -201,9 +212,11 @@ const props = defineProps({
 	parentDoctype: { type: String, default: "SD YRP Cutting Plan" },
 	parentName: { type: String, default: "" },
 	laysheetName: { type: String, default: "" },
+	previousName: { type: String, default: "" },
+	nextName: { type: String, default: "" },
 	canCreate: { type: Boolean, default: false },
 })
-const emit = defineEmits(["update:visible", "changed"])
+const emit = defineEmits(["update:visible", "changed", "navigate"])
 const confirmAction = useActionConfirmation()
 
 const loading = ref(false)
@@ -303,15 +316,16 @@ const bundleColumns = [column("bundle_no", "Bundle No"), column("size", "Size"),
 
 watch(
 	() => [props.visible, props.laysheetName, resolvedParentName.value],
-	([visible]) => {
+	([visible], [wasVisible] = []) => {
 		if (!visible) {
 			loadSequence += 1
 			loading.value = false
 			return
 		}
 		laysheetName.value = props.laysheetName
-		if (laysheetName.value) load()
-		else startCreate()
+		if (!laysheetName.value) return startCreate()
+		if (!wasVisible) activeTab.value = "cloth"
+		load()
 	},
 )
 
@@ -546,7 +560,6 @@ async function load() {
 	const requestedParent = { ...parentArgs.value }
 	loading.value = true
 	sheet.value = null
-	activeTab.value = "details"
 	error.value = ""
 	actionError.value = ""
 	success.value = ""

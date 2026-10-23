@@ -91,5 +91,5 @@ export function sizeMatrixColumns(columns, row) {
 
 export function progressCellLink(column, row) {
 	const process = row.process_links?.[column.fieldname]
-	return !row.is_total_row && row.lot && process ? { path: "/planning/reports", query: { group: "production", report: "inhouse-quantity", lot: row.lot, process } } : ""
+	return !row.is_total_row && row.lot && process ? { path: "/planning/reports", query: { report: "inhouse-quantity", lot: row.lot, process } } : ""
 }

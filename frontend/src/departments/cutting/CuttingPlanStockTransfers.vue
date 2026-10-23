@@ -106,7 +106,7 @@ watch(visibleTabs, (items) => {
 })
 
 async function load(force = false) {
-	if ((!force && loaded.value) || loading.value || !props.cuttingPlan) return
+	if (!props.cuttingPlan || (!force && (loaded.value || loading.value))) return
 	const sequence = ++loadSequence
 	loading.value = true
 	error.value = ""
@@ -126,10 +126,15 @@ function transactions(operation) { return workspace.transactions?.[operation] ||
 function openStockOperation(operation) { selectedOperation.value = operation; stockOperationOpen.value = true }
 function openMovementTransaction(movement, operation) { movementTransactionSource.value = movement; movementTransactionOperation.value = operation; movementTransactionOpen.value = true }
 function openTransaction(record) { selectedTransaction.value = record; transactionOpen.value = true }
+async function showTransaction(record, operation) {
+	activeTab.value = operation
+	openTransaction(record)
+	await load(true)
+}
 async function changed(value) { await load(true); emit("changed", value) }
 function formatDate(value, includeTime = false) { const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!match) return value || "—"; const date = `${match[3]}-${match[2]}-${match[1]}`; return includeTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date }
 
-defineExpose({ load, activate: () => load(true) })
+defineExpose({ load, showTransaction, activate: () => load(true) })
 </script>
 
 <style scoped>

@@ -25,6 +25,13 @@ from yrp.attribute_links import value as _attribute_value
 # These name a record for a human; `label` was dropped (too generic to be a title).
 _LABEL_GUESSES = ("name1", "item_name", "title", "full_name")
 
+# Extra fields every picker matches and shows under each suggestion, by doctype.
+# `link_field.field` reads the linked record (a Warehouse's supplier name).
+SEARCH_DESCRIPTION_FIELDS = {
+	"Warehouse": ("supplier.supplier_name",),
+	"SD YRP Lot": ("item",),
+}
+
 
 def _label_field(meta):
 	"""The single best field to DISPLAY as the human label, or None → use `name`.
@@ -59,16 +66,60 @@ def _match_fields(meta, label_field):
 		cand.append(label_field)
 	if meta.search_fields:
 		cand += [f.strip() for f in meta.search_fields.split(",") if f.strip()]
+	cand += SEARCH_DESCRIPTION_FIELDS.get(meta.name, ())
 	seen, out = set(), []
 	for f in cand:
-		if f and f not in seen and f != "name" and meta.has_field(f):
+		if f and f not in seen and f != "name" and is_searchable_field(meta, f):
 			seen.add(f)
 			out.append(f)
 	return out
 
 
+def is_searchable_field(meta, path):
+	"""A plain field of `meta`, or a readable `link_field.field` on its linked doctype."""
+	if "." not in path:
+		return meta.has_field(path)
+	link_fieldname, target_fieldname = path.split(".", 1)
+	link_field = meta.get_field(link_fieldname)
+	if not link_field or link_field.fieldtype != "Link" or not link_field.options:
+		return False
+	target = link_field.options
+	if not frappe.get_meta(target).has_field(target_fieldname):
+		return False
+	return bool(frappe.has_permission(target, "select") or frappe.has_permission(target, "read"))
+
+
+def get_field_key(path):
+	"""Row key of a selected field; linked paths are aliased (supplier.supplier_name → supplier_supplier_name)."""
+	return path.replace(".", "_")
+
+
+def get_select_field(path):
+	return f"{path} as {get_field_key(path)}" if "." in path else path
+
+
+# Filters that already choose between Item templates and variants.
+ITEM_SCOPE_FIELDS = {"name", "variant_of", "has_variants"}
+
+
+def get_item_scope_filters(filters, allow_variants=False):
+	"""Item pickers list templates and plain items unless the caller asks for variants or scopes them."""
+	if allow_variants and allow_variants not in ("0", "false"):
+		return filters
+	if isinstance(filters, dict):
+		if ITEM_SCOPE_FIELDS & set(filters):
+			return filters
+		return {**filters, "variant_of": ["is", "not set"]}
+	fieldnames = {row[-3] for row in filters if isinstance(row, list | tuple) and len(row) >= 3}
+	if ITEM_SCOPE_FIELDS & fieldnames:
+		return filters
+	return [*filters, ["variant_of", "is", "not set"]]
+
+
 @frappe.whitelist()
-def link_search(doctype, txt="", filters=None, page_length=20, match_visible_only=False):
+def link_search(
+	doctype, txt="", filters=None, page_length=20, match_visible_only=False, allow_variants=False
+):
 	"""Search `doctype` by name + title/search fields. Returns [{name, label}].
 
 	`filters` (AND) narrow the result set (e.g. attribute_name for Item Attribute
@@ -77,12 +128,16 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 	``description``). Form links also match the label field. The `label` is the
 	doctype's human title field when it has one, else the `name`; `description`
 	joins the search-field values, as Desk shows them under each suggestion.
+	Item searches skip variants unless ``allow_variants`` is set or `filters`
+	already scope them.
 	"""
 	if not doctype:
 		return []
 	filters = _parse_filters(filters)
 	if doctype == "Item Attribute Value":
 		return _search_item_attribute_values(txt, filters, page_length)
+	if doctype == "Item":
+		filters = get_item_scope_filters(filters, allow_variants)
 
 	meta = frappe.get_meta(doctype)
 	label_field = _label_field(meta)
@@ -112,7 +167,7 @@ def link_search(doctype, txt="", filters=None, page_length=20, match_visible_onl
 		doctype,
 		filters=filters,
 		or_filters=or_filters,
-		fields=fields + description_fields,
+		fields=fields + [get_select_field(field) for field in description_fields],
 		limit_page_length=page_len,
 		order_by="modified desc",
 	)
@@ -125,7 +180,8 @@ def get_link_option(row, label_field, description_fields):
 	"""One suggestion: the stored `name`, its `label`, and a search-field `description`."""
 	label = (row.get(label_field) if label_field else None) or row["name"]
 	option = {"name": row["name"], "label": label}
-	values = [str(row.get(field)) for field in description_fields if row.get(field) not in (None, "")]
+	keys = [get_field_key(field) for field in description_fields]
+	values = [str(row.get(key)).strip() for key in keys if str(row.get(key) or "").strip()]
 	description = ", ".join(value for value in values if value not in (label, row["name"]))
 	if description:
 		option["description"] = description
@@ -147,7 +203,7 @@ def _exact_matches_first(doctype, text, filters, fields, page_length, rows, extr
 		doctype,
 		filters=filters,
 		or_filters=[[fieldname, "=", text] for fieldname in fields],
-		fields=[*fields, *extra_fields],
+		fields=[*fields, *(get_select_field(field) for field in extra_fields)],
 		limit_page_length=page_length,
 		order_by="modified desc",
 	)

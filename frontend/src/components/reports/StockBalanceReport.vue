@@ -1,5 +1,5 @@
 <template>
-	<ReportShell
+	<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]"
 		:export-source="deskExportSource('stock-balance', activeFilters, columns, [], inlineFilter.matchingIndices.value)"
 		title="Stock Balance"
 		:generated="generated"
@@ -14,36 +14,29 @@
 		<template #filters>
 			<DateField v-model="filters.fromDate" label="From date" required />
 			<DateField v-model="filters.toDate" label="To date" required />
-			<details class="stock-advanced" :open="advancedOpen" @toggle="advancedOpen = $event.currentTarget.open">
-				<summary><span>More filters</span><small>{{ optionalFilterCount ? `${optionalFilterCount} active` : "Optional" }}</small><i class="pi pi-chevron-down" /></summary>
-				<div class="stock-advanced__grid">
-					<MultiSelectField
-						v-for="picker in itemPickers" :key="picker.fieldname" :data-item-filter="picker.fieldname"
-						v-model="filters[picker.fieldname]" :label="picker.label" :options="itemOptions(picker)"
-						:placeholder="`Search ${picker.label}…`" filter-match-mode="stock-balance-server"
-						:reset-filter-on-hide="true" @before-show="searchItems(picker)" @filter="searchItems(picker, $event.value)"
-					/>
-					<LinkField v-model="filters.warehouse" class="stock-link-filter" doctype="Warehouse" label="Warehouse" placeholder="Search warehouse…" :show-open-button="false" show-clear />
-					<MultiSelectField
-						v-for="dimension in dimensions" :key="dimension.fieldname" :data-dimension="dimension.fieldname"
-						:model-value="filters.dimensions[dimension.fieldname] || []" :label="dimension.label"
-						:options="dimensionOptions(dimension)" :placeholder="`Search ${dimension.label}…`"
-						filter-match-mode="stock-balance-server" :reset-filter-on-hide="true"
-						@update:model-value="filters.dimensions[dimension.fieldname] = $event"
-						@before-show="searchDimension(dimension)" @filter="searchDimension(dimension, $event.value)"
-					/>
-					<div class="stock-checks">
-						<label><input v-model="filters.removeZero" type="checkbox" /> Remove zero balance</label>
-						<label><input v-model="filters.showAttributes" type="checkbox" /> Variant attributes</label>
-						<label><input v-model="filters.showAgeing" type="checkbox" /> Stock ageing</label>
-						<label><input v-model="filters.showInwardSplit" type="checkbox" /> Inward date split</label>
-					</div>
+			<ReportMoreFilters :active-count="optionalFilterCount">
+				<MultiSelectField
+					v-for="picker in itemPickers" :key="picker.fieldname" :data-item-filter="picker.fieldname"
+					v-model="filters[picker.fieldname]" :label="picker.label" :options="itemOptions(picker)"
+					:placeholder="`Search ${picker.label}…`" filter-match-mode="stock-balance-server"
+					:reset-filter-on-hide="true" @before-show="searchItems(picker)" @filter="searchItems(picker, $event.value)"
+				/>
+				<LinkField v-model="filters.warehouse" class="stock-link-filter" doctype="Warehouse" label="Warehouse" placeholder="Search warehouse…" :show-open-button="false" show-clear />
+				<MultiSelectField
+					v-for="dimension in dimensions" :key="dimension.fieldname" :data-dimension="dimension.fieldname"
+					:model-value="filters.dimensions[dimension.fieldname] || []" :label="dimension.label"
+					:options="dimensionOptions(dimension)" :placeholder="`Search ${dimension.label}…`"
+					filter-match-mode="stock-balance-server" :reset-filter-on-hide="true"
+					@update:model-value="filters.dimensions[dimension.fieldname] = $event"
+					@before-show="searchDimension(dimension)" @filter="searchDimension(dimension, $event.value)"
+				/>
+				<div class="stock-checks">
+					<label><input v-model="filters.removeZero" type="checkbox" /> Remove zero balance</label>
+					<label><input v-model="filters.showAttributes" type="checkbox" /> Variant attributes</label>
+					<label><input v-model="filters.showAgeing" type="checkbox" /> Stock ageing</label>
+					<label><input v-model="filters.showInwardSplit" type="checkbox" /> Inward date split</label>
 				</div>
-			</details>
-		</template>
-		<template #actions>
-			<Button label="Pick Columns" icon="pi pi-table" severity="secondary" outlined class="erp-action-button" :disabled="!generated || !allColumns.length" @click="pickerVisible = true" />
-			<Button v-if="isBackgroundResult" label="Download" icon="pi pi-download" severity="secondary" outlined class="erp-action-button" @click="download" />
+			</ReportMoreFilters>
 		</template>
 		<template #status>
 			<ReportRunStatus :state="state" :job="job" :generated-at="generatedAt" :tracking-started-at="trackingStartedAt" :show-generated="isBackgroundResult || reused" :has-linked-columns="hasLinkedColumns" :error="reportError" @rebuild="rebuild" />
@@ -89,6 +82,7 @@ import ReportColumnPicker from "./ReportColumnPicker.vue"
 import ReportFilterRow from "./ReportFilterRow.vue"
 import { stockBalanceFormFilters } from "./reportFilterState.js"
 import ReportRunStatus from "./ReportRunStatus.vue"
+import ReportMoreFilters from "./ReportMoreFilters.vue"
 import ReportShell from "./ReportShell.vue"
 import { deskExportSource } from "./reportExport.js"
 import { number, oneMonthAgoIso, stockCellValue, todayIso } from "./reportUtils.js"
@@ -106,7 +100,6 @@ const dimensionSearches = {}
 let restoringFilters = false
 const filterError = ref("")
 const pickerVisible = ref(false)
-const advancedOpen = ref(typeof window === "undefined" || !window.matchMedia("(max-width: 430px)").matches)
 const {
 	state, sourceColumns, sourceRows, job, generatedAt, reused, error: reportError, activeFilters,
 	trackingStartedAt, loading, isBusy, generated, isBackgroundResult, statusOnly,
@@ -160,7 +153,7 @@ function restoreFilters(request) {
 }
 
 function itemOptions(picker) {
-	const options = new Map((itemSuggestions[picker.fieldname] || []).map((row) => [row.value, { label: row.description ? `${row.value} · ${row.description}` : row.value, value: row.value }]))
+	const options = new Map((itemSuggestions[picker.fieldname] || []).map((row) => [row.value, { label: row.value, value: row.value, ...(row.description ? { description: row.description } : {}) }]))
 	for (const value of filters[picker.fieldname]) if (!options.has(value)) options.set(value, { label: value, value })
 	return [...options.values()]
 }
@@ -174,7 +167,7 @@ async function searchItems(picker, txt = "") {
 }
 
 function dimensionOptions(dimension) {
-	const options = new Map((dimensionSuggestions[dimension.fieldname] || []).map((row) => [row.name, { label: row.label || row.name, value: row.name }]))
+	const options = new Map((dimensionSuggestions[dimension.fieldname] || []).map((row) => [row.name, { label: row.label || row.name, value: row.name, ...(row.description ? { description: row.description } : {}) }]))
 	for (const value of filters.dimensions[dimension.fieldname] || []) {
 		if (!options.has(value)) options.set(value, { label: value, value })
 	}
@@ -184,7 +177,7 @@ async function searchDimension(dimension, text = "") {
 	const fieldname = dimension.fieldname
 	const sequence = dimensionSearches[fieldname] = (dimensionSearches[fieldname] || 0) + 1
 	try {
-		const rows = await searchLink(dimension.dimension_doctype, text)
+		const rows = await searchLink(dimension.dimension_doctype, text, {}, 20, true)
 		if (sequence === dimensionSearches[fieldname]) dimensionSuggestions[fieldname] = rows
 	} catch (error) { filterError.value = error.message || "Could not load dimension options." }
 }
@@ -205,50 +198,51 @@ onMounted(loadDimensions)
 </script>
 
 <style scoped>
-.erp-field-label b {
-	color: var(--erp-danger);
-}
-
 .stock-checks {
-	display: grid;
-	grid-column: span 2;
-	grid-template-columns: repeat(2, minmax(145px, 1fr));
-	min-width: 330px;
+	display: flex;
+	grid-column: 1 / -1;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--erp-space-2) var(--erp-space-5);
 	min-height: var(--erp-control-height);
-	align-content: center;
-	gap: 5px var(--erp-space-4);
-	padding: 7px 10px;
-	border: 1px solid var(--erp-border);
-	border-radius: var(--erp-control-radius);
-	background: var(--erp-surface);
 }
 
 .stock-checks label {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
-	gap: 5px;
-	color: #52645b;
-	font-size: var(--erp-font-size-min);
-	white-space: nowrap;
+	gap: 7px;
+	color: var(--erp-text-secondary);
+	font-size: var(--erp-font-size-caption);
+	cursor: pointer;
 }
 
 .stock-checks input {
+	width: 16px;
+	height: 16px;
+	margin: 0;
 	accent-color: var(--erp-accent);
 }
 
-.stock-advanced {
-	display: block;
-	grid-column: 1 / -1;
+@media (max-width: 800px) {
+	.stock-checks {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0 var(--erp-space-2);
+	}
+
+	.stock-checks label {
+		min-height: 44px;
+	}
 }
 
-.stock-advanced__grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: var(--erp-space-2) var(--erp-space-3);
+@media (max-width: 520px) {
+	.stock-checks {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
-.stock-advanced summary {
-	display: none;
+.erp-field-label b {
+	color: var(--erp-danger);
 }
 
 .stock-table {
@@ -287,72 +281,4 @@ onMounted(loadDimensions)
 	font-size: var(--erp-font-size-caption);
 }
 
-@media (max-width: 800px) {
-	.stock-advanced__grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.stock-checks {
-		grid-column: 1 / -1;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		min-width: 0;
-		gap: 6px var(--erp-space-2);
-	}
-
-	.stock-checks label {
-		min-width: 0;
-		min-height: 44px;
-		white-space: normal;
-	}
-
-	.stock-checks input {
-		width: 17px;
-		height: 17px;
-		flex: 0 0 auto;
-	}
-}
-
-@media (max-width: 430px) {
-	.stock-advanced {
-		grid-column: 1 / -1;
-		padding: 0 10px;
-		border: 1px solid var(--erp-border);
-		border-radius: var(--erp-control-radius);
-		background: var(--erp-surface);
-	}
-
-	.stock-advanced summary {
-		display: flex;
-		min-height: 44px;
-		align-items: center;
-		gap: 8px;
-		color: var(--erp-text);
-		font-size: var(--erp-font-size-caption);
-		font-weight: 750;
-		cursor: pointer;
-		list-style: none;
-	}
-
-	.stock-advanced summary::-webkit-details-marker { display: none; }
-	.stock-advanced summary small { margin-left: auto; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 650; }
-	.stock-advanced summary i { color: var(--erp-text-muted); font-size: 11px; transition: transform 140ms ease; }
-	.stock-advanced[open] summary i { transform: rotate(180deg); }
-
-	.stock-advanced__grid {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		gap: var(--erp-space-2);
-		padding: 0 0 10px;
-	}
-
-	.stock-advanced:not([open]) > .stock-advanced__grid {
-		display: none;
-	}
-
-	.stock-checks {
-		grid-column: 1;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		min-width: 0;
-	}
-}
 </style>

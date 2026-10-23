@@ -46,6 +46,7 @@ const props = defineProps({
 	helpText: { type: String, default: "" },
 	filters: { type: Object, default: () => ({}) },
 	disabled: { type: Boolean, default: false },
+	allowVariants: { type: Boolean, default: false },
 })
 const emit = defineEmits(["update:modelValue"])
 
@@ -82,7 +83,8 @@ async function focusFirstOption() {
 async function complete(event) {
 	const request = ++sequence
 	try {
-		const rows = await searchLink(props.doctype, event.query || "", props.filters, 20)
+		const allowVariants = props.allowVariants || /variant/i.test(props.label)
+		const rows = await searchLink(props.doctype, event.query || "", props.filters, 20, false, { allowVariants })
 		if (request !== sequence) return
 		const chosen = new Set(selected.value.map((row) => row.name))
 		suggestions.value = (rows || [])

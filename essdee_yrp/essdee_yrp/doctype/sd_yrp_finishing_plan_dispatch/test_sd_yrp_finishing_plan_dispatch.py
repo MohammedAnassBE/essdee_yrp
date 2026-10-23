@@ -221,3 +221,85 @@ def _item_row(finishing_plan):
 		},
 		"batch_dispatches": [],
 	}
+
+
+PRINT_CONTEXT = {
+	"primary": "Size",
+	"cutting_by_size": {"S": 40, "M": 40, "L": 40},
+	"pieces_per_box": 4,
+	"components_by_size": {},
+	"packing_summary": frappe._dict(dynamic_ratio_packing=False),
+}
+LOT_VALUES = {"production_detail": "IPD-PRINT", "pack_out_stage": "Pack", "packing_uom": "Box"}
+
+
+def _print_variant(size, quantity, **values):
+	return {
+		"against_id": "FP-PRINT",
+		"item_variant": f"ITEM-{size}",
+		"uom": "Pieces",
+		"quantity": quantity,
+		**values,
+	}
+
+
+class TestFinishingPlanDispatchPrint(IntegrationTestCase):
+	def _print_row(self, variants, is_submitted, grn_details=()):
+		with (
+			patch.object(
+				finishing_plan_dispatch, "_get_dispatch_snapshot_context", return_value=PRINT_CONTEXT
+			),
+			patch.object(
+				finishing_plan_dispatch,
+				"get_variant_attr_details",
+				side_effect=lambda variant: {"Size": variant.removeprefix("ITEM-")},
+			),
+			patch.object(
+				finishing_plan_dispatch,
+				"get_attribute_details",
+				return_value={"primary_attribute_values": ["S", "M", "L", "XL"]},
+			),
+			patch.object(
+				finishing_plan_dispatch.attribute_db,
+				"get_value",
+				side_effect=lambda doctype, name, field: LOT_VALUES[field],
+			),
+			patch.object(finishing_plan_dispatch.frappe, "get_all", return_value=list(grn_details)),
+		):
+			return finishing_plan_dispatch.get_dispatch_print_row("LOT-PRINT", "ITEM", variants, is_submitted)
+
+	def test_submitted_print_uses_frozen_snapshot_for_dispatched_sizes(self):
+		row = self._print_row(
+			[
+				_print_variant("M", 3, total_dispatched=7, dispatch_pct=70),
+				_print_variant("S", 2, total_dispatched=5, dispatch_pct=50),
+			],
+			is_submitted=True,
+		)
+		self.assertEqual(row["sizes"], ["S", "M"])
+		self.assertEqual(row["stage"], "Pack")
+		self.assertEqual(row["uom"], "Pieces")
+		self.assertEqual(
+			row["size_data"]["M"], {"dispatch_qty": 3, "dispatch_pct": 70, "total_dispatched": 7}
+		)
+		self.assertEqual((row["total_dispatch"], row["total_dispatched_all"]), (5, 12))
+
+	def test_draft_print_lists_every_cut_size_with_live_progress(self):
+		grn_details = [frappe._dict(item_variant="ITEM-S", dispatched=4)]
+		row = self._print_row([_print_variant("S", 1)], is_submitted=False, grn_details=grn_details)
+		self.assertEqual(row["sizes"], ["S", "M", "L"])
+		self.assertEqual(
+			row["size_data"]["S"], {"dispatch_qty": 1, "dispatch_pct": 40, "total_dispatched": 4}
+		)
+		self.assertEqual(row["size_data"]["M"], {"dispatch_qty": 0, "dispatch_pct": 0, "total_dispatched": 0})
+
+	def test_batch_dispatch_prints_lot_packing_uom(self):
+		variant = _print_variant("S", 2, packing_source="batch", packing_piece_quantity=8)
+		row = self._print_row([variant], is_submitted=True)
+		self.assertEqual((row["uom"], row["size_data"]["S"]["dispatch_qty"]), ("Box", 8))
+
+	def test_dispatch_print_format_is_the_default(self):
+		self.assertEqual(
+			frappe.get_meta("SD YRP Finishing Plan Dispatch").default_print_format,
+			"Essdee Finishing Plan Dispatch",
+		)

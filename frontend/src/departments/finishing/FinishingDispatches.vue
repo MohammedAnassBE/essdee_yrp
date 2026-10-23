@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Finishing Plan Dispatches" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Finishing Plan Dispatches" :back-to="basePath" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Finishing Plan Dispatch unavailable" message="You do not have permission to view Finishing Plan Dispatches." :retryable="false" />
@@ -18,7 +18,7 @@
 				@row-click="openDispatch"
 			>
 				<template #toolbar-actions>
-					<Button v-if="capability.can_create" class="list-primary-action" label="Create Dispatch" icon="pi pi-plus" @click="router.push('/finishing/dispatches/new')" />
+					<Button v-if="capability.can_create" class="list-primary-action" label="Create Dispatch" icon="pi pi-plus" @click="router.push(`${basePath}/dispatches/new`)" />
 				</template>
 			</ListView>
 		</div>
@@ -36,6 +36,12 @@ import ListView from "../../components/common/ListView.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
 
+/** `basePath` is the department that owns the dispatch pages. */
+const props = defineProps({
+	basePath: { type: String, default: "/finishing" },
+	backLabel: { type: String, default: "Finishing" },
+	viewRouteName: { type: String, default: "finishing-dispatch" },
+})
 const router = useRouter()
 const capability = ref(null)
 const loadError = ref("")
@@ -44,7 +50,7 @@ const defaultColumns = ["stock_entry", "fp_total_dispatched", "creation"]
 const columnLabels = { stock_entry: "Stock Entry", fp_total_dispatched: "Total Dispatched", creation: "Created On" }
 
 function openDispatch(row, snapshot) {
-	return openListDocument(router, row, snapshot, { routeName: "finishing-dispatch", paramName: "dispatchId" })
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "dispatchId" })
 }
 
 async function load() {

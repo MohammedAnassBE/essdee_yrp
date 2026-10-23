@@ -108,6 +108,8 @@ const props = defineProps({
 	delay: { type: Number, default: 300 },
 	pageLength: { type: Number, default: 20 },
 	matchVisibleOnly: { type: Boolean, default: false },
+	fieldname: { type: String, default: "" },
+	allowVariants: { type: Boolean, default: false },
 	showClear: { type: Boolean, default: false },
 	showOpenButton: { type: Boolean, default: true },
 	required: { type: Boolean, default: false },
@@ -153,6 +155,9 @@ const modelLabel = computed(() => committedName.value === props.modelValue
 	? committedLabel.value || String(props.modelValue || "")
 	: String(props.modelValue || ""))
 const optionLabel = computed(() => "label")
+// Item pickers hide variants server-side unless this field is an item-variant field.
+const searchesVariants = computed(() => props.allowVariants
+	|| /variant/i.test(`${props.fieldname} ${props.label} ${props.ariaLabel}`))
 const resolvedInputId = computed(() => props.inputId || `link-field-${componentId}`)
 const hasIncompleteFilters = computed(() => Object.keys(props.filters || {}).length > 0
 	&& Object.values(props.filters || {}).some((value) => value === "" || value === null || value === undefined))
@@ -200,6 +205,7 @@ async function complete(event) {
 				props.filters,
 				props.pageLength,
 				props.matchVisibleOnly,
+				{ allowVariants: searchesVariants.value },
 			)
 		if (sequence !== requestSequence) return
 		suggestionSequence = sequence

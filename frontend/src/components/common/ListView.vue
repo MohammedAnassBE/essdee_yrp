@@ -1380,7 +1380,7 @@ function openRow(row) {
 }
 
 function navigationSnapshot(row) {
-	if (!props.navigationEnabled || !route.name) return null
+	if (!route.name) return null
 	const rowIndex = rows.value.findIndex((candidate) => candidate === row || candidate?.name === row?.name)
 	if (rowIndex < 0) return null
 	const direction = sortOrder.value === 1 ? "asc" : "desc"

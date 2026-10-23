@@ -1,6 +1,6 @@
 <template>
     <div class="audit-dashboard">
-        <ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Audit Pending Finishing Plans" :generated="generated" :loading="loading" :error="errorMessage" :has-results="true" :generate-disabled="loading" keep-results-while-loading copyable @generate="generateDashboard" @reset="resetFilters">
+        <ReportShell :actions="[{ label: 'Refresh', icon: 'pi pi-refresh', disabled: loading, command: refreshDashboard }]" :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Audit Pending Finishing Plans" :generated="generated" :loading="loading" :error="errorMessage" :has-results="true" :generate-disabled="loading" keep-results-while-loading copyable @generate="generateDashboard" @reset="resetFilters">
             <template #filters>
                 <label class="audit-filter"><span>Finishing Plan</span><input v-model="filters.plan" type="search" placeholder="Search plan…" /></label>
                 <label class="audit-filter"><span>Lot</span><input v-model="filters.lot" type="search" placeholder="Search lot…" /></label>
@@ -15,12 +15,6 @@
                     <span v-if="asOf" class="as-of">As of {{ formatDate(asOf) }}</span>
                 </div>
             </div>
-            <button type="button" class="secondary-button refresh-button" :disabled="loading" @click="refreshDashboard">
-                <svg :class="{ spinning: loading }" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 11a8.1 8.1 0 0 0-15.5-3M4 4v4h4M4 13a8.1 8.1 0 0 0 15.5 3M20 20v-4h-4" />
-                </svg>
-                {{ loading ? 'Refreshing' : 'Refresh' }}
-            </button>
         </template>
 
         <section class="summary-grid"  aria-label="Audit pending summary">
@@ -452,7 +446,7 @@ onBeforeUnmount(() => { dashboardGeneration += 1; pendingGeneration.value += 1; 
     font-family: var(--erp-font-family);
     color: var(--body);
 }
-.dashboard-header, .title-line, .filter-card, .filter-label, .refresh-button, .oldest-value, .status-age, .pending-heading h3, .dispatch-history h3, .size-detail-heading { display: flex; align-items: center; }
+.dashboard-header, .title-line, .filter-card, .filter-label, .oldest-value, .status-age, .pending-heading h3, .dispatch-history h3, .size-detail-heading { display: flex; align-items: center; }
 .dashboard-header { justify-content: space-between; gap: 18px; margin-bottom: 16px; }
 .dashboard-header h2 { margin: 0; color: var(--primary); font-size: 24px; font-weight: 800; }
 .title-line { flex-wrap: wrap; gap: 10px; }
@@ -460,9 +454,7 @@ onBeforeUnmount(() => { dashboardGeneration += 1; pendingGeneration.value += 1; 
 .secondary-button { min-height: 36px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--erp-text-muted); font-size: 14px; font-weight: 600; cursor: pointer; }
 .secondary-button:hover { background: var(--erp-surface-muted); color: var(--primary); }
 .secondary-button:disabled { cursor: wait; opacity: .65; }
-.refresh-button { gap: 7px; white-space: nowrap; }
-.refresh-button svg, .filter-label svg, .pending-heading svg, .dispatch-history h3 svg, .empty-state svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.spinning { animation: spin .8s linear infinite; }
+.filter-label svg, .pending-heading svg, .dispatch-history h3 svg, .empty-state svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
@@ -491,8 +483,9 @@ onBeforeUnmount(() => { dashboardGeneration += 1; pendingGeneration.value += 1; 
 .generate-button:disabled { cursor: wait; opacity: .65; }
 .generate-loader { width: 14px !important; height: 14px !important; border-width: 2px !important; }
 
-.master-detail-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; height: clamp(540px, calc(100dvh - 350px), 820px); min-height: 0; }
-.master-panel, .detail-panel { min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: none; }
+.master-detail-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; }
+/* The fixed height sits on the clipping panels so Copy Report can grow them to their full content. */
+.master-panel, .detail-panel { height: clamp(540px, calc(100dvh - 350px), 820px); min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: none; }
 .master-panel, .detail-panel { display: flex; flex-direction: column; }
 .master-scroll, .detail-scroll { min-height: 0; overflow: auto; }
 .master-scroll, .detail-scroll, .pending-table-shell, .history-shell, .size-table-shell { scrollbar-width: thin; scrollbar-color: var(--erp-border-strong) transparent; }
@@ -626,7 +619,7 @@ onBeforeUnmount(() => { dashboardGeneration += 1; pendingGeneration.value += 1; 
 @media (max-width: 1100px) {
     .filter-card { flex-wrap: wrap; }
     .filter-card input[type="search"] { min-width: 170px; }
-    .master-detail-layout { grid-template-columns: 1fr; height: auto; }
+    .master-detail-layout { grid-template-columns: 1fr; }
     .master-panel { height: 520px; }
     .detail-panel { height: 720px; }
 }
@@ -661,5 +654,5 @@ onBeforeUnmount(() => { dashboardGeneration += 1; pendingGeneration.value += 1; 
 .master-table thead th { position: sticky; top: 0; z-index: 1; }
 .plan-row:focus-visible, .history-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .modal-backdrop { color: var(--body); }
-@media (prefers-reduced-motion: reduce) { .spinning, .loader { animation-duration: 2s; } .plan-row { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .loader { animation-duration: 2s; } .plan-row { transition: none; } }
 </style>

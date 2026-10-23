@@ -1377,6 +1377,10 @@ class TestSewingBusinessLogic(IntegrationTestCase):
 
 		options = get_item_summary_options(supplier)
 		self.assertIn(lot, options["lots"])
+		self.assertEqual(
+			options["lot_items"].get(lot),
+			frappe.db.get_value("SD YRP Sewing Plan", {"supplier": supplier, "lot": lot}, "item"),
+		)
 		self.assertIn("groups", get_item_summary_data(supplier, lots=[lot]))
 		self.assertIn(
 			lot,

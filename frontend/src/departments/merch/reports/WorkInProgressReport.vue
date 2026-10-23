@@ -1,5 +1,5 @@
 <template>
-	<ReportShell :export-source="{ reportKey: 'merch-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="isBusy" :error="error" :has-results="sourceRows.length > 0" copyable @generate="generate" @reset="reset">
+	<ReportShell :actions="[{ label: 'Paste', icon: 'pi pi-clipboard', disabled: isBusy, command: () => { pasteVisible = true } }]" :export-source="{ reportKey: 'merch-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="isBusy" :error="error" :has-results="sourceRows.length > 0" copyable @generate="generate" @reset="reset">
 		<template #filters>
 			<div>
 				<LinkField v-model="filters.category" label="Product Category" doctype="SD YRP Product Category" :invalid="Boolean(errors.category)" :show-open-button="false" aria-describedby="wip-category-error" />
@@ -16,9 +16,6 @@
 			<DateField v-model="filters.from_date" label="Lot From Date" :invalid="Boolean(errors.from_date)" :error="errors.from_date" />
 			<DateField v-model="filters.to_date" label="Lot To Date" :invalid="Boolean(errors.to_date)" :error="errors.to_date" />
 			<WipLinkMultiSelect v-model="filters.process_list" class="wip-multi-filter" label="Processes" doctype="YRP Process" ordered />
-		</template>
-		<template #actions>
-			<Button label="Paste" icon="pi pi-clipboard" severity="secondary" outlined :disabled="isBusy" @click="pasteVisible = true" />
 		</template>
 		<template #metrics>
 			<div v-for="metric in reportSummary || []" :key="metric.label" class="report-metric">
@@ -46,7 +43,6 @@
 </template>
 
 <script setup>
-import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
 import DateField from "../../../components/common/DateField.vue"

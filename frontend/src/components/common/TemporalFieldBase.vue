@@ -16,12 +16,11 @@
 			:selection-mode="selectionMode"
 			:date-format="dateFormat"
 			:show-time="mode === 'datetime'"
-			:time-only="mode === 'time'"
-			:show-seconds="showSeconds && mode !== 'date'"
+			:show-seconds="showSeconds && mode === 'datetime'"
 			hour-format="24"
 			show-icon
-			:icon="mode === 'time' ? 'pi pi-clock' : 'pi pi-calendar'"
-			:show-button-bar="showButtonBar && mode !== 'time'"
+			icon="pi pi-calendar"
+			:show-button-bar="showButtonBar"
 			:show-clear="showClear"
 			:manual-input="allowsManualInput"
 			:placeholder="resolvedPlaceholder"
@@ -49,14 +48,12 @@
 import DatePicker from "primevue/datepicker"
 import { computed, useId } from "vue"
 
-import { normaliseFrappeTime } from "../../utils/documentValues.js"
-
 const props = defineProps({
 	modelValue: { type: [String, Date, Array], default: "" },
 	mode: {
 		type: String,
 		default: "date",
-		validator: (value) => ["date", "datetime", "time"].includes(value),
+		validator: (value) => ["date", "datetime"].includes(value),
 	},
 	valueType: {
 		type: String,
@@ -107,7 +104,6 @@ const describedBy = computed(() => [
 const dateFormat = computed(() => "dd-mm-yy")
 const allowsManualInput = computed(() => props.manualInput && props.mode === "date")
 const pickerActionLabel = computed(() => {
-	if (props.mode === "time") return "Choose time"
 	if (props.mode === "datetime") return "Choose date and time"
 	return "Choose date"
 })
@@ -128,7 +124,6 @@ const pickerPt = computed(() => ({
 }))
 const resolvedPlaceholder = computed(() => {
 	if (props.placeholder) return props.placeholder
-	if (props.mode === "time") return "HH:MM:SS"
 	if (props.selectionMode === "range") return "DD-MM-YYYY - DD-MM-YYYY"
 	return props.mode === "datetime" ? "DD-MM-YYYY HH:MM:SS" : "DD-MM-YYYY"
 })
@@ -151,15 +146,6 @@ function parseValue(value) {
 	const text = String(value || "").trim()
 	if (!text) return null
 
-	if (props.mode === "time") {
-		const normalized = normaliseFrappeTime(text)
-		const match = normalized.match(/^(\d{2}):(\d{2}):(\d{2})$/)
-		if (!match) return null
-		const result = new Date()
-		result.setHours(Number(match[1]), Number(match[2]), Number(match[3] || 0), 0)
-		return result
-	}
-
 	const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/)
 	if (iso) return localDate(iso[1], iso[2], iso[3], iso[4], iso[5], iso[6])
 	const display = text.match(/^(\d{2})-(\d{2})-(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/)
@@ -179,7 +165,6 @@ function localDate(year, month, day, hour = 0, minute = 0, second = 0) {
 
 function serialiseValue(value) {
 	if (!(value instanceof Date) || Number.isNaN(value.getTime())) return ""
-	if (props.mode === "time") return formatTime(value)
 	const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
 	return props.mode === "datetime" ? `${date} ${formatTime(value)}` : date
 }

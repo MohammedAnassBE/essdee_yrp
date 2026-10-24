@@ -138,6 +138,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
+import { changePurchaseOrderDeliveryLocation } from "./purchaseOrderDelivery.js"
 import { applyPurchaseOrderPricePreview, applyPurchaseOrderPriceSchedule, createPurchaseOrderDraftRevision, createPurchaseOrderPreviewController, currentPurchaseOrderPreview, loadPurchaseOrderGroups, validatePurchaseOrderItems } from "../../utils/purchaseOrder.js"
 
 const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) }, newDefaults: { type: Object, default: () => ({}) } })
@@ -359,10 +360,9 @@ function hasEnteredQuantities() {
 }
 function deliveryModeChanged() { form.default_delivery_location = ""; form.set_warehouse = ""; markDirty() }
 function changeDeliveryLocation(value) {
-	if (value === form.default_delivery_location) return
-	form.default_delivery_location = value || ""
-	form.set_warehouse = ""
+	if ((value || "") === form.default_delivery_location) return
 	markDirty()
+	changePurchaseOrderDeliveryLocation(form, value).catch((reason) => { error.value = reason?.message || "Unable to load the delivery location's warehouse." })
 }
 
 async function save(submit) {

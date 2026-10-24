@@ -65,7 +65,27 @@ function setup_purchase_order_approval_actions(frm) {
 	});
 }
 
+/** Replace Set Target Warehouse with the delivery location's only enabled Warehouse, else clear it. */
+async function fill_purchase_order_delivery_warehouse(frm) {
+	if (!frm.doc.is_yrp_managed) return;
+	const location = frm.doc.default_delivery_location;
+	let warehouse = "";
+	if (location) {
+		const response = await frappe.call({
+			method: "essdee_yrp.api.supplier_warehouse.get_single_location_options",
+			args: { supplier: location },
+		});
+		if (frm.doc.default_delivery_location !== location) return;
+		warehouse = response?.message?.warehouse || "";
+	}
+	if ((frm.doc.set_warehouse || "") !== warehouse) await frm.set_value("set_warehouse", warehouse);
+}
+
 frappe.ui.form.on("Purchase Order", {
+	default_delivery_location(frm) {
+		return fill_purchase_order_delivery_warehouse(frm);
+	},
+
 	refresh(frm) {
 		if (!frm.doc.is_yrp_managed) {
 			return;

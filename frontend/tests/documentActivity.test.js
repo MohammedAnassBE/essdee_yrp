@@ -11,6 +11,8 @@ const tick = async () => { for (let index = 0; index < 3; index += 1) { await ne
 const textOf = (node) => node.type === "comment" ? "" : (node.text || "") + node.children.map(textOf).join("")
 const lineText = (line) => line.map((segment) => segment.text).join("")
 const Button = (props) => Vue.h("button", props, props.label)
+const toggleOf = (root) => findNodes(root, (node) => node.props.class === "document-activity__toggle")[0]
+async function expand(root) { toggleOf(root).props.onClick(); await tick() }
 
 function activityPage(versions, { hasMore = false, nextStart = versions.length } = {}) {
 	return {
@@ -85,6 +87,9 @@ test("activity renders stamps and versions, newest first, and pages older entrie
 	const component = await activityComponent(async (doctype, name, options) => { calls.push([doctype, name, options]); return pages[calls.length - 1] })
 	const root = mountComponent(component, { doctype: "YRP Delivery Challan", name: "DC-1" })
 	await tick()
+	assert.equal(calls.length, 0, "collapsed by default, nothing fetched")
+	assert.equal(toggleOf(root).props["aria-expanded"], false)
+	await expand(root)
 	const text = textOf(root)
 	assert.match(text, /Editor Two modified this\s*· 23-10-2026 14:30/)
 	assert.match(text, /Maker One created this\s*· 20-10-2026 09:05/)
@@ -97,6 +102,10 @@ test("activity renders stamps and versions, newest first, and pages older entrie
 	assert.deepEqual(calls[1][2], { start: 2, pageLength: 10 })
 	assert.match(textOf(root), /added 1 row to Items/)
 	assert.equal(findNodes(root, (node) => node.type === "button" && node.props.label === "Show more").length, 0)
+	assert.equal(textOf(toggleOf(root)).trim(), "Activity3")
+	await expand(root)
+	await expand(root)
+	assert.equal(calls.length, 2, "re-expanding reuses loaded activity")
 })
 
 test("activity collapses and stays hidden for unsaved documents", async () => {
@@ -110,10 +119,12 @@ test("activity collapses and stays hidden for unsaved documents", async () => {
 	assert.equal(calls.length, 0)
 	const root = mountComponent(component, { doctype: "YRP Delivery Challan", name: "DC-9" })
 	await tick()
+	assert.equal(calls.length, 0)
+	const toggle = toggleOf(root)
+	await expand(root)
 	assert.match(textOf(root), /No changes recorded since creation\./)
 	assert.doesNotMatch(textOf(root), /Last modified/)
 	assert.equal(calls.length, 1)
-	const toggle = findNodes(root, (node) => node.props.class === "document-activity__toggle")[0]
 	toggle.props.onClick()
 	await tick()
 	assert.doesNotMatch(textOf(root), /created this/)
@@ -125,8 +136,9 @@ test("activity refetches when the loaded record is saved or submitted", async ()
 	const calls = []
 	const component = await activityComponent(async (...args) => { calls.push(args); return activityPage([]) })
 	const props = Vue.reactive({ doctype: "SD YRP Lot", name: "L-1", record: null })
-	mountComponent(component, props)
+	const root = mountComponent(component, props)
 	await tick()
+	await expand(root)
 	props.record = { modified: "2026-10-23 10:00:00", docstatus: 0, status: "Draft" }
 	await tick()
 	props.record = { modified: "2026-10-23 10:00:00", docstatus: 0 }
@@ -137,7 +149,24 @@ test("activity refetches when the loaded record is saved or submitted", async ()
 	assert.equal(calls.length, 2)
 	props.name = "L-2"
 	await tick()
+	assert.equal(calls.length, 2, "another document starts collapsed")
+	await expand(root)
 	assert.deepEqual(calls.map((call) => call[1]), ["L-1", "L-1", "L-2"])
+})
+
+test("collapsed activity marks saves stale and fetches once on expand", async () => {
+	const calls = []
+	const component = await activityComponent(async (...args) => { calls.push(args); return activityPage([version("v1")]) })
+	const props = Vue.reactive({ doctype: "SD YRP Lot", name: "L-1", record: { modified: "2026-10-23 10:00:00" } })
+	const root = mountComponent(component, props)
+	await tick()
+	props.record = { modified: "2026-10-23 10:05:00" }
+	await tick()
+	assert.equal(calls.length, 0)
+	assert.equal(textOf(toggleOf(root)).trim(), "Activity")
+	await expand(root)
+	assert.equal(calls.length, 1)
+	assert.equal(textOf(toggleOf(root)).trim(), "Activity1")
 })
 
 test("activity uses the page delivered with the document once, then fetches", async () => {
@@ -148,6 +177,10 @@ test("activity uses the page delivered with the document once, then fetches", as
 	const root = mountComponent(component, props)
 	await tick()
 	assert.equal(calls.length, 0)
+	assert.equal(toggleOf(root).props["aria-expanded"], false)
+	assert.equal(textOf(toggleOf(root)).trim(), "Activity1+", "delivered page gives the collapsed count")
+	assert.match(textOf(root), /Last modified 23-10-2026 14:30/)
+	await expand(root)
 	assert.match(textOf(root), /changed Remarks from a to b/)
 	findNodes(root, (node) => node.type === "button" && node.props.label === "Show more")[0].props.onClick()
 	await tick()
@@ -162,6 +195,7 @@ test("activity uses the page delivered with the document once, then fetches", as
 	assert.match(textOf(root), /changed Remarks from b to c/)
 	props.name = "DC-2"
 	await tick()
+	await expand(root)
 	assert.equal(calls.at(-1)[1], "DC-2")
 })
 

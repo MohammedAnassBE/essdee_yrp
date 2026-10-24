@@ -1,9 +1,10 @@
 <template>
 	<section v-if="isSaved" class="document-activity" :aria-labelledby="headingId" :aria-busy="loading">
 		<header class="document-activity__header">
-			<button type="button" class="document-activity__toggle" :aria-expanded="expanded" :aria-controls="bodyId" @click="expanded = !expanded">
+			<button type="button" class="document-activity__toggle" :aria-expanded="expanded" :aria-controls="bodyId" @click="toggle">
 				<i :class="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" aria-hidden="true" />
 				<h2 :id="headingId">Activity</h2>
+				<span v-if="countLabel" class="document-activity__count">{{ countLabel }}</span>
 			</button>
 			<span v-if="!expanded && activity?.modified?.at" class="document-activity__summary">
 				Last modified {{ formatDisplayDatetime(activity.modified.at) }}
@@ -76,7 +77,7 @@ const props = defineProps({
 const isSaved = computed(() => Boolean(props.doctype) && isSavedDocumentName(props.name))
 const headingId = computed(() => `document-activity-${String(props.name).replace(/[^A-Za-z0-9_-]+/g, "-")}`)
 const bodyId = computed(() => `${headingId.value}-body`)
-const expanded = ref(true)
+const expanded = ref(false)
 const activity = ref(null)
 const entries = ref([])
 const hasMore = ref(false)
@@ -86,6 +87,9 @@ const loadingMore = ref(false)
 const error = ref("")
 let sequence = 0
 let usedInitialPage = null
+let stale = true
+
+const countLabel = computed(() => activity.value ? `${entries.value.length}${hasMore.value ? "+" : ""}` : "")
 
 async function fetchPage(start) {
 	return getDocumentActivity(props.doctype, props.name, { start, pageLength: props.pageLength })
@@ -100,6 +104,7 @@ function applyPage(result, append) {
 
 async function load() {
 	const current = ++sequence
+	stale = false
 	error.value = ""
 	if (!isSaved.value) {
 		activity.value = null
@@ -136,9 +141,32 @@ async function loadMore() {
 	}
 }
 
+function toggle() {
+	expanded.value = !expanded.value
+	if (expanded.value && stale) load()
+}
+
+function resetForDocument() {
+	sequence += 1
+	expanded.value = false
+	activity.value = null
+	entries.value = []
+	hasMore.value = false
+	loading.value = false
+	error.value = ""
+}
+
+// Fetch only while expanded; a page delivered with the payload is applied without a request.
+function refresh() {
+	const hasFreshInitialPage = props.initialPage && props.initialPage !== usedInitialPage
+	if (expanded.value || hasFreshInitialPage) load()
+	else stale = true
+}
+
 watch(() => [props.doctype, props.name, activityRefreshKey(props.record)], ([doctype, name, key], previous = []) => {
 	const sameDocument = previous[0] === doctype && previous[1] === name
-	if (!sameDocument || (previous[2] && key !== previous[2])) load()
+	if (!sameDocument) resetForDocument()
+	if (!sameDocument || (previous[2] && key !== previous[2])) refresh()
 }, { immediate: true })
 </script>
 
@@ -178,6 +206,14 @@ watch(() => [props.doctype, props.name, activityRefreshKey(props.record)], ([doc
 	font-size: var(--erp-font-size-table);
 	font-weight: var(--erp-font-weight-bold);
 	letter-spacing: .02em;
+}
+
+.document-activity__count {
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--erp-surface-muted);
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
 }
 
 .document-activity__summary,

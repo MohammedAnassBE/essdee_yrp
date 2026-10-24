@@ -312,8 +312,51 @@ def _row_identity(row) -> tuple:
 	)
 
 
-def _merge_authoritative_rows(authoritative, browser_rows, *, quantity_field: str = "qty") -> list[dict]:
-	"""Copy only user quantities onto trusted rows and reject injected rows."""
+def _apply_browser_quantities(row: dict, browser: Mapping, quantity_field: str) -> dict:
+	try:
+		quantity = float(browser.get(quantity_field) or 0)
+	except (TypeError, ValueError):
+		frappe.throw(_("Item quantity must be a number."))
+	if quantity < 0:
+		frappe.throw(_("Item quantity cannot be negative."))
+	row[quantity_field] = quantity
+	if "comments" in browser:
+		row["comments"] = browser.get("comments") or ""
+	if quantity_field == "qty":
+		row["delivered_quantity"] = quantity
+	if "secondary_qty" in browser:
+		try:
+			secondary_quantity = float(browser.get("secondary_qty") or 0)
+		except (TypeError, ValueError):
+			frappe.throw(_("Secondary quantity must be a number."))
+		if secondary_quantity < 0:
+			frappe.throw(_("Secondary quantity cannot be negative."))
+		row["secondary_qty"] = secondary_quantity
+	return row
+
+
+def get_editor_grid_rows(authoritative, *, corrections: bool) -> list[dict]:
+	"""Flat rows for every cell the editor renders, including padded primary-attribute cells."""
+
+	doctype = "YRP Delivery Challan"
+	if corrections:
+		grid = group_correction_items_for_ui(authoritative, doctype)
+		return ungroup_correction_items_from_ui(grid, doctype, keep_zero=True)
+	return ungroup_items_from_ui(group_items_for_ui(authoritative, doctype), doctype, keep_zero=True)
+
+
+def _merge_authoritative_rows(
+	authoritative,
+	browser_rows,
+	*,
+	quantity_field: str = "qty",
+	corrections: bool = False,
+) -> list[dict]:
+	"""Copy only user quantities onto trusted rows and reject injected rows.
+
+	A quantity in a padded grid cell (a size with no source row) becomes a new
+	row built from the server's own grid, like Desk's matrix sync.
+	"""
 
 	entered = {}
 	for row in browser_rows or []:
@@ -323,37 +366,43 @@ def _merge_authoritative_rows(authoritative, browser_rows, *, quantity_field: st
 	for source in authoritative or []:
 		row = _row_dict(source)
 		matches = entered.get(_row_identity(row)) or []
-		browser = matches.pop(0) if matches else {}
-		try:
-			quantity = float(browser.get(quantity_field) or 0)
-		except (TypeError, ValueError):
-			frappe.throw(_("Item quantity must be a number."))
-		if quantity < 0:
-			frappe.throw(_("Item quantity cannot be negative."))
-		row[quantity_field] = quantity
-		if "comments" in browser:
-			row["comments"] = browser.get("comments") or ""
-		if quantity_field == "qty":
-			row["delivered_quantity"] = quantity
-		if "secondary_qty" in browser:
-			try:
-				secondary_quantity = float(browser.get("secondary_qty") or 0)
-			except (TypeError, ValueError):
-				frappe.throw(_("Secondary quantity must be a number."))
-			if secondary_quantity < 0:
-				frappe.throw(_("Secondary quantity cannot be negative."))
-			row["secondary_qty"] = secondary_quantity
-		merged.append(row)
+		merged.append(_apply_browser_quantities(row, matches.pop(0) if matches else {}, quantity_field))
 
-	remaining_rows = [row for matches in entered.values() for row in matches]
-	if any(
-		flt(row.get(quantity_field)) > 0 or flt(row.get("secondary_qty")) > 0
-		for row in remaining_rows
-	):
-		frappe.throw(
-			_("The available item rows changed. Refresh the editor and enter the quantities again.")
-		)
+	remaining_rows = [
+		row
+		for matches in entered.values()
+		for row in matches
+		if flt(row.get(quantity_field)) > 0 or flt(row.get("secondary_qty")) > 0
+	]
+	if not remaining_rows:
+		return merged
+	merged_by_identity = {_row_identity(row): row for row in merged}
+	padded_cells = {
+		_row_identity(row): row
+		for row in get_editor_grid_rows(authoritative, corrections=corrections)
+		if _row_identity(row) not in merged_by_identity
+	}
+	for browser in remaining_rows:
+		identity = _row_identity(browser)
+		if identity in padded_cells:
+			row = _apply_browser_quantities(_row_dict(padded_cells.pop(identity)), browser, quantity_field)
+			merged_by_identity[identity] = row
+			merged.append(row)
+		elif identity in merged_by_identity:
+			# Another grid entry rendered a padded cell for this same row.
+			_add_browser_quantities(merged_by_identity[identity], browser, quantity_field)
+		else:
+			frappe.throw(
+				_("The available item rows changed. Refresh the editor and enter the quantities again.")
+			)
 	return merged
+
+
+def _add_browser_quantities(row: dict, browser: Mapping, quantity_field: str) -> None:
+	extra = _apply_browser_quantities({}, browser, quantity_field)
+	for fieldname in (quantity_field, "delivered_quantity", "secondary_qty"):
+		if fieldname in extra:
+			row[fieldname] = flt(row.get(fieldname)) + extra[fieldname]
 
 
 def _onload_matrices(doc) -> tuple[list, list]:
@@ -804,7 +853,11 @@ def save_delivery_challan(
 			fallback_rows=authoritative_corrections,
 		)
 		items = _merge_authoritative_rows(authoritative_items, browser_items)
-		corrections = _merge_authoritative_rows(authoritative_corrections, browser_corrections)
+		corrections = _merge_authoritative_rows(
+			authoritative_corrections,
+			browser_corrections,
+			corrections=True,
+		)
 	doc.set("items", items)
 	doc.set("correction_items", corrections)
 	# The controller must validate the trusted flat children directly.  Leaving

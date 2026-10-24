@@ -77,6 +77,22 @@ class TestFabricStoreDeliveryChallan(TestCase):
 		)
 		self.assertEqual(merged, [])
 
+	def test_padded_cell_of_a_repeated_grid_entry_adds_to_the_existing_row(self):
+		authoritative = [{"item_variant": "LABEL-S", "qty": 0, "row_index": "3", "ref_docname": "WOD-1"}]
+		browser = [
+			{"item_variant": "LABEL-S", "qty": 2, "secondary_qty": 1, "row_index": "3"},
+			{"item_variant": "LABEL-S", "qty": 3, "secondary_qty": 1, "row_index": "3"},
+		]
+		with patch(
+			"essdee_yrp.fabric_store.documents.delivery_challan.get_editor_grid_rows",
+			return_value=[dict(authoritative[0])],
+		):
+			merged = _merge_authoritative_rows(authoritative, browser)
+
+		self.assertEqual(len(merged), 1)
+		self.assertEqual((merged[0]["qty"], merged[0]["delivered_quantity"], merged[0]["secondary_qty"]), (5, 5, 2))
+		self.assertEqual(merged[0]["ref_docname"], "WOD-1")
+
 	def test_duplicate_workspace_is_unsaved_and_keeps_entered_groups(self):
 		source = self.make_document(docstatus=1)
 		duplicate = self.make_document()
@@ -554,15 +570,60 @@ class TestFabricStoreDeliveryChallan(TestCase):
 			patch("essdee_yrp.fabric_store.documents.delivery_challan._validate_and_sync_party_dependencies"),
 			patch("essdee_yrp.fabric_store.documents.delivery_challan.frappe.new_doc", return_value=doc),
 			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_delivery_challan_defaults", return_value=defaults),
-			patch("essdee_yrp.fabric_store.documents.delivery_challan.ungroup_items_from_ui", return_value=[
-				{"item_variant": "RAW-S", "qty": 5, "row_index": "0"},
-				{"item_variant": "FORGED", "qty": 99, "row_index": "9"},
-			]),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.group_items_for_ui", return_value=self.EDITOR_GRID),
+			patch(
+				"essdee_yrp.fabric_store.documents.delivery_challan.ungroup_items_from_ui",
+				side_effect=self.ungroup_editor_grid_or([
+					{"item_variant": "RAW-S", "qty": 5, "row_index": "0"},
+					{"item_variant": "FORGED", "qty": 99, "row_index": "9"},
+				]),
+			),
 		):
-			with self.assertRaises(frappe.ValidationError):
+			with self.assertRaisesRegex(frappe.ValidationError, "available item rows changed"):
 				save_delivery_challan({"work_order": "WO-1", "item_details": [{}]})
 
 		doc.insert.assert_not_called()
+
+	EDITOR_GRID = [{"editor_grid": True}]
+	PADDED_GRID_ROWS = [
+		{"item_variant": "RAW-S", "qty": 5, "ref_docname": "WOD-1", "row_index": "0", "rate": 10},
+		{"item_variant": "RAW-M", "qty": 0, "ref_docname": "", "row_index": "0", "rate": 0},
+	]
+
+	def ungroup_editor_grid_or(self, browser_rows):
+		def ungroup(details, *args, **kwargs):
+			return [dict(row) for row in self.PADDED_GRID_ROWS] if details == self.EDITOR_GRID else browser_rows
+
+		return ungroup
+
+	def test_save_accepts_a_quantity_in_a_padded_size_cell_like_desk(self):
+		doc = self.make_document()
+		defaults = {
+			"work_order": "WO-1",
+			"items": [{"item_variant": "RAW-S", "qty": 5, "ref_docname": "WOD-1", "row_index": "0", "rate": 10}],
+			"correction_items": [],
+		}
+		browser_rows = [
+			{"item_variant": "RAW-S", "qty": 2, "row_index": "0"},
+			{"item_variant": "RAW-M", "qty": 4, "row_index": "0", "ref_docname": "FORGED", "rate": 999},
+		]
+		with (
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.frappe.has_permission", return_value=True),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan._validate_and_sync_party_dependencies"),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.frappe.new_doc", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_delivery_challan_defaults", return_value=defaults),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.group_items_for_ui", return_value=self.EDITOR_GRID),
+			patch(
+				"essdee_yrp.fabric_store.documents.delivery_challan.ungroup_items_from_ui",
+				side_effect=self.ungroup_editor_grid_or(browser_rows),
+			),
+			patch("essdee_yrp.fabric_store.documents.delivery_challan.get_delivery_challan_workspace", return_value={}),
+		):
+			save_delivery_challan({"work_order": "WO-1", "item_details": [{}]})
+
+		saved = [(row.item_variant, row.qty, row.delivered_quantity, row.ref_docname, row.rate) for row in doc["items"]]
+		self.assertEqual(saved, [("RAW-S", 2, 2, "WOD-1", 10), ("RAW-M", 4, 4, "", 0)])
+		doc.insert.assert_called_once_with()
 
 	def test_existing_save_persists_only_configured_stock_dimensions(self):
 		doc = self.make_document()

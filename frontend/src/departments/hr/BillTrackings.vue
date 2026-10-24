@@ -94,7 +94,7 @@ import Button from "primevue/button"
 import Message from "primevue/message"
 import { useToast } from "primevue/usetoast"
 import { computed, onMounted, ref } from "vue"
-import { useRouter } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 
 import {
 	bulkAssignBills,
@@ -124,6 +124,7 @@ const props = defineProps({
 	newRouteName: { type: String, default: "hr-bill-tracking-new" },
 })
 
+const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const listView = ref(null)
@@ -157,6 +158,7 @@ async function load() {
 	loadError.value = ""
 	try {
 		capability.value = (await getHrCapabilities())?.sections?.bill_tracking || null
+		if (route.query.assigned_to_me === "1") await showAssignedOnly()
 	} catch (reason) {
 		capability.value = null
 		loadError.value = reason?.message || "Unable to load Bill Tracking."
@@ -165,21 +167,31 @@ async function load() {
 	}
 }
 
+function rememberAssignedOnly(enabled) {
+	const query = { ...route.query, assigned_to_me: enabled ? "1" : undefined }
+	return router.replace({ query, hash: route.hash })
+}
+
 async function toggleAssignedOnly() {
 	if (assignedOnly.value) {
 		assignedOnly.value = false
 		assignedDepartments.value = []
-		return
+		return rememberAssignedOnly(false)
 	}
+	if (await showAssignedOnly()) await rememberAssignedOnly(true)
+}
+
+async function showAssignedOnly() {
 	loadingDepartments.value = true
 	try {
 		const departments = await getUserDepartments()
 		if (!Array.isArray(departments) || !departments.length) {
 			toast.add({ severity: "info", summary: "You are not a member of any department.", life: 3500 })
-			return
+			return false
 		}
 		assignedDepartments.value = departments
 		assignedOnly.value = true
+		return true
 	} catch (reason) {
 		toast.add({ severity: "error", summary: "Unable to load your departments.", detail: reason?.message, life: 4500 })
 	} finally {

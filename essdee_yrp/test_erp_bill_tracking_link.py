@@ -2,7 +2,9 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from yrp.yrp.doctype.yrp_bill_tracking.test_yrp_bill_tracking import _bill, _received_via
+from frappe.utils import add_days, nowdate
+from yrp.yrp.doctype.yrp_bill_tracking.test_yrp_bill_tracking import _bill, _department, _received_via
+from yrp.yrp.doctype.yrp_bill_tracking.yrp_bill_tracking import assign_vendor_bill
 from yrp.yrp.doctype.yrp_goods_received_note.test_purchase_order_grn import _default_received_type
 
 HOOK_MODULES = ("essdee.", "essdee_yrp.")
@@ -24,6 +26,34 @@ def _erp_invoice(bill):
 	)
 	invoice.db_insert()
 	return frappe.get_doc("Purchase Invoice", invoice.name)
+
+
+def _assigned_bill_names(department):
+	"""Mirror the /web and Desk "Assigned to me" list filter."""
+	return frappe.get_all(
+		"YRP Bill Tracking",
+		filters=[["assigned_to", "in", [department]], ["docstatus", "=", 1], ["form_status", "!=", "Closed"]],
+		pluck="name",
+	)
+
+
+def _draft_erp_invoice_from(template_name, bill):
+	"""Copy a submitted site invoice so ERPNext's accounting setup is already valid."""
+	invoice = frappe.copy_doc(frappe.get_doc("Purchase Invoice", template_name))
+	invoice.update(
+		{
+			"docstatus": 0,
+			"bill_no": bill.bill_no,
+			"bill_date": nowdate(),
+			"posting_date": nowdate(),
+			"set_posting_time": 1,
+			"due_date": add_days(nowdate(), 30),
+			"vendor_bill_tracking": bill.name,
+			"payment_schedule": [],
+		}
+	)
+	invoice.insert()
+	return invoice
 
 
 def _run_bill_tracking_hooks(invoice, *events):
@@ -104,3 +134,32 @@ class TestErpBillTrackingLink(FrappeTestCase):
 		self.invoice.reload()
 		_run_bill_tracking_hooks(self.invoice, "before_submit")
 		self.assertEqual(self.invoice.vendor_bill_tracking, "VBT-MISSING")
+
+	def test_real_erp_invoice_submit_drops_bill_from_assigned_to_me(self):
+		template = frappe.db.get_value(
+			"Purchase Invoice",
+			{
+				"docstatus": 1,
+				"is_return": 0,
+				"mrp_purchase_invoice_name": ["is", "not set"],
+				"name": ["not like", "_T-ERP-PI-%"],
+			},
+			"name",
+			order_by="creation desc",
+		)
+		if not template:
+			self.skipTest("Needs one submitted ERPNext Purchase Invoice to copy accounting setup from.")
+		department = _department("_T_BT_ERP_Dept")
+		assign_vendor_bill(self.bill.name, department)
+		self.assertIn(self.bill.name, _assigned_bill_names(department))
+
+		invoice = _draft_erp_invoice_from(template, self.bill)
+		self.assertIn(self.bill.name, _assigned_bill_names(department))
+		with patch("essdee.essdee.utils.mrp.mrp_utilities.requests.post") as remote_post:
+			invoice.submit()
+		remote_post.assert_not_called()
+
+		bill = frappe.get_doc("YRP Bill Tracking", self.bill.name)
+		self.assertEqual(bill.form_status, "Closed")
+		self.assertEqual(bill.erp_purchase_invoice, invoice.name)
+		self.assertNotIn(self.bill.name, _assigned_bill_names(department))

@@ -66,26 +66,29 @@ def get_dynamic_packed_qty(finishing_doc, grn_names):
 	return data
 
 
-def get_finishing_packing_summary(finishing_doc):
+PACKING_GRN_FILTERS = {
+	"against": "YRP Work Order",
+	"docstatus": 1,
+	"is_return": 0,
+	"includes_packing": 1,
+	"from_finishing": 1,
+	"packing_calculation_version": [">=", LEGACY_BATCH_TRACKING_VERSION],
+}
+
+
+def get_finishing_packing_summary(finishing_doc, grn_names=None):
+	"""Packing summary of a plan; grn_names, when given, must equal the per-plan GRN lookup."""
 	if isinstance(finishing_doc, str):
 		finishing_doc = frappe.get_doc("SD YRP Finishing Plan", finishing_doc)
 
-	grn_names = []
-	if finishing_doc.work_order:
-		grn_names = frappe.get_all(
-			"YRP Goods Received Note",
-			filters={
-				"against": "YRP Work Order",
-				"against_id": finishing_doc.work_order,
-				"lot": finishing_doc.lot,
-				"docstatus": 1,
-				"is_return": 0,
-				"includes_packing": 1,
-				"from_finishing": 1,
-				"packing_calculation_version": [">=", LEGACY_BATCH_TRACKING_VERSION],
-			},
-			pluck="name",
-		)
+	if grn_names is None:
+		grn_names = []
+		if finishing_doc.work_order:
+			grn_names = frappe.get_all(
+				"YRP Goods Received Note",
+				filters={**PACKING_GRN_FILTERS, "against_id": finishing_doc.work_order, "lot": finishing_doc.lot},
+				pluck="name",
+			)
 
 	if grn_names:
 		return get_dynamic_packed_qty(finishing_doc, grn_names)

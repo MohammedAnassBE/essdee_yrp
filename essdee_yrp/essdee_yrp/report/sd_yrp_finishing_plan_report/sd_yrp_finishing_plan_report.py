@@ -1,13 +1,14 @@
 # Copyright (c) 2025, Essdee and contributors
 # For license information, please see license.txt
 import frappe
-from yrp.attribute_read_context import attribute_read_scope
 from frappe.utils import flt
 from yrp import attribute_links as attribute_db
+from yrp.attribute_links import value as attribute_value
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.utils import get_variant_attr_details
 
 from essdee_yrp.finishing.old_lot_history import active_old_lot_transfer_rows
-from essdee_yrp.finishing.packing import get_finishing_packing_summary
+from essdee_yrp.finishing.packing import PACKING_GRN_FILTERS, get_finishing_packing_summary
 
 
 def execute(filters=None):
@@ -169,6 +170,114 @@ def _report_plans(names):
 	return plans
 
 
+PLAN_SUMS = {
+	"detail": (
+		"SD YRP Finishing Plan Detail",
+		"""SUM(cutting_qty) AS cut_qty, SUM(delivered_quantity) AS sewing_received,
+		sum(dc_qty) as dc_qty, SUM(lot_transferred) as old_lot, SUM(ironing_excess) as ironing_excess,
+		SUM(return_qty) + SUM(pack_return_qty) AS loose_piece,
+		SUM(transferred_qty) as transferred""",
+		("cut_qty", "sewing_received", "dc_qty", "old_lot", "ironing_excess", "loose_piece", "transferred"),
+	),
+	"dispatch": (
+		"SD YRP Finishing Plan GRN Detail",
+		"sum(dispatched) as dispatched_box",
+		("dispatched_box",),
+	),
+	"rework": (
+		"SD YRP Finishing Plan Reworked Detail",
+		"""SUM(quantity) as rework_quantity, SUM(reworked_quantity) as reworked,
+		SUM(rejected_qty) as rejected""",
+		("rework_quantity", "reworked", "rejected"),
+	),
+}
+
+
+def collation_key(value):
+	"""Python twin of utf8mb4_unicode_ci equality for printable ASCII; None when unprovable."""
+	if isinstance(value, str) and value.isascii() and value.isprintable():
+		return value.lower().rstrip(" ")
+	return None
+
+
+def get_variant_attribute_rows(variants):
+	"""Raw (attribute, value) rows behind get_variant_attr_details; variants it cannot prove identical are left out."""
+	keys = {collation_key(variant) for variant in variants} - {None}
+	ordered_keys = sorted(keys)
+	rows_by_key = {}
+	for offset in range(0, len(ordered_keys), 500):
+		for row in frappe.db.sql(
+			"SELECT parent, attribute, attribute_value FROM `tabItem Variant Attribute` WHERE parent IN %(parents)s",
+			{"parents": tuple(ordered_keys[offset:offset + 500])},
+			as_dict=True,
+		):
+			key = collation_key(row.parent)
+			if key not in keys:
+				return {}
+			rows_by_key.setdefault(key, []).append(row)
+	variant_rows = {}
+	for variant in variants:
+		key = collation_key(variant)
+		rows = rows_by_key.get(key, [])
+		# The per-variant query has no ORDER BY, so a repeated attribute keeps the scalar read.
+		if key is not None and len({row.attribute for row in rows}) == len(rows):
+			variant_rows[variant] = [(row.attribute, row.attribute_value) for row in rows]
+	return variant_rows
+
+
+def get_packing_grn_names(plans):
+	"""get_finishing_packing_summary GRN lists for many plans; plans it cannot prove identical are left out."""
+	plan_keys = {plan.name: (collation_key(plan.work_order), collation_key(plan.lot)) for plan in plans if plan.work_order}
+	plan_keys = {name: key for name, key in plan_keys.items() if None not in key}
+	work_orders = sorted({key[0] for key in plan_keys.values()})
+	rows_by_key = {}
+	for offset in range(0, len(work_orders), 500):
+		for row in frappe.get_all(
+			"YRP Goods Received Note",
+			filters={**PACKING_GRN_FILTERS, "against_id": ["in", work_orders[offset:offset + 500]]},
+			fields=["name", "against_id", "lot", "modified"],
+		):
+			key = (collation_key(row.against_id), collation_key(row.lot))
+			if key[0] is None or (key[1] is None and row.lot is not None):
+				return {}
+			rows_by_key.setdefault(key, []).append(row)
+	names = {plan.name: [] for plan in plans if not plan.work_order}
+	for name, key in plan_keys.items():
+		rows = rows_by_key.get(key, [])
+		# Rows tied on the default `modified desc` order have no defined order: keep the per-plan read.
+		if len({row.modified for row in rows}) == len(rows):
+			names[name] = [row.name for row in rows]
+	return names
+
+
+class PlanSums:
+	"""PLAN_SUMS per plan in one GROUP BY query per 500 plans, shaped like the per-plan query."""
+
+	def __init__(self, kind, names):
+		self.table, self.select, self.columns = PLAN_SUMS[kind]
+		self.rows, self.has_foreign_parent = {}, False
+		for offset in range(0, len(names), 500):
+			chunk = set(names[offset:offset + 500])
+			for row in frappe.db.sql(
+				f"SELECT parent AS plan_name, {self.select} FROM `tab{self.table}` WHERE parent IN %(names)s GROUP BY parent",
+				{"names": tuple(chunk)},
+				as_dict=True,
+			):
+				name = row.pop("plan_name")
+				self.has_foreign_parent |= name not in chunk
+				self.rows[name] = row
+
+	def get(self, name):
+		if name in self.rows:
+			return self.rows[name]
+		if self.has_foreign_parent:
+			# A group keyed by another spelling of a plan name: keep the per-plan read.
+			return frappe.db.sql(
+				f"SELECT {self.select} FROM `tab{self.table}` WHERE parent = %(name)s", {"name": name}, as_dict=True
+			)[0]
+		return frappe._dict.fromkeys(self.columns)
+
+
 def get_data(filters):
 	with attribute_read_scope():
 		return _read_get_data(filters)
@@ -203,9 +312,30 @@ def _read_get_data(filters):
 
 	fp_list = frappe.get_all("SD YRP Finishing Plan", filters=fil, pluck="name")
 	plans = _report_plans(fp_list)
+	set_plans = [plan for plan in plans.values() if plan.is_set_item]
+	variant_rows = get_variant_attribute_rows({
+		row.item_variant
+		for plan in set_plans
+		for field in ("finishing_plan_details", "finishing_old_lot_given_items", "finishing_plan_reworked_details")
+		for row in plan.get(field) or []
+	})
+
+	resolved = {}
+
+	def variant_attrs(variant):
+		if variant not in variant_rows:
+			return get_variant_attr_details(variant)
+		# Resolved on first use, like the scalar read, so unused rows (cancelled transfers) never raise.
+		if variant not in resolved:
+			resolved[variant] = {attribute: attribute_value(raw) for attribute, raw in variant_rows[variant]}
+		return resolved[variant]
+
+	single_plans = [name for name in fp_list if name in plans and not plans[name].is_set_item]
+	sums = {kind: PlanSums(kind, single_plans) for kind in PLAN_SUMS}
+	packing_grn_names = get_packing_grn_names(list(plans.values()))
 	for fp_name in fp_list:
 		fp_doc = plans.get(fp_name) or frappe.get_lazy_doc("SD YRP Finishing Plan", fp_name)
-		packing_summary = get_finishing_packing_summary(fp_doc)
+		packing_summary = get_finishing_packing_summary(fp_doc, packing_grn_names.get(fp_name))
 		report_pieces_per_box = fp_doc.pieces_per_box
 		if packing_summary.dynamic_ratio_packing:
 			batch_combos = {flt(batch.get("pieces_per_box")) for batch in packing_summary.packing_batches}
@@ -221,7 +351,7 @@ def _read_get_data(filters):
 				"YRP Item Production Detail", fp_doc.production_detail, "set_item_attribute"
 			)
 			for row in fp_doc.finishing_plan_details:
-				attrs = get_variant_attr_details(row.item_variant)
+				attrs = variant_attrs(row.item_variant)
 				set_attr_value = attrs[set_attr]
 				set_dict.setdefault(
 					set_attr_value,
@@ -259,7 +389,7 @@ def _read_get_data(filters):
 				set_dict[set_attr_value]["transferred"] += row.transferred_qty
 
 			for row in active_old_lot_transfer_rows(fp_doc.get("finishing_old_lot_given_items")):
-				attrs = get_variant_attr_details(row.item_variant)
+				attrs = variant_attrs(row.item_variant)
 				set_attr_value = attrs[set_attr]
 				if set_attr_value not in set_dict:
 					continue
@@ -268,7 +398,7 @@ def _read_get_data(filters):
 				set_dict[set_attr_value]["transferred_as_loose_piece"] += quantity
 
 			for row in fp_doc.finishing_plan_reworked_details:
-				attrs = get_variant_attr_details(row.item_variant)
+				attrs = variant_attrs(row.item_variant)
 				set_attr_value = attrs[set_attr]
 				set_dict[set_attr_value]["rejection"] += row.rejected_qty
 				set_dict[set_attr_value]["rework"] += row.quantity - (
@@ -360,62 +490,40 @@ def _read_get_data(filters):
 				data.append(set_dict[set_key])
 
 		else:
-			fp_detail_data = frappe.db.sql(
-				f"""
-					SELECT SUM(cutting_qty) AS cut_qty, SUM(delivered_quantity) AS sewing_received,
-					sum(dc_qty) as dc_qty, SUM(lot_transferred) as old_lot, SUM(ironing_excess) as ironing_excess,
-					SUM(return_qty) + SUM(pack_return_qty) AS loose_piece,
-					SUM(transferred_qty) as transferred
-					FROM `tabSD YRP Finishing Plan Detail` WHERE parent = {frappe.db.escape(fp_name)}
-				""",
-				as_dict=True,
-			)
-			d["cut_qty"] = fp_detail_data[0]["cut_qty"]
-			d["sewing_received"] = fp_detail_data[0]["sewing_received"]
-			d["sewing_diff"] = fp_detail_data[0]["sewing_received"] - fp_detail_data[0]["cut_qty"]
-			d["old_lot"] = fp_detail_data[0]["old_lot"]
-			d["ironing_excess"] = fp_detail_data[0]["ironing_excess"]
-			d["finishing_inward"] = fp_detail_data[0]["dc_qty"]
+			fp_detail = sums["detail"].get(fp_name)
+			d["cut_qty"] = fp_detail["cut_qty"]
+			d["sewing_received"] = fp_detail["sewing_received"]
+			d["sewing_diff"] = fp_detail["sewing_received"] - fp_detail["cut_qty"]
+			d["old_lot"] = fp_detail["old_lot"]
+			d["ironing_excess"] = fp_detail["ironing_excess"]
+			d["finishing_inward"] = fp_detail["dc_qty"]
 			d["transferred_as_loose_piece"] = sum(
 				flt(row.loose_piece_given) + flt(row.loose_piece_set_given)
 				for row in active_old_lot_transfer_rows(fp_doc.get("finishing_old_lot_given_items"))
 			)
-			d["loose_piece"] = fp_detail_data[0]["loose_piece"] - d["transferred_as_loose_piece"]
-			d["cut_to_finishing_diff"] = fp_detail_data[0]["dc_qty"] - fp_detail_data[0]["cut_qty"]
-			d["transferred"] = fp_detail_data[0]["transferred"]
+			d["loose_piece"] = fp_detail["loose_piece"] - d["transferred_as_loose_piece"]
+			d["cut_to_finishing_diff"] = fp_detail["dc_qty"] - fp_detail["cut_qty"]
+			d["transferred"] = fp_detail["transferred"]
 			if packing_summary.dynamic_ratio_packing:
 				d["dispatch_box_qty"] = flt(packing_summary.total_dispatched_boxes)
 				d["dispatch_piece_qty"] = flt(packing_summary.total_dispatched)
 			else:
-				dispatch_detail = frappe.db.sql(
-					f"""
-						SELECT sum(dispatched) as dispatched_box FROM `tabSD YRP Finishing Plan GRN Detail`
-						WHERE parent = {frappe.db.escape(fp_name)}
-					""",
-					as_dict=True,
-				)
-				d["dispatch_box_qty"] = flt(dispatch_detail[0]["dispatched_box"])
+				dispatch_detail = sums["dispatch"].get(fp_name)
+				d["dispatch_box_qty"] = flt(dispatch_detail["dispatched_box"])
 				d["dispatch_piece_qty"] = d["dispatch_box_qty"] * flt(fp_doc.pieces_per_box)
 			d["cut_to_dispatch_diff"] = (
 				d["dispatch_piece_qty"]
-				+ fp_detail_data[0]["transferred"]
+				+ fp_detail["transferred"]
 				+ d["transferred_as_loose_piece"]
-				- fp_detail_data[0]["cut_qty"]
+				- fp_detail["cut_qty"]
 			)
-			d["finishing_inward_to_dispatch_diff"] = d["dispatch_piece_qty"] - fp_detail_data[0]["dc_qty"]
-			rework_detail = frappe.db.sql(
-				f"""
-					SELECT SUM(quantity) as rework_quantity, SUM(reworked_quantity) as reworked,
-					SUM(rejected_qty) as rejected FROM `tabSD YRP Finishing Plan Reworked Detail`
-					WHERE parent = {frappe.db.escape(fp_name)}
-				""",
-				as_dict=True,
-			)
-			d["rejection"] = rework_detail[0].get("rejected") or 0
+			d["finishing_inward_to_dispatch_diff"] = d["dispatch_piece_qty"] - fp_detail["dc_qty"]
+			rework_detail = sums["rework"].get(fp_name)
+			d["rejection"] = rework_detail.get("rejected") or 0
 			d["rework"] = (
-				(rework_detail[0].get("rework_quantity") or 0)
-				- (rework_detail[0].get("reworked") or 0)
-				- (rework_detail[0].get("rejected") or 0)
+				(rework_detail.get("rework_quantity") or 0)
+				- (rework_detail.get("reworked") or 0)
+				- (rework_detail.get("rejected") or 0)
 			)
 			sum1 = (
 				d["dispatch_piece_qty"]

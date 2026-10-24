@@ -53,6 +53,8 @@ export const departments = [
 		label: "Quality",
 		shortLabel: "QA",
 		path: "/quality",
+		combines: ["planning", "merch", "pd", "accounts"],
+		combinedSections: ["cutting_plans", "lots", "sewing_plans", "finishing_plans", "process_costs", "products", "lotwise_item_profits", "debits"],
 		sections: { inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
 		component: () => import("./Quality.vue"),
 	},

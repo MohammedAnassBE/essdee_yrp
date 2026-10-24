@@ -11,6 +11,7 @@ import { merchPurchaseLauncherItems } from "../src/departments/merch-purchase/me
 import { MERCH_ROUTES, merchLauncherItems } from "../src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES, PLANNING_WORKSPACES, visiblePlanningWorkspaces } from "../src/departments/planning/planningViews.js"
+import * as qualityWorkspaces from "../src/departments/quality/qualityWorkspaces.js"
 import { PURCHASE_REPORT_KEYS, PURCHASE_ROUTES, PURCHASE_STORE_WORKSPACE_KEYS, purchaseLauncherItems } from "../src/departments/purchase/purchaseViews.js"
 import { departments } from "../src/departments/registry.js"
 import { getLockedDepartment, getLockedRedirect, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
@@ -166,7 +167,7 @@ test("the Planning layout lists the Finishing Plan Dispatch card and opens its p
 
 test("Finishing and Quality launchers show the document cards only when readable", async () => {
 	const finishing = (sections) => launcherItems("frontend/src/departments/Finishing.vue", { "../api/finishing.js": { getFinishingCapabilities: async () => ({ sections }) } })
-	const quality = (sections) => launcherItems("frontend/src/departments/Quality.vue", { "../api/quality.js": { getQualityCapabilities: async () => ({ sections }) } })
+	const quality = (sections) => launcherItems("frontend/src/departments/Quality.vue", { "../api/quality.js": { getQualityCapabilities: async () => ({ sections }) }, "./quality/qualityWorkspaces.js": qualityWorkspaces })
 	assertDocumentCards(await finishing(READABLE), "/finishing")
 	assertDocumentCards(await quality(READABLE), "/quality")
 	assert.ok(!(await finishing({ work_orders: { can_read: true } })).some((item) => DOCUMENT_KEYS.includes(item.key)))

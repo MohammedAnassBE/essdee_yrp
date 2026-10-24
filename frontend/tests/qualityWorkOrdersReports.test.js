@@ -227,6 +227,19 @@ test("Quality reports gate the RFT report by its capability and show a lone repo
 	assert.deepEqual(page.navigations, [])
 })
 
+test("Quality reports list Lot Cut Quantity beside RFT with its Cutting Plan link capability", async () => {
+	const page = await qualityReports({ reports: {
+		quality_inspection_rft: { can_read: true },
+		lot_cut_quantity: { can_read: true, can_read_cutting_plan: true },
+	} })
+	const options = nodes(page.root, "select")[0].props.options
+	assert.deepEqual(options.map((report) => report.value), ["quality-inspection-rft", "lot-cut-quantity"])
+	assert.deepEqual(options[1].props, { canReadCuttingPlan: true })
+	assert.equal(nodes(page.root, "desk-report")[0].props.reportKey, "quality-inspection-rft")
+	const lone = await qualityReports({ reports: { quality_inspection_rft: { can_read: false }, lot_cut_quantity: { can_read: false } } })
+	assert.equal(nodes(lone.root, "error")[0].props.title, "Reports unavailable")
+})
+
 test("RFT config matches optional Desk filters, blank All selection and no date defaults", () => {
 	const config = reportConfig.deskReportConfig["quality-inspection-rft"]
 	assert.equal(config.title, "Quality Inspection RFT")

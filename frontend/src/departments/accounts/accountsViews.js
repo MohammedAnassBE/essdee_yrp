@@ -3,6 +3,31 @@ import { ACCOUNTS_ROUTES } from "./accountsRoutes.js"
 
 export { ACCOUNTS_ROUTES }
 
+export const ACCOUNTS_WORKSPACES = [
+	{ key: "debits", label: "Debits", description: "Work Order debits and approval status.", icon: "pi pi-wallet", to: "/accounts/debits" },
+	{
+		key: "purchase_invoices",
+		label: "Purchase Invoice",
+		description: "Supplier bills against GRNs, with approval and ERP sync.",
+		icon: "pi pi-file-edit",
+		to: "/accounts/purchase-invoices",
+	},
+	{
+		key: "bill_tracking",
+		label: "Vendor Bill Tracking",
+		description: "Track vendor bills, assignments and receipt status.",
+		icon: "pi pi-receipt",
+		to: "/accounts/bill-tracking",
+	},
+	{
+		key: "reports",
+		label: "Reports",
+		description: "Stock, cutting, sewing, dispatch and ironing reports.",
+		icon: "pi pi-chart-bar",
+		to: "/accounts/reports",
+	},
+]
+
 export const ACCOUNTS_REPORTS = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse" },
 	{ key: "cutting_dpr", value: "cutting-dpr", label: "Cutting DPR", icon: "pi pi-chart-line" },

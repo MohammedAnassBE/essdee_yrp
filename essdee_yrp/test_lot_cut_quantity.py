@@ -26,8 +26,8 @@ class TestLotCutQuantity(TestCase):
 			with self.assertRaises(frappe.PermissionError):
 				report.get_lot_cut_quantity(["LOT-1"])
 
-	def test_sewing_or_finishing_report_access_can_run_the_report(self):
-		for department in ("sewing", "finishing"):
+	def test_sewing_finishing_or_quality_report_access_can_run_the_report(self):
+		for department in ("sewing", "finishing", "quality"):
 			with (
 				self.subTest(department=department),
 				patch.object(frappe, "get_roles", return_value=["All", "Desk User"]),
@@ -35,6 +35,10 @@ class TestLotCutQuantity(TestCase):
 				patch(
 					"essdee_yrp.finishing.web_workspace.has_report_access",
 					return_value=department == "finishing",
+				),
+				patch(
+					"essdee_yrp.quality.web_workspace.has_report_access",
+					return_value=department == "quality",
 				),
 				patch.object(frappe, "get_doc", side_effect=lambda _doctype, name: frappe._dict(name=name)),
 				patch.object(frappe, "has_permission", return_value=True),

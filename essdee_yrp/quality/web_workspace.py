@@ -10,6 +10,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_essdee_quality_inspection.sd_yrp_essde
 	get_debit_details,
 )
 from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.purchase.lot_cut_quantity import get_lot_cut_quantity_capability
 from essdee_yrp.web_common import action, assert_expected_modified, parse_mapping, permission_flags
 
 DOCTYPE = "SD YRP Essdee Quality Inspection"
@@ -17,6 +18,17 @@ WORK_ORDER = "YRP Work Order"
 DOCUMENT_SECTIONS = {
 	"delivery_challans": ("Delivery Challans", "YRP Delivery Challan"),
 	"goods_received_notes": ("Goods Received Notes", "YRP Goods Received Note"),
+}
+# Read-only cards that open the Planning, Merch, PD and Accounts pages.
+COMBINED_SECTIONS = {
+	"cutting_plans": ("Cutting Plan", "SD YRP Cutting Plan"),
+	"lots": ("Lot", "SD YRP Lot"),
+	"sewing_plans": ("Sewing Plan", "SD YRP Sewing Plan"),
+	"finishing_plans": ("Finishing Plan", "SD YRP Finishing Plan"),
+	"process_costs": ("Process Cost", "YRP Process Cost"),
+	"products": ("Products", "SD YRP Product"),
+	"lotwise_item_profits": ("Lotwise Item Profit", "SD YRP Lotwise Item Profit"),
+	"debits": ("Debits", "YRP Debit"),
 }
 RFT_REPORT = "SD YRP Qualily Inspection RFT"
 PERMISSION_TYPES = ("read", "write", "create", "submit", "cancel", "amend", "delete", "print")
@@ -63,12 +75,19 @@ RECORD_FIELDS = (
 )
 
 
+def has_report_access() -> bool:
+	"""Inspection readers run Lot Cut Quantity from Quality reports."""
+	return bool(frappe.has_permission(DOCTYPE, ptype="read"))
+
+
 @frappe.whitelist()
 def get_capabilities() -> dict:
-	can_read_inspections = bool(frappe.has_permission(DOCTYPE, ptype="read"))
+	can_read_inspections = has_report_access()
 	reports = {}
 	if can_run_desk_report(RFT_REPORT):
 		reports["quality_inspection_rft"] = {"label": _("Quality Inspection RFT"), "can_read": True, "can_report": True}
+	if can_read_inspections:
+		reports["lot_cut_quantity"] = get_lot_cut_quantity_capability()
 	return {
 		"sections": {
 			"inspections": {
@@ -88,7 +107,7 @@ def get_capabilities() -> dict:
 					"can_read": can_read_inspections and bool(frappe.has_permission(doctype, ptype="read")),
 					"can_create": False,
 				}
-				for key, (label, doctype) in DOCUMENT_SECTIONS.items()
+				for key, (label, doctype) in (DOCUMENT_SECTIONS | COMBINED_SECTIONS).items()
 			},
 			"reports": {"label": _("Reports"), "can_read": bool(reports)},
 		},

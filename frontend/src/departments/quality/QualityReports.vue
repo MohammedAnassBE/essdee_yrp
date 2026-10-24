@@ -11,7 +11,7 @@
 
 <script setup>
 import Skeleton from "primevue/skeleton"
-import { computed, onMounted, ref } from "vue"
+import { computed, defineAsyncComponent, onMounted, ref } from "vue"
 
 import { getQualityCapabilities } from "../../api/quality.js"
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
@@ -20,14 +20,15 @@ import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
 
 const REPORTS = [
-	{ key: "quality_inspection_rft", value: "quality-inspection-rft", label: "Quality Inspection RFT", icon: "pi pi-verified" },
+	{ key: "quality_inspection_rft", value: "quality-inspection-rft", label: "Quality Inspection RFT", icon: "pi pi-verified", component: DeskBackedReport, props: { reportKey: "quality-inspection-rft" } },
+	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")), capabilityProps: (report) => ({ canReadCuttingPlan: Boolean(report.can_read_cutting_plan) }) },
 ]
 
 const loading = ref(true)
 const loadError = ref("")
 const capabilities = ref({ reports: {} })
 const tabs = computed(() => REPORTS.filter((report) => capabilities.value.reports?.[report.key]?.can_read)
-	.map((report) => ({ ...report, component: DeskBackedReport, props: { reportKey: report.value } })))
+	.map((report) => ({ ...report, props: { ...report.props, ...report.capabilityProps?.(capabilities.value.reports[report.key]) } })))
 
 async function load() {
 	loading.value = true

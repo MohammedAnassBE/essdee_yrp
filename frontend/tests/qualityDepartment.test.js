@@ -39,6 +39,8 @@ test("Quality registry follows Finishing and automatically feeds the landing car
 	assert.equal(departments[index - 1].key, "finishing")
 	assert.deepEqual({ ...departments[index], component: undefined }, {
 		key: "quality", label: "Quality", shortLabel: "QA", path: "/quality", component: undefined,
+		combines: ["planning", "merch", "pd", "accounts"],
+		combinedSections: ["cutting_plans", "lots", "sewing_plans", "finishing_plans", "process_costs", "products", "lotwise_item_profits", "debits"],
 		sections: { inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
 	})
 	assert.match(read("components/AdministratorPage.vue"), /v-for="department in visibleDepartments"/)

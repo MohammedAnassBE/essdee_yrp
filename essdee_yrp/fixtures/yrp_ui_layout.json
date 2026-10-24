@@ -264,14 +264,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"inspections\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Quality department workspace only: inspections, work_orders, delivery_challans, goods_received_notes, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"inspections\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"cutting_plans\",\n   \"lots\",\n   \"sewing_plans\",\n   \"finishing_plans\",\n   \"process_costs\",\n   \"products\",\n   \"lotwise_item_profits\",\n   \"debits\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Quality department: inspections, work_orders, delivery_challans, goods_received_notes, cutting_plans, lots, sewing_plans, finishing_plans, process_costs, products, lotwise_item_profits, debits, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "quality",
   "layout_name": "Quality",
-  "modified": "2026-10-22 13:32:41.748727",
+  "modified": "2026-10-24 14:18:37.854857",
   "name": "Quality",
   "render_mode": "Registered Experience"
  },

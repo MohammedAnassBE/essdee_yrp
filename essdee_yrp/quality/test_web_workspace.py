@@ -9,6 +9,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_essdee_quality_inspection.sd_yrp_essde
 	get_debit_details,
 )
 from essdee_yrp.quality.web_workspace import (
+	COMBINED_SECTIONS,
 	get_capabilities,
 	get_inspection_workspace,
 	get_new_inspection_defaults,
@@ -64,6 +65,27 @@ class TestQualityWebWorkspace(IntegrationTestCase):
 		for section in ("inspections", "work_orders", "reports"):
 			self.assertTrue(capabilities["sections"][section]["can_read"], section)
 		self.assertIn("quality_inspection_rft", capabilities["reports"])
+
+	def test_brand_qa_user_reads_the_combined_cards_and_lot_cut_quantity(self):
+		frappe.set_user(_qa_user().name)
+		capabilities = get_capabilities()
+		for section in COMBINED_SECTIONS:
+			self.assertTrue(capabilities["sections"][section]["can_read"], section)
+			self.assertFalse(capabilities["sections"][section]["can_create"], section)
+		self.assertTrue(capabilities["reports"]["lot_cut_quantity"]["can_read"])
+		for doctype in ("Item", "SD YRP Sewing Plan Entry Detail", "SD YRP Product Release"):
+			self.assertTrue(frappe.has_permission(doctype, "read"), f"{doctype} renders the card pages")
+		read_only = ("SD YRP Cutting Plan", "SD YRP Finishing Plan", "YRP Process Cost", "SD YRP Product")
+		for doctype in (*read_only, "SD YRP Lotwise Item Profit"):
+			for ptype in ("write", "create", "submit", "cancel", "delete"):
+				self.assertFalse(frappe.has_permission(doctype, ptype), f"{doctype} {ptype}")
+
+	def test_brand_qa_manager_cancels_inspections_and_debits(self):
+		frappe.set_user(_qa_user(role="Brand QA Manager").name)
+		for doctype in (DOCTYPE, "YRP Debit"):
+			self.assertTrue(frappe.has_permission(doctype, "cancel"), doctype)
+		self.assertFalse(frappe.has_permission("YRP Debit", "create"))
+		self.assertTrue(get_capabilities()["sections"]["lotwise_item_profits"]["can_read"])
 
 	def test_rft_web_report_matches_desk(self):
 		clear_web_report_cache()

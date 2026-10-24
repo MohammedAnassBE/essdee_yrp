@@ -19,35 +19,12 @@ import { getAccountsCapabilities } from "../api/accounts.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import { ACCOUNTS_WORKSPACES } from "./accounts/accountsViews.js"
 
 const loading = ref(true)
 const loadError = ref("")
 const sections = ref({})
-const workspaces = [
-	{ key: "debits", label: "Debits", description: "Work Order debits and approval status.", icon: "pi pi-wallet", to: "/accounts/debits" },
-	{
-		key: "purchase_invoices",
-		label: "Purchase Invoice",
-		description: "Supplier bills against GRNs, with approval and ERP sync.",
-		icon: "pi pi-file-edit",
-		to: "/accounts/purchase-invoices",
-	},
-	{
-		key: "bill_tracking",
-		label: "Vendor Bill Tracking",
-		description: "Track vendor bills, assignments and receipt status.",
-		icon: "pi pi-receipt",
-		to: "/accounts/bill-tracking",
-	},
-	{
-		key: "reports",
-		label: "Reports",
-		description: "Stock, cutting, sewing, dispatch and ironing reports.",
-		icon: "pi pi-chart-bar",
-		to: "/accounts/reports",
-	},
-]
-const visibleWorkspaces = computed(() => workspaces.filter((workspace) => sections.value[workspace.key]?.can_read))
+const visibleWorkspaces = computed(() => ACCOUNTS_WORKSPACES.filter((workspace) => sections.value[workspace.key]?.can_read))
 
 async function load() {
 	loading.value = true

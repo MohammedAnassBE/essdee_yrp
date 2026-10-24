@@ -7,6 +7,9 @@ ENTRY = (*VIEW, "write", "create")
 STORE_ENTRY = (*ENTRY, "submit")
 STORE_MANAGER_ENTRY = (*STORE_ENTRY, "cancel")
 FINISHING_DC = (*STORE_MANAGER_ENTRY, "delete", "amend")
+QA_VIEW = ("read", "print", "report")
+# Frappe allows Cancel only on a row that also has Submit and Write.
+QA_CANCEL = (*QA_VIEW, "write", "submit", "cancel")
 
 # Production MRP floor-role grants that YRP's own DocType permissions do not carry.
 MRP_ROLE_GRANTS = {
@@ -23,6 +26,7 @@ MRP_ROLE_GRANTS = {
 	},
 	"YRP Debit": {
 		"Brand QA User": STORE_ENTRY,
+		"Brand QA Manager": QA_CANCEL,
 		"Merch Manager": (*STORE_MANAGER_ENTRY, "amend"),
 	},
 	"YRP Item Production Detail": {"All": READ},
@@ -31,10 +35,25 @@ MRP_ROLE_GRANTS = {
 		"Merch Manager": (*STORE_MANAGER_ENTRY, "delete"),
 		"Production Planner": VIEW,
 		"Brand QA Manager": VIEW,
+		"Brand QA User": QA_VIEW,
 	},
 	"YRP Purchase Invoice": {"Merch User": (*ENTRY, "delete"), "Brand QA Manager": VIEW},
 	# Not a production row: Purchase users reached it there through Stock/Accounts User.
 	"YRP Excel Sticker Print": {"Purchase User": ("read", "write", "create", "submit", "print")},
+	# Quality department cards that open Planning, PD and Merch pages read-only.
+	**{
+		doctype: {"Brand QA User": QA_VIEW, "Brand QA Manager": QA_VIEW}
+		for doctype in (
+			"SD YRP Cutting Plan",
+			"SD YRP Lot",
+			"SD YRP Sewing Plan",
+			"SD YRP Finishing Plan",
+			"SD YRP Product",
+			"SD YRP Product Release",
+			"SD YRP Lotwise Item Profit",
+			"Item",
+		)
+	},
 	# Attribute values back link fields on every department's forms.
 	"YRP Item Attribute Value": {"All": ("read", "select")},
 }

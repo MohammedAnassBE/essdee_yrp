@@ -1,3 +1,8 @@
+/** Distinct colour names across a Sewing Plan's colour rows, in row order. */
+export function sewingColourNames(colours = {}) {
+	return [...new Set(Object.entries(colours || {}).map(([key, colour]) => colour?.variant_colour || key).filter(Boolean))]
+}
+
 /** Distinct set-item parts (e.g. Top, Bottom) across a Sewing Plan's colour rows, in row order. */
 export function sewingColourParts(colours = {}) {
 	return [...new Set(Object.values(colours || {}).map(colour => colour?.part).filter(Boolean))]

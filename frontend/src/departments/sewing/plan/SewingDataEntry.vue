@@ -19,7 +19,7 @@
 						<article v-for="plan in group.plans" :key="plan.name" class="sewing-data-entry__plan-card erp-card" :data-sewing-plan-card="plan.name">
 							<header><div><h4 class="sewing-data-entry__work-order">{{ plan.data.details?.work_order || 'No Work Order' }}</h4><strong class="sewing-data-entry__item">{{ plan.data.details?.item || 'Item unavailable' }}</strong><p class="sewing-data-entry__plan-reference">{{ plan.name }} · {{ plan.data.details?.work_order_status || 'Status unavailable' }}</p></div><span class="erp-status erp-status--success">Ready</span></header>
 							<div class="sewing-data-entry__stats">
-								<span><small>Colours</small><strong>{{ Object.keys(plan.data.colours || {}).length }}</strong></span>
+								<span><small>Colours</small><strong :title="sewingColourNames(plan.data.colours).join(', ')">{{ sewingColourNames(plan.data.colours).join(', ') || '—' }}</strong></span>
 								<span v-if="sewingPartLabel(plan.data.details, plan.data.colours)" class="sewing-data-entry__parts"><small>{{ sewingPartLabel(plan.data.details, plan.data.colours) }}</small><strong>{{ sewingColourParts(plan.data.colours).join(', ') || '—' }}</strong></span>
 								<span><small>Sizes</small><strong>{{ plan.data.details?.primary_values?.length || 0 }}</strong></span>
 								<span><small>Ordered</small><strong>{{ planTotal(plan.data).toLocaleString(undefined, { maximumFractionDigits: 3 }) }}</strong></span>
@@ -87,7 +87,7 @@ import DocumentConfirmationDialog from "../../../components/documents/DocumentCo
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import SewingQuantityMatrix from "../components/SewingQuantityMatrix.vue"
 import { useSewingContext } from "../useSewingContext.js"
-import { sewingColourParts, sewingPartLabel } from "../setItemParts.js"
+import { sewingColourNames, sewingColourParts, sewingPartLabel } from "../setItemParts.js"
 
 const props = defineProps({ state: { type: Object, required: true }, mutate: { type: Function, required: true }, filters: { type: Object, required: true }, actions: { type: Object, default: () => ({}) } })
 const { supplier, requestGeneration, beginRequest, isCurrent } = useSewingContext()

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import fs from "node:fs"
 import test from "node:test"
-import { sewingColourParts, sewingPartLabel } from "../src/departments/sewing/setItemParts.js"
+import { sewingColourNames, sewingColourParts, sewingPartLabel } from "../src/departments/sewing/setItemParts.js"
 
 const colours = { "Navy": { part: "Top" }, "Navy (Navy)": { part: "Bottom" }, "Red": { part: "Top" } }
 
@@ -23,4 +23,13 @@ test("Sewing quantity matrix renders the part as its own column", () => {
 	assert.match(source, /sewing-quantity-matrix__part-pill">\{\{ colour\.part \}\}/)
 	const entry = fs.readFileSync(new URL("../src/departments/sewing/plan/SewingDataEntry.vue", import.meta.url), "utf8")
 	assert.equal(entry.match(/:part-label="sewingPartLabel\(currentPlan\.details, currentPlan\.colours\)"/g).length, 2)
+})
+
+test("Sewing Data Entry cards list colour names once in row order", () => {
+	const setColours = { "Navy": { variant_colour: "Navy", part: "Top" }, "White (Navy)": { variant_colour: "White", part: "Bottom" }, "Black": { variant_colour: "Black", part: "Top" }, "Navy (Black)": { variant_colour: "Navy", part: "Bottom" } }
+	assert.deepEqual(sewingColourNames(setColours), ["Navy", "White", "Black"])
+	assert.deepEqual(sewingColourNames({ Red: {} }), ["Red"])
+	assert.deepEqual(sewingColourNames(null), [])
+	const entry = fs.readFileSync(new URL("../src/departments/sewing/plan/SewingDataEntry.vue", import.meta.url), "utf8")
+	assert.match(entry, /<small>Colours<\/small><strong :title="sewingColourNames\(plan\.data\.colours\)\.join\(', '\)">\{\{ sewingColourNames\(plan\.data\.colours\)\.join\(', '\) \|\| '—' \}\}<\/strong>/)
 })

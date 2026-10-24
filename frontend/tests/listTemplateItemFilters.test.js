@@ -40,14 +40,16 @@ async function mountList(props, metas, listviewFields = [{ fieldname: "name" }, 
 		"./listItemFilters.js": listItemFilters,
 	}
 	for (const name of ["button", "column", "datatable", "dialog", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
-	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./FormField.vue", "./UserListviewColumns.vue"]) modules[path] = stub(path)
-	modules["./ListviewFilters.vue"] = stub("advanced-filters")
+	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue"]) modules[path] = stub(path)
+	modules["./asyncListParts.js"] = { FormField: stub("./FormField.vue"), UserListviewColumns: stub("./UserListviewColumns.vue"), ListviewFilters: stub("advanced-filters") }
 	modules["./ListviewQuickFilters.vue"] = stub("quick-filters")
 	try {
 		const component = loadComponent("frontend/src/components/common/ListView.vue", modules)
 		const reactiveProps = Vue.reactive({ navigationEnabled: false, ...props })
 		const root = mountComponent(component, reactiveProps)
 		await tick(); await tick()
+		findNodes(root, node => node.type === "button" && node.props.label === "Filters")[0].props.onClick()
+		await tick()
 		const advanced = findNodes(root, node => node.type === "advanced-filters")[0]
 		const quick = findNodes(root, node => node.type === "quick-filters")[0]
 		const itemFields = [...advanced.props.fields, ...(quick?.props.fields || [])].filter(field => field.fieldtype === "Link" && field.options === "Item")

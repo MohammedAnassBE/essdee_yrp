@@ -314,6 +314,7 @@ watch(
 		rows.value = props.modelValue.map(rowFromFilter)
 		if (!rows.value.length) add(defaultField())
 	},
+	{ immediate: true },
 )
 
 function fieldKey(doctype, fieldname) {

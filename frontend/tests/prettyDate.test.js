@@ -90,7 +90,8 @@ test("a mounted list row renders the short modified time with the full timestamp
 		"./listItemFilters.js": listItemFilters,
 	}
 	for (const name of ["button", "column", "datatable", "dialog", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
-	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./FormField.vue", "./UserListviewColumns.vue", "./ListviewFilters.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
+	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
+	modules["./asyncListParts.js"] = { FormField: stub("./FormField.vue"), UserListviewColumns: stub("./UserListviewColumns.vue"), ListviewFilters: stub("./ListviewFilters.vue") }
 	const tick = async () => { await new Promise((resolve) => setImmediate(resolve)); await Vue.nextTick() }
 	let root
 	try {

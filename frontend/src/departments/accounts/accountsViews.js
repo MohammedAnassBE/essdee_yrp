@@ -1,11 +1,7 @@
 import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
+import { ACCOUNTS_ROUTES } from "./accountsRoutes.js"
 
-export const ACCOUNTS_ROUTES = {
-	billTrackings: "accounts-bill-trackings",
-	billTrackingNew: "accounts-bill-tracking-new",
-	billTracking: "accounts-bill-tracking",
-	billTrackingEdit: "accounts-bill-tracking-edit",
-}
+export { ACCOUNTS_ROUTES }
 
 export const ACCOUNTS_REPORTS = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse" },

@@ -194,6 +194,7 @@ watch(
 			edited: draftEdited.value,
 		})
 	},
+	{ immediate: true },
 )
 
 watch(

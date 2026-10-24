@@ -95,10 +95,8 @@
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Select from "primevue/select"
-import DateField from "./DateField.vue"
-import DateTimeField from "./DateTimeField.vue"
+import { DateField, DateTimeField, TimeField } from "./asyncListParts.js"
 import LinkField from "./LinkField.vue"
-import TimeField from "./TimeField.vue"
 
 const props = defineProps({
 	modelValue: { type: Object, default: () => ({}) },

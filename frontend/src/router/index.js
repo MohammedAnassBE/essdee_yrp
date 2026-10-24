@@ -4,11 +4,11 @@ import { departments } from "../departments/registry.js"
 import { getLockedRedirect, LAYOUT_UNAVAILABLE_PATH } from "./departmentLock.js"
 import { getPermissionRedirect, NO_PERMISSION_PATH } from "./listPermission.js"
 import { isChunkLoadError, reloadChunkTarget } from "./chunkReload.js"
-import { PD_ROUTES } from "../departments/pd/pdViews.js"
-import { PURCHASE_ROUTES } from "../departments/purchase/purchaseViews.js"
-import { PLANNING_ROUTES } from "../departments/planning/planningViews.js"
-import { MERCH_ROUTES } from "../departments/merch/merchViews.js"
-import { ACCOUNTS_ROUTES } from "../departments/accounts/accountsViews.js"
+import { PD_ROUTES } from "../departments/pd/pdRoutes.js"
+import { PURCHASE_ROUTES } from "../departments/purchase/purchaseRoutes.js"
+import { PLANNING_ROUTES } from "../departments/planning/planningRoutes.js"
+import { MERCH_ROUTES } from "../departments/merch/merchRoutes.js"
+import { ACCOUNTS_ROUTES } from "../departments/accounts/accountsRoutes.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")

@@ -45,7 +45,8 @@ async function mountList({ counts = async (doctype, sets) => sets.map((_, index)
 		"./listItemFilters.js": listItemFilters,
 	}
 	for (const name of ["button", "column", "datatable", "dialog", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
-	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./FormField.vue", "./UserListviewColumns.vue", "./ListviewFilters.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
+	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
+	modules["./asyncListParts.js"] = { FormField: stub("./FormField.vue"), UserListviewColumns: stub("./UserListviewColumns.vue"), ListviewFilters: stub("./ListviewFilters.vue") }
 	const root = mountComponent(loadComponent("frontend/src/components/common/ListView.vue", modules), Vue.reactive({
 		doctype: "Entry", navigationEnabled: false, statusField: "status", statusOptions: ["Draft", "Open", "Closed"],
 	}))

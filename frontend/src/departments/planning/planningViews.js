@@ -1,26 +1,7 @@
 import { documentWorkspaces } from "../fabric-store/storeWorkspaces.js"
+import { PLANNING_ROUTES } from "./planningRoutes.js"
 
-export const PLANNING_ROUTES = {
-	cuttingPlans: "planning-cutting-plans",
-	cuttingPlanNew: "planning-cutting-plan-new",
-	cuttingPlan: "planning-cutting-plan",
-	sewingPlans: "planning-sewing-plans",
-	finishingPlans: "planning-finishing-plans",
-	finishingPlan: "planning-finishing-plan",
-	lots: "planning-lots",
-	lot: "planning-lot",
-	lotEdit: "planning-lot-edit",
-	productionOrders: "planning-production-orders",
-	productionOrderNew: "planning-production-order-new",
-	productionOrder: "planning-production-order",
-	productionOrderEdit: "planning-production-order-edit",
-	workOrders: "planning-work-orders",
-	workOrderNew: "planning-work-order-new",
-	workOrder: "planning-work-order",
-	workOrderEdit: "planning-work-order-edit",
-	boxStickers: "planning-box-stickers",
-	reports: "planning-reports",
-}
+export { PLANNING_ROUTES }
 
 export const PLANNING_WORKSPACES = [
 	{

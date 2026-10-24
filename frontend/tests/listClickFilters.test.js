@@ -62,13 +62,15 @@ async function mountList(props = {}) {
 	for (const name of ["button", "dialog", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
 	modules["primevue/column"] = stub("column")
 	modules["primevue/datatable"] = dataTable
-	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./FormField.vue", "./UserListviewColumns.vue"]) modules[path] = stub(path)
-	modules["./ListviewFilters.vue"] = stub("advanced-filters")
+	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue"]) modules[path] = stub(path)
+	modules["./asyncListParts.js"] = { FormField: stub("./FormField.vue"), UserListviewColumns: stub("./UserListviewColumns.vue"), ListviewFilters: stub("advanced-filters") }
 	modules["./ListviewQuickFilters.vue"] = stub("quick-filters")
 	const opened = []
 	const component = loadComponent("frontend/src/components/common/ListView.vue", modules)
 	const root = mountComponent(component, Vue.reactive({ doctype: "Entry", navigationEnabled: false, onRowClick: row => opened.push(row.name), ...props }))
 	await tick(); await tick(); await tick()
+	findNodes(root, node => node.type === "button" && node.props.label === "Filters")[0].props.onClick()
+	await tick()
 	const cell = (fieldname) => findNodes(root, node => node.type === "td" && node.props.field === fieldname)[0]?.children.find(child => !["text", "comment"].includes(child.type))
 	const click = async (fieldname) => {
 		let stopped = false

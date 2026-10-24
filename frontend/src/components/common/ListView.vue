@@ -385,6 +385,7 @@
 		/>
 
 		<UserListviewColumns
+			v-if="columnsLoaded"
 			v-model:visible="showColumns"
 			:doctype="doctype"
 			:columns="columnOptions"
@@ -393,6 +394,7 @@
 			@saved="columnsSaved"
 		/>
 		<ListviewFilters
+			v-if="filtersLoaded"
 			v-model:visible="showFilters"
 			v-model="advancedFilters"
 			:doctype="doctype"
@@ -442,7 +444,7 @@
 				<Button
 					:label="`Update ${selectedRows.length} record${selectedRows.length === 1 ? '' : 's'}`"
 					icon="pi pi-check"
-					:disabled="!bulkEditField || bulkEditLoading || bulkEditApplying"
+					:disabled="!bulkEditField || !bulkEditorReady || bulkEditLoading || bulkEditApplying"
 					:loading="bulkEditApplying"
 					@click="applyBulkEdit"
 				/>
@@ -501,7 +503,6 @@ import {
 } from "../../api/frappe.js"
 import DocumentStatusBadge from "../documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
-import FormField from "./FormField.vue"
 import {
 	activeCurrencyReferences,
 	buildColumnOptions,
@@ -509,7 +510,6 @@ import {
 	currencyReferenceField,
 	frappeStandardFilterFields,
 } from "./listColumns.js"
-import ListviewFilters from "./ListviewFilters.vue"
 import {
 	TEMPLATE_ITEM_FILTER,
 	expandTemplateItemFilters,
@@ -519,7 +519,7 @@ import {
 	templateItemLinkFilters,
 } from "./listItemFilters.js"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
-import UserListviewColumns from "./UserListviewColumns.vue"
+import { FormField, ListviewFilters, loadFormField, UserListviewColumns } from "./asyncListParts.js"
 import {
 	createListNavigationState,
 	deterministicOrder,
@@ -605,6 +605,11 @@ const appliedQuickFilters = ref({})
 const mobileQuickFiltersOpen = ref(false)
 const showColumns = ref(false)
 const showFilters = ref(false)
+const columnsLoaded = ref(false)
+const filtersLoaded = ref(false)
+watch(showColumns, (open) => { if (open) columnsLoaded.value = true })
+watch(showFilters, (open) => { if (open) filtersLoaded.value = true })
+const bulkEditorReady = ref(false)
 const activeStatus = ref("")
 const statusCounts = ref({})
 // Total of the last row load, reused by page/sort changes under the same filters and read scope.
@@ -1297,6 +1302,8 @@ async function openBulkEditDialog() {
 	bulkError.value = null
 	bulkNotice.value = ""
 	showBulkEdit.value = true
+	// The value editor loads lazily; Update stays disabled until it can render.
+	loadFormField().then(() => { bulkEditorReady.value = true }, () => {})
 	const fields = await loadBulkFields()
 	if (!fields.length) {
 		showBulkEdit.value = false
@@ -1315,7 +1322,7 @@ async function refreshAfterBulk() {
 async function applyBulkEdit() {
 	const field = bulkEditField.value
 	const names = selectedRows.value.map((row) => row.name).filter(Boolean)
-	if (!field || !names.length) return
+	if (!field || !names.length || !bulkEditorReady.value) return
 	bulkActing.value = "edit"
 	bulkEditApplying.value = true
 	bulkError.value = null

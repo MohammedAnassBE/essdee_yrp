@@ -1,23 +1,7 @@
 import { itemTableProblems, itemTableSaveValues, itemTableValues } from "./item/itemTables.js"
+import { PURCHASE_ROUTES } from "./purchaseRoutes.js"
 
-export const PURCHASE_ROUTES = {
-	lots: "purchase-lots",
-	lot: "purchase-lot",
-	lotNew: "purchase-lot-new",
-	lotEdit: "purchase-lot-edit",
-	items: "purchase-items",
-	itemNew: "purchase-item-new",
-	item: "purchase-item",
-	itemEdit: "purchase-item-edit",
-	itemPrices: "purchase-item-prices",
-	itemPriceNew: "purchase-item-price-new",
-	itemPrice: "purchase-item-price",
-	itemPriceEdit: "purchase-item-price-edit",
-	billTrackings: "purchase-bill-trackings",
-	billTrackingNew: "purchase-bill-tracking-new",
-	billTracking: "purchase-bill-tracking",
-	billTrackingEdit: "purchase-bill-tracking-edit",
-}
+export { PURCHASE_ROUTES }
 
 export const PURCHASE_STORE_WORKSPACE_KEYS = ["goods_received_notes", "purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"]
 export const PURCHASE_REPORT_KEYS = ["stock_balance", "purchase_order_itemwise", "lot_cut_quantity"]

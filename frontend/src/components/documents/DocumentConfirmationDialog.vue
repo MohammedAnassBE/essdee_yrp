@@ -34,7 +34,7 @@ watch(() => props.visible, (visible) => {
 	focusOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : null
 	focusOriginId = focusOrigin?.id || ""
 	explicitReturnFocusSelector = props.returnFocusSelector
-})
+}, { immediate: true })
 
 function focusSafeAction() {
 	const focus = () => (safeAction.value?.$el || safeAction.value)?.focus?.()

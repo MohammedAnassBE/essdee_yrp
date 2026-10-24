@@ -1,36 +1,7 @@
 import { documentWorkspaces } from "../fabric-store/storeWorkspaces.js"
+import { MERCH_ROUTES } from "./merchRoutes.js"
 
-export const MERCH_ROUTES = {
-	lots: "merch-lots",
-	lotNew: "merch-lot-new",
-	lot: "merch-lot",
-	lotEdit: "merch-lot-edit",
-	reports: "merch-reports",
-	ipds: "merch-ipds",
-	ipdNew: "merch-ipd-new",
-	ipd: "merch-ipd",
-	ipdEdit: "merch-ipd-edit",
-	processCosts: "merch-process-costs",
-	processCostNew: "merch-process-cost-new",
-	processCost: "merch-process-cost",
-	processCostEdit: "merch-process-cost-edit",
-	productionOrders: "merch-production-orders",
-	productionOrderNew: "merch-production-order-new",
-	productionOrder: "merch-production-order",
-	productionOrderEdit: "merch-production-order-edit",
-	workOrders: "merch-work-orders",
-	workOrderNew: "merch-work-order-new",
-	workOrder: "merch-work-order",
-	workOrderEdit: "merch-work-order-edit",
-	billTrackings: "merch-bill-trackings",
-	billTrackingNew: "merch-bill-tracking-new",
-	billTracking: "merch-bill-tracking",
-	billTrackingEdit: "merch-bill-tracking-edit",
-	purchaseInvoices: "merch-purchase-invoices",
-	purchaseInvoiceNew: "merch-purchase-invoice-new",
-	purchaseInvoice: "merch-purchase-invoice",
-	purchaseInvoiceEdit: "merch-purchase-invoice-edit",
-}
+export { MERCH_ROUTES }
 
 export const MERCH_SECTION_ORDER = ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "process_costs", "bill_tracking", "purchase_invoices", "reports"]
 

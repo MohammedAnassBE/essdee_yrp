@@ -366,7 +366,7 @@ def _capability_candidates(
 		and not doc.get("is_rework")
 		and _target_create_permission("YRP Work Order", adapter)
 	)
-	can_create_debit = bool(is_open and has_debit_request_permission())
+	can_create_debit = bool(docstatus == 1 and has_debit_request_permission())
 	return {
 		"save": {"label": _("Edit"), "permission": "write", "eligible": docstatus == 0},
 		"submit": {"label": _("Submit"), "permission": "submit", "eligible": docstatus == 0},
@@ -834,7 +834,8 @@ def execute_work_order_command(
 			"close_other_reason": doc.get("close_other_reason") or "",
 			"close_remarks": doc.get("close_remarks") or "",
 			"can_create_debit": bool(
-				permission.get("is_close_manager") and _target_create_permission("YRP Debit")
+				has_debit_request_permission()
+				and not frappe.db.exists("YRP Debit", {"work_order": name, "docstatus": 1, "on_close": 1})
 			),
 			"can_approve_debit": bool(
 				can_read_debits and _settings_role_allowed("debit_approval_role")
@@ -883,12 +884,12 @@ def execute_work_order_command(
 	elif command in {"close", "request_close", "approve_close"}:
 		_assert_close_command(doc, command)
 		if payload.get("with_debit"):
-			frappe.has_permission("YRP Debit", ptype="create", throw=True)
 			create_debit(
 				name,
 				debit_no=payload.get("debit_no"),
 				debit_value=payload.get("debit_value"),
 				reason=payload.get("debit_reason"),
+				debit_document=payload.get("debit_document") or None,
 				on_close=1,
 			)
 		close_work_order(
@@ -898,9 +899,6 @@ def execute_work_order_command(
 			close_remarks=payload.get("close_remarks"),
 		)
 	elif command == "create_debit":
-		_assert_open_submitted(doc)
-		if not has_debit_request_permission():
-			frappe.throw(_("You do not have permission to request a Debit."), frappe.PermissionError)
 		create_debit(
 			name,
 			debit_no=payload.get("debit_no"),

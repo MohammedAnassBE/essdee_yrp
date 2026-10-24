@@ -64,12 +64,6 @@ const invoiceDefinitions = [
 const supplierFieldnames = ["bill_no", "billing_supplier", "bill_date", "bill_tracking", "eligibility_for_itc"]
 const remainingDefinitions = [
 	{
-		key: "debit",
-		label: "Debit",
-		icon: "pi pi-minus-circle",
-		fields: ["debit_type", "debit_no", "debit_value"],
-	},
-	{
 		key: "totals",
 		label: "Totals",
 		icon: "pi pi-calculator",

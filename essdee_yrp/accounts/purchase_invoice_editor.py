@@ -37,9 +37,6 @@ EDITOR_FIELDS = (
 	"billing_supplier",
 	"bill_date",
 	"eligibility_for_itc",
-	"debit_type",
-	"debit_no",
-	"debit_value",
 	"remarks",
 )
 EDITOR_DISPLAY_FIELDS = ("gstin", "pan_no", "status", "amended_from")

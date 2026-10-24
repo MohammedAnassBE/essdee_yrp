@@ -11,7 +11,6 @@ class TestMerchReusedWorkOrderActions(TestCase):
 		self.roles = []
 		self.settings = {
 			"work_order_closing_approver_role": "Merch Manager",
-			"debit_request_role": "Merch User",
 			"debit_approval_role": "",
 		}
 		self.doc = frappe._dict(name="WO-TEST", docstatus=1, open_status="Open", modified="now")
@@ -29,7 +28,7 @@ class TestMerchReusedWorkOrderActions(TestCase):
 		return work_order._capability_candidates(self.doc, {}, {}, work_order.get_close_permission())
 
 	def test_closing_and_debit_actions_follow_settings_roles(self):
-		for role, manager, debit in (("Merch User", False, True), ("Merch Manager", True, False)):
+		for role, manager, debit in (("Merch User", False, True), ("Merch Manager", True, True)):
 			with self.subTest(role=role):
 				self.roles = [role]
 				self.doc.open_status = "Open"
@@ -59,7 +58,7 @@ class TestMerchReusedWorkOrderActions(TestCase):
 				self.roles = [role]
 				context = work_order.execute_work_order_command("WO-TEST", "get_close_context", expected_modified="now")
 				self.assertFalse(context["can_approve_debit"])
-				self.assertEqual(context["can_create_debit"], role == "Merch Manager")
+				self.assertTrue(context["can_create_debit"])
 
 	def test_close_execution_rechecks_the_settings_role(self):
 		self.roles = ["Merch User"]

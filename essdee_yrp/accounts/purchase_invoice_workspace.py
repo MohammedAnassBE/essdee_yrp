@@ -28,9 +28,6 @@ DETAIL_FIELDS = (
 	"billing_supplier",
 	"bill_date",
 	"bill_tracking",
-	"debit_type",
-	"debit_no",
-	"debit_value",
 	"total",
 	"total_tax",
 	"grand_total",
@@ -299,6 +296,7 @@ def _debit_summary(doc) -> list:
 		fields=[
 			"name",
 			"work_order",
+			"debit_type",
 			"debit_no",
 			"debit_value",
 			"reason",

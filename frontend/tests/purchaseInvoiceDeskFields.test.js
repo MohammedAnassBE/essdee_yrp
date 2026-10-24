@@ -42,11 +42,12 @@ test("details overview groups every Desk field the backend sends, including empt
 	const source = read("components/PurchaseInvoiceOverview.vue")
 	for (const fieldname of [
 		"supplier", "against", "due_date", "gstin", "pan_no", "posting_date", "posting_time", "do_not_submit_invoice", "status",
-		"bill_no", "billing_supplier", "bill_date", "bill_tracking", "eligibility_for_itc", "debit_type", "debit_no", "debit_value",
+		"bill_no", "billing_supplier", "bill_date", "bill_tracking", "eligibility_for_itc",
 		"total", "total_tax", "grand_total", "in_words", "amended_from", "erp_inv_name", "final_amount", "cancel_without_cancelling_erp_inv", "remarks",
 	]) {
 		assert.ok(source.includes(`"${fieldname}"`), fieldname)
 	}
+	for (const fieldname of ["debit_type", "debit_no", "debit_value"]) assert.equal(source.includes(`"${fieldname}"`), false, fieldname)
 	assert.equal(source.match(/include-empty/g)?.length, 2)
 	assert.doesNotMatch(source, /filter\(\(field\) => field && documentOverviewHasValue/)
 })

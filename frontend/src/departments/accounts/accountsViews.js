@@ -63,7 +63,6 @@ export const PURCHASE_INVOICE_LIST_COLUMNS = [
 export const PURCHASE_INVOICE_EDITOR_GROUPS = [
 	{ key: "invoice", eyebrow: "Document", label: "Invoice", fields: ["supplier", "against", "due_date", "gstin", "pan_no", "posting_date", "posting_time", "do_not_submit_invoice", "status", "amended_from"] },
 	{ key: "supplier-bill", eyebrow: "Vendor invoice", label: "Supplier bill", fields: ["bill_no", "billing_supplier", "bill_date", "eligibility_for_itc"] },
-	{ key: "debit", eyebrow: "Adjustment", label: "Debit", fields: ["debit_type", "debit_no", "debit_value"] },
 	{ key: "notes", eyebrow: "Context", label: "Notes", fields: ["remarks"] },
 ]
 
@@ -84,9 +83,6 @@ const PURCHASE_INVOICE_FALLBACK_SCHEMA = {
 	billing_supplier: { label: "Billing Supplier", fieldtype: "Link", options: "Supplier", reqd: true },
 	bill_date: { label: "Supplier Invoice Date", fieldtype: "Date", reqd: true },
 	eligibility_for_itc: { label: "Eligibility For ITC", fieldtype: "Select" },
-	debit_type: { label: "Debit Type", fieldtype: "Select" },
-	debit_no: { label: "Debit No", fieldtype: "Data" },
-	debit_value: { label: "Debit Value", fieldtype: "Currency" },
 	remarks: { label: "Remarks", fieldtype: "Small Text" },
 }
 

@@ -78,31 +78,21 @@
 					<h3>WO Recut · <DocumentLink doctype="SD YRP WO Recut" :name="recut.name" /></h3>
 					<WorkOrderItemMatrix :groups="recut.items" mode="recut" />
 				</section>
+				<section v-if="closeContext.debits?.length" class="work-order-action-panel__debits">
+					<h3>Debits</h3>
+					<WorkOrderDebitTable :debits="closeContext.debits" label="Work Order debits" :can-approve="Boolean(closeContext.can_approve_debit)" :approving="approvingDebit" @approve="approveDebit" />
+				</section>
 				<div class="work-order-action-panel__fields">
 					<label><span>Close reason *</span><Select v-model="draft.close_reason" :options="closeContext.reason_options || []" fluid /></label>
 					<label v-if="draft.close_reason === 'Others'"><span>Other reason *</span><InputText v-model="draft.close_other_reason" fluid /></label>
 					<label class="work-order-action-panel__wide"><span>Remarks</span><Textarea v-model="draft.close_remarks" rows="3" auto-resize fluid /></label>
 					<label v-if="closeContext.can_create_debit" class="work-order-action-panel__check"><Checkbox v-model="draft.with_debit" binary /><span>Create a debit while closing</span></label>
-					<template v-if="draft.with_debit"><label><span>Debit number</span><InputText v-model="draft.debit_no" fluid /></label><label><span>Debit value</span><InputNumber v-model="draft.debit_value" :min="0" fluid /></label><label class="work-order-action-panel__wide"><span>Debit reason</span><Textarea v-model="draft.debit_reason" rows="2" auto-resize fluid /></label></template>
 				</div>
-				<section v-if="closeContext.debits?.length" class="work-order-action-panel__existing"><h3>Existing debits</h3><div v-for="debit in closeContext.debits" :key="debit.name"><span>{{ debit.name }}</span><strong>{{ debit.status || number(debit.debit_value) }}</strong><Button v-if="closeContext.can_approve_debit && debit.status !== 'Approved'" label="Approve" size="small" severity="secondary" outlined :loading="acting === `approve_debit:${debit.name}`" @click="approveDebit(debit.name)" /></div></section>
+				<DebitEntryFields v-if="draft.with_debit" v-model:debit-no="draft.debit_no" v-model:debit-value="draft.debit_value" v-model:reason="draft.debit_reason" v-model:debit-document="draft.debit_document" :busy="busy" :uploading="uploading" @attach="attachDebitDocument" />
 			</template>
 
 			<template v-else-if="mode === 'create_debit'">
-				<div class="work-order-action-panel__fields">
-					<label><span>Debit No *</span><InputText v-model="draft.debit_no" fluid /></label>
-					<label><span>Debit Value *</span><InputNumber v-model="draft.debit_value" :min="0" :min-fraction-digits="0" :max-fraction-digits="2" fluid /></label>
-					<label class="work-order-action-panel__wide"><span>Reason *</span><Textarea v-model="draft.reason" rows="3" auto-resize fluid /></label>
-					<label class="work-order-action-panel__wide">
-						<span>Debit Document</span>
-						<input ref="debitDocumentInput" type="file" hidden :disabled="busy" @change="attachDebitDocument" />
-						<div class="work-order-action-panel__check">
-							<Button :label="draft.debit_document ? 'Replace' : 'Attach'" size="small" severity="secondary" outlined :loading="uploading" :disabled="busy" @click.prevent="debitDocumentInput?.click()" />
-							<span v-if="draft.debit_document">{{ debitDocumentName }}</span>
-							<Button v-if="draft.debit_document" label="Clear" size="small" severity="secondary" text :disabled="busy" @click.prevent="draft.debit_document = ''" />
-						</div>
-					</label>
-				</div>
+				<DebitEntryFields v-model:debit-no="draft.debit_no" v-model:debit-value="draft.debit_value" v-model:reason="draft.reason" v-model:debit-document="draft.debit_document" :busy="busy" :uploading="uploading" @attach="attachDebitDocument" />
 			</template>
 
 			<template v-else-if="mode === 'create_rework'">
@@ -175,6 +165,8 @@ import { executeWorkOrderCommand, getWorkOrderFabricCalculationContext } from ".
 import { uploadFile } from "../../api/frappe.js"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DebitEntryFields from "./DebitEntryFields.vue"
+import WorkOrderDebitTable from "./WorkOrderDebitTable.vue"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
 import { pendingWorkOrderGroups } from "./workOrderClose.js"
 import { fabricClothTotal, recutGroupTotals, recutPieces, reworkTotals } from "./workOrderTotals.js"
@@ -198,9 +190,8 @@ const error = ref("")
 const loading = ref(false)
 const acting = ref("")
 const uploading = ref(false)
-const debitDocumentInput = ref(null)
+const approvingDebit = ref("")
 const draft = reactive({})
-const debitDocumentName = computed(() => String(draft.debit_document || "").split("/").pop())
 const garmentRows = ref([])
 const garmentMatrixRows = ref([])
 const garmentPrimaryValues = ref([])
@@ -233,7 +224,7 @@ const titles = {
 }
 const title = computed(() => titles[props.mode] || "Work Order Action")
 const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item", "close", "request_close", "approve_close"].includes(props.mode))
-const busy = computed(() => loading.value || uploading.value || Boolean(acting.value))
+const busy = computed(() => loading.value || uploading.value || Boolean(acting.value || approvingDebit.value))
 const isCloseMode = computed(() => ["close", "request_close", "approve_close"].includes(props.mode))
 const actionLabels = {
 	close: "Close Work Order", request_close: "Request Close", approve_close: "Approve Close",
@@ -269,15 +260,13 @@ function resetDraft() {
 	baselineFabricEntries.value = JSON.stringify(fabricRows.value.map((row) => row.entries))
 	closeContext.value = {}; reworkRows.value = []; recutGroups.value = []; recutCanSubmit.value = false; changeItemContext.value = {}; changeItemPreview.value = {}; error.value = ""
 }
-async function attachDebitDocument(event) {
-	const file = event.target.files?.[0]
-	if (!file) return
+async function attachDebitDocument(file) {
 	uploading.value = true; error.value = ""
 	try {
 		const uploaded = await uploadFile(file, { isPrivate: 1 })
 		draft.debit_document = uploaded.file_url
 	} catch (reason) { error.value = reason?.message || "Unable to upload the Debit Document." }
-	finally { uploading.value = false; event.target.value = "" }
+	finally { uploading.value = false }
 }
 async function refreshFabricSource() {
 	const previousSourceProcess = fabricSourceProcess(fabricContext.value)
@@ -328,10 +317,15 @@ async function previewChangeItem() {
 	finally { acting.value = "" }
 }
 async function approveDebit(debit) {
-	acting.value = `approve_debit:${debit}`; error.value = ""
-	try { const result = await executeWorkOrderCommand(props.workOrder.name, "approve_debit", { debit }, props.workOrder.modified); emit("changed", result); close() }
+	approvingDebit.value = debit; error.value = ""
+	try {
+		const result = await executeWorkOrderCommand(props.workOrder.name, "approve_debit", { debit }, props.workOrder.modified)
+		const approved = closeContext.value.debits?.find((row) => row.name === debit)
+		if (approved) approved.status = "Approved"
+		emit("changed", result)
+	}
 	catch (reason) { error.value = reason?.message || `Unable to approve ${debit}.` }
-	finally { acting.value = "" }
+	finally { approvingDebit.value = "" }
 }
 async function confirmClose() {
 	closeConfirmVisible.value = false
@@ -412,6 +406,8 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-fabric-row__hint, .work-order-fabric-row__quantities small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-fabric-row__error { color: var(--erp-danger); }
 .work-order-fabric-row__yarns { display: flex; gap: 8px 14px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); flex-wrap: wrap; }
+.work-order-action-panel__debits { display: grid; gap: var(--erp-space-2); }
+.work-order-action-panel__debits h3 { margin: 0; font-size: var(--erp-font-size-section); }
 .work-order-action-panel__existing { display: grid; gap: 6px; padding: var(--erp-space-3); border-left: 3px solid var(--erp-border-strong); background: var(--erp-surface-soft); }
 .work-order-action-panel__existing h3 { margin: 0 0 4px; font-size: var(--erp-font-size-section); }
 .work-order-action-panel__existing div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--erp-font-size-caption); }

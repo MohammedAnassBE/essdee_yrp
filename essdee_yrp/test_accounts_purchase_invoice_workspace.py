@@ -148,12 +148,11 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 			"gstin": {"read_only": 1},
 			"status": {"read_only": 1},
 			"final_amount": {"fieldtype": "Currency", "read_only": 1, "allow_on_submit": 1},
-			"debit_value": {"fieldtype": "Currency"},
 			"due_date": {"fieldtype": "Date", "allow_on_submit": 1},
 			"do_not_submit_invoice": {"fieldtype": "Check", "permlevel": 1},
 			"cancel_without_cancelling_erp_inv": {"fieldtype": "Check", "permlevel": 2, "allow_on_submit": 1},
 		}
-		doc = FakeInvoice(gstin=None, debit_value=0, final_amount=0, remarks="Checked")
+		doc = FakeInvoice(gstin=None, final_amount=0, remarks="Checked")
 		doc.meta = SimpleNamespace(
 			get_field=lambda fieldname: SimpleNamespace(
 				label=fieldname.replace("_", " ").title(),
@@ -174,8 +173,15 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 		self.assertIn("final_amount", submitted)
 		self.assertIn("due_date", submitted)
 		self.assertNotIn("remarks", submitted)
-		self.assertNotIn("debit_value", submitted)
 		self.assertNotIn("do_not_submit_invoice", submitted)
+
+	def test_legacy_header_debit_fields_stay_hidden_like_production(self):
+		from essdee_yrp.accounts.purchase_invoice_editor import EDITOR_FIELDS
+		from essdee_yrp.accounts.purchase_invoice_workspace import DETAIL_FIELDS
+
+		for fieldname in ("debit_type", "debit_no", "debit_value"):
+			self.assertNotIn(fieldname, DETAIL_FIELDS)
+			self.assertNotIn(fieldname, EDITOR_FIELDS)
 
 	def test_serialize_rows_handles_frappe_dict_rows(self):
 		from essdee_yrp.accounts.purchase_invoice_workspace import _serialize_rows

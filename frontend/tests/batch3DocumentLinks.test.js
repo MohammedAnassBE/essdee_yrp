@@ -71,7 +71,7 @@ const directCases = [
  ['D12', 'accounts/components/PurchaseInvoiceGroupedItems', 'td', 'value(row.uom)', { row: { uom: 'Nos' }, value: value => value || '—' }, [pair('Nos','uom')]],
  ['D12', 'accounts/components/PurchaseInvoiceGroupedItems', 'td', 'value(row.tax)', { row: { tax: 'TAX/1' }, value: value => value || '—' }, [pair('TAX/1','yrp-tax-slab')]],
  ['D12', 'accounts/components/PurchaseInvoiceTabs', 'td', 'grn.against_id', { grn: { against: 'YRP Work Order', against_id: 'WO/1' } }, [['WO/1','/web/planning/work-orders/WO%2F1']]],
- ['D12', 'accounts/components/PurchaseInvoiceVerification', 'td', 'value(debit.name)', { debit: { name: 'DEBIT/1' }, value: value => value || '—' }, [['DEBIT/1','/web/accounts/debits/DEBIT%2F1']]],
+ ['D12', 'fabric-store/WorkOrderDebitTable', 'td', 'value(debit.name)', { debit: { name: 'DEBIT/1' }, value: value => value || '—' }, [['DEBIT/1','/web/accounts/debits/DEBIT%2F1']]],
  ['D12', 'accounts/components/PurchaseInvoiceVerification', 'td', 'value(approval.user)', { approval: { user: 'USER/1' }, value: value => value || '—' }, [pair('USER/1','user')]],
  ['D12', 'accounts/components/PurchaseInvoiceEditorHeader', 'span', 'purchase-invoice-editor__fact', { billTracking: 'BILL/1' }, [['BILL/1','/web/hr/bill-tracking/BILL%2F1']]],
  ['D14', 'hr/BillTracking', 'dd', 'record.supplier', { record: { supplier: 'SUP/1' } }, [pair('SUP/1','supplier')]],

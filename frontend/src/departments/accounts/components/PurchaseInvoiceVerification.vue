@@ -91,22 +91,7 @@
 
 		<section v-if="debitSummary.length" class="verification-summary erp-card" aria-labelledby="purchase-invoice-debits">
 			<header><h2 id="purchase-invoice-debits">Debits</h2><span>{{ debitSummary.length }}</span></header>
-			<div class="verification-summary__table" role="region" tabindex="0" aria-label="Purchase Invoice debits">
-				<table>
-					<thead><tr><th>Work Order</th><th>Debit</th><th>Debit No</th><th class="verification-table__number">Value</th><th>Status</th><th>Reason</th></tr></thead>
-					<tbody>
-						<tr v-for="debit in debitSummary" :key="debit.name">
-							<td><RouterLink :to="documentRoute('YRP Work Order', debit.work_order)">{{ value(debit.work_order) }}</RouterLink></td>
-							<td><DocumentLink doctype="YRP Debit" :name="debit.name" :label="value(debit.name)" /></td>
-							<td>{{ value(debit.debit_no) }}</td>
-							<td class="verification-table__number">{{ money(debit.debit_value) }}</td>
-							<td>{{ value(debit.status) }}</td>
-							<td>{{ value(debit.reason) }}</td>
-						</tr>
-					</tbody>
-					<tfoot><tr><th colspan="3">Total</th><th class="verification-table__number">{{ money(debitTotal) }}</th><th colspan="2"></th></tr></tfoot>
-				</table>
-			</div>
+			<WorkOrderDebitTable class="verification-summary__debits" :debits="debitSummary" label="Purchase Invoice debits" show-work-order />
 		</section>
 
 		<section v-if="approvals.length" class="verification-summary erp-card" aria-labelledby="purchase-invoice-approvals">
@@ -142,6 +127,7 @@ import { computed, ref } from "vue"
 import { webDocumentPath } from "../../../router/webDocumentRoutes.js"
 import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 import WorkOrderActionPanel from "../../fabric-store/WorkOrderActionPanel.vue"
+import WorkOrderDebitTable from "../../fabric-store/WorkOrderDebitTable.vue"
 
 const props = defineProps({
 	verification: { type: Array, default: () => [] },
@@ -162,7 +148,6 @@ const verificationRows = [
 	{ key: "grn_quantity", label: "GRN Quantity" },
 ]
 const workOrdersByName = computed(() => new Map(props.workOrders.map((workOrder) => [workOrder.name, workOrder])))
-const debitTotal = computed(() => props.debitSummary.reduce((total, row) => total + Number(row.debit_value || 0), 0))
 
 function documentRoute(doctype, name) {
 	return webDocumentPath(doctype, name).replace(/^\/web(?=\/)/, "")
@@ -224,13 +209,6 @@ function number(input) {
 		? numericValue.toLocaleString("en-IN", { maximumFractionDigits: 3 })
 		: "—"
 }
-
-function money(input) {
-	const numericValue = Number(input || 0)
-	return Number.isFinite(numericValue)
-		? numericValue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-		: "—"
-}
 </script>
 
 <style scoped>
@@ -260,7 +238,7 @@ function money(input) {
 .verification-summary > header h2 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-section); }
 .verification-summary > header span { padding: 3px 7px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); background: var(--erp-surface-muted); }
 .verification-summary__table { margin: 10px; }
-.verification-summary tfoot th { color: var(--erp-text); background: var(--erp-accent-soft); }
+.verification-summary__debits { margin: 10px; }
 .purchase-invoice-verification__empty { display: grid; min-height: 140px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-panel-radius); place-content: center; justify-items: center; gap: 8px; }
 .purchase-invoice-verification__empty i { color: var(--erp-accent); font-size: 1.15rem; }
 @media (max-width: 780px) { .verification-work-order__header { align-items: flex-start; flex-direction: column; } .verification-table, .verification-summary__table { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }

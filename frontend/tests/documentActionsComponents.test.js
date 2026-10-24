@@ -167,7 +167,7 @@ function mountDelete(api, overrides = {}) {
 		"primevue/usetoast": { useToast: () => ({ add: message => toasts.push({ message, targets: [...replacements] }) }) },
 		"vue-router": { useRouter: () => ({ replace: target => replacements.push(target) }) },
 		"../navigation/pageNavigationContext.js": { usePageNavigation: () => ({ backTo: Vue.ref("/list") }) },
-		"../../composables/useDocumentPermissions.js": { useDocumentPermissions: source => useDocumentPermissions(source, () => true, api.getDocPermissions) },
+		"../../composables/useDocumentPermissions.js": { useDocumentPermissions: (source, enabled) => useDocumentPermissions(source, enabled, api.getDocPermissions) },
 		"../../api/frappe.js": api, "../../utils/documentDelete.js": documentDelete,
 		"./DocumentConfirmationDialog.vue": props => Vue.h("confirmation", props),
 		"./DocumentErrorDialog.vue": props => Vue.h("error-dialog", props),
@@ -196,6 +196,20 @@ test("delete button reloads on status changes and never offers submitted deletio
 	await tick()
 	assert.equal(nodes(root, "button").length, 1)
 	assert.equal(calls, 3)
+})
+test("delete button uses doc permissions delivered with the document instead of fetching", async () => {
+	let calls = 0
+	const { root, props } = mountDelete({ getDocPermissions: async () => { calls++; return { delete: 1 } } }, { docPermissions: { delete: 1 } })
+	await tick()
+	assert.equal(nodes(root, "button").length, 1)
+	props.docPermissions = { delete: 0 }
+	await tick()
+	assert.equal(nodes(root, "button").length, 0)
+	assert.equal(calls, 0)
+	props.docPermissions = null
+	await tick()
+	assert.equal(nodes(root, "button").length, 1)
+	assert.equal(calls, 1)
 })
 test("delete confirms, emits success, and follows the navigation target", async () => {
 	const calls = []
@@ -275,6 +289,10 @@ test("shared shell passes delete identity and disables deletion while dirty or a
 		assert.equal(button.props.docstatus, 2)
 		assert.equal(button.props.disabled, true)
 		assert.equal(button.props.redirect, true)
+		assert.equal(button.props["doc-permissions"], null)
+		const preloaded = { delete: 1 }
+		const withPayload = mountShell({ workspace: { record: { doctype: "Test Doc", name: "DOC-1", docstatus: 2 }, doc_permissions: preloaded } })
+		assert.deepEqual(nodes(withPayload.root, "delete-button")[0].props["doc-permissions"], preloaded)
 		assert.equal(nodes(mountShell({ acting: "save" }).root, "delete-button")[0].props.disabled, true)
 		assert.equal(nodes(mountShell({ showDelete: false }).root, "delete-button").length, 0)
 	} finally { globalThis.window = oldWindow }

@@ -27,12 +27,15 @@ const props = defineProps({
 	redirectTo: { type: String, default: "" },
 	redirect: { type: Boolean, default: true },
 	showTrigger: { type: Boolean, default: true },
+	// Desk doc permissions already loaded with the document; skips the separate request.
+	docPermissions: { type: Object, default: null },
 })
 const emit = defineEmits(["deleted"])
 const router = useRouter()
 const toast = useToast()
 const navigation = usePageNavigation()
-const permissions = useDocumentPermissions(() => [props.doctype, props.name, props.docstatus])
+const fetchedPermissions = useDocumentPermissions(() => [props.doctype, props.name, props.docstatus], () => props.docPermissions === null)
+const permissions = computed(() => props.docPermissions ?? fetchedPermissions.value)
 const confirmVisible = ref(false)
 const busy = ref(false)
 const error = ref("")

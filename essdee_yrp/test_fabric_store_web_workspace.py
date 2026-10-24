@@ -21,6 +21,10 @@ from essdee_yrp.fabric_store.web_workspace import (
 
 
 class TestFabricStoreWebWorkspace(TestCase):
+	def setUp(self):
+		# Workspaces here use fake document names; the form side payload has its own tests.
+		self.enterContext(patch.object(workspace, "add_form_side_payload", side_effect=lambda payload: payload))
+
 	def test_document_item_groups_use_readable_grouped_projection_for_hidden_child_table(self):
 		rows = [frappe._dict(item_variant="STYLE-S", qty=2)]
 		groups = [{"items": [{"name": "STYLE", "values": {"S": {"qty": 2}}}]}]

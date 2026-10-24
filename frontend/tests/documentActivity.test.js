@@ -140,6 +140,36 @@ test("activity refetches when the loaded record is saved or submitted", async ()
 	assert.deepEqual(calls.map((call) => call[1]), ["L-1", "L-1", "L-2"])
 })
 
+test("activity uses the page delivered with the document once, then fetches", async () => {
+	const calls = []
+	const component = await activityComponent(async (...args) => { calls.push(args); return activityPage([version("v9", { changes: [{ label: "Remarks", fieldtype: "Data", old: "x", new: "y" }] })]) })
+	const initial = activityPage([version("v1", { changes: [{ label: "Remarks", fieldtype: "Data", old: "a", new: "b" }] })], { hasMore: true, nextStart: 1 })
+	const props = Vue.reactive({ doctype: "YRP Delivery Challan", name: "DC-1", record: { modified: "2026-10-23 10:00:00" }, initialPage: initial })
+	const root = mountComponent(component, props)
+	await tick()
+	assert.equal(calls.length, 0)
+	assert.match(textOf(root), /changed Remarks from a to b/)
+	findNodes(root, (node) => node.type === "button" && node.props.label === "Show more")[0].props.onClick()
+	await tick()
+	assert.deepEqual(calls.map((call) => call[2]), [{ start: 1, pageLength: 10 }])
+	props.record = { modified: "2026-10-23 10:05:00" }
+	await tick()
+	assert.deepEqual(calls.map((call) => call[2].start), [1, 0], "a consumed page is never reused")
+	props.initialPage = activityPage([version("v2", { changes: [{ label: "Remarks", fieldtype: "Data", old: "b", new: "c" }] })])
+	props.record = { modified: "2026-10-23 10:09:00" }
+	await tick()
+	assert.equal(calls.length, 2, "a new payload page replaces the fetch")
+	assert.match(textOf(root), /changed Remarks from b to c/)
+	props.name = "DC-2"
+	await tick()
+	assert.equal(calls.at(-1)[1], "DC-2")
+})
+
+test("fabric document shell and Purchase Order dialog pass the payload activity page", () => {
+	assert.match(source("departments/fabric-store/FabricDocumentWorkspace.vue"), /<DocumentActivity [^>]*:initial-page="workspace\.activity \?\? null"/)
+	assert.match(source("departments/fabric-store/PurchaseOrderDialog.vue"), /<DocumentActivity [^>]*:initial-page="payload\.activity \?\? null"/)
+})
+
 test("shared document shells include the activity section", async () => {
 	const DepartmentPage = loadComponent(resolve("frontend/src/components/DepartmentPage.vue"), {
 		"primevue/card": (props, { slots }) => Vue.h("card", props, slots.content?.()),

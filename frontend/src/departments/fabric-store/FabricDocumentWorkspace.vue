@@ -76,6 +76,7 @@
 					:doctype="record.doctype || doctype"
 					:name="record.name"
 					:docstatus="record.docstatus"
+					:doc-permissions="workspace.doc_permissions ?? null"
 					:disabled="Boolean(acting) || dirty"
 					:redirect="presentation !== 'embedded'"
 					@deleted="handleDeleted"
@@ -139,7 +140,7 @@
 				<section v-if="$slots.panel" class="fabric-document-workspace__panel">
 					<slot name="panel" :workspace="workspace" />
 				</section>
-				<DocumentActivity v-if="showActivity" :doctype="record.doctype || doctype" :name="record.name || ''" :record="record" />
+				<DocumentActivity v-if="showActivity" :doctype="record.doctype || doctype" :name="record.name || ''" :record="record" :initial-page="workspace.activity ?? null" />
 			</template>
 		</div>
 

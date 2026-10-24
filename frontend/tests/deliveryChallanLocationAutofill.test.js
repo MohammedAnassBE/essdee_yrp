@@ -90,3 +90,76 @@ test("a saved Delivery Challan is never auto-filled on load", async () => {
 	assert.equal(state.form.to_warehouse, "")
 	assert.deepEqual(state.calls, [])
 })
+
+test("address status delivered with the workspace is used once, then fetched", async () => {
+	const fetched = []
+	const bindings = {
+		...Vue,
+		watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {},
+		defineProps: () => ({}), defineEmits: () => () => {},
+		useRouter: () => ({}), useToast: () => ({ add() {} }),
+		useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }),
+		autofillSingleOptions: () => {}, forgetAutofill, withNewDocumentDefaults,
+		getLocationAddressStatus: async (party) => { fetched.push(party); return { party, has_address: true, message: "" } },
+	}
+	const state = new Function(...Object.keys(bindings), `${script}\nreturn { applyWorkspace, refreshAddressStatus, addressStatus, form }`)(...Object.values(bindings))
+	const missing = { party: "Unit Two", supplier_name: "Unit Two", has_address: false, message: "No address" }
+	state.applyWorkspace({ record: { name: "DC-1", docstatus: 1 }, values: { from_location: "Unit One", supplier: "Unit Two" }, location_address_status: { "Unit Two": missing } })
+	await state.refreshAddressStatus()
+	assert.deepEqual(fetched, ["Unit One"])
+	assert.deepEqual(state.addressStatus.supplier_address, missing)
+	await state.refreshAddressStatus()
+	assert.deepEqual(fetched, ["Unit One", "Unit One", "Unit Two"])
+	state.applyWorkspace({ record: { name: "DC-2", docstatus: 1 }, values: { supplier: "constructor" } })
+	await state.refreshAddressStatus()
+	assert.deepEqual(fetched.at(-1), "constructor")
+})
+
+test("address status delivered with the workspace expires after the apply tick", async () => {
+	const fetched = []
+	const bindings = {
+		...Vue,
+		watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {},
+		defineProps: () => ({}), defineEmits: () => () => {},
+		useRouter: () => ({}), useToast: () => ({ add() {} }),
+		useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }),
+		autofillSingleOptions: () => {}, forgetAutofill, withNewDocumentDefaults,
+		getLocationAddressStatus: async (party) => { fetched.push(party); return { party, has_address: true, message: "" } },
+	}
+	const state = new Function(...Object.keys(bindings), `${script}\nreturn { applyWorkspace, refreshAddressStatus }`)(...Object.values(bindings))
+	state.applyWorkspace({ record: { name: "DC-1", docstatus: 1 }, values: { supplier: "Unit Two" }, location_address_status: { "Unit Two": { party: "Unit Two", has_address: false } } })
+	await settle()
+	await state.refreshAddressStatus()
+	assert.deepEqual(fetched, ["Unit Two"], "a later refresh (window focus) never reuses the load-time status")
+})
+
+test("the real party watcher consumes the delivered status; command responses, reloads and focus behave as before", async () => {
+	const fetched = []
+	const bindings = {
+		...Vue,
+		onMounted: () => {}, onBeforeUnmount: () => {},
+		defineProps: () => ({}), defineEmits: () => () => {},
+		useRouter: () => ({}), useToast: () => ({ add() {} }),
+		useCollapsedStockGuard: () => ({ collapsedStockNotice: Vue.computed(() => "") }),
+		autofillSingleOptions: () => {}, forgetAutofill, withNewDocumentDefaults,
+		getLocationAddressStatus: async (party) => { fetched.push(party); return { party, has_address: true, message: "fetched" } },
+	}
+	const state = new Function(...Object.keys(bindings), `${script}\nreturn { applyWorkspace, refreshAddressStatus, addressStatus }`)(...Object.values(bindings))
+	const values = { from_location: "Unit One", supplier: "Unit Two" }
+	const delivered = { "Unit One": { party: "Unit One", message: "delivered" }, "Unit Two": { party: "Unit Two", message: "delivered" } }
+	state.applyWorkspace({ record: { name: "DC-1", docstatus: 1 }, values, location_address_status: delivered })
+	await settle()
+	assert.deepEqual(fetched, [])
+	assert.equal(state.addressStatus.from_address.message, "delivered")
+	assert.equal(state.addressStatus.supplier_address.message, "delivered")
+	state.applyWorkspace({ record: { name: "DC-1", docstatus: 1 }, values })
+	await settle()
+	assert.deepEqual(fetched, ["Unit One", "Unit Two"], "a command response without statuses fetches")
+	state.applyWorkspace({ record: { name: "DC-1", docstatus: 1 }, values, location_address_status: delivered })
+	await settle()
+	assert.equal(fetched.length, 2, "a reload with unchanged parties still uses its own statuses")
+	assert.equal(state.addressStatus.supplier_address.message, "delivered")
+	await state.refreshAddressStatus()
+	assert.equal(fetched.length, 4, "a focus refresh fetches")
+	assert.equal(state.addressStatus.supplier_address.message, "fetched")
+})

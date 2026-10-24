@@ -234,7 +234,7 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import { useToast } from "primevue/usetoast"
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 
 import {
@@ -278,6 +278,8 @@ const loading = ref(true)
 const acting = ref("")
 const error = ref("")
 const addressStatus = reactive({})
+// Party → address status delivered with the workspace; valid only for the refresh its own form change triggers.
+let preloadedAddressStatus = {}
 const dirty = ref(false)
 const editingSubmitted = ref(false)
 const workspace = ref({})
@@ -493,6 +495,7 @@ function actionIsStale(sequence, requestedRouteName) {
 
 function clearWorkspaceState(name = "") {
 	workspace.value = {}
+	preloadedAddressStatus = {}
 	currentName.value = name
 	for (const key of Object.keys(form)) delete form[key]
 	itemGroups.value = []
@@ -506,9 +509,13 @@ function clearWorkspaceState(name = "") {
 
 function applyWorkspace(nextWorkspace) {
 	workspace.value = nextWorkspace || {}
+	const preloaded = { ...(workspace.value.location_address_status || {}) }
+	preloadedAddressStatus = preloaded
 	currentName.value = workspace.value.record?.name || ""
 	for (const key of Object.keys(form)) delete form[key]
 	Object.assign(form, clone(workspace.value.values || {}))
+	// Registered after the form change, so it runs after the party watcher's refresh.
+	nextTick(() => { if (preloadedAddressStatus === preloaded) preloadedAddressStatus = {} })
 	for (const field of workspace.value.fields || []) {
 		if (!(field.fieldname in form)) form[field.fieldname] = field.value
 	}
@@ -775,10 +782,16 @@ function addressCreationUrl(status) {
 	return `/desk/address/new?${new URLSearchParams({ essdee_supplier: status.party, address_title: status.supplier_name })}`
 }
 async function refreshAddressStatus() {
+	const preloaded = preloadedAddressStatus
+	preloadedAddressStatus = {}
 	await Promise.all([['from_address', 'from_location'], ['supplier_address', 'supplier']].map(async ([fieldname, partyField]) => {
 		const party = form[partyField]
 		delete addressStatus[fieldname]
 		if (!party) return
+		if (Object.hasOwn(preloaded, party)) {
+			addressStatus[fieldname] = preloaded[party]
+			return
+		}
 		try {
 			const status = await getLocationAddressStatus(party)
 			if (form[partyField] === party) addressStatus[fieldname] = status

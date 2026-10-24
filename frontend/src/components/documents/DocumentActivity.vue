@@ -69,6 +69,8 @@ const props = defineProps({
 	name: { type: String, default: "" },
 	record: { type: Object, default: null },
 	pageLength: { type: Number, default: 10 },
+	// First page (start 0, pageLength) delivered with the document payload; used once per payload object.
+	initialPage: { type: Object, default: null },
 })
 
 const isSaved = computed(() => Boolean(props.doctype) && isSavedDocumentName(props.name))
@@ -83,6 +85,7 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref("")
 let sequence = 0
+let usedInitialPage = null
 
 async function fetchPage(start) {
 	return getDocumentActivity(props.doctype, props.name, { start, pageLength: props.pageLength })
@@ -101,6 +104,12 @@ async function load() {
 	if (!isSaved.value) {
 		activity.value = null
 		entries.value = []
+		return
+	}
+	if (props.initialPage && props.initialPage !== usedInitialPage) {
+		usedInitialPage = props.initialPage
+		applyPage(props.initialPage, false)
+		loading.value = false
 		return
 	}
 	loading.value = true

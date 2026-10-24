@@ -24,7 +24,7 @@
 			</template>
 		</div>
 
-		<DocumentActivity :doctype="'Purchase Order'" :name="payload.record?.name || ''" :record="payload.record" />
+		<DocumentActivity :doctype="'Purchase Order'" :name="payload.record?.name || ''" :record="payload.record" :initial-page="payload.activity ?? null" />
 		<template #footer>
 			<div class="purchase-order-footer">
 				<DocumentShortcuts :busy="loading || Boolean(acting)" :can-submit="Boolean(payload.permissions?.can_submit)" :can-cancel="Boolean(payload.permissions?.can_cancel)" cancel-confirms @submit="changeStatus('submit')" @cancel="changeStatus('cancel')" />

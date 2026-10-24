@@ -6,9 +6,11 @@ from collections.abc import Iterable, Mapping
 
 import frappe
 from frappe import _
+from frappe.client import get_doc_permissions
 from frappe.model import get_permitted_fields
 from frappe.utils import cint
 
+from essdee_yrp.api.document_activity import get_document_activity
 from essdee_yrp.print_registry import get_document_print_formats
 
 EFFECTIVE_FIELD_TYPES = {
@@ -432,3 +434,35 @@ def get_workspace_base(
 		"capabilities": filter_authorized_capabilities(capabilities, permissions),
 		"print_formats": get_document_print_formats(doc) if permissions["can_print"] else [],
 	}
+
+
+def add_form_side_payload(workspace: dict) -> dict:
+	"""Add the Desk doc permissions and first activity page the /web form would otherwise request next.
+
+	Same endpoint functions as the separate requests; skipped for unsaved or unreadable records, so the form fetches as before.
+	"""
+
+	record = workspace.get("record") or {}
+	doctype, name = record.get("doctype"), record.get("name")
+	if not name or not get_optional_value(lambda: frappe.has_permission(doctype, "read", name)):
+		return workspace
+	side_values = {
+		"doc_permissions": lambda: get_doc_permissions(doctype, name)["permissions"],
+		"activity": lambda: get_document_activity(doctype, name),
+	}
+	for key, build in side_values.items():
+		value = get_optional_value(build)
+		if value is not None:
+			workspace[key] = value
+	return workspace
+
+
+def get_optional_value(build):
+	"""Return `build()`, or None on error with its messages dropped, so the client requests the value separately and shows that error."""
+
+	message_count = len(frappe.local.message_log)
+	try:
+		return build()
+	except Exception:
+		del frappe.local.message_log[message_count:]
+		return None

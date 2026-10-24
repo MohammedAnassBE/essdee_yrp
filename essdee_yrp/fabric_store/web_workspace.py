@@ -36,11 +36,13 @@ from essdee_yrp.fabric_store.documents import goods_received_note as goods_recei
 from essdee_yrp.fabric_store.documents import purchase_order as purchase_order_service
 from essdee_yrp.fabric_store.documents import work_order as work_order_service
 from essdee_yrp.fabric_store.documents.common import (
+	add_form_side_payload,
 	assert_expected_modified,
 	filter_authorized_capabilities,
 	get_document_permissions,
 	get_draft_completion_stock_entry,
 	get_effective_fields,
+	get_optional_value,
 	get_workspace_base,
 )
 from essdee_yrp.print_registry import get_document_print_formats
@@ -367,9 +369,11 @@ def _purchase_order_grn_capability(doc) -> dict:
 
 @frappe.whitelist()
 def get_purchase_order_workspace(purchase_order: str) -> dict:
-	return purchase_order_service.get_purchase_order_workspace(
-		purchase_order,
-		_adapter=sys.modules[__name__],
+	return add_form_side_payload(
+		purchase_order_service.get_purchase_order_workspace(
+			purchase_order,
+			_adapter=sys.modules[__name__],
+		)
 	)
 
 
@@ -1146,11 +1150,35 @@ def get_location_address_status(party: str) -> dict:
 	}
 
 
+def get_location_address_statuses(values) -> dict:
+	"""Statuses the DC form requests after loading, for existing locations the user may read."""
+
+	statuses = {}
+	for party in (values.get("from_location"), values.get("supplier")):
+		if party and party not in statuses:
+			status = get_optional_value(lambda party=party: get_readable_location_address_status(party))
+			if status is not None:
+				statuses[party] = status
+	return statuses
+
+
+def get_readable_location_address_status(party: str) -> dict | None:
+	"""Address status of an existing Supplier the user may read, else None."""
+
+	if frappe.db.exists("Supplier", party) and frappe.has_permission("Supplier", "read", party):
+		return get_location_address_status(party)
+	return None
+
+
 @frappe.whitelist()
 def get_delivery_challan_workspace(name: str | None = None, source=None) -> dict:
 	"""Load the focused routed/embedded Delivery Challan workspace."""
 
-	return delivery_challan_service.get_delivery_challan_workspace(name, source)
+	workspace = delivery_challan_service.get_delivery_challan_workspace(name, source)
+	if name:
+		add_form_side_payload(workspace)
+		workspace["location_address_status"] = get_location_address_statuses(workspace.get("values") or {})
+	return workspace
 
 
 @frappe.whitelist()
@@ -1194,7 +1222,8 @@ def execute_delivery_challan_command(
 def get_goods_received_note_workspace(name: str | None = None, source=None) -> dict:
 	"""Load the focused routed/embedded Goods Received Note workspace."""
 
-	return goods_received_note_service.get_goods_received_note_workspace(name, source)
+	workspace = goods_received_note_service.get_goods_received_note_workspace(name, source)
+	return add_form_side_payload(workspace) if name else workspace
 
 
 @frappe.whitelist()
@@ -1402,9 +1431,11 @@ def change_document_status(
 def get_work_order_workspace(work_order: str) -> dict:
 	"""Load the complete routed Work Order workspace without business scoping."""
 
-	return work_order_service.get_work_order_workspace(
-		work_order,
-		_adapter=sys.modules[__name__],
+	return add_form_side_payload(
+		work_order_service.get_work_order_workspace(
+			work_order,
+			_adapter=sys.modules[__name__],
+		)
 	)
 
 

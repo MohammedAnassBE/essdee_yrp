@@ -123,3 +123,16 @@ test("Desk-backed column filters narrow the full result, rebuild the total row a
 	assert.equal(dataRows(root).length, 200)
 	assert.equal(nodes(root, "report-shell")[0].props["export-source"].desk.visibleIndices, null)
 })
+
+test("Desk-backed report tables use the shared report table cell classes", async () => {
+	const root = mountReport(Vue.ref(poRows(3)))
+	await tick()
+	assert.match(nodes(root, "table")[0].props.class, /\breport-table\b/)
+	const [nameHead, qtyHead] = nodes(nodes(root, "thead")[0], "th")
+	assert.match(nameHead.props.class, /report-cell--text/)
+	assert.match(qtyHead.props.class, /report-cell--num/)
+	const [nameCell, qtyCell] = nodes(dataRows(root)[0], "td")
+	assert.match(nameCell.props.class, /report-cell--text/)
+	assert.doesNotMatch(nameCell.props.class, /report-cell--last-column/)
+	assert.match(qtyCell.props.class, /report-cell--num.*report-cell--last-column/)
+})

@@ -12,19 +12,19 @@
 			<template #actions>
 				<Button v-if="permissions.can_write" :label="`Close Selected (${selectedNames.length})`" icon="pi pi-lock" :disabled="!selectedNames.length || loading || busy" @click="openCloseDialog" />
 			</template>
-			<div class="finishing-scroll" role="region" aria-label="Open Work Orders" tabindex="0">
-				<table class="finishing-table">
+			<div class="finishing-scroll bulk-close-scroll" role="region" aria-label="Open Work Orders" tabindex="0">
+				<table class="finishing-table report-table">
 					<thead><tr>
-						<th><input type="checkbox" aria-label="Select all shown Work Orders" :checked="allSelected" :indeterminate="selectedNames.length > 0 && !allSelected" :disabled="busy" @change="selectAll($event.target.checked)" /></th>
-						<th>Work Order</th><th :aria-sort="dateSort === 'asc' ? 'ascending' : 'descending'"><Button label="WO Date" :icon="dateSort === 'asc' ? 'pi pi-sort-amount-up' : 'pi pi-sort-amount-down'" text @click="dateSort = dateSort === 'asc' ? 'desc' : 'asc'" /></th>
-						<th>Item</th><th>Lot</th><th>Process</th><th>Delivered</th><th>Received</th><th>Difference</th><th>Actions</th>
+						<th class="report-align-center"><input type="checkbox" aria-label="Select all shown Work Orders" :checked="allSelected" :indeterminate="selectedNames.length > 0 && !allSelected" :disabled="busy" @change="selectAll($event.target.checked)" /></th>
+						<th class="report-cell--text">Work Order</th><th class="report-cell--date" :aria-sort="dateSort === 'asc' ? 'ascending' : 'descending'"><Button label="WO Date" :icon="dateSort === 'asc' ? 'pi pi-sort-amount-up' : 'pi pi-sort-amount-down'" text @click="dateSort = dateSort === 'asc' ? 'desc' : 'asc'" /></th>
+						<th class="report-cell--text">Item</th><th class="report-cell--text">Lot</th><th class="report-cell--text">Process</th><th class="report-cell--num report-align-right">Delivered</th><th class="report-cell--num report-align-right">Received</th><th class="report-cell--num report-align-right">Difference</th><th class="report-cell--text">Actions</th>
 					</tr><ReportFilterRow :columns="filterColumns" :filter="inlineFilter" /></thead>
 					<tbody><tr v-for="row in visibleRows" :key="row.name">
-						<td><input v-model="selection" type="checkbox" :value="row.name" :aria-label="`Select Work Order ${row.name}`" :disabled="busy" /></td>
-						<td><RouterLink :to="'/planning/work-orders/' + encodeURIComponent(row.name)">{{ row.name }}</RouterLink></td>
-						<td>{{ formatDisplayDate(row.wo_date, "") }}</td><td>{{ row.item }}</td><td>{{ row.lot }}</td><td>{{ row.process_name }}</td>
-						<td>{{ quantity(row.total_delivered) }}</td><td>{{ quantity(row.total_received) }}</td><td>{{ quantity(row.difference) }}</td>
-						<td><Button label="View" text @click="viewDetails(row.name)" /></td>
+						<td class="report-align-center"><input v-model="selection" type="checkbox" :value="row.name" :aria-label="`Select Work Order ${row.name}`" :disabled="busy" /></td>
+						<td class="report-cell--text bulk-close-id"><RouterLink :to="'/planning/work-orders/' + encodeURIComponent(row.name)">{{ row.name }}</RouterLink></td>
+						<td class="report-cell--date">{{ formatDisplayDate(row.wo_date, "") }}</td><td class="report-cell--text">{{ row.item }}</td><td class="report-cell--text">{{ row.lot }}</td><td class="report-cell--text">{{ row.process_name }}</td>
+						<td class="report-cell--num report-align-right">{{ quantity(row.total_delivered) }}</td><td class="report-cell--num report-align-right">{{ quantity(row.total_received) }}</td><td class="report-cell--num report-align-right">{{ quantity(row.difference) }}</td>
+						<td class="report-cell--last-column"><Button label="View" text size="small" @click="viewDetails(row.name)" /></td>
 					</tr></tbody>
 				</table>
 			</div>
@@ -42,8 +42,8 @@
 				</section>
 				<section v-if="details.debits?.length">
 					<h3>Debits</h3>
-					<div class="finishing-scroll"><table class="finishing-table"><thead><tr><th>Name</th><th>Debit Type</th><th>Debit No</th><th>Debit Value</th><th>Inspection</th><th>Status</th></tr></thead>
-						<tbody><tr v-for="debit in details.debits" :key="debit.name"><td>{{ debit.name }}</td><td>{{ debit.debit_type }}</td><td>{{ debit.debit_no }}</td><td>{{ quantity(debit.debit_value) }}</td><td>{{ debit.inspection ? 'Yes' : 'No' }}</td><td>{{ debit.status }}</td></tr></tbody>
+					<div class="finishing-scroll"><table class="finishing-table report-table"><thead><tr><th class="report-cell--text">Name</th><th class="report-cell--text">Debit Type</th><th class="report-cell--text">Debit No</th><th class="report-cell--num report-align-right">Debit Value</th><th class="report-cell--text">Inspection</th><th class="report-cell--text">Status</th></tr></thead>
+						<tbody><tr v-for="debit in details.debits" :key="debit.name"><td class="report-cell--text">{{ debit.name }}</td><td class="report-cell--text">{{ debit.debit_type }}</td><td class="report-cell--text">{{ debit.debit_no }}</td><td class="report-cell--num report-align-right">{{ quantity(debit.debit_value) }}</td><td class="report-cell--text">{{ debit.inspection ? 'Yes' : 'No' }}</td><td class="report-cell--text report-cell--last-column">{{ debit.status }}</td></tr></tbody>
 					</table></div>
 				</section>
 			</div>
@@ -219,6 +219,8 @@ onBeforeUnmount(() => { ++listRequest; ++detailRequest })
 </script>
 
 <style scoped>
+.bulk-close-scroll { max-height: 70vh; }
+.finishing-table td.bulk-close-id { white-space: nowrap; }
 .bulk-close-details { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .bulk-close-details :is(h3, h4, p) { margin: 0; }
 .bulk-close-details p { overflow-wrap: anywhere; }

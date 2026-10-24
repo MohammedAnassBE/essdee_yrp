@@ -16,7 +16,7 @@
 			<div class="finishing-stack">
 				<FinishingReportHeading title="Finishing Plan Report" :period="period" />
 				<div class="finishing-scroll fp-report__scroll" role="region" tabindex="0" aria-label="Finishing Plan Report results">
-					<table ref="table" class="finishing-table fp-report__table">
+					<table ref="table" class="finishing-table report-table fp-report__table">
 						<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 						<thead>
 							<tr>
@@ -40,6 +40,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
+import { cellTypeClass } from "../../../composables/reportColumns.js"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../../composables/useReportColumns.js"
 import { useWebReport } from "../../../composables/useWebReport.js"
@@ -82,7 +83,7 @@ function headerClass(column) {
 
 function cellClass(column, row) {
 	const tone = column.kind === "base" ? reportCellTone(column, row) : ""
-	return { ...headerClass(column), [`finishing-value--${tone}`]: Boolean(tone), "finishing-table__colour": column.kind === "base" && column.fieldname === "item" }
+	return { ...headerClass(column), [cellTypeClass(column)]: true, [`finishing-value--${tone}`]: Boolean(tone), "finishing-table__colour": column.kind === "base" && column.fieldname === "item", "fp-report__lot": column.kind === "base" && column.fieldname === "lot", "report-cell--last-column": column.key === columns.value.at(-1)?.key }
 }
 
 function isFrozen(column) { return column.kind === "base" && FROZEN_COLUMNS.includes(column.fieldname) }
@@ -146,4 +147,7 @@ onBeforeUnmount(() => window.removeEventListener("resize", measureFrozen))
 .fp-report__frozen { background: var(--erp-surface); }
 thead .fp-report__frozen { background: var(--erp-surface-muted); }
 .fp-report__frozen-edge { box-shadow: inset -1px 0 0 var(--erp-border-strong); }
+.fp-report__table td.report-cell--text { min-width: 10ch; }
+.fp-report__table td.finishing-table__colour { min-width: 16ch; }
+.fp-report__table td.fp-report__lot { white-space: nowrap; }
 </style>

@@ -20,27 +20,27 @@
 				<section v-for="group in groups" :key="group.date" class="finishing-section" :aria-label="`Packed on ${formatDate(group.date)}`">
 					<p v-if="resultSummary" class="finishing-report-date"><strong>{{ formatDate(group.date) }}</strong> {{ formatQuantity(sumBy(group.rows, "total_pieces")) }} pieces · {{ formatQuantity(sumBy(group.rows, "total_boxes")) }} boxes</p>
 					<div v-for="(row, index) in group.rows" :key="`${group.date}-${row.lot}`" class="finishing-scroll" role="region" tabindex="0" :aria-label="`Packed details for ${row.lot}`">
-						<table class="finishing-table">
+						<table class="finishing-table report-table">
 							<thead>
 								<tr>
-									<th class="finishing-table__index">#</th>
+									<th class="finishing-table__index report-cell--num">#</th>
 									<th>Lot</th>
-									<th>Item</th>
-									<th v-for="size in row.sizes" :key="size" class="erp-number">{{ size }} (Pcs)</th>
-									<th class="erp-number">Total Pieces</th>
-									<th class="erp-number">Pcs/Box</th>
-									<th class="erp-number">Total Boxes</th>
+									<th class="report-cell--text">Item</th>
+									<th v-for="size in row.sizes" :key="size" class="erp-number report-cell--num">{{ size }} (Pcs)</th>
+									<th class="erp-number report-cell--num">Total Pieces</th>
+									<th class="erp-number report-cell--num">Pcs/Box</th>
+									<th class="erp-number report-cell--num">Total Boxes</th>
 								</tr>
 							</thead>
 							<tbody>
 								<tr>
-									<td class="finishing-table__index">{{ index + 1 }}</td>
+									<td class="finishing-table__index report-cell--num">{{ index + 1 }}</td>
 									<td class="finishing-table__colour">{{ row.lot }}</td>
-									<td>{{ row.item }}</td>
-									<td v-for="size in row.sizes" :key="size" class="erp-number">{{ row.size_qty?.[size] ? formatQuantity(row.size_qty[size]) : "" }}</td>
-									<td class="erp-number finishing-table__row-total">{{ formatQuantity(row.total_pieces) }}</td>
-									<td class="erp-number">{{ row.pieces_per_box }}</td>
-									<td class="erp-number finishing-table__row-total">{{ formatQuantity(row.total_boxes) }}</td>
+									<td class="report-cell--text">{{ row.item }}</td>
+									<td v-for="size in row.sizes" :key="size" class="erp-number report-cell--num">{{ row.size_qty?.[size] ? formatQuantity(row.size_qty[size]) : "" }}</td>
+									<td class="erp-number report-cell--num finishing-table__row-total">{{ formatQuantity(row.total_pieces) }}</td>
+									<td class="erp-number report-cell--num">{{ row.pieces_per_box }}</td>
+									<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(row.total_boxes) }}</td>
 								</tr>
 							</tbody>
 						</table>

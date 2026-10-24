@@ -1,5 +1,5 @@
 <template>
-	<section aria-label="Work In Progress">
+	<section class="planning-wide-report" aria-label="Work In Progress">
 		<ReportShell :actions="[{ label: 'Paste', icon: 'pi pi-clipboard', disabled: isBusy, command: () => { pasteVisible = true } }, { label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }, { label: 'Download', icon: 'pi pi-download', visible: isBackgroundResult, command: download }]" :export-source="{ reportKey: 'planning-work-in-progress' }" title="Work In Progress" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<LinkField v-model="filters.category" doctype="SD YRP Product Category" label="Category" :show-open-button="false" show-clear />
@@ -53,3 +53,8 @@ function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request, { process_list: typeof request.process_list === "string" ? JSON.parse(request.process_list) : request.process_list || [] }) }, { flush: "sync" })
 </script>
+
+<style scoped>
+/* Wide tables scroll anyway; give names and IDs room instead of breaking at every hyphen. */
+.planning-wide-report :deep(td.report-cell--text) { min-width: 16ch; }
+</style>

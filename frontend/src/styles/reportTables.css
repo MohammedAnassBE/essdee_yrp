@@ -1,0 +1,156 @@
+/* Shared report and finishing table base, loaded globally so tables look the same whichever page opened first. */
+:root {
+	--erp-report-cell-pad-y: 7px;
+	--erp-report-cell-pad-x: 10px;
+}
+
+@media (max-width: 1500px) {
+	:root {
+		--erp-report-cell-pad-x: 6px;
+	}
+}
+
+.finishing-matrix__scroll,
+.finishing-scroll,
+.report-table-scroll {
+	max-width: 100%;
+	overflow: auto;
+	overscroll-behavior-x: contain;
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	background: var(--erp-surface);
+}
+
+:is(.finishing-table, .report-table) {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	color: var(--erp-text);
+	font-size: var(--erp-font-size-table);
+	font-variant-numeric: tabular-nums;
+}
+
+:is(.finishing-table, .report-table) :is(th, td) {
+	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
+	border-right: 1px solid var(--erp-border-subtle);
+	border-bottom: 1px solid var(--erp-border-subtle);
+	text-align: left;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+:is(.finishing-table, .report-table) :is(th, td):last-child {
+	border-right: 0;
+}
+
+:is(.finishing-table, .report-table) thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	color: var(--erp-text-secondary);
+	background: var(--erp-surface-muted);
+	font-size: var(--erp-font-size-min);
+	font-weight: var(--erp-font-weight-bold);
+	letter-spacing: 0.025em;
+}
+
+:is(.finishing-table, .report-table) tbody + tbody tr:first-child > * {
+	border-top: 1px solid var(--erp-border-strong);
+}
+
+/* Report tables: compact cells, headers wrap at spaces, text cells wrap, numbers and dates never do. */
+.report-table :is(th, td) {
+	padding: var(--erp-report-cell-pad-y) var(--erp-report-cell-pad-x);
+}
+
+.report-table thead th {
+	vertical-align: bottom;
+	white-space: normal;
+	overflow-wrap: normal;
+	line-height: 1.25;
+}
+
+/* Rowspan blocks leave inner rows short, so their last cell is not the last column. */
+.report-table td:last-child:not(.report-cell--last-column) {
+	border-right: 1px solid var(--erp-border-subtle);
+}
+
+.report-table td[rowspan],
+.report-table :is(td, th).report-cell--group {
+	vertical-align: top;
+}
+
+:is(.finishing-table, .report-table) td.report-cell--num,
+:is(.finishing-table, .report-table) td.report-cell--date {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+:is(.finishing-table, .report-table) td.report-cell--text {
+	min-width: 6ch;
+	white-space: normal;
+	overflow-wrap: break-word;
+}
+
+:is(.finishing-table, .report-table) tr.report-group-start > * {
+	border-top: 1px solid var(--erp-border-strong);
+}
+
+tr.report-total-row > * {
+	background: var(--erp-attention-soft);
+	font-weight: var(--erp-font-weight-bold);
+}
+
+.finishing-table__index {
+	width: 1%;
+	text-align: center !important;
+	color: var(--erp-text-muted);
+}
+
+.finishing-table__colour {
+	width: 1%;
+	font-weight: 600;
+}
+
+@media (max-width: 700px) {
+	.finishing-table__colour {
+		min-width: 150px;
+		white-space: normal !important;
+	}
+}
+
+.finishing-table__type {
+	width: 1%;
+	color: var(--erp-text-secondary);
+}
+
+.finishing-table__row-total {
+	font-weight: 700;
+}
+
+.finishing-table__total-group td,
+.finishing-table tr.finishing-table__total-row > * {
+	background: var(--erp-attention-soft);
+	font-weight: 600;
+}
+
+.finishing-tone--positive {
+	background: var(--erp-heat-positive) !important;
+}
+
+.finishing-tone--negative {
+	background: var(--erp-heat-negative) !important;
+}
+
+.finishing-tone--zero {
+	background: var(--erp-heat-zero) !important;
+}
+
+.finishing-tone--zero-inward {
+	background: var(--erp-heat-zero-inward) !important;
+}
+
+.finishing-table td.finishing-tone,
+.finishing-table th.finishing-tone {
+	color: var(--erp-text);
+}

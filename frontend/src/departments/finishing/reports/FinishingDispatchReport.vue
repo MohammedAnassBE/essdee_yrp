@@ -18,41 +18,41 @@
 			<div class="finishing-stack">
 				<FinishingReportHeading title="Dispatch Report" :period="period" />
 				<div v-for="(row, index) in rows" :key="row.lot" class="finishing-scroll" role="region" tabindex="0" :aria-label="`Packed and dispatched for ${row.lot}`">
-					<table class="finishing-table">
+					<table class="finishing-table report-table">
 						<thead>
 							<tr>
-								<th class="finishing-table__index">#</th>
+								<th class="finishing-table__index report-cell--num">#</th>
 								<th>Lot</th>
-								<th>Item</th>
-								<th>Type</th>
-								<th v-for="size in row.sizes" :key="size" class="erp-number">{{ size }} (Pcs)</th>
-								<th class="erp-number">Total Boxes</th>
-								<th class="erp-number">Pcs/Box</th>
-								<th class="erp-number">Total Pieces</th>
+								<th class="report-cell--text">Item</th>
+								<th class="report-cell--text">Type</th>
+								<th v-for="size in row.sizes" :key="size" class="erp-number report-cell--num">{{ size }} (Pcs)</th>
+								<th class="erp-number report-cell--num">Total Boxes</th>
+								<th class="erp-number report-cell--num">Pcs/Box</th>
+								<th class="erp-number report-cell--num">Total Pieces</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr>
-								<td rowspan="3" class="finishing-table__index">{{ index + 1 }}</td>
+								<td rowspan="3" class="finishing-table__index report-cell--num">{{ index + 1 }}</td>
 								<td rowspan="3" class="finishing-table__colour">{{ row.lot }}</td>
-								<td rowspan="3">{{ row.item }}</td>
-								<td class="finishing-type--packed">Packed</td>
-								<td v-for="size in row.sizes" :key="size" class="erp-number">{{ blank(row.packed_qty?.[size]) }}</td>
-								<td class="erp-number finishing-table__row-total">{{ blank(row.packed_total_boxes) }}</td>
-								<td rowspan="3" class="erp-number">{{ row.pieces_per_box }}</td>
-								<td class="erp-number finishing-table__row-total">{{ blank(row.packed_total_pieces) }}</td>
+								<td rowspan="3" class="report-cell--text">{{ row.item }}</td>
+								<td class="finishing-type--packed report-cell--text">Packed</td>
+								<td v-for="size in row.sizes" :key="size" class="erp-number report-cell--num">{{ blank(row.packed_qty?.[size]) }}</td>
+								<td class="erp-number report-cell--num finishing-table__row-total">{{ blank(row.packed_total_boxes) }}</td>
+								<td rowspan="3" class="erp-number report-cell--num">{{ row.pieces_per_box }}</td>
+								<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ blank(row.packed_total_pieces) }}</td>
 							</tr>
 							<tr>
-								<td class="finishing-type--dispatched">Dispatched</td>
-								<td v-for="size in row.sizes" :key="size" class="erp-number">{{ blank(row.dispatched_qty?.[size]) }}</td>
-								<td class="erp-number finishing-table__row-total">{{ blank(row.dispatched_total_boxes) }}</td>
-								<td class="erp-number finishing-table__row-total">{{ blank(row.dispatched_total_pieces) }}</td>
+								<td class="finishing-type--dispatched report-cell--text">Dispatched</td>
+								<td v-for="size in row.sizes" :key="size" class="erp-number report-cell--num">{{ blank(row.dispatched_qty?.[size]) }}</td>
+								<td class="erp-number report-cell--num finishing-table__row-total">{{ blank(row.dispatched_total_boxes) }}</td>
+								<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ blank(row.dispatched_total_pieces) }}</td>
 							</tr>
 							<tr>
-								<td class="finishing-type--diff">Diff</td>
-								<td v-for="size in row.sizes" :key="size" class="erp-number finishing-type--diff">{{ blank(dispatchDiff(row.packed_qty?.[size], row.dispatched_qty?.[size])) }}</td>
-								<td class="erp-number finishing-type--diff">{{ formatQuantity(row.packed_total_boxes - row.dispatched_total_boxes) }}</td>
-								<td class="erp-number finishing-type--diff">{{ formatQuantity(row.packed_total_pieces - row.dispatched_total_pieces) }}</td>
+								<td class="finishing-type--diff report-cell--text">Diff</td>
+								<td v-for="size in row.sizes" :key="size" class="erp-number report-cell--num finishing-type--diff">{{ blank(dispatchDiff(row.packed_qty?.[size], row.dispatched_qty?.[size])) }}</td>
+								<td class="erp-number report-cell--num finishing-type--diff">{{ formatQuantity(row.packed_total_boxes - row.dispatched_total_boxes) }}</td>
+								<td class="erp-number report-cell--num finishing-type--diff report-cell--last-column">{{ formatQuantity(row.packed_total_pieces - row.dispatched_total_pieces) }}</td>
 							</tr>
 						</tbody>
 					</table>

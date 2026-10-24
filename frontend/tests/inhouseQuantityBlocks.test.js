@@ -4,6 +4,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import { blockCellSpan, blockSpans } from "../src/departments/planning/reports/inhouseQuantityBlocks.js"
 import * as inlineFilters from "../src/composables/useInlineFilters.js"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
+import * as reportColumns from "../src/composables/reportColumns.js"
 
 const types = ["Delivered", "Received", "Difference"]
 const block = (number, colour, supplier, part = "") => types.map((type) => ({ number, colour, part, supplier, type, size_0: 1, total: 1, diff: 4 }))
@@ -23,7 +24,7 @@ test("only identity and diff columns merge across a block", () => {
 })
 
 test("table renders supplier and colour once per block", () => {
-	const table = loadComponent(new URL("../src/departments/planning/reports/PlanningReportTable.vue", import.meta.url).pathname, { "vue-router": { RouterLink: (_props, { slots }) => Vue.h("a", slots.default?.()) }, "primevue/button": (props) => Vue.h("button", props), "../../../composables/useIncrementalRows.js": incrementalRows, "../../../composables/useInlineFilters.js": inlineFilters })
+	const table = loadComponent(new URL("../src/departments/planning/reports/PlanningReportTable.vue", import.meta.url).pathname, { "vue-router": { RouterLink: (_props, { slots }) => Vue.h("a", slots.default?.()) }, "primevue/button": (props) => Vue.h("button", props), "../../../composables/useIncrementalRows.js": incrementalRows, "../../../composables/useInlineFilters.js": inlineFilters, "../../../composables/reportColumns.js": reportColumns })
 	const root = mountComponent(table, { title: "In-house Quantity", columns, rows, cellAlign: () => "", formattedCell: (column, row) => String(row[column.fieldname] ?? ""), cellSpan: blockCellSpan(blockSpans(rows)) })
 	try {
 		const bodyRows = findNodes(root, (node) => node.type === "tr").slice(1)
@@ -43,7 +44,7 @@ test("table renders supplier and colour once per block", () => {
 })
 
 test("tables without a span function render every cell", () => {
-	const table = loadComponent(new URL("../src/departments/planning/reports/PlanningReportTable.vue", import.meta.url).pathname, { "vue-router": { RouterLink: () => null }, "primevue/button": (props) => Vue.h("button", props), "../../../composables/useIncrementalRows.js": incrementalRows, "../../../composables/useInlineFilters.js": inlineFilters })
+	const table = loadComponent(new URL("../src/departments/planning/reports/PlanningReportTable.vue", import.meta.url).pathname, { "vue-router": { RouterLink: () => null }, "primevue/button": (props) => Vue.h("button", props), "../../../composables/useIncrementalRows.js": incrementalRows, "../../../composables/useInlineFilters.js": inlineFilters, "../../../composables/reportColumns.js": reportColumns })
 	const root = mountComponent(table, { title: "T", columns, rows: rows.slice(0, 3), cellAlign: () => "", formattedCell: () => "x" })
 	try {
 		const tds = findNodes(root, (node) => node.type === "td")

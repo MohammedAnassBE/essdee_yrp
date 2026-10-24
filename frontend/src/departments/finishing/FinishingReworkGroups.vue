@@ -18,25 +18,25 @@
 					<section v-for="group in groups" :key="group.key" class="finishing-section" :aria-label="group.key">
 						<h3 class="finishing-section__title">{{ group.key }}</h3>
 						<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`${group.key} rework rows`">
-							<table class="finishing-table rework-groups__table">
+							<table class="finishing-table report-table">
 								<thead>
 									<tr>
 										<th class="finishing-table__colour">Colour</th>
-										<th v-if="group.is_set_item">Part</th>
+										<th v-if="group.is_set_item" class="report-cell--text">Part</th>
 										<th>GRN Number</th>
-										<th>Received Type</th>
+										<th class="report-cell--text">Received Type</th>
 										<th v-if="editable" class="rework-groups__actions">Actions</th>
-										<th>Row</th>
-										<th v-for="size in group.sizes" :key="size" class="erp-number">{{ size }}</th>
-										<th class="erp-number">Total</th>
+										<th class="report-cell--text">Row</th>
+										<th v-for="size in group.sizes" :key="size" class="erp-number report-cell--num">{{ size }}</th>
+										<th class="erp-number report-cell--num">Total</th>
 									</tr>
 								</thead>
 								<tbody v-for="(row, index) in group.rows" :key="`${row.grn_number}-${row.colour}-${row.part}-${row.received_type}`">
 									<tr>
 										<td :rowspan="editable ? 3 : 1" class="finishing-table__colour">{{ row.colour }}</td>
-										<td v-if="group.is_set_item" :rowspan="editable ? 3 : 1">{{ row.part }}</td>
+										<td v-if="group.is_set_item" :rowspan="editable ? 3 : 1" class="report-cell--text">{{ row.part }}</td>
 										<td :rowspan="editable ? 3 : 1"><button type="button" class="rework-groups__link" @click="openGrn(row.grn_number)">{{ row.grn_number }}</button></td>
-										<td :rowspan="editable ? 3 : 1">{{ row.received_type }}</td>
+										<td :rowspan="editable ? 3 : 1" class="report-cell--text">{{ row.received_type }}</td>
 										<td v-if="editable" rowspan="3" class="rework-groups__actions">
 											<div role="group" :aria-label="`${row.grn_number} ${row.colour} actions`">
 												<Button label="Update Reworked Piece" icon="pi pi-replay" size="small" :disabled="busy" @click="updateReworked(group, index)" />
@@ -44,19 +44,19 @@
 												<Button label="Complete Rework" icon="pi pi-check" severity="danger" outlined size="small" :disabled="busy" @click="complete(group, index)" />
 											</div>
 										</td>
-										<td class="finishing-table__type">Received</td>
-										<td v-for="size in group.sizes" :key="size" class="erp-number">{{ formatQuantity(row.received[size] || 0) }}</td>
-										<td class="erp-number finishing-table__row-total">{{ formatQuantity(rowTotal(row.received, group.sizes)) }}</td>
+										<td class="finishing-table__type report-cell--text">Received</td>
+										<td v-for="size in group.sizes" :key="size" class="erp-number report-cell--num">{{ formatQuantity(row.received[size] || 0) }}</td>
+										<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(rowTotal(row.received, group.sizes)) }}</td>
 									</tr>
 									<tr v-if="editable">
-										<td class="finishing-table__type">Rejection</td>
+										<td class="finishing-table__type report-cell--text">Rejection</td>
 										<td v-for="size in group.sizes" :key="size"><input v-model="inputs[group.key][index].rejection[size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${row.grn_number} ${row.colour} ${size} rejection`" :disabled="busy" /></td>
-										<td class="erp-number">{{ formatQuantity(rowTotal(inputs[group.key][index].rejection, group.sizes)) }}</td>
+										<td class="erp-number report-cell--num report-cell--last-column">{{ formatQuantity(rowTotal(inputs[group.key][index].rejection, group.sizes)) }}</td>
 									</tr>
 									<tr v-if="editable">
-										<td class="finishing-table__type">Reworked</td>
+										<td class="finishing-table__type report-cell--text">Reworked</td>
 										<td v-for="size in group.sizes" :key="size"><input v-model="inputs[group.key][index].rework[size]" type="number" min="0" class="finishing-entry-input" :aria-label="`${row.grn_number} ${row.colour} ${size} reworked`" :disabled="busy" /></td>
-										<td class="erp-number">{{ formatQuantity(rowTotal(inputs[group.key][index].rework, group.sizes)) }}</td>
+										<td class="erp-number report-cell--num report-cell--last-column">{{ formatQuantity(rowTotal(inputs[group.key][index].rework, group.sizes)) }}</td>
 									</tr>
 								</tbody>
 							</table>
@@ -178,9 +178,7 @@ function reset() {
 .finishing-rework { min-width: 0; padding-top: 0; }
 .rework-groups__link { padding: 0; color: var(--erp-accent-dark); background: none; border: 0; font: inherit; font-weight: 650; cursor: pointer; }
 .rework-groups__link:hover, .rework-groups__link:focus-visible { text-decoration: underline; }
-.rework-groups__actions { vertical-align: middle !important; }
 .rework-groups__actions { width: 216px; min-width: 216px; }
 .rework-groups__actions > div { display: grid; gap: 6px; }
 .rework-groups__actions :deep(.p-button) { justify-content: center; white-space: nowrap; }
-.rework-groups__table tbody + tbody tr:first-child > * { border-top: 1px solid var(--erp-border-strong); }
 </style>

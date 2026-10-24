@@ -12,32 +12,32 @@
 			<div class="finishing-stack">
 				<FinishingReportHeading title="Rework Completion" :period="period" />
 				<div class="finishing-scroll" role="region" tabindex="0" aria-label="Rework completion by colour and size">
-					<table class="finishing-table">
+					<table class="finishing-table report-table">
 						<thead>
 							<tr>
-								<th class="finishing-table__index">S.No</th>
+								<th class="finishing-table__index report-cell--num">S.No</th>
 								<th class="finishing-table__colour">Colour</th>
-								<th v-if="data.is_set_item">{{ data.set_attr }}</th>
-								<th class="finishing-table__type">Types</th>
-								<th v-for="size in data.primary_values" :key="size" class="erp-number">{{ size }}</th>
-								<th class="erp-number">Total</th>
+								<th v-if="data.is_set_item" class="report-cell--text">{{ data.set_attr }}</th>
+								<th class="finishing-table__type report-cell--text">Types</th>
+								<th v-for="size in data.primary_values" :key="size" class="erp-number report-cell--num">{{ size }}</th>
+								<th class="erp-number report-cell--num">Total</th>
 							</tr>
 						</thead>
 						<tbody v-for="(colour, index) in colours" :key="colour">
 							<tr v-for="(type, typeIndex) in data.types" :key="type">
 								<template v-if="typeIndex === 0">
-									<td :rowspan="data.types.length + 1" class="finishing-table__index">{{ index + 1 }}</td>
+									<td :rowspan="data.types.length + 1" class="finishing-table__index report-cell--num">{{ index + 1 }}</td>
 									<td :rowspan="data.types.length + 1" class="finishing-table__colour">{{ colour }}</td>
-									<td v-if="data.is_set_item" :rowspan="data.types.length + 1">{{ data.data[colour].part }}</td>
+									<td v-if="data.is_set_item" :rowspan="data.types.length + 1" class="report-cell--text">{{ data.data[colour].part }}</td>
 								</template>
-								<td class="finishing-table__type">{{ type }}</td>
-								<td v-for="size in data.primary_values" :key="size" class="erp-number">{{ formatQuantity(data.data[colour].values?.[size]?.[type] ?? 0) }}</td>
-								<td class="erp-number finishing-table__row-total">{{ formatQuantity(data.data[colour].type_wise_total?.[type] ?? 0) }}</td>
+								<td class="finishing-table__type report-cell--text">{{ type }}</td>
+								<td v-for="size in data.primary_values" :key="size" class="erp-number report-cell--num">{{ formatQuantity(data.data[colour].values?.[size]?.[type] ?? 0) }}</td>
+								<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(data.data[colour].type_wise_total?.[type] ?? 0) }}</td>
 							</tr>
-							<tr class="finishing-table__total-row">
-								<td class="finishing-table__type">Total</td>
-								<td v-for="size in data.primary_values" :key="size" class="erp-number">{{ formatQuantity(data.data[colour].size_wise_total?.[size] ?? 0) }}</td>
-								<td class="erp-number">{{ formatQuantity(data.data[colour].colour_total?.total) }}</td>
+							<tr class="finishing-table__total-row report-total-row">
+								<td class="finishing-table__type report-cell--text">Total</td>
+								<td v-for="size in data.primary_values" :key="size" class="erp-number report-cell--num">{{ formatQuantity(data.data[colour].size_wise_total?.[size] ?? 0) }}</td>
+								<td class="erp-number report-cell--num report-cell--last-column">{{ formatQuantity(data.data[colour].colour_total?.total) }}</td>
 							</tr>
 						</tbody>
 					</table>

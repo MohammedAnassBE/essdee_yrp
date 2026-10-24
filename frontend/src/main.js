@@ -12,6 +12,7 @@ import router, { reloadRouteChunk } from "./router/index.js"
 import { initializeTheme } from "./utils/themePreference.js"
 import "./styles/main.css"
 import "./styles/enterprise.css"
+import "./styles/reportTables.css"
 
 initializeTheme()
 

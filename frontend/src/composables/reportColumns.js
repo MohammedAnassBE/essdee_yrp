@@ -1,4 +1,5 @@
 const NUMERIC_FIELDTYPES = new Set(["Currency", "Float", "Int", "Percent"])
+const DATE_FIELDTYPES = new Set(["Date", "Datetime", "Time"])
 const LINKED_NAME_LIMIT = 5_000
 const LINKED_BATCH_CONCURRENCY = 3
 export const MAX_LINKED_COLUMNS = 20
@@ -44,6 +45,13 @@ export function cellAlign(column) {
 	return NUMERIC_FIELDTYPES.has(column?.fieldtype)
 		? "report-align-right"
 		: "report-align-left"
+}
+
+/** Cell class from reportTables.css: numbers and dates never wrap, text may. */
+export function cellTypeClass(column) {
+	if (NUMERIC_FIELDTYPES.has(column?.fieldtype)) return "report-cell--num"
+	if (DATE_FIELDTYPES.has(column?.fieldtype)) return "report-cell--date"
+	return "report-cell--text"
 }
 
 export function normalizeReportRows(rows, columns) {

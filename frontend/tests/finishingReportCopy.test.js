@@ -4,7 +4,7 @@ import path from "node:path"
 import test from "node:test"
 
 const reports = path.resolve(import.meta.dirname, "../src/departments/finishing/reports")
-const finishingCss = fs.readFileSync(path.resolve(reports, "../finishing.css"), "utf8")
+const reportTablesCss = fs.readFileSync(path.resolve(import.meta.dirname, "../src/styles/reportTables.css"), "utf8")
 
 for (const file of ["FinishingPackingDpr.vue", "FinishingIroningDpr.vue", "FinishingDispatchReport.vue"]) {
 	test(`${file}: Copy Report captures every row because every row is in the DOM`, () => {
@@ -18,7 +18,7 @@ for (const file of ["FinishingPackingDpr.vue", "FinishingIroningDpr.vue", "Finis
 }
 
 test("finishing tables only clip through overflow, which the copy helper expands", () => {
-	const scroll = finishingCss.match(/\.finishing-scroll\s*{([^}]*)}/)[1]
+	const scroll = reportTablesCss.match(/\.finishing-scroll,[^{]*{([^}]*)}/)[1]
 	assert.match(scroll, /overflow:\s*auto/)
 	assert.doesNotMatch(scroll, /(max-)?height:/)
 })

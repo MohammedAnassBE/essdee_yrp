@@ -35,17 +35,17 @@
 					<span class="erp-count-badge">{{ group.items?.length || 0 }} rows</span>
 				</header>
 				<div class="erp-table-wrap cut-sheet-card__table">
-					<table class="erp-data-table cut-sheet-table">
-						<thead><tr><th>#</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th>Cutter</th><th v-for="size in group.primary_attribute_values || []" :key="size">{{ size }}</th><th>Today total</th></tr></thead>
+					<table class="erp-data-table report-table cut-sheet-table">
+						<thead><tr><th class="report-cell--num">#</th><th v-for="attribute in group.attributes || []" :key="attribute" class="report-cell--text">{{ attribute }}</th><th class="report-cell--text">Cutter</th><th v-for="size in group.primary_attribute_values || []" :key="size" class="report-cell--text">{{ size }}</th><th class="report-cell--text">Today total</th></tr></thead>
 						<tbody>
 							<tr v-for="(row, rowIndex) in group.items || []" :key="rowIndex">
-								<td>{{ rowIndex + 1 }}</td>
-								<td v-for="attribute in group.attributes || []" :key="attribute">{{ attributeValue(row, attribute) }}</td>
-								<td><span class="cutter-chip">{{ row.cutter || "Unassigned" }}</span></td>
-								<td v-for="size in group.primary_attribute_values || []" :key="size">
+								<td class="report-cell--num report-cell--group">{{ rowIndex + 1 }}</td>
+								<td v-for="attribute in group.attributes || []" :key="attribute" class="report-cell--text report-cell--group">{{ attributeValue(row, attribute) }}</td>
+								<td class="report-cell--group"><span class="cutter-chip">{{ row.cutter || "Unassigned" }}</span></td>
+								<td v-for="size in group.primary_attribute_values || []" :key="size" class="report-cell--group">
 									<div class="panel-values"><span v-for="panel in positivePanels(row.values?.[size])" :key="panel.name"><b>{{ panel.name }}</b>{{ quantity(panel.value) }}</span><i v-if="!positivePanels(row.values?.[size]).length">—</i></div>
 								</td>
-								<td><div class="panel-values panel-values--total"><span v-for="panel in positivePanels(row.total_panel_qty)" :key="panel.name"><b>{{ panel.name }}</b>{{ quantity(panel.value) }}</span></div></td>
+								<td class="report-cell--group report-cell--last-column"><div class="panel-values panel-values--total"><span v-for="panel in positivePanels(row.total_panel_qty)" :key="panel.name"><b>{{ panel.name }}</b>{{ quantity(panel.value) }}</span></div></td>
 							</tr>
 						</tbody>
 					</table>
@@ -147,9 +147,10 @@ function reset() {
 	display: inline-flex;
 	padding: 2px 6px;
 	border-radius: var(--erp-pill-radius);
-	background: #edf5f1;
-	color: #315e4c;
+	background: var(--erp-accent-soft);
+	color: var(--erp-accent-dark);
 	font-size: var(--erp-font-size-min);
+	white-space: nowrap;
 }
 
 .panel-values {
@@ -170,6 +171,7 @@ function reset() {
 .panel-values b {
 	color: var(--erp-text);
 	font-weight: 700;
+	white-space: normal;
 }
 
 .panel-values i {

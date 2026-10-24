@@ -219,6 +219,10 @@ test("Cut Bundle Balance mounts rows in steps and hands ReportShell a full rende
 	try {
 		await tick()
 		assert.equal(dataRows().length, 200)
+		assert.match(nodes(root, "table")[0].props.class, /\breport-table\b/)
+		const [lotCell, qtyCell] = nodes(dataRows()[0], "td")
+		assert.match(lotCell.props.class, /report-cell--text/)
+		assert.match(qtyCell.props.class, /report-cell--num.*report-cell--last-column/)
 		const more = nodes(root, "tr").find(row => row.props.class === "cut-bundle-balance__more")
 		assert.ok("data-export-ignore" in more.props)
 		assert.ok(findNodes(root, node => node.text === "450").length, "metrics count every row")

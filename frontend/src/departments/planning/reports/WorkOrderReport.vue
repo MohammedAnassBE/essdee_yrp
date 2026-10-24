@@ -1,5 +1,5 @@
 <template>
-	<section aria-label="Work Order">
+	<section class="planning-wide-report" aria-label="Work Order">
 		<ReportShell :actions="[{ label: 'Pick Columns', icon: 'pi pi-table', disabled: !generated || !allColumns.length, command: () => { pickerVisible = true } }]" :export-source="{ reportKey: 'planning-work-order' }" title="Work Order" :generated="generated" :loading="loading" :error="layoutError || reportError" :has-results="rows.length > 0" :generate-disabled="isBusy || Boolean(hint)" :status-only="statusOnly" empty-title="No rows for these filters." copyable @generate="generate" @reset="reset">
 			<template #filters>
 				<label class="common-field"><span class="erp-field-label">Based on</span><Select v-model="filters.based_on" :options="['Date', 'WO Status']" aria-label="Based on" fluid /></label>
@@ -57,3 +57,7 @@ watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultF
 
 </script>
 
+<style scoped>
+/* Wide tables scroll anyway; give names and IDs room instead of breaking at every hyphen. */
+.planning-wide-report :deep(td.report-cell--text) { min-width: 16ch; }
+</style>

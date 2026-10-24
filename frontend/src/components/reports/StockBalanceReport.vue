@@ -50,14 +50,14 @@
 		</template>
 
 		<div class="erp-table-wrap report-table-frame stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
-			<table class="erp-data-table stock-table">
+			<table class="erp-data-table report-table stock-table">
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
-				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label || column.fieldname }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
+				<thead><tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]">{{ column.label || column.fieldname }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
 					<tr v-for="(row, rowIndex) in renderedRows" :key="rowIndex" :class="{ 'report-total-row': row.is_total_row }">
-						<td v-for="column in columns" :key="column.key" :class="cellClass(column, row)"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ displayCell(row, column) }}</span></td>
+						<td v-for="(column, columnIndex) in columns" :key="column.key" :class="[cellClass(column, row), { 'report-cell--last-column': columnIndex === columns.length - 1 }]"><span :class="column.fieldname === 'inward_split' ? 'multiline-cell' : ''">{{ displayCell(row, column) }}</span></td>
 					</tr>
-					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="stock-more"><td :colspan="columns.length"><div class="stock-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="stock-more"><td class="report-cell--last-column" :colspan="columns.length"><div class="stock-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -71,6 +71,7 @@ import { FilterService } from "@primevue/core/api"
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue"
 
 import { callMethod, searchLink } from "../../api/frappe.js"
+import { cellTypeClass } from "../../composables/reportColumns.js"
 import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
@@ -128,7 +129,7 @@ function defaultFilters() {
 	return { fromDate: oneMonthAgoIso(), toDate: todayIso(), item: [], parentItem: [], warehouse: "", dimensions: {}, removeZero: true, showAttributes: false, showAgeing: false, showInwardSplit: false }
 }
 function cellClass(column, row) {
-	return [cellAlign(column), column.fieldname === "in_qty" && Number(row.in_qty) > 0 ? "stock-in" : "", column.fieldname === "out_qty" && Number(row.out_qty) > 0 ? "stock-out" : ""]
+	return [cellAlign(column), cellTypeClass(column), column.fieldname === "in_qty" && Number(row.in_qty) > 0 ? "stock-in" : "", column.fieldname === "out_qty" && Number(row.out_qty) > 0 ? "stock-out" : ""]
 }
 function requestFilters() {
 	return {

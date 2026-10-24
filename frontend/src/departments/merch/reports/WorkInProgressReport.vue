@@ -25,15 +25,15 @@
 		<p class="wip-description">Lot-wise movement from order to dispatch</p>
 		<p v-if="notInIpdProcesses.length" class="wip-description" role="note">No columns for: {{ notInIpdProcesses.join(', ') }} (not in the IPD of any lot with sewing work orders).</p>
 		<div class="erp-table-wrap report-table-frame wip-table" tabindex="0" aria-label="Work In Progress table">
-			<table class="erp-table">
+			<table class="erp-table report-table">
 				<thead>
-					<tr><th v-for="(group, index) in groups" :key="index" :colspan="group.span" scope="colgroup">{{ group.label }}</th></tr>
-					<tr><th v-for="column in sourceColumns" :key="column.fieldname" scope="col">{{ column.label }}</th></tr>
+					<tr><th v-for="(group, index) in groups" :key="index" :colspan="group.span" scope="colgroup" class="wip-group">{{ group.label }}</th></tr>
+					<tr><th v-for="column in sourceColumns" :key="column.fieldname" scope="col" :class="[cellTypeClass(column), { 'wip-number': column.fieldtype === 'Float' }]">{{ column.label }}</th></tr>
 					<ReportFilterRow :columns="sourceColumns" :filter="inlineFilter" />
 				</thead>
 				<tbody>
-					<tr v-for="row in inlineFilter.filteredRows.value" :key="row.lot || 'total'" :class="{ 'wip-total': row.is_total_row }">
-						<td v-for="column in sourceColumns" :key="column.fieldname" :class="[cellTone(row, column), { 'wip-number': column.fieldtype === 'Float' }]">{{ cellText(row, column) }}</td>
+					<tr v-for="row in inlineFilter.filteredRows.value" :key="row.lot || 'total'" :class="{ 'report-total-row': row.is_total_row }">
+						<td v-for="column in sourceColumns" :key="column.fieldname" :class="[cellTypeClass(column), cellTone(row, column), { 'wip-number': column.fieldtype === 'Float' }]">{{ cellText(row, column) }}</td>
 					</tr>
 				</tbody>
 			</table>
@@ -48,6 +48,7 @@ import { computed, reactive, ref, watch } from "vue"
 import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
+import { cellTypeClass } from "../../../composables/reportColumns.js"
 import { useWebReport } from "../../../composables/useWebReport.js"
 import PasteListDialog from "../../../components/reports/PasteListDialog.vue"
 import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
@@ -84,11 +85,9 @@ function paste({ target, names }) { filters[target] = mergeNames(filters[target]
 .wip-error { display: block; color: var(--erp-danger); font-size: var(--erp-font-size-caption); margin-top: 5px; }
 .wip-description { margin: 0; color: var(--erp-text-muted); }
 .wip-table { max-width: 100%; overflow: auto; }
-.wip-table table { width: max-content; min-width: 100%; border-collapse: collapse; }
-.wip-table th, .wip-table td { padding: 8px 12px; border: 1px solid var(--erp-border); white-space: nowrap; }
-.wip-table th { background: var(--erp-surface-soft); }
-.wip-number { text-align: right; font-variant-numeric: tabular-nums; }
-.wip-total { font-weight: 750; background: var(--erp-surface-soft); }
+.wip-table table { width: max-content; min-width: 100%; }
+.wip-table .wip-group { text-align: center; }
+.wip-table .wip-number { text-align: right; }
 .wip-negative { color: var(--erp-danger); }
 .wip-positive { color: var(--erp-success-text); }
 @media (max-width: 1000px) {

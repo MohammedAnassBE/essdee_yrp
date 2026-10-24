@@ -23,28 +23,28 @@
 					<article v-for="report in group.rows" :key="`${group.date}-${report.lot}`" class="finishing-section">
 						<h3 class="ironing-dpr__lot">LOT: {{ report.lot }} <small>Item: {{ report.item }}</small></h3>
 						<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`Ironing quantities for ${report.lot}`">
-							<table class="finishing-table">
+							<table class="finishing-table report-table">
 								<thead>
 									<tr>
-										<th class="finishing-table__index">No</th>
-										<th v-if="ironingShowsPart(report)">Part</th>
-										<th>Colour</th>
-										<th v-for="size in report.primary_attributes" :key="size" class="erp-number">{{ size }}</th>
-										<th class="erp-number">Total Qty</th>
+										<th class="finishing-table__index report-cell--num">No</th>
+										<th v-if="ironingShowsPart(report)" class="report-cell--text">Part</th>
+										<th class="report-cell--text">Colour</th>
+										<th v-for="size in report.primary_attributes" :key="size" class="erp-number report-cell--num">{{ size }}</th>
+										<th class="erp-number report-cell--num">Total Qty</th>
 									</tr>
 								</thead>
 								<tbody>
 									<tr v-for="row in report.rows" :key="`${row.s_no}-${row.colour}`">
-										<td class="finishing-table__index">{{ row.s_no }}</td>
-										<td v-if="ironingShowsPart(report)">{{ row.part || "" }}</td>
+										<td class="finishing-table__index report-cell--num">{{ row.s_no }}</td>
+										<td v-if="ironingShowsPart(report)" class="report-cell--text">{{ row.part || "" }}</td>
 										<td class="finishing-table__colour">{{ row.colour || "" }}</td>
-										<td v-for="size in report.primary_attributes" :key="size" class="erp-number">{{ formatQuantity(row[size] || 0) }}</td>
-										<td class="erp-number finishing-table__row-total">{{ formatQuantity(row.total_qty || 0) }}</td>
+										<td v-for="size in report.primary_attributes" :key="size" class="erp-number report-cell--num">{{ formatQuantity(row[size] || 0) }}</td>
+										<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(row.total_qty || 0) }}</td>
 									</tr>
-									<tr class="finishing-table__total-row">
-										<td :colspan="ironingShowsPart(report) ? 3 : 2">Total</td>
-										<td v-for="size in report.primary_attributes" :key="size" class="erp-number">{{ formatQuantity(sumBy(report.rows, size)) }}</td>
-										<td class="erp-number">{{ formatQuantity(sumBy(report.rows, "total_qty")) }}</td>
+									<tr class="finishing-table__total-row report-total-row">
+										<td :colspan="ironingShowsPart(report) ? 3 : 2" class="report-cell--text">Total</td>
+										<td v-for="size in report.primary_attributes" :key="size" class="erp-number report-cell--num">{{ formatQuantity(sumBy(report.rows, size)) }}</td>
+										<td class="erp-number report-cell--num report-cell--last-column">{{ formatQuantity(sumBy(report.rows, "total_qty")) }}</td>
 									</tr>
 								</tbody>
 							</table>

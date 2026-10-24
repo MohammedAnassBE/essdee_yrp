@@ -12,6 +12,7 @@ const sharedModules = {
 	"listDateRangeFilters.js": await import("../../frontend/src/components/common/listDateRangeFilters.js"),
 	"listScrollState.js": await import("../../frontend/src/components/common/listScrollState.js"),
 	"newDocumentDefaults.js": await import("../../frontend/src/utils/newDocumentDefaults.js"),
+	"reportColumns.js": await import("../../frontend/src/composables/reportColumns.js"),
 	// Tab titles need the app router; components under test only report them.
 	"usePageTitle.js": { usePageTitle() {} },
 	// The activity footer loads its own data; tests that cover it pass the real component explicitly.

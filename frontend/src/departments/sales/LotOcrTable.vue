@@ -31,7 +31,7 @@
 				</template>
 				<tr v-if="!processRows.length" class="ppo-lot-ocr__empty"><td :colspan="sizes.length + 5">No submitted Work Order movement is available for this Lot.</td></tr>
 				<tr class="ppo-lot-ocr__dispatch">
-					<td>—</td><th>Dispatch</th>
+					<td class="ppo-lot-ocr__serial">—</td><th>Dispatch</th>
 					<td class="ppo-lot-ocr__documents"><div v-if="finishingPlans.length"><span>Finishing Plans</span><template v-for="document in finishingPlans" :key="document"><RouterLink v-if="linked" :to="webDocumentRoute('SD YRP Finishing Plan', document)">{{ document }}</RouterLink><strong v-else>{{ document }}</strong></template></div><em v-else>—</em></td>
 					<th>Dispatched</th>
 					<td v-for="size in sizes" :key="`dispatch-${size}`">{{ formatNumber(dispatchDetail[size]) }}</td>
@@ -78,8 +78,8 @@ function differenceClass(value) { return number(value) < 0 ? "ppo-lot-ocr__negat
 .ppo-lot-ocr__table-wrap th, .ppo-lot-ocr__table-wrap td { height: 39px; padding: 7px 9px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); text-align: right; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .ppo-lot-ocr__table-wrap th:last-child, .ppo-lot-ocr__table-wrap td:last-child { border-right: 0; }
 .ppo-lot-ocr__table-wrap thead th { height: 35px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 800; letter-spacing: .035em; text-transform: uppercase; background: var(--erp-surface-muted); white-space: nowrap; }
-.ppo-lot-ocr__table-wrap thead th:nth-child(-n + 4), .ppo-lot-ocr__process, .ppo-lot-ocr__documents { text-align: left; }
-.ppo-lot-ocr__serial { width: 54px; text-align: center !important; }
+.ppo-lot-ocr__table-wrap thead th:nth-child(-n + 4), .ppo-lot-ocr__table-wrap tbody th, .ppo-lot-ocr__table-wrap .ppo-lot-ocr__documents { text-align: left; }
+.ppo-lot-ocr__serial { width: 54px; text-align: center !important; vertical-align: top; }
 .ppo-lot-ocr__process { min-width: 135px; color: var(--erp-text) !important; font-weight: 780; vertical-align: top; background: var(--erp-surface-soft); }
 .ppo-lot-ocr__documents { min-width: 190px; vertical-align: top; }
 .ppo-lot-ocr__documents > div { display: grid; gap: 3px; margin-bottom: 8px; }

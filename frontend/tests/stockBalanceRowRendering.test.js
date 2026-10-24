@@ -95,3 +95,15 @@ test("Stock Balance shows inward split dates as DD-MM-YYYY", async () => {
 	const cell = nodes(dataRows(root)[0], "span").find((node) => node.props.class === "multiline-cell")
 	assert.equal(cell.text, "23-10-2026: 3\n01-09-2026: 2")
 })
+
+test("Stock Balance table uses the shared report table cell classes", async () => {
+	const root = mountReport(Vue.ref(stockRows(2)))
+	await tick()
+	assert.match(nodes(root, "table")[0].props.class, /\breport-table\b/)
+	const heads = nodes(nodes(root, "thead")[0], "th")
+	assert.match(heads[0].props.class, /report-cell--text/)
+	assert.match(heads[1].props.class, /report-cell--num/)
+	const cells = nodes(dataRows(root)[0], "td")
+	assert.match(cells[0].props.class, /report-cell--text/)
+	assert.match(cells[2].props.class, /report-cell--num.*stock-in.*report-cell--last-column/)
+})

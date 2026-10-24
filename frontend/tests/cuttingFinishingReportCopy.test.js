@@ -34,7 +34,7 @@ test("Report-owned scroll boxes clip, so the copy helper expands them to full si
 	// A fixed height on a non-clipping box would not be reset by expandForCapture and would overlap content.
 	const finishingPlan = source("departments/finishing/reports/FinishingPlanReport.vue")
 	assert.match(finishingPlan, /class="finishing-scroll fp-report__scroll"/)
-	assert.match(source("departments/finishing/finishing.css"), /\.finishing-scroll \{[^}]*overflow: auto/)
+	assert.match(source("styles/reportTables.css"), /\.finishing-scroll,[^{]*\{[^}]*overflow: auto/)
 	for (const file of ["departments/cutting/reports/DailyCutSheetReport.vue", "departments/cutting/reports/DailyProductionReport.vue"]) {
 		const style = source(file).split("<style scoped>")[1]
 		assert.doesNotMatch(style, /(^|[\s;{])(max-)?height:\s*(?=[^\d\s])/m, file)

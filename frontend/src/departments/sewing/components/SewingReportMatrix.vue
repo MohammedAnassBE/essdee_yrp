@@ -1,10 +1,10 @@
 <template>
 	<div class="sewing-report-matrix erp-table-wrap" role="region" :aria-label="label" tabindex="0">
-		<table class="erp-table">
+		<table class="erp-table report-table">
 			<caption>{{ label }}</caption>
-			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="cellClass(column, index)" :style="cellStyle(index)">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="columns" :filter="inlineFilter" :cell-class="cellClass" :cell-style="(column, index) => cellStyle(index)" /></thead>
+			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="[cellClass(column, index), { nowrap: !String(column.label).includes(' ') }]" :style="cellStyle(index)">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="columns" :filter="inlineFilter" :cell-class="cellClass" :cell-style="(column, index) => cellStyle(index)" /></thead>
 			<tbody><tr v-for="(row, rowIndex) in visibleRows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key], column) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key], column) }}</slot></td></tr></tbody>
-			<tfoot v-if="footerTotals"><tr><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(footerTotals[column.key]) }}</th></tr></tfoot>
+			<tfoot v-if="footerTotals"><tr class="report-total-row"><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(footerTotals[column.key]) }}</th></tr></tfoot>
 		</table>
 	</div>
 </template>
@@ -14,6 +14,7 @@ import { computed } from "vue"
 
 import { columnTotal } from "../../../components/reports/inlineFilters.js"
 import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
+import { cellTypeClass } from "../../../composables/reportColumns.js"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
 import { formatDisplayByFieldtype } from "../../../utils/dateFormat.js"
 
@@ -47,7 +48,10 @@ const frozenOffsets = computed(() => {
 	return offsets
 })
 function cellClass(column, index) {
-	return { numeric: column.numeric, sized: column.width, frozen: index < frozenOffsets.value.length, "frozen-last": index === frozenOffsets.value.length - 1 }
+	const frozenCount = frozenOffsets.value.length
+	// Short identifiers (Lot, Line, Type) stay on one line; only columns marked wrap may break.
+	const typeClass = column.numeric ? "report-cell--num" : (column.fieldtype || column.wrap) ? cellTypeClass(column) : undefined
+	return [typeClass, { numeric: column.numeric, sized: column.width, frozen: index < frozenCount, "frozen-last": index === frozenCount - 1, "report-cell--last-column": index === props.columns.length - 1 }]
 }
 function cellStyle(index) {
 	const column = props.columns[index]
@@ -63,14 +67,17 @@ function format(value, column) {
 
 <style scoped>
 .sewing-report-matrix { width: 100%; max-width: 100%; min-width: 0; max-height: 62vh; overflow: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
-table { width: 100%; border-collapse: separate; border-spacing: 0; color: var(--erp-text); font-size: var(--erp-font-size-table); line-height: var(--erp-line-height-tight); }
+/* Borders, header, padding and wrapping come from .report-table in reportTables.css. */
+table { line-height: var(--erp-line-height-tight); }
 caption { text-align: left; padding: 10px 12px; color: var(--erp-text-muted); background: var(--erp-surface); }
-th, td { box-sizing: border-box; padding: 9px 12px; white-space: nowrap; border-bottom: 1px solid var(--erp-border); text-align: left; }
+th, td { box-sizing: border-box; }
 td { background: var(--erp-surface); }
-thead th { position: sticky; top: 0; z-index: 2; color: var(--erp-text); font-weight: var(--erp-font-weight-semibold); vertical-align: bottom; background: var(--erp-surface-muted); border-bottom-color: var(--erp-border-strong); }
-thead th.sized { white-space: normal; }
+thead th { z-index: 2; border-bottom-color: var(--erp-border-strong); }
+/* Header labels wrap at spaces, not at the hyphen in sizes like 8-10. */
+.report-table thead th { white-space: normal; }
+.report-table thead th.nowrap { white-space: nowrap; }
 td.sized { overflow: hidden; text-overflow: ellipsis; }
-tfoot th { color: var(--erp-text); background: var(--erp-surface-muted); font-weight: var(--erp-font-weight-bold); }
+tfoot th { border-top: 1px solid var(--erp-border-strong); }
 .frozen { position: sticky; z-index: 1; }
 thead th.frozen, :deep(.report-filter-row > th.frozen) { z-index: 3; }
 .frozen-last { border-right: 1px solid var(--erp-border-strong); box-shadow: 4px 0 6px -4px rgb(16 24 40 / 18%); }

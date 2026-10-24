@@ -22,7 +22,7 @@ export function scrColourKeys(data, selected = []) {
 
 export function scrColumns(data) {
 	return [
-		{ key: "colour", label: "Colour" },
+		{ key: "colour", label: "Colour", wrap: true },
 		...partColumn(data.is_set_item, data.set_attr),
 		{ key: "type", label: "Type" },
 		...sizeColumns(data.primary_values),
@@ -63,8 +63,8 @@ function dprTable(lot, group) {
 		}
 	}
 	const columns = [
-		{ key: "index", label: "#", numeric: true }, { key: "lot", label: "Lot" }, { key: "item", label: "Item" },
-		{ key: "colour", label: "Colour" }, { key: "station", label: "Line" }, { key: "type", label: "Type" },
+		{ key: "index", label: "#", numeric: true }, { key: "lot", label: "Lot" }, { key: "item", label: "Item", wrap: true },
+		{ key: "colour", label: "Colour", wrap: true }, { key: "station", label: "Line" }, { key: "type", label: "Type" },
 		...partColumn(group.is_set_item, group.set_attr), ...sizeColumns(group.primary_values),
 		{ key: "remarks", label: "Remarks" }, { key: "total", label: "Total", numeric: true },
 	]

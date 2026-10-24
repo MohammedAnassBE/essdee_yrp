@@ -5,21 +5,21 @@
 			<span class="rework-entry__type">{{ receivedType }}</span>
 		</header>
 		<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`${title} sizes`">
-			<table class="finishing-table">
+			<table class="finishing-table report-table">
 				<thead>
-					<tr><th>Size</th><th v-for="item in items" :key="item.row_name" class="erp-number">{{ item[sizeField] }}</th><th class="erp-number">Total</th></tr>
+					<tr><th class="report-cell--text">Size</th><th v-for="item in items" :key="item.row_name" class="erp-number report-cell--num">{{ item[sizeField] }}</th><th class="erp-number report-cell--num">Total</th></tr>
 				</thead>
 				<tbody>
-					<tr><td>Total {{ receivedType }}</td><td v-for="item in items" :key="item.row_name" class="erp-number"><strong>{{ formatQuantity(item.rework_qty) }}</strong></td><td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.rework_qty) }}</td></tr>
+					<tr><td class="report-cell--text">Total {{ receivedType }}</td><td v-for="item in items" :key="item.row_name" class="erp-number report-cell--num"><strong>{{ formatQuantity(item.rework_qty) }}</strong></td><td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(totals.rework_qty) }}</td></tr>
 					<tr v-if="editable">
-						<td>Rejection</td>
+						<td class="report-cell--text">Rejection</td>
 						<td v-for="item in items" :key="item.row_name"><input v-model="item.rejected" type="number" min="0" :max="item.rework_qty" class="finishing-entry-input" :aria-label="`${title} ${item[sizeField]} rejection`" :disabled="busy" @input="emit('changed')" /></td>
-						<td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.rejected) }}</td>
+						<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(totals.rejected) }}</td>
 					</tr>
 					<tr v-if="editable">
-						<td>Reworked</td>
+						<td class="report-cell--text">Reworked</td>
 						<td v-for="item in items" :key="item.row_name"><input v-model="item.rework" type="number" min="0" :max="item.rework_qty" class="finishing-entry-input" :aria-label="`${title} ${item[sizeField]} reworked`" :disabled="busy" @input="emit('changed')" /></td>
-						<td class="erp-number finishing-table__row-total">{{ formatQuantity(totals.rework) }}</td>
+						<td class="erp-number report-cell--num finishing-table__row-total report-cell--last-column">{{ formatQuantity(totals.rework) }}</td>
 					</tr>
 				</tbody>
 			</table>

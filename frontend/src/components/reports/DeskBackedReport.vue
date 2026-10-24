@@ -11,11 +11,11 @@
 		</template>
 		<template #status><ReportRunStatus :state="state" :job="job" :error="reportError" @rebuild="generate" /></template>
 		<div class="erp-table-wrap report-table-frame" role="region" :aria-label="`${config.title} results`" tabindex="0">
-			<table class="erp-data-table desk-report-table">
-				<thead><tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
+			<table class="erp-data-table report-table desk-report-table">
+				<thead><tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
-					<tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellToneClass(row, column)]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr>
-					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="desk-report-more"><td :colspan="columns.length"><div class="desk-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
+					<tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="(column, columnIndex) in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column), cellToneClass(row, column), { 'report-cell--last-column': columnIndex === columns.length - 1 }]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="desk-report-more"><td class="report-cell--last-column" :colspan="columns.length"><div class="desk-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -30,6 +30,7 @@ import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRoute } from "vue-router"
+import { cellTypeClass } from "../../composables/reportColumns.js"
 import { ROW_RENDER_STEP, useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
@@ -105,7 +106,7 @@ onMounted(() => {
 .desk-report-field { display: grid; gap: 6px; font-size: var(--erp-font-size-caption); font-weight: 680; }
 .desk-report-check { display: flex; align-items: center; gap: 8px; font-size: var(--erp-font-size-caption); }
 .desk-report-table { width: max-content; min-width: 100%; }
-.desk-report-table td { white-space: pre-line; }
+.desk-report-table td.report-cell--text { white-space: pre-line; }
 .desk-report-more__inner { position: sticky; left: 0; display: inline-flex; align-items: center; gap: var(--erp-space-3); color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .desk-report-table .desk-report-cell--success { color: var(--erp-success-text); font-weight: 650; }
 .desk-report-table .desk-report-cell--danger { color: var(--erp-danger); font-weight: 650; }

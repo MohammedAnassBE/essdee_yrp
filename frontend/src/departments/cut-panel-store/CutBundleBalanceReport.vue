@@ -27,20 +27,20 @@
 		</template>
 
 		<div class="erp-table-wrap cut-bundle-balance__table-wrap" role="region" aria-label="Cut Bundle Balance results" tabindex="0">
-			<table class="erp-data-table cut-bundle-balance__table">
+			<table class="erp-data-table report-table cut-bundle-balance__table">
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead>
-					<tr><th v-for="column in columns" :key="column.key" :class="cellAlign(column)">{{ column.label }}</th></tr>
+					<tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]">{{ column.label }}</th></tr>
 					<ReportFilterRow :columns="columns" :filter="inlineFilter" />
 				</thead>
 				<tbody>
 					<tr v-for="(row, index) in renderedRows" :key="`${row.name || 'row'}-${index}`" :class="{ 'report-total-row': row.is_total_row }">
-						<td v-for="column in columns" :key="column.key" :class="cellAlign(column)">
+						<td v-for="(column, columnIndex) in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column), { 'report-cell--last-column': columnIndex === columns.length - 1 }]">
 							<strong v-if="column.kind === 'base' && column.fieldname === 'qty'">{{ number(cellValue(row, column)) }}</strong>
 							<span v-else>{{ cellText(row, column) || "—" }}</span>
 						</td>
 					</tr>
-					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="cut-bundle-balance__more" data-export-ignore><td :colspan="columns.length"><div class="cut-bundle-balance__more-inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="cut-bundle-balance__more" data-export-ignore><td class="report-cell--last-column" :colspan="columns.length"><div class="cut-bundle-balance__more-inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -52,6 +52,7 @@
 import Button from "primevue/button"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 
+import { cellTypeClass } from "../../composables/reportColumns.js"
 import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"

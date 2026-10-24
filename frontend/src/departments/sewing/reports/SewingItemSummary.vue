@@ -31,7 +31,7 @@ let mounted = true, optionsSequence = 0
 const lotOptions = computed(() => options.value.lots.map(lot => ({ label: lot, value: lot, description: options.value.lotItems[lot] || "" })))
 function columns(group) {
 	return [
-		{ key: "date", label: "Date", fieldtype: "Date" }, { key: "input_type", label: "Input Type" }, { key: "work_station", label: "Work Station" }, { key: "colour", label: "Colour" },
+		{ key: "date", label: "Date", fieldtype: "Date" }, { key: "input_type", label: "Input Type" }, { key: "work_station", label: "Work Station" }, { key: "colour", label: "Colour", wrap: true },
 		...(group.has_part ? [{ key: "part", label: "Part" }] : []),
 		...(group.headers || []).map(size => ({ key: `size:${size}`, label: size, numeric: true })), { key: "total", label: "Total", numeric: true },
 	]

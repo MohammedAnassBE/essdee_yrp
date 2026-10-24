@@ -22,9 +22,9 @@
 						<div v-for="(group, key) in detail.rejection_detail" :key="key" class="finishing-section">
 							<h4 class="rejection-report__group">{{ key }}</h4>
 							<div class="finishing-scroll">
-								<table class="finishing-table">
-									<thead><tr><th>Size</th><th v-for="(item, index) in group.items" :key="index" class="erp-number">{{ item[detail.size] }}</th></tr></thead>
-									<tbody><tr><td>Rejected Qty</td><td v-for="(item, index) in group.items" :key="index" class="erp-number">{{ formatQuantity(item.rejected_qty) }}</td></tr></tbody>
+								<table class="finishing-table report-table">
+									<thead><tr><th class="report-cell--text">Size</th><th v-for="(item, index) in group.items" :key="index" class="erp-number report-cell--num">{{ item[detail.size] }}</th></tr></thead>
+									<tbody><tr><td class="report-cell--text">Rejected Qty</td><td v-for="(item, index) in group.items" :key="index" class="erp-number report-cell--num" :class="{ 'report-cell--last-column': index === group.items.length - 1 }">{{ formatQuantity(item.rejected_qty) }}</td></tr></tbody>
 								</table>
 							</div>
 						</div>

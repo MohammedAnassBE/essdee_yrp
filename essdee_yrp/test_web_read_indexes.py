@@ -103,3 +103,8 @@ class TestCancelLinkCheckIndexes(TestCase):
 			("Payment Entry", "source_doctype"),
 		):
 			self.assertIn((doctype, (column,)), indexes.CANDIDATES)
+
+
+class TestReportFilterIndexes(TestCase):
+	def test_product_category_item_filter_is_indexed(self):
+		self.assertIn(("Item", ("product_category",)), indexes.CANDIDATES)

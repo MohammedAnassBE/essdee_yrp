@@ -17,11 +17,13 @@
 					<section class="movement-document-card">
 						<header><span>DOCUMENT</span><h3>Movement source & posting</h3><DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" /></header>
 						<div class="movement-document-grid">
-							<LinkField v-model="form.lot" doctype="SD YRP Lot" label="Lot" required :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" />
+							<LinkField v-model="form.lot" doctype="SD YRP Lot" label="Lot" required :disabled="Boolean(record) || busy" @update:model-value="form.cutting_plan = ''; sourceChanged()" />
 							<LinkField v-model="form.from_warehouse" doctype="Supplier" label="From Warehouse" required :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" />
 							<div class="movement-context-value"><span>Item</span><strong>{{ editor.context?.item || "Derived from Lot" }}</strong></div>
 							<DateField v-model="form.posting_date" label="Posting Date" required :disabled="!form.edit_posting_date_and_time || busy" />
 							<TimeField v-model="form.posting_time" label="Posting Time" required :disabled="!form.edit_posting_date_and_time || busy" />
+							<label class="movement-toggle"><span>Movement From Cutting</span><ToggleSwitch v-model="form.movement_from_cutting" :disabled="Boolean(record) || busy" @update:model-value="sourceChanged" /></label>
+							<LinkField v-if="form.movement_from_cutting" v-model="form.cutting_plan" doctype="SD YRP Cutting Plan" label="Cutting Plan" required :filters="cuttingPlanFilters" :disabled="Boolean(record) || busy || !form.lot" help-text="Lists the plan's accessory foldings." @update:model-value="sourceChanged" />
 							<label class="movement-toggle"><span>Edit Posting Date and Time</span><ToggleSwitch v-model="form.edit_posting_date_and_time" :disabled="busy" /></label>
 						</div>
 					</section>
@@ -151,7 +153,7 @@ const confirmationVisible = ref(false)
 const pendingCommand = ref("")
 const movementEditor = ref(null)
 const editor = reactive({ context: {}, permissions: {}, record: null })
-const form = reactive({ lot: "", from_warehouse: "", posting_date: "", posting_time: "", edit_posting_date_and_time: false })
+const form = reactive({ lot: "", from_warehouse: "", movement_from_cutting: false, cutting_plan: "", posting_date: "", posting_time: "", edit_posting_date_and_time: false })
 const movementData = reactive(emptyMovement())
 const linked = reactive({ sections: {}, actions: {} })
 const linkedLoading = ref(false)
@@ -171,6 +173,7 @@ let actionSequence = 0
 const record = computed(() => editor.record)
 const busy = computed(() => Boolean(acting.value))
 const showRail = computed(() => Boolean(record.value && Number(record.value.docstatus || 0) !== 0))
+const cuttingPlanFilters = computed(() => ({ lot: form.lot, docstatus: 1, version: ["!=", "V1"] }))
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
 const hasSelection = computed(() => Boolean(movementEditor.value?.hasSelection))
 const selectionSummaryText = computed(() => movementEditor.value?.selectionSummaryText || "")
@@ -205,6 +208,7 @@ async function load() {
 		Object.assign(form, payload?.defaults || {})
 		if (!requestedMovement) Object.assign(form, withNewDocumentDefaults({ ...form }, filterDefaultsFor("SD YRP Cut Panel Movement", ["lot", "from_warehouse", "posting_date", "posting_time", "edit_posting_date_and_time"])))
 		form.edit_posting_date_and_time = Boolean(form.edit_posting_date_and_time)
+		form.movement_from_cutting = Boolean(form.movement_from_cutting)
 		replaceMovement(payload?.movement_data || payload?.record?.movement_data || {})
 		generated.value = Boolean(payload?.record)
 		if (payload?.record?.name) await loadLinked(sequence, payload.record.name)
@@ -233,7 +237,7 @@ function actionIsStale(sequence, requestedMovement, requestedLoadSequence) {
 function resetLoadedState() {
 	for (const key of Object.keys(editor)) delete editor[key]
 	Object.assign(editor, { context: {}, permissions: {}, record: null })
-	Object.assign(form, { lot: "", from_warehouse: "", posting_date: "", posting_time: "", edit_posting_date_and_time: false })
+	Object.assign(form, { lot: "", from_warehouse: "", movement_from_cutting: false, cutting_plan: "", posting_date: "", posting_time: "", edit_posting_date_and_time: false })
 	replaceMovement({})
 	Object.assign(linked, { sections: {}, actions: {} })
 	transactionCreateVisible.value = false

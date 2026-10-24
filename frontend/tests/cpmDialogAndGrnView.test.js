@@ -16,3 +16,11 @@ test("Submitting a Cut Panel Movement keeps the dialog open for the next transac
 	assert.match(dialog, /document-label="Cut Panel Movement"/)
 })
 
+
+test("Cut Panel Store movement can come from a Cutting Plan so its accessory foldings list", () => {
+	const dialog = read("departments/cut-panel-store/CutPanelMovementDialog.vue")
+	assert.match(dialog, /<ToggleSwitch v-model="form\.movement_from_cutting" :disabled="Boolean\(record\) \|\| busy" @update:model-value="sourceChanged" \/>/)
+	assert.match(dialog, /<LinkField v-if="form\.movement_from_cutting" v-model="form\.cutting_plan" doctype="SD YRP Cutting Plan" label="Cutting Plan" required :filters="cuttingPlanFilters"/)
+	assert.match(dialog, /const cuttingPlanFilters = computed\(\(\) => \(\{ lot: form\.lot, docstatus: 1, version: \["!=", "V1"\] \}\)\)/)
+	assert.match(dialog, /movement_from_cutting: false, cutting_plan: ""/)
+})

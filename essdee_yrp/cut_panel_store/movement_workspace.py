@@ -64,17 +64,21 @@ def _movement_context(doc=None, source=None) -> frappe._dict:
 	"""Resolve immutable movement identity from the current document or Lot."""
 
 	source = parse_json_object(source, label=_("Source"))
-	lot = doc.lot if doc else source.get("lot")
-	supplier = doc.from_warehouse if doc else source.get("from_warehouse")
+	origin = doc or frappe._dict(source)
+	lot = origin.lot
+	supplier = origin.from_warehouse
+	movement_from_cutting = cint(origin.movement_from_cutting)
 	context = frappe._dict(
 		lot=lot,
 		item=None,
 		production_detail=None,
 		source_supplier=supplier,
 		source_warehouse=None,
-		movement_from_cutting=cint(doc.movement_from_cutting) if doc else 0,
-		cutting_plan=doc.cutting_plan if doc else None,
+		movement_from_cutting=movement_from_cutting,
+		cutting_plan=origin.cutting_plan if movement_from_cutting else None,
 	)
+	if not doc and movement_from_cutting and not context.cutting_plan:
+		frappe.throw(_("Select a Cutting Plan for a movement from Cutting."))
 	if lot:
 		lot_doc = frappe.get_doc("SD YRP Lot", lot)
 		lot_doc.check_permission("read")
@@ -187,6 +191,8 @@ def _editor_payload(context, doc=None) -> dict:
 		"defaults": {
 			"lot": context.lot,
 			"from_warehouse": context.source_supplier,
+			"movement_from_cutting": context.movement_from_cutting,
+			"cutting_plan": context.cutting_plan,
 			"posting_date": doc.posting_date if doc else nowdate(),
 			"posting_time": doc.posting_time if doc else nowtime(),
 			"edit_posting_date_and_time": cint(doc.edit_posting_date_and_time) if doc else 0,
@@ -223,8 +229,8 @@ def _apply_identity(doc, context, *, is_new: bool) -> None:
 	doc.lot = context.lot
 	doc.item = context.item
 	doc.from_warehouse = context.source_supplier
-	doc.movement_from_cutting = 0
-	doc.cutting_plan = None
+	doc.movement_from_cutting = context.movement_from_cutting
+	doc.cutting_plan = context.cutting_plan
 
 
 @frappe.whitelist()

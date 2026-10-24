@@ -5,10 +5,12 @@ import frappe
 from frappe.tests import UnitTestCase
 
 from essdee_yrp.cut_panel_store.movement_workspace import (
+	_apply_identity,
 	_authoritative_selection,
 	_movement_context,
 	_transaction_record,
 	create_movement_transaction,
+	generate_movement_bundles,
 	get_movement_linked_documents,
 	get_movement_work_orders,
 	get_movement_editor,
@@ -121,6 +123,52 @@ class TestCutPanelStoreMovementWorkspace(UnitTestCase):
 		self.assertEqual(context.production_detail, "IPD-AUTH")
 		self.assertEqual(context.source_supplier, "CUT-STORE")
 		self.assertEqual(context.source_warehouse, "CUT-WH")
+
+	def source_context(self, source):
+		lot = MagicMock(item="ITEM-1", production_detail="IPD-1")
+		with (
+			patch("essdee_yrp.cut_panel_store.movement_workspace.frappe.get_doc", return_value=lot),
+			patch("essdee_yrp.cut_panel_store.movement_workspace.frappe.db.exists", return_value="CUT-STORE"),
+			patch("essdee_yrp.cut_panel_store.movement_workspace._get_warehouse_for_supplier", return_value="CUT-WH"),
+		):
+			return _movement_context(source={"lot": "LOT-1", "from_warehouse": "CUT-STORE", **source})
+
+	def test_new_movement_from_cutting_keeps_its_cutting_plan_like_desk(self):
+		context = self.source_context({"movement_from_cutting": 1, "cutting_plan": "CP-1"})
+
+		self.assertEqual(context.movement_from_cutting, 1)
+		self.assertEqual(context.cutting_plan, "CP-1")
+
+	def test_cutting_plan_is_ignored_when_movement_is_not_from_cutting(self):
+		context = self.source_context({"movement_from_cutting": 0, "cutting_plan": "CP-1"})
+
+		self.assertEqual(context.movement_from_cutting, 0)
+		self.assertIsNone(context.cutting_plan)
+
+	def test_movement_from_cutting_requires_a_cutting_plan(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Cutting Plan"):
+			self.source_context({"movement_from_cutting": 1})
+
+	def test_new_movement_stores_cutting_source_identity(self):
+		doc = frappe._dict()
+		context = frappe._dict(lot="LOT-1", item="ITEM-1", source_supplier="CUT-STORE", movement_from_cutting=1, cutting_plan="CP-1")
+
+		_apply_identity(doc, context, is_new=True)
+
+		self.assertEqual(doc.movement_from_cutting, 1)
+		self.assertEqual(doc.cutting_plan, "CP-1")
+
+	@patch("essdee_yrp.cut_panel_store.movement_workspace.get_cut_bundle_unmoved_data")
+	@patch("essdee_yrp.cut_panel_store.movement_workspace._movement_context")
+	def test_movement_from_cutting_lists_the_plan_accessory_foldings(self, context, generator):
+		context.return_value = frappe._dict(lot="LOT-1", item="ITEM-1", source_supplier="CUT-STORE", movement_from_cutting=1, cutting_plan="CP-1")
+		generator.return_value = deepcopy(self.available)
+
+		with patch("essdee_yrp.cut_panel_store.movement_workspace.frappe.has_permission", return_value=True):
+			payload = generate_movement_bundles({"lot": "LOT-1", "from_warehouse": "CUT-STORE", "posting_date": "2026-10-07", "posting_time": "10:30:00"})
+
+		self.assertEqual(payload["accessory_data"][0]["cloth_name"], "TAPE")
+		generator.assert_called_once_with("CUT-STORE", "LOT-1", "2026-10-07", "10:30:00", 1, cutting_plan="CP-1", get_collapsed=True)
 
 	@patch("essdee_yrp.cut_panel_store.movement_workspace.get_cut_bundle_unmoved_data")
 	@patch("essdee_yrp.cut_panel_store.movement_workspace._movement_context")

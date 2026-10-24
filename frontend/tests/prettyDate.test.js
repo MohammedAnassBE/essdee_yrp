@@ -80,7 +80,6 @@ test("a mounted list row renders the short modified time with the full timestamp
 			getList: async (doctype, args) => { fetched.push(args.fields); return [{ name: "ENTRY-1", modified }] },
 			getCount: async () => 1,
 			getCounts: async (doctype, filterSets) => filterSets.map(() => 1),
-			getReadScope: () => "scope",
 		},
 		"./listColumns.js": listColumns,
 		"../../utils/listNavigation.js": listNavigation,

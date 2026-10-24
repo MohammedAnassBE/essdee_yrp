@@ -86,7 +86,10 @@ async function open() {
 
 async function prepareRows() {
 	const restore = await props.prepareRows?.()
-	if (restore && !restoreRows) restoreRows = restore
+	if (!restore) return
+	// Newest first: a restore made stale by a row reset is a no-op, so the newest valid one wins.
+	const older = restoreRows
+	restoreRows = older ? () => { restore(); older() } : restore
 }
 
 function releaseRows() {

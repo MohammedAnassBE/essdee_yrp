@@ -238,19 +238,32 @@ test("the export dialog mounts rows again before Download and steps back when it
 		"../../api/reportExport.js": { getExportPermission: async () => true, exportWebReport: async () => {}, exportReportRows: async args => calls.push(args.rows.length) },
 		"./reportExport.js": await import("../src/components/reports/reportExport.js"),
 	})
-	let mounted = 200
-	const prepareRows = async () => { events.push("prepare"); const previous = mounted; mounted = 450; return () => { events.push("restore"); mounted = previous } }
+	// Mirrors useIncrementalRows.renderAllRows: a restore made before a row reset does nothing.
+	let mounted = 200, resets = 0
+	const prepareRows = async () => {
+		events.push("prepare")
+		const previous = mounted, generation = resets
+		mounted = 450
+		return () => { if (generation === resets) mounted = previous }
+	}
 	const getRows = () => Array.from({ length: mounted }, (_, index) => [index])
 	const root = mountComponent(button, { title: "Work Order", source: { reportKey: "planning-work-order" }, getRows, prepareRows })
 	try {
 		await tick()
 		const byLabel = label => findNodes(root, node => node.type === "export-button" && node.props.label === label)[0]
-		byLabel("Export").props.onClick()
-		await tick()
-		mounted = 200 // linked values or an inline filter replaced the rows while the dialog was open
-		byLabel("Download").props.onClick()
-		await tick()
+		const exportAndDownload = async ({ reset }) => {
+			byLabel("Export").props.onClick()
+			await tick()
+			if (reset) { resets += 1; mounted = 200 } // linked values or an inline filter replaced the rows
+			byLabel("Download").props.onClick()
+			await tick()
+		}
+		await exportAndDownload({ reset: true })
 		assert.deepEqual(calls, [450])
-		assert.deepEqual(events, ["prepare", "prepare", "restore"], "Download prepares again and closing the dialog steps back once")
+		assert.deepEqual(events, ["prepare", "prepare"], "Download prepares again")
+		assert.equal(mounted, 200, "closing after a reset steps back to the reset's limit")
+		await exportAndDownload({ reset: false })
+		assert.deepEqual(calls, [450, 450])
+		assert.equal(mounted, 200, "closing without a reset steps back to the limit before Export")
 	} finally { root.__vue_app__.unmount() }
 })

@@ -27,7 +27,6 @@ async function mountList(props, metas, listviewFields = [{ fieldname: "name" }, 
 		getList: async (doctype, args) => { calls.lists.push(args.filters); return [] },
 		getCount: async (doctype, filters) => { calls.counts.push(filters); return 0 },
 		getCounts: async (doctype, filterSets) => { calls.counts.push(...filterSets); return filterSets.map(() => 0) },
-		getReadScope: () => "scope",
 	}
 	const modules = {
 		"vue-router": { useRoute: () => ({ fullPath: "/stock" }) },

@@ -18,11 +18,6 @@ export function invalidatePendingReads() {
 	linkResults.clear()
 }
 
-/** Changes on every write, explicit invalidation or session change: results read under one scope may be reused. */
-export function getReadScope() {
-	return JSON.stringify([...sessionIdentity(), readGeneration])
-}
-
 /** Drops every session read cache, including DocType metadata. */
 export function clearReadCaches() {
 	invalidatePendingReads()

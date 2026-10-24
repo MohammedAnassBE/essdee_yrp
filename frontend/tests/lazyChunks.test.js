@@ -201,7 +201,6 @@ async function mountListView({ loadFormField = async () => ({}), bulkUpdates = [
 			getList: async () => [{ name: "ENT-1", lot: "L1" }],
 			getCount: async () => 1,
 			getCounts: async (doctype, sets) => sets.map(() => 1),
-			getReadScope: () => "scope",
 			getBulkEditFields: async () => [{ key: "lot", fieldname: "lot", label: "Lot", fieldtype: "Data" }],
 			bulkUpdateField: async (...args) => { bulkUpdates.push(args); return { updated: ["ENT-1"], failures: [] } },
 		},

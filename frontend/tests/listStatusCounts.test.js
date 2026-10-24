@@ -23,7 +23,6 @@ async function mountList({ counts = async (doctype, sets) => sets.map((_, index)
 	const previousWindow = globalThis.window
 	globalThis.window = { sessionStorage: { getItem: () => null }, frappe: {} }
 	const calls = { totals: [], batches: [] }
-	const state = { scope: "scope-1" }
 	const mocks = {
 		getMeta: async () => [{ name: "Entry", fields }, { name: "Entry Item", fields: [{ fieldname: "item", fieldtype: "Data" }] }],
 		getActiveWorkflow: async () => null,
@@ -32,7 +31,6 @@ async function mountList({ counts = async (doctype, sets) => sets.map((_, index)
 		getList: async () => [{ name: "ENT-1", status: "Open" }],
 		getCount: async (doctype, filters, options) => { calls.totals.push({ filters, options }); return totals() },
 		getCounts: async (doctype, sets, options) => { calls.batches.push({ doctype, sets, options }); return counts(doctype, sets) },
-		getReadScope: () => state.scope,
 	}
 	const modules = {
 		"vue-router": { useRoute: () => ({ fullPath: "/entries" }) },
@@ -53,7 +51,7 @@ async function mountList({ counts = async (doctype, sets) => sets.map((_, index)
 	await settle()
 	const node = (predicate) => findNodes(root, predicate)[0]
 	return {
-		calls, state, root,
+		calls, root,
 		tabCounts: () => findNodes(root, n => n.props?.class === "list-status-tab__count").map(n => (n.text || n.children.map(child => child.text).join("")).trim()),
 		page: async () => { node(n => n.type === "paginator").props.onPage({ first: 20, rows: 20 }); await settle() },
 		sort: async () => { node(n => n.type === "datatable").props.onSort({ sortField: "name", sortOrder: 1 }); await settle() },
@@ -75,38 +73,20 @@ test("status counts come from one batch request in tab order", async () => {
 	} finally { list.restore() }
 })
 
-test("page and sort changes reuse the total only under the same filters and read scope", async () => {
-	const list = await mountList()
+test("page and sort changes refetch the total so other users' writes show", async () => {
+	let total = 100
+	const list = await mountList({ totals: () => total })
 	try {
-		await list.page()
-		await list.sort()
 		assert.equal(list.calls.totals.length, 1)
-		list.state.scope = "scope-2"
+		total = 101
 		await list.page()
 		assert.equal(list.calls.totals.length, 2)
 		await list.sort()
-		assert.equal(list.calls.totals.length, 2)
-		await list.refresh()
 		assert.equal(list.calls.totals.length, 3)
+		assert.equal(list.calls.batches.length, 1)
+		await list.refresh()
+		assert.equal(list.calls.totals.length, 4)
 		assert.equal(list.calls.batches.length, 2)
-		await list.page()
-		assert.equal(list.calls.totals.length, 3)
-	} finally { list.restore() }
-})
-
-test("a page change during a refresh does not reuse the total the refresh replaces", async () => {
-	let release = null
-	let held = false
-	const list = await mountList({ totals: () => held ? new Promise(resolve => { release = () => resolve(150) }) : 100 })
-	try {
-		held = true
-		await list.refresh()
-		held = false
-		await list.page()
-		assert.equal(list.calls.totals.length, 3)
-		release()
-		await list.page()
-		assert.equal(list.calls.totals.length, 3)
 	} finally { list.restore() }
 })
 
@@ -154,15 +134,4 @@ test("getCounts splits more than 100 filter sets into ordered requests", async (
 		assert.deepEqual(await api.getCounts("Entry", sets), sets.map((_, index) => index))
 		assert.deepEqual(sizes, [100, 100, 5])
 	} finally { globalThis.window = previousWindow; globalThis.fetch = previousFetch }
-})
-
-test("the read scope changes on writes and invalidation", () => {
-	const previousWindow = globalThis.window
-	globalThis.window = { csrf_token: "token", frappe: { session: { user: "a@example.com" } } }
-	try {
-		const before = api.getReadScope()
-		assert.equal(api.getReadScope(), before)
-		api.invalidatePendingReads()
-		assert.notEqual(api.getReadScope(), before)
-	} finally { globalThis.window = previousWindow }
 })

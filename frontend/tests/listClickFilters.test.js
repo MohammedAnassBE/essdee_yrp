@@ -47,7 +47,6 @@ async function mountList(props = {}) {
 		getList: async (doctype, args) => { calls.lists.push(args.filters); return rows },
 		getCount: async () => rows.length,
 		getCounts: async (doctype, filterSets) => filterSets.map(() => rows.length),
-		getReadScope: () => "scope",
 	}
 	const modules = {
 		"vue-router": { useRoute: () => ({ fullPath: "/entries" }) },

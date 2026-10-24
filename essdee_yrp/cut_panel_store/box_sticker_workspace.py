@@ -59,6 +59,16 @@ def _integer(value, label, *, minimum=0) -> int:
 	return int(number)
 
 
+def _amount(value, label) -> float:
+	try:
+		number = Decimal(str(value if value not in (None, "") else 0))
+	except (InvalidOperation, ValueError):
+		frappe.throw(_("{0} must be a number.").format(label))
+	if not number.is_finite() or number < 0:
+		frappe.throw(_("{0} cannot be negative.").format(label))
+	return flt(number)
+
+
 def _require_expected_modified(doc, expected_modified) -> None:
 	if not expected_modified:
 		frappe.throw(
@@ -224,7 +234,10 @@ def _canonical_source_rows(
 			frappe.throw(_("Allow Excess Percentage cannot exceed 100."))
 		row = {
 			"size": size,
-			"mrp": flt(_value(existing, "mrp") if existing else _value(server, "mrp")),
+			"mrp": _amount(
+				client.get("mrp", _value(existing, "mrp") if existing else _value(server, "mrp")),
+				_("MRP for size {0}").format(size),
+			),
 			"quantity": quantity,
 			"printed_quantity": _integer(
 				_value(existing, "printed_quantity", 0), _("Printed Quantity for size {0}").format(size)

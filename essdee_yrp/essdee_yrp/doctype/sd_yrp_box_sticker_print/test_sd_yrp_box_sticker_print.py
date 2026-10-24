@@ -206,6 +206,35 @@ class TestBoxStickerPrint(unittest.TestCase):
 		self.assertEqual((values["fg_item"], values["piece_per_box"]), ("FG-1", 6))
 		mocks["fg_lookup"].assert_called_once_with("ITEM-1")
 
+	def test_work_order_box_sticker_rows_take_the_production_order_lot_price(self):
+		with _auto_create_patches(fg_item="FG-1") as mocks:
+			auto_create_box_sticker_print(_dict(lot="LOT-1", item="ITEM-1", name="WO-1"))
+		rows = mocks["new_doc"].return_value.set.call_args.args[1]
+		self.assertEqual([(row["size"], row["mrp"]) for row in rows], [("S", 125.0)])
+
+	def test_effective_lot_price_is_production_order_mrp_unless_lot_override(self):
+		production_order = _dict(
+			doctype="YRP Production Order",
+			item="ITEM-1",
+			production_order_details=[_dict(item_variant="V-S", mrp=110), _dict(item_variant="V-M", mrp=120)],
+			lot_price_overrides=[_dict(lot="LOT-1", size="M", mrp=135)],
+		)
+		with (
+			patch.object(lot_pricing.attribute_db, "get_value", return_value="PPO-1"),
+			patch.object(lot_pricing.frappe, "get_doc", return_value=production_order),
+			patch.object(lot_pricing.frappe, "get_value", return_value="Size"),
+			patch.object(
+				lot_pricing, "get_variant_attr_details", side_effect=lambda variant: {"Size": variant[-1]}
+			),
+			patch.object(
+				lot_pricing,
+				"get_lot_print_state",
+				return_value={"locked": False, "documents": [], "prices": {}},
+			),
+		):
+			price_map = lot_pricing.get_effective_lot_price_map("LOT-1", "PPO-1")
+		self.assertEqual(price_map, {"S": 110.0, "M": 135.0})
+
 	def test_migrated_packing_work_order_has_complete_price_scope(self):
 		work_order = "WO-2627-00839"
 		if not frappe.db.exists("YRP Work Order", work_order):

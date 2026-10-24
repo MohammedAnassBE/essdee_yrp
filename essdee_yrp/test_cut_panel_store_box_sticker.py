@@ -99,7 +99,7 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 		self.assertEqual(payload["context"]["display_name"], "FG One")
 		doc.check_permission.assert_called_with("read")
 
-	def test_source_preview_keeps_server_size_and_mrp(self):
+	def test_source_preview_keeps_server_size_and_user_mrp(self):
 		lot = MagicMock()
 		fg_item = MagicMock()
 		fg_item.display_name = "New Shirt"
@@ -123,7 +123,7 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 			)
 
 		self.assertEqual([row["size"] for row in payload["rows"]], ["S", "M"])
-		self.assertEqual([row["mrp"] for row in payload["rows"]], [125.0, 135.0])
+		self.assertEqual([row["mrp"] for row in payload["rows"]], [1.0, 2.0])
 		self.assertEqual([row["quantity"] for row in payload["rows"]], [8, 0])
 		self.assertEqual([row["allow_excess_quantity"] for row in payload["rows"]], [0, 0])
 		self.assertEqual(payload["context"]["display_name"], "New Shirt")
@@ -162,7 +162,7 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 		):
 			save_box_sticker({"rows": []}, name="BSP-1")
 
-	def test_save_uses_server_row_identity_and_mrp(self):
+	def test_save_uses_server_row_identity_and_user_mrp(self):
 		doc = box_doc(name="BSP-NEW", docstatus=0, rows=[])
 		lot = MagicMock()
 		fg_item = MagicMock()
@@ -187,7 +187,7 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 		self.assertEqual(payload["name"], "BSP-NEW")
 		rows = doc.set.call_args.args[1]
 		self.assertEqual(rows[0]["size"], "S")
-		self.assertEqual(rows[0]["mrp"], 125.0)
+		self.assertEqual(rows[0]["mrp"], 1.0)
 		self.assertEqual(rows[0]["quantity"], 10)
 		self.assertEqual(rows[0]["allow_excess_percentage"], 7)
 		doc.save.assert_called_once()
@@ -231,11 +231,8 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 				expected_modified="M1",
 			)
 
-	def test_save_preserves_server_mrp_snapshot_for_an_unchanged_source(self):
-		doc = box_doc(
-			docstatus=0,
-			rows=[detail("ROW-S", "S", 10, 150)],
-		)
+	def _save_existing(self, saved_mrp, row_values):
+		doc = box_doc(docstatus=0, rows=[detail("ROW-S", "S", 10, saved_mrp)])
 		with (
 			patch(f"{MODULE}.frappe.get_doc", side_effect=[doc, MagicMock(), MagicMock(), MagicMock()]),
 			patch(f"{MODULE}.get_fg_details", return_value=[{"size": "S", "mrp": 125}]),
@@ -246,14 +243,39 @@ class TestCutPanelStoreBoxStickerWorkspace(UnitTestCase):
 					"lot": "LOT-1",
 					"fg_item": "FG-1",
 					"print_format": "BOX-FORMAT",
-					"rows": [{"name": "ROW-S", "size": "S", "mrp": 1, "quantity": 10}],
+					"rows": [{"name": "ROW-S", "size": "S", **row_values}],
 				},
 				name="BSP-1",
 				expected_modified="M1",
 			)
+		return doc.set.call_args.args[1]
+
+	def test_manual_edit_of_saved_mrp_and_quantity_persists(self):
+		rows = self._save_existing(150, {"mrp": 199.5, "quantity": 42})
+		self.assertEqual((rows[0]["mrp"], rows[0]["quantity"]), (199.5, 42))
+
+	def test_save_without_mrp_keeps_the_saved_mrp(self):
+		rows = self._save_existing(150, {"quantity": 10})
+		self.assertEqual(rows[0]["mrp"], 150.0)
+
+	def test_save_rejects_negative_or_invalid_mrp(self):
+		for mrp in (-1, "abc"):
+			with self.subTest(mrp=mrp), self.assertRaises(frappe.ValidationError):
+				self._save_existing(150, {"mrp": mrp, "quantity": 10})
+
+	def test_submit_keeps_the_manually_edited_mrp_and_quantity(self):
+		doc = box_doc(docstatus=0, modified="M1", rows=[detail("ROW-S", "S", 42, 199.5)])
+		with (
+			patch(f"{MODULE}.frappe.has_permission", return_value=True),
+			patch(f"{MODULE}.frappe.get_doc", return_value=doc),
+			patch(f"{MODULE}.get_fg_details", return_value=[{"size": "S", "mrp": 125}]),
+			patch(f"{MODULE}._record_payload", return_value={"name": "BSP-1"}),
+		):
+			execute_box_sticker_command("BSP-1", "submit", expected_modified="M1")
 
 		rows = doc.set.call_args.args[1]
-		self.assertEqual(rows[0]["mrp"], 150.0)
+		self.assertEqual((rows[0]["mrp"], rows[0]["quantity"]), (199.5, 42))
+		doc.submit.assert_called_once()
 
 	def test_partial_existing_save_preserves_optional_server_fields(self):
 		doc = box_doc(

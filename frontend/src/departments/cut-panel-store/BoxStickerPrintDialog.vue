@@ -108,7 +108,21 @@
 						<tbody>
 							<tr v-for="(row, index) in rows" :key="row.name || `${row.size}-${index}`">
 								<td><strong>{{ row.size || "Not set" }}</strong></td>
-								<td class="box-sticker-number-cell"><span>{{ money(row.mrp) }}</span></td>
+								<td class="box-sticker-number-cell">
+									<InputNumber
+										v-if="canEdit"
+										v-model="row.mrp"
+										:min="0"
+										:min-fraction-digits="2"
+										:max-fraction-digits="2"
+										:use-grouping="false"
+										:disabled="busy"
+										:aria-label="`MRP for ${row.size || `row ${index + 1}`}`"
+										fluid
+										@update:model-value="markDirty"
+									/>
+									<span v-else>{{ money(row.mrp) }}</span>
+								</td>
 								<td class="box-sticker-number-cell">
 									<InputNumber
 										v-if="canEdit"
@@ -560,7 +574,7 @@ function documentValues() {
 		size: form.size,
 		print_format: form.print_format,
 		use_item_name: form.use_item_name ? 1 : 0,
-		rows: editableRows(),
+		rows: editableRows({ includeMrp: true }),
 	}
 }
 
@@ -587,10 +601,11 @@ function setForm(source = {}) {
 	})
 }
 
-function editableRows() {
+function editableRows({ includeMrp = false } = {}) {
 	return rows.value.map((row) => ({
 		name: row.name || undefined,
 		size: row.size,
+		...(includeMrp ? { mrp: Number(row.mrp || 0) } : {}),
 		quantity: Number(row.quantity || 0),
 		allow_excess_percentage: Number(row.allow_excess_percentage || 0),
 	}))

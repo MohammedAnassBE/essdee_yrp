@@ -4,6 +4,7 @@ import test from "node:test"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 const { useIncrementalRows } = incrementalRows
 import { useCopyFeedback } from "../src/composables/useCopyFeedback.js"
+import * as rowToggle from "../src/utils/rowToggle.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 
 const nodes = (root, predicate) => findNodes(root, predicate)
@@ -44,10 +45,11 @@ test("FinishingSeriesTable expandAll opens every detail row and drops the toggle
 	const table = loadComponent(resolve("frontend/src/departments/finishing/components/FinishingSeriesTable.vue"), {
 		"../../../components/reports/reportUtils.js": { formatDate: value => value },
 		"../finishingViews.js": { formatQuantity: value => String(value) },
+		"../../../utils/rowToggle.js": rowToggle,
 	})
 	const rows = ["S-1", "S-2"].map(series => ({ series, colour: "Red", total: 1, values: {}, detail: { grn_number: "GRN", lot: "L", item: "I", date: "2026-10-23" } }))
 	const detailRows = root => nodes(root, node => node.type === "tr" && node.props.class === "series-table__detail")
-	const toggles = root => nodes(root, node => node.props.class === "series-table__toggle")
+	const toggles = root => nodes(root, node => String(node.props.class || "").split(" ").includes("series-table__toggle"))
 
 	const collapsed = mountComponent(table, { rows, types: ["Stain"], expanded: "S-1", printable: true })
 	assert.equal(detailRows(collapsed).length, 1)

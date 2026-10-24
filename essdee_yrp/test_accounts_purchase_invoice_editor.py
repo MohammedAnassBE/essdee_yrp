@@ -347,7 +347,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 			):
 				_resolve_grn_supplier(supplier)
 
-	def test_resolve_grn_supplier_uses_billing_supplier_with_fallback(self):
+	def test_resolve_grn_supplier_uses_supplier_not_billing_supplier(self):
 		from essdee_yrp.purchase_invoice import _resolve_grn_supplier
 
 		for billing_supplier in ("SUP-2", "", None):
@@ -358,10 +358,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 					patch("essdee_yrp.purchase_invoice.frappe.db.exists", return_value=True),
 					patch("essdee_yrp.purchase_invoice.frappe.get_doc", return_value=doc),
 				):
-					self.assertEqual(
-						_resolve_grn_supplier(supplier, purchase_invoice=doc.name),
-						billing_supplier or "SUP-1",
-					)
+					self.assertEqual(_resolve_grn_supplier(supplier, purchase_invoice=doc.name), "SUP-1")
 					self.assertEqual(_resolve_grn_supplier("SUP-3", purchase_invoice=doc.name), "SUP-3")
 				self.assertEqual(doc.checked_permissions, ["write"])
 
@@ -402,7 +399,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 		self.assertEqual(doc.checked_permissions, ["write"])
 		self.assertEqual(
 			get_list.call_args.kwargs["filters"],
-			{"docstatus": 1, "supplier": "SUP-2", "against": "Purchase Order"},
+			{"docstatus": 1, "supplier": "SUP-1", "against": "Purchase Order"},
 		)
 		self.assertEqual(get_list.call_args.kwargs["limit_page_length"], 75)
 
@@ -638,7 +635,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 		):
 			EssdeePurchaseInvoice.validate_grns(doc)
 
-	def test_invoice_validation_uses_billing_supplier_with_fallback(self):
+	def test_invoice_validation_uses_supplier_not_billing_supplier(self):
 		from essdee_yrp.overrides.purchase_invoice import EssdeePurchaseInvoice
 
 		for against in ("Purchase Order", "YRP Work Order"):
@@ -652,7 +649,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 				)
 				grn = frappe._dict(
 					docstatus=1,
-					supplier=billing_supplier or "SUP-1",
+					supplier="SUP-1",
 					against=against,
 					purchase_invoice_name=None,
 				)

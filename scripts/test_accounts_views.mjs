@@ -302,12 +302,7 @@ console.log("accounts views OK")
 
 const accountsViews = await import("../frontend/src/departments/accounts/accountsViews.js")
 const { Vue, findNodes, loadComponent, mountComponent } = await import("./helpers/vue_renderer.mjs")
-for (const billing_supplier of ["BILLING-SUP", "", null, undefined]) {
-	assert.equal(
-		accountsViews.purchaseInvoiceGrnSupplier({ supplier: "BILL-SUP", billing_supplier }),
-		billing_supplier || "BILL-SUP",
-	)
-}
+assert.equal(accountsViews.purchaseInvoiceGrnSupplier, undefined)
 
 const control = (props) => Vue.h("control", props)
 const flush = async () => {
@@ -340,13 +335,19 @@ const bodyProps = Vue.reactive({
 })
 mountComponent(bodyComponent, bodyProps)
 await flush()
-assert.equal(grnRequests.at(-1).supplier, "BILLING-SUP")
+assert.equal(grnRequests.at(-1).supplier, "BILL-SUP")
 for (const billingSupplier of ["CHANGED-SUP", "", "XXXXXXXX"]) {
 	const count = grnRequests.length
 	bodyProps.form.billing_supplier = billingSupplier
 	await flush()
+	assert.equal(grnRequests.length, count)
+}
+for (const supplier of ["OTHER-SUP", "XXXXXXXX"]) {
+	const count = grnRequests.length
+	bodyProps.form.supplier = supplier
+	await flush()
 	assert.equal(grnRequests.length, count + 1)
-	assert.equal(grnRequests.at(-1).supplier, billingSupplier === "XXXXXXXX" ? undefined : billingSupplier || "BILL-SUP")
+	assert.equal(grnRequests.at(-1).supplier, supplier === "XXXXXXXX" ? undefined : supplier)
 	assert.equal(grnRequests.at(-1).purchaseInvoice, "PI-1")
 }
 
@@ -381,17 +382,19 @@ await flush()
 const editorBody = () => findNodes(page, (node) => node.type === "editor-body")[0].props
 editorBody().onFetch()
 await flush()
-assert.equal(fetchRequests.at(-1).supplier, "BILLING-SUP")
+assert.equal(fetchRequests.at(-1).supplier, "BILL-SUP")
+editorBody()["onUpdate:items"]?.([{ qty: 12, rate: 5 }])
+await flush()
+const itemsBeforeBillingChange = editorBody().items
 for (const billingSupplier of ["CHANGED-SUP", "", "XXXXXXXX"]) {
 	editorBody().onUpdateField("billing_supplier", billingSupplier)
 	await flush()
 	assert.equal(editorBody().form.supplier, "BILL-SUP")
-	assert.deepEqual(editorBody().grns, [])
-	assert.deepEqual(editorBody().items, [])
-	editorBody()["onUpdate:grns"](["GRN-2"])
-	await flush()
-	editorBody().onFetch()
-	await flush()
-	assert.equal(fetchRequests.at(-1).supplier, billingSupplier === "XXXXXXXX" ? undefined : billingSupplier || "BILL-SUP")
+	assert.equal(editorBody().form.billing_supplier, billingSupplier)
+	assert.deepEqual(editorBody().grns, ["GRN-1"])
+	assert.deepEqual(editorBody().items, itemsBeforeBillingChange)
 }
-console.log("accounts billing supplier GRN refresh and fetch OK")
+editorBody().onFetch()
+await flush()
+assert.equal(fetchRequests.at(-1).supplier, "BILL-SUP")
+console.log("accounts GRNs follow supplier, not billing supplier OK")

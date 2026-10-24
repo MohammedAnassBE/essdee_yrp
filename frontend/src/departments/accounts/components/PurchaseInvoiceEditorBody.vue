@@ -24,7 +24,7 @@
 			<div class="purchase-invoice-editor__grn-row">
 				<PurchaseInvoiceGrnPicker
 					:model-value="grns"
-					:supplier="purchaseInvoiceGrnSupplier(form)"
+					:supplier="form.supplier"
 					:against="form.against"
 					:purchase-invoice="currentName"
 					:bill-tracking="form.bill_tracking"
@@ -108,7 +108,6 @@ import { computed } from "vue"
 
 import FormField from "../../../components/common/FormField.vue"
 import DocumentFieldGroupGrid from "../../../components/documents/DocumentFieldGroupGrid.vue"
-import { purchaseInvoiceGrnSupplier } from "../accountsViews.js"
 import PurchaseInvoiceGrnPicker from "./PurchaseInvoiceGrnPicker.vue"
 import PurchaseInvoiceGroupedItems from "./PurchaseInvoiceGroupedItems.vue"
 

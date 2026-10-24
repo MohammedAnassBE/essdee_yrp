@@ -200,20 +200,28 @@ def get_plan_actions(doc) -> dict[str, bool]:
 
 
 def get_linked_documents(doc) -> list[dict]:
+	"""Linked document groups; `cancellable` also needs the user's cancel permission on the doctype."""
 	groups = []
+	cancel_permissions = {}
 	for key, (label, doctype, cancellable) in LINKED_DOCUMENT_LISTS.items():
 		entries = json_object(doc.get(key))
 		documents = [{"name": name, "date": _entry_date(value)} for name, value in entries.items()]
+		if cancellable and doctype not in cancel_permissions:
+			cancel_permissions[doctype] = has_cancel_permission(doctype)
 		groups.append(
 			{
 				"key": key,
 				"label": _(label),
 				"doctype": doctype,
-				"cancellable": cancellable,
+				"cancellable": cancellable and cancel_permissions[doctype],
 				"documents": documents,
 			}
 		)
 	return groups
+
+
+def has_cancel_permission(doctype: str) -> bool:
+	return bool(frappe.has_permission(doctype, ptype="cancel"))
 
 
 def _entry_date(value) -> str:
@@ -376,10 +384,8 @@ def get_plan_tab(name: str, tab: str) -> dict:
 def _cancel_linked_document(doc, payload):
 	doctype, docname = cstr(payload.get("doctype")), cstr(payload.get("name"))
 	owned = any(
-		group["doctype"] == doctype
-		and group["cancellable"]
-		and any(document["name"] == docname for document in group["documents"])
-		for group in get_linked_documents(doc)
+		list_doctype == doctype and cancellable and docname in json_object(doc.get(key))
+		for key, (_label, list_doctype, cancellable) in LINKED_DOCUMENT_LISTS.items()
 	)
 	if not owned:
 		frappe.throw(_("{0} {1} does not belong to this Finishing Plan.").format(doctype, docname))

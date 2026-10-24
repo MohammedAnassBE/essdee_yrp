@@ -15,14 +15,14 @@
                     <tr>
                         <th>Lot Transfer</th>
                         <th>Date Time</th>
-                        <th>Cancel</th>
+                        <th v-if="can_cancel">Cancel</th>
                     </tr>
                 </thead>
                 <tbody class="dark-border">
                     <tr v-for="(date, lt) in lt_list">
                         <td style="cursor: pointer;" @click="redirect_to('SD YRP Lot Transfer', lt)">{{ lt }}</td>
                         <td>{{ date?.datetime ?? date }}</td>
-                        <td>
+                        <td v-if="can_cancel">
                             <button class="btn btn-primary" @click="cancel_doc('SD YRP Lot Transfer', lt)">Cancel</button>
                         </td>
                     </tr>
@@ -102,6 +102,7 @@ let items = ref([])
 let colours = ref([])
 let given_matrix = ref({ primary_values: [], groups: [] })
 let received_matrix = ref({ primary_values: [], groups: [] })
+const can_cancel = frappe.model.can_cancel("SD YRP Lot Transfer")
 let lt_list = JSON.parse(cur_frm.doc.lot_transfer_list || "{}");
 
 const MatrixTable = {

@@ -280,6 +280,28 @@ class TestFinishingWebWorkspace(TestCase):
 		self.assertFalse(groups["incomplete_transfer_dc_list"]["cancellable"])
 		self.assertEqual(groups["stock_entry_list"]["documents"], [])
 
+	def test_linked_documents_are_cancellable_only_with_doctype_cancel_permission(self):
+		plan = make_plan(
+			lot_transfer_list='{"LT-1": "2026-10-01 10:00:00"}',
+			stock_entry_list='{"STE-1": "2026-10-01 10:00:00"}',
+		)
+		with self._permissions(denied={("SD YRP Lot Transfer", "cancel")}) as has_permission:
+			groups = {group["key"]: group for group in self._workspace().get_linked_documents(plan)}
+		self.assertFalse(groups["lot_transfer_list"]["cancellable"])
+		self.assertTrue(groups["stock_entry_list"]["cancellable"])
+		self.assertTrue(groups["ironing_excess_list"]["cancellable"])
+		cancel_checks = [call.args[0] for call in has_permission.call_args_list]
+		self.assertEqual(len(cancel_checks), len(set(cancel_checks)), "one cancel check per doctype")
+
+	def test_cancel_linked_document_leaves_the_permission_check_to_the_document(self):
+		plan = make_plan(lot_transfer_list='{"LT-1": "2026-10-01"}')
+		with (
+			patch("essdee_yrp.finishing.transactions.cancel_document") as cancel_document,
+			patch.object(self._workspace(), "has_cancel_permission", return_value=False),
+		):
+			self._execute(plan, "cancel_linked_document", {"doctype": "SD YRP Lot Transfer", "name": "LT-1"})
+		cancel_document.assert_called_once_with("SD YRP Lot Transfer", "LT-1")
+
 	def _execute(self, plan, command, payload=None, expected_modified=None, roles=("Stock User",)):
 		workspace = self._workspace()
 		roles_patch, settings_patch = self._roles(*roles)

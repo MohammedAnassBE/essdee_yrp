@@ -9,7 +9,7 @@
 						<th>Date Time</th>
 						<th class="erp-number">Qty</th>
 						<th>Delivery Challan</th>
-						<th v-if="canCancel" class="source-entries__action"><span class="sr-only">Actions</span></th>
+						<th v-if="showCancelColumn" class="source-entries__action"><span class="sr-only">Actions</span></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -23,8 +23,8 @@
 							<button v-else-if="entry.dc" type="button" class="source-entries__open" :title="`Open ${entry.dc}`" @click="emit('open', 'YRP Delivery Challan', entry.dc)">{{ entry.dc }}</button>
 							<span v-else>—</span>
 						</td>
-						<td v-if="canCancel" class="source-entries__action">
-							<Button label="Cancel" icon="pi pi-ban" severity="danger" text size="small" :disabled="busy" :aria-label="`Cancel ${entry.name}`" @click="emit('cancel', entry.doctype, entry.name)" />
+						<td v-if="showCancelColumn" class="source-entries__action">
+							<Button v-if="entry.cancellable" label="Cancel" icon="pi pi-ban" severity="danger" text size="small" :disabled="busy" :aria-label="`Cancel ${entry.name}`" @click="emit('cancel', entry.doctype, entry.name)" />
 						</td>
 					</tr>
 				</tbody>
@@ -35,12 +35,13 @@
 
 <script setup>
 import Button from "primevue/button"
+import { computed } from "vue"
 
 import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 import { formatQuantity } from "../finishingViews.js"
 import { canCreateDc, isExistingDc } from "./finishingSourceEntries.js"
 
-defineProps({
+const props = defineProps({
 	title: { type: String, required: true },
 	documentLabel: { type: String, required: true },
 	entries: { type: Array, default: () => [] },
@@ -49,6 +50,7 @@ defineProps({
 	busy: { type: Boolean, default: false },
 })
 const emit = defineEmits(["open", "cancel", "create-dc"])
+const showCancelColumn = computed(() => props.canCancel && props.entries.some((entry) => entry.cancellable))
 
 function quantitySummary(entry) {
 	return Object.entries(entry.quantities || {})

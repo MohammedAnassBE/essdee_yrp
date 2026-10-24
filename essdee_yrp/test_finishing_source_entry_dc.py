@@ -170,6 +170,19 @@ class TestFinishingSourceEntryDc(IntegrationTestCase):
 			quantities = source_entries.get_entry_quantities(None, rows, context)
 		self.assertEqual(quantities, {"Blue": {"S": 5, "M": 1}})
 
+	def test_source_entries_are_cancellable_only_with_doctype_cancel_permission(self):
+		plan = _plan(lot_transfer_list=frappe.as_json({"LT-1": NEW}))
+		for allowed in (True, False):
+			with (
+				patch.object(source_entries.frappe, "get_doc", return_value=_source("LT-1")),
+				patch.object(source_entries.views, "get_ipd_context", return_value={}),
+				patch.object(source_entries, "get_entry_quantities", return_value={}),
+				patch.object(source_entries.frappe, "has_permission", return_value=allowed) as has_permission,
+			):
+				entries = source_entries.get_source_entries(plan, "lot_transfer_list")
+			self.assertEqual(entries[0]["cancellable"], allowed)
+			has_permission.assert_called_once_with("SD YRP Lot Transfer", ptype="cancel")
+
 	@patch("essdee_yrp.migration.mark_finishing_entries_dc_done.frappe.db.commit")
 	def test_mark_script_is_idempotent(self, _commit):
 		stored = {

@@ -59,6 +59,7 @@ def get_source_entries(doc, list_key) -> list[dict]:
 	if not entries:
 		return []
 	context = views.get_ipd_context(doc)
+	cancellable = bool(frappe.has_permission(doctype, ptype="cancel"))
 	result = []
 	for name, entry in entries.items():
 		source = frappe.get_doc(doctype, name)
@@ -71,6 +72,7 @@ def get_source_entries(doc, list_key) -> list[dict]:
 				"doctype": doctype,
 				"date": entry["datetime"],
 				"dc": entry["dc"],
+				"cancellable": cancellable,
 				"total_qty": sum(flt(row.qty) for row in rows),
 				"quantities": get_entry_quantities(doc, rows, context),
 			}

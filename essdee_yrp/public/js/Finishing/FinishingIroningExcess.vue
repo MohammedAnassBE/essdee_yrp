@@ -7,14 +7,14 @@
                     <tr>
                         <th>Stock Entry</th>
                         <th>Date Time</th>
-                        <th>Cancel</th>
+                        <th v-if="can_cancel">Cancel</th>
                     </tr>
                 </thead>
                 <tbody class="dark-border">
                     <tr v-for="(date, ie) in ie_list">
                         <td style="cursor: pointer;" @click="redirect_to('YRP Stock Entry', ie)">{{ ie }}</td>
                         <td>{{ date?.datetime ?? date }}</td>
-                        <td>
+                        <td v-if="can_cancel">
                             <button class="btn btn-primary" @click="cancel_doc('YRP Stock Entry', ie)">Cancel</button>
                         </td>
                     </tr>
@@ -74,6 +74,7 @@ function load_data(data){
     items.value = data
 }
 
+const can_cancel = frappe.model.can_cancel("YRP Stock Entry")
 let ie_list = JSON.parse(cur_frm.doc.ironing_excess_list || "{}");
 
 function cancel_doc(doctype, docname){

@@ -9,13 +9,13 @@ const field = (fields, fieldname) => fields.find((candidate) => candidate.fieldn
 
 test("stock reconciliation shows supplier before warehouse and filters warehouse by supplier", () => {
 	const fields = buildStockHeaderFields("stock_reconciliation", { default_supplier: "Essdee Fabric Store - Tiruppur" }, editor)
-	assert.deepEqual(names(fields), ["purpose", "default_supplier", "default_warehouse"])
+	assert.deepEqual(names(fields), ["purpose", "default_supplier", "default_warehouse", "comments"])
 	assert.deepEqual(field(fields, "default_warehouse").link_filters, { disabled: 0, supplier: "Essdee Fabric Store - Tiruppur" })
 })
 
 test("stock update shows supplier before warehouse and filters warehouse by supplier", () => {
 	const fields = buildStockHeaderFields("stock_update", { supplier: "SUP-1" }, editor)
-	assert.deepEqual(names(fields), ["update_type", "supplier", "warehouse"])
+	assert.deepEqual(names(fields), ["update_type", "supplier", "warehouse", "comments"])
 	assert.deepEqual(field(fields, "warehouse").link_filters, { disabled: 0, supplier: "SUP-1" })
 })
 
@@ -26,9 +26,24 @@ test("warehouse is unfiltered by supplier when no supplier is selected, like Des
 
 test("stock entry keeps each location before its warehouse with the paired filter", () => {
 	const fields = buildStockHeaderFields("stock_entry", { purpose: "Send to Warehouse", from_supplier: "A", to_supplier: "B" }, editor)
-	assert.deepEqual(names(fields), ["purpose", "from_supplier", "to_supplier", "from_warehouse", "to_warehouse", "skip_transit"])
+	assert.deepEqual(names(fields), ["purpose", "from_supplier", "to_supplier", "from_warehouse", "to_warehouse", "skip_transit", "transfer_supplier", "vehicle_no", "terms_and_condition", "additional_amount", "comments"])
 	assert.equal(field(fields, "from_warehouse").link_filters.supplier, "A")
 	assert.equal(field(fields, "to_warehouse").link_filters.supplier, "B")
+})
+
+test("stock entry shows the Desk transport and remarks fields, Additional Amount only for Send to Warehouse", () => {
+	const issue = buildStockHeaderFields("stock_entry", { purpose: "Material Issue" }, editor)
+	assert.deepEqual(names(issue).slice(-4), ["transfer_supplier", "vehicle_no", "terms_and_condition", "comments"])
+	assert.equal(field(issue, "vehicle_no").fieldtype, "Data")
+	assert.equal(field(issue, "comments").fieldtype, "Small Text")
+	assert.equal(field(issue, "terms_and_condition").options, "YRP Terms and Condition")
+	assert.deepEqual(field(issue, "transfer_supplier").link_filters, { disabled: 0 })
+	assert.equal(field(buildStockHeaderFields("stock_entry", { purpose: "Send to Warehouse" }, editor), "additional_amount").fieldtype, "Currency")
+})
+
+test("protected completion entries show the added fields read-only", () => {
+	const fields = buildStockHeaderFields("stock_entry", { purpose: "DC Completion" }, { ...editor, protected_completion: true })
+	for (const fieldname of ["transfer_supplier", "vehicle_no", "terms_and_condition", "comments"]) assert.equal(field(fields, fieldname).read_only, true, fieldname)
 })
 
 test("changing supplier clears only a warehouse that does not belong to it", async () => {

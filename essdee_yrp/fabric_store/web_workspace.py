@@ -208,6 +208,8 @@ STOCK_OPERATION_FIELDS = {
 		"to_supplier",
 		"transfer_supplier",
 		"vehicle_no",
+		"terms_and_condition",
+		"additional_amount",
 		"comments",
 	},
 	"stock_reconciliation": {

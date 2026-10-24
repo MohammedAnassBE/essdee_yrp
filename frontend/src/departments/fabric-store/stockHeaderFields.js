@@ -21,6 +21,10 @@ export function buildStockHeaderFields(operation, form, editor) {
 		link("from_warehouse", "From Warehouse", "Warehouse", form.purpose !== "Material Receipt", protectedFields || receipt || form.purpose === "Material Receipt")
 		if (["Send to Warehouse", "Material Receipt", "Receive at Warehouse"].includes(form.purpose) || protectedFields) link("to_warehouse", "To Warehouse", "Warehouse", true, protectedFields || receipt)
 		if (form.purpose === "Send to Warehouse") fields.push({ fieldname: "skip_transit", label: "Skip Transit", fieldtype: "Check" })
+		link("transfer_supplier", "Transfer Supplier", "Supplier", false, protectedFields)
+		fields.push({ fieldname: "vehicle_no", label: "Vehicle No", fieldtype: "Data", read_only: protectedFields })
+		link("terms_and_condition", "Terms and Condition", "YRP Terms and Condition", false, protectedFields)
+		if (form.purpose === "Send to Warehouse") fields.push({ fieldname: "additional_amount", label: "Additional Amount", fieldtype: "Currency", read_only: protectedFields })
 	}
 	if (operation === "stock_reconciliation") {
 		link("default_supplier", "Supplier", "Supplier")
@@ -33,6 +37,7 @@ export function buildStockHeaderFields(operation, form, editor) {
 	}
 	if (editor.posting_fields?.length) fields.push({ fieldname: "edit_posting_date_and_time", label: "Edit Posting Date and Time", fieldtype: "Check", read_only: protectedFields })
 	for (const field of editor.posting_fields || []) fields.push({ ...field, fieldtype: field.fieldname === "posting_date" ? "Date" : "Time", reqd: field.reqd || Boolean(form.edit_posting_date_and_time), read_only: protectedFields || !form.edit_posting_date_and_time })
+	fields.push({ fieldname: "comments", label: "Comments", fieldtype: "Small Text", read_only: protectedFields })
 	for (const field of fields) {
 		if (field.options === "Supplier") field.link_filters = { disabled: 0 }
 		if (field.options === "Warehouse") {

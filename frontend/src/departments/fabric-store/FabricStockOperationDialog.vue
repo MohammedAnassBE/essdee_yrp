@@ -11,7 +11,7 @@
 		<div v-if="loading" class="fabric-stock-loading"><Skeleton v-for="index in 6" :key="index" height="3rem" /></div>
 		<div v-else class="fabric-stock-stack">
 			<section class="fabric-operation-fields">
-				<FormField v-for="field in headerFields" :key="field.fieldname" :class="{ 'fabric-select-field': field.fieldtype === 'Select' }" :field="field" :form="form" :search-handler="stockEntryFields.linkSearchHandlers[field.fieldname]?.(form)" :model-value="form[field.fieldname]" :required="Boolean(field.reqd)" :invalid="Boolean(fieldErrors[field.fieldname])" :error="fieldErrors[field.fieldname] || ''" :show-open-button="false" :show-clear="!field.read_only" @update:model-value="updateField(field.fieldname, $event)" />
+				<FormField v-for="field in headerFields" :key="field.fieldname" :class="{ 'fabric-select-field': field.fieldtype === 'Select', 'fabric-wide-field': field.fieldtype === 'Small Text' }" :field="field" :form="form" :search-handler="stockEntryFields.linkSearchHandlers[field.fieldname]?.(form)" :model-value="form[field.fieldname]" :required="Boolean(field.reqd)" :invalid="Boolean(fieldErrors[field.fieldname])" :error="fieldErrors[field.fieldname] || ''" :show-open-button="false" :show-clear="!field.read_only" @update:model-value="updateField(field.fieldname, $event)" />
 			</section>
 
 			<StockItemComposer
@@ -221,7 +221,7 @@ function requestVisibility(value) {
 	})
 	emit("update:visible", false)
 }
-function emptyForm() { return { from_supplier: "", to_supplier: "", outgoing_stock_entry: "", skip_transit: 0, purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, comments: "" } }
+function emptyForm() { return { from_supplier: "", to_supplier: "", outgoing_stock_entry: "", skip_transit: 0, purpose: "", update_type: "", from_warehouse: "", to_warehouse: "", default_warehouse: "", default_supplier: "", warehouse: "", supplier: "", posting_date: "", posting_time: "", edit_posting_date_and_time: 0, transfer_supplier: "", vehicle_no: "", terms_and_condition: "", additional_amount: 0, comments: "" } }
 function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 </script>
 
@@ -229,6 +229,7 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .fabric-stock-loading, .fabric-stock-stack { display: grid; gap: var(--erp-space-3); }
 .fabric-stock-stack { overflow-y: visible; padding: 1px; }
 .fabric-operation-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--erp-space-3); }
+.fabric-wide-field { grid-column: 1 / -1; }
 .fabric-select-field { display: grid; align-content: start; gap: 6px; }
 .fabric-select-field > span { color: #405047; font-size: var(--erp-font-size-caption); font-weight: 700; }
 .fabric-stock-footer { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; }

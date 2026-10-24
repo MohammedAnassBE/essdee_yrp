@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-const { assertCanvasFits, expandForCapture, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
+const { assertCanvasFits, CAPTURE_PRINT_CLASS, captureElementImage, expandForCapture, getCapturePixelRatio, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
 
 function node({ overflow = "visible", size = [100, 100], content = size, placeholder = null, tag = "div", textOverflow = "clip", clip = "auto", hidden = false } = {}) {
 	const attributes = placeholder === null ? {} : { placeholder }
@@ -9,7 +9,10 @@ function node({ overflow = "visible", size = [100, 100], content = size, placeho
 		cssText: "height: 40px;",
 		setProperty(property, value, priority) { this.cssText += ` ${property}: ${value} !${priority};` },
 	}
+	const classes = new Set()
 	const element = {
+		classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
+		innerText: "Report",
 		tag, overflow, textOverflow, clip, hidden, style, children: [],
 		clientWidth: size[0], clientHeight: size[1], scrollWidth: content[0], scrollHeight: content[1], offsetWidth: size[0],
 		getAttribute: name => attributes[name] ?? null,
@@ -100,4 +103,39 @@ test("copy refuses an image the browser cannot draw instead of shrinking it", ()
 	assert.doesNotThrow(() => assertCanvasFits(1600, 30_000))
 	assert.throws(() => assertCanvasFits(1600, 40_000), { message: TOO_LARGE_MESSAGE })
 	assert.throws(() => assertCanvasFits(12_000, 30_000), { message: TOO_LARGE_MESSAGE })
+})
+
+test("copy captures at 2x and steps down to 1.5x or 1x for large reports", () => {
+	assert.equal(getCapturePixelRatio(1400, 2_000), 2)
+	assert.equal(getCapturePixelRatio(1400, 5_000), 1.5)
+	assert.equal(getCapturePixelRatio(1400, 11_500), 1, "a 16 MP report keeps today's 1x speed")
+	assert.equal(getCapturePixelRatio(1600, 30_000), 1)
+	assert.throws(() => getCapturePixelRatio(1600, 40_000), { message: TOO_LARGE_MESSAGE })
+})
+
+test("copy renders in print mode at the chosen pixel ratio, then removes print mode", async () => {
+	const root = node({ size: [800, 600] })
+	let options = null
+	const render = (element, renderOptions) => {
+		assert.ok(element.classList.contains(CAPTURE_PRINT_CLASS), "print mode is on while rendering")
+		options = renderOptions
+		return "png"
+	}
+	const result = await captureElementImage(root, { view, render })
+	assert.deepEqual(result, { blob: "png", text: "Report" })
+	assert.equal(options.pixelRatio, 2)
+	assert.equal(options.backgroundColor, "#ffffff")
+	assert.equal(root.classList.contains(CAPTURE_PRINT_CLASS), false)
+})
+
+test("copy removes print mode and restores the page when the render fails", async () => {
+	const root = node({ overflow: "auto", size: [800, 110], content: [800, 420] })
+	const render = () => { throw new Error("render failed") }
+	await assert.rejects(captureElementImage(root, { view, render }), { message: "render failed" })
+	assert.equal(root.classList.contains(CAPTURE_PRINT_CLASS), false)
+	assert.equal(root.style.cssText, "height: 40px;")
+
+	const huge = node({ size: [1600, 40_000] })
+	await assert.rejects(captureElementImage(huge, { view, render }), { message: TOO_LARGE_MESSAGE })
+	assert.equal(huge.classList.contains(CAPTURE_PRINT_CLASS), false)
 })

@@ -138,6 +138,7 @@
 	--erp-layer-dropdown: 150;
 	--erp-layer-dialog: 200;
 	--erp-layer-toast: 300;
+	--erp-report-head-bg: #DEDAD0;
 }
 
 :root.erp-dark {
@@ -209,6 +210,7 @@
 	--erp-shadow-pop: 0 14px 40px rgba(0,0,0,.42);
 	--erp-shadow-button: 0 1px 2px rgba(0,0,0,.32);
 	--erp-on-accent: #0D0E0D;
+	--erp-report-head-bg: #2B2E29;
 }
 
 :root.erp-dark .workspace-load-error {
@@ -717,7 +719,7 @@
 	padding: var(--erp-table-cell-pad-y) var(--erp-table-cell-pad-x);
 	color: var(--erp-text-secondary);
 	font-size: var(--erp-font-size-table);
-	font-weight: var(--erp-font-weight-regular);
+	font-weight: var(--erp-table-cell-weight, var(--erp-font-weight-regular));
 	font-variant-numeric: tabular-nums;
 	border-bottom: 1px solid var(--erp-border-subtle);
 	vertical-align: middle;
@@ -2032,4 +2034,83 @@ table td.erp-number {
 
 .p-dialog .erp-editor-header {
 	top: 0;
+}
+
+/* Report tables: near-black text, darker header and stronger rules so shared or printed copies stay legible. */
+.report-shell__results table {
+	--erp-text: var(--erp-neutral-950);
+	--erp-text-secondary: var(--erp-neutral-950);
+	--erp-text-muted: var(--erp-neutral-800);
+	--erp-text-subtle: var(--erp-neutral-600);
+	--erp-border-subtle: var(--erp-neutral-400);
+	--erp-border: var(--erp-neutral-400);
+	--erp-border-strong: var(--erp-neutral-600);
+	--erp-surface-muted: var(--erp-report-head-bg);
+	--erp-table-cell-weight: var(--erp-font-weight-medium);
+	font-weight: var(--erp-font-weight-medium);
+	font-variant-numeric: tabular-nums;
+}
+
+.report-shell__results table thead th {
+	color: var(--erp-text);
+	font-weight: var(--erp-font-weight-bold);
+}
+
+.report-shell__results :is(.report-table-frame, .erp-table-wrap, .finishing-scroll) {
+	border-color: var(--erp-neutral-400);
+}
+
+/* Applied only while Copy Report captures: print colours whatever the theme. */
+.report-capture-print,
+.report-capture-print table {
+	color-scheme: light;
+	--erp-text: #000000;
+	--erp-text-secondary: #000000;
+	--erp-text-muted: #111111;
+	--erp-text-subtle: #333333;
+	--erp-neutral-400: #555555;
+	--erp-neutral-600: #333333;
+	--erp-neutral-800: #111111;
+	--erp-neutral-950: #000000;
+	--erp-bg: #FFFFFF;
+	--erp-canvas: #FFFFFF;
+	--erp-surface: #FFFFFF;
+	--erp-surface-raised: #FFFFFF;
+	--erp-surface-soft: #FFFFFF;
+	--erp-surface-hover: #FFFFFF;
+	--erp-surface-muted: #E5E5E5;
+	--erp-report-head-bg: #E5E5E5;
+	--erp-border-subtle: #555555;
+	--erp-border: #555555;
+	--erp-border-strong: #333333;
+	--erp-mint: #FFFFFF;
+	--erp-accent-soft: #FFFFFF;
+	--erp-accent-border: #555555;
+	--erp-accent: #9B4C32;
+	--erp-accent-dark: #7E3E29;
+	--erp-accent-ink: #7E3E29;
+	--erp-attention-soft: #FBF0DA;
+	--erp-attention-text: #92400E;
+	--erp-success-text: #147A48;
+	--erp-success-soft: #E4F4EB;
+	--erp-danger: #BE123C;
+	--erp-danger-soft: #FBE7E7;
+	--erp-info: #175CD3;
+	--erp-info-soft: #EFF8FF;
+	--erp-heat-positive: #C9E9D6;
+	--erp-heat-negative: #F5C9CF;
+	--erp-heat-zero: #F3E0AE;
+	--erp-heat-zero-inward: #C8E0EA;
+	background: #FFFFFF;
+	color: #000000;
+}
+
+.report-capture-print,
+.report-capture-print * {
+	box-shadow: none !important;
+	text-shadow: none !important;
+}
+
+.report-capture-print tbody tr {
+	background: #FFFFFF !important;
 }

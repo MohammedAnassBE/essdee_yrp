@@ -8,6 +8,12 @@ const PLAIN_INPUT_SELECTOR = "td input, td textarea, th input, th textarea"
 // Chromium and Firefox refuse canvases past these sizes.
 const MAX_CANVAS_SIDE = 32_767
 const MAX_CANVAS_AREA = 268_000_000
+// Sharpest first; larger reports scale down so encoding stays as fast as a 1x copy.
+const CAPTURE_PIXEL_RATIOS = [2, 1.5, 1]
+// Above about 24 MP the PNG encode slows sharply (a 65 MP copy took ten times as long).
+const MAX_SCALED_CAPTURE_PIXELS = 24_000_000
+/** Forces white background, black text and solid borders while a report is captured. */
+export const CAPTURE_PRINT_CLASS = "report-capture-print"
 export const TOO_LARGE_MESSAGE = "Report is too large to copy as one image. Narrow the filters or use Export."
 export const COPY_BLOCKED_MESSAGE = "The browser blocked the clipboard. Try Copy again or use Export."
 export const COPY_AGAIN_MESSAGE = "The report image is ready. Click Copy again to put it on the clipboard."
@@ -64,9 +70,37 @@ export function expandForCapture(element, view = window, { hide = [] } = {}) {
 	return () => { for (const undo of restore.reverse()) undo() }
 }
 
+export function isCanvasFitting(width, height) {
+	return width <= MAX_CANVAS_SIDE && height <= MAX_CANVAS_SIDE && width * height <= MAX_CANVAS_AREA
+}
+
 export function assertCanvasFits(width, height) {
-	if (width > MAX_CANVAS_SIDE || height > MAX_CANVAS_SIDE || width * height > MAX_CANVAS_AREA) {
-		throw new Error(TOO_LARGE_MESSAGE)
+	if (!isCanvasFitting(width, height)) throw new Error(TOO_LARGE_MESSAGE)
+}
+
+/** Largest capture scale within the scaled-pixel budget; 1x only needs the browser canvas limits. */
+export function getCapturePixelRatio(width, height) {
+	const isWithinBudget = scale => scale === 1 || width * height * scale * scale <= MAX_SCALED_CAPTURE_PIXELS
+	const ratio = CAPTURE_PIXEL_RATIOS.find(scale => isWithinBudget(scale) && isCanvasFitting(width * scale, height * scale))
+	if (!ratio) throw new Error(TOO_LARGE_MESSAGE)
+	return ratio
+}
+
+/** Renders `element` in print mode at full size and returns the PNG blob with its text; the page is restored even on error. */
+export async function captureElementImage(element, { hide = [], view = window, render = toBlob } = {}) {
+	element.classList.add(CAPTURE_PRINT_CLASS)
+	let restore = null
+	try {
+		restore = expandForCapture(element, view, { hide })
+		const width = Math.max(element.scrollWidth, element.clientWidth)
+		const height = Math.max(element.scrollHeight, element.clientHeight)
+		const pixelRatio = getCapturePixelRatio(width, height)
+		// html-to-image otherwise shrinks anything past 16384px until it is unreadable.
+		const blob = await render(element, { backgroundColor: "#ffffff", pixelRatio, width, height, skipAutoScale: true })
+		return { blob, text: element.innerText || "" }
+	} finally {
+		restore?.()
+		element.classList.remove(CAPTURE_PRINT_CLASS)
 	}
 }
 
@@ -74,18 +108,7 @@ export async function copyElementAsImage(element, { hide = [] } = {}) {
 	if (!element) throw new Error("Nothing available to copy.")
 	if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
 
-	const restore = expandForCapture(element, window, { hide })
-	let blob, text
-	try {
-		const width = Math.max(element.scrollWidth, element.clientWidth)
-		const height = Math.max(element.scrollHeight, element.clientHeight)
-		assertCanvasFits(width, height)
-		// html-to-image otherwise shrinks anything past 16384px until it is unreadable.
-		blob = await toBlob(element, { backgroundColor: "#ffffff", pixelRatio: 1, width, height, skipAutoScale: true })
-		text = element.innerText || ""
-	} finally {
-		restore()
-	}
+	const { blob, text } = await captureElementImage(element, { hide })
 	if (!blob) throw new Error(TOO_LARGE_MESSAGE)
 
 	await writeImageToClipboard(blob, text, { key: element })

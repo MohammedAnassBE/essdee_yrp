@@ -99,6 +99,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import {
+	PURCHASE_INVOICE_DISPLAY_FIELDS,
 	PURCHASE_INVOICE_EDITOR_GROUPS,
 	applySupplierChange,
 	cloneValue,
@@ -177,7 +178,9 @@ const canSave = computed(() => !loadFailed.value && FORM_FIELDS.every((fieldname
 const previewTotals = computed(() => purchaseInvoicePreviewTotals(items.value, taxRates.value))
 const editorGroups = computed(() => PURCHASE_INVOICE_EDITOR_GROUPS.map((group) => ({
 	...group,
-	fields: group.fields.map((fieldname) => purchaseInvoiceEditorField(fieldname, editor.value)),
+	fields: group.fields
+		.filter((fieldname) => !PURCHASE_INVOICE_DISPLAY_FIELDS.includes(fieldname) || hasValue(form[fieldname]))
+		.map((fieldname) => purchaseInvoiceEditorField(fieldname, editor.value)),
 })))
 
 async function load() {

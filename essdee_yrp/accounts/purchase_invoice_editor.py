@@ -30,6 +30,7 @@ EDITOR_FIELDS = (
 	"supplier",
 	"against",
 	"posting_date",
+	"posting_time",
 	"due_date",
 	"do_not_submit_invoice",
 	"bill_no",
@@ -41,6 +42,7 @@ EDITOR_FIELDS = (
 	"debit_value",
 	"remarks",
 )
+EDITOR_DISPLAY_FIELDS = ("gstin", "pan_no", "status", "amended_from")
 LOCKED_BILL_TRACKING_FIELDS = ["supplier", "bill_no", "bill_date"]
 MASKED_EDITOR_FIELDS = {"supplier", "billing_supplier"}
 COMMAND_PERMISSIONS = {
@@ -75,6 +77,7 @@ def _field_schema(doc, fieldname: str) -> dict:
 		"fieldtype": field.fieldtype,
 		"options": field.options,
 		"reqd": bool(field.reqd),
+		"read_only": bool(field.read_only),
 	}
 
 
@@ -86,7 +89,7 @@ def _editor_items(doc) -> list[dict]:
 
 
 def _editor_payload(doc, is_existing: bool, duplicate_billing_supplier: bool) -> dict:
-	fieldnames = (*EDITOR_FIELDS, "bill_tracking")
+	fieldnames = (*EDITOR_FIELDS, *EDITOR_DISPLAY_FIELDS, "bill_tracking")
 	bill_tracking = doc.get("bill_tracking")
 	rate_source = doc.get("essdee_rate_table_source")
 	values = {fieldname: doc.get(fieldname) for fieldname in fieldnames}
@@ -100,7 +103,10 @@ def _editor_payload(doc, is_existing: bool, duplicate_billing_supplier: bool) ->
 		"is_rate_only": rate_source == MIGRATED_RATE_SOURCE,
 		"modified": doc.get("modified") if is_existing else None,
 		"locked_fields": LOCKED_BILL_TRACKING_FIELDS if bill_tracking else [],
-		"schema": {fieldname: _field_schema(doc, fieldname) for fieldname in EDITOR_FIELDS},
+		"schema": {
+			fieldname: _field_schema(doc, fieldname)
+			for fieldname in (*EDITOR_FIELDS, *EDITOR_DISPLAY_FIELDS)
+		},
 	}
 
 

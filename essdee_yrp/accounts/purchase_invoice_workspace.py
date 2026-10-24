@@ -15,20 +15,34 @@ DOCTYPE = "YRP Purchase Invoice"
 PERMISSION_TYPES = ("read", "write", "create", "submit", "cancel", "delete", "amend", "print")
 NUMERIC_FIELD_TYPES = frozenset({"Currency", "Float", "Int", "Percent"})
 DETAIL_FIELDS = (
+	"supplier",
 	"against",
-	"posting_date",
 	"due_date",
+	"gstin",
+	"pan_no",
+	"posting_date",
+	"posting_time",
+	"do_not_submit_invoice",
+	"status",
+	"bill_no",
 	"billing_supplier",
 	"bill_date",
 	"bill_tracking",
-	"eligibility_for_itc",
 	"debit_type",
 	"debit_no",
 	"debit_value",
+	"total",
+	"total_tax",
+	"grand_total",
+	"in_words",
+	"amended_from",
 	"erp_inv_name",
 	"final_amount",
+	"eligibility_for_itc",
 	"remarks",
+	"cancel_without_cancelling_erp_inv",
 )
+SUPPLIER_LINK_FIELDS = frozenset({"supplier", "billing_supplier"})
 TOTAL_FIELDS = (
 	("total", _("Total")),
 	("total_tax", _("Total Tax")),
@@ -104,28 +118,40 @@ def _detail_field(doc, fieldname: str) -> dict:
 		"label": field.label if field and field.label else fieldname.replace("_", " ").title(),
 		"fieldtype": field.fieldtype if field else "Data",
 		"value": _supplier_display_name(doc, fieldname)
-		if fieldname == "billing_supplier"
+		if fieldname in SUPPLIER_LINK_FIELDS
 		else doc.get(fieldname),
 		"options": field.options if field else None,
 		**({"link_name": _invoice_link_name(doc, fieldname)} if field and field.fieldtype == "Link" else {}),
 	}
 
 
+def _has_detail_value(detail: dict) -> bool:
+	value = detail["value"]
+	if value in (None, ""):
+		return False
+	return not (detail["fieldtype"] in NUMERIC_FIELD_TYPES | {"Check"} and not value)
+
+
+def is_detail_visible(doc, fieldname: str, detail: dict) -> bool:
+	"""Mirror Desk: hide unreadable permlevels and empty fields the user cannot edit."""
+	field = doc.meta.get_field(fieldname)
+	permlevel = getattr(field, "permlevel", 0) or 0
+	if permlevel and not doc.has_permlevel_access_to(fieldname, field, "read"):
+		return False
+	if _has_detail_value(detail):
+		return True
+	is_editable = cint(doc.docstatus) == 0 or getattr(field, "allow_on_submit", 0)
+	return bool(is_editable) and not getattr(field, "read_only", 0)
+
+
 def serialize_purchase_invoice_details(doc, duplicate_billing_supplier: bool = False) -> list[dict]:
-	details = []
-	for fieldname in DETAIL_FIELDS:
-		if fieldname == "billing_supplier" and (
-			duplicate_billing_supplier or doc.get("billing_supplier") == doc.get("supplier")
-		):
-			continue
-		detail = _detail_field(doc, fieldname)
-		value = detail["value"]
-		if value in (None, ""):
-			continue
-		if detail["fieldtype"] in NUMERIC_FIELD_TYPES and value == 0:
-			continue
-		details.append(detail)
-	return details
+	details = {fieldname: _detail_field(doc, fieldname) for fieldname in DETAIL_FIELDS}
+	if duplicate_billing_supplier:
+		supplier = details["supplier"]
+		details["billing_supplier"].update(value=supplier["value"], link_name=supplier.get("link_name"))
+	return [
+		detail for fieldname, detail in details.items() if is_detail_visible(doc, fieldname, detail)
+	]
 
 
 def serialize_grouped_items(doc) -> list[dict]:

@@ -61,16 +61,23 @@ export const PURCHASE_INVOICE_LIST_COLUMNS = [
 ]
 
 export const PURCHASE_INVOICE_EDITOR_GROUPS = [
-	{ key: "invoice", eyebrow: "Document", label: "Invoice", fields: ["supplier", "against", "posting_date", "due_date", "do_not_submit_invoice"] },
+	{ key: "invoice", eyebrow: "Document", label: "Invoice", fields: ["supplier", "against", "due_date", "gstin", "pan_no", "posting_date", "posting_time", "do_not_submit_invoice", "status", "amended_from"] },
 	{ key: "supplier-bill", eyebrow: "Vendor invoice", label: "Supplier bill", fields: ["bill_no", "billing_supplier", "bill_date", "eligibility_for_itc"] },
 	{ key: "debit", eyebrow: "Adjustment", label: "Debit", fields: ["debit_type", "debit_no", "debit_value"] },
 	{ key: "notes", eyebrow: "Context", label: "Notes", fields: ["remarks"] },
 ]
 
+export const PURCHASE_INVOICE_DISPLAY_FIELDS = ["gstin", "pan_no", "status", "amended_from"]
+
 const PURCHASE_INVOICE_FALLBACK_SCHEMA = {
 	supplier: { label: "Supplier", fieldtype: "Link", options: "Supplier", reqd: true },
 	against: { label: "Against", fieldtype: "Select", options: "Purchase Order\nYRP Work Order", reqd: true },
 	posting_date: { label: "Posting Date", fieldtype: "Date", reqd: true },
+	posting_time: { label: "Posting Time", fieldtype: "Time", reqd: true },
+	gstin: { label: "GSTIN", fieldtype: "Data", read_only: true },
+	pan_no: { label: "PAN NO", fieldtype: "Data", read_only: true },
+	status: { label: "Status", fieldtype: "Select", read_only: true },
+	amended_from: { label: "Amended From", fieldtype: "Link", options: "YRP Purchase Invoice", read_only: true },
 	due_date: { label: "Due Date", fieldtype: "Date" },
 	do_not_submit_invoice: { label: "Do not submit Invoice", fieldtype: "Check" },
 	bill_no: { label: "Supplier Invoice No", fieldtype: "Data", reqd: true },
@@ -184,7 +191,7 @@ export function purchaseInvoiceEditorField(fieldname, editor = {}) {
 	const field = { ...PURCHASE_INVOICE_FALLBACK_SCHEMA[fieldname], ...(editor.schema?.[fieldname] || {}), fieldname }
 	if (fieldname === "supplier") field.link_filters = { disabled: 0 }
 	if (fieldname === "against") field.options = "Purchase Order\nYRP Work Order"
-	field.read_only = (editor.locked_fields || []).includes(fieldname)
+	field.read_only = Boolean(field.read_only) || (editor.locked_fields || []).includes(fieldname)
 	return field
 }
 
@@ -199,7 +206,8 @@ export function purchaseInvoicePreviewTotals(rows, taxRates) {
 }
 
 export function purchaseInvoiceSaveValues(form, fieldnames) {
-	const values = Object.fromEntries([...fieldnames, "bill_tracking"].map((fieldname) => [fieldname, form[fieldname]]))
+	const editableFieldnames = fieldnames.filter((fieldname) => !PURCHASE_INVOICE_DISPLAY_FIELDS.includes(fieldname))
+	const values = Object.fromEntries([...editableFieldnames, "bill_tracking"].map((fieldname) => [fieldname, form[fieldname]]))
 	if (isMaskedValue(values.supplier)) delete values.supplier
 	if (isMaskedValue(values.billing_supplier)) delete values.billing_supplier
 	return values

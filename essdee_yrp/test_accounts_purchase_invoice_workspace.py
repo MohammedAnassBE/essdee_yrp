@@ -147,40 +147,44 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 			frappe.db.rollback()
 			frappe.set_user(original_user)
 
-	def test_details_omit_zero_numeric_values_and_keep_nonzero_values_in_order(self):
-		from essdee_yrp.accounts.purchase_invoice_workspace import serialize_purchase_invoice_details
-
-		doc = FakeInvoice(
-			fieldtypes={
-				"eligibility_for_itc": "Percent",
-				"debit_no": "Int",
-				"debit_value": "Currency",
-				"final_amount": "Float",
-			},
-			against=None,
-			billing_supplier=None,
-			eligibility_for_itc=0,
-			debit_no=0,
-			debit_value=0,
-			final_amount=0.0,
-			remarks="Checked",
+	def test_details_follow_desk_visibility_in_desk_order(self):
+		from essdee_yrp.accounts.purchase_invoice_workspace import (
+			DETAIL_FIELDS,
+			serialize_purchase_invoice_details,
 		)
 
-		self.assertEqual(
-			[field["fieldname"] for field in serialize_purchase_invoice_details(doc)],
-			["remarks"],
+		field_flags = {
+			"gstin": {"read_only": 1},
+			"status": {"read_only": 1},
+			"final_amount": {"fieldtype": "Currency", "read_only": 1, "allow_on_submit": 1},
+			"debit_value": {"fieldtype": "Currency"},
+			"due_date": {"fieldtype": "Date", "allow_on_submit": 1},
+			"do_not_submit_invoice": {"fieldtype": "Check", "permlevel": 1},
+			"cancel_without_cancelling_erp_inv": {"fieldtype": "Check", "permlevel": 2, "allow_on_submit": 1},
+		}
+		doc = FakeInvoice(gstin=None, debit_value=0, final_amount=0, remarks="Checked")
+		doc.meta = SimpleNamespace(
+			get_field=lambda fieldname: SimpleNamespace(
+				label=fieldname.replace("_", " ").title(),
+				options=None,
+				**{"fieldtype": "Data", **field_flags.get(fieldname, {})},
+			)
 		)
+		doc.has_permlevel_access_to = lambda _fieldname, field, _ptype: field.permlevel == 1
 
-		doc.values.update({
-			"eligibility_for_itc": 5,
-			"debit_no": 2,
-			"debit_value": 125,
-			"final_amount": 130.5,
-		})
-		self.assertEqual(
-			[field["fieldname"] for field in serialize_purchase_invoice_details(doc)],
-			["eligibility_for_itc", "debit_no", "debit_value", "final_amount", "remarks"],
-		)
+		draft = [field["fieldname"] for field in serialize_purchase_invoice_details(doc)]
+		self.assertEqual(draft, [f for f in DETAIL_FIELDS if f not in {"gstin", "final_amount", "cancel_without_cancelling_erp_inv"}])
+		self.assertIn("billing_supplier", draft)
+
+		doc.docstatus = 1
+		doc.values.update({"gstin": "29ABCDE1234F1Z5", "final_amount": 10, "remarks": None})
+		submitted = [field["fieldname"] for field in serialize_purchase_invoice_details(doc)]
+		self.assertIn("gstin", submitted)
+		self.assertIn("final_amount", submitted)
+		self.assertIn("due_date", submitted)
+		self.assertNotIn("remarks", submitted)
+		self.assertNotIn("debit_value", submitted)
+		self.assertNotIn("do_not_submit_invoice", submitted)
 
 	def test_serialize_rows_handles_frappe_dict_rows(self):
 		from essdee_yrp.accounts.purchase_invoice_workspace import _serialize_rows
@@ -241,7 +245,7 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 			]["allowed"]
 		)
 
-	def test_workspace_requires_read_and_hides_duplicate_fields(self):
+	def test_workspace_requires_read_and_shows_desk_fields(self):
 		from essdee_yrp.accounts.purchase_invoice_workspace import get_purchase_invoice_workspace
 
 		doc = FakeInvoice(
@@ -293,9 +297,9 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 		self.assertIn("against", fieldnames)
 		self.assertIn("posting_date", fieldnames)
 		self.assertIn("remarks", fieldnames)
-		self.assertNotIn("billing_supplier", fieldnames)
+		self.assertIn("billing_supplier", fieldnames)
+		self.assertIn("gstin", fieldnames)
 		self.assertNotIn("naming_series", fieldnames)
-		self.assertNotIn("gstin", fieldnames)
 
 	def test_workspace_serializes_masked_and_field_permitted_values(self):
 		from essdee_yrp.accounts.purchase_invoice_workspace import get_purchase_invoice_workspace
@@ -312,6 +316,13 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 			doc.values.pop("remarks")
 
 		doc.apply_fieldlevel_read_permissions = apply_field_permissions
+		base_field = doc.get_meta_field
+		doc.meta = SimpleNamespace(
+			get_field=lambda fieldname: SimpleNamespace(
+				**vars(base_field(fieldname)), permlevel=1 if fieldname == "remarks" else 0
+			)
+		)
+		doc.has_permlevel_access_to = lambda *_args: False
 		with (
 			patch(
 				"essdee_yrp.accounts.purchase_invoice_workspace.frappe.get_doc",
@@ -332,10 +343,10 @@ class TestPurchaseInvoiceWorkspace(TestCase):
 		):
 			payload = get_purchase_invoice_workspace(doc.name)
 
-		fieldnames = [field["fieldname"] for field in payload["details"]]
+		details = {field["fieldname"]: field for field in payload["details"]}
 		self.assertEqual(payload["record"]["supplier"], "XXXXXXXX")
-		self.assertNotIn("billing_supplier", fieldnames)
-		self.assertNotIn("remarks", fieldnames)
+		self.assertEqual(details["billing_supplier"]["value"], "XXXXXXXX")
+		self.assertNotIn("remarks", details)
 		self.assertEqual(doc.fieldlevel_permissions_applied, 1)
 
 	def test_workspace_computes_permissions_and_actions_before_masking(self):

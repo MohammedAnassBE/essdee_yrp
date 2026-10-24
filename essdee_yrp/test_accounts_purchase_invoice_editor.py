@@ -34,6 +34,7 @@ class FakeMeta:
 			fieldtype=fieldtype,
 			options=None,
 			reqd=fieldname in {"supplier", "bill_no", "bill_date"},
+			read_only=fieldname in {"gstin", "pan_no", "status", "amended_from"},
 		)
 
 
@@ -739,6 +740,31 @@ class TestPurchaseInvoiceEditor(TestCase):
 
 		self.assertEqual(doc.get("status"), "Draft")
 		self.assertIsNone(doc.get("approved_by"))
+
+	def test_save_applies_posting_time_but_not_display_fields(self):
+		doc = FakeInvoice(posting_time="10:00:00", gstin=None, pan_no=None, amended_from=None)
+
+		self.save_existing(
+			doc,
+			values={"posting_time": "11:30:00", "gstin": "29ABCDE1234F1Z5", "pan_no": "ABCDE1234F", "amended_from": "X"},
+		)
+
+		self.assertEqual(doc.get("posting_time"), "11:30:00")
+		self.assertIsNone(doc.get("gstin"))
+		self.assertIsNone(doc.get("pan_no"))
+		self.assertIsNone(doc.get("amended_from"))
+
+	def test_editor_payload_carries_read_only_desk_fields(self):
+		from essdee_yrp.accounts.purchase_invoice_editor import _editor_payload
+
+		doc = FakeInvoice(posting_time="10:00:00", gstin="29ABCDE1234F1Z5", pan_no=None, amended_from=None)
+		payload = _editor_payload(doc, True, False)
+
+		self.assertEqual(payload["values"]["posting_time"], "10:00:00")
+		self.assertEqual(payload["values"]["gstin"], "29ABCDE1234F1Z5")
+		self.assertTrue(payload["schema"]["gstin"]["read_only"])
+		self.assertTrue(payload["schema"]["status"]["read_only"])
+		self.assertFalse(payload["schema"]["posting_time"]["read_only"])
 
 	def test_save_keeps_the_erp_bill_as_draft_choice(self):
 		doc = FakeInvoice(do_not_submit_invoice=0)

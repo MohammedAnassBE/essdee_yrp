@@ -4,6 +4,7 @@
 			class="purchase-invoice-overview__groups"
 			:fields="fields"
 			:definitions="invoiceDefinitions"
+			include-empty
 			aria-label="Invoice details"
 			id-prefix="purchase-invoice-invoice"
 		/>
@@ -20,7 +21,7 @@
 				<div v-for="field in supplierFields" :key="field.fieldname">
 					<dt>{{ field.label }}</dt>
 					<dd :title="String(formatDocumentOverviewValue(field))">
-						<DocumentLink v-if="linkFieldTarget(field)" v-bind="linkFieldTarget(field)" :label="formatDocumentOverviewValue(field)" />
+						<DocumentLink v-if="documentOverviewHasValue(field.value) && linkFieldTarget(field)" v-bind="linkFieldTarget(field)" :label="formatDocumentOverviewValue(field)" />
 						<template v-else>{{ formatDocumentOverviewValue(field) }}</template>
 					</dd>
 				</div>
@@ -30,6 +31,7 @@
 			class="purchase-invoice-overview__groups"
 			:fields="fields"
 			:definitions="remainingDefinitions"
+			include-empty
 			aria-label="Purchase Invoice details"
 			id-prefix="purchase-invoice-details"
 		/>
@@ -56,10 +58,10 @@ const invoiceDefinitions = [
 		key: "invoice",
 		label: "Invoice",
 		icon: "pi pi-file-edit",
-		fields: ["against", "posting_date", "due_date"],
+		fields: ["supplier", "against", "due_date", "gstin", "pan_no", "posting_date", "posting_time", "do_not_submit_invoice", "status"],
 	},
 ]
-const supplierFieldnames = ["billing_supplier", "bill_date", "bill_tracking", "eligibility_for_itc"]
+const supplierFieldnames = ["bill_no", "billing_supplier", "bill_date", "bill_tracking", "eligibility_for_itc"]
 const remainingDefinitions = [
 	{
 		key: "debit",
@@ -68,10 +70,16 @@ const remainingDefinitions = [
 		fields: ["debit_type", "debit_no", "debit_value"],
 	},
 	{
+		key: "totals",
+		label: "Totals",
+		icon: "pi pi-calculator",
+		fields: ["total", "total_tax", "grand_total", "in_words", "amended_from"],
+	},
+	{
 		key: "erp-bill",
 		label: "ERP bill",
 		icon: "pi pi-receipt",
-		fields: ["erp_inv_name", "final_amount"],
+		fields: ["erp_inv_name", "final_amount", "cancel_without_cancelling_erp_inv"],
 	},
 	{
 		key: "notes",
@@ -85,7 +93,7 @@ const supplierFields = computed(() => {
 	const fieldsByName = new Map(props.fields.map((field) => [field.fieldname, field]))
 	return supplierFieldnames
 		.map((fieldname) => fieldsByName.get(fieldname))
-		.filter((field) => field && documentOverviewHasValue(field.value))
+		.filter(Boolean)
 })
 
 </script>

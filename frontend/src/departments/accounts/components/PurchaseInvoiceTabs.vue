@@ -2,21 +2,20 @@
 	<Tabs :value="activeTab" class="purchase-invoice-tabs erp-tabs" @update:value="emit('update:active-tab', $event)">
 		<TabList>
 			<Tab value="details">Details</Tab>
-			<Tab value="items">Items <span>{{ workspace.items?.length || 0 }}</span></Tab>
-			<Tab value="grns">GRNs <span>{{ workspace.grns?.length || 0 }}</span></Tab>
+			<Tab value="items">Items &amp; GRNs</Tab>
 			<Tab v-if="workspace.record?.against === 'YRP Work Order'" value="verification">Verification</Tab>
 		</TabList>
 		<TabPanels>
 			<TabPanel value="details">
 				<PurchaseInvoiceOverview :fields="workspace.details || []" />
 			</TabPanel>
-			<TabPanel value="items">
+			<TabPanel value="items" class="purchase-invoice-items-grns">
+				<h2 class="purchase-invoice-section-title">Items <span>{{ workspace.items?.length || 0 }}</span></h2>
 				<PurchaseInvoiceGroupedItems
 					:rows="workspace.items || []"
 					:erp-sync-enabled="Boolean(workspace.erp_sync_enabled)"
 				/>
-			</TabPanel>
-			<TabPanel value="grns">
+				<h2 class="purchase-invoice-section-title">GRNs <span>{{ workspace.grns?.length || 0 }}</span></h2>
 				<section class="purchase-invoice-grns erp-card" aria-label="Purchase Invoice GRNs">
 					<div v-if="workspace.grns?.length" class="purchase-invoice-grns__table" role="region" tabindex="0">
 						<table>
@@ -90,6 +89,10 @@ function number(input) {
 .purchase-invoice-tabs :deep(.p-tablist-tab-list) { padding-inline: 2px; }
 .purchase-invoice-tabs :deep(.p-tab > span) { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); }
 .purchase-invoice-tabs :deep(.p-tabpanels) { min-height: 0; padding: 12px 0 0; overflow-y: auto; background: transparent; }
+.purchase-invoice-items-grns { display: grid; gap: var(--erp-space-2); }
+.purchase-invoice-section-title { margin: 0; color: var(--erp-text-secondary); font-size: var(--erp-font-size-table); font-weight: var(--erp-font-weight-bold); }
+.purchase-invoice-section-title:not(:first-child) { margin-top: var(--erp-space-3); }
+.purchase-invoice-section-title > span { margin-left: 5px; padding: 2px 6px; color: var(--erp-text-muted); background: var(--erp-surface-muted); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 600; }
 .purchase-invoice-grns { min-width: 0; overflow: hidden; border-color: var(--erp-border); box-shadow: var(--erp-shadow-xs); }
 .purchase-invoice-grns__table { max-width: 100%; overflow: auto; }
 .purchase-invoice-grns__table table { width: 100%; min-width: 850px; border-collapse: collapse; font-size: var(--erp-font-size-caption); }

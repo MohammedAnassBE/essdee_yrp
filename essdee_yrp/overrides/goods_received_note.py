@@ -40,6 +40,11 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 	"""Use base YRP normally; specialize only an Essdee return GRN."""
 
 	def get_item_details_for_ui(self):
+		empty_draft_rows = get_empty_draft_rows(self)
+		if empty_draft_rows is not None:
+			from yrp.stock.save_stock_items import group_items_for_ui
+
+			return group_items_for_ui(empty_draft_rows, "YRP Goods Received Note")
 		if self.get("additional_grn") and self.against == "YRP Work Order":
 			from yrp.stock.save_stock_items import group_items_for_ui
 
@@ -275,8 +280,7 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 		if not same_warehouse:
 			return super().validate_items()
 
-		if not (self.get("items") or self.get("correction_items")):
-			frappe.throw(_("At least one receivable or correction item is required."))
+		self.validate_has_received_quantity()
 		if self.against == "YRP Work Order" and not self.from_warehouse:
 			frappe.throw(_("From Warehouse is required."))
 		if not self.to_warehouse:
@@ -886,6 +890,54 @@ def get_work_order_defaults(work_order, delivery_challan=None):
 	defaults["items"] = items
 	defaults["item_details"] = group_items_for_ui(items, "YRP Goods Received Note")
 	return defaults
+
+
+BUILDER_SOURCE_FIELDS = (
+	"is_return",
+	"is_rework",
+	"includes_packing",
+	"cutting_laysheet",
+	"cut_panel_movement",
+	"from_closed_wo_sewing_details",
+	"from_finishing",
+)
+
+
+def get_empty_draft_rows(grn):
+	"""Zero-quantity source rows for a saved draft that has no receipt rows yet.
+
+	Returns None when the GRN already has rows or its rows come from a builder.
+	"""
+	if grn.docstatus != 0 or not grn.get("against_id") or grn.get("items") or grn.get("correction_items"):
+		return None
+	if any(grn.get(fieldname) for fieldname in BUILDER_SOURCE_FIELDS):
+		return None
+	from yrp.stock.dimensions import apply_dimension_defaults
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import (
+		_apply_dimension_values_to_rows,
+		_get_production_group_dimensions,
+		_pending_purchase_order_rows,
+		_pending_receivable_rows,
+	)
+
+	source = frappe.get_doc(grn.against, grn.against_id)
+	if grn.against == "Purchase Order":
+		rows = _pending_purchase_order_rows(source, existing_rows=[])
+	elif grn.get("additional_grn"):
+		from essdee_yrp.additional_grn import get_receivable_rows
+
+		return get_receivable_rows(source)
+	else:
+		delivery_challan = (
+			frappe.get_doc("YRP Delivery Challan", grn.delivery_challan)
+			if grn.get("delivery_challan")
+			else None
+		)
+		rows = _pending_receivable_rows(source, existing_rows=[], delivery_challan=delivery_challan)
+		rows = normalize_cutting_grn_row_indexes(_only_default_received_type(rows))
+	_apply_dimension_values_to_rows(rows, _get_production_group_dimensions(source))
+	apply_dimension_defaults(rows)
+	return rows
 
 
 def _default_received_type():

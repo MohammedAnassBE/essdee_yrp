@@ -51,6 +51,7 @@ from essdee_yrp.garment_grn import (
 )
 from essdee_yrp.overrides.goods_received_note import (
 	_lock_versioned_cloth_lot,
+	get_empty_draft_rows,
 	get_work_order_defaults,
 )
 from essdee_yrp.overrides.inspection_entry import (
@@ -1159,6 +1160,10 @@ def save_goods_received_note(
 		authoritative_corrections = [
 			_row_dict(row) for row in (doc.get("correction_items") or [])
 		]
+		# A draft saved without quantities merges onto the rows a new GRN would offer.
+		matrix_source_items = authoritative_items or [
+			_row_dict(row) for row in (get_empty_draft_rows(doc) or [])
+		]
 	else:
 		frappe.has_permission("YRP Goods Received Note", ptype="create", throw=True)
 		_source, against, against_id, delivery_challan = _resolve_source(values)
@@ -1175,6 +1180,7 @@ def save_goods_received_note(
 		authoritative_corrections = [
 			_row_dict(row) for row in (defaults.get("correction_items") or [])
 		]
+		matrix_source_items = authoritative_items
 
 	if submitted_update:
 		doc.update(
@@ -1200,7 +1206,7 @@ def save_goods_received_note(
 		)
 		items = (
 			_merge_authoritative_rows(
-				authoritative_items,
+				matrix_source_items,
 				browser_items,
 				actual_dia_context=_actual_dia_context(doc),
 				**(_purchase_order_lot_context(doc) if cint(doc.docstatus) == 0 else {}),

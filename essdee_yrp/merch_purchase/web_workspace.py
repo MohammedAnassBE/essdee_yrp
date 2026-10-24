@@ -8,7 +8,7 @@ from essdee_yrp.purchase import web_capabilities as purchase
 from essdee_yrp.web_common import report_access_scope
 
 # Fabric Store sections the Purchase department shows; its reports come with them.
-PURCHASE_STORE_SECTIONS = ("purchase_orders", "stock_transfers")
+PURCHASE_STORE_SECTIONS = ("purchase_orders", "stock_transfers", "item_conversions")
 CUT_PANEL_SECTIONS = ("box_stickers", "excel_stickers")
 
 

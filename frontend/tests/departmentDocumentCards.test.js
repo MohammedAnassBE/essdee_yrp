@@ -253,6 +253,7 @@ function documentSection(basePath, { processes = async () => ["Stitching"], capa
 		"./fabric-store/FabricPurchaseOrders.vue": stub("purchase"),
 		"./fabric-store/FabricReports.vue": stub("reports"),
 		"./fabric-store/FabricStockTransfers.vue": stub("transfers"),
+		"./fabric-store/item-conversion/ItemConversions.vue": stub("item-conversions"),
 		"./fabric-store/FabricWorkOrders.vue": stub("work-orders"),
 	})
 	const prefix = DEPARTMENTS[basePath].prefix

@@ -97,6 +97,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 				"SD YRP Lot Transfer",
 				"YRP Delivery Challan",
 				"YRP Goods Received Note",
+				"SD YRP Item Conversion",
 			},
 		)
 
@@ -145,7 +146,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 		)
 
 	def test_capabilities_omit_unreadable_sections_and_operations(self):
-		unreadable = {"Purchase Order", "SD YRP Lot Transfer", "YRP Goods Received Note"}
+		unreadable = {"Purchase Order", "SD YRP Lot Transfer", "YRP Goods Received Note", "SD YRP Item Conversion"}
 
 		def has_permission(doctype, ptype="read", **kwargs):
 			if ptype == "read":
@@ -160,6 +161,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 
 		self.assertIn("work_orders", payload["sections"])
 		self.assertNotIn("purchase_orders", payload["sections"])
+		self.assertNotIn("item_conversions", payload["sections"])
 		self.assertIn("stock_transfers", payload["sections"])
 		self.assertNotIn(
 			"lot_transfer",
@@ -192,6 +194,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 			payload["sections"]["work_orders"]["doctype"],
 			DOCUMENT_KEYS["work_orders"],
 		)
+		self.assertEqual(payload["sections"]["item_conversions"]["doctype"], "SD YRP Item Conversion")
 
 	def test_capabilities_expose_each_permitted_shared_report(self):
 		permitted_reports = {

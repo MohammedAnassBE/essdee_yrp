@@ -13,7 +13,7 @@ export const departments = [
 		label: "Fabric Store",
 		shortLabel: "FS",
 		path: "/fabric-store",
-		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", reports: "reports" },
+		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", item_conversions: "item-conversions", reports: "reports" },
 		component: () => import("./FabricStore.vue"),
 	},
 	{
@@ -29,7 +29,7 @@ export const departments = [
 		label: "Accessory Store",
 		shortLabel: "AS",
 		path: "/accessory-store",
-		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", excel_stickers: "excel-sticker-prints", reports: "reports" },
+		sections: { work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", purchase_orders: ["purchase-orders", "goods-received-notes"], stock_transfers: "stock-transfers", item_conversions: "item-conversions", excel_stickers: "excel-sticker-prints", reports: "reports" },
 		component: () => import("./AccessoryStore.vue"),
 	},
 	{
@@ -71,7 +71,7 @@ export const departments = [
 		label: "Purchase",
 		shortLabel: "PU",
 		path: "/purchase",
-		sections: { lots: "lots", items: "items", item_prices: "item-prices", bill_tracking: "bill-tracking", goods_received_notes: "goods-received-notes", purchase_orders: "purchase-orders", stock_transfers: "stock-transfers", box_stickers: "box-sticker-prints", excel_stickers: "excel-sticker-prints", reports: "reports" },
+		sections: { lots: "lots", items: "items", item_prices: "item-prices", bill_tracking: "bill-tracking", goods_received_notes: "goods-received-notes", purchase_orders: "purchase-orders", stock_transfers: "stock-transfers", item_conversions: "item-conversions", box_stickers: "box-sticker-prints", excel_stickers: "excel-sticker-prints", reports: "reports" },
 		component: () => import("./Purchase.vue"),
 	},
 	{

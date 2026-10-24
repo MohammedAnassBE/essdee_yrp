@@ -26,6 +26,7 @@ import FabricPurchaseOrders from "./fabric-store/FabricPurchaseOrders.vue"
 import FabricReports from "./fabric-store/FabricReports.vue"
 import FabricStockTransfers from "./fabric-store/FabricStockTransfers.vue"
 import FabricWorkOrders from "./fabric-store/FabricWorkOrders.vue"
+import ItemConversions from "./fabric-store/item-conversion/ItemConversions.vue"
 import CutPanelDocuments from "./cut-panel-store/CutPanelDocuments.vue"
 
 const props = defineProps({
@@ -48,6 +49,7 @@ const definitions = {
 	goods_received_notes: { label: "Goods Received Notes", component: CutPanelDocuments },
 	purchase_orders: { label: "Purchase Orders", component: FabricPurchaseOrders },
 	stock_transfers: { label: "Stock Transfers", component: FabricStockTransfers },
+	item_conversions: { label: "Item Conversions", component: ItemConversions },
 	reports: { label: "Reports", component: FabricReports },
 }
 const definition = computed(() => definitions[props.section] || definitions.work_orders)

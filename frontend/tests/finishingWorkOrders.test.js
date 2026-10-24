@@ -72,6 +72,7 @@ function workOrderSection(capabilities) {
 		"./fabric-store/FabricPurchaseOrders.vue": stub("purchase"),
 		"./fabric-store/FabricReports.vue": stub("reports"),
 		"./fabric-store/FabricStockTransfers.vue": stub("transfers"),
+		"./fabric-store/item-conversion/ItemConversions.vue": stub("item-conversions"),
 	})
 	const props = { section: "work_orders", basePath: "/finishing", storeName: "Finishing", workOrderViewRouteName: "finishing-work-order" }
 	return { root: mountComponent(section, props), requests }

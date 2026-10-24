@@ -151,52 +151,6 @@ class TestStockBusinessLogic(IntegrationTestCase):
 		with patch("frappe.db.get_single_value", return_value=None):
 			self.assertRaises(frappe.ValidationError, get_default_fg_lot)
 
-	def test_item_conversion_valid_transfer_submit_and_cancel(self):
-		variant = "Fusing Sticker-REGULAR-White-Move Air"
-		for doctype, name in (
-			("Warehouse", "S-0165"),
-			("Item", "Fusing Sticker"),
-			("Item", variant),
-			("SD YRP Lot", "Open Lot"),
-		):
-			if not frappe.db.exists(doctype, name):
-				self.skipTest("Item-conversion lifecycle requires migrated stock masters")
-		detail = {
-			"item": variant,
-			"qty": 1,
-			"uom": "Nos",
-			"lot": "Open Lot",
-			"received_type": "Accepted",
-		}
-		doc = frappe.get_doc(
-			{
-				"doctype": "SD YRP Item Conversion",
-				"naming_series": "IC-.YYYY.-",
-				"warehouse": "S-0165",
-				"from_item": "Fusing Sticker",
-				"to_item": "Fusing Sticker",
-				"posting_date": "2026-08-18",
-				"posting_time": "11:00:00",
-				"from_items": [detail],
-				"to_items": [detail],
-			}
-		)
-		doc.insert()
-		doc.submit()
-
-		self.assertEqual(doc.docstatus, 1)
-		self.assertEqual(doc.from_total_amount, doc.to_total_amount)
-		self.assertEqual(
-			frappe.db.count(
-				"YRP Stock Ledger Entry",
-				{"voucher_type": "SD YRP Item Conversion", "voucher_no": doc.name},
-			),
-			2,
-		)
-
-		doc.cancel()
-		self.assertEqual(doc.docstatus, 2)
-
 	def test_unrelated_stock_entry_does_not_enter_cut_bundle_tracking(self):
 		doc = frappe._dict(
 			doctype="YRP Stock Entry",

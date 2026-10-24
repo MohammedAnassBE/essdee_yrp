@@ -46,6 +46,7 @@ function workOrderList(basePath, { processes = async () => ["Stitching", "Finish
 		"./fabric-store/FabricPurchaseOrders.vue": stub("purchase"),
 		"./fabric-store/FabricReports.vue": stub("reports"),
 		"./fabric-store/FabricStockTransfers.vue": stub("transfers"),
+		"./fabric-store/item-conversion/ItemConversions.vue": stub("item-conversions"),
 	})
 	const props = Vue.reactive({ section: "work_orders", basePath, storeName: "Quality", workOrderViewRouteName: "quality-work-order" })
 	return { root: mountComponent(section, props), props, requests, navigations }

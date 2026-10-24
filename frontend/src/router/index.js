@@ -455,6 +455,12 @@ const routes = [
 		props: { section: "stock_transfers" },
 	},
 	{
+		path: "/fabric-store/item-conversions",
+		name: "fabric-item-conversions",
+		component: FabricStoreSection,
+		props: { section: "item_conversions" },
+	},
+	{
 		path: "/fabric-store/reports",
 		name: "fabric-reports",
 		component: FabricStoreSection,
@@ -576,6 +582,12 @@ const routes = [
 		name: "accessory-stock-transfers",
 		component: FabricStoreSection,
 		props: { section: "stock_transfers", storeName: "Accessory Store", basePath: "/accessory-store" },
+	},
+	{
+		path: "/accessory-store/item-conversions",
+		name: "accessory-item-conversions",
+		component: FabricStoreSection,
+		props: { section: "item_conversions", storeName: "Accessory Store", basePath: "/accessory-store" },
 	},
 	{
 		path: "/accessory-store/reports",
@@ -920,6 +932,12 @@ const routes = [
 		name: "purchase-stock-transfers",
 		component: FabricStoreSection,
 		props: { section: "stock_transfers", storeName: "Purchase", basePath: "/purchase" },
+	},
+	{
+		path: "/purchase/item-conversions",
+		name: "purchase-item-conversions",
+		component: FabricStoreSection,
+		props: { section: "item_conversions", storeName: "Purchase", basePath: "/purchase" },
 	},
 	{
 		path: "/purchase/box-sticker-prints",

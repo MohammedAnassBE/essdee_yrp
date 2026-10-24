@@ -120,14 +120,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Fabric Store department workspace only: work_orders, delivery_challans, goods_received_notes, purchase_orders, stock_transfers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"item_conversions\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Fabric Store department workspace only: work_orders, delivery_challans, goods_received_notes, purchase_orders, stock_transfers, item_conversions, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "fabric-store",
   "layout_name": "Fabric Store",
-  "modified": "2026-10-22 13:32:41.347920",
+  "modified": "2026-10-24 15:05:20.846017",
   "name": "Fabric Store",
   "render_mode": "Registered Experience"
  },
@@ -144,14 +144,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Accessory Store department workspace only: work_orders, delivery_challans, goods_received_notes, purchase_orders, stock_transfers, excel_stickers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"item_conversions\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Accessory Store department workspace only: work_orders, delivery_challans, goods_received_notes, purchase_orders, stock_transfers, item_conversions, excel_stickers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "accessory-store",
   "layout_name": "Accessory Store",
-  "modified": "2026-10-22 13:32:41.683911",
+  "modified": "2026-10-24 15:05:20.960144",
   "name": "Accessory Store",
   "render_mode": "Registered Experience"
  },
@@ -180,14 +180,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"items\",\n   \"item_prices\",\n   \"bill_tracking\",\n   \"goods_received_notes\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Purchase department workspace only: lots, items, item_prices, bill_tracking, goods_received_notes, purchase_orders, stock_transfers, box_stickers, excel_stickers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"items\",\n   \"item_prices\",\n   \"bill_tracking\",\n   \"goods_received_notes\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"item_conversions\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Purchase department workspace only: lots, items, item_prices, bill_tracking, goods_received_notes, purchase_orders, stock_transfers, item_conversions, box_stickers, excel_stickers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "purchase",
   "layout_name": "Purchase",
-  "modified": "2026-10-23 11:19:19.794786",
+  "modified": "2026-10-24 15:05:20.963975",
   "name": "Purchase",
   "render_mode": "Registered Experience"
  },
@@ -276,14 +276,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"item_production_details\",\n   \"production_orders\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"process_costs\",\n   \"bill_tracking\",\n   \"purchase_invoices\",\n   \"items\",\n   \"item_prices\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Merch & Purchase department workspace only: lots, item_production_details, production_orders, work_orders, delivery_challans, goods_received_notes, process_costs, bill_tracking, purchase_invoices, items, item_prices, purchase_orders, stock_transfers, box_stickers, excel_stickers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"item_production_details\",\n   \"production_orders\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"process_costs\",\n   \"bill_tracking\",\n   \"purchase_invoices\",\n   \"items\",\n   \"item_prices\",\n   \"purchase_orders\",\n   \"stock_transfers\",\n   \"item_conversions\",\n   \"box_stickers\",\n   \"excel_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Merch & Purchase department workspace only: lots, item_production_details, production_orders, work_orders, delivery_challans, goods_received_notes, process_costs, bill_tracking, purchase_invoices, items, item_prices, purchase_orders, stock_transfers, item_conversions, box_stickers, excel_stickers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "merch-purchase",
   "layout_name": "Merch & Purchase",
-  "modified": "2026-10-22 13:32:41.801050",
+  "modified": "2026-10-24 15:05:20.966500",
   "name": "Merch & Purchase",
   "render_mode": "Registered Experience"
  },

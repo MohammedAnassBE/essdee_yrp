@@ -34,7 +34,7 @@ function loadRouter() {
 
 test("Merch & Purchase combines every Merch and Purchase card once", () => {
 	const keys = items.map((item) => item.key)
-	assert.deepEqual(keys, ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "process_costs", "bill_tracking", "purchase_invoices", "items", "item_prices", "purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"])
+	assert.deepEqual(keys, ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "process_costs", "bill_tracking", "purchase_invoices", "items", "item_prices", "purchase_orders", "stock_transfers", "item_conversions", "box_stickers", "excel_stickers", "reports"])
 	assert.equal(new Set(keys).size, keys.length)
 	for (const key of [...merchLauncherItems(), ...purchaseLauncherItems()].map((item) => item.key).concat(PURCHASE_STORE_WORKSPACE_KEYS)) assert.ok(keys.includes(key), key)
 	assert.deepEqual(items.filter((item) => item.label === "Lot").map((item) => item.to), ["/merch/lots"])

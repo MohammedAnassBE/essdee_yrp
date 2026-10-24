@@ -9,7 +9,8 @@ frappe.ui.form.on("SD YRP Item Conversion", {
 		}
 	},
 	refresh(frm) {
-		if (frm.doc.docstatus === 1) frm.page.btn_secondary.hide();
+		frm.page.btn_secondary.hide();
+		if (frm.doc.docstatus === 1 && frm.perm[0]?.cancel) frm.add_custom_button(__("Cancel"), () => frm._cancel());
 	},
 	warehouse(frm) { frm.item_conversion?.refresh_from_rates(); },
 	from_item(frm) { frm.item_conversion?.refresh_from_rates(); },

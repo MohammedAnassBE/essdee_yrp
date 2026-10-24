@@ -25,6 +25,7 @@ STORE = {
 		"work_orders": {"label": "Work Orders", "can_read": True},
 		"purchase_orders": {"label": "Purchase Orders", "can_read": True, "can_create": True},
 		"stock_transfers": {"label": "Stock Transfers", "operations": {"stock_entry": {"can_read": True}}},
+		"item_conversions": {"label": "Item Conversions", "doctype": "SD YRP Item Conversion", "can_read": True, "can_create": True},
 		"reports": {"label": "Reports", "reports": {"stock_balance": {"label": "Stock Balance", "can_read": True}, "grn_report": {"label": "GRN Report", "can_read": True}}},
 	},
 }
@@ -56,7 +57,7 @@ class TestMerchPurchaseWebWorkspace(TestCase):
 		sections = self.get_capabilities()["sections"]
 		self.assertEqual(
 			list(sections),
-			["lots", "production_orders", "work_orders", "items", "purchase_orders", "stock_transfers", "box_stickers", "excel_stickers", "reports"],
+			["lots", "production_orders", "work_orders", "items", "purchase_orders", "stock_transfers", "item_conversions", "box_stickers", "excel_stickers", "reports"],
 		)
 		self.assertEqual(sections["excel_stickers"], CUT_PANEL["sections"]["excel_stickers"])
 		self.assertEqual(sections["lots"], {
@@ -64,6 +65,7 @@ class TestMerchPurchaseWebWorkspace(TestCase):
 		})
 		self.assertEqual(sections["work_orders"], MERCH["sections"]["work_orders"], "Merch owns Work Orders; the store copy is not used")
 		self.assertTrue(sections["stock_transfers"]["can_read"])
+		self.assertEqual(sections["item_conversions"], STORE["sections"]["item_conversions"])
 		self.assertNotIn("movements", sections)
 
 	def test_reports_combine_both_departments_without_duplicates(self):

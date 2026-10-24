@@ -144,6 +144,7 @@ test("the department GRN section passes its new route to the list", async () => 
 		"./fabric-store/FabricPurchaseOrders.vue": stub("purchase"),
 		"./fabric-store/FabricReports.vue": stub("reports"),
 		"./fabric-store/FabricStockTransfers.vue": stub("transfers"),
+		"./fabric-store/item-conversion/ItemConversions.vue": stub("item-conversions"),
 		"./fabric-store/FabricWorkOrders.vue": stub("work-orders"),
 		"./cut-panel-store/CutPanelDocuments.vue": stub("documents"),
 	})

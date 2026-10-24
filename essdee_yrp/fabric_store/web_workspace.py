@@ -54,6 +54,7 @@ DOCUMENT_KEYS = {
 	"delivery_challans": "YRP Delivery Challan",
 	"goods_received_notes": "YRP Goods Received Note",
 	"purchase_orders": "Purchase Order",
+	"item_conversions": "SD YRP Item Conversion",
 }
 
 STOCK_OPERATION_DOCTYPES = {
@@ -82,6 +83,7 @@ SECTION_LABELS = {
 	"goods_received_notes": _("Goods Received Notes"),
 	"purchase_orders": _("Purchase Orders"),
 	"stock_transfers": _("Stock Transfers"),
+	"item_conversions": _("Item Conversions"),
 	"reports": _("Reports"),
 }
 

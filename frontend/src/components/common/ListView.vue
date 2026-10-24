@@ -203,7 +203,7 @@
 			</div>
 		</div>
 
-		<div v-if="!error" class="list-table-frame">
+		<div v-if="!error" ref="frame" class="list-table-frame">
 			<div v-if="loading && !rows.length" class="list-loading" :class="['erp-skeleton-table', 'erp-skeleton-table--responsive']" aria-label="Loading records">
 				<div class="erp-skeleton-table__header">
 					<span v-for="column in 4" :key="column" class="erp-skeleton erp-skeleton--line" />
@@ -376,15 +376,20 @@
 			</div>
 		</div>
 
-		<Paginator
-			class="list-paginator"
-			v-if="!error && total > pageSize"
-			:first="first"
-			:rows="pageSize"
-			:total-records="total"
-			:rows-per-page-options="[10, 20, 50, 100]"
-			@page="pageChanged"
-		/>
+		<div v-if="!error && rows.length" class="list-load-status" role="status" aria-live="polite">
+			<span v-if="loadingMore" class="list-load-status__loading"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i> Loading more…</span>
+			<span v-else-if="loadMoreError" class="list-load-status__error">{{ loadMoreError }}</span>
+			<span v-else-if="hasMoreRows">Showing {{ rows.length }} of {{ total }}</span>
+			<span v-else>All {{ total }} loaded</span>
+			<Button
+				v-if="hasMoreRows && !loadingMore"
+				class="list-load-more"
+				:label="loadMoreError ? 'Retry' : 'Load more'"
+				size="small"
+				text
+				@click="loadMoreRows"
+			/>
+		</div>
 
 		<UserListviewColumns
 			v-if="columnsLoaded"
@@ -484,9 +489,8 @@ import DataTable from "primevue/datatable"
 import Dialog from "primevue/dialog"
 import InputText from "primevue/inputtext"
 import Message from "primevue/message"
-import Paginator from "primevue/paginator"
 import Select from "primevue/select"
-import { computed, onBeforeUnmount, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 
 import {
@@ -535,6 +539,7 @@ import { listStandardFilterFields, listStatusFilters } from "./listStatusFilters
 import { clickFilterValue, isClickFilterColumn, replaceEqualityFilter } from "./listClickFilters.js"
 import { dateRangeFilters, dateRangeValue } from "./listDateRangeFilters.js"
 import { equalityFilterDefaults, stageNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
+import { listQueryFingerprint, listScrollStateKey, readListScrollState, saveListScrollState } from "./listScrollState.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -553,7 +558,7 @@ const props = defineProps({
 	defaultColumns: { type: Array, default: () => [] },
 	extraFields: { type: Array, default: () => [] },
 	unsortableColumns: { type: Array, default: () => [] },
-	initialPageSize: { type: Number, default: 20 },
+	initialPageSize: { type: Number, default: 50 },
 	minTableWidth: { type: String, default: "900px" },
 	clickable: { type: Boolean, default: true },
 	statusField: { type: String, default: "" },
@@ -592,8 +597,10 @@ const loading = ref(false)
 const error = ref("")
 const search = ref("")
 const appliedSearch = ref("")
-const first = ref(0)
 const pageSize = ref(props.initialPageSize)
+const loadingMore = ref(false)
+const loadMoreError = ref("")
+const frame = ref(null)
 const sortField = ref(props.defaultOrderBy.split(" ")[0] || "modified")
 const sortOrder = ref(props.defaultOrderBy.toLowerCase().endsWith(" asc") ? 1 : -1)
 const metaFields = ref([])
@@ -636,6 +643,11 @@ let searchTimer = null
 let quickFilterTimer = null
 const quickFilterDelay = 1000
 let restoredNavigationKey = ""
+let rowLimit = props.initialPageSize
+let pendingScrollTop = null
+let scrollStateRestored = false
+let loadMoreObserver = null
+const listRouteName = String(route.name || "")
 const initialisationGuard = createListInitialisationGuard()
 const variantsByItem = Object.create(null)
 const pendingItemFilters = new Map()
@@ -750,6 +762,7 @@ const activeFilterCount = computed(() => {
 	)
 	return Number(Boolean(appliedSearch.value)) + advancedFilters.value.length + activeQuickFilterCount.value + Number(statusIsSeparate)
 })
+const hasMoreRows = computed(() => rows.value.length < total.value)
 const isEmptyResult = computed(() =>
 	metadataReady.value && !loading.value && !error.value && rows.value.length === 0,
 )
@@ -910,7 +923,7 @@ watch(
 		const next = cloneFilters(filters)
 		if (JSON.stringify(next) === JSON.stringify(advancedFilters.value)) return
 		advancedFilters.value = next
-		first.value = 0
+		resetPaging()
 		if (metadataReady.value) reload(true)
 	},
 	{ deep: true },
@@ -999,12 +1012,13 @@ async function initialise() {
 	loading.value = true
 	error.value = ""
 	metadataReady.value = false
-	first.value = 0
+	resetPaging()
 	advancedFilters.value = cloneFilters(props.initialAdvancedFilters)
 	quickFilters.value = initialStatusQuickFilters()
 	appliedQuickFilters.value = initialStatusQuickFilters()
 	activeStatus.value = props.initialStatus
 	restoreNavigationState()
+	restoreScrollState()
 	clearSelection()
 	bulkNotice.value = ""
 	bulkError.value = null
@@ -1076,28 +1090,34 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 	}
 }
 
+function getRowPage(filters, start, pageLength) {
+	return getList(props.doctype, {
+		fields: fetchFields.value,
+		filters,
+		orderBy: deterministicOrder(sortField.value, sortOrder.value === 1 ? "asc" : "desc"),
+		start,
+		pageLength,
+		groupBy: parentGroupBy(filters, props.doctype),
+	})
+}
+
+/** Loads the first `rowLimit` rows: one page after a query change, the whole loaded range on refresh or restore. */
 async function loadRows(existingSequence = null) {
 	const sequence = existingSequence || ++loadSequence
 	loading.value = true
 	error.value = ""
+	loadMoreError.value = ""
 	try {
 		const filters = await resolveItemFilters(allFilters({ expand: false }))
 		if (sequence !== loadSequence) return
-		const orderBy = deterministicOrder(sortField.value, sortOrder.value === 1 ? "asc" : "desc")
 		const [data, count] = await Promise.all([
-			getList(props.doctype, {
-				fields: fetchFields.value,
-				filters,
-				orderBy,
-				start: first.value,
-				pageLength: pageSize.value,
-				groupBy: parentGroupBy(filters, props.doctype),
-			}),
+			getRowPage(filters, 0, Math.max(pageSize.value, rowLimit)),
 			getCount(props.doctype, filters, { distinct: hasChildTableFilter(filters, props.doctype) }),
 		])
 		if (sequence !== loadSequence) return
 		rows.value = data
 		total.value = count
+		rowLimit = Math.max(pageSize.value, data.length)
 		now.value = new Date()
 		clearSelection()
 		emit("loaded", { rows: data, total: count })
@@ -1109,7 +1129,107 @@ async function loadRows(existingSequence = null) {
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
+	if (sequence === loadSequence) applyPendingScroll()
 }
+
+/** Appends the next page; the total from the last full load is reused and corrected when the end arrives early. */
+async function loadMoreRows() {
+	if (!metadataReady.value || loading.value || loadingMore.value || !hasMoreRows.value) return
+	const sequence = loadSequence
+	loadingMore.value = true
+	loadMoreError.value = ""
+	try {
+		const filters = await resolveItemFilters(allFilters({ expand: false }))
+		if (sequence !== loadSequence) return
+		const data = await getRowPage(filters, rows.value.length, pageSize.value)
+		if (sequence !== loadSequence) return
+		const loadedNames = new Set(rows.value.map((row) => row.name))
+		rows.value = [...rows.value, ...data.filter((row) => !loadedNames.has(row.name))]
+		total.value = data.length < pageSize.value ? rows.value.length : Math.max(total.value, rows.value.length)
+		rowLimit = rows.value.length
+		emit("loaded", { rows: rows.value, total: total.value })
+	} catch (reason) {
+		if (sequence === loadSequence) loadMoreError.value = reason.message || "Unable to load more records."
+	} finally {
+		loadingMore.value = false
+	}
+}
+
+function resetPaging() {
+	rowLimit = pageSize.value
+	pendingScrollTop = 0
+}
+
+/** The element that scrolls the rows: the table box when the list is viewport-bounded, otherwise the page. */
+function listScrollElement() {
+	if (typeof document === "undefined") return null
+	const container = frame.value?.querySelector?.(".p-datatable-table-container")
+	if (container?.offsetParent && /auto|scroll/.test(window.getComputedStyle(container).overflowY) && container.scrollHeight > container.clientHeight) {
+		return container
+	}
+	return document.scrollingElement
+}
+
+function applyPendingScroll() {
+	if (pendingScrollTop === null) return
+	const top = pendingScrollTop
+	pendingScrollTop = null
+	nextTick(() => {
+		const element = listScrollElement()
+		element?.scrollTo({ top, behavior: "instant" })
+	})
+}
+
+function queryFingerprint() {
+	return listQueryFingerprint({
+		doctype: props.doctype,
+		baseFilters: baseFilters(),
+		search: appliedSearch.value,
+		advancedFilters: advancedFilters.value,
+		quickFilters: appliedQuickFilters.value,
+		status: activeStatus.value,
+		sortField: sortField.value,
+		sortOrder: sortOrder.value,
+	})
+}
+
+function scrollStateKey() {
+	return props.navigationEnabled ? listScrollStateKey(listRouteName, props.doctype) : ""
+}
+
+function saveScrollState() {
+	if (!metadataReady.value || !rows.value.length) return
+	saveListScrollState(scrollStateKey(), {
+		fingerprint: queryFingerprint(),
+		loadedCount: rows.value.length,
+		scrollTop: listScrollElement()?.scrollTop || 0,
+	})
+}
+
+function restoreScrollState() {
+	if (scrollStateRestored) return
+	scrollStateRestored = true
+	const state = readListScrollState(scrollStateKey(), queryFingerprint())
+	if (!state) return
+	rowLimit = Math.max(pageSize.value, state.loadedCount)
+	pendingScrollTop = state.scrollTop
+}
+
+/** Watches a row near the end of the desktop table and of the mobile cards; whichever is shown triggers the next page. */
+function observeLoadMoreTriggers() {
+	loadMoreObserver?.disconnect()
+	if (typeof IntersectionObserver === "undefined" || !frame.value?.querySelectorAll || !hasMoreRows.value) return
+	loadMoreObserver ??= new IntersectionObserver((entries) => {
+		if (entries.some((entry) => entry.isIntersecting) && !loadMoreError.value) loadMoreRows()
+	}, { rootMargin: "0px 0px 240px 0px" })
+	const tableRows = frame.value.querySelectorAll(".p-datatable-tbody > tr")
+	const cards = frame.value.querySelectorAll(".mobile-list-record")
+	for (const target of [tableRows[Math.max(0, tableRows.length - 10)], cards[Math.max(0, cards.length - 3)]]) {
+		if (target) loadMoreObserver.observe(target)
+	}
+}
+
+watch(() => [rows.value.length, total.value, loading.value, loadingMore.value], observeLoadMoreTriggers, { flush: "post" })
 
 function reload(includeCounts = false) {
 	if (!metadataReady.value) return Promise.resolve([])
@@ -1127,14 +1247,14 @@ function applySearch() {
 	}
 	if (appliedSearch.value === search.value.trim()) return
 	appliedSearch.value = search.value.trim()
-	first.value = 0
+	resetPaging()
 	reload(true)
 }
 
 function filtersApplied(filters) {
 	advancedFilters.value = cloneFilters(filters)
 	emit("update:advancedFilters", cloneFilters(advancedFilters.value))
-	first.value = 0
+	resetPaging()
 	reload(true)
 }
 
@@ -1148,7 +1268,7 @@ async function columnsSaved() {
 		currencyFields.value = listview.currency_fields || {}
 		allowedFieldsReady.value = true
 		userColumns.value = listview.columns
-		first.value = 0
+		resetPaging()
 		await reload()
 	} catch (reason) {
 		if (!initialisationGuard.isCurrent(request, props.doctype)) return
@@ -1156,16 +1276,10 @@ async function columnsSaved() {
 	}
 }
 
-function pageChanged(event) {
-	first.value = event.first
-	pageSize.value = event.rows
-	reload()
-}
-
 function sortChanged(event) {
 	sortField.value = event.sortField || "modified"
 	sortOrder.value = event.sortOrder || -1
-	first.value = 0
+	resetPaging()
 	reload()
 }
 
@@ -1181,7 +1295,7 @@ function selectStatus(value) {
 	if (hasFilterValue(value)) appliedValues[effectiveStatusField.value] = value
 	else delete appliedValues[effectiveStatusField.value]
 	appliedQuickFilters.value = appliedValues
-	first.value = 0
+	resetPaging()
 	reload()
 }
 
@@ -1197,7 +1311,7 @@ function quickFiltersChanged({ values, field }) {
 			? values[effectiveStatusField.value]
 			: ""
 	}
-	first.value = 0
+	resetPaging()
 
 	if (quickFilterTimer) clearTimeout(quickFilterTimer)
 	quickFilterTimer = setTimeout(() => {
@@ -1227,7 +1341,7 @@ function clearFilters() {
 	quickFilters.value = {}
 	appliedQuickFilters.value = {}
 	activeStatus.value = ""
-	first.value = 0
+	resetPaging()
 	reload(true)
 }
 
@@ -1439,7 +1553,7 @@ function applyQuickFilter(fieldname, value) {
 	}
 	quickFilters.value = { ...quickFilters.value, [fieldname]: value }
 	appliedQuickFilters.value = { ...quickFilters.value }
-	first.value = 0
+	resetPaging()
 	reload(true)
 }
 
@@ -1462,6 +1576,7 @@ function openRow(row) {
 
 function navigationSnapshot(row) {
 	if (!route.name) return null
+	saveScrollState()
 	const rowIndex = rows.value.findIndex((candidate) => candidate === row || candidate?.name === row?.name)
 	if (rowIndex < 0) return null
 	const direction = sortOrder.value === 1 ? "asc" : "desc"
@@ -1478,9 +1593,9 @@ function navigationSnapshot(row) {
 		sortField: sortField.value,
 		sortOrder: direction,
 		orderBy: deterministicOrder(sortField.value, direction),
-		pageStart: first.value,
+		pageStart: 0,
 		pageSize: pageSize.value,
-		globalIndex: first.value + rowIndex,
+		globalIndex: rowIndex,
 		total: total.value,
 	})
 }
@@ -1498,8 +1613,6 @@ function restoreNavigationState() {
 	quickFilters.value = { ...state.quickFilters }
 	appliedQuickFilters.value = { ...state.quickFilters }
 	activeStatus.value = state.status
-	first.value = state.pageStart
-	pageSize.value = state.pageSize
 	sortField.value = state.sortField
 	sortOrder.value = state.sortOrder === "asc" ? 1 : -1
 }
@@ -1575,6 +1688,7 @@ function modifiedTitle(row) {
 }
 
 onBeforeUnmount(() => {
+	loadMoreObserver?.disconnect()
 	if (searchTimer) clearTimeout(searchTimer)
 	if (quickFilterTimer) clearTimeout(quickFilterTimer)
 })
@@ -1591,6 +1705,8 @@ defineExpose({ refresh: reload })
 	--list-muted: var(--erp-text-muted);
 	--list-line: var(--erp-border);
 	--list-surface: var(--erp-surface);
+	--erp-table-row-height: 32px;
+	--erp-table-cell-pad-y: 5px;
 
 	display: grid;
 	gap: 12px;
@@ -1916,7 +2032,8 @@ defineExpose({ refresh: reload })
 .list-status-tabs {
 	display: flex;
 	align-items: center;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	scrollbar-width: thin;
 	gap: 2px;
 	overflow-x: auto;
 	padding: 0 2px;
@@ -2111,7 +2228,7 @@ defineExpose({ refresh: reload })
 
 :deep(.premium-list-table .p-datatable-tbody > tr > td:has(.list-row-open)),
 :deep(.premium-list-table .p-datatable-tbody > tr > td:has(.p-checkbox)) {
-	padding-block: 6px;
+	padding-block: 2px;
 }
 
 :deep(.premium-list-table .p-datatable-tbody > tr:not(.p-datatable-empty-message):hover > td) {
@@ -2234,8 +2351,8 @@ defineExpose({ refresh: reload })
 
 .list-row-open {
 	display: grid;
-	width: 32px;
-	height: 32px;
+	width: 28px;
+	height: 28px;
 	padding: 0;
 	color: var(--erp-text-subtle);
 	background: transparent;
@@ -2251,14 +2368,14 @@ defineExpose({ refresh: reload })
 
 :deep(.premium-list-table .p-checkbox) {
 	display: grid;
-	width: 32px;
-	height: 32px;
+	width: 28px;
+	height: 28px;
 	place-items: center;
 }
 
 :deep(.premium-list-table .p-checkbox-box) {
-	width: 20px;
-	height: 20px;
+	width: 18px;
+	height: 18px;
 }
 
 .list-row-open:hover {
@@ -2318,49 +2435,44 @@ defineExpose({ refresh: reload })
 	margin: 12px;
 }
 
-.list-table-frame:has(+ .list-paginator) {
+.list-table-frame:has(+ .list-load-status) {
 	border-bottom: 0;
 	border-bottom-left-radius: 0;
 	border-bottom-right-radius: 0;
 }
 
-.list-paginator {
-	width: 100%;
+.list-load-status {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	min-height: 34px;
 	margin-top: -12px;
+	padding: 2px 10px 2px 14px;
+	color: var(--erp-text-muted);
+	font-size: var(--erp-font-size-caption);
+	font-variant-numeric: tabular-nums;
 	background: var(--erp-surface);
 	border: 1px solid var(--erp-border);
 	border-top-color: var(--erp-border-subtle);
 	border-radius: 0 0 var(--erp-panel-radius) var(--erp-panel-radius);
 }
 
-:deep(.p-paginator) {
-	justify-content: flex-end;
-	width: 100%;
-	margin: 0;
-	padding: 6px 10px;
-	color: var(--erp-text-muted);
+.list-load-status__loading {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--erp-text-secondary);
+}
+
+.list-load-status__error {
+	color: var(--erp-danger);
+}
+
+.list-load-status :deep(.list-load-more) {
+	height: 28px;
+	padding-inline: 8px;
 	font-size: var(--erp-font-size-caption);
-	background: transparent;
-	border: 0;
-	border-radius: 0;
-	box-shadow: none;
-}
-
-:deep(.p-paginator-page),
-:deep(.p-paginator-next),
-:deep(.p-paginator-prev),
-:deep(.p-paginator-first),
-:deep(.p-paginator-last) {
-	min-width: 32px;
-	height: 32px;
-	color: var(--erp-text-muted);
-	border-radius: var(--erp-control-radius);
-}
-
-:deep(.p-paginator-page.p-paginator-page-selected) {
-	color: var(--erp-accent-ink);
-	font-weight: 600;
-	background: var(--erp-accent-soft);
 }
 
 @media (pointer: coarse) {
@@ -2374,9 +2486,7 @@ defineExpose({ refresh: reload })
 		height: 44px;
 	}
 
-	:deep(.p-paginator button),
-	:deep(.p-paginator .p-select) {
-		min-width: 44px;
+	.list-load-status :deep(.list-load-more) {
 		min-height: 44px;
 	}
 }
@@ -2414,12 +2524,6 @@ defineExpose({ refresh: reload })
 }
 
 @media (max-width: 1024px) {
-	:deep(.p-paginator button),
-	:deep(.p-paginator .p-select) {
-		min-width: 44px;
-		min-height: 44px;
-	}
-
 	.common-list-view--viewport-bounded {
 		height: auto;
 		min-height: calc(100dvh - var(--erp-shell-header-height) - 76px);

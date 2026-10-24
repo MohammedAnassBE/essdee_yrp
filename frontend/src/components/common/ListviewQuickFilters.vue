@@ -160,7 +160,7 @@ function linkFilters(field) {
 
 .quick-filters__grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 260px));
+	grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
 	gap: 10px;
 }
 

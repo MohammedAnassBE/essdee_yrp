@@ -1,6 +1,6 @@
 <template>
 	<DepartmentPage title="Debits" back-to="/accounts" back-label="Accounts" flat full-width>
-		<ListView v-if="isListInLayout" doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" clickable @row-click="openDebit" />
+		<ListView v-if="isListInLayout" doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" viewport-bounded clickable @row-click="openDebit" />
 		<Dialog v-model:visible="visible" modal header="Debit" class="erp-dialog--md">
 			<div v-if="loading">Loading debit…</div>
 			<template v-else-if="record"><DocumentStatusBadge :label="record.status" :docstatus="record.docstatus" /><dl><template v-for="field in fields" :key="field"><dt>{{ field.replaceAll('_', ' ') }}</dt><dd><DocumentLink v-if="fieldTarget(field)" v-bind="fieldTarget(field)" :label="record[field] || '—'" /><template v-else>{{ record[field] || '—' }}</template></dd></template></dl><div class="debit-actions"><Button v-if="canApprove" label="Approve" icon="pi pi-check" :loading="approving" @click="approveDebit" /><Button v-if="record.work_order" label="Open Work Order" severity="secondary" @click="openWorkOrder" /><Button v-if="permissions?.create" label="Duplicate" icon="pi pi-clone" severity="secondary" outlined @click="duplicateDebit" /></div><DocumentActivity doctype="YRP Debit" :name="record.name" :record="record" /></template>

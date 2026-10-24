@@ -28,7 +28,7 @@ async function mountList({ counts = async (doctype, sets) => sets.map((_, index)
 		getActiveWorkflow: async () => null,
 		getUserListview: async () => ({ fields: [{ fieldname: "name" }, ...fields], columns: null }),
 		getItemFilterValues: async () => ({}),
-		getList: async () => [{ name: "ENT-1", status: "Open" }],
+		getList: async (doctype, { start }) => start ? [{ name: "ENT-2", status: "Open" }] : [{ name: "ENT-1", status: "Open" }],
 		getCount: async (doctype, filters, options) => { calls.totals.push({ filters, options }); return totals() },
 		getCounts: async (doctype, sets, options) => { calls.batches.push({ doctype, sets, options }); return counts(doctype, sets) },
 	}
@@ -53,7 +53,7 @@ async function mountList({ counts = async (doctype, sets) => sets.map((_, index)
 	return {
 		calls, root,
 		tabCounts: () => findNodes(root, n => n.props?.class === "list-status-tab__count").map(n => (n.text || n.children.map(child => child.text).join("")).trim()),
-		page: async () => { node(n => n.type === "paginator").props.onPage({ first: 20, rows: 20 }); await settle() },
+		loadMore: async () => { node(n => n.type === "button" && n.props.class === "list-load-more").props.onClick(); await settle() },
 		sort: async () => { node(n => n.type === "datatable").props.onSort({ sortField: "name", sortOrder: 1 }); await settle() },
 		refresh: async () => { node(n => n.type === "button" && n.props.icon === "pi pi-refresh").props.onClick(); await settle() },
 		restore: () => { globalThis.window = previousWindow },
@@ -73,19 +73,19 @@ test("status counts come from one batch request in tab order", async () => {
 	} finally { list.restore() }
 })
 
-test("page and sort changes refetch the total so other users' writes show", async () => {
+test("appending a page reuses the total; sort and refresh refetch it so other users' writes show", async () => {
 	let total = 100
 	const list = await mountList({ totals: () => total })
 	try {
 		assert.equal(list.calls.totals.length, 1)
 		total = 101
-		await list.page()
-		assert.equal(list.calls.totals.length, 2)
+		await list.loadMore()
+		assert.equal(list.calls.totals.length, 1)
 		await list.sort()
-		assert.equal(list.calls.totals.length, 3)
+		assert.equal(list.calls.totals.length, 2)
 		assert.equal(list.calls.batches.length, 1)
 		await list.refresh()
-		assert.equal(list.calls.totals.length, 4)
+		assert.equal(list.calls.totals.length, 3)
 		assert.equal(list.calls.batches.length, 2)
 	} finally { list.restore() }
 })

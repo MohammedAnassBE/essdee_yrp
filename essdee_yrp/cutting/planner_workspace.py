@@ -315,6 +315,7 @@ def get_editor(name=None):
 	if name:
 		doc = frappe.get_doc(DOCTYPE, name)
 		_require_permission("read", doc)
+		native.recover_stuck_optimization(doc)
 	else:
 		_require_permission("create")
 		doc = frappe.new_doc(DOCTYPE)
@@ -370,6 +371,7 @@ def start_optimization(name, expected_modified=None):
 def get_status(name):
 	doc = frappe.get_doc(DOCTYPE, name)
 	_require_permission("read", doc)
+	native.recover_stuck_optimization(doc)
 	status = _doc_value(doc, "optimization_status") or "Not Started"
 	permissions = _permissions(doc)
 	return {

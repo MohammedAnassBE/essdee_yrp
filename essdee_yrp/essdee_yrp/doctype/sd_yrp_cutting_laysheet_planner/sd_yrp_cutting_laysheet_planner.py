@@ -1,17 +1,24 @@
 # Copyright (c) 2026, Essdee and contributors
 # For license information, please see license.txt
 import json
+from datetime import timedelta
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import now_datetime
+from frappe.utils import now_datetime, time_diff_in_seconds
+from frappe.utils.background_jobs import get_job
+from rq.job import JobStatus
+from rq.utils import now as rq_now
 from yrp.attribute_links import value as _attribute_value
 
 DOCTYPE = "SD YRP Cutting Laysheet Planner"
 ACTIVE_OPTIMIZATION_STATUSES = {"Queued", "Running"}
-OPTIMIZATION_METHOD = (
-	"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet_planner.cutting_laysheet_planner.run_optimization"
-)
+OPTIMIZATION_METHOD = f"{__name__}.run_optimization"
+OPTIMIZATION_QUEUE = "long"
+OPTIMIZATION_TIMEOUT = 900
+STALE_OPTIMIZATION_SECONDS = OPTIMIZATION_TIMEOUT + 300
+ENQUEUE_GRACE_SECONDS = 60
+LIVE_JOB_STATUSES = {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED}
 
 
 class SDYRPCuttingLaysheetPlanner(Document):
@@ -53,6 +60,7 @@ def optimize(doc_name):
 	_validate_optimizer_inputs(values)
 	input_json = json.dumps(values, separators=(",", ":"), ensure_ascii=False)
 
+	discard_stale_optimization_job(doc.name)
 	_clear_results(doc)
 	doc.optimization_status = "Queued"
 	doc.optimization_started_on = None
@@ -63,10 +71,10 @@ def optimize(doc_name):
 
 	frappe.enqueue(
 		OPTIMIZATION_METHOD,
-		queue="long",
-		timeout=900,
+		queue=OPTIMIZATION_QUEUE,
+		timeout=OPTIMIZATION_TIMEOUT,
 		enqueue_after_commit=True,
-		job_id=f"cutting-laysheet-optimizer-{doc.name}",
+		job_id=get_optimization_job_id(doc.name),
 		deduplicate=True,
 		doc_name=doc.name,
 		input_json=input_json,
@@ -140,11 +148,59 @@ def run_optimization(doc_name, input_json):
 		raise
 
 
+def get_optimization_job_id(doc_name):
+	return f"cutting-laysheet-optimizer-{doc_name}"
+
+
+def discard_stale_optimization_job(doc_name):
+	"""Drop a leftover RQ job so a retry is not swallowed by enqueue deduplication."""
+	job = get_job(get_optimization_job_id(doc_name))
+	if not job:
+		return
+	if job.get_status() == JobStatus.STARTED and job.started_at:
+		if (rq_now() - job.started_at) < timedelta(seconds=STALE_OPTIMIZATION_SECONDS):
+			frappe.throw("The previous lay optimization job is still running. Try again when it finishes.")
+	job.delete()
+
+
+def get_stuck_optimization_message(doc):
+	"""Return why an active optimization can no longer finish, or None while it still can."""
+	job = get_job(get_optimization_job_id(doc.name))
+	status = job.get_status() if job else None
+	age = time_diff_in_seconds(now_datetime(), doc.modified)
+	if status == JobStatus.FAILED:
+		lines = str(job.exc_info or "").strip().splitlines() or ["unknown error"]
+		return f"Lay optimization job failed: {lines[-1]}"
+	if status in LIVE_JOB_STATUSES:
+		if age <= STALE_OPTIMIZATION_SECONDS:
+			return None
+		return (
+			f"Lay optimization did not finish within {STALE_OPTIMIZATION_SECONDS // 60} minutes. "
+			f"Check that a background worker is running the '{OPTIMIZATION_QUEUE}' queue, then retry."
+		)
+	if age <= ENQUEUE_GRACE_SECONDS:
+		return None
+	return "Lay optimization job ended without saving a result. Retry the optimization."
+
+
+def recover_stuck_optimization(doc):
+	"""Mark a Queued/Running planner Failed when its background job cannot finish it."""
+	if doc.optimization_status not in ACTIVE_OPTIMIZATION_STATUSES:
+		return False
+	message = get_stuck_optimization_message(doc)
+	if not message:
+		return False
+	_mark_optimization_failed(doc.name, doc.optimization_input_json, message)
+	doc.reload()
+	return True
+
+
 @frappe.whitelist()
 def get_optimization_status(doc_name):
 	"""Return only lightweight state; the form reloads once work is complete."""
 	doc = frappe.get_doc(DOCTYPE, doc_name)
 	doc.check_permission("read")
+	recover_stuck_optimization(doc)
 	return {
 		"status": doc.optimization_status or "Not Started",
 		"error_message": doc.optimization_error,

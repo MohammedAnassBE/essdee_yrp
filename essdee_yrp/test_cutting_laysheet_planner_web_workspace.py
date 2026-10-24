@@ -94,6 +94,11 @@ def result_payload():
 
 
 class TestCuttingLaySheetPlannerWebWorkspace(TestCase):
+	def setUp(self):
+		recovery = patch("essdee_yrp.cutting.planner_workspace.native.recover_stuck_optimization", return_value=False)
+		recovery.start()
+		self.addCleanup(recovery.stop)
+
 	def test_values_preserve_stable_rows_allow_zero_and_reject_invalid_inputs(self):
 		doc = planner_doc()
 		values = planner_values()

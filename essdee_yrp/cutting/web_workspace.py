@@ -24,13 +24,14 @@ from essdee_yrp.cutting.lot_transfer_quantities import apply_quantities, get_qua
 from essdee_yrp.cutting.movement import (
 	build_delivery_challan_defaults,
 	build_stock_entry_defaults,
+	get_active_root_transactions_by_movement,
 	new_transaction_from_defaults,
 )
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_movement import (
 	get_cut_bundle_unmoved_data,
 	get_total,
 )
-from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.print_registry import get_document_print_formats, print_format_scope
 
 PLAN_DOCTYPE = "SD YRP Cutting Plan"
 RELATION_DOCTYPE = "SD YRP Cutting Plan Stock Transfer"
@@ -245,19 +246,22 @@ def _movement_totals(value):
 	}
 
 
-def _movement_payload(doc, *, include_data=False):
-	active_roots = []
-	if doc.docstatus == 1:
-		from essdee_yrp.cutting.movement import get_active_root_transactions
+def _movement_payload(doc, *, include_data=False, active_root_rows=None):
+	"""`active_root_rows`: the movement's active root transactions when the caller already read them."""
+	if active_root_rows is None:
+		active_root_rows = []
+		if doc.docstatus == 1:
+			from essdee_yrp.cutting.movement import get_active_root_transactions
 
-		active_roots = [
-			{
-				"doctype": row.doctype,
-				"name": row.name,
-				"docstatus": row.docstatus,
-			}
-			for row in get_active_root_transactions(doc.name)
-		]
+			active_root_rows = get_active_root_transactions(doc.name)
+	active_roots = [
+		{
+			"doctype": row.doctype,
+			"name": row.name,
+			"docstatus": row.docstatus,
+		}
+		for row in active_root_rows
+	]
 	payload = {
 		"name": doc.name,
 		"docstatus": doc.docstatus,
@@ -296,7 +300,9 @@ def _get_movements(plan):
 		order_by="modified desc",
 		limit_page_length=500,
 	)
-	return [_movement_payload(frappe.get_doc(MOVEMENT_DOCTYPE, name)) for name in names]
+	docs = [frappe.get_doc(MOVEMENT_DOCTYPE, name) for name in names]
+	roots = get_active_root_transactions_by_movement(doc.name for doc in docs if doc.docstatus == 1)
+	return [_movement_payload(doc, active_root_rows=roots.get(doc.name, [])) for doc in docs]
 
 
 def _transaction_permissions(doc):
@@ -437,12 +443,13 @@ def get_workspace(cutting_plan):
 	"""Load the CPM workspace only when its web tab is activated."""
 	plan = _get_plan(cutting_plan)
 	context = _plan_context(plan)
-	return {
-		"context": context,
-		"permissions": _workspace_permissions(plan, context),
-		"movements": _get_movements(plan),
-		"transactions": _get_transactions(plan),
-	}
+	with print_format_scope():
+		return {
+			"context": context,
+			"permissions": _workspace_permissions(plan, context),
+			"movements": _get_movements(plan),
+			"transactions": _get_transactions(plan),
+		}
 
 
 def _assert_movement_belongs(plan, movement):

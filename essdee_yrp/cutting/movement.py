@@ -107,6 +107,48 @@ def get_active_root_transactions(cpm_name, *, exclude_doctype=None, exclude_name
 	return sorted(owners, key=lambda row: row.creation)
 
 
+def get_active_root_transactions_by_movement(cpm_names):
+	"""`get_active_root_transactions` for many CPMs with one query per root doctype.
+
+	A CPM with two same-doctype roots tied on creation and modified has no deterministic order, so it keeps the per-CPM read.
+	"""
+	owners = {name: [] for name in cpm_names}
+	if not owners:
+		return owners
+	ambiguous = set()
+	for doctype in _ROOT_TRANSACTION_DOCTYPES:
+		filters = {"cut_panel_movement": ["in", list(owners)], "docstatus": ["<", 2]}
+		if doctype == "YRP Stock Entry":
+			filters["purpose"] = ["not in", tuple(_COMPLETION_PURPOSES)]
+		seen = set()
+		for row in frappe.get_all(
+			doctype,
+			filters=filters,
+			fields=["name", "docstatus", "creation", "modified", "cut_panel_movement"],
+		):
+			if row.cut_panel_movement not in owners:
+				# The collation matched a differently spelled link; keep the exact per-CPM answer.
+				return {name: get_active_root_transactions(name) for name in owners}
+			key = (row.cut_panel_movement, row.creation, row.modified)
+			if key in seen:
+				ambiguous.add(row.cut_panel_movement)
+			seen.add(key)
+			owners[row.cut_panel_movement].append(
+				frappe._dict(
+					doctype=doctype,
+					name=row.name,
+					docstatus=row.docstatus,
+					creation=row.creation,
+				)
+			)
+	return {
+		name: get_active_root_transactions(name)
+		if name in ambiguous
+		else sorted(rows, key=lambda row: row.creation)
+		for name, rows in owners.items()
+	}
+
+
 def _get_active_root_transaction(cpm_name, *, exclude_doctype=None, exclude_name=None):
 	owners = get_active_root_transactions(
 		cpm_name,

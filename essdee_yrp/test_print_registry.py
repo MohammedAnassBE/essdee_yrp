@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 import frappe
 
-from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.print_registry import get_document_print_formats, print_format_scope
 
 
 class TestDocumentPrintFormats(TestCase):
@@ -51,3 +51,58 @@ class TestDocumentPrintFormats(TestCase):
 		self.has_permission.assert_called_once_with("YRP Production Order", "print", doc=doc)
 		self.db.get_single_value.assert_not_called()
 		self.formats.assert_not_called()
+
+
+class TestPrintFormatScope(TestCase):
+	def setUp(self):
+		db_patch = patch.object(frappe, "db", Mock())
+		db_patch.start()
+		self.addCleanup(db_patch.stop)
+		formats_patch = patch("essdee_yrp.print_registry.get_desk_print_formats", side_effect=lambda doctype: [f"{doctype} Format"])
+		self.formats = formats_patch.start()
+		self.addCleanup(formats_patch.stop)
+		permission_patch = patch.object(frappe, "has_permission", return_value=True)
+		self.has_permission = permission_patch.start()
+		self.addCleanup(permission_patch.stop)
+
+	def _doc(self, doctype, docstatus=1):
+		doc = Mock(doctype=doctype, docstatus=docstatus)
+		doc.meta.is_submittable = True
+		return doc
+
+	def test_formats_are_read_once_per_doctype_inside_scope(self):
+		first, second, other = self._doc("A"), self._doc("A"), self._doc("B")
+		with print_format_scope():
+			results = [get_document_print_formats(doc) for doc in (first, second, other, first)]
+		self.assertEqual(results[0], [{"label": "A Format", "format": "A Format"}])
+		self.assertEqual(results[1], results[0])
+		self.assertIsNot(results[1], results[0])
+		self.assertEqual(results[2], [{"label": "B Format", "format": "B Format"}])
+		self.assertEqual([call.args[0] for call in self.formats.call_args_list], ["A", "B"])
+		self.assertEqual(self.has_permission.call_count, 4)
+
+	def test_permission_and_restriction_are_checked_per_document_inside_scope(self):
+		allowed, denied, draft = self._doc("A"), self._doc("A"), self._doc("A", docstatus=0)
+		self.has_permission.side_effect = lambda doctype, ptype, doc: doc is not denied
+		frappe.db.get_single_value.return_value = 0
+		with print_format_scope():
+			self.assertEqual(get_document_print_formats(allowed), [{"label": "A Format", "format": "A Format"}])
+			self.assertEqual(get_document_print_formats(denied), [])
+			self.assertEqual(get_document_print_formats(draft), [])
+
+	def test_outside_scope_always_reads_and_scope_is_dropped_on_exit_and_error(self):
+		doc = self._doc("A")
+		get_document_print_formats(doc)
+		get_document_print_formats(doc)
+		self.assertEqual(self.formats.call_count, 2)
+		with print_format_scope():
+			with print_format_scope():
+				get_document_print_formats(doc)
+			get_document_print_formats(doc)
+		self.assertEqual(self.formats.call_count, 3)
+		self.assertIsNone(frappe.local.web_print_formats)
+		with self.assertRaises(RuntimeError), print_format_scope():
+			raise RuntimeError
+		self.assertIsNone(frappe.local.web_print_formats)
+		get_document_print_formats(doc)
+		self.assertEqual(self.formats.call_count, 4)

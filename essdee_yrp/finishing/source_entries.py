@@ -40,7 +40,7 @@ def new_entry() -> dict:
 
 def get_entry_quantities(doc, rows, context=None) -> dict:
 	"""Map source rows to the Create DC matrix shape: {colour: {size: qty}}."""
-	context = context or views._get_ipd_context(doc)
+	context = context or views.get_ipd_context(doc)
 	quantities = {}
 	for row in rows:
 		identity = views._row_identity(
@@ -58,7 +58,7 @@ def get_source_entries(doc, list_key) -> list[dict]:
 	entries = get_entries(doc.get(list_key))
 	if not entries:
 		return []
-	context = views._get_ipd_context(doc)
+	context = views.get_ipd_context(doc)
 	result = []
 	for name, entry in entries.items():
 		source = frappe.get_doc(doctype, name)

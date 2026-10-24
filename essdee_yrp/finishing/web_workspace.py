@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 import frappe
 from frappe import _
 from frappe.utils import cstr
+from yrp.attribute_read_context import attribute_read_scope
 
 from essdee_yrp.cut_panel_store.common import assert_expected_modified, parse_json_object
 from essdee_yrp.finishing import (
@@ -232,25 +233,26 @@ def get_dispatch_logs(doc) -> list[dict]:
 def get_plan_workspace(name: str) -> dict:
 	"""Return the Finishing Plan header, actions, linked documents and dispatch history."""
 
-	doc = get_plan(name)
-	actions = get_plan_actions(doc)
-	return {
-		"record": {field: doc.get(field) for field in RECORD_FIELDS},
-		"locked": (doc.fp_status or "") in LOCKED_STATUSES,
-		"actions": actions,
-		"permissions": {
-			"can_read": True,
-			"can_write": bool(frappe.has_permission(DOCTYPE, ptype="write", doc=doc)),
-			"can_print": bool(frappe.has_permission(DOCTYPE, ptype="print", doc=doc)),
-		},
-		"print_formats": get_document_print_formats(doc),
-		"primary_values": transactions.get_primary_values(doc.lot, doc.production_detail)
-		if actions["print_inward"]
-		else [],
-		"linked_documents": get_linked_documents(doc),
-		"dispatch_logs": get_dispatch_logs(doc),
-		"entry_options": get_entry_options(doc) if actions["create_entries"] else {},
-	}
+	with attribute_read_scope():
+		doc = get_plan(name)
+		actions = get_plan_actions(doc)
+		return {
+			"record": {field: doc.get(field) for field in RECORD_FIELDS},
+			"locked": (doc.fp_status or "") in LOCKED_STATUSES,
+			"actions": actions,
+			"permissions": {
+				"can_read": True,
+				"can_write": bool(frappe.has_permission(DOCTYPE, ptype="write", doc=doc)),
+				"can_print": bool(frappe.has_permission(DOCTYPE, ptype="print", doc=doc)),
+			},
+			"print_formats": get_document_print_formats(doc),
+			"primary_values": transactions.get_primary_values(doc.lot, doc.production_detail)
+			if actions["print_inward"]
+			else [],
+			"linked_documents": get_linked_documents(doc),
+			"dispatch_logs": get_dispatch_logs(doc),
+			"entry_options": get_entry_options(doc) if actions["create_entries"] else {},
+		}
 
 
 def get_entry_options(doc) -> dict:
@@ -263,24 +265,26 @@ def get_entry_options(doc) -> dict:
 	}
 
 
-def _matrix_payload(doc, plan_views, key, **extra):
+def _matrix_payload(context, data, **extra):
 	return {
-		"primary_values": plan_views["primary_values"],
-		"data": plan_views[key],
-		"is_set_item": plan_views["is_set_item"],
-		"set_attr": plan_views["set_attr"],
+		"primary_values": context["primary_values"],
+		"data": data,
+		"is_set_item": context["is_set_item"],
+		"set_attr": context["set_attr"],
 		**extra,
 	}
 
 
 def _details_tab(doc):
-	plan_views = views.build_plan_views(doc)
-	return _matrix_payload(doc, plan_views, "finishing_inward", process=doc.finishing_process)
+	context = views.get_ipd_context(doc)
+	data = views.build_quantity_views(doc, context)["finishing_inward"]
+	return _matrix_payload(context, data, process=doc.finishing_process)
 
 
 def _item_details_tab(doc):
-	plan_views = views.build_plan_views(doc)
-	return _matrix_payload(doc, plan_views, "finishing_qty", rework_details=plan_views["rework_details"])
+	context = views.get_ipd_context(doc)
+	data = views.build_quantity_views(doc, context)["finishing_qty"]
+	return _matrix_payload(context, data, rework_details=views.build_rework_details(doc, context))
 
 
 def _grn_tab(doc):
@@ -291,22 +295,27 @@ def _grn_tab(doc):
 	}
 
 
+def _inward_tab(doc):
+	context = views.get_ipd_context(doc)
+	return _matrix_payload(context, views.build_inward_details(doc, context))
+
+
 def _old_lot_tab(doc):
-	plan_views = views.build_plan_views(doc)
+	matrices = views.build_old_lot_matrices(doc, views.get_ipd_context(doc))
 	available = old_lot.fetch_from_old_lot(doc.name) if get_plan_actions(doc)["fetch_old_lot"] else None
 	return {
-		"given": plan_views["old_lot_given_matrix"],
-		"received": plan_views["old_lot_received_matrix"],
+		"given": matrices["old_lot_given_matrix"],
+		"received": matrices["old_lot_received_matrix"],
 		"available": available,
 		"entries": get_source_entries(doc, "lot_transfer_list"),
 	}
 
 
 def _ocr_tab(doc):
-	plan_views = views.build_plan_views(doc)
+	context = views.get_ipd_context(doc)
 	return {
 		"ocr_data": ocr.get_ocr_details(doc),
-		"primary_values": plan_views["primary_values"],
+		"primary_values": context["primary_values"],
 		"item": doc.item,
 	}
 
@@ -318,32 +327,37 @@ def _p_and_l_tab(doc):
 
 
 def _ironing_excess_tab(doc):
+	context = views.get_ipd_context(doc)
 	return _matrix_payload(
-		doc,
-		views.build_plan_views(doc),
-		"finishing_ironing",
+		context,
+		views.build_quantity_views(doc, context)["finishing_ironing"],
 		entries=get_source_entries(doc, "ironing_excess_list"),
 	)
 
 
-def _view_tab(key):
-	return lambda doc: _matrix_payload(doc, views.build_plan_views(doc), key)
+def _pack_return_tab(doc):
+	context = views.get_ipd_context(doc)
+	return _matrix_payload(context, views.build_quantity_views(doc, context)["pack_return"])
+
+
+def _rejection_tab(doc):
+	return views.build_rejection_details(doc, views.get_ipd_context(doc))
 
 
 TAB_LOADERS = {
 	"details": _details_tab,
 	"item_details": _item_details_tab,
 	"grn": _grn_tab,
-	"inward": _view_tab("inward_details"),
+	"inward": _inward_tab,
 	"old_lot": _old_lot_tab,
 	"ironing_excess": _ironing_excess_tab,
-	"pack_return": _view_tab("pack_return"),
+	"pack_return": _pack_return_tab,
 	"ocr": _ocr_tab,
 	"ocr_consumption": lambda doc: insights.get_fp_consumption_details(doc.name),
 	"ocr_stock_balance": lambda doc: insights.get_fp_stock_balance_details(doc.name),
 	"p_and_l": _p_and_l_tab,
 	"alternatives": lambda doc: get_alternative_details(doc.lot) if doc.lot else {},
-	"rejection": lambda doc: views.build_plan_views(doc)["rejection_details"],
+	"rejection": _rejection_tab,
 }
 
 
@@ -351,11 +365,12 @@ TAB_LOADERS = {
 def get_plan_tab(name: str, tab: str) -> dict:
 	"""Load one Finishing Plan tab so inactive tabs never compute their view models."""
 
-	doc = get_plan(name)
-	loader = TAB_LOADERS.get(tab)
-	if not loader:
-		frappe.throw(_("Unknown Finishing Plan tab: {0}").format(tab))
-	return loader(doc)
+	with attribute_read_scope():
+		doc = get_plan(name)
+		loader = TAB_LOADERS.get(tab)
+		if not loader:
+			frappe.throw(_("Unknown Finishing Plan tab: {0}").format(tab))
+		return loader(doc)
 
 
 def _cancel_linked_document(doc, payload):

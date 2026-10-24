@@ -27,31 +27,37 @@ def order_item_sizes(item, sizes):
 
 
 def build_plan_views(doc):
-	context = _get_ipd_context(doc)
-	views = _build_quantity_views(doc, context)
-	views["inward_details"] = _build_inward_details(doc, context)
-	views["rework_details"] = _build_rework_details(doc, context)
-	views["rejection_details"] = _build_rejection_details(doc, context)
+	context = get_ipd_context(doc)
+	views = build_quantity_views(doc, context)
+	views["inward_details"] = build_inward_details(doc, context)
+	views["rework_details"] = build_rework_details(doc, context)
+	views["rejection_details"] = build_rejection_details(doc, context)
 	views["packed_qty"] = get_packed_qty(doc)
 	# Available balances are recalculated on demand and never persisted.
 	views["old_lot_data"] = {"data": [], "colours": []}
-	views["old_lot_given_matrix"] = _build_transfer_matrix(
-		active_old_lot_transfer_rows(doc.get("finishing_old_lot_given_items")),
-		context["primary_values"],
-		"destination_fp",
-		"destination_lot",
-		"loose_piece_given",
-		"loose_piece_set_given",
-	)
-	views["old_lot_received_matrix"] = _build_transfer_matrix(
-		get_old_lot_received_rows(doc),
-		context["primary_values"],
-		"source_fp",
-		"source_lot",
-		"loose_piece_taken",
-		"loose_piece_set_taken",
-	)
+	views.update(build_old_lot_matrices(doc, context))
 	return views
+
+
+def build_old_lot_matrices(doc, context):
+	return {
+		"old_lot_given_matrix": _build_transfer_matrix(
+			active_old_lot_transfer_rows(doc.get("finishing_old_lot_given_items")),
+			context["primary_values"],
+			"destination_fp",
+			"destination_lot",
+			"loose_piece_given",
+			"loose_piece_set_given",
+		),
+		"old_lot_received_matrix": _build_transfer_matrix(
+			get_old_lot_received_rows(doc),
+			context["primary_values"],
+			"source_fp",
+			"source_lot",
+			"loose_piece_taken",
+			"loose_piece_set_taken",
+		),
+	}
 
 
 def get_packed_qty(doc):
@@ -113,7 +119,7 @@ def before_save(doc):
 	doc.set("finishing_plan_details", get_finishing_plan_list(items))
 
 
-def _get_ipd_context(doc):
+def get_ipd_context(doc):
 	ipd_name = doc.production_detail or attribute_db.get_value("SD YRP Lot", doc.lot, "production_detail")
 	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", ipd_name)
 	return {
@@ -153,7 +159,7 @@ def _json_object(value):
 	return json_object(value)
 
 
-def _build_inward_details(doc, context):
+def build_inward_details(doc, context):
 	data = {"data": {}, "total": {}}
 	for row in doc.get("finishing_plan_details") or []:
 		identity = _row_identity(row, context)
@@ -199,7 +205,7 @@ def _ensure_inward_block(data, identity):
 	return block
 
 
-def _build_rework_details(doc, context):
+def build_rework_details(doc, context):
 	data = {"data": {}, "total": {}}
 	for row in doc.get("finishing_plan_reworked_details") or []:
 		identity = _row_identity(row, context)
@@ -234,7 +240,7 @@ def _build_rework_details(doc, context):
 	return data
 
 
-def _build_quantity_views(doc, context):
+def build_quantity_views(doc, context):
 	finishing_inward = {"data": {}, "total": {}, "over_all": {}}
 	finishing_quantity = {"data": {}, "total": {}}
 	finishing_ironing = {"data": {}, "total": {}, "total_qty": {"ironing": 0}}
@@ -393,7 +399,7 @@ def _ensure_pack_return(data, identity):
 	return block
 
 
-def _build_rejection_details(doc, context):
+def build_rejection_details(doc, context):
 	data = {}
 	grand_total = 0
 	for document_name in frappe.get_all("SD YRP GRN Rework Item", filters={"lot": doc.lot}, pluck="name"):

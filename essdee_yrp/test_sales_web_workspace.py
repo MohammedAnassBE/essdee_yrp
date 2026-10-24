@@ -411,6 +411,33 @@ class TestSalesWebWorkspace(TestCase):
 
 		self.assertEqual(payload["matrix"][0]["size"], "M")
 
+	def test_workspace_reuses_attribute_reads_after_the_writing_onload(self):
+		from yrp.attribute_read_context import _reads
+
+		workspace = self._workspace()
+		doc = FakeProductionOrder(
+			docstatus=1,
+			status="Open",
+			production_order_details=[
+				frappe._dict(item="Polo", item_variant="POLO-M", attributes_json=None, quantity=40),
+				frappe._dict(item="Polo", item_variant="POLO-M", attributes_json=None, quantity=10),
+			],
+			production_ordered_details=[],
+			__onload={"can_manage_production_order": False, "linked_lots": []},
+		)
+		scopes = []
+		doc.run_method = lambda _method: scopes.append(_reads.get())
+		reads = []
+		with (
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch("yrp.utils._read_get_variant_attr_details", side_effect=lambda variant: reads.append(variant) or {"Size": "M"}),
+		):
+			workspace.get_production_order_workspace(doc.name)
+		self.assertEqual(scopes, [None], "onload can write, so it must run outside the read scope")
+		self.assertEqual(reads, ["POLO-M"])
+		self.assertIsNone(_reads.get())
+
 	def test_workspace_resolves_size_for_ordered_lot_rows(self):
 		workspace = self._workspace()
 		doc = FakeProductionOrder(

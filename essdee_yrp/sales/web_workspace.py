@@ -7,6 +7,7 @@ from collections.abc import Mapping
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.utils import get_variant_attr_details
 
 from essdee_yrp import production_order_workflow as workflow
@@ -414,42 +415,44 @@ def _pending_production_order_request(doc, onload) -> dict | None:
 def get_production_order_workspace(production_order: str) -> dict:
 	doc = frappe.get_doc(DOCTYPE, production_order)
 	doc.check_permission("read")
+	# onload may db_set price_approval_status, so it stays outside the read scope.
 	doc.run_method("onload")
 	onload = doc.get("__onload") or {}
-	permissions = _permission_flags(doc)
-	print_formats = get_document_print_formats(doc)
-	permissions["can_print"] = permissions["can_print"] and bool(print_formats)
-	matrix = _serialize_matrix(doc.get("production_order_details"))
-	ordered = _serialize_ordered(doc.get("production_ordered_details"))
-	record = {
-		"doctype": DOCTYPE,
-		"name": doc.name,
-		"docstatus": cint(doc.docstatus),
-		"status_label": get_production_order_status(doc),
-		"modified": doc.get("modified"),
-		"total_quantity": sum(flt(row["quantity"]) for row in matrix),
-	}
-	for fieldname in RECORD_FIELDS:
-		record[fieldname] = doc.get(fieldname)
+	with attribute_read_scope():
+		permissions = _permission_flags(doc)
+		print_formats = get_document_print_formats(doc)
+		permissions["can_print"] = permissions["can_print"] and bool(print_formats)
+		matrix = _serialize_matrix(doc.get("production_order_details"))
+		ordered = _serialize_ordered(doc.get("production_ordered_details"))
+		record = {
+			"doctype": DOCTYPE,
+			"name": doc.name,
+			"docstatus": cint(doc.docstatus),
+			"status_label": get_production_order_status(doc),
+			"modified": doc.get("modified"),
+			"total_quantity": sum(flt(row["quantity"]) for row in matrix),
+		}
+		for fieldname in RECORD_FIELDS:
+			record[fieldname] = doc.get(fieldname)
 
-	fields = _production_order_fields(doc, record)
-	return {
-		"record": record,
-		"fields": fields,
-		"matrix": matrix,
-		"ordered": ordered,
-		"linked_lots": onload.get("linked_lots") or [],
-		"pending_request": _pending_production_order_request(doc, onload),
-		"histories": {
-			"dates": [_serialize_child_row(row) for row in doc.get("date_change_history") or []],
-			"transfers": [_serialize_child_row(row) for row in doc.get("quantity_transfer_history") or []],
-			"prices": onload.get("price_requests") or [],
-			"comments": doc.get("comment_log") or "",
-		},
-		"permissions": permissions,
-		"print_formats": print_formats,
-		"capabilities": _production_order_actions(doc, permissions, onload),
-	}
+		fields = _production_order_fields(doc, record)
+		return {
+			"record": record,
+			"fields": fields,
+			"matrix": matrix,
+			"ordered": ordered,
+			"linked_lots": onload.get("linked_lots") or [],
+			"pending_request": _pending_production_order_request(doc, onload),
+			"histories": {
+				"dates": [_serialize_child_row(row) for row in doc.get("date_change_history") or []],
+				"transfers": [_serialize_child_row(row) for row in doc.get("quantity_transfer_history") or []],
+				"prices": onload.get("price_requests") or [],
+				"comments": doc.get("comment_log") or "",
+			},
+			"permissions": permissions,
+			"print_formats": print_formats,
+			"capabilities": _production_order_actions(doc, permissions, onload),
+		}
 
 
 @frappe.whitelist()

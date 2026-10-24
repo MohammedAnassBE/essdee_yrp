@@ -339,34 +339,121 @@ class TestFinishingWebWorkspace(TestCase):
 		):
 			self._workspace().get_plan_tab("FP-0001", "details")
 
-	def test_details_tab_returns_the_desk_view_model(self):
-		views = {
-			"primary_values": ["S", "M"],
-			"finishing_inward": {"data": {}, "total": {}, "over_all": {}},
-			"is_set_item": 0,
-			"set_attr": None,
+	def _tab(self, tab, plan=None, roles=("Stock User",)):
+		"""Load a tab with every view builder stubbed; return the payload and the builders called."""
+		context = {"primary_values": ["S", "M"], "is_set_item": 0, "set_attr": None}
+		quantity = {key: {"key": key} for key in ("finishing_inward", "finishing_qty", "finishing_ironing", "pack_return")}
+		results = {
+			"get_ipd_context": context,
+			"build_quantity_views": quantity,
+			"build_inward_details": {"key": "inward_details"},
+			"build_rework_details": {"key": "rework_details"},
+			"build_rejection_details": {"key": "rejection_details"},
+			"build_old_lot_matrices": {"old_lot_given_matrix": {"groups": []}, "old_lot_received_matrix": {"groups": []}},
+			"get_packed_qty": {"sizes": {}},
 		}
-		with (
-			self._permissions(),
-			patch.object(frappe, "get_doc", return_value=make_plan()),
-			patch("essdee_yrp.finishing.views.build_plan_views", return_value=views),
-		):
-			payload = self._workspace().get_plan_tab("FP-0001", "details")
-		self.assertEqual(payload["primary_values"], ["S", "M"])
-		self.assertEqual(payload["data"], views["finishing_inward"])
-		self.assertEqual(payload["process"], "Finishing")
+		called = []
 
-	def test_old_lot_tab_skips_available_balances_for_closed_plans(self):
-		views = {"old_lot_given_matrix": {"groups": []}, "old_lot_received_matrix": {"groups": []}}
-		roles_patch, settings_patch = self._roles("Stock User")
+		def stub(name):
+			def builder(*args):
+				called.append(name)
+				return results[name]
+
+			return builder
+
+		roles_patch, settings_patch = self._roles(*roles)
+		patches = [patch(f"essdee_yrp.finishing.views.{name}", side_effect=stub(name)) for name in results]
+		patches.append(patch("essdee_yrp.finishing.views.build_plan_views", side_effect=AssertionError("full build")))
 		with (
 			self._permissions(),
 			roles_patch,
 			settings_patch,
-			patch.object(frappe, "get_doc", return_value=make_plan(fp_status="OCR Completed")),
-			patch("essdee_yrp.finishing.views.build_plan_views", return_value=views),
-			patch("essdee_yrp.finishing.old_lot.fetch_from_old_lot") as fetch_from_old_lot,
+			patch.object(frappe, "get_doc", return_value=plan or make_plan()),
+			patch("essdee_yrp.finishing.web_workspace.get_source_entries", return_value=[]),
+			patch("essdee_yrp.finishing.web_workspace.ocr.get_ocr_details", return_value={}),
+			patch("essdee_yrp.finishing.web_workspace.transactions.get_primary_values", return_value=["S", "M"]),
+			patch("essdee_yrp.finishing.web_workspace.packing.get_ipd_packing_config", return_value={}),
 		):
-			payload = self._workspace().get_plan_tab("FP-0001", "old_lot")
+			for item in patches:
+				item.start()
+			try:
+				payload = self._workspace().get_plan_tab("FP-0001", tab)
+			finally:
+				for item in reversed(patches):
+					item.stop()
+		return payload, set(called)
+
+	def test_details_tab_returns_the_desk_view_model(self):
+		payload, _called = self._tab("details")
+		self.assertEqual(
+			payload,
+			{
+				"primary_values": ["S", "M"],
+				"data": {"key": "finishing_inward"},
+				"is_set_item": 0,
+				"set_attr": None,
+				"process": "Finishing",
+			},
+		)
+
+	def test_each_tab_builds_only_its_own_view(self):
+		context = {"get_ipd_context"}
+		expected = {
+			"details": context | {"build_quantity_views"},
+			"item_details": context | {"build_quantity_views", "build_rework_details"},
+			"inward": context | {"build_inward_details"},
+			"ironing_excess": context | {"build_quantity_views"},
+			"pack_return": context | {"build_quantity_views"},
+			"old_lot": context | {"build_old_lot_matrices"},
+			"ocr": context,
+			"rejection": context | {"build_rejection_details"},
+			"grn": {"get_packed_qty"},
+		}
+		for tab, builders in expected.items():
+			with self.subTest(tab=tab):
+				_payload, called = self._tab(tab, plan=make_plan(fp_status="OCR Completed"))
+				self.assertEqual(called, builders)
+
+	def test_tab_payloads_keep_the_desk_keys(self):
+		self.assertEqual(self._tab("item_details")[0]["rework_details"], {"key": "rework_details"})
+		self.assertEqual(self._tab("inward")[0]["data"], {"key": "inward_details"})
+		self.assertEqual(self._tab("ironing_excess")[0]["data"], {"key": "finishing_ironing"})
+		self.assertEqual(self._tab("ironing_excess")[0]["entries"], [])
+		self.assertEqual(self._tab("pack_return")[0]["data"], {"key": "pack_return"})
+		self.assertEqual(self._tab("rejection")[0], {"key": "rejection_details"})
+		self.assertEqual(self._tab("ocr")[0], {"ocr_data": {}, "primary_values": ["S", "M"], "item": "TSHIRT"})
+
+	def test_tabs_and_workspace_reuse_attribute_reads_within_one_request(self):
+		from yrp.attribute_read_context import read_value
+
+		loads = []
+
+		def read_twice(*_args):
+			for _ in range(2):
+				read_value("p12-test", "key", lambda: loads.append(1) or {"value": 1})
+			return {"print_inward": False, "create_entries": False}
+
+		workspace = self._workspace()
+		with (
+			self._permissions(),
+			patch.object(frappe, "get_doc", return_value=make_plan()),
+			patch.dict(workspace.TAB_LOADERS, {"p12": read_twice}),
+		):
+			workspace.get_plan_tab("FP-0001", "p12")
+		self.assertEqual(len(loads), 1)
+		with (
+			patch.object(workspace, "get_plan", return_value=make_plan()),
+			patch.object(workspace, "get_plan_actions", side_effect=read_twice),
+			patch.object(workspace, "get_document_print_formats", return_value=[]),
+			patch.object(frappe, "has_permission", return_value=True),
+		):
+			workspace.get_plan_workspace("FP-0001")
+		self.assertEqual(len(loads), 2)
+		read_value("p12-test", "key", lambda: loads.append(1))
+		self.assertEqual(len(loads), 3, "the scope must not outlive the request")
+
+	def test_old_lot_tab_skips_available_balances_for_closed_plans(self):
+		with patch("essdee_yrp.finishing.old_lot.fetch_from_old_lot") as fetch_from_old_lot:
+			payload, _called = self._tab("old_lot", plan=make_plan(fp_status="OCR Completed"))
 		fetch_from_old_lot.assert_not_called()
 		self.assertIsNone(payload["available"])

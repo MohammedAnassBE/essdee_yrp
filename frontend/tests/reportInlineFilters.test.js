@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { Vue, findNodes, loadComponent, mountComponent, typeInto } from "../../scripts/helpers/vue_renderer.mjs"
 import * as inlineFilterComposable from "../src/composables/useInlineFilters.js"
+import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 import * as inlineFilterHelpers from "../src/components/reports/inlineFilters.js"
 import { columnTotal, createRowFilter, filteredTotalRow, guessFilter, splitTotalRow } from "../src/components/reports/inlineFilters.js"
 import { tableGrid } from "../src/components/reports/reportExport.js"
@@ -125,7 +126,7 @@ const pause = () => new Promise((done) => setTimeout(done, INLINE_FILTER_DELAY +
 const bodyTexts = (root) => nodesOf(nodesOf(root, "tbody")[0], "tr").map((tr) => nodesOf(tr, "td").map((td) => findNodes(td, (node) => node.type === "text").map((node) => node.text).join("")))
 
 test("PlanningReportTable filters only when a report opts in, so block layouts keep every row", async () => {
-	const table = loadComponent(new URL("../src/departments/planning/reports/PlanningReportTable.vue", import.meta.url).pathname, { "vue-router": { RouterLink: () => null }, "../../../composables/useInlineFilters.js": inlineFilterComposable })
+	const table = loadComponent(new URL("../src/departments/planning/reports/PlanningReportTable.vue", import.meta.url).pathname, { "vue-router": { RouterLink: () => null }, "primevue/button": (props) => Vue.h("button", props), "../../../composables/useIncrementalRows.js": incrementalRows, "../../../composables/useInlineFilters.js": inlineFilterComposable })
 	const props = { title: "Work Order", columns, rows, cellAlign: () => "", formattedCell: (column, row) => String(row[column.fieldname] ?? "") }
 	const plain = mountComponent(table, props)
 	assert.equal(nodesOf(plain, "input").length, 0)

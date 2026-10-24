@@ -34,8 +34,11 @@ export function useReportColumns({ reportKey, sourceColumns, sourceRows }) {
 		fieldsBySource.value,
 	))
 	const displayColumns = computed(() => columns.value.filter((column) => column.visible))
-	const rows = computed(() => attachLinkedValues(unref(sourceRows) || [], linkedValues.value))
 	const hasLinkedColumns = computed(() => displayColumns.value.some((column) => column.kind === "linked"))
+	const rows = computed(() => {
+		const source = unref(sourceRows) || []
+		return hasLinkedColumns.value ? attachLinkedValues(source, linkedValues.value) : source
+	})
 	const layoutError = computed(() => layoutRequestError.value || hydrationError.value)
 
 	async function loadLayout() {

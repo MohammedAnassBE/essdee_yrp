@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import { resolve } from "node:path"
 import test from "node:test"
-import { useIncrementalRows } from "../src/composables/useIncrementalRows.js"
+import * as incrementalRows from "../src/composables/useIncrementalRows.js"
+const { useIncrementalRows } = incrementalRows
 import { useCopyFeedback } from "../src/composables/useCopyFeedback.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 
@@ -17,6 +18,7 @@ function mountShell(beforeCopy, copyElementAsImage) {
 		"../../composables/useCopyFeedback.js": { useCopyFeedback: options => useCopyFeedback({ ...options, toast: { add() {} } }) },
 		"./ReportActions.vue": () => null, "./ReportExportButton.vue": () => null,
 		"./reportExport.js": { renderedReportRows: () => [] },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../navigation/InlinePageNavigation.vue": () => null,
 		"../navigation/pageNavigationContext.js": { usePageNavigation: () => null },
 	})
@@ -69,4 +71,23 @@ test("renderAllRows mounts every lazily rendered row until the result changes", 
 	rows.value = Array.from({ length: 300 }, (_, index) => index)
 	await Vue.nextTick()
 	assert.equal(renderedRows.value.length, 200)
+})
+
+test("a full-render restore steps back only when no new result arrived meanwhile", async () => {
+	const rows = Vue.ref(Array.from({ length: 900 }, (_, index) => index))
+	let incremental
+	mountComponent({ setup() { incremental = useIncrementalRows(rows); return () => null } })
+	const { renderedRows, renderMoreRows, renderAllRows } = incremental
+	renderMoreRows()
+	renderMoreRows()
+	const restore = renderAllRows()
+	assert.equal(renderedRows.value.length, 900)
+	restore()
+	assert.equal(renderedRows.value.length, 600)
+	const stale = renderAllRows()
+	rows.value = Array.from({ length: 800 }, (_, index) => index)
+	await Vue.nextTick()
+	renderAllRows()
+	stale()
+	assert.equal(renderedRows.value.length, 800, "a restore from before the reset leaves the newer state alone")
 })

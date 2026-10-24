@@ -1,5 +1,6 @@
 const NUMERIC_FIELDTYPES = new Set(["Currency", "Float", "Int", "Percent"])
 const LINKED_NAME_LIMIT = 5_000
+const LINKED_BATCH_CONCURRENCY = 3
 export const MAX_LINKED_COLUMNS = 20
 
 export function normalizeReportColumn(column, index = 0) {
@@ -74,13 +75,26 @@ export function buildLinkedValueBatches(rows, columns) {
 	return batches
 }
 
-export async function hydrateLinkedValueBatches(batches, fetchBatch, isCurrent) {
-	const values = {}
-	for (const requests of batches) {
-		const response = await fetchBatch(requests)
-		if (!isCurrent()) return null
-		mergeLinkedValues(values, response || {})
+/** Fetches up to `concurrency` batches at a time and merges the responses in batch order. */
+export async function hydrateLinkedValueBatches(batches, fetchBatch, isCurrent, concurrency = LINKED_BATCH_CONCURRENCY) {
+	const responses = new Array(batches.length)
+	let next = 0
+	let failed = false
+	async function worker() {
+		while (next < batches.length && !failed && isCurrent()) {
+			const index = next++
+			try {
+				responses[index] = await fetchBatch(batches[index])
+			} catch (reason) {
+				failed = true
+				throw reason
+			}
+		}
 	}
+	await Promise.all(Array.from({ length: Math.min(concurrency, batches.length) }, worker))
+	if (!isCurrent()) return null
+	const values = {}
+	for (const response of responses) mergeLinkedValues(values, response || {})
 	return values
 }
 

@@ -49,7 +49,7 @@
 <script setup>
 import Button from "primevue/button"
 import ProgressBar from "primevue/progressbar"
-import { computed, onBeforeUnmount, ref } from "vue"
+import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from "vue"
 
 const props = defineProps({
 	state: { type: String, default: "idle" },
@@ -65,23 +65,45 @@ const props = defineProps({
 defineEmits(["rebuild"])
 
 const clock = ref(Date.now())
-const timer = window.setInterval(() => { clock.value = Date.now() }, 1_000)
 const isRunning = computed(() => ["queued", "running"].includes(props.state))
 const progress = computed(() => Math.max(0, Math.min(Number(props.job?.progress || 0), 100)))
 const elapsed = computed(() => formatDuration(clock.value - (props.trackingStartedAt || clock.value)))
 const generatedAgo = computed(() => relativeTime(props.generatedAt, clock.value))
+let timer
+let active = true
 
-onBeforeUnmount(() => window.clearInterval(timer))
+// The clock ticks every second only while a job runs, and otherwise wakes when "Generated …" would change.
+function tick() {
+	window.clearTimeout(timer)
+	clock.value = Date.now()
+	const delay = isRunning.value ? 1_000 : props.showGenerated ? nextRelativeChange(props.generatedAt, clock.value) : null
+	if (active && delay !== null) timer = window.setTimeout(tick, delay)
+}
+watch([isRunning, () => props.showGenerated, () => props.generatedAt], tick, { immediate: true })
+onActivated(() => { active = true; tick() })
+onDeactivated(() => { active = false; window.clearTimeout(timer) })
+onBeforeUnmount(() => window.clearTimeout(timer))
 
 function formatDuration(milliseconds) {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1_000))
 	return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
 }
 
+function parseTime(value) {
+	return new Date(typeof value === "string" ? value.replace(" ", "T") : value).getTime()
+}
+
+/** Milliseconds until `relativeTime` shows a different label, or null when it never changes. */
+function nextRelativeChange(value, now) {
+	const elapsed = now - parseTime(value)
+	if (!value || !Number.isFinite(elapsed)) return null
+	const unit = elapsed < 3_600_000 ? 60_000 : elapsed < 86_400_000 ? 3_600_000 : 86_400_000
+	return elapsed < 0 ? unit - elapsed : unit - (elapsed % unit)
+}
+
 function relativeTime(value, now) {
 	if (!value) return "just now"
-	const parsed = new Date(typeof value === "string" ? value.replace(" ", "T") : value)
-	const seconds = Math.max(0, Math.floor((now - parsed.getTime()) / 1_000))
+	const seconds = Math.max(0, Math.floor((now - parseTime(value)) / 1_000))
 	if (!Number.isFinite(seconds) || seconds < 60) return "just now"
 	if (seconds < 3_600) return `${Math.floor(seconds / 60)} min ago`
 	if (seconds < 86_400) return `${Math.floor(seconds / 3_600)} h ago`

@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import { useCopyFeedback } from "../src/composables/useCopyFeedback.js"
+import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 
 globalThis.window ??= globalThis
 const tick = async () => { await new Promise(done => setImmediate(done)); await Vue.nextTick() }
@@ -24,6 +25,7 @@ function mountShell(props, { copy = () => new Promise(() => {}), toast = { add()
 		"../../composables/useCopyFeedback.js": { useCopyFeedback: options => useCopyFeedback({ ...options, toast }) },
 		"./ReportExportButton.vue": ExportStub,
 		"./reportExport.js": { renderedReportRows: () => [] },
+		"../../composables/useIncrementalRows.js": incrementalRows,
 		"../navigation/InlinePageNavigation.vue": () => null,
 		"../navigation/pageNavigationContext.js": { usePageNavigation: () => null },
 	})
@@ -50,6 +52,7 @@ test("reports show only Generate and Copy, with the rest in the more-actions men
 		assert.equal(trigger.props["aria-controls"], nodes(root, "menu")[0].props.id)
 		assert.deepEqual(menuItems(root).map(item => [item.label, Boolean(item.disabled)]), [["Reset", false], ["Export", false], ["Pick Columns", false]])
 		for (const item of menuItems(root)) item.command()
+		await tick()
 		assert.deepEqual([emitted, opened.length, pick.length], [["reset"], 1, 1])
 	} finally { root.__vue_app__.unmount() }
 })

@@ -7,6 +7,7 @@
 		:has-results="rows.length > 0"
 		:generate-disabled="isBusy"
 		:status-only="statusOnly"
+		:before-export="renderAllRows"
 		@generate="generate"
 		@reset="reset"
 	>
@@ -33,12 +34,13 @@
 					<ReportFilterRow :columns="columns" :filter="inlineFilter" />
 				</thead>
 				<tbody>
-					<tr v-for="(row, index) in inlineFilter.filteredRows.value" :key="`${row.name || 'row'}-${index}`" :class="{ 'report-total-row': row.is_total_row }">
+					<tr v-for="(row, index) in renderedRows" :key="`${row.name || 'row'}-${index}`" :class="{ 'report-total-row': row.is_total_row }">
 						<td v-for="column in columns" :key="column.key" :class="cellAlign(column)">
 							<strong v-if="column.kind === 'base' && column.fieldname === 'qty'">{{ number(cellValue(row, column)) }}</strong>
 							<span v-else>{{ cellText(row, column) || "—" }}</span>
 						</td>
 					</tr>
+					<tr v-if="unrenderedCount" ref="moreRowsSentinel" class="cut-bundle-balance__more" data-export-ignore><td :colspan="columns.length"><div class="cut-bundle-balance__more-inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ inlineFilter.filteredRows.value.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -47,8 +49,10 @@
 </template>
 
 <script setup>
+import Button from "primevue/button"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 
+import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
@@ -78,6 +82,8 @@ const columns = computed(() => reportColumns.value.filter(column => column.field
 const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => column.kind === "base" && column.fieldname === "qty" ? number(cellValue(row, column)) : cellText(row, column) })
 function cellText(row, column) { return formatDisplayByFieldtype(cellValue(row, column), column.fieldtype, { fallback: "" }) }
 const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
+// The rendered export reads the table DOM, so ReportShell calls renderAllRows before it.
+const { renderedRows, unrenderedCount, sentinel: moreRowsSentinel, renderMoreRows, renderAllRows } = useIncrementalRows(inlineFilter.filteredRows, { resetOn: [sourceRows, inlineFilter.keywords] })
 const totalQuantity = computed(() => dataRows.value.reduce((total, row) => total + Number(row.qty || 0), 0))
 const uniqueLots = computed(() => new Set(dataRows.value.map((row) => row.lot).filter(Boolean)).size)
 const uniqueSuppliers = computed(() => new Set(dataRows.value.map((row) => row.supplier).filter(Boolean)).size)
@@ -108,4 +114,5 @@ onMounted(loadLayout)
 
 <style scoped>
 .cut-bundle-balance__table-wrap{max-width:100%;overflow:auto}.cut-bundle-balance__table{min-width:1120px}.cut-bundle-balance__table td{max-width:220px}.cut-bundle-balance__table td span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cut-bundle-balance__table td strong{color:var(--erp-accent-hover);font-variant-numeric:tabular-nums}
+.cut-bundle-balance__table .cut-bundle-balance__more td{max-width:none}.cut-bundle-balance__table .cut-bundle-balance__more span{display:inline;overflow:visible}.cut-bundle-balance__more-inner{position:sticky;left:0;display:inline-flex;align-items:center;gap:var(--erp-space-3);color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}
 </style>

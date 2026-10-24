@@ -47,7 +47,7 @@ import InputText from "primevue/inputtext"
 import Message from "primevue/message"
 import Select from "primevue/select"
 import Textarea from "primevue/textarea"
-import { computed, onMounted, reactive, ref } from "vue"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 import { exportReportRows, exportWebReport, getExportPermission } from "../../api/reportExport.js"
 import { CSV_QUOTING_OPTIONS, EXPORT_FORMATS, csvPreview, defaultExportSettings, deskExportArgs, rowsExportArgs } from "./reportExport.js"
 
@@ -55,6 +55,8 @@ const props = defineProps({
 	title: { type: String, required: true },
 	source: { type: Object, required: true },
 	getRows: { type: Function, required: true },
+	/** Mounts every row before `getRows` reads them; resolves to a function that undoes it when the dialog closes. */
+	prepareRows: { type: Function, default: null },
 	disabled: { type: Boolean, default: false },
 	/** Opened from a menu through the exposed `open`. */
 	hideButton: { type: Boolean, default: false },
@@ -69,13 +71,27 @@ const settings = reactive(defaultExportSettings())
 const hasAppliedFilters = computed(() => Object.keys(props.source.appliedFilters || {}).length > 0)
 const preview = computed(() => csvPreview(previewRows.value, settings))
 
+let restoreRows = null
+
 onMounted(async () => { canExport.value = await getExportPermission(props.source) })
+watch(visible, (open) => { if (!open) releaseRows() })
 defineExpose({ open, canExport })
 
-function open() {
+async function open() {
 	error.value = ""
+	await prepareRows()
 	previewRows.value = props.getRows()
 	visible.value = true
+}
+
+async function prepareRows() {
+	const restore = await props.prepareRows?.()
+	if (restore && !restoreRows) restoreRows = restore
+}
+
+function releaseRows() {
+	restoreRows?.()
+	restoreRows = null
 }
 
 async function download() {
@@ -85,7 +101,11 @@ async function download() {
 	const fallbackName = `${props.title}.${settings.fileFormat === "CSV" ? "csv" : "xlsx"}`
 	try {
 		if (props.source.desk) await exportWebReport(deskExportArgs({ ...props.source.desk, reportKey: props.source.reportKey, appliedFilters: props.source.appliedFilters }, settings), fallbackName)
-		else await exportReportRows(rowsExportArgs({ ...props.source, title: props.title }, requireRows(), settings), fallbackName)
+		else {
+			// Rows may have been replaced (linked values, inline filters) while the dialog was open.
+			await prepareRows()
+			await exportReportRows(rowsExportArgs({ ...props.source, title: props.title }, requireRows(), settings), fallbackName)
+		}
 		visible.value = false
 	} catch (reason) {
 		error.value = reason?.message || "The report could not be exported."

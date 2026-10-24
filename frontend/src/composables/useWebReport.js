@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue"
 
 import { onRealtime } from "../api/realtime.js"
 import { downloadReportJob, getReportJob, runWebReport } from "../api/webReports.js"
@@ -20,9 +20,10 @@ import {
 
 export function useWebReport({ reportKey }) {
 	const state = ref("idle")
-	const sourceColumns = ref([])
-	const sourceRows = ref([])
-	const payload = ref(null)
+	// Results are replaced as a whole and never mutated in place, so they are not deep-reactive.
+	const sourceColumns = shallowRef([])
+	const sourceRows = shallowRef([])
+	const payload = shallowRef(null)
 	const job = ref(null)
 	const generatedAt = ref(null)
 	const reused = ref(false)

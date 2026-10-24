@@ -36,6 +36,7 @@
 					:title="title"
 					:source="exportSource"
 					:get-rows="getRenderedRows"
+				:prepare-rows="prepareRenderedRows"
 				/>
 			</div>
 		</form>
@@ -83,6 +84,7 @@ import { useCopyFeedback } from "../../composables/useCopyFeedback.js"
 import ReportActions from "./ReportActions.vue"
 import ReportExportButton from "./ReportExportButton.vue"
 import { renderedReportRows } from "./reportExport.js"
+import { provideFullRender } from "../../composables/useIncrementalRows.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import { usePageNavigation } from "../navigation/pageNavigationContext.js"
 
@@ -95,6 +97,8 @@ const props = defineProps({
 	copyable: { type: Boolean, default: false },
 	/** Runs before Copy Report captures; may mount hidden rows and return a function that undoes it. */
 	beforeCopy: { type: Function, default: null },
+	/** Runs before a rendered (DOM) export reads the rows, for incremental tables owned outside the shell; may return a restore function. */
+	beforeExport: { type: Function, default: null },
 	/** Secondary actions for the "⋯" menu, as PrimeVue Menu items. Keep only record operations in the #actions slot. */
 	actions: { type: Array, default: () => [] },
 	exportSource: { type: Object, default: null },
@@ -122,20 +126,32 @@ const moreActions = computed(() => [
 const reportRoot = ref(null)
 const resultsRoot = ref(null)
 const getRenderedRows = () => renderedReportRows(resultsRoot.value)
+const renderAllRows = provideFullRender()
 const { copying, copied, runCopy } = useCopyFeedback({ success: "Report copied to clipboard" })
 const COPY_HIDDEN = [".report-shell__filters", ".report-shell__refreshing"]
 
 function copyReport() {
 	return runCopy(async () => {
 		if (copyPendingImage(reportRoot.value)) return
+		const restoreRows = await renderAllRows()
 		const restoreState = props.beforeCopy ? await props.beforeCopy() : null
 		await nextTick()
 		try {
 			await copyElementAsImage(reportRoot.value, { hide: COPY_HIDDEN })
 		} finally {
 			restoreState?.()
+			restoreRows()
 		}
 	})
+}
+
+/** Mounts every row before a rendered export reads the DOM; a Desk export rebuilds rows on the server. */
+async function prepareRenderedRows() {
+	if (props.exportSource?.desk) return null
+	const restoreRows = await renderAllRows()
+	const restoreOwned = await props.beforeExport?.()
+	await nextTick()
+	return () => { restoreOwned?.(); restoreRows() }
 }
 </script>
 

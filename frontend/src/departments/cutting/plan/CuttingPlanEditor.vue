@@ -68,6 +68,7 @@
 						<div class="cutting-plan-editor__field cutting-plan-editor__field--full">
 							<label for="cp-location">Cutting Location</label>
 							<Select v-model="form.cutting_location" input-id="cp-location" :options="options.cutting_locations || []" :disabled="busy || !canEditField('cutting_location')" show-clear fluid />
+							<small v-if="fields.laysheet_locked_fields.length" class="cutting-plan-editor__hint">Cutting Location and Is Manual Entry are locked because LaySheets exist for this plan.</small>
 						</div>
 					</div>
 				</section>
@@ -119,7 +120,7 @@ const stagedDefaults = takeNewDocumentDefaults("SD YRP Cutting Plan")
 const filterDefaults = props.name || props.duplicateFrom || props.initialPayload ? {} : stagedDefaults
 const groups = ref([])
 const permissions = reactive({ can_create: false, can_write: false, can_update_after_submit: false, can_submit: false })
-const fields = reactive({ show_work_order: false, can_edit_work_order: false, allow_on_submit_fields: [] })
+const fields = reactive({ show_work_order: false, can_edit_work_order: false, allow_on_submit_fields: [], laysheet_locked_fields: [] })
 const options = reactive({ cutting_locations: [] })
 const modified = ref("")
 const savedName = ref(props.name)
@@ -156,6 +157,7 @@ const dirty = computed(() => !loading.value && signature.value !== cleanSignatur
 const loadFailed = computed(() => Boolean(error.value && !hasLoaded.value))
 
 function canEditField(fieldname) {
+	if (fields.laysheet_locked_fields.includes(fieldname)) return false
 	return !submittedEditor.value || allowOnSubmitFields.value.has(fieldname)
 }
 
@@ -334,6 +336,7 @@ watch(() => [props.name, props.duplicateFrom], () => load())
 .cutting-plan-editor__field > label span { color: #c24145; }
 .cutting-plan-editor__check { display: inline-flex; min-height: var(--erp-control-height); align-items: center; gap: 8px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 650; }
 .cutting-plan-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.55; }
+.cutting-plan-editor__hint { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 
 @media (max-width: 900px) {
 	.cutting-plan-editor__card-grid { grid-template-columns: 1fr; }

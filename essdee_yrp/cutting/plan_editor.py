@@ -13,8 +13,10 @@ from frappe.utils import cint, flt, sbool
 
 from essdee_yrp.api.duplicate import build_duplicate_values
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan import (
+	LAYSHEET_LOCKED_FIELDS,
 	fetch_order_item_details,
 	get_items,
+	has_cutting_laysheets,
 )
 
 
@@ -196,6 +198,12 @@ def _allow_on_submit_fields(doc, write_fields=None) -> list[str]:
 	return allowed
 
 
+def _laysheet_locked_fields(doc) -> list[str]:
+	if not has_cutting_laysheets(_doc_value(doc, "name")):
+		return []
+	return list(LAYSHEET_LOCKED_FIELDS)
+
+
 def _get_lot(lot: str):
 	if not lot:
 		frappe.throw(_("Lot is required."))
@@ -242,9 +250,8 @@ def _permission_flags(doc=None) -> dict[str, bool]:
 		"can_amend": allowed("amend"),
 	}
 	if doc is not None:
-		permissions["can_update_after_submit"] = bool(
-			docstatus == 1 and raw_write and _allow_on_submit_fields(doc)
-		)
+		editable_after_submit = set(_allow_on_submit_fields(doc)) - set(_laysheet_locked_fields(doc))
+		permissions["can_update_after_submit"] = bool(docstatus == 1 and raw_write and editable_after_submit)
 		permissions["can_write"] = bool(docstatus == 0 and permissions["can_write"])
 		permissions["can_submit"] = bool(docstatus == 0 and permissions["can_submit"])
 		permissions["can_cancel"] = bool(docstatus == 1 and permissions["can_cancel"])
@@ -301,6 +308,7 @@ def _serialize_editor(doc, groups) -> dict:
 			"show_work_order": show_work_order,
 			"can_edit_work_order": "work_order" in write_fields,
 			"allow_on_submit_fields": allow_on_submit_fields,
+			"laysheet_locked_fields": _laysheet_locked_fields(doc),
 		},
 		"options": {
 			"cutting_locations": ["Machine Cutting", "Manual Cutting"],

@@ -27,6 +27,7 @@ from essdee_yrp.fabric_substitution import substitution_index
 from essdee_yrp.print_helpers import set_attribute_display_values
 
 DEFAULT_PIECE_WEIGHT_TOLERANCE = 0.003
+LAYSHEET_LOCKED_FIELDS = {"cutting_location": "Cutting Location", "is_manual_entry": "Is Manual Entry"}
 
 
 def _get_submitted_cutting_plan(name, permission="write"):
@@ -144,7 +145,34 @@ def change_approval_grammage(doc_name, piece_weight_tolerance):
 	}
 
 
+def has_cutting_laysheets(cutting_plan):
+	"""Any LaySheet (draft, submitted or cancelled) created against this plan."""
+	return bool(cutting_plan and frappe.db.exists("SD YRP Cutting LaySheet", {"cutting_plan": cutting_plan}))
+
+
 class SDYRPCuttingPlan(Document):
+	def validate(self):
+		self.validate_laysheet_locked_fields()
+
+	def before_update_after_submit(self):
+		self.validate_laysheet_locked_fields()
+
+	def validate_laysheet_locked_fields(self):
+		before = None if self.is_new() else self.get_doc_before_save()
+		if not before:
+			return
+		changed = [
+			label
+			for fieldname, label in LAYSHEET_LOCKED_FIELDS.items()
+			if (self.get(fieldname) or None) != (before.get(fieldname) or None)
+		]
+		if changed and has_cutting_laysheets(self.name):
+			frappe.throw(
+				_("{0} cannot be changed because LaySheets exist for Cutting Plan {1}.").format(
+					" and ".join(_(label) for label in changed), self.name
+				)
+			)
+
 	def before_print(self, settings=None):
 		set_attribute_display_values(self)
 
@@ -277,6 +305,7 @@ class SDYRPCuttingPlan(Document):
 
 		accessory_items = fetch_cloth_details(self.cutting_plan_accessory_details)
 		self.set_onload("item_accessory_details", accessory_items)
+		self.set_onload("has_laysheets", has_cutting_laysheets(self.name))
 
 	def validate_work_order_lot(self):
 		if not self.work_order:

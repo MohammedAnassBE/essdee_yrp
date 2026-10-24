@@ -26,12 +26,9 @@ frappe.ui.form.on("SD YRP Cutting Plan", {
 			}
         }
         else {
-            if (frm.doc.lay_no != 0) {
-                frm.set_df_property("cutting_location", "read_only", true)
-            }
-            else {
-                frm.set_df_property("cutting_location", "read_only", false)
-            }
+            const has_laysheets = Boolean(frm.doc.__onload && frm.doc.__onload.has_laysheets)
+            frm.set_df_property("cutting_location", "read_only", has_laysheets)
+            frm.set_df_property("is_manual_entry", "read_only", has_laysheets)
             if (frm.doc.__onload && frm.doc.__onload.item_details) {
                 frm.cut_plan_items.load_data(frm.doc.__onload.item_details, 0)
             }

@@ -306,7 +306,10 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 
 	def validate_against_work_order_pending(self):
 		from essdee_yrp.fabric_grn import is_calculable_fabric_grn
+		from essdee_yrp.finishing.grn import is_finishing_plan_grn, map_finishing_plan_receivables
 
+		if is_finishing_plan_grn(self):
+			return map_finishing_plan_receivables(self)
 		if not is_calculable_fabric_grn(self):
 			return super().validate_against_work_order_pending()
 		work_order = frappe.get_doc("YRP Work Order", self.against_id)

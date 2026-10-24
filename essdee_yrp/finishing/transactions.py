@@ -11,7 +11,6 @@ from yrp.utils import get_variant_attr_details, update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import (
 	build_variant_attributes,
 	get_or_create_variant,
-	get_parent_item,
 )
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import (
 	get_ipd_primary_values,
@@ -120,7 +119,6 @@ def create_grn(
 			config.get("colours"),
 			config.get("packing_combo"),
 		)
-		validate_dynamic_packing_availability(work_order, ipd_doc, batch_rows)
 		size_quantities, total_boxes, total_pieces = aggregate_batch_pieces(batch_rows)
 		uom = attribute_db.get_value("SD YRP Lot", lot, "packing_uom")
 	else:
@@ -177,48 +175,10 @@ def create_grn(
 				"ratio_json": frappe.as_json(batch["ratio"]),
 			},
 		)
+	grn.flags.finishing_plan_grn = True
 	grn.insert()
 	grn.submit()
 	return grn.name
-
-
-def validate_dynamic_packing_availability(work_order, ipd_doc, batches):
-	if not frappe.db.sql("SELECT name FROM `tabYRP Work Order` WHERE name = %s FOR UPDATE", work_order):
-		frappe.throw(f"Work Order {work_order} does not exist")
-	requested = {}
-	for batch in batches:
-		for size, pieces in batch["size_pieces"].items():
-			key = (_attribute_value(batch["colour"]), size)
-			requested[key] = requested.get(key, 0) + flt(pieces)
-
-	work_order_doc = frappe.get_doc("YRP Work Order", work_order)
-	balances = {}
-	for row in work_order_doc.get("work_order_calculated_items") or []:
-		if get_parent_item(row.item_variant) != ipd_doc.item:
-			continue
-		attributes = get_variant_attr_details(row.item_variant)
-		colour = attributes.get(ipd_doc.packing_attribute)
-		size = attributes.get(ipd_doc.primary_item_attribute)
-		if not colour or not size:
-			continue
-		pending = max(flt(row.delivered_quantity) - flt(row.received_qty), 0)
-		key = (colour, size)
-		if ipd_doc.is_set_item:
-			part = attributes.get(ipd_doc.set_item_attribute)
-			if part:
-				balances.setdefault(key, {})
-				balances[key][part] = balances[key].get(part, 0) + pending
-		else:
-			balances[key] = flt(balances.get(key)) + pending
-
-	for (colour, size), quantity in requested.items():
-		balance = balances.get((colour, size), {}) if ipd_doc.is_set_item else balances.get((colour, size), 0)
-		available = min(balance.values()) if ipd_doc.is_set_item and balance else flt(balance)
-		if quantity > available:
-			frappe.throw(
-				f"Packing ratio needs {quantity:g} pieces for {colour} / {size}, "
-				f"but only {available:g} pieces are pending in Work Order {work_order}"
-			)
 
 
 def validate_dynamic_packing_transition(work_order, lot):
@@ -263,18 +223,10 @@ def _build_packing_grn_items(
 			item_name,
 			build_variant_attributes({ipd_doc.primary_item_attribute: size}, stage, ipd_doc.name),
 		)
-		receivables = [
-			row
-			for row in work_order_doc.receivables
-			if row.item_variant == variant and flt(row.pending_quantity) > 0
-		]
+		receivables = [row for row in work_order_doc.receivables if row.item_variant == variant]
 		if not receivables:
 			frappe.throw(f"Work Order {work_order_doc.name} has no packing receivable for {variant}")
-		remaining = flt(quantity)
-		for receivable in receivables:
-			allocated = min(remaining, flt(receivable.pending_quantity))
-			if allocated <= 0:
-				continue
+		for receivable, allocated in _allocate_to_receivables(receivables, flt(quantity)):
 			items.append(
 				{
 					"item_variant": variant,
@@ -289,15 +241,26 @@ def _build_packing_grn_items(
 					"set_combination": receivable.set_combination or "{}",
 				}
 			)
-			remaining -= allocated
-			if remaining <= 0.001:
-				break
-		if remaining > 0.001:
-			frappe.throw(
-				f"Work Order {work_order_doc.name} has only {flt(quantity) - remaining:g} "
-				f"packing quantity pending for {variant}, not {flt(quantity):g}"
-			)
 	return items
+
+
+def _allocate_to_receivables(receivables, quantity):
+	"""Fill pending receivables in order; the excess over the Work Order goes on the last one.
+
+	Finishing Plan packing is gated on Loose Piece stock, not on Work Order receivables.
+	"""
+	allocations = {}
+	remaining = quantity
+	for receivable in receivables:
+		allocated = min(remaining, max(flt(receivable.pending_quantity), 0))
+		if allocated > 0:
+			allocations[receivable.name] = allocated
+			remaining -= allocated
+	if remaining > 0.001:
+		last = receivables[-1].name
+		allocations[last] = flt(allocations.get(last)) + remaining
+	by_name = {receivable.name: receivable for receivable in receivables}
+	return [(by_name[name], allocated) for name, allocated in allocations.items()]
 
 
 def _normalize_size_quantities(data):

@@ -16,6 +16,38 @@ from essdee_yrp.finishing.state import (
 from essdee_yrp.finishing.status import apply_auto_fp_status
 
 
+def is_finishing_plan_grn(grn):
+	"""Packing GRN built by the Finishing Plan create path, which sets the in-memory flag."""
+	return bool(
+		(getattr(grn, "flags", None) or {}).get("finishing_plan_grn")
+		and grn.get("against") == "YRP Work Order"
+		and grn.get("from_finishing")
+		and grn.get("includes_packing")
+		and not grn.get("is_return")
+		and not grn.get("is_rework")
+		and not grn.get("additional_grn")
+	)
+
+
+def map_finishing_plan_receivables(grn):
+	"""Link rows to Work Order receivables without a quantity cap; Loose Piece stock gates the receipt."""
+	from yrp.yrp.doctype.yrp_goods_received_note.yrp_goods_received_note import _find_matching_receivable
+
+	work_order = frappe.get_doc("YRP Work Order", grn.against_id)
+	for row in grn.items:
+		target = _find_matching_receivable(work_order.receivables, row)
+		if not target:
+			frappe.throw(
+				_("Row {0}: no matching Work Order Receivable found for {1}.").format(
+					row.idx, row.item_variant
+				)
+			)
+		row.ref_doctype = "YRP Work Order Receivables"
+		row.ref_docname = target.name
+		row.pending_quantity = target.pending_quantity
+		row.max_receivable_quantity = -1
+
+
 def validate_packing_cancellation(grn):
 	"""Do not cancel a packing GRN while any of its boxes are dispatched."""
 	if not grn.get("includes_packing"):

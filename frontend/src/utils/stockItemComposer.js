@@ -9,6 +9,13 @@ export const stockRateLabels = {
 	"SD YRP Lot Transfer": "Rate",
 }
 
+// production_api offers Secondary Qty on these item editors, only for Items with a Secondary UOM.
+const SECONDARY_QUANTITY_OPERATIONS = new Set(["stock_entry", "stock_update", "purchase_order"])
+
+export function offersSecondaryQuantity(operation, schema) {
+	return SECONDARY_QUANTITY_OPERATIONS.has(operation) && Boolean(schema?.secondary_uom)
+}
+
 export function applyStockUpdateRates(row, rates) {
 	const prepared = clone(row)
 	for (const [key, value] of Object.entries(prepared.values || {})) {

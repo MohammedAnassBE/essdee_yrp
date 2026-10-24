@@ -89,7 +89,7 @@
 							<span>{{ quantityLabel }}</span>
 							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched[value] = true" />
 							<template v-if="rateEditable"><span>Rate</span><input v-model.number="receiptRates[value]" type="number" min="0" step="0.0001" :disabled="disabled" /></template>
-							<template v-if="itemSchema.secondary_uom && operation === 'stock_entry'">
+							<template v-if="offersSecondary">
 								<span>{{ itemSchema.secondary_uom }}</span>
 								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" :disabled="disabled" />
 							</template>
@@ -98,7 +98,7 @@
 					<div v-else class="stock-composer__single-quantity">
 						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched.default = true" /></label>
 						<label v-if="rateEditable"><span>Rate</span><input v-model.number="receiptRates.default" type="number" min="0" step="0.0001" :disabled="disabled" /></label>
-						<label v-if="itemSchema.secondary_uom && operation === 'stock_entry'"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :disabled="disabled" /></label>
+						<label v-if="offersSecondary"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :disabled="disabled" /></label>
 					</div>
 				</div>
 
@@ -143,7 +143,7 @@ import { computed, reactive, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
 import { callMethod } from "../../api/frappe.js"
-import { getEntryPrimaryValues, mergeStockItemDraft, stockRateLabels } from "../../utils/stockItemComposer.js"
+import { getEntryPrimaryValues, mergeStockItemDraft, offersSecondaryQuantity, stockRateLabels } from "../../utils/stockItemComposer.js"
 import { cellAmount, getEntryTotals, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
 import { formatDisplayDate } from "../../utils/dateFormat.js"
 
@@ -182,6 +182,7 @@ const editing = ref(null)
 const preparing = ref(false)
 
 const dimensions = computed(() => props.editor.dimensions || [])
+const offersSecondary = computed(() => offersSecondaryQuantity(props.operation, itemSchema.value))
 const rateLabel = computed(() => stockRateLabels[props.operation] || (props.operation === "purchase_order" ? "Rate" : ""))
 const rateEditable = computed(() => props.operation === "stock_reconciliation" || (props.operation === "stock_entry" && props.purpose === "Material Receipt"))
 const lockedDimensions = computed(() => {
@@ -326,7 +327,7 @@ async function stageItem() {
 		values[value] = { qty }
 		if (!editing.value?.row?.values?.[value]) values[value].rate = 0
 		if (rateEditable.value) values[value].rate = Number(receiptRates[value] || 0)
-		if (itemSchema.value.secondary_uom && props.operation === "stock_entry") {
+		if (offersSecondary.value) {
 			values[value].secondary_qty = Number(secondaryQuantities[value] || 0)
 			values[value].secondary_uom = itemSchema.value.secondary_uom
 		}

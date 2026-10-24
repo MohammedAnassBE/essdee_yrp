@@ -9,6 +9,7 @@ const { parse, compileScript } = require("@vue/compiler-sfc")
 const sharedModules = {
 	"dateFormat.js": await import("../../frontend/src/utils/dateFormat.js"),
 	"listClickFilters.js": await import("../../frontend/src/components/common/listClickFilters.js"),
+	"listDateRangeFilters.js": await import("../../frontend/src/components/common/listDateRangeFilters.js"),
 	"newDocumentDefaults.js": await import("../../frontend/src/utils/newDocumentDefaults.js"),
 	// Tab titles need the app router; components under test only report them.
 	"usePageTitle.js": { usePageTitle() {} },

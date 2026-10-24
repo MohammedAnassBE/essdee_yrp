@@ -86,3 +86,15 @@ test("every department DC and GRN card uses the meta-driven list without hiding 
 	assert.match(source, /<ListView :doctype="capability.doctype"/)
 	assert.doesNotMatch(source, /excluded-filter-fields/)
 })
+
+test("GRN, DC and Stock Entry lists offer a Posting Date quick filter", async () => {
+	const doctypes = {
+		"YRP Goods Received Note": "yrp/doctype/yrp_goods_received_note/yrp_goods_received_note.json",
+		"YRP Delivery Challan": "yrp/doctype/yrp_delivery_challan/yrp_delivery_challan.json",
+		"YRP Stock Entry": "yrp_stock/doctype/yrp_stock_entry/yrp_stock_entry.json",
+	}
+	for (const [doctype, path] of Object.entries(doctypes)) {
+		const fields = await quickFilterFields(doctype, withPropertySetters(doctype, JSON.parse(yrpFile(path)).fields))
+		assert.equal(fields.find(field => field.fieldname === "posting_date")?.fieldtype, "Date", doctype)
+	}
+})

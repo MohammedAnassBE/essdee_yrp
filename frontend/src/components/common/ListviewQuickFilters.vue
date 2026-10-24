@@ -1,7 +1,7 @@
 <template>
 	<section class="quick-filters">
 		<div class="quick-filters__grid">
-			<div v-for="field in fields" :key="field.fieldname" class="quick-filter-field">
+			<div v-for="field in fields" :key="field.fieldname" class="quick-filter-field" :class="{ 'quick-filter-field--range': field.fieldtype === 'Date' }">
 				<label :for="`quick-filter-${field.fieldname}`">{{ field.label }}</label>
 
 				<LinkField
@@ -42,13 +42,12 @@
 					fluid
 					@update:model-value="update(field, $event)"
 				/>
-				<DateField
+				<DateRangeFilter
 					v-else-if="field.fieldtype === 'Date'"
 					:input-id="`quick-filter-${field.fieldname}`"
 					:model-value="modelValue[field.fieldname] || ''"
-					:aria-label="field.label"
+					:label="field.label"
 					:placeholder="`All ${field.label}`"
-					show-clear
 					@update:model-value="update(field, $event)"
 				/>
 				<DateTimeField
@@ -95,7 +94,7 @@
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Select from "primevue/select"
-import { DateField, DateTimeField, TimeField } from "./asyncListParts.js"
+import { DateRangeFilter, DateTimeField, TimeField } from "./asyncListParts.js"
 import LinkField from "./LinkField.vue"
 
 const props = defineProps({
@@ -118,6 +117,7 @@ function update(field, value) {
 }
 
 function hasValue(value) {
+	if (Array.isArray(value)) return value.some(hasValue)
 	return value !== null && value !== undefined && value !== ""
 }
 
@@ -211,6 +211,12 @@ function linkFilters(field) {
 		background: transparent;
 		border: 0;
 		box-shadow: none;
+	}
+}
+
+@media (min-width: 601px) {
+	.quick-filter-field--range {
+		grid-column: span 2;
 	}
 }
 

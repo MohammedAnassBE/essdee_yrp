@@ -533,6 +533,7 @@ import { formatFullDateTime, prettyDate } from "../../utils/prettyDate.js"
 import { listStatusTone } from "../../utils/statusTone.js"
 import { listStandardFilterFields, listStatusFilters } from "./listStatusFilters.js"
 import { clickFilterValue, isClickFilterColumn, replaceEqualityFilter } from "./listClickFilters.js"
+import { dateRangeFilters, dateRangeValue } from "./listDateRangeFilters.js"
 import { equalityFilterDefaults, stageNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
 const props = defineProps({
@@ -935,6 +936,7 @@ function cloneFilters(filters) {
 }
 
 function hasFilterValue(value) {
+	if (Array.isArray(value)) return value.some(hasFilterValue)
 	return value !== null && value !== undefined && value !== ""
 }
 
@@ -960,6 +962,7 @@ function quickFilterTuples({ excludeStatus = false } = {}) {
 		if (field.fieldname === effectiveStatusField.value && hasFilterValue(value)) {
 			return listStatusFilters(effectiveStatusField.value, effectiveStatusOptions.value, value)
 		}
+		if (field.fieldtype === "Date") return dateRangeFilters(field.fieldname, value)
 		return hasFilterValue(value) ? [[field.fieldname, "=", value]] : []
 	})
 }
@@ -1419,13 +1422,14 @@ function cellValueClicked(event, column, row) {
 	const value = clickFilterValue(column, row[fieldname])
 	if (fieldname === effectiveStatusField.value && statusTabs.value.length) return selectStatus(String(value))
 	const advanced = replaceEqualityFilter(advancedFilters.value, props.doctype, fieldname, value)
-	if (!standardFilterFields.value.some((field) => field.fieldname === fieldname)) return filtersApplied(advanced)
+	const standardField = standardFilterFields.value.find((field) => field.fieldname === fieldname)
+	if (!standardField) return filtersApplied(advanced)
 	const remaining = advanced.slice(0, -1)
 	if (remaining.length !== advancedFilters.value.length) {
 		advancedFilters.value = remaining
 		emit("update:advancedFilters", cloneFilters(remaining))
 	}
-	applyQuickFilter(fieldname, value)
+	applyQuickFilter(fieldname, standardField.fieldtype === "Date" ? dateRangeValue(value) : value)
 }
 
 function applyQuickFilter(fieldname, value) {

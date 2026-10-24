@@ -148,6 +148,7 @@ fixtures = [
 					"YRP Item Production Detail",
 					"YRP Terms and Condition",
 					"SD YRP Sewing Plan Entry Detail",
+					"Department",
 				],
 			]
 		],

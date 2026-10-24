@@ -2,14 +2,12 @@
 	<DepartmentPage title="Item Production Details" back-to="/merch" back-label="Merch" :show-title="false" flat full-width inline-navigation>
 		<section class="merch-ipds-page erp-workspace" aria-label="Item Production Details">
 			<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
-			<div v-else-if="loading" class="merch-ipds-page__loading" aria-label="Loading Item Production Details">
-				<ListPageSkeleton />
-			</div>
-			<Message v-else-if="!capability?.can_read" severity="warn" :closable="false">
+			<Message v-else-if="!loading && !capability?.can_read" severity="warn" :closable="false">
 				You do not have permission to view Item Production Details.
 			</Message>
 			<ListView
 				v-else
+				:can-read="!loading && Boolean(capability?.can_read)"
 				doctype="YRP Item Production Detail"
 				title="Item Production Details"
 				eyebrow="Merch"
@@ -51,7 +49,6 @@ import { useRouter } from "vue-router"
 
 import { getIpdListCapabilities } from "../../../api/merch.js"
 import DepartmentPage from "../../../components/DepartmentPage.vue"
-import ListPageSkeleton from "../../../components/common/ListPageSkeleton.vue"
 import ListView from "../../../components/common/ListView.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
@@ -92,10 +89,5 @@ onMounted(load)
 <style scoped>
 .merch-ipds-page {
 	min-width: 0;
-}
-.merch-ipds-page__loading {
-	display: grid;
-	gap: 16px;
-	padding: clamp(14px, 2vw, 22px);
 }
 </style>

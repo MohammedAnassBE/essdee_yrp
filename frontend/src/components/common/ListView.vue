@@ -1,5 +1,7 @@
 <template>
+	<ListPageSkeleton v-if="!canRead" />
 	<section
+		v-else
 		class="common-list-view"
 		:class="{
 			'common-list-view--viewport-bounded': viewportBounded,
@@ -502,6 +504,7 @@ import {
 } from "../../api/frappe.js"
 import DocumentStatusBadge from "../documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
+import ListPageSkeleton from "./ListPageSkeleton.vue"
 import {
 	activeCurrencyReferences,
 	buildColumnOptions,
@@ -559,6 +562,8 @@ const props = defineProps({
 	allowBulkActions: { type: Boolean, default: true },
 	selectable: { type: Boolean, default: false },
 	navigationEnabled: { type: Boolean, default: true },
+	/** False while the page's read permission is unknown: data loads, only a skeleton renders. */
+	canRead: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(["row-click", "loaded", "selection-change", "update:advancedFilters"])

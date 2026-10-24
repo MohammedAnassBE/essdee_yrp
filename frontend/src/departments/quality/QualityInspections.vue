@@ -1,9 +1,8 @@
 <template>
 	<DepartmentPage title="Quality Inspections" back-to="/quality" back-label="Quality" :show-title="false" flat full-width inline-navigation>
-		<ListPageSkeleton v-if="loading" />
-		<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
-		<Message v-else-if="!capability.can_read" severity="warn" :closable="false">You do not have permission to view Quality Inspections.</Message>
-		<ListView v-else :doctype="INSPECTION_DOCTYPE" title="Essdee Quality Inspection" eyebrow="Quality"
+		<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
+		<Message v-else-if="!loading && !capability.can_read" severity="warn" :closable="false">You do not have permission to view Quality Inspections.</Message>
+		<ListView v-else :can-read="!loading && Boolean(capability.can_read)" :doctype="INSPECTION_DOCTYPE" title="Essdee Quality Inspection" eyebrow="Quality"
 			:default-columns="INSPECTION_LIST_COLUMNS" status-field="result" :status-options="statusOptions"
 			:allow-bulk-actions="false" full-width viewport-bounded clickable @row-click="openInspection">
 			<template #toolbar-actions>
@@ -25,7 +24,6 @@ import { useRouter } from "vue-router"
 import { getQualityCapabilities } from "../../api/quality.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import ListView from "../../components/common/ListView.vue"
-import ListPageSkeleton from "../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"

@@ -14,6 +14,8 @@ const sharedModules = {
 	"usePageTitle.js": { usePageTitle() {} },
 	// The activity footer loads its own data; tests that cover it pass the real component explicitly.
 	"DocumentActivity.vue": () => null,
+	// Template-only placeholder (no <script>); rendered as a marker node.
+	"ListPageSkeleton.vue": () => Vue.h("list-page-skeleton"),
 	"documentShortcuts.js": await import("../../frontend/src/utils/documentShortcuts.js"),
 	// Keyboard shortcuts bind to window; tests that cover them pass the real composable explicitly.
 	"useDocumentShortcuts.js": { useDocumentShortcuts() {} },

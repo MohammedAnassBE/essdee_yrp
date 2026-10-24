@@ -10,14 +10,12 @@
 	>
 		<section class="planning-lots-page erp-workspace" aria-label="Planning lots">
 			<WorkspaceLoadError v-if="error" :message="error" :loading="loading" @retry="load" />
-			<div v-else-if="loading" class="planning-lots-page__loading" aria-label="Loading Lots">
-				<ListPageSkeleton />
-			</div>
-			<Message v-else-if="!capability" severity="warn" :closable="false">
+			<Message v-else-if="!loading && !capability" severity="warn" :closable="false">
 				You do not have permission to view Lots.
 			</Message>
 			<ListView
 				v-else
+				:can-read="!loading && Boolean(capability)"
 				doctype="SD YRP Lot"
 				title="Lots"
 				eyebrow="Planning"
@@ -62,7 +60,6 @@ import { useRouter } from "vue-router"
 import { getPlanningCapabilities } from "../../../api/planning.js"
 import DepartmentPage from "../../../components/DepartmentPage.vue"
 import ListView from "../../../components/common/ListView.vue"
-import ListPageSkeleton from "../../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../../router/listDocumentNavigation.js"
@@ -99,10 +96,5 @@ onMounted(load)
 <style scoped>
 .planning-lots-page {
 	min-width: 0;
-}
-.planning-lots-page__loading {
-	display: grid;
-	gap: var(--erp-space-4);
-	padding: var(--erp-space-3) 0;
 }
 </style>

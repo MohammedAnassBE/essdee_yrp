@@ -9,20 +9,18 @@
 		inline-navigation
 	>
 		<section class="purchase-invoices-page erp-workspace" aria-label="Purchase Invoices">
-			<div v-if="loading" class="purchase-invoices-page__loading">
-				<ListPageSkeleton />
-			</div>
 			<WorkspaceLoadError
-				v-else-if="loadError"
+				v-if="loadError"
 				:message="loadError"
 				:loading="loading"
 				@retry="load"
 			/>
-			<Message v-else-if="!capability?.can_read" severity="warn" :closable="false">
+			<Message v-else-if="!loading && !capability?.can_read" severity="warn" :closable="false">
 				You do not have permission to view Purchase Invoices.
 			</Message>
 			<ListView
 				v-else
+				:can-read="!loading && Boolean(capability?.can_read)"
 				doctype="YRP Purchase Invoice"
 				title="Purchase Invoices"
 				:eyebrow="eyebrow"
@@ -42,7 +40,7 @@
 			>
 				<template #toolbar-actions>
 					<Button
-						v-if="capability.can_create"
+						v-if="capability?.can_create"
 						label="New Purchase Invoice"
 						icon="pi pi-plus"
 						@click="createPurchaseInvoice"
@@ -65,7 +63,6 @@ import { useRouter } from "vue-router"
 import { getAccountsCapabilities } from "../../api/accounts.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import ListView from "../../components/common/ListView.vue"
-import ListPageSkeleton from "../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
@@ -120,7 +117,6 @@ onMounted(load)
 
 <style scoped>
 .purchase-invoices-page { width: 100%; min-width: 0; padding: 2px 0 var(--erp-space-5); }
-.purchase-invoices-page__loading { display: grid; gap: var(--erp-space-3); padding-top: 2px; }
 :deep(.purchase-invoice-status--draft) { color: var(--erp-warning); background: var(--erp-warning-soft); border-color: var(--erp-attention-border); }
 :deep(.purchase-invoice-status--approval-initiated) { color: var(--erp-danger); background: var(--erp-danger-soft); border-color: color-mix(in srgb, var(--erp-danger) 22%, transparent); }
 :deep(.purchase-invoice-status--approval-pending) { color: var(--erp-warning); background: var(--erp-warning-soft); border-color: var(--erp-attention-border); }

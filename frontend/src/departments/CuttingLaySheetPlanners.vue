@@ -4,7 +4,8 @@
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="LaySheet Planner unavailable" message="You do not have permission to view LaySheet Planner documents." :retryable="false" />
 			<ListView
-				v-else-if="capability?.can_read"
+				v-else
+				:can-read="Boolean(capability?.can_read)"
 				doctype="SD YRP Cutting Laysheet Planner"
 				title="LaySheet Planner"
 				search-placeholder="Search LaySheet Plans…"
@@ -19,7 +20,7 @@
 				@row-click="openPlan"
 			>
 				<template #toolbar-actions>
-					<Button v-if="capability.can_create" class="list-primary-action" label="Create LaySheet Plan" icon="pi pi-plus" @click="createPlan" />
+					<Button v-if="capability?.can_create" class="list-primary-action" label="Create LaySheet Plan" icon="pi pi-plus" @click="createPlan" />
 				</template>
 				<template #cell-optimization_status="{ value }">
 					<DocumentStatusBadge :label="value || 'Not Started'" />

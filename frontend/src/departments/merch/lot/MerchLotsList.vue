@@ -18,15 +18,8 @@
 				:loading="loading"
 				@retry="load"
 			/>
-			<div
-				v-else-if="loading"
-				class="purchase-lots-page__loading"
-				aria-label="Loading Lots"
-			>
-				<ListPageSkeleton />
-			</div>
 			<Message
-				v-else-if="!capability?.can_read"
+				v-else-if="!loading && !capability?.can_read"
 				severity="warn"
 				:closable="false"
 			>
@@ -34,6 +27,7 @@
 			</Message>
 			<ListView
 				v-else
+				:can-read="!loading && Boolean(capability?.can_read)"
 				doctype="SD YRP Lot"
 				title="Merch Lots"
 				eyebrow="Merch"
@@ -87,7 +81,6 @@ import { useRouter } from "vue-router"
 import { getMerchCapabilities } from "../../../api/merch.js"
 import DepartmentPage from "../../../components/DepartmentPage.vue"
 import ListView from "../../../components/common/ListView.vue"
-import ListPageSkeleton from "../../../components/common/ListPageSkeleton.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../../router/listDocumentNavigation.js"
@@ -124,10 +117,5 @@ onMounted(load)
 <style scoped>
 .purchase-lots-page {
 	min-width: 0;
-}
-.purchase-lots-page__loading {
-	display: grid;
-	gap: 16px;
-	padding: clamp(14px, 2vw, 22px);
 }
 </style>

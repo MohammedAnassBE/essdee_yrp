@@ -4,7 +4,8 @@
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Cutting Plans unavailable" message="You do not have permission to view Cutting Plans." :retryable="false" />
 			<ListView
-				v-else-if="capability?.can_read"
+				v-else
+				:can-read="Boolean(capability?.can_read)"
 				doctype="SD YRP Cutting Plan"
 				title="Cutting Plans"
 				search-placeholder="Search Cutting Plans…"
@@ -21,7 +22,7 @@
 				@row-click="openCuttingPlan"
 			>
 				<template #toolbar-actions>
-					<Button v-if="capability.can_create" class="list-primary-action" label="Create Cutting Plan" icon="pi pi-plus" @click="createCuttingPlan" />
+					<Button v-if="capability?.can_create" class="list-primary-action" label="Create Cutting Plan" icon="pi pi-plus" @click="createCuttingPlan" />
 				</template>
 				<template #cell-cp_status="{ value }">
 					<DocumentStatusBadge :label="value || 'Draft'" />

@@ -4,7 +4,8 @@
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Finishing Plans unavailable" message="You do not have permission to view Finishing Plans." :retryable="false" />
 			<ListView
-				v-else-if="capability?.can_read"
+				v-else
+				:can-read="Boolean(capability?.can_read)"
 				doctype="SD YRP Finishing Plan"
 				title="Finishing Plans"
 				search-placeholder="Search Finishing Plans…"

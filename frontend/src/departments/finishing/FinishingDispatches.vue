@@ -4,7 +4,8 @@
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="Finishing Plan Dispatch unavailable" message="You do not have permission to view Finishing Plan Dispatches." :retryable="false" />
 			<ListView
-				v-else-if="capability?.can_read"
+				v-else
+				:can-read="Boolean(capability?.can_read)"
 				doctype="SD YRP Finishing Plan Dispatch"
 				title="Finishing Plan Dispatch"
 				search-placeholder="Search Finishing Plan Dispatches…"
@@ -18,7 +19,7 @@
 				@row-click="openDispatch"
 			>
 				<template #toolbar-actions>
-					<Button v-if="capability.can_create" class="list-primary-action" label="Create Dispatch" icon="pi pi-plus" @click="router.push(`${basePath}/dispatches/new`)" />
+					<Button v-if="capability?.can_create" class="list-primary-action" label="Create Dispatch" icon="pi pi-plus" @click="router.push(`${basePath}/dispatches/new`)" />
 				</template>
 			</ListView>
 		</div>

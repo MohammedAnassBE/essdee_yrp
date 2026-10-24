@@ -113,8 +113,8 @@
 				<Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined :loading="acting === 'reload'" @click="emit('reload')" />
 			</div>
 			<template v-if="hasWorkspace">
-				<div class="fabric-document-workspace__columns">
-					<aside class="fabric-document-workspace__rail" aria-label="Document totals and context" :tabindex="compactMobileRail ? 0 : undefined">
+				<div class="fabric-document-workspace__columns" :class="{ 'fabric-document-workspace__columns--without-rail': !showRail }">
+					<aside v-if="showRail" class="fabric-document-workspace__rail" aria-label="Document totals and context" :tabindex="compactMobileRail ? 0 : undefined">
 						<slot name="rail" :workspace="workspace">
 							<div v-for="total in workspace.totals || []" :key="total.fieldname" class="fabric-document-workspace__metric">
 								<span>{{ total.label }}</span>
@@ -187,6 +187,7 @@ const props = defineProps({
 	showDelete: { type: Boolean, default: true },
 	showLifecycleActions: { type: Boolean, default: true },
 	compactMobileRail: { type: Boolean, default: false },
+	showRail: { type: Boolean, default: true },
 	showActivity: { type: Boolean, default: true },
 })
 const emit = defineEmits(["reload", "action", "close", "deleted"])
@@ -447,4 +448,5 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 .fabric-document-workspace__metric:last-child {
 	border-bottom: 0;
 }
+.fabric-document-workspace__columns.fabric-document-workspace__columns--without-rail { grid-template-areas: "main"; grid-template-columns: minmax(0, 1fr); }
 </style>

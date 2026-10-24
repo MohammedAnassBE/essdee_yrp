@@ -11,6 +11,7 @@
 			:acting="acting"
 			:show-lifecycle-actions="false"
 			:compact-mobile-rail="Boolean(workspace.record?.name)"
+			:show-rail="!canEditDraft"
 			@reload="load(true)"
 			@action="runWorkspaceAction"
 			@close="emit('closed')"
@@ -145,7 +146,7 @@
 												<InputNumber :model-value="row.values.default.secondary_qty" :aria-label="matrixInputLabel('Secondary quantity for', section, row, 'default', secondaryUom(row, 'default'))" :min="0" :max-fraction-digits="3" :disabled="!canEditMatrixBlock(block.kind)" fluid @update:model-value="setDisplaySecondaryQuantity(row, 'default', $event)" @input="setDisplaySecondaryQuantity(row, 'default', $event.value)" /><small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
-											<td><InputText :model-value="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="setDisplayComment(row, $event)" /></td><td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
+											<td class="delivery-challan-matrix__comments"><InputText :model-value="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="setDisplayComment(row, $event)" /></td><td class="erp-number delivery-challan-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>
 									</tbody>
@@ -968,12 +969,19 @@ function documentDeleted() {
 .delivery-challan-matrix__pending-heading, .delivery-challan-matrix__pending { background: var(--erp-attention-soft); }
 .delivery-challan-matrix__quantity-heading, .delivery-challan-matrix__quantity { background: var(--erp-accent-soft); }
 .delivery-challan-matrix__pending { min-width: 78px; color: var(--erp-attention-text); font-weight: 750; }
-.delivery-challan-matrix__quantity, .delivery-challan-matrix__secondary { min-width: 106px; }
-.delivery-challan-matrix :deep(.p-inputnumber) { min-width: 94px; }
-.delivery-challan-matrix :deep(.p-inputnumber-input) { height: 32px; padding: 5px 8px; text-align: right; }
+.delivery-challan-matrix__scroll { max-height: max(320px, calc(100dvh - 240px)); }
+.delivery-challan-matrix__quantity { min-width: 74px; }
+.delivery-challan-matrix__secondary { min-width: 106px; }
+.delivery-challan-matrix__scroll td.delivery-challan-matrix__primary-cell { padding-inline: 5px; }
+.delivery-challan-matrix :deep(.p-inputnumber) { min-width: 64px; }
+.delivery-challan-matrix__comments { min-width: 128px; }
+.delivery-challan-matrix__comments :deep(.p-inputtext) { width: 100%; min-width: 0; }
+.delivery-challan-matrix :deep(.p-inputnumber-input) { height: 32px; padding: 5px 6px; text-align: right; }
+.delivery-challan-matrix__scroll th { white-space: normal; }
 .delivery-challan-matrix__secondary small { display: block; margin-top: 3px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .delivery-challan-matrix__primary-cell > small { display: block; margin-top: 3px; color: var(--erp-attention-text); font-size: var(--erp-font-size-min); text-align: right; }
-.delivery-challan-matrix__secondary-inline { display: grid; grid-template-columns: minmax(72px, 1fr) auto; align-items: center; gap: 5px; margin-top: 5px; }
+.delivery-challan-matrix__secondary-inline { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: end; gap: 2px; margin-top: 5px; }
+.delivery-challan-matrix__secondary-inline > :first-child { width: 100%; }
 .delivery-challan-matrix__secondary-inline span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .delivery-challan-matrix__total { color: var(--erp-accent); font-weight: 800; }
 .delivery-challan-matrix__footer th, .delivery-challan-matrix__footer td { color: var(--erp-text); font-weight: 800; text-align: left; background: var(--erp-surface-muted); border-top: 1px solid var(--erp-border-strong); }

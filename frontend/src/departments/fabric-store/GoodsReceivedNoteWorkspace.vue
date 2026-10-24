@@ -11,6 +11,7 @@
 			:acting="acting"
 			:show-lifecycle-actions="false"
 			:compact-mobile-rail="Boolean(workspace.record?.name)"
+			:show-rail="!canEditDraft"
 			@reload="load(true)"
 			@action="runWorkspaceAction"
 			@close="emit('closed')"
@@ -170,7 +171,7 @@
 												<small><DocumentLink doctype="UOM" :name="secondaryUom(row, 'default')" :label="secondaryUom(row, 'default')" /></small>
 											</td>
 										</template>
-											<td><InputText v-model="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="markDirty" /><Button v-if="block.kind === 'items' && canEditDraft && !workspace.special_source?.read_only" label="Add split" size="small" severity="secondary" text @click="openSplit(section.group, row)" /></td><td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
+											<td class="goods-received-note-matrix__comments"><InputText v-model="row.comments" aria-label="Row comments" :disabled="!canEditMatrixBlock(block.kind)" @update:model-value="markDirty" /><Button v-if="block.kind === 'items' && canEditDraft && !workspace.special_source?.read_only" label="Add split" size="small" severity="secondary" text @click="openSplit(section.group, row)" /></td><td class="erp-number goods-received-note-matrix__total">{{ formatQty(rowTotal(row)) }}</td>
 											<td class="erp-number goods-received-note-matrix__value">{{ formatMoney(rowValue(row)) }}</td>
 											<td><DocumentLink doctype="UOM" :name="row.default_uom || row.uom" :label="row.default_uom || row.uom || '—'" /></td>
 										</tr>
@@ -1092,12 +1093,19 @@ function documentDeleted() {
 .goods-received-note-matrix__available-heading, .goods-received-note-matrix__available { background: var(--erp-attention-soft); }
 .goods-received-note-matrix__quantity-heading, .goods-received-note-matrix__quantity { background: var(--erp-accent-soft); }
 .goods-received-note-matrix__available { min-width: 82px; color: var(--erp-attention-text); font-weight: 750; }
-.goods-received-note-matrix__quantity, .goods-received-note-matrix__secondary { min-width: 106px; }
-.goods-received-note-matrix :deep(.p-inputnumber) { min-width: 94px; }
-.goods-received-note-matrix :deep(.p-inputnumber-input) { height: 32px; padding: 5px 8px; text-align: right; }
+.goods-received-note-matrix__scroll { max-height: max(320px, calc(100dvh - 240px)); }
+.goods-received-note-matrix__quantity { min-width: 74px; }
+.goods-received-note-matrix__secondary { min-width: 106px; }
+.goods-received-note-matrix__scroll td.goods-received-note-matrix__primary-cell { padding-inline: 5px; }
+.goods-received-note-matrix :deep(.p-inputnumber) { min-width: 64px; }
+.goods-received-note-matrix__comments { min-width: 128px; }
+.goods-received-note-matrix__comments :deep(.p-inputtext) { width: 100%; min-width: 0; }
+.goods-received-note-matrix :deep(.p-inputnumber-input) { height: 32px; padding: 5px 6px; text-align: right; }
+.goods-received-note-matrix__scroll th { white-space: normal; }
 .goods-received-note-matrix__secondary small { display: block; margin-top: 3px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .goods-received-note-matrix__primary-cell > small { display: block; margin-top: 3px; color: var(--erp-attention-text); font-size: var(--erp-font-size-min); text-align: right; }
-.goods-received-note-matrix__secondary-inline { display: grid; grid-template-columns: minmax(72px, 1fr) auto; align-items: center; gap: 5px; margin-top: 5px; }
+.goods-received-note-matrix__secondary-inline { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: end; gap: 2px; margin-top: 5px; }
+.goods-received-note-matrix__secondary-inline > :first-child { width: 100%; }
 .goods-received-note-matrix__secondary-inline span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .goods-received-note-matrix__total, .goods-received-note-matrix__value { color: var(--erp-accent-dark); font-weight: 800; }
 .goods-received-note-matrix__footer th, .goods-received-note-matrix__footer td { color: var(--erp-text); font-weight: 800; text-align: left; background: var(--erp-surface-muted); border-top: 1px solid var(--erp-border-strong); }

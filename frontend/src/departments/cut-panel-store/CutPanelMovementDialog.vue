@@ -12,7 +12,7 @@
 	>
 		<div v-if="loading" class="movement-dialog__loading"><Skeleton v-for="index in 7" :key="index" height="3rem" /></div>
 		<div v-else class="movement-dialog__body">
-			<div class="cut-panel-movement-layout" :class="{ 'cut-panel-movement-layout--without-rail': !record }">
+			<div class="cut-panel-movement-layout" :class="{ 'cut-panel-movement-layout--without-rail': !showRail }">
 				<div class="cut-panel-movement-layout__main">
 					<section class="movement-document-card">
 						<header><span>DOCUMENT</span><h3>Movement source & posting</h3><DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" /></header>
@@ -40,7 +40,7 @@
 					/>
 				</div>
 				<CutPanelMovementRail
-					v-if="record"
+					v-if="showRail"
 					:linked="linked"
 					:loading="linkedLoading"
 					:busy="busy"
@@ -170,6 +170,7 @@ let loadSequence = 0
 let actionSequence = 0
 const record = computed(() => editor.record)
 const busy = computed(() => Boolean(acting.value))
+const showRail = computed(() => Boolean(record.value && Number(record.value.docstatus || 0) !== 0))
 const canEdit = computed(() => record.value ? Boolean(record.value.permissions?.can_write) : Boolean(editor.permissions?.can_create))
 const hasSelection = computed(() => Boolean(movementEditor.value?.hasSelection))
 const selectionSummaryText = computed(() => movementEditor.value?.selectionSummaryText || "")

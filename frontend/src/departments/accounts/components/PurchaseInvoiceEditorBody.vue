@@ -130,7 +130,7 @@ const notesGroups = computed(() => props.groups.filter((group) => group.key === 
 </script>
 
 <style scoped>
-.purchase-invoice-editor__body { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(260px, 288px); align-items: start; gap: clamp(12px, 1.3vw, 20px); }
+.purchase-invoice-editor__body { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); align-items: start; gap: clamp(12px, 1.3vw, 20px); }
 .purchase-invoice-editor__main { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .purchase-invoice-editor__notes :deep([data-group="notes"]) { grid-column: 1 / -1; }
 .purchase-invoice-editor__fields { align-items: end; }
@@ -146,11 +146,10 @@ const notesGroups = computed(() => props.groups.filter((group) => group.key === 
 .purchase-invoice-editor__warnings strong { display: block; margin-bottom: var(--erp-space-2); }
 .purchase-invoice-editor__warnings ul { display: grid; gap: var(--erp-space-1); margin: 0; padding-left: 20px; }
 .purchase-invoice-editor__items :deep(.purchase-invoice-items) { border: 0; border-radius: 0; box-shadow: none; }
-.purchase-invoice-editor__rail { position: sticky; top: calc(var(--erp-shell-header-height) + 65px); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-card); }
-.purchase-invoice-editor__metric { display: grid; min-height: 70px; align-content: center; gap: 4px; padding: 11px 13px; border-bottom: 1px solid var(--erp-border); }
-.purchase-invoice-editor__metric:last-child { border-bottom: 0; }
+.purchase-invoice-editor__rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-card); }
+.purchase-invoice-editor__metric { display: grid; min-height: 62px; align-content: center; gap: 4px; padding: 11px 13px; border-right: 1px solid var(--erp-border); }
+.purchase-invoice-editor__metric:last-child { border-right: 0; }
 .purchase-invoice-editor__metric span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
 .purchase-invoice-editor__metric strong { color: var(--erp-text); font-size: var(--erp-font-size-section); font-weight: 700; letter-spacing: -.01em; text-align: right; font-variant-numeric: tabular-nums; }
-@media (max-width: 1000px) { .purchase-invoice-editor__body { grid-template-columns: 1fr; } .purchase-invoice-editor__rail { position: static; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); } .purchase-invoice-editor__metric { min-height: 62px; border-right: 1px solid var(--erp-border); border-bottom: 0; } .purchase-invoice-editor__metric:last-child { border-right: 0; } }
 @media (max-width: 700px) { .purchase-invoice-editor__grn-row { grid-template-columns: 1fr; } .purchase-invoice-editor__grn-row > .p-button { width: 100%; margin-bottom: 0; } .purchase-invoice-editor__rail { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-invoice-editor__metric:nth-child(2) { border-right: 0; } .purchase-invoice-editor__metric:nth-child(-n + 2) { border-bottom: 1px solid var(--erp-border); } .purchase-invoice-editor__items > header small { display: none; } }
 </style>

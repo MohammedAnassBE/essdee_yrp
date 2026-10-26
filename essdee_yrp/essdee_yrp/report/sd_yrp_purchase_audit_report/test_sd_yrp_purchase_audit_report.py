@@ -3,7 +3,10 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_audit_report.sd_yrp_purchase_audit_report import execute
+from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_audit_report.sd_yrp_purchase_audit_report import (
+	execute,
+	item_query,
+)
 
 DATE = "2099-03-10"
 NEXT_DATE = "2099-03-20"
@@ -243,3 +246,25 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		self.assertEqual(len(self.run_report(item_group=group)), 1)
 		self.assertEqual(self.run_report(item_group=other), [])
 		self.assertEqual(len(self.run_report(item_group=[other, group])), 1)
+
+	def test_item_query_limits_options_to_item_group_tree(self):
+		standalone = self.make_item("S")
+		parent = self.make_item_group("Parent", is_group=1)
+		child = self.make_item_group("Child", parent=parent)
+		frappe.db.set_value("Item", self.variant, "item_group", child)
+		cases = [
+			({}, {self.template, standalone}),
+			({"variant": 1}, {self.variant, standalone}),
+			({"item_group": [parent]}, {self.template}),
+			({"item_group": json.dumps([child]), "variant": 1}, {self.variant}),
+			({"item_group": [parent, child], "variant": 1}, {self.variant}),
+		]
+		for filters, expected in cases:
+			with self.subTest(filters=filters):
+				rows = item_query("Item", f"AUD-{self.key}", "name", 0, 20, filters)
+				self.assertEqual({row[0] for row in rows}, expected)
+
+	def make_item_group(self, name, parent="All Item Groups", is_group=0):
+		doc = {"doctype": "Item Group", "item_group_name": f"AUD {name} {self.key}"}
+		doc.update(parent_item_group=parent, is_group=is_group)
+		return frappe.get_doc(doc).insert(ignore_permissions=True).name

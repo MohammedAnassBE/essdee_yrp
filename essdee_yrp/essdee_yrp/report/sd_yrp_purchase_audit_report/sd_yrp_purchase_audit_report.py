@@ -44,8 +44,10 @@ PERIODS = {
 	"month_wise": (("DATE_FORMAT(sle.posting_date, '%%Y-%%m')", "month"),),
 }
 
+ITEM_EXPRESSION = "COALESCE(NULLIF(variant.variant_of, ''), variant.name)"
+
 DIMENSIONS = (
-	("COALESCE(NULLIF(variant.variant_of, ''), variant.name)", "item"),
+	(ITEM_EXPRESSION, "item"),
 	("sle.item", "item_variant"),
 	("variant.item_group", "item_group"),
 	("supplier.name", "supplier"),
@@ -58,7 +60,7 @@ DIMENSIONS = (
 FILTER_CONDITIONS = {
 	"supplier": "supplier.name = %(supplier)s",
 	"warehouse": "sle.warehouse = %(warehouse)s",
-	"item": "COALESCE(NULLIF(variant.variant_of, ''), variant.name) IN %(item)s",
+	"item": f"{ITEM_EXPRESSION} IN %(item)s",
 	"item_variant": "sle.item = %(item_variant)s",
 	"lot": "sle.lot = %(lot)s",
 	"received_type": "sle.received_type = %(received_type)s",
@@ -79,6 +81,30 @@ def execute(filters=None):
 	view = get_view(filters)
 	months = get_months(filters) if view == "month_wise" else []
 	return get_columns(view, months), get_data(filters, view, months)
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def item_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Item (or variant, with filters.variant) options inside the selected Item Group trees, matching the report filters."""
+	filters = frappe._dict(filters or {})
+	item_group = get_filter_values(filters.item_group)
+	variant_key = "variant.name" if filters.variant else ITEM_EXPRESSION
+	conditions = [
+		"item.disabled = 0",
+		"item.has_variants = 0" if filters.variant else "IFNULL(item.variant_of, '') = ''",
+		"(item.name LIKE %(txt)s OR item.item_name LIKE %(txt)s)",
+	]
+	if item_group:
+		conditions.append(
+			f"item.name IN (SELECT {variant_key} FROM `tabItem` variant WHERE {FILTER_CONDITIONS['item_group']})"
+		)
+	return frappe.db.sql(
+		f"""SELECT item.name, item.item_name FROM `tabItem` item
+		WHERE {" AND ".join(conditions)}
+		ORDER BY item.name LIMIT %(start)s, %(page_len)s""",
+		{"txt": f"%{txt}%", "item_group": item_group, "start": start, "page_len": page_len},
+	)
 
 
 def get_filter_values(value):

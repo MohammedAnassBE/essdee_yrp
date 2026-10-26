@@ -1,3 +1,10 @@
+const ITEM_QUERY =
+	"essdee_yrp.essdee_yrp.report.sd_yrp_purchase_audit_report.sd_yrp_purchase_audit_report.item_query";
+
+const get_item_filters = () => ({
+	item_group: frappe.query_report.get_filter_value("item_group") || [],
+});
+
 frappe.query_reports["SD YRP Purchase Audit Report"] = {
 	filters: [
 		{
@@ -42,14 +49,20 @@ frappe.query_reports["SD YRP Purchase Audit Report"] = {
 			label: __("Item"),
 			fieldtype: "MultiSelectList",
 			options: "Item",
-			get_data: (txt) => frappe.db.get_link_options("Item", txt, { variant_of: ["is", "not set"] }),
+			get_data: (txt) =>
+				frappe.xcall("frappe.desk.search.search_link", {
+					doctype: "Item",
+					txt,
+					query: ITEM_QUERY,
+					filters: get_item_filters(),
+				}),
 		},
 		{
 			fieldname: "item_variant",
 			label: __("Item Variant"),
 			fieldtype: "Link",
 			options: "Item",
-			get_query: () => ({ filters: { has_variants: 0 } }),
+			get_query: () => ({ query: ITEM_QUERY, filters: { ...get_item_filters(), variant: 1 } }),
 		},
 		{
 			fieldname: "item_group",
@@ -57,6 +70,13 @@ frappe.query_reports["SD YRP Purchase Audit Report"] = {
 			fieldtype: "MultiSelectList",
 			options: "Item Group",
 			get_data: (txt) => frappe.db.get_link_options("Item Group", txt),
+			on_change: (report) => {
+				if (report.get_filter_value("item")?.length || report.get_filter_value("item_variant")) {
+					report.set_filter_value({ item: [], item_variant: "" });
+				} else {
+					report.refresh();
+				}
+			},
 		},
 		{
 			fieldname: "received_type",

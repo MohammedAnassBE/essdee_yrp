@@ -422,10 +422,16 @@ def merge_received_types(items, type_positions=None):
 			frappe.as_json(item.get("attributes")),
 			str(item.get("set_combination") or ""),
 		)
-		target = merged.setdefault(key, {**item, "types": [], "values": {}, "type_positions": {}})
+		target = merged.setdefault(
+			key, {**item, "types": [], "values": {}, "type_positions": {}, "type_comments": {}}
+		)
 		position = type_positions.get((str(item.get("row_index") or ""), received_type), len(type_positions))
 		if received_type not in target["types"]:
 			target["types"].append(received_type)
+		comments = target["type_comments"].setdefault(received_type, [])
+		comment = str(item.get("comments") or "").strip()
+		if comment and comment not in comments:
+			comments.append(comment)
 		target["type_positions"][received_type] = min(
 			position, target["type_positions"].get(received_type, position)
 		)
@@ -438,6 +444,9 @@ def merge_received_types(items, type_positions=None):
 	for target in merged.values():
 		positions = target.pop("type_positions")
 		target["types"].sort(key=positions.get)
+		target["type_comments"] = {
+			received_type: "\n".join(comments) for received_type, comments in target["type_comments"].items()
+		}
 		for cell in target["values"].values():
 			cell["types"] = {
 				received_type: cell["types"].get(received_type, 0.0) for received_type in target["types"]

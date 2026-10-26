@@ -8,11 +8,12 @@ from frappe.tests import IntegrationTestCase
 from essdee_yrp import print_helpers
 
 
-def _sized_row(received_type, quantities, row_index="1"):
+def _sized_row(received_type, quantities, row_index="1", comments=""):
 	sizes = ("S", "M", "L", "XL", "2XL")
 	return {
 		"name": "Pyjama",
 		"row_index": row_index,
+		"comments": comments,
 		"dimensions": {"lot": "L1", "received_type": received_type},
 		"attributes": {"Stage": "Piece", "Colour": "Black"},
 		"set_combination": '{"major_colour":"Black"}',
@@ -47,6 +48,30 @@ def _grouped_row(received_type, quantity):
 	}
 
 
+def render_work_order_grn(groups):
+	template = Path(
+		frappe.get_app_path("essdee_yrp", "templates", "print_formats", "essdee_goods_received_note.html")
+	)
+	doc = frappe._dict(name="GRN-1", against="YRP Work Order", items=[], lot="L1", comments="")
+	return (
+		frappe.get_jenv()
+		.from_string(template.read_text())
+		.render(doc=doc, frappe=frappe, get_grn_structure=lambda name: groups)
+	)
+
+
+def table_rows(html):
+	rows = []
+	for row in re.findall(r"<tr>(.*?)</tr>", html, flags=re.S):
+		cells = [
+			re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cell)).strip()
+			for cell in re.findall(r"<td[^>]*>(.*?)</td>", row, flags=re.S)
+		]
+		if cells and (cells[0] in ("1", "2", "3", "Total") or cells[1:2] == ["Total"]):
+			rows.append(cells)
+	return rows
+
+
 class TestGoodsReceivedNotePrint(IntegrationTestCase):
 	def test_grn_structure_merges_received_types_like_mrp(self):
 		groups = [
@@ -69,14 +94,18 @@ class TestGoodsReceivedNotePrint(IntegrationTestCase):
 		self.assertEqual(item["values"]["S"]["types"], {"Accepted": 0, "Rejected": 0})
 		self.assertEqual(result[0]["attributes"], ["Stage", "Colour"])
 
-	def get_mixed_structure(self, rows=MIXED_SIZE_ROWS):
+	def get_mixed_structure(self, rows=MIXED_SIZE_ROWS, comments=None):
+		comments = comments or {}
 		groups = [
 			{
 				"attributes": ["Stage", "Colour"],
 				"primary_attribute": "Size",
 				"primary_attribute_values": ["S", "M", "L", "XL", "2XL"],
 				"lot": "L1",
-				"items": [_sized_row(received_type, quantities) for received_type, quantities in rows],
+				"items": [
+					_sized_row(received_type, quantities, comments=comments.get(received_type, ""))
+					for received_type, quantities in rows
+				],
 			}
 		]
 		doc = frappe._dict(items=[], lot="L1")
@@ -113,25 +142,8 @@ class TestGoodsReceivedNotePrint(IntegrationTestCase):
 		self.assertEqual(merged[0]["types"], ["Accepted", "Adas", "Oil Mark"])
 
 	def test_work_order_grid_prints_a_cell_per_size_and_correct_column_totals(self):
-		template = Path(
-			frappe.get_app_path("essdee_yrp", "templates", "print_formats", "essdee_goods_received_note.html")
-		)
-		doc = frappe._dict(name="GRN-1", against="YRP Work Order", items=[], lot="L1", comments="")
-		groups = self.get_mixed_structure()
-		html = (
-			frappe.get_jenv()
-			.from_string(template.read_text())
-			.render(doc=doc, frappe=frappe, get_grn_structure=lambda name: groups)
-		)
-		rows = []
-		for row in re.findall(r"<tr>(.*?)</tr>", html, flags=re.S):
-			cells = [
-				re.sub(r"<[^>]+>|\s+", " ", cell).strip()
-				for cell in re.findall(r"<td[^>]*>(.*?)</td>", row, flags=re.S)
-			]
-			if cells and cells[0] in ("1", "2", "3", "Total"):
-				rows.append([re.sub(r"\s+", " ", cell) for cell in cells])
-		self.assertEqual({len(row) for row in rows}, {10})
+		rows = table_rows(render_work_order_grn(self.get_mixed_structure()))
+		self.assertEqual({len(row) for row in rows}, {11})
 		self.assertEqual(
 			rows[1],
 			[
@@ -145,9 +157,35 @@ class TestGoodsReceivedNotePrint(IntegrationTestCase):
 				"0.0 Pieces",
 				"0.0 Pieces",
 				"28.0",
+				"",
 			],
 		)
-		self.assertEqual(rows[-1], ["Total", "", "", "", "66.0", "196.0", "143.0", "70.0", "59.0", "534.0"])
+		self.assertEqual(
+			rows[-1], ["Total", "", "", "", "66.0", "196.0", "143.0", "70.0", "59.0", "534.0", ""]
+		)
+
+	def test_work_order_grid_prints_each_received_type_row_comment_once(self):
+		comments = {"Accepted": "Pressed &amp; packed", "Adas": "Oil mark\nre-wash"}
+		html = render_work_order_grn(self.get_mixed_structure(comments=comments))
+		self.assertEqual(html.count("Pressed &amp; packed"), 1)
+		self.assertEqual(html.count("Oil mark\nre-wash"), 1)
+		self.assertNotIn("&amp;amp;", html)
+		self.assertIn(">Comments<", html)
+
+	def test_received_type_rows_keep_their_own_comments_when_merged(self):
+		rows = (("Accepted", {"S": 5}), ("Adas", {"S": 1}), ("Accepted", {"M": 4}))
+		comments = {"Accepted": "First", "Adas": "Second"}
+		item = self.get_mixed_structure(rows, comments=comments)[0]["items"][0]
+		self.assertEqual(item["type_comments"], {"Accepted": "First", "Adas": "Second"})
+
+	def test_unsized_work_order_rows_print_each_received_type_quantity(self):
+		items = [
+			{**_grouped_row("Accepted", 0), "values": {"default": {"received": 10, "ref_docname": "a"}}},
+			{**_grouped_row("Rejected", 0), "values": {"default": {"received": 2, "ref_docname": "r"}}},
+		]
+		merged = print_helpers.merge_received_types(items)
+		rows = table_rows(render_work_order_grn([{"attributes": ["Colour"], "lot": "L1", "items": merged}]))
+		self.assertEqual([row[4] for row in rows], ["10.0", "2.0", "12.0"])
 
 	def test_party_name_line_is_not_repeated_in_the_address(self):
 		strip = print_helpers.strip_party_name_line

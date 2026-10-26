@@ -109,7 +109,7 @@
                                                         {% endif %}
                                                     </td>
                                                 {% endfor %}
-                                                <td>{{ j.comments }}</td>
+                                                <td style="white-space:pre-line;">{{ j.comments or "" }}</td>
                                             </tr>
                                         {% endfor %}
                                     </table>
@@ -139,7 +139,7 @@
                                                         <span><br>({{ j['values']['default'].secondary_received }}{% if j.secondary_uom %}{{' ' + j.secondary_uom }}{% endif %})</span>
                                                     {% endif %}
                                                 </td>
-                                                <td>{{ j.comments }}</td>
+                                                <td style="white-space:pre-line;">{{ j.comments or "" }}</td>
                                             </tr>
                                         {% endfor %}
                                     </table>
@@ -243,6 +243,7 @@
                                                 <td class="font_weight">{{attr}}</td>
                                             {% endfor %}
                                             <td class="font_weight">Total</td>
+                                            <td class="font_weight">Comments</td>
                                         </tr>	
                                         {% for j in i['items'] %}
                                             {% for t in j['types']%}
@@ -279,6 +280,7 @@
                                                         {% endif %}
                                                     {% endfor %}
                                                     <td class="font_weight" >{{total["total"] | round(3) }}</td>
+                                                    <td style="white-space:pre-line;">{{ j.type_comments[t] if j.type_comments and j.type_comments[t] }}</td>
                                                 </tr>
                                             {% endfor %}	
                                         {% endfor %}
@@ -295,6 +297,7 @@
                                                 {% if total_table_qty.update({"total": temp}) %}{% endif %}
                                             {% endfor %}
                                             <td class="font_weight">{{ total_table_qty["total"] }}</td>
+                                            <td></td>
                                         </tr>
                                     </table>
                                 {% endif %}
@@ -312,6 +315,7 @@
                                             {% endfor %}
                                             <td class="font_weight">Type</td>
                                             <td class="font_weight">Received qty</td>
+                                            <td class="font_weight">Comments</td>
                                         </tr>
                                         {% set total = {"total":0} %}
                                         {% for j in i['items'] %}
@@ -324,15 +328,17 @@
                                                     {% endfor %}
                                                     <td>{{t}}</td>
                                                     <td>
-                                                        {% if j['values']["default"]['received'] > 0 %}
-                                                            {% set _ = total["total"] + j['values']["default"]['received'] %}
+                                                        {% set type_qty = j['values']["default"]['types'][t] %}
+                                                        {% if type_qty > 0 %}
+                                                            {% set _ = total["total"] + type_qty %}
                                                             {% if total.update({ "total":_ }) %}{% endif %}
-                                                            {{ j['values']["default"]['received'] | round(3) }}
+                                                            {{ type_qty | round(3) }}
                                                             {% if j.default_uom %}
                                                                 <span>{{ " " + j.default_uom }}</span>
                                                             {% endif %}	
                                                         {% endif %}		
                                                     </td>
+                                                    <td style="white-space:pre-line;">{{ j.type_comments[t] if j.type_comments and j.type_comments[t] }}</td>
                                                 </tr>
                                             {% endfor %}	
                                         {% endfor %}
@@ -344,6 +350,7 @@
                                             {% endfor %}
                                             <td></td>
                                             <td class="font_weight">{{ total["total"] | round(3) }}</td>
+                                            <td></td>
                                         </tr>
                                     </table>
                                 {% endif %}	

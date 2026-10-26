@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 import frappe
@@ -75,6 +76,55 @@ class TestStockEntryPrint(UnitTestCase):
 		format_data = print_format_data("essdee_stock_transfer")
 		self.assertIn('text-center\\">\\n' + " " * 48 + "0\\n", format_data)
 		self.assertNotIn("---", format_data)
+
+
+def render_stock_transfer(groups):
+	from essdee_yrp.test_delivery_challan_print import print_format_data
+
+	html = next(
+		field["options"]
+		for field in json.loads(print_format_data("essdee_stock_transfer"))
+		if field.get("fieldname") == "_custom_html"
+	)
+	doc = frappe.new_doc("YRP Stock Entry", purpose="Send to Warehouse", posting_date="2026-10-26")
+	doc.docstatus = 1
+	return (
+		frappe.get_jenv()
+		.from_string(html)
+		.render(doc=doc, frappe=frappe, fetch_stock_entry_items=lambda items: groups)
+	)
+
+
+class TestStockEntryRowRemarksPrint(IntegrationTestCase):
+	def test_each_item_row_prints_its_remarks_once(self):
+		sized = {
+			"name": "Shirt",
+			"lot": "L1",
+			"attributes": {"Colour": "Red"},
+			"values": {"S": {"qty": 2}, "M": {"qty": 3}},
+			"remarks": "Wash &amp; press\nfirst",
+		}
+		plain = {
+			"name": "Tape",
+			"lot": "L1",
+			"attributes": {"Colour": "White"},
+			"values": {"default": {"qty": 4, "rate": 0}},
+			"remarks": "Loose roll",
+		}
+		groups = [
+			{
+				"attributes": ["Colour"],
+				"primary_attribute": "Size",
+				"primary_attribute_values": ["S", "M"],
+				"items": [sized],
+			},
+			{"attributes": ["Colour"], "primary_attribute": "", "items": [plain]},
+		]
+		html = render_stock_transfer(groups)
+		self.assertEqual(html.count(">Remarks</th>"), 2)
+		self.assertEqual(html.count("Wash &amp; press\nfirst"), 1)
+		self.assertNotIn("&amp;amp;", html)
+		self.assertEqual(html.count("Loose roll"), 1)
 
 
 class TestStockEntryPrintAddresses(IntegrationTestCase):

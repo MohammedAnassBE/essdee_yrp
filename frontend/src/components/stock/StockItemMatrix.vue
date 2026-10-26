@@ -40,7 +40,7 @@
 						<tbody>
 							<tr v-for="(row, rowIndex) in group.items || []" :key="`${row.name}-${rowIndex}`">
 								<td v-if="!groupByItem" class="item-matrix__index">{{ rowIndex + 1 }}</td>
-								<td v-if="!groupByItem" class="item-matrix__item"><strong><DocumentLink doctype="Item" :name="row.name" :label="row.name || '—'" /></strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="normalizedComment(row.comments)" class="item-matrix__item-comment">{{ normalizedComment(row.comments) }}</small></td>
+								<td v-if="!groupByItem" class="item-matrix__item"><strong><DocumentLink doctype="Item" :name="row.name" :label="row.name || '—'" /></strong><small v-if="row.primary_attribute">{{ row.primary_attribute }}</small><small v-if="rowNote(row)" class="item-matrix__item-comment">{{ rowNote(row) }}</small></td>
 								<td v-for="column in leadingContextColumns(group)" :key="column.key"><DocumentLink v-if="contextTarget(row, column)" v-bind="contextTarget(row, column)" :label="contextDisplay(row, column)" /><template v-else>{{ contextDisplay(row, column) }}</template></td>
 								<td v-for="attribute in group.attributes || []" :key="attribute"><span class="item-matrix__attribute">{{ display(row.attributes?.[attribute]) }}</span></td>
 								<td v-for="column in trailingContextColumns(group)" :key="column.key"><DocumentLink v-if="contextTarget(row, column)" v-bind="contextTarget(row, column)" :label="contextDisplay(row, column)" /><template v-else>{{ contextDisplay(row, column) }}</template></td>
@@ -126,7 +126,7 @@ const displayGroups = computed(() => {
 			if (!sections.has(key)) sections.set(key, { ...group, items: [], itemIdentity, itemLot, itemComments: [], itemGroupKey: key })
 			const section = sections.get(key)
 			section.items.push(item)
-			const comment = normalizedComment(item.comments)
+			const comment = rowNote(item)
 			if (comment && !section.itemComments.includes(comment)) section.itemComments.push(comment)
 		}
 		return Array.from(sections.values()).map((section) => ({ ...section, itemComment: section.itemComments.join(" · ") }))
@@ -202,7 +202,7 @@ function display(value) { return value === null || value === undefined || value 
 function formatDate(value) { return formatDisplayDate(value, display(value)) }
 function formatQty(value) { return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 }) }
 function formatMoney(value) { return `${props.currency ? `${props.currency} ` : ""}${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` }
-function normalizedComment(value) { return String(value || "").trim() }
+function rowNote(row) { return String(row.comments || row.remarks || "").trim() }
 function titleCase(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()) }
 function groupKey(group, index) { return group.itemGroupKey || `${group.primary_attribute || "quantity"}-${(group.attributes || []).join("-")}-${index}` }
 </script>

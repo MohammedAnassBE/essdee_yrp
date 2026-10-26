@@ -321,6 +321,9 @@ frappe.production.ui.EmblishmentDetails = class {
 	load_data(items) {
 		this.vue.load_items(typeof items === "string" ? items : JSON.stringify(items || {}));
 	}
+	set_panels_only(value) {
+		this.vue.set_panels_only(value);
+	}
 	get_items() {
 		return JSON.parse(JSON.stringify(this.vue.get_items()));
 	}

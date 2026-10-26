@@ -404,6 +404,7 @@ export function recordActions({ approved = false, capabilities = {}, acting = ""
 	const label = (key, fallback) => capabilities[key]?.label || fallback
 	const actions = []
 	if (approved) {
+		if (allowed("approved_edits")) actions.push(action("edit", label("approved_edits", "Add processes / panels"), "pi pi-pencil", { disabled: busy }))
 		if (allowed("new_version")) actions.push(action("new_version", label("new_version", "New version from this"), "pi pi-copy", { primary: true, disabled: busy }))
 		if (allowed("revert_approval")) actions.push(action("revert_approval", label("revert_approval", "Revert Approval"), "pi pi-undo", { severity: "warn", disabled: busy, loading: acting === "revert_approval" }))
 	} else {

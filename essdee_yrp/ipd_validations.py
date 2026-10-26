@@ -17,6 +17,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 	get_dia_attribute,
 )
 from essdee_yrp.fabric_requirement import get_unmapped_accessories
+from essdee_yrp.ipd_approved_edits import get_approved_edit_changes
 
 
 def is_cloth_ipd(doc):
@@ -32,8 +33,8 @@ def before_validate(doc, method=None):
 	from essdee_yrp.ipd_attribute_links import normalize_major_value
 
 	validate_cloth_ipd_insert(doc)
-	normalize_major_value(doc)
 	validate_approved_immutability(doc)
+	normalize_major_value(doc)
 	apply_ipd_settings_defaults(doc)
 	if is_cloth_ipd(doc):
 		sync_cloth_recipe_snapshot(doc)
@@ -97,16 +98,29 @@ def allow_generated_cloth_ipd_insert():
 
 
 def validate_approved_immutability(doc):
-	"""Approved IPDs must be reverted through the approval action before edits."""
+	"""Approved IPDs accept only new process rows and embellishment panel changes."""
 	if doc.is_new() or frappe.flags.in_patch:
 		return
 	allowed_names = frappe.flags.get("generated_cloth_ipd_updates") or set()
 	if doc.name in allowed_names and is_cloth_ipd(doc):
 		return
-	if attribute_db.get_value("YRP Item Production Detail", doc.name, "approval_status") == "Approved":
-		frappe.throw(
-			_("Item Production Detail {0} is Approved. Revert Approval before editing it.").format(doc.name)
-		)
+	if attribute_db.get_value("YRP Item Production Detail", doc.name, "approval_status") != "Approved":
+		return
+	before = doc.get_doc_before_save()
+	if before is None or is_cloth_ipd(doc):
+		throw_approved_lock(doc)
+	locked, allowed = get_approved_edit_changes(doc, before)
+	if locked or not allowed:
+		throw_approved_lock(doc, locked)
+
+
+def throw_approved_lock(doc, locked=None):
+	message = _("Item Production Detail {0} is Approved. Revert Approval before editing it.").format(doc.name)
+	if locked:
+		message += " " + _(
+			"Only new IPD Processes rows and Embellishment panels can change while it is Approved. Changed: {0}."
+		).format(", ".join(_(label) for label in locked))
+	frappe.throw(message)
 
 
 @contextmanager

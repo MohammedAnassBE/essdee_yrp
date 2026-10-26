@@ -139,7 +139,8 @@ const approval = computed(() => record.value.name ? { status: record.value.appro
 const lockNote = computed(() => {
 	if (approved.value) {
 		const by = approval.value?.approvedBy ? `Approved by ${approval.value.approvedBy}. ` : "Approved. "
-		return by + (capabilities.value.revert_approval?.allowed ? "Revert approval to edit." : "Create a new version to change it.")
+		const extra = capabilities.value.approved_edits?.allowed ? " You can still add processes and change embellishment panels." : ""
+		return by + (capabilities.value.revert_approval?.allowed ? "Revert approval to edit." : "Create a new version to change it.") + extra
 	}
 	return workspace.value.permissions?.can_write ? "" : "You can view this IPD. Editing needs write permission."
 })

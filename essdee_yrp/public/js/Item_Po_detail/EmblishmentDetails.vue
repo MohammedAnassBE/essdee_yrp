@@ -4,16 +4,17 @@
             <tr>
                 <th> Process </th>
                 <th> {{ stiching_attr }}</th>
-                <th></th>
+                <th v-if="!panels_only"></th>
             </tr>
             <tr v-for="item in Object.keys(items)" :key="item">
                 <td>{{item}}</td>
                 <td>
-                   <div style="display: flex;" v-for="x in items[item]" :key="x">
-                        <div>{{x}}</div>
-                   </div>
+                   <label style="display: flex; gap: 6px; align-items: center; margin: 0;" v-for="panel in row_panels(item)" :key="panel">
+                        <input type="checkbox" :checked="items[item].includes(panel)" @change="toggle_panel(item, panel, $event.target.checked)">
+                        <span>{{panel}}</span>
+                   </label>
                 </td>
-                <td>
+                <td v-if="!panels_only">
                     <div class="cursor-pointer" @click="delete_item(item)"
 					v-html="frappe.utils.icon('delete', 'md', 'mr-1')"></div>
                 </td>
@@ -21,7 +22,7 @@
         </table>
         <div class="process-name col-md-5"></div>
         <div class="panel-checks row p-4" style="display: flex; gap: 10px"></div>
-        <button v-if="show_button1" class="btn btn-success" @click="create_inputs()"> Add Process</button>
+        <button v-if="show_button1 && !panels_only" class="btn btn-success" @click="create_inputs()"> Add Process</button>
         <button v-if="show_button2" class="btn btn-success" @click="add_process()">Add</button>
     </div>
 </template>
@@ -29,6 +30,7 @@
 import {ref, onMounted} from 'vue';
 
 let show_button1 = ref(true)
+let panels_only = ref(false)
 let show_button2 = ref(false)
 let root = ref(null)
 let sample_doc = ref({})
@@ -137,6 +139,21 @@ function add_process(){
     panel_values = []
 }
 
+function row_panels(item){
+    const stored = (items.value[item] || []).filter((panel) => !panels.value.includes(panel))
+    return [...panels.value, ...stored]
+}
+
+function toggle_panel(item, panel, checked){
+    const current = items.value[item] || []
+    items.value[item] = checked ? [...current, panel] : current.filter((value) => value !== panel)
+    cur_frm.dirty()
+}
+
+function set_panels_only(value){
+    panels_only.value = Boolean(value)
+}
+
 function get_items(){
     return items.value
 }
@@ -152,5 +169,6 @@ function load_items(item){
 defineExpose({
     get_items,
     load_items,
+    set_panels_only,
 })
 </script>

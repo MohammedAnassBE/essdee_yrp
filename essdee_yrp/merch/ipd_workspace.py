@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 
 from essdee_yrp import ipd_ui
+from essdee_yrp.ipd_approved_edits import APPROVED_EDIT_FIELDS
 from essdee_yrp.merch.ipd import client_rules
 from essdee_yrp.merch.ipd.attribute_values import get_usage, save_values
 from essdee_yrp.merch.ipd.bom_mapping import get_bom_mapping, save_bom_mapping
@@ -77,8 +78,12 @@ def save_ipd(
 	doc = load_editor_ipd(name, duplicate_from)
 	if name:
 		assert_expected_modified(doc, expected_modified)
-		if doc.approval_status == "Approved":
-			frappe.throw(_("Approved IPDs are read only. Revert approval to edit."))
+		if doc.approval_status == "Approved" and set(values) - set(APPROVED_EDIT_FIELDS):
+			frappe.throw(
+				_(
+					"Approved IPDs are read only except for new IPD Processes rows and Embellishment panels. Revert approval to edit."
+				)
+			)
 	apply_patch(doc, values)
 	detached = [] if name else detach_bom_mappings(doc)
 	if name:

@@ -85,6 +85,7 @@ export function useIpdEditor(initialName) {
 	const name = computed(() => record.value.name || "")
 	const isNew = computed(() => !name.value)
 	const capabilities = computed(() => payload.value?.capabilities || {})
+	const approvedEdits = computed(() => !capabilities.value.edit?.allowed && Boolean(capabilities.value.approved_edits?.allowed))
 	const fields = computed(() => payload.value?.fields || {})
 	const isDirty = computed(() => dirtyKeys.value.size > 0)
 	const sections = computed(() => sectionsFor(Boolean(record.value.is_cloth_item)))
@@ -153,7 +154,7 @@ export function useIpdEditor(initialName) {
 	}
 	function redirectIfReadOnly(result) {
 		const recordName = result?.record?.name
-		if (!recordName || result.capabilities?.edit?.allowed) return false
+		if (!recordName || result.capabilities?.edit?.allowed || result.capabilities?.approved_edits?.allowed) return false
 		router.replace(recordLocation(recordName, result.record.modified))
 		return true
 	}
@@ -370,7 +371,7 @@ export function useIpdEditor(initialName) {
 	}))
 	const api = reactive({
 		draft: readonly(draft), context, grids, gridDrift, fields, record, checks, isNew, sections, states,
-		capabilities, isDirty, acting, readonly: false, approve,
+		capabilities, isDirty, acting, readonly: approvedEdits, approvedEdits, approve,
 		problemsFor: (sectionKey) => problemsFor(checks.value, sectionKey),
 		cellError: (field, rowKey, column) => gridErrors(checks.value, field)?.[rowKey]?.[column ?? ""] || "",
 		gridErrors: (field) => gridErrors(checks.value, field),

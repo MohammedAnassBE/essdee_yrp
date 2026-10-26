@@ -39,6 +39,10 @@ export function tableFromModel(rows, model, fields, { keyField = "" } = {}) {
 	})
 }
 
+export function lockSavedRows(grid) {
+	return { ...grid, rows: grid.rows.map((row) => (row.key.startsWith("new:") ? row : { ...row, readonly: true, removable: false })) }
+}
+
 export function processRowsFromModel(rows, model, fields) {
 	return tableFromModel(rows, model, fields).map((row, index) => (row !== rows[index] && !same(row.in_stage, rows[index].in_stage) ? { ...row, out_stage: row.in_stage } : row))
 }

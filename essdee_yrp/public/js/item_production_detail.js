@@ -6,6 +6,24 @@ const IPD_LAYOUT_FIELDTYPES = new Set([
 ]);
 
 const APPROVED_IPD_HTML_LOCK_CLASS = "essdee-approved-ipd-html-locked";
+// Approved IPDs still accept new process rows and embellishment panel changes.
+const APPROVED_IPD_EDITABLE_FIELDS = new Set(["ipd_processes", "emblishment_details_html"]);
+
+function is_approved_ipd(frm) {
+	return !frm.is_new() && frm.doc.approval_status === "Approved";
+}
+
+function set_saved_process_rows_read_only(frm, rows, read_only) {
+	for (const name of rows) {
+		for (const df of frappe.meta.get_docfields("YRP IPD Process", name)) {
+			df.read_only = read_only;
+		}
+	}
+	const grid = frm.fields_dict.ipd_processes?.grid;
+	if (!grid) return;
+	grid.df.cannot_delete_rows = read_only;
+	grid.refresh();
+}
 
 function ensure_approved_ipd_lock_styles() {
 	if (document.getElementById("essdee-approved-ipd-lock-styles")) return;
@@ -46,6 +64,7 @@ function restore_approved_ipd_lock(frm) {
 			"opacity": values.opacity,
 		}).removeClass(APPROVED_IPD_HTML_LOCK_CLASS);
 	}
+	set_saved_process_rows_read_only(frm, state.process_rows, 0);
 	frm._essdee_approved_ipd_lock_state = null;
 	if (frm.doc.docstatus === 0 && (frm.perm || []).some((permission) => permission.write)) {
 		frm.enable_save();
@@ -53,12 +72,15 @@ function restore_approved_ipd_lock(frm) {
 }
 
 function apply_approved_ipd_lock(frm) {
-	if (frm.is_new() || frm.doc.approval_status !== "Approved") return;
+	if (!is_approved_ipd(frm)) return;
 	ensure_approved_ipd_lock_styles();
 
-	const state = { fields: {}, html: {} };
+	const cloth = Boolean(frm.doc.is_cloth_item);
+	const editable = cloth ? new Set() : APPROVED_IPD_EDITABLE_FIELDS;
+	const process_rows = cloth ? [] : (frm.doc.ipd_processes || []).filter((row) => !row.__islocal).map((row) => row.name);
+	const state = { fields: {}, html: {}, process_rows };
 	for (const df of frm.meta.fields || []) {
-		if (!df.fieldname || IPD_LAYOUT_FIELDTYPES.has(df.fieldtype)) continue;
+		if (!df.fieldname || IPD_LAYOUT_FIELDTYPES.has(df.fieldtype) || editable.has(df.fieldname)) continue;
 		state.fields[df.fieldname] = {
 			read_only: Number(Boolean(df.read_only)),
 			hidden: Number(Boolean(df.hidden)),
@@ -74,7 +96,7 @@ function apply_approved_ipd_lock(frm) {
 	// tabs usable. Other HTML islands expose their own editing controls, so make
 	// those islands view-only as one unit while the IPD is approved.
 	for (const df of (frm.meta.fields || []).filter((field) => field.fieldtype === "HTML")) {
-		if (df.fieldname === "panel_wise_consumption_matrix_html") continue;
+		if (df.fieldname === "panel_wise_consumption_matrix_html" || editable.has(df.fieldname)) continue;
 		const wrapper = frm.fields_dict[df.fieldname]?.wrapper;
 		if (!wrapper) continue;
 		const style = getComputedStyle(wrapper);
@@ -88,7 +110,11 @@ function apply_approved_ipd_lock(frm) {
 	}
 
 	frm._essdee_approved_ipd_lock_state = state;
-	frm.disable_save();
+	if (cloth) {
+		frm.disable_save();
+		return;
+	}
+	set_saved_process_rows_read_only(frm, process_rows, 1);
 }
 
 function add_ipd_process_matrix_button(frm) {
@@ -628,6 +654,7 @@ frappe.ui.form.on("YRP Item Production Detail", {
 	emblishment_details(frm){
 		$(frm.fields_dict['emblishment_details_html'].wrapper).html("");
 		frm.emblishment = new frappe.production.ui.EmblishmentDetails(frm.fields_dict['emblishment_details_html'].wrapper);
+		frm.emblishment.set_panels_only(is_approved_ipd(frm))
 		if(frm.doc.emblishment_details_json){
 			frm.emblishment.load_data(frm.doc.emblishment_details_json)
 		}
@@ -678,6 +705,13 @@ frappe.ui.form.on("YRP Item Production Detail", {
 		})
 	},
 	validate:async function(frm){
+		if(is_approved_ipd(frm)){
+			// Other widgets are locked; re-serialising them would look like an edit.
+			if(frm.emblishment){
+				frm.doc.emblishment_details_json = frm.emblishment.get_items()
+			}
+			return
+		}
 		if(!frm.doc.__islocal){
 			if(frm.doc.enable_panel_wise_consumption_matrix && frm.panel_wise_consumption_matrix){
 				let matrix = frm.panel_wise_consumption_matrix.get_data()

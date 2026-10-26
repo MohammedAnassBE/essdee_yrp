@@ -72,7 +72,7 @@
 						</td>
 						<td v-if="hasRowTotals" class="entry-grid__total entry-grid__number">{{ formatTotal(rowTotal(modelValue, row, columns)) }}</td>
 						<td v-if="removableRows && !readonly" class="entry-grid__remove">
-							<Button icon="pi pi-times" text rounded severity="secondary" size="small" :aria-label="`Remove ${row.label}`" @click="emit('remove-row', row.key)" />
+							<Button v-if="row.removable !== false" icon="pi pi-times" text rounded severity="secondary" size="small" :aria-label="`Remove ${row.label}`" @click="emit('remove-row', row.key)" />
 						</td>
 					</tr>
 				</tbody>

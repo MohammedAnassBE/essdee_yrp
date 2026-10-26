@@ -37,6 +37,11 @@ def get_capabilities(doc, permissions) -> dict:
 		"save": action(
 			editable, _("Create IPD") if doc.is_new() else _("Save"), edit_reason(approved, can_write)
 		),
+		"approved_edits": action(
+			can_write and approved and not doc.get("is_cloth_item"),
+			_("Add processes / panels"),
+			_("Editing needs write permission.") if approved else _("Only Approved IPDs use this."),
+		),
 		"run_checks": action(
 			permissions["can_read"] and not approved,
 			_("Run checks"),

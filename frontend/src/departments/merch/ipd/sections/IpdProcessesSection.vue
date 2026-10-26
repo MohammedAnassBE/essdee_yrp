@@ -1,7 +1,7 @@
 <template>
 	<IpdSection :section-key="sectionKey">
 		<template #actions>
-			<Button v-if="part === 'general' && !editor.readonly" label="Add process" icon="pi pi-plus" size="small" outlined @click="addProcess" />
+			<Button v-if="part === 'general' && (!editor.readonly || editor.approvedEdits)" label="Add process" icon="pi pi-plus" size="small" outlined @click="addProcess" />
 		</template>
 		<div class="ipd-section-stack">
 			<template v-if="part === 'general'">
@@ -13,11 +13,11 @@
 					:rows="processes.rows"
 					:columns="ipdLinkColumns(processColumns, editor, 'ipd_processes')"
 					:model-value="processes.model"
-					:readonly="editor.readonly"
+					:readonly="editor.readonly && !editor.approvedEdits"
 					:errors="editor.gridErrors('ipd_processes')"
 					:toolbar="[]"
 					:fill-shortcuts="false"
-					:removable-rows="!editor.readonly"
+					:removable-rows="!editor.readonly || editor.approvedEdits"
 					@update:model-value="updateProcesses"
 					@remove-row="removeProcess"
 				/>
@@ -37,7 +37,7 @@
 					:rows="embellishment.rows"
 					:columns="embellishment.columns"
 					:model-value="embellishment.model"
-					:readonly="editor.readonly"
+					:readonly="editor.readonly && !editor.approvedEdits"
 					:toolbar="[]"
 					:fill-shortcuts="false"
 					:removable-rows="!editor.readonly"
@@ -80,7 +80,7 @@ import IpdSection from "../IpdSection.vue"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 import { attributeValues } from "./attributeValues.js"
 import { orphanProcessNotices } from "./orphanProcessNotices.js"
-import { addEmbellishment, embellishmentFromModel, embellishmentGrid, hasStageMismatch, processRowsFromModel, removeEmbellishment, removeTableRow, syncProcessStages, tableGrid } from "./garmentGrids.js"
+import { addEmbellishment, embellishmentFromModel, embellishmentGrid, hasStageMismatch, lockSavedRows, processRowsFromModel, removeEmbellishment, removeTableRow, syncProcessStages, tableGrid } from "./garmentGrids.js"
 import { useSectionFocus } from "./sectionFocus.js"
 import "./sections.css"
 
@@ -100,7 +100,10 @@ const error = ref("")
 const draft = computed(() => editor.draft)
 const stages = computed(() => editor.context?.stage_values || [])
 const panels = computed(() => attributeValues(editor, draft.value.stiching_attribute))
-const processes = computed(() => tableGrid(draft.value.ipd_processes, PROCESS_FIELDS))
+const processes = computed(() => {
+	const grid = tableGrid(draft.value.ipd_processes, PROCESS_FIELDS)
+	return editor.approvedEdits ? lockSavedRows(grid) : grid
+})
 const processColumns = computed(() => [
 	{ key: "process_name", label: "Process", type: "link", fieldtype: "Link", link_doctype: "YRP Process", doctype: "YRP Process" },
 	{ key: "process_item", label: "Process Item", type: "link", fieldtype: "Link", link_doctype: "Item", doctype: "Item" },

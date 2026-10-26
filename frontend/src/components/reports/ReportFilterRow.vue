@@ -1,5 +1,5 @@
 <template>
-	<tr ref="filterRow" class="report-filter-row" data-export-ignore :style="{ '--report-filter-top': `${stickyTop}px` }">
+	<tr ref="filterRow" class="report-filter-row" data-export-ignore data-capture-hide :style="{ '--report-filter-top': `${stickyTop}px` }">
 		<th v-for="(column, index) in columns" :key="filter.columnKey(column)" :class="['report-filter-row__cell', cellClass(column, index)]" :style="cellStyle(column, index)">
 			<input
 				v-if="column.filterable !== false"
@@ -15,8 +15,8 @@
 			/>
 		</th>
 	</tr>
-	<tr v-if="filter.isFiltered.value && !filter.matchingCount.value" class="report-filter-row__empty" data-export-ignore>
-		<td :colspan="columns.length">
+	<tr v-if="filter.isFiltered.value && !filter.matchingCount.value" class="report-filter-row__empty" data-export-ignore data-capture-hide>
+		<td class="report-cell--last-column" :colspan="columns.length">
 			<div class="report-filter-row__empty-inner">
 				<span>No rows match the column filters.</span>
 				<button type="button" class="report-filter-row__clear" @click="filter.clearFilters()">Clear filters</button>

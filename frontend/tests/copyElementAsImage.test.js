@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
 
-const { assertCanvasFits, CAPTURE_PRINT_CLASS, captureElementImage, expandForCapture, getCapturePixelRatio, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
+const { assertCanvasFits, CAPTURE_PRINT_CLASS, captureElementImage, expandForCapture, getCapturePixelRatio, getCaptureSize, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
 
-function node({ overflow = "visible", size = [100, 100], content = size, placeholder = null, tag = "div", textOverflow = "clip", clip = "auto", hidden = false } = {}) {
+function node({ overflow = "visible", size = [100, 100], content = size, placeholder = null, tag = "div", textOverflow = "clip", clip = "auto", hidden = false, rect = [0, 0, ...size] } = {}) {
 	const attributes = placeholder === null ? {} : { placeholder }
 	const style = {
 		cssText: "height: 40px;",
@@ -13,14 +14,16 @@ function node({ overflow = "visible", size = [100, 100], content = size, placeho
 	const element = {
 		classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
 		innerText: "Report",
-		tag, overflow, textOverflow, clip, hidden, style, children: [],
+		tagName: tag.toUpperCase(), tag, overflow, textOverflow, clip, hidden, style, children: [],
 		clientWidth: size[0], clientHeight: size[1], scrollWidth: content[0], scrollHeight: content[1], offsetWidth: size[0],
+		getBoundingClientRect: () => ({ left: rect[0], top: rect[1], width: rect[2], height: rect[3], right: rect[0] + rect[2], bottom: rect[1] + rect[3] }),
 		getAttribute: name => attributes[name] ?? null,
 		setAttribute: (name, value) => { attributes[name] = value },
 		removeAttribute: name => { delete attributes[name] },
 		querySelectorAll(selector) {
 			const all = this.children.flatMap(child => [child, ...child.querySelectorAll("*")])
 			if (selector === "*") return all
+			if (selector === "table") return all.filter(child => child.tag === "table")
 			if (selector.includes("input")) return all.filter(child => child.tag === "input")
 			return all.filter(child => child.hidden)
 		},
@@ -138,4 +141,40 @@ test("copy removes print mode and restores the page when the render fails", asyn
 	const huge = node({ size: [1600, 40_000] })
 	await assert.rejects(captureElementImage(huge, { view, render }), { message: TOO_LARGE_MESSAGE })
 	assert.equal(huge.classList.contains(CAPTURE_PRINT_CLASS), false)
+})
+
+test("copy hides the inline filter row and its empty state; restore brings them back", () => {
+	const source = readFileSync(new URL("../src/components/reports/ReportFilterRow.vue", import.meta.url), "utf8")
+	assert.match(source, /class="report-filter-row" data-export-ignore data-capture-hide/)
+	assert.match(source, /class="report-filter-row__empty" data-export-ignore data-capture-hide/)
+	assert.match(source, /<td class="report-cell--last-column" :colspan/, "the empty-state cell has no extra right border")
+
+	const root = node()
+	const filterRow = node({ hidden: true, tag: "tr" })
+	root.children.push(filterRow)
+	const restore = expandForCapture(root, view)
+	assert.match(filterRow.style.cssText, /visibility: collapse !important/, "a collapsed row keeps the on-screen column widths")
+	restore()
+	assert.equal(filterRow.style.cssText, "height: 40px;")
+})
+
+test("copy bounds cover the root border and every table, even one spilling past the root", () => {
+	const root = node({ size: [1000, 600], content: [998, 598], rect: [10, 20, 1000, 600] })
+	const narrow = node({ tag: "table", rect: [26, 40, 900, 200] })
+	const wide = node({ tag: "table", rect: [26, 260, 1600.4, 500] })
+	const hidden = node({ tag: "table", rect: [0, 0, 0, 0] })
+	root.children.push(narrow, wide, hidden)
+	assert.deepEqual(getCaptureSize(root), { width: 1617, height: 740 })
+	assert.deepEqual(getCaptureSize(node({ size: [800, 400], content: [800, 900] })), { width: 800, height: 900 })
+})
+
+test("copy renders the full multi-table bounds and restores the filter row on error", async () => {
+	const root = node({ size: [800, 600] })
+	const filterRow = node({ hidden: true, tag: "tr" })
+	root.children.push(filterRow, node({ tag: "table", rect: [0, 0, 1200, 900] }))
+	let options = null
+	await captureElementImage(root, { view, render: (_, renderOptions) => { options = renderOptions; assert.match(filterRow.style.cssText, /visibility: collapse/); return "png" } })
+	assert.deepEqual([options.width, options.height], [1200, 900])
+	await assert.rejects(captureElementImage(root, { view, render: () => { throw new Error("render failed") } }), { message: "render failed" })
+	assert.equal(filterRow.style.cssText, "height: 40px;")
 })

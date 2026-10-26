@@ -48,14 +48,15 @@ function flattenInputs(element, restore) {
 }
 
 /**
- * Lays `element` out at full size for an image capture: `hide` selectors and [data-capture-hide] drop out,
+ * Lays `element` out at full size for an image capture: `hide` selectors and [data-capture-hide] drop out (rows collapse),
  * clipping boxes grow to their content, ellipsis text wraps, cell inputs render as plain text and the root
  * widens to its widest table. Returns a function that restores the page.
  */
 export function expandForCapture(element, view = window, { hide = [] } = {}) {
 	const restore = []
+	// A collapsed row still sizes its columns, so hiding the filter row keeps the on-screen column widths.
 	for (const node of element.querySelectorAll(["[data-capture-hide]", ...hide].join(", "))) {
-		applyStyle(node, { display: "none" }, restore)
+		applyStyle(node, node.tagName === "TR" ? { visibility: "collapse" } : { display: "none" }, restore)
 	}
 	// Innermost first, so an outer box clipped by an expanded child is caught too.
 	for (const node of [element, ...element.querySelectorAll("*")].reverse()) {
@@ -86,14 +87,26 @@ export function getCapturePixelRatio(width, height) {
 	return ratio
 }
 
+/** Image size that covers the element, its borders and every table in it, even a table spilling past its box. */
+export function getCaptureSize(element) {
+	const box = element.getBoundingClientRect()
+	let right = box.right, bottom = box.bottom
+	for (const table of element.querySelectorAll("table")) {
+		const rect = table.getBoundingClientRect()
+		if (!rect.width) continue
+		right = Math.max(right, rect.right)
+		bottom = Math.max(bottom, rect.bottom)
+	}
+	return { width: Math.ceil(Math.max(right - box.left, element.scrollWidth)), height: Math.ceil(Math.max(bottom - box.top, element.scrollHeight)) }
+}
+
 /** Renders `element` in print mode at full size and returns the PNG blob with its text; the page is restored even on error. */
 export async function captureElementImage(element, { hide = [], view = window, render = toBlob } = {}) {
 	element.classList.add(CAPTURE_PRINT_CLASS)
 	let restore = null
 	try {
 		restore = expandForCapture(element, view, { hide })
-		const width = Math.max(element.scrollWidth, element.clientWidth)
-		const height = Math.max(element.scrollHeight, element.clientHeight)
+		const { width, height } = getCaptureSize(element)
 		const pixelRatio = getCapturePixelRatio(width, height)
 		// html-to-image otherwise shrinks anything past 16384px until it is unreadable.
 		const blob = await render(element, { backgroundColor: "#ffffff", pixelRatio, width, height, skipAutoScale: true })

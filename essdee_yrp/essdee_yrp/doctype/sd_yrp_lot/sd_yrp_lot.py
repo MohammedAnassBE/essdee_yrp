@@ -36,6 +36,7 @@ from essdee_yrp.fabric_program import (
 )
 from essdee_yrp.garment_bom import calculate_essdee_accessory_bom
 from essdee_yrp.garment_bom_matrix import ensure_garment_bom_matrices
+from essdee_yrp.print_helpers import set_attribute_display_values
 
 
 def get_panel_colour_combination(ipd_doc):
@@ -58,6 +59,9 @@ def get_panel_colour_combination(ipd_doc):
 
 
 class SDYRPLot(Document):
+	def before_print(self, settings=None):
+		set_attribute_display_values(self)
+
 	def before_submit(self):
 		if len(self.bom_summary) == 0:
 			frappe.throw("BOM is not calculated")

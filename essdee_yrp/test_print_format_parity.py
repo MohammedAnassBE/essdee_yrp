@@ -222,3 +222,27 @@ class TestPrintFormatParity(IntegrationTestCase):
 		row = doc.stiching_item_details[0]
 		self.assertEqual((row.set_item_attribute_value, row.stiching_attribute_value), ("Top", "Front"))
 		self.assertIn(row.stiching_attribute_value, json.loads(doc.emblishment_details_json)["Printing"])
+
+	def test_consumption_sheet_shows_fabric_attribute_values(self):
+		lot = frappe.get_doc(
+			{
+				"doctype": "SD YRP Lot",
+				"lot_fabric_requirements": [{"cloth_item": "Jersey", "colour": "IAV-BLACK", "dia": "IAV-DIA-60"}],
+			}
+		)
+		labels = [
+			frappe._dict(name="IAV-BLACK", attribute_name="Colour", attribute_value="Black"),
+			frappe._dict(name="IAV-DIA-60", attribute_name="Dia", attribute_value="60 Dia"),
+		]
+		with (
+			patch.object(frappe.local, "attribute_link_values", {}, create=True),
+			patch("essdee_yrp.merch.ipd.payload.frappe.get_all", return_value=labels),
+		):
+			lot.run_method("before_print")
+
+		html = frappe.render_template(
+			'{% include "essdee_yrp/templates/print_formats/essdee_consumption_sheet.html" %}', {"doc": lot}
+		)
+		self.assertNotIn("IAV-", html)
+		self.assertIn("<td>Black</td>", html)
+		self.assertIn("<td>60 Dia</td>", html)

@@ -68,6 +68,31 @@ FILTER_CONDITIONS = {
 
 MULTI_SELECT_FILTERS = ("item", "item_group")
 
+BALANCE_KEY = "sle.item, sle.warehouse, IFNULL(sle.lot, ''), IFNULL(sle.received_type, '')"
+BALANCE_LEDGER = """FROM `tabYRP Stock Ledger Entry` sle
+	JOIN `tabItem` variant ON variant.name = sle.item
+	WHERE sle.is_cancelled = 0 AND sle.docstatus < 2 AND sle.posting_date <= %(to_date)s"""
+RECONCILIATION = "'YRP Stock Reconciliation'"
+BALANCE_QUERY = f"""SELECT {BALANCE_KEY}, SUM(sle.qty) {BALANCE_LEDGER} {{conditions}}
+	AND sle.voucher_type != {RECONCILIATION}
+	GROUP BY {BALANCE_KEY}"""
+RECONCILED_BALANCE_QUERY = f"""SELECT recon.item, recon.warehouse, recon.lot, recon.received_type,
+	recon.qty_after_transaction + COALESCE(SUM(later.qty), 0)
+	FROM (
+		SELECT sle.item, sle.warehouse, IFNULL(sle.lot, '') AS lot, IFNULL(sle.received_type, '') AS received_type,
+			sle.qty_after_transaction, sle.posting_datetime, sle.creation,
+			ROW_NUMBER() OVER (PARTITION BY {BALANCE_KEY} ORDER BY sle.posting_datetime DESC, sle.creation DESC)
+				AS position
+		{BALANCE_LEDGER} {{conditions}} AND sle.voucher_type = {RECONCILIATION}
+	) recon
+	LEFT JOIN `tabYRP Stock Ledger Entry` later ON later.item = recon.item AND later.warehouse = recon.warehouse
+		AND IFNULL(later.lot, '') = recon.lot AND IFNULL(later.received_type, '') = recon.received_type
+		AND later.is_cancelled = 0 AND later.docstatus < 2 AND later.posting_date <= %(to_date)s
+		AND later.voucher_type != {RECONCILIATION}
+		AND (later.posting_datetime, later.creation) > (recon.posting_datetime, recon.creation)
+	WHERE recon.position = 1
+	GROUP BY recon.item, recon.warehouse, recon.lot, recon.received_type, recon.qty_after_transaction"""
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -177,7 +202,33 @@ def get_ledger_rows(filters, view):
 
 def get_data(filters, view, months):
 	rows = get_bucket_rows(filters, view)
-	return get_month_rows(rows, months) if view == "month_wise" else rows
+	if view == "month_wise":
+		rows = get_month_rows(rows, months)
+	balances = get_stock_balances(filters, {row["item_variant"] for row in rows})
+	for row in rows:
+		key = (row["item_variant"], row["warehouse"], row["lot"] or "", row["received_type"] or "")
+		row["stock_balance"] = balances.get(key, 0.0)
+	return rows
+
+
+def get_stock_balances(filters, variants):
+	"""Closing qty at To Date per variant, warehouse, lot and received type, computed like YRP Stock Balance.
+
+	The latest Stock Reconciliation entry sets the balance to its qty_after_transaction; later entries add qty.
+	"""
+	if not variants:
+		return {}
+	conditions = "".join(
+		f" AND {condition}"
+		for field, condition in FILTER_CONDITIONS.items()
+		if field != "supplier" and filters.get(field)
+	)
+	values = {**filters, "variants": tuple(variants)}
+	balances = {}
+	for query in (BALANCE_QUERY, RECONCILED_BALANCE_QUERY):
+		rows = frappe.db.sql(query.format(conditions=f" AND sle.item IN %(variants)s{conditions}"), values)
+		balances.update({tuple(row[:4]): row[4] for row in rows})
+	return balances
 
 
 def get_bucket_rows(filters, view):
@@ -241,6 +292,7 @@ def get_columns(view, months):
 		columns.append(qty_column(_("Total Inward"), "total_inward"))
 		columns.append(qty_column(_("Total Outward"), "total_outward"))
 	columns.append(qty_column(_("Difference"), "difference"))
+	columns.append({**qty_column(_("Stock Balance"), "stock_balance"), "disable_total": 1})
 	return columns
 
 

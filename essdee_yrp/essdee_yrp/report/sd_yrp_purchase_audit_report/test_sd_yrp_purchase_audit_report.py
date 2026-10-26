@@ -50,7 +50,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		doc.db_insert()
 		return doc
 
-	def add_entry(self, voucher, qty, date=DATE, warehouse=None, item=None, lot=None):
+	def add_entry(self, voucher, qty, date=DATE, warehouse=None, item=None, lot=None, **fields):
 		frappe.get_doc(
 			{
 				"doctype": "YRP Stock Ledger Entry",
@@ -66,6 +66,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 				"received_type": None,
 				"is_cancelled": 0,
 				"docstatus": 1,
+				**fields,
 			}
 		).db_insert()
 
@@ -173,7 +174,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		self.make_all_movements()
 		columns, _rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "summarized_view": 1})
 		fields = [column["fieldname"] for column in columns]
-		self.assertEqual(fields[-3:], ["total_inward", "total_outward", "difference"])
+		self.assertEqual(fields[-4:], ["total_inward", "total_outward", "difference", "stock_balance"])
 		self.assertNotIn("po_grn", fields)
 
 	def test_month_wise_report_splits_totals_per_month(self):
@@ -197,6 +198,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 				"Total Inward",
 				"Total Outward",
 				"Difference",
+				"Stock Balance",
 			],
 		)
 		(row,) = rows
@@ -269,3 +271,26 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		doc = {"doctype": "Item Group", "item_group_name": f"AUD {name} {self.key}"}
 		doc.update(parent_item_group=parent, is_group=is_group)
 		return frappe.get_doc(doc).insert(ignore_permissions=True).name
+
+	def test_stock_balance_is_closing_qty_at_to_date(self):
+		receipt = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		issue = self.make_voucher("YRP Stock Entry", purpose="Material Issue")
+		reconciliation = self.make_voucher("YRP Stock Reconciliation")
+		moved, reconciled = f"LOT-{self.key}", f"RECON-{self.key}"
+		self.add_entry(receipt, 50, date="2099-03-01", lot=moved)
+		self.add_entry(receipt, 10, lot=moved)
+		self.add_entry(issue, -4, lot=moved)
+		self.add_entry(receipt, 100, date="2099-04-01", lot=moved)
+		self.add_entry(receipt, 7, date="2099-03-01", lot=reconciled)
+		self.add_entry(reconciliation, 0, date="2099-03-05", lot=reconciled, qty_after_transaction=20)
+		self.add_entry(receipt, 5, lot=reconciled)
+		views = ({}, {"summarized_view": 1}, {"summarized_view": 1, "month_wise_report": 1})
+		for view in views:
+			with self.subTest(view=view):
+				columns, rows = execute(
+					{"from_date": DATE, "to_date": NEXT_DATE, "warehouse": self.warehouse, **view}
+				)
+				self.assertEqual(columns[-1]["fieldname"], "stock_balance")
+				self.assertEqual(
+					{row["lot"]: row["stock_balance"] for row in rows}, {moved: 56, reconciled: 25}
+				)

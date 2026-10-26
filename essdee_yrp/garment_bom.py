@@ -30,7 +30,7 @@ def calculate_essdee_accessory_bom(ipd_name, variant_demands, lot_doc, process_n
 		validate_bom_item_variant_mapping(bom_row)
 		wastage_factor = 1 + flt(bom_row.get("wastage_pct")) / 100
 		if bom_row.based_on_attribute_mapping and bom_row.attribute_mapping:
-			for demand in demands:
+			for demand_index, demand in enumerate(demands):
 				mapped = _resolve_mapping(bom_row.attribute_mapping, demand["attrs"])
 				if not mapped:
 					continue
@@ -42,6 +42,8 @@ def calculate_essdee_accessory_bom(ipd_name, variant_demands, lot_doc, process_n
 					bom_row,
 					mapped.get("bom_attrs") or {},
 					quantity * wastage_factor,
+					qty_of_bom,
+					demand_index,
 				)
 			continue
 
@@ -56,7 +58,7 @@ def calculate_essdee_accessory_bom(ipd_name, variant_demands, lot_doc, process_n
 			# This is the legacy set-garment rule in Production API's mode-A path.
 			basis_quantity /= 2
 		quantity = basis_quantity * flt(bom_row.qty_of_bom_item) / qty_of_product
-		_add_row(aggregated, bom_row, {}, quantity * wastage_factor)
+		_add_row(aggregated, bom_row, {}, quantity * wastage_factor, flt(bom_row.qty_of_bom_item), 0)
 
 	return list(aggregated.values())
 
@@ -180,7 +182,7 @@ def _same_attributes(mapping):
 	}
 
 
-def _add_row(aggregated, bom_row, attrs, quantity):
+def _add_row(aggregated, bom_row, attrs, quantity, qty_of_bom_item, demand_index):
 	item_variant = get_or_create_variant(bom_row.item, attrs)
 	uom = bom_row.uom or frappe.db.get_value("Item", bom_row.item, "stock_uom")
 	key = (bom_row.process_name, item_variant, uom)
@@ -193,5 +195,7 @@ def _add_row(aggregated, bom_row, attrs, quantity):
 			"required_qty": 0.0,
 			"uom": uom,
 			"attrs": attrs,
+			"qty_of_bom_item": qty_of_bom_item,
+			"first_demand_index": demand_index,
 		}
 	aggregated[key]["required_qty"] += flt(quantity)

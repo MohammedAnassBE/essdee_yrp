@@ -116,6 +116,10 @@ class TestLot(FrappeTestCase):
 				"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.now_datetime",
 				return_value="2026-08-14 12:00:00",
 			),
+			patch(
+				"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot._build_bom_summary_json",
+				return_value={"_Test Thread": ["_Test Stitching", 1, "Pieces", 1, "Kg", 0.5]},
+			) as summary_builder,
 		):
 			result = calculate_bom(lot.name)
 
@@ -130,7 +134,8 @@ class TestLot(FrappeTestCase):
 		)
 		self.assertEqual(len(lot.bom_summary), 2)
 		self.assertEqual(lot.bom_summary[0]["item_name"], "_Test Cloth Variant")
-		self.assertEqual(lot.bom_summary_json["_Test Cloth Variant"][3], 0.25)
+		summary_builder.assert_called_once_with(lot, calculation["accessories"])
+		self.assertEqual(lot.bom_summary_json["_Test Thread"][5], 0.5)
 		self.assertEqual(result["last_calculated_time"], "2026-08-14 12:00:00")
 
 	def test_ocr_details_uses_migrated_cutting_and_finishing_plans(self):

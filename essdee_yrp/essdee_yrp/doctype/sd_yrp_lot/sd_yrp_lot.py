@@ -963,6 +963,8 @@ def update_order_details(doc_name):
 
 @frappe.whitelist()
 def get_mapping_details(ipd):
+	if not ipd:
+		return {}
 	ipd_doc = frappe.get_cached_doc("YRP Item Production Detail", ipd)
 	bom_attribute_list = []
 	for bom in ipd_doc.item_bom:
@@ -1482,30 +1484,40 @@ def _build_lot_bom_rows(calculation):
 	return list(aggregated.values())
 
 
-def _build_bom_summary_json(lot_doc, rows):
-	"""Keep the legacy print payload in sync with the matrix-backed rows.
+def _build_bom_summary_json(lot_doc, accessories):
+	"""Build Production API's Lot BOM print payload, keyed by IPD Item BOM template item.
 
-	The generic calculator returns final quantities rather than the old entered
-	product/BOM ratio. Derive an equivalent per-unit ratio from the Lot demand so
-	existing Lot BOM and consumption print formats remain useful.
+	Each value is [process, qty of product, product stage UOM, qty of BOM item, BOM UOM, total qty].
 	"""
-	total_quantity = flt(lot_doc.total_order_quantity)
-	product_uom = lot_doc.uom or ""
+	ipd = frappe.get_cached_doc("YRP Item Production Detail", lot_doc.production_detail)
+	stage_uoms = {}
+	if ipd.get("dependent_attribute_mapping"):
+		attr_list = get_dependent_attribute_details(ipd.dependent_attribute_mapping)["attr_list"]
+		stage_uoms = {stage: details.get("uom") for stage, details in attr_list.items()}
+
+	def first_demand_index(bom_row):
+		indexes = [row["first_demand_index"] for row in accessories if row.get("item") == bom_row.item]
+		return min(indexes, default=0)
+
+	item_bom = ipd.get("item_bom") or []
+	ordered_rows = [row for row in item_bom if not row.based_on_attribute_mapping]
+	mapped_rows = [row for row in item_bom if row.based_on_attribute_mapping]
+	ordered_rows += sorted(mapped_rows, key=first_demand_index)
 	summary = {}
-	for row in rows:
-		key = row["item_name"]
-		if key in summary:
-			key = f"{key} · {row['process_name']}"
-		if key in summary:
-			key = f"{key} · {row['uom']}"
-		ratio = row["required_qty"] / total_quantity if total_quantity else 0
-		summary[key] = [
-			row["process_name"],
-			1,
-			product_uom,
-			ratio,
-			row["uom"],
-			row["required_qty"],
+	for bom_row in ordered_rows:
+		calculated = [row for row in accessories if row.get("item") == bom_row.item]
+		if bom_row.item in summary or (bom_row.based_on_attribute_mapping and not calculated):
+			continue
+		qty_of_bom = flt(bom_row.qty_of_bom_item)
+		if bom_row.based_on_attribute_mapping:
+			qty_of_bom = flt(calculated[0].get("qty_of_bom_item")) or qty_of_bom
+		summary[bom_row.item] = [
+			bom_row.process_name,
+			flt(bom_row.qty_of_product),
+			stage_uoms.get(_attribute_value(bom_row.dependent_attribute_value)),
+			qty_of_bom,
+			calculated[0]["uom"] if calculated else frappe.db.get_value("Item", bom_row.item, "stock_uom"),
+			sum(flt(row.get("required_qty")) for row in calculated),
 		]
 	return summary
 
@@ -1545,7 +1557,7 @@ def calculate_bom(lot_name):
 		frappe.throw("The IPD Process Matrix and Item BOM did not produce any BOM rows.")
 
 	lot_doc.set("bom_summary", bom_rows)
-	lot_doc.set("bom_summary_json", _build_bom_summary_json(lot_doc, bom_rows))
+	lot_doc.set("bom_summary_json", _build_bom_summary_json(lot_doc, essdee_accessories))
 	lot_doc.last_calculated_time = now_datetime()
 	lot_doc.save()
 

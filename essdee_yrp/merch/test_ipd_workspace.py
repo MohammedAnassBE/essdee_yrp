@@ -107,7 +107,10 @@ class TestIpdWorkspace(IntegrationTestCase):
 			self.assertEqual(payload["record"]["approved_by"], SENIOR)
 			self.assertTrue(payload["capabilities"]["revert_approval"]["allowed"])
 			payload = workspace.execute_ipd_command(
-				EDITABLE, "revert_approval", expected_modified=payload["record"]["modified"]
+				EDITABLE,
+				"revert_approval",
+				payload={"reason": "Workspace check"},
+				expected_modified=payload["record"]["modified"],
 			)
 			self.assertEqual(payload["record"]["approval_status"], "Not Approved")
 

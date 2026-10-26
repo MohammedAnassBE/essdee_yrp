@@ -345,10 +345,11 @@ frappe.ui.form.on("YRP Item Production Detail", {
 					}
 					if (frm.doc.approval_status && frm.doc.approval_status !== "Not Approved") {
 						frm.add_custom_button(__("Revert Approval"), () => {
-							frappe.confirm(__("Revert approval status to Not Approved?"), () => {
-								frappe.call({
+							frappe.prompt(
+								[{ fieldname: "reason", fieldtype: "Small Text", label: __("Reason"), reqd: 1 }],
+								(values) => frappe.call({
 									method: "essdee_yrp.ipd_ui.revert_ipd_approval",
-									args: { doc_name: frm.doc.name },
+									args: { doc_name: frm.doc.name, reason: values.reason },
 									callback: function () {
 										frappe.msgprint({
 											title: __("Success"),
@@ -357,8 +358,10 @@ frappe.ui.form.on("YRP Item Production Detail", {
 										});
 										frm.reload_doc();
 									}
-								});
-							});
+								}),
+								__("Revert approval?"),
+								__("Revert Approval"),
+							);
 						});
 						frm.change_custom_button_type(__("Revert Approval"), null, "danger");
 					}

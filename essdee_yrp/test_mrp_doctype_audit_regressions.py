@@ -61,7 +61,7 @@ class TestMRPDocTypeAuditRegressions(IntegrationTestCase):
 		):
 			doc.save()
 
-		self.assertEqual(revert_ipd_approval(name), {"status": "success"})
+		self.assertEqual(revert_ipd_approval(name, "Audit regression check"), {"status": "success"})
 		self.assertEqual(
 			frappe.db.get_value("YRP Item Production Detail", name, "approval_status"),
 			"Not Approved",

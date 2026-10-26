@@ -311,10 +311,10 @@ class TestClothProgramAccess(IntegrationTestCase):
 		frappe.set_user(self.users["manager"])
 		for name in (cloth, garment):
 			with self.subTest(name=name):
-				self.assertEqual(ipd_ui.revert_ipd_approval(name), {"status": "success"})
+				self.assertEqual(ipd_ui.revert_ipd_approval(name, "Cloth access check"), {"status": "success"})
 				self.assertEqual(ipd_ui.approve_ipd(name), {"status": "success"})
 				self.assertEqual(frappe.db.get_value("YRP Item Production Detail", name, "approval_status"), "Approved")
-				self.assertEqual(ipd_ui.revert_ipd_approval(name), {"status": "success"})
+				self.assertEqual(ipd_ui.revert_ipd_approval(name, "Cloth access check"), {"status": "success"})
 
 	def test_merch_build_role_does_not_grant_approval(self):
 		frappe.set_user(self.users["merch"])

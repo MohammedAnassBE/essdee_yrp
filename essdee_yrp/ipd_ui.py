@@ -2,7 +2,7 @@ import json
 from itertools import groupby, zip_longest
 
 import frappe
-from frappe.utils import cint, get_datetime
+from frappe.utils import cint, escape_html, get_datetime, get_fullname
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document, get_mapping_values
@@ -10,6 +10,8 @@ from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item_dependent_attribute_mapping.yrp_item_dependent_attribute_mapping import (
 	get_dependent_attribute_details,
 )
+
+from essdee_yrp.merch.ipd.revert_alerts import queue_revert_alert
 
 
 def onload(doc, method=None):
@@ -128,13 +130,16 @@ def approve_ipd(doc_name, approval_type="Approved"):
 
 
 @frappe.whitelist()
-def revert_ipd_approval(doc_name):
+def revert_ipd_approval(doc_name, reason=None):
 	allowed_roles = get_approval_roles()
 	if not any(role in frappe.get_roles() for role in allowed_roles):
 		frappe.throw(
 			"You do not have permission to revert Item Production Detail approval",
 			frappe.PermissionError,
 		)
+	reason = (reason or "").strip()
+	if not reason:
+		frappe.throw(frappe._("Enter a reason for reverting the approval."))
 
 	doc = frappe.get_doc("YRP Item Production Detail", doc_name)
 	doc.check_permission("write")
@@ -149,6 +154,9 @@ def revert_ipd_approval(doc_name):
 		update_modified=True,
 	)
 	frappe.clear_document_cache("YRP Item Production Detail", doc.name)
+	reverted_by = get_fullname(frappe.session.user)
+	doc.add_comment("Comment", f"Approval reverted by {escape_html(reverted_by)}: {escape_html(reason)}")
+	queue_revert_alert(doc, reason)
 	return {"status": "success"}
 
 

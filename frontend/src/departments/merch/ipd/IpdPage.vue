@@ -48,13 +48,20 @@
 			cancel-label="Keep Approved"
 			severity="warn"
 			:busy="acting === 'revert_approval'"
-			@confirm="runCommand('revert_approval')"
-		/>
+			:confirm-disabled="!revertPayload"
+			@confirm="runCommand('revert_approval', revertPayload)"
+		>
+			<label class="ipd-revert-reason" for="ipd-revert-reason">
+				<span>Reason</span>
+				<Textarea id="ipd-revert-reason" v-model="revertReason" rows="3" auto-resize required :disabled="acting === 'revert_approval'" placeholder="Why does this IPD need to be edited again?" />
+			</label>
+		</DocumentConfirmationDialog>
 		<DocumentErrorDialog :message="isStaleWriteError(actionError) ? actionError : ''" retry-label="Reload" @dismiss="actionError = ''" @retry="load(true)" />
 	</DepartmentPage>
 </template>
 
 <script setup>
+import Textarea from "primevue/textarea"
 import { useToast } from "primevue/usetoast"
 import { computed, provide, reactive, readonly, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
@@ -79,6 +86,7 @@ import { gridErrors, isStaleWriteError, problemsFor, recordActions, sectionState
 import { IPD_EDITOR_KEY } from "./useIpdEditor.js"
 import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
 import { ipdCommandSuccess } from "./ipdCommandSuccess.js"
+import { revertReasonPayload } from "./ipdRevertReason.js"
 import "./ipd.css"
 
 const props = defineProps({ ipdId: { type: String, required: true } })
@@ -94,6 +102,8 @@ const checks = ref(null)
 const checksRunning = ref(false)
 const copyVisible = ref(false)
 const revertVisible = ref(false)
+const revertReason = ref("")
+const revertPayload = computed(() => revertReasonPayload(revertReason.value))
 const frame = ref(null)
 const { registerFocus, focusProblem } = createFocusRegistry()
 const changesVisible = ref(false)
@@ -154,7 +164,7 @@ provide(IPD_EDITOR_KEY, readOnlyApi)
 const handlers = {
 	edit: openEditor,
 	approve: () => runCommand("approve"),
-	revert_approval: () => { revertVisible.value = true },
+	revert_approval: () => { revertReason.value = ""; revertVisible.value = true },
 	run_checks: runChecks,
 	new_version: () => { copyVisible.value = true },
 	regenerate_process_matrix: () => runCommand("regenerate_process_matrix"),
@@ -201,12 +211,12 @@ async function runChecks() {
 		if (sequence === checkSequence) checksRunning.value = false
 	}
 }
-async function runCommand(command) {
+async function runCommand(command, payload = null) {
 	if (acting.value) return
 	acting.value = command
 	actionError.value = ""
 	try {
-		workspace.value = await executeIpdCommand(record.value.name, command, { expectedModified: record.value.modified })
+		workspace.value = await executeIpdCommand(record.value.name, command, { payload, expectedModified: record.value.modified })
 		revertVisible.value = false
 		checks.value = null
 		toast.add(ipdCommandSuccess(command, record.value.name))

@@ -131,6 +131,7 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 			approval_status="Approved",
 			approved_by="approver@example.com",
 			check_permission=Mock(),
+			add_comment=Mock(),
 		)
 		with (
 			patch(
@@ -155,8 +156,9 @@ class TestPanelWiseConsumption(IntegrationTestCase):
 				frappe,
 				"clear_document_cache",
 			),
+			patch("essdee_yrp.ipd_ui.queue_revert_alert"),
 		):
-			result = revert_ipd_approval("TEST-IPD")
+			result = revert_ipd_approval("TEST-IPD", "Ratio correction")
 
 		self.assertEqual(result, {"status": "success"})
 		doc.check_permission.assert_called_once_with("write")

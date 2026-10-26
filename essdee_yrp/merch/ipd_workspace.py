@@ -107,8 +107,8 @@ def approve(doc, _payload):
 	ipd_ui.approve_ipd(doc.name, "Approved")
 
 
-def revert_approval(doc, _payload):
-	ipd_ui.revert_ipd_approval(doc.name)
+def revert_approval(doc, payload):
+	ipd_ui.revert_ipd_approval(doc.name, payload.get("reason"))
 
 
 def regenerate_process_matrix(doc, _payload):

@@ -161,6 +161,10 @@
 	border-radius: var(--erp-panel-radius);
 	background: var(--erp-accent-soft);
 }
+.ipd-revert-reason { display: grid; gap: 6px; margin-top: 12px; }
+.ipd-revert-reason > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 600; }
+.ipd-revert-reason > span::after { content: " *"; color: var(--erp-danger); }
+.ipd-revert-reason > .p-textarea { width: 100%; }
 .ipd-copy-banner > span { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
 .ipd-copy-banner > .p-button { flex: none; white-space: nowrap; }
 .ipd-lock-note {

@@ -2,7 +2,7 @@
 	<Dialog class="document-confirmation-shell erp-dialog--sm" :visible="visible" modal :header="title" :closable="!busy" :dismissable-mask="false" @show="focusSafeAction" @hide="restoreFocus" @update:visible="emit('update:visible', $event)">
 		<div class="document-confirmation-dialog"><i :class="icon" /><p>{{ message }}</p></div>
 		<slot />
-		<template #footer><Button ref="safeAction" :label="cancelLabel" severity="secondary" text autofocus :disabled="busy" @click="emit('update:visible', false)" /><Button :label="confirmLabel" :icon="confirmIcon" :severity="severity" :loading="busy" @click="emit('confirm')" /></template>
+		<template #footer><Button ref="safeAction" :label="cancelLabel" severity="secondary" text autofocus :disabled="busy" @click="emit('update:visible', false)" /><Button :label="confirmLabel" :icon="confirmIcon" :severity="severity" :loading="busy" :disabled="confirmDisabled" @click="emit('confirm')" /></template>
 	</Dialog>
 </template>
 
@@ -21,6 +21,7 @@ const props = defineProps({
 	icon: { type: String, default: "pi pi-exclamation-triangle" },
 	severity: { type: String, default: "danger" },
 	busy: { type: Boolean, default: false },
+	confirmDisabled: { type: Boolean, default: false },
 	returnFocusSelector: { type: String, default: "" },
 })
 const emit = defineEmits(["update:visible", "confirm"])

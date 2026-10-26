@@ -40,6 +40,8 @@
   "merchandising_manager_role",
   "merch_user_role",
   "production_planner_role",
+  "ipd_revert_alerts_section",
+  "ipd_revert_alert_recipients",
   "vendor_bill_tracking_section",
   "enable_vendor_bill_no_unique_restriction",
   "enable_grn_document_no_unique_restriction",
@@ -383,6 +385,18 @@
    "options": "Role"
   },
   {
+   "description": "Telegram alert sent when an IPD approval is reverted. Each person must press Start on the approval bot once; group chat IDs also work.",
+   "fieldname": "ipd_revert_alerts_section",
+   "fieldtype": "Section Break",
+   "label": "IPD Revert Alerts"
+  },
+  {
+   "fieldname": "ipd_revert_alert_recipients",
+   "fieldtype": "Table",
+   "label": "IPD Revert Alert Recipients",
+   "options": "SD YRP IPD Revert Alert Recipient"
+  },
+  {
    "fieldname": "cutting_plan_section",
    "fieldtype": "Section Break",
    "label": "Cutting Plan"
@@ -600,7 +614,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-07 10:00:00.000000",
+ "modified": "2026-10-26 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP MRP Settings",

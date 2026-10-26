@@ -1,7 +1,7 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from essdee_yrp.essdee_yrp.report.purchase_audit_report.purchase_audit_report import execute
+from essdee_yrp.essdee_yrp.report.sd_yrp_purchase_audit_report.sd_yrp_purchase_audit_report import execute
 
 DATE = "2099-03-10"
 NEXT_DATE = "2099-03-20"

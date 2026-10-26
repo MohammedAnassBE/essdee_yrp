@@ -1,4 +1,4 @@
-frappe.query_reports["Purchase Audit Report"] = {
+frappe.query_reports["SD YRP Purchase Audit Report"] = {
 	filters: [
 		{
 			fieldname: "from_date",

@@ -38,6 +38,12 @@ def get_fp_ocr_details(doc_name):
 	doc = frappe.get_doc("SD YRP Finishing Plan", doc_name)
 	doc.check_permission("read")
 	ocr_data = get_ocr_details(doc)
+	primary_values = get_ipd_primary_values(doc.production_detail)
+	for values in ocr_data.values():
+		for size in primary_values:
+			values["total"].setdefault(size, _empty_size())
+			for colour in values["data"].values():
+				colour["values"].setdefault(size, _empty_cell())
 	metrics = {
 		"get_total_difference": {},
 		"get_total": {},
@@ -136,7 +142,7 @@ def get_fp_ocr_details(doc_name):
 			)
 			for size, row in values["total"].items()
 		}
-	return ocr_data, metrics, get_ipd_primary_values(doc.production_detail)
+	return ocr_data, metrics, primary_values
 
 
 def get_ocr_details(doc):

@@ -46,13 +46,13 @@ def get_eqi_status(work_orders):
 	result = {}
 	for name in inspection_names:
 		doc = frappe.get_doc("SD YRP Essdee Quality Inspection", name)
-		result.setdefault(doc.supplier_name, {})
+		supplier = result.setdefault(doc.supplier_name or doc.supplier, {})
 		for row in doc.get("essdee_quality_inspection_colours") or []:
 			if row.selected:
-				result[doc.supplier_name].setdefault(_attribute_value(row.colour), {})
+				supplier.setdefault(_attribute_value(row.colour), {})
 		for row in doc.get("essdee_quality_inspection_sizes") or []:
 			if row.selected:
-				for colour in result[doc.supplier_name].values():
+				for colour in supplier.values():
 					colour.setdefault(_attribute_value(row.size), doc.result)
 	return result
 
@@ -155,6 +155,7 @@ def _add_inward_rows(
 			part_data["part_colours"].append(colour)
 			part_data["colours"][colour] = {"sewing_received": 0}
 			part_data["colour_type"][colour] = {"type_wise": {}}
+			part_data["cut_detail"][colour] = 0
 		for received_type, quantity in (update_if_string_instance(row.received_type_json) or {}).items():
 			if received_type == rejected_type:
 				continue
@@ -162,7 +163,6 @@ def _add_inward_rows(
 				type_list.append(received_type)
 			quantity = flt(quantity)
 			if cutting:
-				part_data["cut_detail"].setdefault(colour, 0)
 				part_data["cut_detail"][colour] += quantity
 				part_data["total_cut"] += quantity
 			else:

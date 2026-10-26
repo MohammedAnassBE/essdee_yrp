@@ -40,9 +40,9 @@ frappe.query_reports["SD YRP Purchase Audit Report"] = {
 		{
 			fieldname: "item",
 			label: __("Item"),
-			fieldtype: "Link",
+			fieldtype: "MultiSelectList",
 			options: "Item",
-			get_query: () => ({ filters: { variant_of: ["is", "not set"] } }),
+			get_data: (txt) => frappe.db.get_link_options("Item", txt, { variant_of: ["is", "not set"] }),
 		},
 		{
 			fieldname: "item_variant",
@@ -54,8 +54,9 @@ frappe.query_reports["SD YRP Purchase Audit Report"] = {
 		{
 			fieldname: "item_group",
 			label: __("Item Group"),
-			fieldtype: "Link",
+			fieldtype: "MultiSelectList",
 			options: "Item Group",
+			get_data: (txt) => frappe.db.get_link_options("Item Group", txt),
 		},
 		{
 			fieldname: "received_type",

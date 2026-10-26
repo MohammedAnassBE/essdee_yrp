@@ -58,23 +58,34 @@ DIMENSIONS = (
 FILTER_CONDITIONS = {
 	"supplier": "supplier.name = %(supplier)s",
 	"warehouse": "sle.warehouse = %(warehouse)s",
-	"item": "COALESCE(NULLIF(variant.variant_of, ''), variant.name) = %(item)s",
+	"item": "COALESCE(NULLIF(variant.variant_of, ''), variant.name) IN %(item)s",
 	"item_variant": "sle.item = %(item_variant)s",
 	"lot": "sle.lot = %(lot)s",
 	"received_type": "sle.received_type = %(received_type)s",
 	"item_group": """variant.item_group IN (
 		SELECT child.name FROM `tabItem Group` child
-		JOIN `tabItem Group` parent ON parent.name = %(item_group)s
+		JOIN `tabItem Group` parent ON parent.name IN %(item_group)s
 		WHERE child.lft >= parent.lft AND child.rgt <= parent.rgt)""",
 }
+
+MULTI_SELECT_FILTERS = ("item", "item_group")
 
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
+	for field in MULTI_SELECT_FILTERS:
+		filters[field] = get_filter_values(filters.get(field))
 	validate_dates(filters)
 	view = get_view(filters)
 	months = get_months(filters) if view == "month_wise" else []
 	return get_columns(view, months), get_data(filters, view, months)
+
+
+def get_filter_values(value):
+	"""MultiSelectList values as a tuple for SQL IN; a single name is accepted too."""
+	if isinstance(value, str):
+		value = frappe.parse_json(value) if value.startswith("[") else [value]
+	return tuple(name for name in value or [] if name)
 
 
 def validate_dates(filters):

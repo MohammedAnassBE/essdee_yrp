@@ -1,3 +1,5 @@
+import json
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -223,6 +225,9 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 			({"item": standalone}, {standalone}),
 			({"item_variant": self.variant}, {self.variant}),
 			({"item": standalone, "item_variant": self.variant}, set()),
+			({"item": [self.template, standalone]}, {self.variant, standalone}),
+			({"item": json.dumps([standalone])}, {standalone}),
+			({"item": []}, {self.variant, standalone}),
 		]
 		for filters, expected in cases:
 			with self.subTest(filters=filters):
@@ -237,3 +242,4 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		self.assertEqual(len(self.run_report(item_group=root)), 1)
 		self.assertEqual(len(self.run_report(item_group=group)), 1)
 		self.assertEqual(self.run_report(item_group=other), [])
+		self.assertEqual(len(self.run_report(item_group=[other, group])), 1)

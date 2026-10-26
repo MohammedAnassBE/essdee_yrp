@@ -70,6 +70,12 @@
 	line-height: 1.25;
 }
 
+/* Filter inputs fill their column without widening it to the input's default size. */
+.report-table .report-filter-row__input {
+	width: 0;
+	min-width: max(100%, 48px);
+}
+
 /* Rowspan blocks leave inner rows short, so their last cell is not the last column. */
 .report-table td:last-child:not(.report-cell--last-column) {
 	border-right: 1px solid var(--erp-border-subtle);
@@ -81,7 +87,8 @@
 }
 
 :is(.finishing-table, .report-table) td.report-cell--num,
-:is(.finishing-table, .report-table) td.report-cell--date {
+:is(.finishing-table, .report-table) td.report-cell--date,
+:is(.finishing-table, .report-table) td.report-cell--id {
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }

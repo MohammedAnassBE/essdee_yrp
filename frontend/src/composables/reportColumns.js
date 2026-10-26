@@ -1,5 +1,8 @@
 const NUMERIC_FIELDTYPES = new Set(["Currency", "Float", "Int", "Percent"])
 const DATE_FIELDTYPES = new Set(["Date", "Datetime", "Time"])
+// Links to masters whose names read as prose, so they may wrap like text.
+const TEXT_LINK_DOCTYPES = new Set(["Item", "Supplier", "Customer", "Warehouse", "Item Group", "Brand", "Company", "Address", "Department"])
+const ID_FIELDNAME = /^(name|lot|grn|dc|wo|work_order|voucher_no|document_name|docname)$/
 const LINKED_NAME_LIMIT = 5_000
 const LINKED_BATCH_CONCURRENCY = 3
 export const MAX_LINKED_COLUMNS = 20
@@ -47,11 +50,19 @@ export function cellAlign(column) {
 		: "report-align-left"
 }
 
-/** Cell class from reportTables.css: numbers and dates never wrap, text may. */
+/** Cell class from reportTables.css: numbers, dates and document IDs never wrap, text may. */
 export function cellTypeClass(column) {
 	if (NUMERIC_FIELDTYPES.has(column?.fieldtype)) return "report-cell--num"
 	if (DATE_FIELDTYPES.has(column?.fieldtype)) return "report-cell--date"
+	if (isIdColumn(column)) return "report-cell--id"
 	return "report-cell--text"
+}
+
+/** Document names (Lot, GRN, DC, Work Order, ...) that must not split at hyphens. */
+export function isIdColumn(column) {
+	if (ID_FIELDNAME.test(column?.fieldname || "")) return true
+	if (column?.fieldtype === "Dynamic Link") return true
+	return column?.fieldtype === "Link" && !TEXT_LINK_DOCTYPES.has(column?.options)
 }
 
 export function normalizeReportRows(rows, columns) {

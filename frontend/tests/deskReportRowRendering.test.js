@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import * as reportConfig from "../src/components/reports/deskReportConfig.js"
 import * as reportExport from "../src/components/reports/reportExport.js"
-import { cellAlign, reconcileReportLayout, reportCellValue } from "../src/composables/reportColumns.js"
+import { cellAlign, cellTypeClass, reconcileReportLayout, reportCellValue } from "../src/composables/reportColumns.js"
 import * as incrementalRows from "../src/composables/useIncrementalRows.js"
 import * as inlineFilters from "../src/composables/useInlineFilters.js"
 import { Vue, findNodes, loadComponent, mountComponent, typeInto } from "../../scripts/helpers/vue_renderer.mjs"
@@ -129,10 +129,33 @@ test("Desk-backed report tables use the shared report table cell classes", async
 	await tick()
 	assert.match(nodes(root, "table")[0].props.class, /\breport-table\b/)
 	const [nameHead, qtyHead] = nodes(nodes(root, "thead")[0], "th")
-	assert.match(nameHead.props.class, /report-cell--text/)
+	assert.match(nameHead.props.class, /report-cell--id/)
 	assert.match(qtyHead.props.class, /report-cell--num/)
 	const [nameCell, qtyCell] = nodes(dataRows(root)[0], "td")
-	assert.match(nameCell.props.class, /report-cell--text/)
+	assert.match(nameCell.props.class, /report-cell--id/)
 	assert.doesNotMatch(nameCell.props.class, /report-cell--last-column/)
 	assert.match(qtyCell.props.class, /report-cell--num.*report-cell--last-column/)
+})
+
+test("Report cells keep document IDs, numbers and dates on one line and let prose wrap", () => {
+	const kind = (column) => cellTypeClass(column)
+	assert.equal(kind({ fieldname: "lot", fieldtype: "Link", options: "SD YRP Lot" }), "report-cell--id")
+	assert.equal(kind({ fieldname: "lot", fieldtype: "Data" }), "report-cell--id")
+	assert.equal(kind({ fieldname: "grn", fieldtype: "Link", options: "Goods Received Note" }), "report-cell--id")
+	assert.equal(kind({ fieldname: "voucher", fieldtype: "Dynamic Link", options: "voucher_type" }), "report-cell--id")
+	assert.equal(kind({ fieldname: "name", fieldtype: "Data" }), "report-cell--id")
+	assert.equal(kind({ fieldname: "item", fieldtype: "Link", options: "Item" }), "report-cell--text")
+	assert.equal(kind({ fieldname: "supplier", fieldtype: "Link", options: "Supplier" }), "report-cell--text")
+	assert.equal(kind({ fieldname: "item_name", fieldtype: "Data" }), "report-cell--text")
+	assert.equal(kind({ fieldname: "qty", fieldtype: "Float" }), "report-cell--num")
+	assert.equal(kind({ fieldname: "posting_date", fieldtype: "Date" }), "report-cell--date")
+})
+
+test("Desk report text cells wrap within a max width and filter inputs do not widen columns", async () => {
+	const { readFileSync } = await import("node:fs")
+	const desk = readFileSync(resolve("frontend/src/components/reports/DeskBackedReport.vue"), "utf8")
+	assert.match(desk, /\.desk-report-table td\.report-cell--text \{ max-width: 18rem; white-space: pre-line; \}/)
+	const css = readFileSync(resolve("frontend/src/styles/reportTables.css"), "utf8")
+	assert.match(css, /td\.report-cell--id \{[^}]*white-space: nowrap/)
+	assert.match(css, /\.report-table \.report-filter-row__input \{\s*width: 0;\s*min-width: max\(100%, 48px\);/)
 })

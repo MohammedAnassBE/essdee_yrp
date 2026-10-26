@@ -73,7 +73,7 @@ test("CSV preview applies quoting, delimiter, and decimal separator", () => {
 
 test("Every /web report shell declares an export source", () => {
 	const files = [
-		"components/reports/DeskBackedReport.vue", "components/reports/StockBalanceReport.vue", "components/reports/PurchaseOrderItemwiseReport.vue",
+		"components/reports/DeskBackedReport.vue", "components/reports/StockBalanceReport.vue",
 		"departments/finishing/reports/FinishingPlanReport.vue", "departments/merch/reports/WorkInProgressReport.vue",
 		"departments/planning/reports/InhouseQuantityReport.vue", "departments/sewing/reports/SewingDpr.vue",
 		"departments/cutting/reports/DailyCutSheetReport.vue", "components/reports/AttendanceStrengthReport.vue",

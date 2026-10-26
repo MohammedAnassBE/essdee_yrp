@@ -9,8 +9,13 @@ from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document
 from yrp.utils import update_if_string_instance
 
+from essdee_yrp.print_helpers import set_attribute_display_values
+
 
 class SDYRPCuttingOrder(Document):
+	def before_print(self, settings=None):
+		set_attribute_display_values(self)
+
 	def autoname(self):
 		self.naming_series = "CTO-.YY..MM.-.{#####}."
 

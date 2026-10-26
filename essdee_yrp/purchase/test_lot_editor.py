@@ -131,13 +131,16 @@ class TestLotEditor(TestCase):
 		doc.item = "Item"
 		doc.production_order = ""
 		locks = editor._lot_locks(doc, True, False)
-		self.assertTrue(locks["production_order"])
+		self.assertFalse(locks["production_order"])
 		self.assertTrue(locks["item"])
 		self.assertTrue(locks["lot_name"])
 		locks = editor._lot_locks(doc, False, True)
-		self.assertTrue(locks["production_order"])
+		self.assertFalse(locks["production_order"])
 		self.assertFalse(locks["item"])
 		self.assertFalse(locks["lot_name"])
+		doc.production_detail = "IPD"
+		self.assertTrue(editor._lot_locks(doc, False, False)["production_order"])
+		self.assertFalse(editor._lot_locks(doc, True, True)["production_order"])
 		doc.is_transferred = 1
 		self.assertTrue(editor._lot_locks(doc, True, False)["order_details"])
 
@@ -159,6 +162,15 @@ class TestLotEditor(TestCase):
 		doc.item = "Stored"
 		with self.assertRaisesRegex(frappe.ValidationError, "cannot be changed here"):
 			editor._reject_locked_changes(doc, {"item": "Changed"}, editor._lot_locks(doc, True, True))
+
+	def test_production_order_is_editable_until_ipd_is_linked(self):
+		doc = frappe.new_doc("SD YRP Lot")
+		doc.item = "Item"
+		values = {"production_order": "PPO-2"}
+		editor._reject_locked_changes(doc, values, editor._lot_locks(doc, True, False))
+		doc.production_detail = "IPD"
+		with self.assertRaisesRegex(frappe.ValidationError, "after an IPD is linked"):
+			editor._reject_locked_changes(doc, values, editor._lot_locks(doc, True, False))
 
 	def test_ppo_item_is_verified_and_server_owned(self):
 		doc = frappe.new_doc("SD YRP Lot")

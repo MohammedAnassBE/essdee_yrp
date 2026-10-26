@@ -39,15 +39,10 @@ frappe.ui.form.on("SD YRP Lot", {
 				}
 				frm.set_df_property("item", "read_only", x)
 				frm.refresh_field("item")
-				if (frm.doc.item && !frm.doc.production_order) {
-					frm.set_df_property("production_order", "read_only", true)
-				}
-				else{
-					frm.set_df_property("production_order", "read_only", !x)
-				}
-				frm.refresh_field("production_order")
 			}
 		})
+		frm.set_df_property("production_order", "read_only", Boolean(frm.doc.production_detail) && !frm.is_new())
+		frm.refresh_field("production_order")
 
 		if (!frm.is_new()) {
 			frm.add_custom_button(__('Purchase Summary'), function () {

@@ -64,7 +64,7 @@ def _lot_locks(doc, ppo_mode, is_new):
 	return {
 		"lot_name": not is_new,
 		"item": ppo_mode,
-		"production_order": (not ppo_mode) or bool(doc.item and not doc.production_order),
+		"production_order": not is_new and bool(doc.production_detail),
 		"order_details": bool(doc.lot_time_and_action_details) or bool(doc.is_transferred),
 	}
 
@@ -171,6 +171,8 @@ def is_locked_field_changed(doc, values, locks, field):
 def reject_locked_field(doc, values, field):
 	if field == "item" and is_ppo_item_change(doc, values):
 		return
+	if field == "production_order":
+		frappe.throw(_("Production Order cannot be changed after an IPD is linked."))
 	frappe.throw(_("{0} cannot be changed here.").format(doc.meta.get_label(field)))
 
 

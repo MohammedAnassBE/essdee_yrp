@@ -22,6 +22,11 @@ export function lotLinkFilters(fieldname, form) {
 	if (fieldname === "production_detail") return { item: form.item }
 	return undefined
 }
+export function lotFieldDescription(field) {
+	if (field.fieldname === "size_set_colour" && !field.options) return "Options appear after Lot Order Details exist."
+	if (field.fieldname === "production_order") return field.read_only ? "Locked once an IPD is linked." : "Submitted PPOs for this item only."
+	return field.description
+}
 export function fabricColumnFilters(column, row) {
 	if (column.fieldname === "cloth_item") return { is_cloth_item: 1 }
 	if (column.fieldname === "production_detail") return { item: row.cloth_item }

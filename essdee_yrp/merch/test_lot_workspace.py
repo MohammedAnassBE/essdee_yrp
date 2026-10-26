@@ -471,14 +471,15 @@ class TestMerchLotWorkspace(TestCase):
 		payload = workspace.get_merch_lot_editor(self.doc.name)
 		self.assertTrue(payload["box_locked"])
 		self.assertEqual(payload["derived"]["packing_combo"], 10)
-		self.assertTrue(payload["fields"][0]["read_only"])
+		self.assertNotIn("read_only", payload["fields"][0])
 
-	def test_existing_ppo_change_cannot_bypass_action_role_via_save(self):
+	def test_existing_ppo_change_saves_through_lot_editor(self):
+		self.doc = get_lot(lot_order_details=[])
 		self.mock("lot_editor.load_writable_lot", return_value=self.doc)
-		save = self.mock("lot_editor.save_lot")
-		with self.assertRaisesRegex(frappe.ValidationError, "Use Change PPO"):
-			workspace.save_merch_lot({"production_order": "PPO-2"}, self.doc.name, self.doc.modified)
-		save.assert_not_called()
+		save = self.mock("lot_editor.save_lot", return_value={"name": self.doc.name})
+		self.mock("get_merch_lot_workspace", return_value={})
+		workspace.save_merch_lot({"production_order": "PPO-2"}, self.doc.name, self.doc.modified)
+		save.assert_called_once()
 
 	def test_record_facts_keep_false_and_zero_values(self):
 		self.doc.meta.get_field.return_value = Row(label="Capacity Planning", fieldtype="Check")

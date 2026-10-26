@@ -173,11 +173,6 @@ def get_record_facts(doc, fields):
 def get_merch_lot_editor(name: str | None = None, duplicate_from: str | None = None) -> dict:
 	payload = lot_editor.get_lot_form(name, duplicate_from)
 	doc = lot_editor.load_editor_lot(name, duplicate_from)
-	if name:
-		payload["locks"]["production_order"] = True
-		for field in payload["fields"]:
-			if field["fieldname"] == "production_order":
-				field["read_only"] = True
 	payload["derived"].update({field: doc.get(field) for field in IPD_FACTS})
 	payload["box_locked"] = is_order_locked(doc) or bool(
 		doc.production_order and doc.get("lot_order_details")
@@ -251,8 +246,6 @@ def save_merch_lot(values, name: str | None = None, expected_modified: str | Non
 	doc = lot_editor.load_writable_lot(name)
 	if name:
 		assert_expected_modified(doc, expected_modified)
-		if (values.get("production_order", doc.production_order) or "") != (doc.production_order or ""):
-			frappe.throw(_("Use Change PPO to link an existing Lot to a Production Order."))
 	reject_negative_boxes(values.get("item_details") or [])
 	if name:
 		reject_locked_boxes(doc, values)

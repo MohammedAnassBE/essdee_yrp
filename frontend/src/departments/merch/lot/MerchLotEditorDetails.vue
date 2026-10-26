@@ -92,6 +92,7 @@ import {
 	DERIVED_LABELS,
 	LOT_EDIT_GROUPS,
 	fabricColumnFilters,
+	lotFieldDescription,
 	lotLinkFilters,
 } from "../../purchase/lot/lotEditor.js"
 import { countLabel } from "../../purchase/lot/lotViews.js"
@@ -148,13 +149,6 @@ function derivedTarget(fieldname) {
 function fieldSchema(fieldname) {
 	const field = props.fields.find((field) => field.fieldname === fieldname)
 	if (!field) throw new Error(`Missing Lot field: ${fieldname}`)
-	let description = field.description
-	if (fieldname === "size_set_colour" && !field.options)
-		description = "Options appear after Lot Order Details exist."
-	if (fieldname === "production_order")
-		description = field.read_only
-			? "Use Change PPO on the Lot record."
-			: "Submitted PPOs for this item only."
-	return { ...field, description, link_filters: lotLinkFilters(fieldname, props.form) }
+	return { ...field, description: lotFieldDescription(field), link_filters: lotLinkFilters(fieldname, props.form) }
 }
 </script>

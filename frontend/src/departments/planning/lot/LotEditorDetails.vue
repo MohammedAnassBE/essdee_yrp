@@ -24,7 +24,7 @@ import DocumentLink from "../../../components/common/DocumentLink.vue"
 import ChildTableField from "../../../components/common/ChildTableField.vue"
 import FormField from "../../../components/common/FormField.vue"
 import DocumentFieldGroupGrid from "../../../components/documents/DocumentFieldGroupGrid.vue"
-import { DERIVED_LABELS, LOT_EDIT_GROUPS, fabricColumnFilters, lotLinkFilters } from "./lotEditor.js"
+import { DERIVED_LABELS, LOT_EDIT_GROUPS, fabricColumnFilters, lotFieldDescription, lotLinkFilters } from "./lotEditor.js"
 import { countLabel } from "./lotViews.js"
 const props = defineProps({ form: { type: Object, required: true }, derived: { type: Object, required: true }, fields: { type: Array, required: true }, fabricMeta: { type: Object, required: true }, attemptedSave: Boolean, disabled: Boolean })
 const emit = defineEmits(["set-field", "fabric-rows"])
@@ -40,8 +40,6 @@ function derivedTarget(fieldname) {
 function fieldSchema(fieldname) {
 	const field = props.fields.find((field) => field.fieldname === fieldname)
 	if (!field) throw new Error(`Missing Lot field: ${fieldname}`)
-	const description = fieldname === "size_set_colour" && !field.options
-		? "Options appear after Lot Order Details exist." : field.description
-	return { ...field, description, link_filters: lotLinkFilters(fieldname, props.form) }
+	return { ...field, description: lotFieldDescription(field), link_filters: lotLinkFilters(fieldname, props.form) }
 }
 </script>

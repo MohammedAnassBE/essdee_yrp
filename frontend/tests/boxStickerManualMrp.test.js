@@ -4,15 +4,17 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Vue } from "../../scripts/helpers/vue_renderer.mjs"
 
-const PATH = "frontend/src/departments/cut-panel-store/BoxStickerPrintDialog.vue"
+const PATH = "frontend/src/departments/cut-panel-store/BoxStickerPrintPage.vue"
 const source = readFileSync(resolve(PATH), "utf8")
 const script = source.split("<script setup>")[1].split("</script>")[0].replace(/^import[\s\S]*? from ["'][^"']+["'];?\n/gm, "")
 
 function dialog() {
 	const values = {
 		...Vue, watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {},
-		defineProps: () => ({ visible: true, documentName: "" }), defineEmits: () => () => {}, useDocumentShortcuts: () => {},
+		defineProps: () => ({ boxStickerPrintId: "" }), useRoute: () => ({ query: {} }), onBeforeRouteUpdate: () => {},
 		useRouter: () => ({ push() {}, replace() {} }), takeNewDocumentDefaults: () => ({}), withNewDocumentDefaults: (value) => value,
+		usePageTitle: () => {}, useDuplicateAction: () => ({ value: null }), loadDuplicateValues: async () => null,
+		window: { addEventListener() {}, removeEventListener() {} },
 	}
 	return new Function(...Object.keys(values), `${script}\nreturn { rows, documentValues, sourcePreviewValues }`)(...Object.values(values))
 }

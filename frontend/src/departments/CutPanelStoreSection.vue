@@ -6,7 +6,7 @@
 			</div>
 			<WorkspaceLoadError v-else-if="error" :message="error" :loading="loading" @retry="load" />
 			<Message v-else-if="!capability" severity="warn" :closable="false">You do not have permission to view {{ definition.label }}.</Message>
-			<component v-else-if="definition.component" :is="definition.component" :capability="capability" v-bind="definition.componentProps || {}" />
+			<component v-else-if="definition.component" :is="definition.component" :capability="capability" v-bind="componentProps" />
 			<div v-else class="erp-empty-state cut-panel-store-section__empty">
 				<i :class="definition.icon" aria-hidden="true" />
 				<strong>{{ definition.label }}</strong>
@@ -36,6 +36,8 @@ const props = defineProps({
 	section: { type: String, required: true },
 	backTo: { type: String, default: "/cut-panel-store" },
 	backLabel: { type: String, default: "Cut Panel Store" },
+	newRouteName: { type: String, default: "" },
+	viewRouteName: { type: String, default: "" },
 })
 const definitions = {
 	delivery_challans: { label: "Delivery Challans", icon: "pi pi-truck", component: CutPanelDocuments },
@@ -53,6 +55,10 @@ const definitions = {
 	reports: { label: "Reports", icon: "pi pi-chart-bar", component: CutPanelStoreReports },
 }
 const definition = computed(() => definitions[props.section] || definitions.movements)
+const componentProps = computed(() => ({
+	...(definition.value.componentProps || {}),
+	...(props.viewRouteName ? { newRouteName: props.newRouteName, viewRouteName: props.viewRouteName } : {}),
+}))
 const capability = ref(null)
 const loading = ref(true)
 const error = ref("")

@@ -238,10 +238,11 @@ test("every routed document page and document dialog wires the activity section"
 		"departments/finishing/FinishingPlan.vue": "SD YRP Finishing Plan", "departments/finishing/FinishingDispatch.vue": "SD YRP Finishing Plan Dispatch",
 		"departments/pd/ProductPage.vue": "SD YRP Product", "departments/pd/ProductReleasePage.vue": "SD YRP Product Release",
 		"departments/pd/LotwiseItemProfitPage.vue": "SD YRP Lotwise Item Profit", "departments/purchase/ItemPage.vue": "Item",
+		"departments/cut-panel-store/BoxStickerPrintPage.vue": "SD YRP Box Sticker Print",
 	}
 	for (const [page, doctype] of Object.entries(shellPages)) assert.match(source(page), new RegExp(`activity-doctype="${doctype}"`), page)
 	const dialogs = [
-		"components/documents/DocumentTransactionDialog.vue", "departments/accounts/Debits.vue", "departments/cut-panel-store/BoxStickerPrintDialog.vue",
+		"components/documents/DocumentTransactionDialog.vue", "departments/accounts/Debits.vue",
 		"departments/cut-panel-store/CutBundleEditDialog.vue", "departments/cut-panel-store/CutPanelMovementDialog.vue", "departments/cut-panel-store/ExcelStickerPrintDialog.vue",
 		"departments/cutting/CpmMovementDialog.vue", "departments/cutting/CpmTransactionDialog.vue", "departments/cutting/CuttingLaySheetDialog.vue",
 		"departments/cutting/CuttingMarkerDialog.vue", "departments/fabric-store/PurchaseOrderDialog.vue", "departments/planning/lot/LotDocumentDialog.vue",

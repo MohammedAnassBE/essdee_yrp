@@ -1,24 +1,32 @@
 <template>
-	<Dialog
-		:visible="visible"
-		modal
-		maximizable
-		:dismissable-mask="false"
-		:closable="!closeLocked"
-		:close-on-escape="!closeLocked"
-		:header="record?.name ? `Box Sticker Print · ${record.name}` : 'New Box Sticker Print'"
-		class="box-sticker-print-dialog erp-entity-dialog erp-dialog--xl"
-		@update:visible="visibilityChanged"
-	>
-		<div v-if="loading" class="box-sticker-dialog__loading">
+	<DepartmentPage title="Box Sticker Print" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation activity-doctype="SD YRP Box Sticker Print" :activity-name="record?.name || ''" :activity-record="record">
+		<section class="box-sticker-page erp-workspace" aria-labelledby="box-sticker-page-title" :aria-busy="loading">
+			<header class="box-sticker-page__header erp-page-header">
+				<InlinePageNavigation title-target="box-sticker-page-title" show-document-navigation :current-name="record?.name || ''" document-label="Box Sticker Print" :navigation-disabled="loading || busy" />
+				<div class="box-sticker-page__identity">
+					<span>Box Sticker Print</span>
+					<div>
+						<h1 id="box-sticker-page-title" class="erp-doc-title">{{ record?.name || "New Box Sticker Print" }}</h1>
+						<DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" />
+					</div>
+					<small :class="{ 'box-sticker-print-hint': printHint }" role="status">{{ printHint || footerSummary }}</small>
+				</div>
+				<div v-if="!loading" class="box-sticker-page__actions">
+					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Box Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect-to="backTo" @deleted="documentDeleted" />
+					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Box Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
+					<DocumentActionStrip v-if="actions.length" class="erp-page-header__actions" :actions="actions" />
+				</div>
+			</header>
+
+		<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
+		<div v-else-if="loading" class="box-sticker-page__loading">
 			<Skeleton v-for="index in 7" :key="index" height="3rem" />
 		</div>
 
-		<div v-else class="box-sticker-dialog__body">
+		<div v-else class="box-sticker-page__body">
 			<section class="box-sticker-document" aria-label="Box Sticker Print details">
 				<header class="box-sticker-section-head">
-					<div><h3>Box Sticker Print</h3></div>
-					<DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" />
+					<div><h3>Details</h3></div>
 				</header>
 				<div class="box-sticker-document__grid">
 					<LinkField
@@ -211,80 +219,7 @@
 			</section>
 		</div>
 
-		<DocumentActivity :doctype="'SD YRP Box Sticker Print'" :name="record?.name || ''" :record="record" />
-		<template #footer>
-			<div class="box-sticker-dialog__footer">
-				<span :class="{ 'box-sticker-print-hint': printHint }" role="status">{{ printHint || footerSummary }}</span>
-				<div>
-					<DocumentShortcuts :busy="busy || confirmationVisible" :can-save="canEdit && canSave && (!record?.name || dirty)" :can-submit="Boolean(documentPermissions.can_submit && !dirty && rows.length)" submit-confirms :can-cancel="Boolean(documentPermissions.can_cancel && !pendingPrintConfirmation)" cancel-confirms @save="save" @submit="requestCommand('submit')" @cancel="requestCommand('cancel')" />
-					<Button label="Close" severity="secondary" text :disabled="busy" @click="requestClose" />
-					<Button
-						v-if="['reserving', 'reserved'].includes(pendingPrintConfirmation?.phase)"
-						label="Resume Print"
-						icon="pi pi-refresh"
-						severity="warn"
-						outlined
-						:loading="acting === 'recover-print'"
-						:disabled="busy"
-						@click="resumePendingPrint"
-					/>
-					<DocumentDeleteButton v-if="record?.name" doctype="SD YRP Box Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" :redirect="false" @deleted="documentDeleted" />
-					<DocumentPrintButton v-if="record?.name" doctype="SD YRP Box Sticker Print" :name="record.name" :docstatus="record.docstatus" :disabled="busy" />
-					<Button
-						v-if="pendingPrintConfirmation?.phase === 'printing'"
-						label="Confirm Printed"
-						icon="pi pi-check"
-						severity="warn"
-						outlined
-						:loading="acting === 'confirm-print'"
-						:disabled="busy"
-						@click="requestCommand('confirm-print')"
-					/>
-					<Button
-						v-if="pendingPrintConfirmation?.phase === 'confirming'"
-						label="Retry Confirmation"
-						icon="pi pi-refresh"
-						severity="warn"
-						outlined
-						:loading="acting === 'confirm-print'"
-						:disabled="busy"
-						@click="retryPrintConfirmation"
-					/>
-					<Button
-						v-if="pendingPrintConfirmation?.phase === 'rollback'"
-						label="Retry Rollback"
-						icon="pi pi-undo"
-						severity="danger"
-						outlined
-						:loading="acting === 'rollback-print'"
-						:disabled="busy"
-						@click="retryPrintRollback"
-					/>
-					<Button
-						v-if="pendingPrintConfirmation && pendingPrintConfirmation.phase !== 'confirming' && pendingPrintConfirmation.phase !== 'rollback'"
-						label="Release Reservation"
-						icon="pi pi-times"
-						severity="secondary"
-						outlined
-						:disabled="busy"
-						@click="requestCommand('release-print')"
-					/>
-					<Button
-						v-if="canPrint"
-						label="Print Labels"
-						icon="pi pi-print"
-						severity="secondary"
-						outlined
-						:disabled="busy"
-						@click="startPrint"
-					/>
-					<Button v-if="documentPermissions.can_cancel" label="Cancel Document" :title="withShortcutHint('Cancel Document', 'cancel')" icon="pi pi-ban" severity="danger" outlined :disabled="busy || Boolean(pendingPrintConfirmation)" @click="requestCommand('cancel')" />
-					<Button v-if="documentPermissions.can_submit" label="Submit" :title="withShortcutHint('Submit', 'submit')" icon="pi pi-check" severity="secondary" outlined :disabled="busy || dirty || !rows.length" @click="requestCommand('submit')" />
-					<Button v-if="canEdit" label="Save" :title="withShortcutHint('Save', 'save')" icon="pi pi-save" :loading="acting === 'save'" :disabled="busy || !canSave" @click="save" />
-				</div>
-			</div>
-		</template>
-	</Dialog>
+		</section>
 
 	<PrinterDialog
 		v-model:visible="printerVisible"
@@ -308,21 +243,19 @@
 	/>
 
 	<DocumentErrorDialog :message="error" title="Box Sticker Print action failed" @dismiss="error = ''" />
+	</DepartmentPage>
 </template>
 
 <script setup>
-import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
-import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
-import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import Checkbox from "primevue/checkbox"
-import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import Skeleton from "primevue/skeleton"
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue"
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router"
 
 import {
 	confirmBoxStickerPrint,
@@ -337,25 +270,36 @@ import {
 	saveBoxSticker,
 } from "../../api/cutPanelStore.js"
 import { printQzRaw } from "../../api/qzPrinter.js"
+import DepartmentPage from "../../components/DepartmentPage.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
+import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
+import { loadDuplicateValues, useDuplicateAction } from "../../composables/useDuplicateAction.js"
+import { usePageTitle } from "../../composables/usePageTitle.js"
 import PrinterDialog from "./PrinterDialog.vue"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 
+const DOCTYPE = "SD YRP Box Sticker Print"
 const props = defineProps({
-	visible: Boolean,
-	documentName: { type: String, default: "" },
+	boxStickerPrintId: { type: String, default: "" },
+	backTo: { type: String, required: true },
+	backLabel: { type: String, default: "Box Sticker Prints" },
+	newRouteName: { type: String, required: true },
+	viewRouteName: { type: String, required: true },
 })
-
-const emit = defineEmits(["update:visible", "changed"])
+const route = useRoute()
+const router = useRouter()
 
 const emptyForm = () => ({ lot: "", fg_item: "", size: "", use_item_name: 0, print_format: "" })
 const editor = reactive({ context: {}, permissions: {}, choices: {}, record: null })
 const form = reactive(emptyForm())
 const rows = ref([])
 const loading = ref(false)
+const loadError = ref("")
 const acting = ref("")
 const error = ref("")
 const dirty = ref(false)
@@ -377,10 +321,11 @@ let previewSequence = 0
 let previewAbortController = null
 let printIntentKey = ""
 let printRequestId = ""
+let allowNavigation = false
+let resolveNavigation = null
 
 const record = computed(() => editor.record)
 const busy = computed(() => Boolean(acting.value))
-const closeLocked = computed(() => busy.value || printerVisible.value || confirmationVisible.value || Boolean(error.value))
 const documentPermissions = computed(() => record.value?.permissions || editor.permissions || {})
 const canEdit = computed(() => Number(record.value?.docstatus || 0) === 0 && (record.value ? Boolean(documentPermissions.value.can_write) : Boolean(editor.permissions?.can_create)))
 const canPrint = computed(() => Number(record.value?.docstatus) === 1 && Boolean(documentPermissions.value.can_print) && !pendingPrintConfirmation.value)
@@ -410,50 +355,101 @@ const footerSummary = computed(() => {
 })
 const previewEmptyTitle = computed(() => record.value?.name ? "No preview generated" : "Save to generate preview")
 const previewEmptyMessage = computed(() => record.value?.name ? "Refresh after choosing a valid print format." : "The server renders a preview after the document is saved.")
+const duplicateAction = useDuplicateAction({
+	canCreate: () => editor.permissions?.can_create,
+	newRouteName: () => props.newRouteName,
+	name: () => record.value?.name,
+	busy,
+	router,
+})
+const actions = computed(() => [...documentActions(), ...printRecoveryActions(), duplicateAction.value].filter(Boolean))
 const confirmationTitle = computed(() => ({ close: "Discard unsaved changes?", "replace-source": "Replace size rows?", "replace-rows": "Refresh size rows?", cancel: "Cancel Box Sticker Print?", submit: "Submit Box Sticker Print?", "confirm-print": "Were the labels printed?", "release-print": "Were the labels not printed?" })[pendingAction.value] || "Confirm action")
 const confirmationMessage = computed(() => ({ close: "Your unsaved document and print quantities will be lost.", "replace-source": "Changing the source reloads the authoritative size rows and discards current row edits.", "replace-rows": "Refreshing reloads the authoritative size rows and discards current row edits.", cancel: `Cancel ${record.value?.name || "this Box Sticker Print"}?`, submit: `Submit ${record.value?.name || "this Box Sticker Print"}? Quantities will be checked again.`, "confirm-print": "Confirm only if the printer produced these labels. This makes the reserved printed quantities permanent and cannot be undone.", "release-print": "Release only if the printer did not produce these labels. This restores the reserved printed quantities so they can be printed later." })[pendingAction.value] || "Continue with this action?")
 const confirmationLabel = computed(() => ({ close: "Discard Changes", "replace-source": "Replace Rows", "replace-rows": "Refresh Rows", cancel: "Cancel Document", submit: "Submit", "confirm-print": "Yes, Labels Printed", "release-print": "No, Release Reservation" })[pendingAction.value] || "Continue")
 const confirmationCancelLabel = computed(() => ["confirm-print", "release-print"].includes(pendingAction.value) ? "Go Back" : "Keep Document")
 const confirmationSeverity = computed(() => pendingAction.value === "submit" || pendingAction.value === "confirm-print" ? "success" : "danger")
 
-watch(() => [props.visible, props.documentName], ([visible]) => {
-	if (visible) load()
-	else {
-		loadSequence += 1
-		loading.value = false
-		previewLoading.value = false
-		resetEditorState()
-	}
-})
+usePageTitle(() => record.value?.name)
+watch(() => [props.boxStickerPrintId, route.query.duplicate_from], load, { immediate: true })
 
 watch(confirmationVisible, (visible) => {
+	if (!visible && pendingAction.value === "close") {
+		pendingAction.value = ""
+		finishNavigation(false)
+	}
 	if (visible || pendingAction.value !== "replace-source") return
 	pendingSource.value = null
 	pendingAction.value = ""
 	sourceFieldKey.value += 1
 })
 
-onBeforeUnmount(revokePreviewUrl)
+onBeforeRouteLeave(guardNavigation)
+onBeforeRouteUpdate(guardNavigation)
+window.addEventListener("beforeunload", warnBeforeUnload)
+onBeforeUnmount(() => {
+	revokePreviewUrl()
+	window.removeEventListener("beforeunload", warnBeforeUnload)
+	finishNavigation(false)
+})
+
+/** Save, Submit, Print Labels and Cancel for the current state; Save leads while the form has unsaved values. */
+function documentActions() {
+	if (loading.value || loadError.value) return []
+	const permissions = documentPermissions.value
+	const saveFirst = canEdit.value && (!record.value?.name || dirty.value)
+	return [
+		canEdit.value && { key: "save", label: "Save", icon: "pi pi-save", primary: saveFirst, shortcut: "save", loading: acting.value === "save", disabled: busy.value || !canSave.value || !saveFirst, command: save },
+		permissions.can_submit && { key: "submit", label: "Submit", icon: "pi pi-check", primary: !saveFirst, shortcut: "submit", disabled: busy.value || dirty.value || !rows.value.length, command: () => requestCommand("submit") },
+		canPrint.value && { key: "print-labels", label: "Print Labels", icon: "pi pi-print", primary: true, disabled: busy.value, command: startPrint },
+		permissions.can_cancel && { key: "cancel", label: "Cancel Document", icon: "pi pi-ban", severity: "danger", shortcut: "cancel", menuOnly: true, disabled: busy.value || Boolean(pendingPrintConfirmation.value), command: () => requestCommand("cancel") },
+	]
+}
+
+/** Recovery steps for an interrupted label print, in the order the phase allows them. */
+function printRecoveryActions() {
+	const phase = pendingPrintConfirmation.value?.phase
+	if (!phase) return []
+	const action = (key, label, icon, command, severity = "warn") => ({ key, label, icon, severity, primary: key !== "release-print", loading: acting.value === key, disabled: busy.value, command })
+	return [
+		["reserving", "reserved"].includes(phase) && action("recover-print", "Resume Print", "pi pi-refresh", resumePendingPrint),
+		phase === "printing" && action("confirm-print", "Confirm Printed", "pi pi-check", () => requestCommand("confirm-print")),
+		phase === "confirming" && action("confirm-print", "Retry Confirmation", "pi pi-refresh", retryPrintConfirmation),
+		phase === "rollback" && action("rollback-print", "Retry Rollback", "pi pi-undo", retryPrintRollback, "danger"),
+		!["confirming", "rollback"].includes(phase) && action("release-print", "Release Reservation", "pi pi-times", () => requestCommand("release-print"), "secondary"),
+	].filter(Boolean)
+}
 
 async function load() {
 	const sequence = ++loadSequence
+	const documentName = props.boxStickerPrintId
 	loading.value = true
+	loadError.value = ""
 	error.value = ""
 	resetEditorState()
 	try {
-		const isNew = !props.documentName
-		const filterDefaults = isNew ? filterDefaultsFor("SD YRP Box Sticker Print", ["lot", "fg_item", "size", "use_item_name", "print_format"]) : {}
-		const payload = await getBoxStickerEditor(props.documentName)
-		if (sequence !== loadSequence || !props.visible) return
-		applyEditorPayload(isNew && payload && !payload.record ? { ...payload, defaults: withNewDocumentDefaults(payload.defaults, filterDefaults) } : payload)
+		const duplicate = documentName ? null : await loadDuplicateValues(DOCTYPE, route)
+		const filterDefaults = documentName || duplicate ? {} : filterDefaultsFor(DOCTYPE, ["lot", "fg_item", "size", "use_item_name", "print_format"])
+		const payload = await getBoxStickerEditor(documentName)
+		if (sequence !== loadSequence) return
+		applyEditorPayload(documentName || !payload ? payload : { ...payload, defaults: withNewDocumentDefaults(payload.defaults, duplicate || filterDefaults) })
 		if (record.value?.name) void loadPreview()
+		else if (duplicate) await loadSourceRows({ ...sourcePreviewValues(), rows: duplicateRows(duplicate) })
 		else if (Object.keys(filterDefaults).length && !rows.value.length) await loadSourceRows()
 	} catch (reason) {
-		if (sequence !== loadSequence || !props.visible) return
-		error.value = messageOf(reason, "Unable to load the Box Sticker Print.")
+		if (sequence === loadSequence) loadError.value = messageOf(reason, "Unable to load the Box Sticker Print.")
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
+}
+
+/** Copied size rows with their typed MRP and quantities; printed quantities start again from zero. */
+function duplicateRows(duplicate) {
+	return (duplicate.box_sticker_print_details || []).map((row) => ({
+		size: row.size,
+		mrp: Number(row.mrp || 0),
+		quantity: Number(row.quantity || 0),
+		allow_excess_percentage: Number(row.allow_excess_percentage || 0),
+	}))
 }
 
 /** Staged list filters for a new document, limited to the fields this form holds. */
@@ -538,14 +534,14 @@ function requestRowsRefresh() {
 	loadSourceRows()
 }
 
-async function loadSourceRows() {
+async function loadSourceRows(values = sourcePreviewValues()) {
 	if (!form.lot || !form.fg_item) return
 	const sequence = ++sourceSequence
 	acting.value = "source"
 	error.value = ""
 	revokePreviewUrl()
 	try {
-		const payload = await previewBoxStickerSource(form.lot, form.fg_item, sourcePreviewValues(), record.value?.name || "")
+		const payload = await previewBoxStickerSource(form.lot, form.fg_item, values, record.value?.name || "")
 		if (sequence !== sourceSequence) return
 		editor.context = { ...editor.context, ...(payload?.context || {}) }
 		editor.choices = { ...editor.choices, ...(payload?.choices || {}) }
@@ -619,9 +615,10 @@ async function save() {
 			name: record.value?.name,
 			expectedModified: record.value?.modified,
 		})
+		const created = !record.value?.name
 		applyRecordPayload(saved)
-		void loadPreview()
-		emit("changed", editor.record)
+		if (created) await router.replace({ name: props.viewRouteName, params: { boxStickerPrintId: editor.record.name } })
+		else void loadPreview()
 	} catch (reason) {
 		error.value = messageOf(reason, "Unable to save the Box Sticker Print.")
 	} finally {
@@ -629,31 +626,42 @@ async function save() {
 	}
 }
 
-
 function requestCommand(command) {
 	pendingAction.value = command
 	confirmationVisible.value = true
 }
 
-function requestClose() {
-	if (closeLocked.value) return
-	if (hasUnsavedValues.value) requestCommand("close")
-	else emit("update:visible", false)
+/** Route guard: unsaved values or typed print quantities ask before leaving; busy work blocks it. */
+function guardNavigation() {
+	if (allowNavigation || !hasUnsavedValues.value) return true
+	if (busy.value || printerVisible.value) return false
+	finishNavigation(false)
+	requestCommand("close")
+	return new Promise((resolve) => { resolveNavigation = resolve })
 }
 
-function visibilityChanged(value) {
-	if (value) emit("update:visible", true)
-	else requestClose()
+function finishNavigation(allowed) {
+	const resolve = resolveNavigation
+	resolveNavigation = null
+	resolve?.(allowed)
+}
+
+function documentDeleted() {
+	allowNavigation = true
+}
+
+function warnBeforeUnload(event) {
+	if (!hasUnsavedValues.value) return
+	event.preventDefault()
+	event.returnValue = ""
 }
 
 async function confirmAction() {
 	const action = pendingAction.value
 	confirmationVisible.value = false
 	if (action === "close") {
-		dirty.value = false
-		rows.value.forEach((row) => { row.print_quantity = 0 })
 		pendingAction.value = ""
-		emit("update:visible", false)
+		finishNavigation(true)
 		return
 	}
 	if (action === "replace-source") {
@@ -682,7 +690,6 @@ async function confirmAction() {
 		const changed = await executeBoxStickerCommand(record.value.name, action, record.value.modified)
 		applyRecordPayload(changed)
 		void loadPreview()
-		emit("changed", editor.record)
 	} catch (reason) {
 		error.value = messageOf(reason, `Unable to ${action} the Box Sticker Print.`)
 	} finally {
@@ -797,7 +804,6 @@ async function finishPrintConfirmation() {
 	clearPrintRequestId(pending.requestId)
 	if (!applyRecordPayload(confirmed)) await refreshAuthoritativeRecord()
 	void loadPreview()
-	emit("changed", editor.record)
 }
 
 async function resumePendingPrint() {
@@ -811,7 +817,6 @@ async function resumePendingPrint() {
 			clearPendingPrintConfirmation()
 			clearPrintRequestId(pending.requestId)
 			if (!applyRecordPayload(recovery)) await refreshAuthoritativeRecord()
-			emit("changed", editor.record)
 			return
 		}
 		if (recovery?.state === "Rolled Back") {
@@ -891,7 +896,6 @@ async function performPrintRollback() {
 	if (applyRecordPayload(rolledBack)) void loadPreview()
 	else await refreshAuthoritativeRecord()
 	restorePrintQuantities(requestedQuantities)
-	emit("changed", editor.record)
 }
 
 function pendingConfirmationStorageKey(documentName) {
@@ -941,7 +945,7 @@ function restorePrintQuantities(quantities) {
 }
 
 async function refreshAuthoritativeRecord() {
-	const payload = await getBoxStickerEditor(record.value?.name || props.documentName)
+	const payload = await getBoxStickerEditor(record.value?.name || props.boxStickerPrintId)
 	applyEditorPayload(payload)
 	if (record.value?.name) void loadPreview()
 }
@@ -1064,15 +1068,12 @@ function messageOf(reason, fallback) {
 function clone(value) {
 	return JSON.parse(JSON.stringify(value))
 }
-function documentDeleted() {
-	emit("update:visible", false)
-	emit("changed")
-}
 </script>
 
 <style scoped>
-.box-sticker-dialog__loading,.box-sticker-dialog__body{display:grid;gap:12px}.box-sticker-document,.box-sticker-rows,.box-sticker-preview{min-width:0;overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.box-sticker-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;padding:9px 12px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.box-sticker-section-head>div{display:flex;align-items:center;gap:9px;min-width:0}.box-sticker-section-head h3{margin:0;color:var(--erp-text);font-size:.95rem}.box-sticker-section-head>strong,.box-sticker-section-head>em{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.box-sticker-document__status--1{color:var(--erp-accent-hover)!important}.box-sticker-document__status--2{color:var(--erp-danger)!important}.box-sticker-document__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;padding:12px}.box-sticker-field,.box-sticker-context{display:grid;gap:7px}.box-sticker-context strong{display:block;min-height:auto;padding:2px 0 7px;border:0;border-bottom:1px solid var(--erp-border);border-radius:0;background:transparent;color:var(--erp-text);font-size:13px;font-weight:750}.box-sticker-check{display:flex;align-items:center;gap:9px;min-height:40px;padding:8px 10px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft);cursor:pointer}.box-sticker-check>span{display:grid;gap:2px}.box-sticker-check strong{color:var(--erp-text);font-size:var(--erp-font-size-caption)}.box-sticker-check small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3}.box-sticker-table-wrap{max-width:100%;overflow:auto}.box-sticker-table-wrap table{width:100%;min-width:900px;border-collapse:collapse}.box-sticker-table-wrap th{padding:8px 9px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-muted);color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3;text-align:center;text-transform:uppercase;vertical-align:middle}.box-sticker-table-wrap th.box-sticker-print-column{background:color-mix(in srgb,var(--erp-accent) 14%,var(--erp-surface-muted));color:var(--erp-accent-hover)}.box-sticker-table-wrap td{height:52px;padding:7px 9px;border-bottom:1px solid var(--erp-border-subtle);color:var(--erp-text-secondary);font-size:12px;text-align:center;vertical-align:middle}.box-sticker-table-wrap tbody tr:last-child td{border-bottom:0}.box-sticker-table-wrap td>strong{color:var(--erp-text)}.box-sticker-number-cell{min-width:90px}.box-sticker-print-quantity{min-width:110px}.box-sticker-print-hint{color:var(--erp-warning)!important;font-weight:700}.box-sticker-empty{display:grid;min-height:250px;padding:32px;color:var(--erp-text-muted);text-align:center;place-content:center;justify-items:center}.box-sticker-empty i{margin-bottom:11px;color:var(--erp-accent);font-size:24px}.box-sticker-empty strong{margin-bottom:4px;color:var(--erp-text);font-size:14px}.box-sticker-empty span{max-width:360px;font-size:12px;line-height:1.5}.box-sticker-preview__canvas{display:grid;min-height:180px;padding:14px;background:color-mix(in srgb,var(--erp-surface-muted) 65%,var(--erp-surface));place-items:center}.box-sticker-preview__canvas img{display:block;width:auto;max-width:100%;max-height:220px;object-fit:contain;border:1px solid var(--erp-border-strong);border-radius:var(--erp-control-radius);background:white;box-shadow:0 9px 24px color-mix(in srgb,var(--erp-accent-hover) 10%,transparent)}.box-sticker-preview__message{display:grid;max-width:280px;justify-items:center;color:var(--erp-text-muted);text-align:center}.box-sticker-preview__message i{margin-bottom:10px;color:var(--erp-border-strong);font-size:27px}.box-sticker-preview__message strong{margin-bottom:5px;color:var(--erp-text);font-size:13px}.box-sticker-preview__message span{font-size:12px;line-height:1.5}.box-sticker-preview__message--error i{color:var(--erp-danger)}.box-sticker-preview>footer{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--erp-border);color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.box-sticker-dialog__footer{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%}.box-sticker-dialog__footer>span{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption)}.box-sticker-dialog__footer>div{display:flex;gap:8px}.box-sticker-table-wrap :deep(.p-inputnumber-input){min-width:64px;padding:7px 8px;font-size:12px;text-align:center}
+.box-sticker-page{display:grid;min-width:0;gap:12px;padding:2px 0 var(--erp-space-5)}.box-sticker-page__header{display:flex;flex-wrap:wrap;align-items:center;gap:12px}.box-sticker-page__identity{display:grid;flex:1;min-width:0;gap:2px}.box-sticker-page__identity>span,.box-sticker-page__identity>small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.box-sticker-page__identity>div{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.box-sticker-page__identity h1{margin:0}.box-sticker-page__actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.box-sticker-page__loading,.box-sticker-page__body{display:grid;gap:12px}.box-sticker-document,.box-sticker-rows,.box-sticker-preview{min-width:0;overflow:hidden;border:1px solid var(--erp-border);border-radius:var(--erp-panel-radius);background:var(--erp-surface)}.box-sticker-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:43px;padding:9px 12px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-soft)}.box-sticker-section-head>div{display:flex;align-items:center;gap:9px;min-width:0}.box-sticker-section-head h3{margin:0;color:var(--erp-text);font-size:.95rem}.box-sticker-section-head>strong,.box-sticker-section-head>em{color:var(--erp-text-muted);font-size:var(--erp-font-size-caption);font-style:normal}.box-sticker-document__status--1{color:var(--erp-accent-hover)!important}.box-sticker-document__status--2{color:var(--erp-danger)!important}.box-sticker-document__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:12px;padding:12px}.box-sticker-field,.box-sticker-context{display:grid;gap:7px}.box-sticker-context strong{display:block;min-height:auto;padding:2px 0 7px;border:0;border-bottom:1px solid var(--erp-border);border-radius:0;background:transparent;color:var(--erp-text);font-size:13px;font-weight:750}.box-sticker-check{display:flex;align-items:center;gap:9px;min-height:40px;padding:8px 10px;border:1px solid var(--erp-border);border-radius:var(--erp-control-radius);background:var(--erp-surface-soft);cursor:pointer}.box-sticker-check>span{display:grid;gap:2px}.box-sticker-check strong{color:var(--erp-text);font-size:var(--erp-font-size-caption)}.box-sticker-check small{color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3}.box-sticker-table-wrap{max-width:100%;overflow:auto}.box-sticker-table-wrap table{width:100%;min-width:900px;border-collapse:collapse}.box-sticker-table-wrap th{padding:8px 9px;border-bottom:1px solid var(--erp-border);background:var(--erp-surface-muted);color:var(--erp-text-muted);font-size:var(--erp-font-size-min);line-height:1.3;text-align:center;text-transform:uppercase;vertical-align:middle}.box-sticker-table-wrap th.box-sticker-print-column{background:color-mix(in srgb,var(--erp-accent) 14%,var(--erp-surface-muted));color:var(--erp-accent-hover)}.box-sticker-table-wrap td{height:52px;padding:7px 9px;border-bottom:1px solid var(--erp-border-subtle);color:var(--erp-text-secondary);font-size:12px;text-align:center;vertical-align:middle}.box-sticker-table-wrap tbody tr:last-child td{border-bottom:0}.box-sticker-table-wrap td>strong{color:var(--erp-text)}.box-sticker-number-cell{min-width:90px}.box-sticker-print-quantity{min-width:110px}.box-sticker-print-hint{color:var(--erp-warning)!important;font-weight:700}.box-sticker-empty{display:grid;min-height:250px;padding:32px;color:var(--erp-text-muted);text-align:center;place-content:center;justify-items:center}.box-sticker-empty i{margin-bottom:11px;color:var(--erp-accent);font-size:24px}.box-sticker-empty strong{margin-bottom:4px;color:var(--erp-text);font-size:14px}.box-sticker-empty span{max-width:360px;font-size:12px;line-height:1.5}.box-sticker-preview__canvas{display:grid;min-height:180px;padding:14px;background:color-mix(in srgb,var(--erp-surface-muted) 65%,var(--erp-surface));place-items:center}.box-sticker-preview__canvas img{display:block;width:auto;max-width:100%;max-height:220px;object-fit:contain;border:1px solid var(--erp-border-strong);border-radius:var(--erp-control-radius);background:white;box-shadow:0 9px 24px color-mix(in srgb,var(--erp-accent-hover) 10%,transparent)}.box-sticker-preview__message{display:grid;max-width:280px;justify-items:center;color:var(--erp-text-muted);text-align:center}.box-sticker-preview__message i{margin-bottom:10px;color:var(--erp-border-strong);font-size:27px}.box-sticker-preview__message strong{margin-bottom:5px;color:var(--erp-text);font-size:13px}.box-sticker-preview__message span{font-size:12px;line-height:1.5}.box-sticker-preview__message--error i{color:var(--erp-danger)}.box-sticker-preview>footer{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--erp-border);color:var(--erp-text-muted);font-size:var(--erp-font-size-min)}.box-sticker-table-wrap :deep(.p-inputnumber-input){min-width:64px;padding:7px 8px;font-size:12px;text-align:center}
 .box-sticker-table-wrap td:first-child,.box-sticker-table-wrap th:first-child{position:sticky;left:0;z-index:1;white-space:nowrap;background:var(--erp-surface);box-shadow:1px 0 0 var(--erp-border-subtle)}.box-sticker-table-wrap th:first-child{background:var(--erp-surface-muted)}
 @media(max-width:1050px){.box-sticker-document__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.box-sticker-document__grid{grid-template-columns:1fr}.box-sticker-dialog__footer{align-items:stretch;flex-direction:column}.box-sticker-dialog__footer>div{justify-content:flex-end;flex-wrap:wrap}.box-sticker-dialog__footer>span{text-align:right}.box-sticker-preview__canvas{min-height:180px;padding:12px}.box-sticker-preview__canvas img{max-height:220px}.box-sticker-empty{min-height:160px;padding:22px}}
+@media(max-width:600px){.box-sticker-document__grid{grid-template-columns:1fr}.box-sticker-page__header{align-items:flex-start;flex-direction:column}.box-sticker-preview__canvas{min-height:180px;padding:12px}.box-sticker-preview__canvas img{max-height:220px}.box-sticker-empty{min-height:160px;padding:22px}}
 </style>

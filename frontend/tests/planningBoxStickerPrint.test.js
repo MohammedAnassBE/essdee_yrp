@@ -33,7 +33,7 @@ test("Planning shows the shared Box Sticker Print section under its own path", (
 	assert.deepEqual(getWorkspacePaths(departments.find((item) => item.key === "planning")).box_stickers, [PATH])
 	const route = loadRouter().resolve(PATH)
 	assert.equal(route.name, PLANNING_ROUTES.boxStickers)
-	assert.deepEqual(JSON.parse(JSON.stringify(route.matched.at(-1).props.default)), { section: "box_stickers", backTo: "/planning", backLabel: "Planning" })
+	assert.deepEqual(JSON.parse(JSON.stringify(route.matched.at(-1).props.default)), { section: "box_stickers", backTo: "/planning", backLabel: "Planning", newRouteName: PLANNING_ROUTES.boxStickerNew, viewRouteName: PLANNING_ROUTES.boxSticker })
 	assert.match(source("../src/router/index.js"), /path: "\/planning\/box-sticker-prints", name: PLANNING_ROUTES\.boxStickers, component: CutPanelStoreSection,/)
 })
 

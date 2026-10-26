@@ -33,6 +33,7 @@ const FabricDeliveryChallan = () => import("../departments/FabricDeliveryChallan
 const FabricGoodsReceivedNote = () => import("../departments/FabricGoodsReceivedNote.vue")
 const FabricStoreSection = () => import("../departments/FabricStoreSection.vue")
 const CutPanelStoreSection = () => import("../departments/CutPanelStoreSection.vue")
+const BoxStickerPrintPage = () => import("../departments/cut-panel-store/BoxStickerPrintPage.vue")
 const SewingPlans = () => import("../departments/sewing/SewingPlans.vue")
 const SewingReports = () => import("../departments/sewing/SewingReports.vue")
 const SewingAttendance = () => import("../departments/sewing/SewingAttendance.vue")
@@ -90,6 +91,18 @@ const ProcessCostEditorPage = () => import("../departments/merch/process-cost/Pr
 const idProps = (param, extra) => (route) => ({ [param]: String(route.params[param] || ""), ...extra })
 
 const Debits = () => import("../departments/accounts/Debits.vue")
+
+/** New and document pages of the Box Sticker Print list at `listPath`; the list links to them by these route names. */
+function boxStickerPrintPages(listPath, { newRouteName, viewRouteName }) {
+	const props = { backTo: listPath, backLabel: "Box Sticker Prints", newRouteName, viewRouteName }
+	return [
+		{ path: `${listPath}/new`, name: newRouteName, component: BoxStickerPrintPage, props },
+		{ path: `${listPath}/:boxStickerPrintId`, name: viewRouteName, component: BoxStickerPrintPage, props: idProps("boxStickerPrintId", props) },
+	]
+}
+const CUT_PANEL_BOX_STICKER_PAGES = { newRouteName: "cut-panel-box-sticker-print-new", viewRouteName: "cut-panel-box-sticker-print" }
+const PURCHASE_BOX_STICKER_PAGES = { newRouteName: "purchase-box-sticker-print-new", viewRouteName: "purchase-box-sticker-print" }
+const PLANNING_BOX_STICKER_PAGES = { newRouteName: PLANNING_ROUTES.boxStickerNew, viewRouteName: PLANNING_ROUTES.boxSticker }
 
 /** Delivery Challan and GRN lists of a department at `listPaths` (null skips one); `pages` adds the document pages, `editable` their new and edit pages. */
 function departmentDocumentRoutes(prefix, storeName, listPaths, { pages = true, editable = true } = {}) {
@@ -428,8 +441,9 @@ const routes = [
 		path: "/cut-panel-store/box-sticker-prints",
 		name: "cut-panel-box-stickers",
 		component: CutPanelStoreSection,
-		props: { section: "box_stickers" },
+		props: { section: "box_stickers", ...CUT_PANEL_BOX_STICKER_PAGES },
 	},
+	...boxStickerPrintPages("/cut-panel-store/box-sticker-prints", CUT_PANEL_BOX_STICKER_PAGES),
 	{
 		path: "/cut-panel-store/excel-sticker-prints",
 		name: "cut-panel-excel-stickers",
@@ -785,8 +799,9 @@ const routes = [
 	...departmentDocumentRoutes("planning", "Planning", ["/planning/delivery-challans", "/planning/goods-received-notes"]),
 	{
 		path: "/planning/box-sticker-prints", name: PLANNING_ROUTES.boxStickers, component: CutPanelStoreSection,
-		props: { section: "box_stickers", backTo: "/planning", backLabel: "Planning" },
+		props: { section: "box_stickers", backTo: "/planning", backLabel: "Planning", ...PLANNING_BOX_STICKER_PAGES },
 	},
+	...boxStickerPrintPages("/planning/box-sticker-prints", PLANNING_BOX_STICKER_PAGES),
 	{ path: "/planning/reports", name: PLANNING_ROUTES.reports, component: PlanningReports },
 	{ path: "/merch/item-production-details", name: MERCH_ROUTES.ipds, component: IpdList },
 	{ path: "/merch/lots", name: MERCH_ROUTES.lots, component: MerchLotsList },
@@ -943,8 +958,9 @@ const routes = [
 		path: "/purchase/box-sticker-prints",
 		name: "purchase-box-stickers",
 		component: CutPanelStoreSection,
-		props: { section: "box_stickers", backTo: "/purchase", backLabel: "Purchase" },
+		props: { section: "box_stickers", backTo: "/purchase", backLabel: "Purchase", ...PURCHASE_BOX_STICKER_PAGES },
 	},
+	...boxStickerPrintPages("/purchase/box-sticker-prints", PURCHASE_BOX_STICKER_PAGES),
 	{
 		path: "/purchase/excel-sticker-prints",
 		name: "purchase-excel-stickers",

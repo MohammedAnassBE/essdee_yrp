@@ -859,7 +859,7 @@ async function boxStickerSuite(page) {
 	assert(calls.rollbackCount() === 2, "Release Reservation mutated quantities before application confirmation")
 	await confirmation.getByRole("button", { name: "Go Back", exact: true }).click()
 	await page.evaluate(() => window.sessionStorage.removeItem("essdee-yrp:box-sticker-confirmation:BSP-CP-1"))
-	const source = readFileSync(new URL("../frontend/src/departments/cut-panel-store/BoxStickerPrintDialog.vue", import.meta.url), "utf8")
+	const source = readFileSync(new URL("../frontend/src/departments/cut-panel-store/BoxStickerPrintPage.vue", import.meta.url), "utf8")
 	assert(source.includes("DocumentErrorDialog") && !source.includes("window.confirm"), "Box Sticker errors/confirmations do not use application dialogs")
 }
 

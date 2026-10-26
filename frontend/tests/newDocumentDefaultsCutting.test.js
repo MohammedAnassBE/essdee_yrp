@@ -108,11 +108,12 @@ test("new Cut Bundle Edit and Cut Panel Movement dialogs take the list filters",
 	assert.equal(movement.form.posting_date, "2026-10-23")
 })
 
-test("new Box and Excel Sticker Print dialogs take the list filters", async () => {
+test("new Box Sticker Print page and Excel Sticker Print dialog take the list filters", async () => {
 	stage("SD YRP Box Sticker Print", { lot: "LOT-1", fg_item: "FG-1", print_format: "ZPL-1" })
 	const sources = []
-	const box = setup("departments/cut-panel-store/BoxStickerPrintDialog.vue", {
-		defineProps: () => ({ visible: true, documentName: "" }),
+	const box = setup("departments/cut-panel-store/BoxStickerPrintPage.vue", {
+		defineProps: () => ({ boxStickerPrintId: "" }), useRoute: () => ({ query: {} }), onBeforeRouteUpdate: () => {},
+		usePageTitle: () => {}, useDuplicateAction: () => ({ value: null }), loadDuplicateValues: async () => null,
 		getBoxStickerEditor: async () => ({ permissions: { can_create: true }, defaults: { print_format: "ZPL-DEFAULT" }, record: null }),
 		previewBoxStickerSource: async (...args) => { sources.push(args); return { rows: [{ size: "M", quantity: 4 }] } },
 	}, "load, form, rows")

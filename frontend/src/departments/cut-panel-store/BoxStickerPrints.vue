@@ -1,7 +1,6 @@
 <template>
 	<div class="box-sticker-prints">
 		<ListView
-			ref="listView"
 			doctype="SD YRP Box Sticker Print"
 			title="Box Sticker Prints"
 			search-placeholder="Search Box Sticker Prints…"
@@ -19,46 +18,31 @@
 				<DocumentStatusBadge :docstatus="value" />
 			</template>
 			<template #toolbar-actions>
-				<Button v-if="capability.can_create" label="Create Box Sticker Print" icon="pi pi-plus" @click="createPrint" />
+				<Button v-if="capability.can_create" label="New" icon="pi pi-plus" @click="router.push({ name: newRouteName })" />
 			</template>
 		</ListView>
-
-		<BoxStickerPrintDialog
-			v-model:visible="dialogVisible"
-			:document-name="selectedName"
-			@changed="changed"
-		/>
 	</div>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import { ref } from "vue"
+import { useRouter } from "vue-router"
 
 import ListView from "../../components/common/ListView.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
-import BoxStickerPrintDialog from "./BoxStickerPrintDialog.vue"
+import { openListDocument } from "../../router/listDocumentNavigation.js"
 
-defineProps({ capability: { type: Object, required: true } })
+const props = defineProps({
+	capability: { type: Object, required: true },
+	newRouteName: { type: String, required: true },
+	viewRouteName: { type: String, required: true },
+})
 
-const listView = ref(null)
-const dialogVisible = ref(false)
-const selectedName = ref("")
+const router = useRouter()
 const defaultColumns = ["lot", "fg_item", "print_format", "docstatus"]
 
-function createPrint() {
-	selectedName.value = ""
-	dialogVisible.value = true
-}
-
-function openPrint(row) {
-	if (!row?.name) return
-	selectedName.value = row.name
-	dialogVisible.value = true
-}
-
-async function changed() {
-	await listView.value?.refresh?.()
+function openPrint(row, snapshot) {
+	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "boxStickerPrintId" })
 }
 </script>
 

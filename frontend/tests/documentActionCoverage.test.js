@@ -11,7 +11,6 @@ const dialogs = [
 	"departments/cutting/CuttingMarkerDialog",
 	"departments/cutting/CuttingLaySheetDialog",
 	"departments/cut-panel-store/CutPanelMovementDialog",
-	"departments/cut-panel-store/BoxStickerPrintDialog",
 	"departments/cut-panel-store/ExcelStickerPrintDialog",
 	"departments/cut-panel-store/CutBundleEditDialog",
 ]
@@ -87,7 +86,7 @@ test("D1–D7 page actions use the saved identity, status, and list destination"
 	}
 })
 test("P2–P7 and QZ dialogs offer generic print through the shared button", () => {
-	for (const path of ["CuttingBulkLaySheet", "CuttingLaySheetPlanner", "cut-panel-store/CutPanelMovementDialog", "pd/components/LotwiseWorkspaceHeader", "purchase/ItemPage", "cut-panel-store/BoxStickerPrintDialog", "cut-panel-store/ExcelStickerPrintDialog", "cut-panel-store/CutBundleEditDialog"]) {
+	for (const path of ["CuttingBulkLaySheet", "CuttingLaySheetPlanner", "cut-panel-store/CutPanelMovementDialog", "pd/components/LotwiseWorkspaceHeader", "purchase/ItemPage", "cut-panel-store/BoxStickerPrintPage", "cut-panel-store/ExcelStickerPrintDialog", "cut-panel-store/CutBundleEditDialog"]) {
 		const text = source(`departments/${path}`)
 		assert.equal((text.match(/<DocumentPrintButton\b/g) || []).length, 1)
 	}

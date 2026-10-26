@@ -14,6 +14,7 @@ class Precheck:
 		self.importer = importer
 		self.docs = docs
 		self.missing = []
+		self.variants_to_create = {}
 
 	def run(self):
 		self.check_links()
@@ -54,8 +55,14 @@ class Precheck:
 				for row in [doc, *child_rows(doc)]:
 					names |= {row[f] for f in ITEM_FIELDS if row.get(f)}
 		for name in sorted(names):
-			if not resolve_item(name, self.importer.data["variants"].get(name)):
-				self.missing.append(f"Item {name}")
+			variant = self.importer.data["variants"].get(name)
+			if resolve_item(name, variant):
+				continue
+			problem = get_variant_problem(variant)
+			if problem:
+				self.missing.append(f"Item {name} ({problem})")
+			else:
+				self.variants_to_create[name] = variant
 
 	def check_ipds_and_lots(self):
 		from essdee_yrp.api.work_order import _get_work_order_selection_context
@@ -119,6 +126,29 @@ def resolve_item(name, variant):
 	from yrp.yrp.doctype.yrp_item.yrp_item import _lookup_variant
 
 	return _lookup_variant(variant["template"], variant["attributes"], backfill_tuple=False)
+
+
+def get_variant_problem(variant):
+	"""Why a missing variant cannot be created from its template, or None when it can."""
+	if not variant:
+		return "not a variant in the dump"
+	template = variant["template"]
+	if not frappe.db.get_value("Item", template, "has_variants"):
+		return f"template {template} not found or has no variants"
+	template_attributes = frappe.get_all(
+		"Item Variant Attribute", filters={"parent": template, "parenttype": "Item"}, pluck="attribute"
+	)
+	if set(template_attributes) != set(variant["attributes"]):
+		return f"attributes {sorted(variant['attributes'])} do not match template {sorted(template_attributes)}"
+	from yrp.yrp.doctype.yrp_item.yrp_item import validate_attribute_value
+
+	for attribute, value in variant["attributes"].items():
+		try:
+			validate_attribute_value(attribute, value)
+		except frappe.ValidationError:
+			frappe.clear_messages()
+			return f"{attribute} value {value} not found"
+	return None
 
 
 def resolve_address(name, party, kind, throw=True):

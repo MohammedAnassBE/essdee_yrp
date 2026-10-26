@@ -103,11 +103,14 @@ class Importer:
 		Only docs still to import are pre-checked. With `ignore_markers` the pre-check is report-only,
 		so every create path still runs and fails on its own.
 		"""
-		missing = Precheck(self, self.get_pending_docs()).run()
+		precheck = Precheck(self, self.get_pending_docs())
+		missing = precheck.run()
 		if missing:
 			self.log["failed"].append({"doctype": "Pre-check", "old": "-", "error": "; ".join(missing)})
 			if not self.ignore_markers:
 				return False
+		if not self.create_variants(precheck.variants_to_create):
+			return False
 		for pc in sorted(self.docs["process_costs"], key=lambda d: d["name"]):
 			self.per_doc("Process Cost", pc, self.import_process_cost)
 		for kind, doc in self.stock_vouchers():
@@ -115,6 +118,28 @@ class Importer:
 			self.per_doc(kind, doc, importer)
 		for lot, chain in self.lot_chains().items():
 			self.import_lot(lot, chain)
+		return True
+
+	def create_variants(self, variants):
+		"""Create the variants the pre-check found missing from their existing template; all or none."""
+		from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant
+
+		state = self.get_state()
+		frappe.db.savepoint("cpd_variants")
+		old = None
+		try:
+			for old, variant in sorted(variants.items()):
+				new = get_or_create_variant(variant["template"], variant["attributes"])
+				self.item_names[old] = new
+				self.log["created"].append({"doctype": "Item Variant", "old": old, "new": new})
+				print("CREATED", "Item Variant", old, "->", new)
+		except Exception as error:
+			self.undo("cpd_variants", state)
+			for name in variants:
+				self.item_names.pop(name, None)
+			self.fail("Item Variant", old, error)
+			return False
+		self.save()
 		return True
 
 	def get_pending_docs(self):

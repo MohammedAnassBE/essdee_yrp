@@ -69,11 +69,11 @@ class TestReturnReworkSource(TestCase):
 		with (
 			patch.object(rework_item, "_received_type_defaults", return_value=("Accepted", "Rejected")),
 			patch.object(frappe.db, "exists", return_value=None),
-			patch.object(rework_item, "_actual_receipt_warehouse", return_value="S-1"),
 			patch.object(frappe, "new_doc", return_value=rework),
 		):
 			rework_item.sync_grn_rework(grn)
 		rework.insert.assert_called_once()
+		self.assertEqual(rework.update.call_args.args[0]["warehouse"], "S-1")
 		self.assertEqual(rework.append.call_args.args[1]["received_type"], "Misstitch")
 
 

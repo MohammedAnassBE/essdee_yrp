@@ -51,27 +51,6 @@ def _received_type_defaults():
 	)
 
 
-def _actual_receipt_warehouse(grn_item, fallback):
-	"""Return the warehouse where this GRN row actually posted.
-
-	Internal-unit receipts post to Transit Warehouse first, so ``to_warehouse``
-	is not necessarily the live stock bucket.
-	"""
-	warehouse = frappe.db.get_value(
-		"YRP Stock Ledger Entry",
-		{
-			"voucher_type": "YRP Goods Received Note",
-			"voucher_no": grn_item.parent,
-			"voucher_detail_no": grn_item.name,
-			"is_cancelled": 0,
-			"qty": (">", 0),
-		},
-		"warehouse",
-		order_by="posting_datetime desc, creation desc",
-	)
-	return warehouse or fallback
-
-
 def sync_grn_rework(doc, method=None):
 	"""Create one idempotent rework source per GRN logical matrix row."""
 	del method
@@ -104,7 +83,8 @@ def sync_grn_rework(doc, method=None):
 				"grn_number": doc.name,
 				"lot": doc.get("lot"),
 				"item": doc.get("item"),
-				"warehouse": _actual_receipt_warehouse(rows[0], doc.to_warehouse),
+				# Clearing waits for Complete Transfer of internal-unit receipts out of Transit.
+				"warehouse": doc.to_warehouse,
 			}
 		)
 		for row in rows:
@@ -461,6 +441,44 @@ def update_rejected_quantity(rejection_data, completed=0, lot=None):
 	return {"name": parent.name, "completed": parent.completed}
 
 
+@frappe.whitelist()
+def revert_reworked_item(docname):
+	"""Cancel every Received Type conversion of this Rework Item and reopen its rows."""
+	from yrp.stock.stock_ledger import make_sl_entries
+
+	parent = frappe.get_doc("SD YRP GRN Rework Item", docname, for_update=True)
+	parent.check_permission("write")
+	entries = get_conversion_entries(parent.name)
+	if not entries:
+		frappe.throw(_("GRN Rework Item {0} has no rework entries to revert.").format(parent.name))
+	make_sl_entries(entries, cancel=True, force_inline=True)
+	for row in parent.grn_rework_item_details:
+		row.reworked = 0
+		if row.completed:
+			row.completed = 0
+			row.rejection = 0
+	parent.completed = 0
+	parent.set("grn_reworked_item_details", [])
+	parent.set("grn_rejected_item_details", [])
+	parent.save()
+	_rebuild_finishing(parent.lot)
+	return {"name": parent.name, "reverted_entries": len(entries)}
+
+
+def get_conversion_entries(docname):
+	"""Active ledger rows posted by this Rework Item, shaped for cancellation."""
+	from yrp.stock.dimensions import get_dimension_fieldnames
+
+	fields = ["item", "warehouse", "uom", "voucher_type", "voucher_no", "voucher_detail_no"]
+	fields += ["posting_date", "posting_time", "qty", "rate", *get_dimension_fieldnames()]
+	return frappe.get_all(
+		"YRP Stock Ledger Entry",
+		filters={"voucher_type": "SD YRP GRN Rework Item", "voucher_no": docname, "is_cancelled": 0},
+		fields=fields,
+		order_by="posting_datetime asc, creation asc",
+	)
+
+
 def _post_conversions(parent, conversions):
 	from yrp.stock.dimensions import get_dimension_fieldnames
 	from yrp.stock.stock_ledger import make_sl_entries
@@ -525,24 +543,17 @@ def _source_dimensions(parent, row, dimension_fieldnames):
 
 
 def _source_warehouse(parent, row, dimensions, qty, get_stock_balance):
-	candidates = [parent.warehouse]
-	if parent.grn_number:
-		final_warehouse = frappe.db.get_value("YRP Goods Received Note", parent.grn_number, "to_warehouse")
-		if final_warehouse and final_warehouse not in candidates:
-			candidates.append(final_warehouse)
-	balances = {}
-	for warehouse in candidates:
-		balance = get_stock_balance(row.item_variant, warehouse, **dimensions)
-		if isinstance(balance, tuple):
-			balance = balance[0]
-		balances[warehouse] = flt(balance)
-		if flt(balance) + QTY_TOLERANCE >= flt(qty):
-			return warehouse
-	frappe.throw(
-		_("Cannot clear {0} {1}: source stock is unavailable ({2}).").format(
-			flt(qty), row.item_variant, ", ".join(f"{key}: {value}" for key, value in balances.items())
+	balance = get_stock_balance(row.item_variant, parent.warehouse, **dimensions)
+	if isinstance(balance, tuple):
+		balance = balance[0]
+	if flt(balance) + QTY_TOLERANCE < flt(qty):
+		frappe.throw(
+			_(
+				"Cannot clear {0} {1}: only {2} is in {3}. "
+				"Complete Transfer for GRN {4} first if it is still in transit."
+			).format(flt(qty), row.item_variant, flt(balance), parent.warehouse, parent.grn_number)
 		)
-	)
+	return parent.warehouse
 
 
 def _rebuild_finishing(lot):

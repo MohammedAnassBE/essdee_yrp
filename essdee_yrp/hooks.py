@@ -375,6 +375,7 @@ jinja = {
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_mapping_details",
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_ipd_print_accessory_combination",
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_consumption_sheet_data",
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot.get_ironing_mistake_pf_items",
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_shortened_link.sd_yrp_shortened_link.get_short_link",
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.get_latest_product_images",
 		"essdee_yrp.essdee_yrp.doctype.sd_yrp_product.sd_yrp_product.get_product_colour_codes",

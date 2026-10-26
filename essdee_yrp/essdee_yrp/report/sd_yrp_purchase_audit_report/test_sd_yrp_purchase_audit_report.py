@@ -50,19 +50,19 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		doc.db_insert()
 		return doc
 
-	def add_entry(self, voucher, qty, date=DATE, warehouse=None, item=None, time="10:00:00"):
+	def add_entry(self, voucher, qty, date=DATE, warehouse=None, item=None, lot=None):
 		frappe.get_doc(
 			{
 				"doctype": "YRP Stock Ledger Entry",
 				"item": item or self.variant,
 				"warehouse": warehouse or self.warehouse,
 				"posting_date": date,
-				"posting_time": time,
+				"posting_time": "10:00:00",
 				"posting_datetime": f"{date} 10:00:00",
 				"qty": qty,
 				"voucher_type": voucher.doctype,
 				"voucher_no": voucher.name,
-				"lot": None,
+				"lot": lot,
 				"received_type": None,
 				"is_cancelled": 0,
 				"docstatus": 1,
@@ -106,29 +106,26 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		return {voucher.name: voucher for voucher, _qty in movements}
 
 	def test_each_voucher_lands_in_its_column(self):
-		vouchers = self.make_all_movements()
-		rows = [row for row in self.run_report() if row.get("against_id")]
-		by_voucher = {row["against_id"]: row for row in rows}
+		self.make_all_movements()
+		rows = {row["supplier"]: row for row in self.run_report()}
 		expected = {
-			"YRP Goods Received Note:Purchase Order": ("po_grn", 100),
-			"YRP Goods Received Note:YRP Work Order": ("other_inward", 7),
-			"YRP Stock Entry:Material Receipt": ("se_material_receipt", 20),
-			"YRP Stock Entry:Material Issue": ("se_material_issue", -5),
-			"YRP Stock Entry:Send to Warehouse": ("sent_warehouse", -8),
-			"YRP Stock Entry:Receive at Warehouse": ("received_warehouse", 9),
-			"YRP Stock Update:Add": ("added_stock", 3),
-			"YRP Stock Update:Reduce": ("reduced_stock", -2),
-			"YRP Delivery Challan:": ("dc_qty", -30),
+			self.supplier: {"po_grn": 100, "other_inward": 7, "dc_qty": 30},
+			None: {
+				"se_material_receipt": 20,
+				"se_material_issue": 5,
+				"sent_warehouse": 8,
+				"received_warehouse": 9,
+				"added_stock": 3,
+				"reduced_stock": 2,
+				"conversion_inward": 4,
+				"conversion_outward": 6,
+			},
 		}
-		for name, voucher in vouchers.items():
-			if voucher.doctype == "SD YRP Item Conversion":
-				continue
-			kind = voucher.get("against") or voucher.get("purpose") or voucher.get("update_type") or ""
-			column, qty = expected[f"{voucher.doctype}:{kind}"]
-			with self.subTest(voucher=voucher.doctype, kind=kind):
-				self.assertEqual(by_voucher[name][column], abs(qty))
-		conversion = next(row for row in rows if row["against"] == "SD YRP Item Conversion")
-		self.assertEqual((conversion["conversion_inward"], conversion["conversion_outward"]), (4, 6))
+		self.assertEqual(set(rows), set(expected))
+		for supplier, columns in expected.items():
+			with self.subTest(supplier=supplier):
+				quantities = {field: rows[supplier][field] for field in columns}
+				self.assertEqual(quantities, columns)
 
 	def test_totals_and_difference_match_ledger_net(self):
 		self.make_all_movements()
@@ -148,31 +145,35 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 			self.assertEqual(row["difference"], row["total_inward"] - row["total_outward"])
 			self.assertEqual((row["item"], row["item_variant"]), (self.template, self.variant))
 
-	def test_document_rows_keep_earliest_known_posting_time(self):
-		transfer = self.make_voucher("YRP Stock Entry", purpose="Send to Warehouse")
-		mixed = self.make_voucher("YRP Stock Entry", purpose="Send to Warehouse")
-		untimed = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
-		self.add_entry(transfer, 2, time="11:00:00")
-		self.add_entry(transfer, -3, time="09:30:00")
-		self.add_entry(mixed, 2, time=None)
-		self.add_entry(mixed, -3, time="08:00:00")
-		self.add_entry(untimed, 4, time=None)
-		times = {row["against_id"]: row["posting_time"] for row in self.run_report()}
-		self.assertEqual(str(times[transfer.name]), "9:30:00")
-		self.assertEqual(str(times[mixed.name]), "8:00:00")
-		self.assertIsNone(times[untimed.name])
+	def test_detailed_view_collapses_vouchers_per_variant_lot_and_received_type(self):
+		first = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		second = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		issue = self.make_voucher("YRP Stock Entry", purpose="Material Issue")
+		self.add_entry(first, 10, lot=f"LOT-{self.key}")
+		self.add_entry(second, 6, date=NEXT_DATE, lot=f"LOT-{self.key}")
+		self.add_entry(issue, -4, lot=f"LOT-{self.key}")
+		self.add_entry(first, 3, lot=f"OTHER-{self.key}")
+		columns, rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "warehouse": self.warehouse})
+		fields = [column["fieldname"] for column in columns]
+		for field in ("against", "against_id", "posting_date", "posting_time"):
+			self.assertNotIn(field, fields)
+		by_lot = {row["lot"]: row for row in rows}
+		self.assertEqual(len(rows), 2)
+		row = by_lot[f"LOT-{self.key}"]
+		self.assertEqual((row["se_material_receipt"], row["se_material_issue"]), (16, 4))
+		self.assertEqual((row["total_inward"], row["total_outward"], row["difference"]), (16, 4, 12))
+		self.assertEqual(by_lot[f"OTHER-{self.key}"]["total_inward"], 3)
 
 	def test_rejects_missing_or_reversed_dates(self):
 		for filters in ({"from_date": DATE}, {"from_date": NEXT_DATE, "to_date": DATE}):
 			with self.subTest(filters=filters), self.assertRaises(frappe.ValidationError):
 				execute(filters)
 
-	def test_summarized_view_drops_document_and_bucket_columns(self):
+	def test_summarized_view_drops_bucket_columns(self):
 		self.make_all_movements()
 		columns, _rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "summarized_view": 1})
 		fields = [column["fieldname"] for column in columns]
 		self.assertEqual(fields[-3:], ["total_inward", "total_outward", "difference"])
-		self.assertNotIn("against_id", fields)
 		self.assertNotIn("po_grn", fields)
 
 	def test_month_wise_report_splits_totals_per_month(self):
@@ -208,7 +209,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 	def test_month_wise_report_needs_summarized_view(self):
 		self.make_all_movements()
 		columns, _rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "month_wise_report": 1})
-		self.assertIn("against_id", [column["fieldname"] for column in columns])
+		self.assertIn("po_grn", [column["fieldname"] for column in columns])
 
 	def test_supplier_filter_excludes_documents_without_supplier(self):
 		self.make_all_movements()

@@ -35,11 +35,7 @@ SUPPLIER = """CASE sle.voucher_type
 END"""
 
 PERIODS = {
-	"detailed": (
-		("sle.posting_date", "posting_date"),
-		("sle.voucher_type", "against"),
-		("sle.voucher_no", "against_id"),
-	),
+	"detailed": (),
 	"summarized": (),
 	"month_wise": (("DATE_FORMAT(sle.posting_date, '%%Y-%%m')", "month"),),
 }
@@ -151,8 +147,6 @@ def get_bucket_expression():
 def get_ledger_rows(filters, view):
 	period = PERIODS[view]
 	selects = [f"{expression} AS {alias}" for expression, alias in DIMENSIONS + period]
-	if view == "detailed":
-		selects.append("MIN(sle.posting_time) AS posting_time")
 	conditions = [
 		"sle.is_cancelled = 0",
 		"sle.docstatus = 1",
@@ -191,12 +185,9 @@ def get_bucket_rows(filters, view):
 	rows = {}
 	for ledger_row in get_ledger_rows(filters, view):
 		bucket, qty = ledger_row.pop("bucket"), ledger_row.pop("qty")
-		key = tuple(value for field, value in ledger_row.items() if field != "posting_time")
+		key = tuple(ledger_row.values())
 		row = rows.setdefault(key, {**ledger_row, **dict.fromkeys(get_quantity_fields(), 0.0)})
 		row[bucket] += qty
-		if "posting_time" in ledger_row:
-			times = [time for time in (row["posting_time"], ledger_row["posting_time"]) if time is not None]
-			row["posting_time"] = min(times, default=None)
 	for row in rows.values():
 		row["total_inward"] = sum(row[field] for field, _label, _condition in INWARD_COLUMNS)
 		row["total_outward"] = sum(row[field] for field, _label, _condition in OUTWARD_COLUMNS)
@@ -254,19 +245,7 @@ def get_columns(view, months):
 
 
 def get_detail_columns():
-	columns = [
-		{"label": _("Posting Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 100},
-		{"label": _("Posting Time"), "fieldname": "posting_time", "fieldtype": "Time", "width": 90},
-		link_column(_("Against"), "against", "DocType"),
-		{
-			"label": _("Against ID"),
-			"fieldname": "against_id",
-			"fieldtype": "Dynamic Link",
-			"options": "against",
-			"width": 160,
-		},
-	]
-	columns += [qty_column(label, field) for field, label, _condition in INWARD_COLUMNS]
+	columns = [qty_column(label, field) for field, label, _condition in INWARD_COLUMNS]
 	columns.append(qty_column(_("Total Inward"), "total_inward"))
 	columns += [qty_column(label, field) for field, label, _condition in OUTWARD_COLUMNS]
 	columns.append(qty_column(_("Total Outward"), "total_outward"))

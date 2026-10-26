@@ -145,7 +145,7 @@ def get_rows_created_since(doctype, since):
 	"""Rows another session wrote while the dry run was open, so a changed table can be attributed."""
 	if doctype == "Series":
 		return []
-	columns = [c for c in REFERENCE_COLUMNS if frappe.get_meta(doctype).has_field(c[0])]
+	columns = [c for c in REFERENCE_COLUMNS if all(frappe.db.has_column(doctype, field) for field in c)]
 	fields = ", ".join(f"`{field}`" for pair in columns[:1] for field in pair)
 	rows = frappe.db.sql(
 		f"select name, creation, owner{', ' + fields if fields else ''} from `tab{doctype}` where creation >= %s",

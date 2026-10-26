@@ -195,3 +195,30 @@ class TestPrintFormatParity(IntegrationTestCase):
 					},
 				)
 				self.assertIsInstance(html, str)
+
+	def test_ipd_print_details_show_attribute_values_and_panel_ticks(self):
+		from essdee_yrp.print_helpers import get_ipd_pf_details
+
+		ipd = frappe.get_doc(
+			{
+				"doctype": "YRP Item Production Detail",
+				"emblishment_details_json": json.dumps({"Printing": ["Front"]}),
+				"stiching_item_details": [
+					{"set_item_attribute_value": "IAV-TOP", "stiching_attribute_value": "IAV-FRONT"}
+				],
+			}
+		)
+		labels = [
+			frappe._dict(name="IAV-TOP", attribute_name="Part", attribute_value="Top"),
+			frappe._dict(name="IAV-FRONT", attribute_name="Panel", attribute_value="Front"),
+		]
+		with (
+			patch.object(frappe.local, "attribute_link_values", {}, create=True),
+			patch("essdee_yrp.print_helpers.frappe.get_doc", return_value=ipd),
+			patch("essdee_yrp.merch.ipd.payload.frappe.get_all", return_value=labels),
+		):
+			doc = get_ipd_pf_details("IPD-TEST")
+
+		row = doc.stiching_item_details[0]
+		self.assertEqual((row.set_item_attribute_value, row.stiching_attribute_value), ("Top", "Front"))
+		self.assertIn(row.stiching_attribute_value, json.loads(doc.emblishment_details_json)["Printing"])

@@ -63,7 +63,10 @@ def get_user_signature(user):
 
 
 def get_ipd_pf_details(ipd):
-	return frappe.get_doc("YRP Item Production Detail", ipd)
+	"""The IPD with attribute values as text, so panels match the embellishment JSON's names."""
+	doc = frappe.get_doc("YRP Item Production Detail", ipd)
+	set_attribute_display_values(doc)
+	return doc
 
 
 def get_supplier_address_display(supplier):

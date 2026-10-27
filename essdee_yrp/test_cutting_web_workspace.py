@@ -457,6 +457,25 @@ class TestCuttingWebWorkspace(UnitTestCase):
 		self.assertEqual(entry["values"]["S"]["rate"], 0)
 		self.assertEqual(entry["values"]["S"]["secondary_uom"], "Kg")
 
+	@patch("essdee_yrp.cutting.web_workspace.frappe.get_doc")
+	@patch("essdee_yrp.cutting.web_workspace.get_stock_dimensions")
+	@patch("essdee_yrp.cutting.web_workspace._get_stock_item_schema_data")
+	def test_reconciliation_keeps_entered_rate(self, item_schema, stock_dimensions, get_doc):
+		item_schema.return_value = self._stock_item_schema()
+		stock_dimensions.return_value = [
+			{"fieldname": "lot", "label": "Lot", "dimension_doctype": "SD YRP Lot", "mandatory": 1}
+		]
+		get_doc.return_value.check_permission = MagicMock()
+
+		result = _normalize_stock_item_details(
+			frappe._dict(name="CP-TEST", lot="LOT-TEST"),
+			frappe._dict(default_received_type="Accepted"),
+			"stock_reconciliation",
+			self._stock_item_details(rate=361.91),
+		)
+
+		self.assertEqual(result[0]["items"][0]["values"]["S"]["rate"], 361.91)
+
 	@patch("essdee_yrp.cutting.web_workspace.get_stock_dimensions")
 	@patch("essdee_yrp.cutting.web_workspace._get_stock_item_schema_data")
 	def test_grouped_stock_items_reject_cross_plan_lot(self, item_schema, stock_dimensions):

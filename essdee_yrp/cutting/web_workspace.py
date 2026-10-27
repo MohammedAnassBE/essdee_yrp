@@ -1088,10 +1088,10 @@ def _normalize_value_cells(operation, entry, primary, primary_values, secondary_
 			frappe.throw(_("Quantity details for {0} must be a JSON object.").format(key))
 		qty = _as_non_negative_number(source.get("qty"), _("Quantity"))
 		positive_qty = positive_qty or qty > 0
-		cell = {"qty": qty}
-		# Rates are derived from the server-side source valuation bucket by the
-		# YRP controllers. Never let a browser pick the valuation rate here.
-		cell["rate"] = 0
+		# Other operations take the rate from the source valuation bucket in the
+		# YRP controllers. A counted balance carries the rate the user entered.
+		rate = _as_non_negative_number(source.get("rate"), _("Rate")) if operation == "stock_reconciliation" else 0
+		cell = {"qty": qty, "rate": rate}
 		if source.get("secondary_qty") not in (None, ""):
 			cell["secondary_qty"] = _as_non_negative_number(
 				source.get("secondary_qty"), _("Secondary Quantity")

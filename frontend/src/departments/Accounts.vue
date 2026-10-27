@@ -19,12 +19,12 @@ import { getAccountsCapabilities } from "../api/accounts.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
-import { ACCOUNTS_WORKSPACES } from "./accounts/accountsViews.js"
+import { accountsLauncherItems } from "./accounts/accountsViews.js"
 
 const loading = ref(true)
 const loadError = ref("")
 const sections = ref({})
-const visibleWorkspaces = computed(() => ACCOUNTS_WORKSPACES.filter((workspace) => sections.value[workspace.key]?.can_read))
+const visibleWorkspaces = computed(() => accountsLauncherItems().filter((workspace) => sections.value[workspace.key]?.can_read))
 
 async function load() {
 	loading.value = true

@@ -10,6 +10,7 @@ MERCH_PURCHASE = {
 		"lots": {"label": "Lot", "can_read": True},
 		"item_production_details": {"label": "Item Production Detail", "can_read": True},
 		"purchase_orders": {"label": "Purchase Orders", "can_read": True},
+		"bill_tracking": {"label": "Vendor Bill Tracking", "can_read": True},
 		"work_orders": {"label": "Work Order", "can_read": True},
 		"reports": {"label": "Reports", "can_read": True},
 	},
@@ -31,9 +32,9 @@ class TestMerchPdWebWorkspace(TestCase):
 		):
 			return web_workspace.get_capabilities()
 
-	def test_sections_are_the_four_merch_pd_cards(self):
+	def test_sections_are_the_merch_pd_cards(self):
 		sections = self.get_capabilities()["sections"]
-		self.assertEqual(list(sections), ["lots", "item_production_details", "purchase_orders", "lotwise_item_profits"])
+		self.assertEqual(list(sections), ["lots", "item_production_details", "purchase_orders", "bill_tracking", "lotwise_item_profits"])
 		self.assertEqual(sections["lotwise_item_profits"], PD["sections"]["lotwise_item_profits"])
 
 	def test_a_section_its_source_hides_stays_hidden(self):

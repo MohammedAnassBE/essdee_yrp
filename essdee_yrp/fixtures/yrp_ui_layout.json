@@ -228,14 +228,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"purchase_invoices\",\n   \"bill_tracking\",\n   \"reports\",\n   \"debits\"\n  ]\n }\n}",
-  "description": "/web Accounts department workspace only: purchase_invoices, bill_tracking, reports, debits.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"purchase_invoices\",\n   \"bill_tracking\",\n   \"reports\",\n   \"debits\",\n   \"lots\",\n   \"lotwise_item_profits\"\n  ]\n }\n}",
+  "description": "/web Accounts department workspace only: purchase_invoices, bill_tracking, reports, debits, lots, lotwise_item_profits.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "accounts",
   "layout_name": "Accounts",
-  "modified": "2026-10-22 12:14:41.214395",
+  "modified": "2026-10-27 12:00:00.000000",
   "name": "Accounts",
   "render_mode": "Registered Experience"
  },
@@ -288,14 +288,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"item_production_details\",\n   \"purchase_orders\",\n   \"lotwise_item_profits\"\n  ]\n }\n}",
-  "description": "/web Merch PD department workspace only: lots, item_production_details, purchase_orders, lotwise_item_profits.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"lots\",\n   \"item_production_details\",\n   \"purchase_orders\",\n   \"bill_tracking\",\n   \"lotwise_item_profits\"\n  ]\n }\n}",
+  "description": "/web Merch PD department workspace only: lots, item_production_details, purchase_orders, bill_tracking, lotwise_item_profits.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "merch-pd",
   "layout_name": "Merch PD",
-  "modified": "2026-10-23 10:20:07.545185",
+  "modified": "2026-10-27 12:00:00.000000",
   "name": "Merch PD",
   "render_mode": "Registered Experience"
  }

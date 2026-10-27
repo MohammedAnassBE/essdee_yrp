@@ -30,14 +30,15 @@ function loadRouter() {
 	return context.router
 }
 
-test("Merch PD shows Lot, Item Production Detail, Purchase Order and Lotwise Item Profit", () => {
+test("Merch PD shows Lot, Item Production Detail, Purchase Order, Vendor Bill Tracking and Lotwise Item Profit", () => {
 	assert.deepEqual(items.map((item) => [item.label, item.to]), [
 		["Lot", "/merch/lots"],
 		["Item Production Detail", "/merch/item-production-details"],
 		["Purchase Orders", "/purchase/purchase-orders"],
+		["Vendor Bill Tracking", "/merch/bill-tracking"],
 		["Lotwise Item Profit", "/pd/lotwise-item-profits"],
 	])
-	assert.deepEqual(workspaces, ["lots", "item_production_details", "purchase_orders", "lotwise_item_profits"], "the shipped layout lists every card")
+	assert.deepEqual(workspaces, ["lots", "item_production_details", "purchase_orders", "bill_tracking", "lotwise_item_profits"], "the shipped layout lists every card")
 	assert.equal(layout.name, "Merch PD")
 	assert.equal(layout.render_mode, "Registered Experience")
 	assert.deepEqual(pdLauncherItems().map((item) => item.key), ["products", "product_releases", "lotwise_item_profits"])
@@ -52,6 +53,7 @@ test("the department combines Merch, Purchase and PD sections in the registry", 
 		lots: ["/merch/lots", "/purchase/lots"],
 		item_production_details: ["/merch/item-production-details"],
 		purchase_orders: ["/purchase/purchase-orders"],
+		bill_tracking: ["/merch/bill-tracking", "/purchase/bill-tracking"],
 		lotwise_item_profits: ["/pd/lotwise-item-profits"],
 	})
 	assert.equal(Object.keys(getWorkspacePaths(departments.find((item) => item.key === "merch-purchase"))).length, 17, "other combined departments keep every section")

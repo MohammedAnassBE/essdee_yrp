@@ -1,4 +1,7 @@
 import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
+import { merchLauncherItems } from "../merch/merchViews.js"
+import { pdLauncherItems } from "../pd/pdViews.js"
+import { departments } from "../registry.js"
 import { ACCOUNTS_ROUTES } from "./accountsRoutes.js"
 
 export { ACCOUNTS_ROUTES }
@@ -27,6 +30,16 @@ export const ACCOUNTS_WORKSPACES = [
 		to: "/accounts/reports",
 	},
 ]
+
+export const ACCOUNTS_COMBINED_KEYS = departments.find((department) => department.key === "accounts").combinedSections
+
+/** Accounts cards, then the Lot card from Merch and the Lotwise Item Profit card from PD, then Reports. */
+export function accountsLauncherItems() {
+	const borrowed = [...merchLauncherItems(), ...pdLauncherItems()]
+	const own = ACCOUNTS_WORKSPACES.filter((item) => item.key !== "reports")
+	const reports = ACCOUNTS_WORKSPACES.filter((item) => item.key === "reports")
+	return [...own, ...ACCOUNTS_COMBINED_KEYS.map((key) => borrowed.find((item) => item.key === key)), ...reports]
+}
 
 export const ACCOUNTS_REPORTS = [
 	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse" },

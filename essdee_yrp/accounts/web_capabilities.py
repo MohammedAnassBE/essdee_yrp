@@ -11,6 +11,11 @@ from essdee_yrp.sewing.web_workspace import get_capabilities as get_sewing_capab
 from essdee_yrp.web_common import report_access_scope
 
 ACCOUNTS_REPORT_ROLES = frozenset({"Accounts User", "Accounts Manager", "System Manager"})
+# Read-only cards that open the Merch Lot and PD Lotwise Item Profit pages.
+COMBINED_SECTIONS = {
+	"lots": ("Lot", "SD YRP Lot"),
+	"lotwise_item_profits": ("Lotwise Item Profit", "SD YRP Lotwise Item Profit"),
+}
 
 
 def can_view_accounts_reports():
@@ -63,6 +68,10 @@ def get_capabilities() -> dict:
 				"label": _("Bill Tracking"),
 				"can_read": bool(frappe.has_permission("YRP Bill Tracking", ptype="read")),
 				"can_create": bool(frappe.has_permission("YRP Bill Tracking", ptype="create")),
+			},
+			**{
+				key: {"label": _(label), "can_read": bool(frappe.has_permission(doctype, ptype="read")), "can_create": False}
+				for key, (label, doctype) in COMBINED_SECTIONS.items()
 			},
 			"reports": {"label": _("Reports"), "can_read": bool(reports)},
 		},

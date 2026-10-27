@@ -51,8 +51,16 @@ test("Material Receipt rows can allow a zero valuation rate", async () => {
 	assert.equal(props.modelValue[0].items[0].allow_zero_valuation_rate, true)
 })
 
-test("outgoing Stock Entry rows do not offer a zero valuation rate", async () => {
-	const { root, props } = mountComposer("stock_entry", "Material Issue")
+test("every Stock Entry purpose offers a zero valuation rate per row", async () => {
+	for (const purpose of ["Material Issue", "Send to Warehouse", "Receive at Warehouse", "Material Consumed"]) {
+		const { root, props } = mountComposer("stock_entry", purpose)
+		await addTape(root, true)
+		assert.equal(props.modelValue[0].items[0].allow_zero_valuation_rate, true, purpose)
+	}
+})
+
+test("other stock operations do not offer a zero valuation rate", async () => {
+	const { root, props } = mountComposer("stock_update")
 	await addTape(root, false)
 
 	assert.equal(zeroValuationBox(root), undefined)

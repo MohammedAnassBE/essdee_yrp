@@ -105,7 +105,7 @@
 				<label v-if="operation === 'stock_entry'" class="stock-composer__remarks"><span>Remarks</span><textarea v-model="rowRemarks" rows="2" aria-label="Row remarks" :disabled="disabled"></textarea></label>
 
 				<div class="stock-composer__builder-footer">
-					<label v-if="rateEditable" class="stock-composer__check"><input v-model="allowZeroValuation" type="checkbox" :disabled="disabled" /><span>{{ operation === "stock_reconciliation" ? "Allow zero valuation when no prior rate exists" : "Allow zero valuation rate" }}</span></label>
+					<label v-if="zeroValuationEditable" class="stock-composer__check"><input v-model="allowZeroValuation" type="checkbox" :disabled="disabled" /><span>{{ operation === "stock_reconciliation" ? "Allow zero valuation when no prior rate exists" : "Allow zero valuation rate" }}</span></label>
 					<span v-else></span>
 					<div>
 						<Button v-if="editing" label="Cancel Edit" severity="secondary" text size="small" :disabled="disabled" @click="resetEditor" />
@@ -188,6 +188,7 @@ const dimensions = computed(() => props.editor.dimensions || [])
 const offersSecondary = computed(() => offersSecondaryQuantity(props.operation, itemSchema.value))
 const rateLabel = computed(() => stockRateLabels[props.operation] || (props.operation === "purchase_order" ? "Rate" : ""))
 const rateEditable = computed(() => props.operation === "stock_reconciliation" || (props.operation === "stock_entry" && props.purpose === "Material Receipt"))
+const zeroValuationEditable = computed(() => ["stock_reconciliation", "stock_entry"].includes(props.operation))
 const lockedDimensions = computed(() => {
 	const locked = props.editor.locked_dimensions
 		|| dimensions.value.filter((dimension) => dimension.locked).map((dimension) => dimension.fieldname)
@@ -348,7 +349,7 @@ async function stageItem() {
 		values,
 		default_uom: activeUom.value,
 		secondary_uom: itemSchema.value.secondary_uom || "",
-		allow_zero_valuation_rate: rateEditable.value ? allowZeroValuation.value : false,
+		allow_zero_valuation_rate: zeroValuationEditable.value ? allowZeroValuation.value : false,
 	})
 	if (props.operation === "lot_transfer") Object.assign(row, clone(dimensionValues))
 	if (props.operation === "stock_entry") row.remarks = rowRemarks.value.trim()

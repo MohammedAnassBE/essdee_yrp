@@ -1165,10 +1165,11 @@ def _normalize_stock_item_details(plan, context, operation, item_details):
 			}
 			if lot_transfer_fields:
 				normalized_entry.update(lot_transfer_fields)
-			if operation == "stock_reconciliation":
+			if operation in ("stock_reconciliation", "stock_entry"):
 				normalized_entry["allow_zero_valuation_rate"] = cint(
 					entry.get("allow_zero_valuation_rate")
 				)
+			if operation == "stock_reconciliation":
 				normalized_entry["make_qty_zero"] = cint(entry.get("make_qty_zero"))
 			normalized_groups.append(
 				{

@@ -476,6 +476,29 @@ class TestCuttingWebWorkspace(UnitTestCase):
 
 		self.assertEqual(result[0]["items"][0]["values"]["S"]["rate"], 361.91)
 
+	@patch("essdee_yrp.cutting.web_workspace.frappe.get_doc")
+	@patch("essdee_yrp.cutting.web_workspace.get_stock_dimensions")
+	@patch("essdee_yrp.cutting.web_workspace._get_stock_item_schema_data")
+	def test_stock_entry_keeps_row_zero_valuation_flag(self, item_schema, stock_dimensions, get_doc):
+		item_schema.return_value = self._stock_item_schema()
+		stock_dimensions.return_value = [
+			{"fieldname": "lot", "label": "Lot", "dimension_doctype": "SD YRP Lot", "mandatory": 1}
+		]
+		get_doc.return_value.check_permission = MagicMock()
+		item_details = self._stock_item_details()
+		item_details[0]["items"][0]["allow_zero_valuation_rate"] = 1
+
+		result = _normalize_stock_item_details(
+			frappe._dict(name="CP-TEST", lot="LOT-TEST"),
+			frappe._dict(default_received_type="Accepted"),
+			"stock_entry",
+			item_details,
+		)
+
+		entry = result[0]["items"][0]
+		self.assertEqual(entry["allow_zero_valuation_rate"], 1)
+		self.assertNotIn("make_qty_zero", entry)
+
 	@patch("essdee_yrp.cutting.web_workspace.get_stock_dimensions")
 	@patch("essdee_yrp.cutting.web_workspace._get_stock_item_schema_data")
 	def test_grouped_stock_items_reject_cross_plan_lot(self, item_schema, stock_dimensions):

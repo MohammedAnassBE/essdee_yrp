@@ -49,6 +49,24 @@
 						:disabled="!allowedFieldsReady"
 						@click="openColumnsDialog"
 					/>
+					<Select
+						class="list-sort-field"
+						:model-value="sortField"
+						:options="SORT_OPTIONS"
+						option-label="label"
+						option-value="value"
+						placeholder="Sort"
+						aria-label="Sort by"
+						@update:model-value="sortChanged({ sortField: $event, sortOrder })"
+					/>
+					<Button
+						:icon="sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down'"
+						severity="secondary"
+						outlined
+						:title="sortOrder === 1 ? 'Ascending' : 'Descending'"
+						:aria-label="sortOrder === 1 ? 'Sort ascending' : 'Sort descending'"
+						@click="sortChanged({ sortField, sortOrder: -sortOrder })"
+					/>
 					<Button
 						icon="pi pi-refresh"
 						severity="secondary"
@@ -601,6 +619,11 @@ const pageSize = ref(props.initialPageSize)
 const loadingMore = ref(false)
 const loadMoreError = ref("")
 const frame = ref(null)
+const SORT_OPTIONS = [
+	{ label: "Last Updated", value: "modified" },
+	{ label: "Created On", value: "creation" },
+	{ label: "ID", value: "name" },
+]
 const sortField = ref(props.defaultOrderBy.split(" ")[0] || "modified")
 const sortOrder = ref(props.defaultOrderBy.toLowerCase().endsWith(" asc") ? 1 : -1)
 const metaFields = ref([])
@@ -1877,6 +1900,12 @@ defineExpose({ refresh: reload })
 	border-color: var(--erp-accent-border);
 }
 
+.list-sort-field {
+	min-width: 9.5rem;
+	height: var(--erp-control-height);
+}
+
+.list-toolbar__secondary :deep(.p-button[aria-label^="Sort "]),
 .list-toolbar__secondary :deep(.p-button[aria-label="Refresh"]) {
 	width: var(--erp-control-height);
 	padding: 0;

@@ -28,8 +28,6 @@ def sales_definition(template, size_range, size_type, values, settings):
         return None
     if template.get('primary_attribute') != settings.primary:
         raise ValueError(f'Size Range requires {settings.primary} as the Item template primary attribute.')
-    if template.get('dependent_attribute') != settings.packing:
-        raise ValueError(f'Size Range requires {settings.packing} as the Item template dependent attribute.')
     if not size_range.get('size_type'):
         raise ValueError('Sales Size Range requires a Size Type.')
     selected = [r.get('attribute_value') for r in size_range.get('sizes') or []]

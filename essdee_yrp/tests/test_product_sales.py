@@ -24,11 +24,13 @@ class TestSalesDefinition(unittest.TestCase):
     def test_no_size_range_is_unchanged(self):
         self.assertIsNone(self.definition(custom_size_range=None))
 
-    def test_primary_and_packing_attributes_follow_ipd_settings(self):
+    def test_primary_attribute_follows_ipd_settings(self):
         with self.assertRaises(ValueError):
             self.definition(primary_attribute='Colour')
-        with self.assertRaises(ValueError):
-            self.definition(dependent_attribute=None)
+
+    def test_any_dependent_attribute_is_allowed(self):
+        self.assertTrue(self.definition(dependent_attribute=None)['cells'])
+        self.assertTrue(self.definition(dependent_attribute='Colour')['cells'])
 
 
 class TestProductSalesSite(unittest.TestCase):

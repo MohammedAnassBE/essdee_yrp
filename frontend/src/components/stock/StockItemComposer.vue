@@ -105,7 +105,7 @@
 				<label v-if="operation === 'stock_entry'" class="stock-composer__remarks"><span>Remarks</span><textarea v-model="rowRemarks" rows="2" aria-label="Row remarks" :disabled="disabled"></textarea></label>
 
 				<div class="stock-composer__builder-footer">
-					<label v-if="operation === 'stock_reconciliation'" class="stock-composer__check"><input v-model="allowZeroValuation" type="checkbox" /><span>Allow zero valuation when no prior rate exists</span></label>
+					<label v-if="rateEditable" class="stock-composer__check"><input v-model="allowZeroValuation" type="checkbox" :disabled="disabled" /><span>{{ operation === "stock_reconciliation" ? "Allow zero valuation when no prior rate exists" : "Allow zero valuation rate" }}</span></label>
 					<span v-else></span>
 					<div>
 						<Button v-if="editing" label="Cancel Edit" severity="secondary" text size="small" :disabled="disabled" @click="resetEditor" />
@@ -348,7 +348,7 @@ async function stageItem() {
 		values,
 		default_uom: activeUom.value,
 		secondary_uom: itemSchema.value.secondary_uom || "",
-		allow_zero_valuation_rate: props.operation === "stock_reconciliation" ? allowZeroValuation.value : false,
+		allow_zero_valuation_rate: rateEditable.value ? allowZeroValuation.value : false,
 	})
 	if (props.operation === "lot_transfer") Object.assign(row, clone(dimensionValues))
 	if (props.operation === "stock_entry") row.remarks = rowRemarks.value.trim()

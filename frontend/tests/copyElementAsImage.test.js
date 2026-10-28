@@ -4,7 +4,9 @@ import test from "node:test"
 
 const { assertCanvasFits, CAPTURE_PRINT_CLASS, captureElementImage, expandForCapture, getCapturePixelRatio, getCaptureSize, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
 
-function node({ overflow = "visible", size = [100, 100], content = size, placeholder = null, tag = "div", textOverflow = "clip", clip = "auto", hidden = false, rect = [0, 0, ...size] } = {}) {
+const ownerDocument = { createElement: tag => node({ tag }) }
+
+function node({ overflow = "visible", size = [100, 100], content = size, placeholder = null, tag = "div", textOverflow = "clip", clip = "auto", hidden = false, rect = [0, 0, ...size], value = "" } = {}) {
 	const attributes = placeholder === null ? {} : { placeholder }
 	const style = {
 		cssText: "height: 40px;",
@@ -14,30 +16,34 @@ function node({ overflow = "visible", size = [100, 100], content = size, placeho
 	const element = {
 		classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
 		innerText: "Report",
+		ownerDocument, parentNode: null, value, textContent: "",
 		tagName: tag.toUpperCase(), tag, overflow, textOverflow, clip, hidden, style, children: [],
 		clientWidth: size[0], clientHeight: size[1], scrollWidth: content[0], scrollHeight: content[1], offsetWidth: size[0],
 		getBoundingClientRect: () => ({ left: rect[0], top: rect[1], width: rect[2], height: rect[3], right: rect[0] + rect[2], bottom: rect[1] + rect[3] }),
 		getAttribute: name => attributes[name] ?? null,
 		setAttribute: (name, value) => { attributes[name] = value },
 		removeAttribute: name => { delete attributes[name] },
+		insertBefore(child, before) { child.parentNode = this; this.children.splice(this.children.indexOf(before), 0, child) },
+		remove() { this.parentNode?.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null },
 		querySelectorAll(selector) {
 			const all = this.children.flatMap(child => [child, ...child.querySelectorAll("*")])
 			if (selector === "*") return all
-			if (selector === "table") return all.filter(child => child.tag === "table")
+			if (selector === "table" || selector === "caption") return all.filter(child => child.tag === selector)
 			if (selector.includes("input")) return all.filter(child => child.tag === "input")
 			return all.filter(child => child.hidden)
 		},
 	}
 	return element
 }
-const view = { getComputedStyle: element => ({ overflowX: element.overflow, overflowY: element.overflow, textOverflow: element.textOverflow, clip: element.clip, clipPath: "none" }) }
+const view = { getComputedStyle: element => ({ overflowX: element.overflow, overflowY: element.overflow, textOverflow: element.textOverflow, clip: element.clip, clipPath: "none", position: element.position ?? "static", display: "block", marginTop: "4px" }) }
 
-test("copy expands clipping scroll containers, flattens cell inputs and restores the page", () => {
+test("copy expands clipping scroll containers, swaps cell inputs for their text and restores the page", () => {
 	const root = node({ overflow: "hidden" })
 	const frame = node({ overflow: "auto", size: [800, 110], content: [1200, 420] })
 	const quiet = node({ overflow: "auto", size: [200, 50], content: [200, 50] })
-	const remarks = node({ tag: "input", placeholder: "Remarks" })
+	const remarks = node({ tag: "input", placeholder: "Remarks", value: "Short 2 pcs" })
 	frame.children.push(remarks)
+	remarks.parentNode = frame
 	root.children.push(frame, quiet)
 	// The frame grows the shell once expanded, so the outer box clips only after the inner pass.
 	frame.style.setProperty = function (property, value, priority) {
@@ -50,13 +56,32 @@ test("copy expands clipping scroll containers, flattens cell inputs and restores
 	assert.match(frame.style.cssText, /overflow: visible !important; max-height: none !important; max-width: none !important; height: auto !important; scrollbar-gutter: auto !important;/)
 	assert.match(root.style.cssText, /overflow: visible !important/)
 	assert.equal(quiet.style.cssText, "height: 40px;")
-	assert.match(remarks.style.cssText, /border: 0 !important; background: transparent !important/)
-	assert.match(remarks.style.cssText, /width: 100px !important/)
-	assert.equal(remarks.getAttribute("placeholder"), null)
+	// A cloned input renders taller than on screen and overflows its pinned row height, so it becomes plain text.
+	assert.match(remarks.style.cssText, /display: none !important/)
+	const [text] = frame.children
+	assert.equal(text.tag, "span")
+	assert.equal(text.textContent, "Short 2 pcs")
+	assert.equal(text.style.cssText, "display: inline-block; width: 100px;")
 
 	restore()
 	for (const element of [root, frame, quiet, remarks]) assert.equal(element.style.cssText, "height: 40px;")
-	assert.equal(remarks.getAttribute("placeholder"), "Remarks")
+	assert.deepEqual(frame.children, [remarks], "the text stand-in is removed")
+})
+
+test("copy lifts table captions out of the table height so cloned rows keep their on-screen height", () => {
+	const root = node()
+	const table = node({ tag: "table" })
+	const caption = node({ tag: "caption", size: [800, 36] })
+	const srCaption = node({ tag: "caption", size: [1, 1], clip: "rect(0px, 0px, 0px, 0px)" })
+	table.children.push(caption)
+	caption.parentNode = table
+	root.children.push(table, srCaption)
+	const restore = expandForCapture(root, view)
+	assert.match(table.style.cssText, /position: relative !important; margin-top: 40px !important;/)
+	assert.match(caption.style.cssText, /position: absolute !important; top: -36px !important; left: 0 !important; width: 100% !important;/)
+	assert.equal(srCaption.style.cssText, "height: 40px;", "a screen-reader caption is left alone")
+	restore()
+	for (const element of [table, caption]) assert.equal(element.style.cssText, "height: 40px;")
 })
 
 test("copy widens an overflowing root to its widest table and restores it", () => {
@@ -94,12 +119,13 @@ test("copy hides [data-capture-hide] and caller selectors, then restores them", 
 	const filters = node({ hidden: true })
 	const filterInput = node({ tag: "input", placeholder: "Filter Lot" })
 	root.children.push(filters, filterInput)
+	filterInput.parentNode = root
 	const restore = expandForCapture(root, view, { hide: [".report-shell__filters"] })
 	assert.match(filters.style.cssText, /display: none !important/)
-	assert.match(filterInput.style.cssText, /border: 0 !important/, "header filter inputs render as plain text")
+	assert.match(filterInput.style.cssText, /display: none !important/, "header filter inputs render as plain text")
 	restore()
 	assert.equal(filters.style.cssText, "height: 40px;")
-	assert.equal(filterInput.getAttribute("placeholder"), "Filter Lot")
+	assert.deepEqual(root.children, [filters, filterInput])
 })
 
 test("copy refuses an image the browser cannot draw instead of shrinking it", () => {

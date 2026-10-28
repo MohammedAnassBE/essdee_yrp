@@ -3,7 +3,6 @@ import { toBlob } from "html-to-image"
 const SCROLLING = /auto|scroll|hidden/
 const EXPANDED_STYLE = { overflow: "visible", "max-height": "none", "max-width": "none", height: "auto", "scrollbar-gutter": "auto" }
 const UNCLIPPED_TEXT_STYLE = { "white-space": "normal", "overflow-wrap": "anywhere", "text-overflow": "clip" }
-const PLAIN_INPUT_STYLE = { border: "0", background: "transparent", "box-shadow": "none", padding: "0" }
 const PLAIN_INPUT_SELECTOR = "td input, td textarea, th input, th textarea"
 // Chromium and Firefox refuse canvases past these sizes.
 const MAX_CANVAS_SIDE = 32_767
@@ -36,20 +35,37 @@ function applyStyle(element, style, saved) {
 	for (const [property, value] of Object.entries(style)) element.style.setProperty(property, value, "important")
 }
 
+/** Swaps each cell input for its value as plain text, so the image shows no empty input boxes. */
 function flattenInputs(element, restore) {
 	for (const input of element.querySelectorAll(PLAIN_INPUT_SELECTOR)) {
 		const width = Math.max(input.clientWidth, input.scrollWidth)
-		applyStyle(input, { ...PLAIN_INPUT_STYLE, ...(width ? { width: `${width}px` } : {}) }, restore)
-		const placeholder = input.getAttribute("placeholder")
-		if (placeholder === null) continue
-		input.removeAttribute("placeholder")
-		restore.push(() => input.setAttribute("placeholder", placeholder))
+		const text = input.ownerDocument.createElement("span")
+		text.textContent = input.value ?? ""
+		if (width) text.style.cssText = `display: inline-block; width: ${width}px;`
+		input.parentNode.insertBefore(text, input)
+		restore.push(() => text.remove())
+		applyStyle(input, { display: "none" }, restore)
+	}
+}
+
+/**
+ * Chromium reports a table's computed height with its caption, and the capture pins that height on the cloned table,
+ * so the clone grows by the caption and spreads it over the body rows. A caption lifted out of flow keeps both equal.
+ */
+function liftCaptions(element, view, restore) {
+	for (const caption of element.querySelectorAll("caption")) {
+		const style = view.getComputedStyle(caption)
+		if (style.position !== "static" || style.display === "none" || isVisuallyHidden(style)) continue
+		const table = caption.parentNode, height = caption.getBoundingClientRect().height
+		const marginTop = parseFloat(view.getComputedStyle(table).marginTop) || 0
+		applyStyle(table, { position: "relative", "margin-top": `${marginTop + height}px` }, restore)
+		applyStyle(caption, { position: "absolute", top: `${-height}px`, left: "0", width: "100%", "box-sizing": "border-box" }, restore)
 	}
 }
 
 /**
  * Lays `element` out at full size for an image capture: `hide` selectors and [data-capture-hide] drop out (rows collapse),
- * clipping boxes grow to their content, ellipsis text wraps, cell inputs render as plain text and the root
+ * clipping boxes grow to their content, ellipsis text wraps, cell inputs render as plain text, captions leave the table height and the root
  * widens to its widest table. Returns a function that restores the page.
  */
 export function expandForCapture(element, view = window, { hide = [] } = {}) {
@@ -58,13 +74,14 @@ export function expandForCapture(element, view = window, { hide = [] } = {}) {
 	for (const node of element.querySelectorAll(["[data-capture-hide]", ...hide].join(", "))) {
 		applyStyle(node, node.tagName === "TR" ? { visibility: "collapse" } : { display: "none" }, restore)
 	}
+	flattenInputs(element, restore)
+	liftCaptions(element, view, restore)
 	// Innermost first, so an outer box clipped by an expanded child is caught too.
 	for (const node of [element, ...element.querySelectorAll("*")].reverse()) {
 		const style = view.getComputedStyle(node)
 		if (!isClipping(node, style)) continue
 		applyStyle(node, style.textOverflow === "ellipsis" ? { ...EXPANDED_STYLE, ...UNCLIPPED_TEXT_STYLE } : EXPANDED_STYLE, restore)
 	}
-	flattenInputs(element, restore)
 	if (element.scrollWidth > element.clientWidth) {
 		applyStyle(element, { width: "max-content", "min-width": `${element.offsetWidth}px`, "max-width": "none" }, restore)
 	}

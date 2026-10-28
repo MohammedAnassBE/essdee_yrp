@@ -200,7 +200,7 @@ def get_rework_items(
 			"total_reworked": 0,
 		}
 		for row in doc.get("grn_rework_item_details") or []:
-			if bool(row.completed) != bool(show_reworked):
+			if bool(row.completed or doc.completed) != bool(show_reworked):
 				continue
 			if received_type and row.received_type != received_type:
 				continue
@@ -258,7 +258,7 @@ def get_rework_sources(filters, order_by="creation desc"):
 	docs = frappe.get_list(
 		"SD YRP GRN Rework Item",
 		filters=filters,
-		fields=["name", "grn_number", "creation", "lot", "item", "warehouse"],
+		fields=["name", "grn_number", "creation", "lot", "item", "warehouse", "completed"],
 		order_by=order_by,
 		limit_page_length=0,
 	)

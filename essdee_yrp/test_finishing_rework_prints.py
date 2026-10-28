@@ -106,6 +106,16 @@ class TestFinishingReworkPrints(TestCase):
 		items = data["report_detail"]["RW-1"]["rework_detail"]["Oil Mark-Red"]["items"]
 		self.assertEqual([row["Size"] for row in items], ["S", "M", "L", "XL"])
 
+	def test_completed_parent_is_hidden_from_pending_rework(self):
+		source = rework_source()
+		source.completed = 1
+		source.grn_rework_item_details = [rework_row("d1", "V-S")]
+		with patched_rework(source):
+			pending = rework_items.get_rework_items()
+			reworked = rework_items.get_rework_items(show_reworked=1)
+		self.assertNotIn("RW-1", pending["report_detail"])
+		self.assertIn("RW-1", reworked["report_detail"])
+
 	def test_formats_are_standard_grn_formats(self):
 		for folder, name in FORMATS.items():
 			with self.subTest(name=name):

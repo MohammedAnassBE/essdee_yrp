@@ -298,6 +298,24 @@ function sectionTotal(section) {
 	font-weight: 780;
 }
 
+/* Copy Report: match the DPR print look; the fixed greens above ignore the capture tokens. */
+.report-capture-print .completed-report__table thead th {
+	color: #000000;
+	background: var(--erp-report-head-bg);
+	font-weight: 700;
+}
+
+.report-capture-print .completed-report__panel,
+.report-capture-print .completed-report__row-total,
+.report-capture-print .completed-report__part strong { color: #000000; }
+.report-capture-print .completed-report__panel { border-color: var(--erp-border); }
+
+.report-capture-print .completed-report__total-row th,
+.report-capture-print .completed-report__total-row td {
+	color: #000000;
+	background: #FFFFFF;
+}
+
 .completed-report__empty {
 	display: grid;
 	place-items: center;

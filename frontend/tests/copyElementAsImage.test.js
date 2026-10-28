@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
-const { assertCanvasFits, CAPTURE_PRINT_CLASS, captureElementImage, expandForCapture, getCapturePixelRatio, getCaptureSize, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
+const { assertCanvasFits, CAPTURE_PRINT_CLASS, captureElementImage, expandForCapture, getCapturePixelRatio, getCaptureSize, getInputText, TOO_LARGE_MESSAGE } = await import("../src/components/reports/copyElementAsImage.js")
 
 const ownerDocument = { createElement: tag => node({ tag }) }
 
@@ -203,4 +203,10 @@ test("copy renders the full multi-table bounds and restores the filter row on er
 	assert.deepEqual([options.width, options.height], [1200, 900])
 	await assert.rejects(captureElementImage(root, { view, render: () => { throw new Error("render failed") } }), { message: "render failed" })
 	assert.equal(filterRow.style.cssText, "height: 40px;")
+})
+
+test("copy prints a checkbox cell as Yes or No, never its constant \"on\" value", () => {
+	assert.equal(getInputText({ type: "checkbox", value: "on", checked: true }), "Yes")
+	assert.equal(getInputText({ type: "checkbox", value: "on", checked: false }), "No")
+	assert.equal(getInputText({ type: "text", value: "Short 2 pcs" }), "Short 2 pcs")
 })

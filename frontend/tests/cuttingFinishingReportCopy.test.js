@@ -40,3 +40,16 @@ test("Report-owned scroll boxes clip, so the copy helper expands them to full si
 		assert.doesNotMatch(style, /(^|[\s;{])(max-)?height:\s*(?=[^\d\s])/m, file)
 	}
 })
+
+test("Lot Cut Quantity copies in the DPR print colours with larger bold table text", () => {
+	const completed = source("departments/cutting/CuttingCompletedReport.vue").split("<style scoped>")[1]
+	// Fixed greens bypass the capture tokens, so print mode must override every one of them.
+	for (const selector of ["completed-report__table thead th", "completed-report__panel", "completed-report__row-total", "completed-report__total-row td"]) {
+		assert.match(completed, new RegExp(`\\.report-capture-print \\.${selector}[^{]*\\{[^}]*color: #000000`), selector)
+	}
+	// Vue scopes `.x :is(...)` to the outer element, which never matches, so capture rules stay plain selectors.
+	assert.doesNotMatch(completed, /\.report-capture-print[^{]*:is\(/)
+	const lotCut = source("components/reports/LotCutQuantityReport.vue").split("<style scoped>")[1]
+	assert.match(lotCut, /\.lot-cut-quantity-report__plan :deep\(\.completed-report__table\) \{[^}]*font-size: var\(--erp-font-size-md\);[^}]*font-weight: var\(--erp-font-weight-semibold\)/)
+	assert.match(lotCut, /\.report-capture-print \.lot-cut-quantity-report__lot-header h2/)
+})

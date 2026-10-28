@@ -223,6 +223,21 @@ function planDoc(lot, plan) {
 
 .lot-cut-quantity-report__no-plan i { color: var(--erp-accent); }
 
+.lot-cut-quantity-report__plan :deep(.completed-report__table) {
+	font-size: var(--erp-font-size-md);
+	font-weight: var(--erp-font-weight-semibold);
+}
+
+.lot-cut-quantity-report__plan :deep(.completed-report__table thead th),
+.lot-cut-quantity-report__plan :deep(.completed-report__panel) {
+	font-size: var(--erp-font-size-table);
+	font-weight: var(--erp-font-weight-bold);
+}
+
+.report-capture-print .lot-cut-quantity-report__lot-header h2,
+.report-capture-print .lot-cut-quantity-report__plan-header a,
+.report-capture-print .lot-cut-quantity-report__plan-header strong { color: #000000; }
+
 @media (max-width: 600px) {
 	.lot-cut-quantity-report__lot-header,
 	.lot-cut-quantity-report__plan-header { align-items: flex-start; flex-direction: column; }

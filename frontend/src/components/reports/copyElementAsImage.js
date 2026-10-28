@@ -35,12 +35,18 @@ function applyStyle(element, style, saved) {
 	for (const [property, value] of Object.entries(style)) element.style.setProperty(property, value, "important")
 }
 
+/** A checkbox's value is "on" whether ticked or not, so it prints as Yes or No. */
+export function getInputText(input) {
+	if (input.type === "checkbox" || input.type === "radio") return input.checked ? "Yes" : "No"
+	return input.value ?? ""
+}
+
 /** Swaps each cell input for its value as plain text, so the image shows no empty input boxes. */
 function flattenInputs(element, restore) {
 	for (const input of element.querySelectorAll(PLAIN_INPUT_SELECTOR)) {
 		const width = Math.max(input.clientWidth, input.scrollWidth)
 		const text = input.ownerDocument.createElement("span")
-		text.textContent = input.value ?? ""
+		text.textContent = getInputText(input)
 		if (width) text.style.cssText = `display: inline-block; width: ${width}px;`
 		input.parentNode.insertBefore(text, input)
 		restore.push(() => text.remove())

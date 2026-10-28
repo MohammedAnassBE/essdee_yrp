@@ -4,6 +4,9 @@ export const ENTRY_GRID_TOOLS = ["fillRight", "fillDown", "sameForAll", "paste",
 
 const TRUE_VALUES = new Set(["1", "y", "yes", "true", "✓", "x", "on"])
 const FALSE_VALUES = new Set(["", "0", "n", "no", "false", "off"])
+const ROW_HEADER_MIN_WIDTH = 140
+const ROW_HEADER_MAX_WIDTH = 280
+const INDEX_MIN_WIDTH = 44
 
 export function parsePastedBlock(text) {
 	const source = String(text ?? "").replace(/\r\n?/g, "\n")
@@ -306,4 +309,11 @@ export function columnMinWidth(column) {
 	if (column.type === "number" || column.type === "check") return 72
 	if (column.type === "link") return 180
 	return 120
+}
+
+/** Row header px width: a "#" index fits its row numbers; a label column fits its labels within 140-280px. */
+export function rowHeaderColumnWidth(rows, isIndex = false) {
+	const longest = Math.max(0, ...rows.map((row) => String(row.label ?? "").length))
+	if (isIndex) return Math.max(INDEX_MIN_WIDTH, longest * 8 + 20)
+	return Math.min(ROW_HEADER_MAX_WIDTH, Math.max(ROW_HEADER_MIN_WIDTH, longest * 8 + 28))
 }

@@ -98,6 +98,16 @@ test("layout widths fill the table by percentage and keep a minimum px width on 
 	assert.deepEqual(layoutWidths(columns, 150), [120, 60, 52])
 })
 
+test("layout widths take a raised minimum back from wider columns so the table still fits", () => {
+	const columns = [
+		{ key: "item", fieldtype: "Link", width: 200, percent: 95 },
+		{ key: "based_on", fieldtype: "Data", width: 160, percent: 5 },
+	]
+	const widths = layoutWidths(columns, 1000)
+	assert.deepEqual(widths, [904, 96])
+	assert.ok(widths.reduce((sum, width) => sum + width, 0) <= 1000)
+})
+
 test("the last shown column gets 100% minus the others and moves with reorder or hide", () => {
 	const draft = columnDraft(schema, resolveGridColumns(schema, [{ fieldname: "qty", width_percent: 30 }, { fieldname: "item", width_percent: 70 }]))
 	assert.deepEqual(draft.map((column) => [column.key, column.visible, column.percent, column.locked]), [

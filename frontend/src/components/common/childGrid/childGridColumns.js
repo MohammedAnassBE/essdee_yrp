@@ -97,9 +97,24 @@ function withDefaultWidth(column) {
 export function layoutWidths(columns, tableWidth, reservedWidth = 0) {
 	const fixedWidth = columns.filter((column) => !isConfigurable(column)).reduce((sum, column) => sum + column.width, 0)
 	const available = Math.max((tableWidth || REFERENCE_WIDTH) - reservedWidth - fixedWidth, 0)
-	return columns.map((column) => isConfigurable(column) && column.percent
+	const widths = columns.map((column) => isSized(column)
 		? Math.max(minColumnWidth(column), Math.floor((available * column.percent) / 100))
 		: column.width)
+	return shrinkToFit(columns, widths, available)
+}
+
+function isSized(column) {
+	return isConfigurable(column) && Boolean(column.percent)
+}
+
+/** Takes the width that minimums added back from columns above their minimum, so the table still fits. */
+function shrinkToFit(columns, widths, available) {
+	const slack = columns.map((column, index) => isSized(column) ? widths[index] - minColumnWidth(column) : 0)
+	const used = widths.reduce((sum, width, index) => sum + (isSized(columns[index]) ? width : 0), 0)
+	const totalSlack = slack.reduce((sum, value) => sum + value, 0)
+	if (used <= available || !totalSlack) return widths
+	const share = Math.min((used - available) / totalSlack, 1)
+	return widths.map((width, index) => width - Math.ceil(slack[index] * share))
 }
 
 /** Editable list for the column settings dialog: visible columns first, then hidden ones. */

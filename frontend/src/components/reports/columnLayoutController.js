@@ -69,13 +69,12 @@ function setTableWidth(table, width) {
 	table.style.tableLayout = "fixed"
 }
 
-function ensureHandle(cell, index) {
+function ensureHandle(cell) {
 	if (cell.querySelector(`:scope > .${HANDLE_CLASS}`)) return
 	if (cell.ownerDocument.defaultView.getComputedStyle(cell).position === "static") cell.style.position = "relative"
 	const handle = cell.ownerDocument.createElement("span")
 	handle.className = HANDLE_CLASS
 	handle.dataset.captureHide = ""
-	handle.dataset.column = String(index)
 	handle.setAttribute("aria-hidden", "true")
 	handle.title = "Drag to resize. Double-click to reset."
 	cell.append(handle)
@@ -95,7 +94,7 @@ export function attachColumnLayout(root, layout) {
 		const isMovable = table.hasAttribute("data-column-order")
 		for (const column of columns) {
 			if (!column.cell || isPinnedCell(column.cell)) continue
-			ensureHandle(column.cell, column.index)
+			ensureHandle(column.cell)
 			column.cell.classList.toggle(MOVABLE_CLASS, isMovable)
 		}
 		const saved = layout.widths[key] || {}
@@ -118,9 +117,14 @@ export function attachColumnLayout(root, layout) {
 		return { table, key: tableLayoutKey(table, index), columns: tableColumns(table) }
 	}
 
+	/** The column a handle sits in now; headers move with their handles when the column order changes. */
+	function locateHandle(handle) {
+		const located = locate(handle)
+		return { ...located, column: located.columns.find(column => column.cell === handle.parentElement) }
+	}
+
 	function beginResize(event, handle) {
-		const { table, key, columns } = locate(handle)
-		const column = columns[Number(handle.dataset.column)]
+		const { table, key, columns, column } = locateHandle(handle)
 		if (!column) return
 		const saved = { ...(layout.widths[key] || {}), [column.label]: clampColumnWidth(column.cell.getBoundingClientRect().width) }
 		// Saved before the drag so a sync mid-drag finds the table already sized and leaves it alone.
@@ -142,8 +146,8 @@ export function attachColumnLayout(root, layout) {
 	}
 
 	function resetWidth(handle) {
-		const { key, columns } = locate(handle)
-		const label = columns[Number(handle.dataset.column)]?.label
+		const { key, column } = locateHandle(handle)
+		const label = column?.label
 		const { [label]: _removed, ...rest } = layout.widths[key] || {}
 		const { [key]: _table, ...others } = layout.widths
 		layout.widths = Object.keys(rest).length ? { ...others, [key]: rest } : others

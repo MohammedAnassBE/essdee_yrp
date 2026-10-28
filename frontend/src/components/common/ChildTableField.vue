@@ -16,13 +16,38 @@
 			/>
 		</header>
 
-		<EditableDataTable
-			:value="modelValue"
-			scrollable
-			size="small"
+		<ChildGridTable
+			:rows="modelValue"
+			:columns="gridColumns"
+			:title="field.label || field.fieldname"
+			:parent-doctype="parentDoctype || field.parent || ''"
+			:child-doctype="field.options || ''"
+			:can-add="!isDisabled"
+			:add="addRow"
+			show-index
 			class="child-table-field__table"
-			:pt="{ tableContainer: { tabindex: 0, role: 'region', 'aria-label': `${field.label || field.fieldname} rows` } }"
 		>
+			<template v-for="column in columns" :key="column.fieldname" #[`cell-${column.fieldname}`]="{ data, index }">
+				<DocumentLink v-if="(isDisabled || column.read_only) && cellTarget(column, data)" v-bind="cellTarget(column, data)" :label="data[column.fieldname]" />
+				<FormField
+					v-else
+					:field="childTableColumnField(column, columnFilters, data)"
+					:model-value="data[column.fieldname]"
+					:form="data"
+					:disabled="isDisabled"
+					:required="Boolean(column.reqd)"
+					:invalid="Boolean(errors[`${index}.${column.fieldname}`])"
+					:error="errors[`${index}.${column.fieldname}`] || ''"
+					:show-label="false"
+					:show-open-button="false"
+					:input-id="`${field.fieldname}-${index + 1}-${column.fieldname}`"
+					:aria-label="`${column.label || column.fieldname}, row ${index + 1}`"
+					@update:model-value="setCell(index, column.fieldname, $event)"
+				/>
+			</template>
+			<template v-if="!isDisabled" #row-actions="{ index }">
+				<Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove row ${index + 1}`" @click="removeRow(index)" />
+			</template>
 			<template #empty>
 				<div class="child-table-field__empty">
 					<i class="pi pi-table" aria-hidden="true"></i>
@@ -30,20 +55,19 @@
 					<span v-if="!isDisabled">Use Add Row to create the first line.</span>
 				</div>
 			</template>
-		</EditableDataTable>
+		</ChildGridTable>
 	</section>
 </template>
 
 <script setup>
 import Button from "primevue/button"
-import Column from "primevue/column"
-import DataTable from "primevue/datatable"
-import { computed, defineComponent, h } from "vue"
+import { computed } from "vue"
 
 import FormField from "./FormField.vue"
 import DocumentLink from "./DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 import { childTableColumnField } from "./childTableFields.js"
+import ChildGridTable from "./childGrid/ChildGridTable.vue"
 
 const props = defineProps({
 	field: { type: Object, required: true },
@@ -52,6 +76,7 @@ const props = defineProps({
 	columnFilters: { type: Function, default: null },
 	disabled: { type: Boolean, default: false },
 	errors: { type: Object, default: () => ({}) },
+	parentDoctype: { type: String, default: "" },
 })
 
 const emit = defineEmits(["update:modelValue", "change"])
@@ -80,59 +105,22 @@ const eligibleColumns = computed(() =>
 			!excludedFieldtypes.has(column.fieldtype),
 	),
 )
-const columns = computed(() => {
-	const preferred = eligibleColumns.value.filter(
-		(column) => column.in_list_view || column.reqd || column.read_only,
-	)
-	return preferred.length ? preferred : eligibleColumns.value.slice(0, 6)
-})
+const preferredColumns = computed(() => eligibleColumns.value.filter(
+	(column) => column.in_list_view || column.reqd || column.read_only,
+))
+const columns = computed(() => preferredColumns.value.length ? eligibleColumns.value : eligibleColumns.value.slice(0, 6))
 
-// BodyCell renders the body slot as a component; its function must keep its identity.
-const cellBodies = new Map()
-const indexBody = ({ index }) => index + 1
-const removeBody = ({ index }) => h(Button, {
-	icon: "pi pi-trash", severity: "danger", text: true, rounded: true,
-	"aria-label": `Remove row ${index + 1}`, onClick: () => removeRow(index),
-})
-const EditableDataTable = defineComponent({
-	inheritAttrs: false,
-	setup(_, { attrs, slots }) {
-		return () => h(DataTable, attrs, { ...slots, default: renderColumns })
-	},
-})
+const gridColumns = computed(() => columns.value.map((column) => ({
+	key: column.fieldname,
+	label: column.label || column.fieldname,
+	fieldtype: column.fieldtype,
+	reqd: column.reqd,
+	readonly: Boolean(column.read_only),
+	hidden: preferredColumns.value.length > 0 && !preferredColumns.value.includes(column),
+})))
 
-function renderColumns() {
-	return [
-		h(Column, { columnKey: "__index", header: "#", frozen: true, class: "child-table-field__index" }, { body: indexBody }),
-		...columns.value.map((column) => {
-			const fieldname = column.fieldname
-			if (!cellBodies.has(fieldname)) {
-				cellBodies.set(fieldname, (cell) => renderCell(fieldname, cell))
-			}
-			return h(Column, {
-				key: fieldname, columnKey: fieldname, field: fieldname,
-				header: column.label || fieldname, style: { minWidth: columnWidth(column) },
-			}, { body: cellBodies.get(fieldname) })
-		}),
-		...(!isDisabled.value ? [h(Column, { columnKey: "__remove", header: "", frozen: true, alignFrozen: "right" }, { body: removeBody })] : []),
-	]
-}
-
-function renderCell(fieldname, { data, index }) {
-	const column = columns.value.find((item) => item.fieldname === fieldname)
-	if (!column) return null
-	const field = childTableColumnField(column, props.columnFilters, data)
-	const target = linkFieldTarget({ ...column, value: data[fieldname] }, data)
-	if ((isDisabled.value || column.read_only) && target) return h(DocumentLink, { ...target, label: data[fieldname] })
-	const error = props.errors[`${index}.${fieldname}`] || ""
-	return h(FormField, {
-		field, modelValue: data[fieldname], form: data, disabled: isDisabled.value,
-		required: Boolean(column.reqd), invalid: Boolean(error), error,
-		showLabel: false, showOpenButton: false,
-		inputId: `${props.field.fieldname}-${index + 1}-${fieldname}`,
-		ariaLabel: `${column.label || fieldname}, row ${index + 1}`,
-		"onUpdate:modelValue": (value) => setCell(index, fieldname, value),
-	})
+function cellTarget(column, data) {
+	return linkFieldTarget({ ...column, value: data[column.fieldname] }, data)
 }
 
 function updateRows(rows) {
@@ -168,11 +156,6 @@ function removeRow(index) {
 	)
 }
 
-function columnWidth(column) {
-	if (["Text", "Long Text", "Text Editor", "Code"].includes(column.fieldtype)) return "260px"
-	if (["Link", "Dynamic Link", "Data"].includes(column.fieldtype)) return "210px"
-	return "150px"
-}
 </script>
 
 <style scoped>

@@ -20,6 +20,8 @@
 					:removable-rows="!editor.readonly || editor.approvedEdits"
 					@update:model-value="updateProcesses"
 					@remove-row="removeProcess"
+					:add-row="editor.readonly && !editor.approvedEdits ? null : addProcess"
+					settings-doctype="YRP Item Production Detail" settings-child-doctype="YRP IPD Process"
 				/>
 				<p v-else class="erp-help-text">No processes yet.</p>
 				<p v-if="stageMismatches && !editor.readonly" class="ipd-grid-notice ipd-grid-notice--warning" role="status">

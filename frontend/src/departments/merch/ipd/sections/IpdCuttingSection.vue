@@ -21,6 +21,8 @@
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateCloths"
 					@remove-row="removeCloth"
+					:add-row="editor.readonly ? null : addCloth"
+					settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP Item Production Detail Cloth Detail"
 				/>
 				<p v-else class="erp-help-text">No cloths yet.</p>
 				<p v-if="duplicates.length" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />Cloth names must be unique: {{ duplicates.join(", ") }}</p>

@@ -6,6 +6,7 @@ const require = createRequire(new URL("../../frontend/package.json", import.meta
 export const Vue = require("vue")
 const { parse, compileScript } = require("@vue/compiler-sfc")
 // Pure display helpers every component may import; resolved to the real module by default.
+const { resolveGridColumns } = await import("../../frontend/src/components/common/childGrid/childGridColumns.js")
 const sharedModules = {
 	"dateFormat.js": await import("../../frontend/src/utils/dateFormat.js"),
 	"listClickFilters.js": await import("../../frontend/src/components/common/listClickFilters.js"),
@@ -26,6 +27,19 @@ const sharedModules = {
 	"workspaceSearch.js": await import("../../frontend/src/components/common/workspaceSearch.js"),
 	// The launcher search binds to window and the router; tests that cover it pass the real component explicitly.
 	"WorkspaceSearch.vue": () => null,
+	"childGridColumns.js": await import("../../frontend/src/components/common/childGrid/childGridColumns.js"),
+	// Child grid keyboard and column settings touch the DOM and Frappe user settings; tables render default columns.
+	"entryTable.js": { vEntryTable: {} },
+	"useGridColumns.js": {
+		useGridColumns: (columns) => ({
+			visibleColumns: Vue.computed(() => resolveGridColumns(Vue.toValue(columns) || [], null)),
+			canConfigure: Vue.computed(() => false),
+			save() {},
+			reset() {},
+		}),
+		useContainerWidth: () => Vue.ref(0),
+	},
+	"ChildGridSettings.vue": () => null,
 	// Column resize and move handles need a real DOM; tables render their columns in the given order.
 	"useReportColumnLayout.js": {
 		provideReportColumnLayout: () => ({ isCustomized: Vue.computed(() => false), reset() {} }),

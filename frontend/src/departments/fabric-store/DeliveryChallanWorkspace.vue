@@ -122,7 +122,7 @@
 								<label v-if="canEditMatrixBlock(block.kind)" class="delivery-challan-matrix__fill" :title="isTableFilled(section.items, primaryValues(section.group)) ? 'Untick to remove quantity' : 'Tick to fill pending quantity'"><Checkbox :model-value="isTableFilled(section.items, primaryValues(section.group))" binary :aria-label="`Fill quantity for ${section.name || 'item'}`" @update:model-value="fillTable(section, $event)" /><span>Fill quantity</span></label>
 							</header>
 							<div class="erp-table-wrap delivery-challan-matrix__scroll" tabindex="0" role="region" :aria-label="`Delivery quantities for ${section.name || 'item'}`">
-								<table class="erp-data-table">
+								<table v-entry-table class="erp-data-table">
 									<thead><tr>
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
 									<template v-if="hasPrimaryAttribute(section.group)"><th v-for="value in primaryValues(section.group)" :key="value" class="erp-number delivery-challan-matrix__quantity-heading">{{ value }}</th></template>
@@ -263,6 +263,7 @@ import FabricDocumentWorkspace from "./FabricDocumentWorkspace.vue"
 import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },

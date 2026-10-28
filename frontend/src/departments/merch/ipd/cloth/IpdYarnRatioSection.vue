@@ -22,6 +22,8 @@
 				:removable-rows="!readonly"
 				@update:model-value="ratios.update"
 				@remove-row="ratios.remove"
+				:add-row="readonly ? null : () => ratios.add({ yarn_item: null, ratio: null })"
+				settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP IPD Yarn Ratio"
 			/>
 			<p v-else class="erp-empty-state erp-empty-state--compact ipd-cloth-empty">No yarns yet. Add the yarns this cloth is knitted from.</p>
 			<p v-if="ratios.rows.value.length" class="ipd-cloth-strip" :class="totalOk ? 'ipd-cloth-strip--ok' : 'ipd-cloth-strip--error'" role="status">

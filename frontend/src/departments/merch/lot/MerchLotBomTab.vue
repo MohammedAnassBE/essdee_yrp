@@ -4,6 +4,7 @@
 		<section class="lot-section">
 			<div class="lot-section__body lot-tab-stack">
 				<ChildTableField
+					parent-doctype="SD YRP Lot"
 					v-if="metadata"
 					v-model="rows"
 					:field="{

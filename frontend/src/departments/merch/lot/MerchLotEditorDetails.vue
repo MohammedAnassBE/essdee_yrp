@@ -66,6 +66,7 @@
 			</header>
 			<div class="lot-section__body">
 				<ChildTableField
+					parent-doctype="SD YRP Lot"
 					:field="{
 						fieldname: 'lot_fabric_details',
 						label: 'Fabric Details',

@@ -20,6 +20,8 @@
 					:removable-rows="!editor.readonly"
 					@update:model-value="updateBom"
 					@remove-row="removeBom"
+					:add-row="editor.readonly ? null : addBom"
+					settings-doctype="YRP Item Production Detail" settings-child-doctype="YRP Item BOM"
 				/>
 				<p v-else class="erp-help-text">No BOM rows yet.</p>
 				<div v-if="mapped.length" class="ipd-chip-cards" aria-label="Attribute mapped BOM rows">

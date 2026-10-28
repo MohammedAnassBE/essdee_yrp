@@ -10,7 +10,7 @@
 		</header>
 		<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 		<div v-if="rows.length" class="table-scroll" role="region" tabindex="0" aria-label="Manual bundle details">
-			<table class="laysheet-table manual-bundles__table">
+			<table v-entry-table="{ add: editable && !busy ? addRow : null }" class="laysheet-table manual-bundles__table">
 				<thead>
 					<tr>
 						<th>S.No</th><th>Colour</th><th>Major Colour</th><th v-if="isSetItem">Set Colour</th><th>Shade</th><th>Quantity</th>
@@ -49,6 +49,7 @@ import InputText from "primevue/inputtext"
 import Message from "primevue/message"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 
 import { applySetFieldDefaults, emptyManualRow, manualRowsFromSheet, manualRowsPayload, validateManualRows } from "./manualBundles.js"
 

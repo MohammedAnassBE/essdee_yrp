@@ -22,6 +22,8 @@
 				:removable-rows="!readonly"
 				@update:model-value="compacting.update"
 				@remove-row="compacting.remove"
+				:add-row="readonly ? null : () => compacting.add({ colour: null, input_dia: null, compacting_dia: null, notes: null })"
+				settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP IPD Compacting Reference"
 			>
 				<template v-if="!readonly" #toolbar>
 					<Button label="Fill compacting dia" icon="pi pi-pencil" text severity="secondary" size="small" @click="openFill" />

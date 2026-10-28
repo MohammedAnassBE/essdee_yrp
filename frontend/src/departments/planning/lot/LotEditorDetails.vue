@@ -13,7 +13,7 @@
 		<section class="lot-section">
 			<header><div><span>Fabric</span><h2>Fabric Details</h2></div><span class="lot-count">{{ countLabel(form.lot_fabric_details.length, 'row') }}</span></header>
 			<div class="lot-section__body">
-				<ChildTableField :field="{ fieldname: 'lot_fabric_details', label: 'Fabric Details', options: 'SD YRP Lot Fabric Detail' }" :model-value="form.lot_fabric_details" :child-meta="fabricMeta" :column-filters="fabricColumnFilters" :disabled="disabled" :errors="fabricErrors" @update:model-value="emit('fabric-rows', $event)" />
+				<ChildTableField parent-doctype="SD YRP Lot" :field="{ fieldname: 'lot_fabric_details', label: 'Fabric Details', options: 'SD YRP Lot Fabric Detail' }" :model-value="form.lot_fabric_details" :child-meta="fabricMeta" :column-filters="fabricColumnFilters" :disabled="disabled" :errors="fabricErrors" @update:model-value="emit('fabric-rows', $event)" />
 			</div>
 		</section>
 	</div>

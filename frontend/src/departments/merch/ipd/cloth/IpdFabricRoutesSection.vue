@@ -20,6 +20,8 @@
 				:removable-rows="!readonly"
 				@update:model-value="routes.update"
 				@remove-row="routes.remove"
+				:add-row="readonly ? null : () => routes.add(newRoute())"
+				settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP IPD Fabric Route"
 			/>
 			<p v-else class="erp-empty-state erp-empty-state--compact ipd-cloth-empty">No fabric routes. Lots then use the fabric processes as they are.</p>
 		</div>

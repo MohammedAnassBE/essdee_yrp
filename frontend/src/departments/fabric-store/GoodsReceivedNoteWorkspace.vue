@@ -119,7 +119,7 @@
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="goods-received-note-matrix__group">
 							<header><div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong><small v-if="section.lot && !canEditLots"><DocumentLink doctype="SD YRP Lot" :name="section.lot" :label="section.lot" /></small></div></header>
 							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
-								<table class="erp-data-table">
+								<table v-entry-table class="erp-data-table">
 									<thead><tr>
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
 										<th v-if="hasActualDia && block.kind === 'items'">Actual Dia</th>
@@ -308,6 +308,7 @@ import { autofillGoodsReceivedNoteLocation, GRN_LOCATION_AUTOFILL } from "./grnL
 import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, lotNamesInOptions, unusedLotsForEntry } from "./grnLotOptions.js"
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },

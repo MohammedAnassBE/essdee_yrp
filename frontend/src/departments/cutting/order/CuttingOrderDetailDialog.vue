@@ -39,7 +39,7 @@
 						</section>
 						<section class="detail-section">
 							<header><div><h3>Item Attributes</h3><small>Attribute mappings and their available values.</small></div><Button v-if="canEdit" label="Add Attribute" icon="pi pi-plus" text size="small" @click="addAttribute" /></header>
-							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :aria-label="`Attribute row ${index + 1}`" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :aria-label="`Values for attribute row ${index + 1}`" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove attribute row ${index + 1}`" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
+							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table v-entry-table="{ add: canEdit ? addAttribute : null }" class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :aria-label="`Attribute row ${index + 1}`" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :aria-label="`Values for attribute row ${index + 1}`" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove attribute row ${index + 1}`" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
 							<div v-if="!attributes.length" class="detail-empty">Save the item once to load its default attributes.</div>
 						</section>
 					</TabPanel>
@@ -102,7 +102,8 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import Tag from "primevue/tag"
-import { computed, defineComponent, h, reactive, ref, watch } from "vue"
+import { computed, defineComponent, h, reactive, ref, watch, withDirectives } from "vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 
 import { getCuttingOrderDetail, saveCuttingOrderDetail } from "../../../api/cuttingOrder.js"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
@@ -205,10 +206,10 @@ const RowEditor = defineComponent({
 	setup(componentProps, { slots, emit: childEmit }) {
 		return () => h("section", { class: "detail-section row-editor" }, [
 			h("header", [h("h3", componentProps.title), componentProps.editable ? h(Button, { label: componentProps.addLabel, icon: "pi pi-plus", text: true, size: "small", onClick: () => childEmit("add") }) : null]),
-			componentProps.rows.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, h("table", { class: "detail-table" }, [
+			componentProps.rows.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, withDirectives(h("table", { class: "detail-table" }, [
 				h("thead", h("tr", [h("th", "S.No."), slots.header?.(), componentProps.editable ? h("th") : null])),
 				h("tbody", componentProps.rows.map((row, index) => h("tr", { key: row._row_key || index }, [h("td", index + 1), slots.row?.({ row, index }), componentProps.editable ? h("td", h(Button, { icon: "pi pi-trash", severity: "danger", text: true, rounded: true, "aria-label": `Remove ${componentProps.title || "detail"} row ${index + 1}`, onClick: () => childEmit("remove", index) })) : null]))),
-			])) : h("div", { class: "detail-empty" }, `No ${String(componentProps.title || "rows").toLowerCase()} yet.`),
+			]), [[vEntryTable, { add: componentProps.editable ? () => childEmit("add") : null }]])) : h("div", { class: "detail-empty" }, `No ${String(componentProps.title || "rows").toLowerCase()} yet.`),
 		])
 	},
 })

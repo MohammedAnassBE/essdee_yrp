@@ -20,6 +20,8 @@
 				:removable-rows="!readonly"
 				@update:model-value="updateProcesses"
 				@remove-row="removeProcessRow"
+				:add-row="readonly ? null : addProcess"
+				settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP IPD Fabric Process"
 			/>
 			<p v-else class="erp-empty-state erp-empty-state--compact ipd-cloth-empty">No fabric processes. Add knitting first, then dyeing or compacting.</p>
 			<EntryGrid
@@ -38,6 +40,8 @@
 				:removable-rows="!readonly"
 				@update:model-value="updateMappings"
 				@remove-row="mappings.remove"
+				:add-row="readonly ? null : addMapping"
+				settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP IPD Fabric Value Mapping"
 			>
 				<template v-if="!readonly" #toolbar>
 					<Button label="Add rule row" icon="pi pi-plus" text severity="secondary" size="small" :disabled="!processes.rows.value.length" @click="addMapping" />

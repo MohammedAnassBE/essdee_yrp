@@ -17,18 +17,24 @@
 				role="grid"
 				:aria-label="ariaLabel || title"
 				:aria-rowcount="rows.length + 1"
-				:aria-colcount="columns.length + 1"
+				:aria-colcount="gridColumns.length + 1"
 				:aria-readonly="readonly || undefined"
-				:style="{ minWidth: tableMinWidth }"
+				:style="tableStyle"
 				@keydown="onKeydown"
 				@copy="onCopy"
 				@paste="onPaste"
 				@entry-grid-finish-edit="finishCellEdit"
 			>
+				<colgroup>
+					<col :style="{ width: `${rowHeaderWidth}px` }">
+					<col v-for="(column, colIndex) in gridColumns" :key="column.key" :style="{ width: `${columnWidths[colIndex]}px` }">
+					<col v-if="hasRowTotals" :style="{ width: `${TOTAL_WIDTH}px` }">
+					<col v-if="removableRows && !readonly" :style="{ width: `${REMOVE_WIDTH}px` }">
+				</colgroup>
 				<thead>
 					<tr role="row" aria-rowindex="1">
-						<th scope="col" class="entry-grid__corner" role="columnheader">{{ rowHeaderLabel }}</th>
-						<template v-for="(column, colIndex) in columns" :key="column.key">
+						<th scope="col" class="entry-grid__corner" role="columnheader"><span class="entry-grid__corner-label">{{ rowHeaderLabel }}</span><ChildGridSettings v-if="gridSettings.canConfigure.value" :title="title || ariaLabel || 'grid'" :columns="schemaColumns" :visible-columns="gridColumns" :save="gridSettings.save" :reset="gridSettings.reset" /></th>
+						<template v-for="(column, colIndex) in gridColumns" :key="column.key">
 							<th v-if="readonly || !column.fill" scope="col" role="columnheader" :class="alignClass(column)" :style="{ minWidth: `${columnMinWidth(column)}px` }">{{ column.label }}</th>
 							<th v-else scope="col" role="columnheader" class="entry-grid__fill-header" :class="alignClass(column)" :style="{ minWidth: `${headerMinWidth(column)}px` }">
 								<span class="entry-grid__heading">{{ column.label }}</span>
@@ -48,7 +54,7 @@
 					<tr v-for="(row, rowIndex) in rows" :key="row.key" role="row" :aria-rowindex="rowIndex + 2">
 						<th scope="row" role="rowheader" class="entry-grid__row-header"><DocumentLink v-if="row.link_doctype" :doctype="row.link_doctype" :name="row.link_name" :label="row.label" /><template v-else>{{ row.label }}</template></th>
 						<td
-							v-for="(column, colIndex) in columns"
+							v-for="(column, colIndex) in gridColumns"
 							:key="column.key"
 							role="gridcell"
 							:class="['entry-grid__cell', alignClass(column)]"
@@ -70,7 +76,7 @@
 							</template>
 							<div v-else class="entry-grid__box" :class="boxClasses(rowIndex, colIndex)" :title="cellError(rowIndex, colIndex) || derivedTitle(rowIndex, colIndex)"><DocumentLink v-if="cellTarget(rowIndex, colIndex)" v-bind="cellTarget(rowIndex, colIndex)" :label="cellText(rowIndex, colIndex)" /><template v-else>{{ cellText(rowIndex, colIndex) }}</template></div>
 						</td>
-						<td v-if="hasRowTotals" class="entry-grid__total entry-grid__number">{{ formatTotal(rowTotal(modelValue, row, columns)) }}</td>
+						<td v-if="hasRowTotals" class="entry-grid__total entry-grid__number">{{ formatTotal(rowTotal(modelValue, row, gridColumns)) }}</td>
 						<td v-if="removableRows && !readonly" class="entry-grid__remove">
 							<Button v-if="row.removable !== false" icon="pi pi-times" text rounded severity="secondary" size="small" :aria-label="`Remove ${row.label}`" @click="emit('remove-row', row.key)" />
 						</td>
@@ -79,7 +85,7 @@
 				<tfoot v-if="hasColumnTotals">
 					<tr role="row">
 						<th scope="row" class="entry-grid__row-header">{{ totalLabel }}</th>
-						<td v-for="column in columns" :key="column.key" class="entry-grid__footer-total" :class="alignClass(column)">{{ column.type === "number" ? formatTotal(totals_[column.key]) : "" }}</td>
+						<td v-for="column in gridColumns" :key="column.key" class="entry-grid__footer-total" :class="alignClass(column)">{{ column.type === "number" ? formatTotal(totals_[column.key]) : "" }}</td>
 						<td v-if="hasRowTotals" class="entry-grid__footer-total entry-grid__number">{{ formatTotal(grandTotal) }}</td>
 						<td v-if="removableRows && !readonly" />
 					</tr>
@@ -95,6 +101,9 @@ import Button from "primevue/button"
 import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch } from "vue"
 
 import LinkField from "./LinkField.vue"
+import ChildGridSettings from "./childGrid/ChildGridSettings.vue"
+import { enterTarget, isRowBlank, labelWidth, layoutWidths } from "./childGrid/childGridColumns.js"
+import { useContainerWidth, useGridColumns } from "./childGrid/useGridColumns.js"
 import DocumentLink from "./DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 import {
@@ -130,6 +139,8 @@ const TOOL_ICONS = { fillRight: "pi pi-arrow-right", fillDown: "pi pi-arrow-down
 const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }
 const ROW_HEADER_WIDTH = 140
 const FILL_MIN_WIDTH = 220
+const TOTAL_WIDTH = 110
+const REMOVE_WIDTH = 44
 
 const props = defineProps({
 	rows: { type: Array, default: () => [] },
@@ -149,6 +160,9 @@ const props = defineProps({
 	removableRows: { type: Boolean, default: false },
 	fillShortcuts: { type: Boolean, default: true },
 	validationField: { type: String, default: "" },
+	addRow: { type: Function, default: null },
+	settingsDoctype: { type: String, default: "" },
+	settingsChildDoctype: { type: String, default: "" },
 })
 const emit = defineEmits(["update:modelValue", "change", "paste-report", "remove-row"])
 
@@ -177,17 +191,32 @@ const selectedCount = computed(() => { const size = rangeSize(range.value); retu
 const metaText = computed(() => selectedCount.value > 1 ? `${selectedCount.value} cells selected` : report.value || props.meta)
 const hasRowTotals = computed(() => ["column", "both"].includes(props.totals))
 const hasColumnTotals = computed(() => ["row", "both"].includes(props.totals))
-const totals_ = computed(() => columnTotals(props.modelValue, props.rows, props.columns))
+const totals_ = computed(() => columnTotals(props.modelValue, props.rows, gridColumns.value))
 const grandTotal = computed(() => Object.values(totals_.value).reduce((sum, value) => sum + value, 0))
-const hasAnyHeaderFill = computed(() => props.columns.some(hasHeaderFill))
-const tableMinWidth = computed(() => `max(100%, ${ROW_HEADER_WIDTH + props.columns.reduce((sum, column) => sum + headerMinWidth(column), 0)}px)`)
+const hasAnyHeaderFill = computed(() => gridColumns.value.some(hasHeaderFill))
+const schemaColumns = computed(() => props.columns.map((column) => ({ ...column, width: column.width || Math.max(columnMinWidth(column), labelWidth(column.label)) })))
+const gridSettings = useGridColumns(schemaColumns, { parentDoctype: () => props.settingsDoctype, childDoctype: () => props.settingsChildDoctype })
+const gridColumns = gridSettings.visibleColumns
+const canAddRows = computed(() => !props.readonly && typeof props.addRow === "function")
+const rowHeaderWidth = computed(() => Math.min(280, Math.max(ROW_HEADER_WIDTH, ...props.rows.map((row) => String(row.label ?? "").length * 8 + 28))))
+const scrollerWidth = useContainerWidth(scroller)
+const reservedWidth = computed(() => rowHeaderWidth.value + (hasRowTotals.value ? TOTAL_WIDTH : 0) + (props.removableRows && !props.readonly ? REMOVE_WIDTH : 0))
+const columnWidths = computed(() => {
+	if (!gridSettings.canConfigure.value) return gridColumns.value.map(headerMinWidth)
+	const widths = layoutWidths(gridColumns.value, Math.max(scrollerWidth.value - 2, 0), reservedWidth.value)
+	return widths.map((width, index) => hasHeaderFill(gridColumns.value[index]) ? Math.max(width, FILL_MIN_WIDTH) : width)
+})
+const tableStyle = computed(() => {
+	const width = reservedWidth.value + columnWidths.value.reduce((sum, columnWidth) => sum + columnWidth, 0)
+	return { width: gridSettings.canConfigure.value ? `${width}px` : `max(100%, ${width}px)` }
+})
 
-watch(() => [props.rows.length, props.columns.length], clampActive)
+watch(() => [props.rows.length, gridColumns.value.length], clampActive)
 
 const invalidRegistry = inject(ENTRY_GRID_INVALID_KEY, null)
 const liveInvalidCells = computed(() => {
 	const rowKeys = new Set(props.rows.map((row) => row.key))
-	const colKeys = new Set(props.columns.map((column) => column.key))
+	const colKeys = new Set(gridColumns.value.map((column) => column.key))
 	return Object.values(invalidCells.value).filter((cell) => rowKeys.has(cell.rowKey) && colKeys.has(cell.colKey))
 })
 if (invalidRegistry) watch(liveInvalidCells, (cells) => invalidRegistry.report(gridId, cells.length, {
@@ -196,12 +225,12 @@ if (invalidRegistry) watch(liveInvalidCells, (cells) => invalidRegistry.report(g
 
 function clampActive() {
 	const row = Math.min(active.value.row, Math.max(props.rows.length - 1, 0))
-	const col = Math.min(active.value.col, Math.max(props.columns.length - 1, 0))
+	const col = Math.min(active.value.col, Math.max(gridColumns.value.length - 1, 0))
 	active.value = { row, col }
 	anchor.value = { row, col }
 }
-function cellKey(row, col) { return `${props.rows[row]?.key}\u001f${props.columns[col]?.key}` }
-function isEditable(row, col) { return !props.readonly && isCellEditable(props.rows, props.columns, row, col) }
+function cellKey(row, col) { return `${props.rows[row]?.key}\u001f${gridColumns.value[col]?.key}` }
+function isEditable(row, col) { return !props.readonly && isCellEditable(props.rows, gridColumns.value, row, col) }
 function isActive(row, col) { return active.value.row === row && active.value.col === col }
 function isEditing(row, col) { return Boolean(editing.value) && isActive(row, col) }
 function isSelected(row, col) {
@@ -220,29 +249,29 @@ function editorElement(reference) { return Array.isArray(reference) ? reference[
 function cellLabel(row, column) { return `${row.label} ${column.label}` }
 function cellTarget(row, col) {
 	const record = { ...props.rows[row], ...props.modelValue[props.rows[row].key] }
-	const column = props.columns[col]
+	const column = gridColumns.value[col]
 	if (!["Link", "Dynamic Link"].includes(column.fieldtype)) return null
 	const value = rawValue(row, col)
 	return linkFieldTarget({ ...column, value, link_name: column.linkName ? column.linkName(value, record) : column.link_name }, record)
 }
-function rawValue(row, col) { return cellValue(props.modelValue, props.rows[row].key, props.columns[col].key) }
+function rawValue(row, col) { return cellValue(props.modelValue, props.rows[row].key, gridColumns.value[col].key) }
 function cellError(row, col) {
-	return invalidCells.value[cellKey(row, col)]?.message || props.errors?.[props.rows[row]?.key]?.[props.columns[col]?.key] || ""
+	return invalidCells.value[cellKey(row, col)]?.message || props.errors?.[props.rows[row]?.key]?.[gridColumns.value[col]?.key] || ""
 }
 function derivedTitle(row, col) {
-	const value = props.derived?.[props.rows[row].key]?.[props.columns[col].key]
+	const value = props.derived?.[props.rows[row].key]?.[gridColumns.value[col].key]
 	return typeof value === "string" ? value : ""
 }
 function cellText(row, col) {
 	const invalid = invalidCells.value[cellKey(row, col)]
-	return invalid ? invalid.value : displayCell(props.columns[col], rawValue(row, col))
+	return invalid ? invalid.value : displayCell(gridColumns.value[col], rawValue(row, col))
 }
 function boxClasses(row, col) {
 	return {
 		"is-active": isActive(row, col),
 		"is-selected": isSelected(row, col),
 		"is-error": Boolean(cellError(row, col)),
-		"is-derived": Boolean(props.derived?.[props.rows[row].key]?.[props.columns[col].key]),
+		"is-derived": Boolean(props.derived?.[props.rows[row].key]?.[gridColumns.value[col].key]),
 		"is-readonly": !isEditable(row, col),
 	}
 }
@@ -262,8 +291,8 @@ function select(position, extend = false) {
 }
 function focusCell(rowKey, colKey) {
 	const row = rowKey == null ? 0 : props.rows.findIndex((candidate) => candidate.key === rowKey)
-	const col = colKey == null || colKey === '' ? 0 : props.columns.findIndex((candidate) => candidate.key === colKey)
-	if (row < 0 || col < 0 || !props.rows.length || !props.columns.length) return false
+	const col = colKey == null || colKey === '' ? 0 : gridColumns.value.findIndex((candidate) => candidate.key === colKey)
+	if (row < 0 || col < 0 || !props.rows.length || !gridColumns.value.length) return false
 	select({ row, col })
 	return true
 }
@@ -281,7 +310,7 @@ function markInvalid(cells) {
 function startEdit(mode, initial = null) {
 	const { row, col } = active.value
 	if (editing.value || !isEditable(row, col)) return
-	const column = props.columns[col]
+	const column = gridColumns.value[col]
 	if (column.type === "check") { toggleCheck(); return }
 	editing.value = mode
 	const current = rawValue(row, col)
@@ -301,7 +330,7 @@ function stopEdit() {
 function finishCellEdit() {
 	if (!editing.value) return
 	const { row, col } = active.value
-	if (!isChoiceColumn(props.columns[col])) { commitEdit(); return }
+	if (!isChoiceColumn(gridColumns.value[col])) { commitEdit(); return }
 	const element = editorElement(editor.value)
 	const value = element?.finishEdit()
 	delete invalidCells.value[cellKey(row, col)]
@@ -313,7 +342,7 @@ function finishCellEdit() {
 function commitEdit(direction = null, { picked = false, focus = true } = {}) {
 	if (!editing.value) return
 	const { row, col } = active.value
-	const column = props.columns[col]
+	const column = gridColumns.value[col]
 	if (isChoiceColumn(column) && !picked) { stopEdit(); return }
 	saveCellEdit(row, col)
 	editing.value = ""
@@ -321,7 +350,7 @@ function commitEdit(direction = null, { picked = false, focus = true } = {}) {
 	else if (focus) focusActive()
 }
 function saveCellEdit(row, col) {
-	const column = props.columns[col]
+	const column = gridColumns.value[col]
 	const { value, error } = coerceCell(column, editText.value)
 	const cell = { rowKey: props.rows[row].key, colKey: column.key }
 	if (error) markInvalid([{ ...cell, value: editText.value, message: error }])
@@ -329,8 +358,8 @@ function saveCellEdit(row, col) {
 }
 function linkValidation({ message, query }) {
 	const { row, col } = active.value
-	if (!editing.value || !props.rows[row] || !props.columns[col]) return
-	if (message) markInvalid([{ rowKey: props.rows[row].key, colKey: props.columns[col].key, value: query, message }])
+	if (!editing.value || !props.rows[row] || !gridColumns.value[col]) return
+	if (message) markInvalid([{ rowKey: props.rows[row].key, colKey: gridColumns.value[col].key, value: query, message }])
 	else delete invalidCells.value[cellKey(row, col)]
 }
 function commitLink(value) {
@@ -349,14 +378,14 @@ function setFillText(key, value) {
 	fillErrors.value[key] = ""
 }
 function applyFill(col) {
-	const column = props.columns[col]
+	const column = gridColumns.value[col]
 	if (!column || !hasHeaderFill(column)) return
 	const raw = fillValue(column)
 	if (raw === undefined) return
 	const { value, error } = String(raw ?? "").trim() ? coerceCell(column, raw) : { error: `Enter a ${column.label} to fill.` }
 	fillErrors.value[column.key] = error || ""
 	if (error) return
-	const result = fillColumn(props.modelValue, props.rows, props.columns, col, value)
+	const result = fillColumn(props.modelValue, props.rows, gridColumns.value, col, value)
 	emitChanges(result.model, result.changes)
 	report.value = `Filled ${result.changes.length} rows`
 }
@@ -371,16 +400,16 @@ function fillValue(column) {
 function toggleCheck() {
 	const { row, col } = active.value
 	if (!isEditable(row, col)) return
-	const cell = { rowKey: props.rows[row].key, colKey: props.columns[col].key, value: Number(rawValue(row, col)) ? 0 : 1 }
+	const cell = { rowKey: props.rows[row].key, colKey: gridColumns.value[col].key, value: Number(rawValue(row, col)) ? 0 : 1 }
 	emitChanges(setCells(props.modelValue, [cell]), [cell])
 }
 
 function move(direction, extend = false) {
-	const bounds = { rows: props.rows.length, cols: props.columns.length }
+	const bounds = { rows: props.rows.length, cols: gridColumns.value.length }
 	select(moveCell(active.value, direction, bounds, isEditable), extend)
 }
 function tabTarget(backwards) {
-	const bounds = { rows: props.rows.length, cols: props.columns.length }
+	const bounds = { rows: props.rows.length, cols: gridColumns.value.length }
 	const next = moveCell(active.value, backwards ? "previous" : "next", bounds, isEditable)
 	const index = (cell) => cell.row * bounds.cols + cell.col
 	const wrapped = backwards ? index(next) >= index(active.value) : index(next) <= index(active.value)
@@ -389,7 +418,12 @@ function tabTarget(backwards) {
 
 function onEditorKeydown(event) {
 	if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); stopEdit(); return }
-	if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); commitEdit(event.shiftKey ? "up" : "down"); return }
+	if (event.key === "Enter") {
+		event.preventDefault(); event.stopPropagation()
+		if (canAddRows.value && !event.shiftKey) { commitEdit(); enterNext(); return }
+		commitEdit(event.shiftKey ? "up" : "down")
+		return
+	}
 	if (event.key === "Tab") {
 		const target = tabTarget(event.shiftKey)
 		event.stopPropagation()
@@ -417,7 +451,7 @@ function onKeydown(event) {
 	if (handleShortcut(event) || handleNavigation(event)) return
 	handleEditKey(event)
 }
-function canHandleGridKey(event) { return !event.altKey && !event.defaultPrevented && props.rows.length && props.columns.length }
+function canHandleGridKey(event) { return !event.altKey && !event.defaultPrevented && props.rows.length && gridColumns.value.length }
 function cancelEditKey(event) {
 	if (event.key === "Escape") { event.preventDefault(); stopEdit() }
 }
@@ -426,13 +460,32 @@ function handleNavigation(event) {
 	if (ARROWS[event.key]) { event.preventDefault(); move(ARROWS[event.key], event.shiftKey); return true }
 	if (event.key === "Tab") { onTab(event); return true }
 	event.preventDefault()
-	move(event.shiftKey ? "up" : "down")
+	if (canAddRows.value && !event.shiftKey) enterNext()
+	else move(event.shiftKey ? "up" : "down")
 	return true
+}
+async function enterNext() {
+	await nextTick()
+	const { row } = active.value
+	const bounds = { rows: props.rows.length, cols: gridColumns.value.length }
+	const rowBlank = isRowBlank(props.modelValue?.[props.rows[row]?.key], gridColumns.value)
+	const next = enterTarget(active.value, bounds, isEditable, { canAdd: true, rowBlank })
+	if (next.action === "move") select(next.cell)
+	if (next.action === "add") await addRowAndFocus()
+}
+async function addRowAndFocus() {
+	const count = props.rows.length
+	await props.addRow()
+	await nextTick()
+	if (props.rows.length <= count) return
+	const row = props.rows.length - 1
+	const col = gridColumns.value.findIndex((_, index) => isEditable(row, index))
+	select({ row, col: Math.max(col, 0) })
 }
 function handleEditKey(event) {
 	if (props.readonly) return
 	if (event.key === "F2") { event.preventDefault(); startEdit("edit"); return }
-	if (event.key === " " && props.columns[active.value.col]?.type === "check") { event.preventDefault(); toggleCheck(); return }
+	if (event.key === " " && gridColumns.value[active.value.col]?.type === "check") { event.preventDefault(); toggleCheck(); return }
 	if (["Delete", "Backspace"].includes(event.key)) { event.preventDefault(); runTool("clear"); return }
 	if (isPrintableKey(event)) { event.preventDefault(); startEdit("replace", event.key) }
 }
@@ -454,7 +507,7 @@ function runTool(tool) {
 	if (props.readonly || !props.rows.length) return
 	if (tool === "paste") { pasteFromClipboard(); return }
 	const handlers = { fillRight, fillDown, sameForAll, clear: clearRange }
-	const result = handlers[tool](props.modelValue, props.rows, props.columns, range.value)
+	const result = handlers[tool](props.modelValue, props.rows, gridColumns.value, range.value)
 	emitChanges(result.model, result.changes)
 	focusActive()
 }
@@ -465,7 +518,7 @@ async function pasteFromClipboard() {
 function pasteText(text) {
 	const block = parsePastedBlock(text)
 	if (!block.length) return
-	const result = applyBlock(props.modelValue, props.rows, props.columns, { row: range.value.top, col: range.value.left }, block)
+	const result = applyBlock(props.modelValue, props.rows, gridColumns.value, { row: range.value.top, col: range.value.left }, block)
 	const summary = { rows: block.length, cols: Math.max(...block.map((line) => line.length)), applied: result.applied, skipped: result.skipped, readonly: result.readonly, invalid: result.invalid }
 	markInvalid(result.invalid)
 	emitChanges(result.model, result.changes)
@@ -481,7 +534,7 @@ function onPaste(event) {
 function onCopy(event) {
 	if (editing.value) return
 	event.preventDefault()
-	event.clipboardData?.setData("text/plain", toTsv(rangeMatrix(props.modelValue, props.rows, props.columns, range.value)))
+	event.clipboardData?.setData("text/plain", toTsv(rangeMatrix(props.modelValue, props.rows, gridColumns.value, range.value)))
 }
 
 function onCellMousedown(event, row, col) {
@@ -505,13 +558,13 @@ function onCellClick(event, row, col) {
 	if (event.target?.closest?.("a")) return
 	if (!isPlainClick(event) || dragged) return
 	if (isEditing(row, col) || !isEditable(row, col)) return
-	if (props.columns[col].type === "check") {
+	if (gridColumns.value[col].type === "check") {
 		if (event.detail > 1) return
 		select({ row, col })
 		toggleCheck()
 		return
 	}
-	if (!isChoiceColumn(props.columns[col])) return
+	if (!isChoiceColumn(gridColumns.value[col])) return
 	select({ row, col })
 	startEdit("edit")
 }
@@ -533,15 +586,19 @@ defineExpose({ focusCell })
 .entry-grid__meta { margin-left: auto; }
 .entry-grid__separator { width: 1px; height: 18px; background: var(--erp-border); }
 .entry-grid__scroll { overflow-x: auto; }
-.entry-grid__table { width: 100%; border-collapse: collapse; font-size: var(--erp-font-size-table); font-variant-numeric: tabular-nums; }
+.entry-grid__table { table-layout: fixed; border-collapse: collapse; font-size: var(--erp-font-size-table); font-variant-numeric: tabular-nums; }
 .entry-grid__error { margin: 0; padding: 0 12px; color: var(--erp-danger); font-size: var(--erp-font-size-caption); }
 .entry-grid__error:not(:empty) { padding-block: 8px; }
 .entry-grid__table:focus { outline: none; }
 .entry-grid__table thead th { height: 34px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-align: left; text-transform: uppercase; white-space: nowrap; border: 1px solid var(--erp-border); background: var(--erp-surface-muted); }
 .entry-grid__table thead th.entry-grid__number { text-align: right; }
 .entry-grid__corner, .entry-grid__row-header { position: sticky; left: 0; z-index: var(--erp-layer-content); min-width: 140px; }
-.entry-grid__row-header { padding: 0 10px; color: var(--erp-text); font-weight: 600; text-align: left; white-space: nowrap; border: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 72%, var(--erp-surface)); }
-.entry-grid__table td { padding: 3px; border: 1px solid var(--erp-border); }
+.entry-grid__row-header { padding: 0 10px; overflow: hidden; color: var(--erp-text); font-weight: 600; text-align: left; white-space: nowrap; text-overflow: ellipsis; border: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 72%, var(--erp-surface)); }
+.entry-grid__table td { padding: 3px; overflow: hidden; border: 1px solid var(--erp-border); }
+.entry-grid__table thead th:not(.entry-grid__fill-header) { overflow: hidden; text-overflow: ellipsis; }
+.entry-grid__corner > * { vertical-align: middle; }
+.entry-grid__corner-label { display: inline-block; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; }
+.entry-grid__corner :deep(.child-grid-settings__trigger) { float: right; width: 26px; height: 22px; margin: -2px -6px 0 0; }
 .entry-grid__cell:focus { outline: none; }
 .entry-grid__box { display: flex; width: 100%; min-width: 0; height: var(--erp-control-height-compact); align-items: center; padding: 0 7px; overflow: hidden; color: var(--erp-text); white-space: nowrap; text-overflow: ellipsis; border: 1px solid var(--erp-border-strong); border-radius: 5px; background: var(--erp-surface); font: inherit; }
 .entry-grid__number .entry-grid__box { justify-content: flex-end; text-align: right; }
@@ -566,7 +623,7 @@ defineExpose({ focusCell })
 .entry-grid__fill > .p-button { flex: none; height: var(--erp-control-height); }
 .entry-grid__fill > .entry-grid__link :deep(.p-autocomplete), .entry-grid__fill > .entry-grid__link :deep(.p-autocomplete-input), .entry-grid__fill > .entry-grid__link :deep(.p-autocomplete-dropdown) { height: var(--erp-control-height); }
 .entry-grid__fill-error { display: block; max-width: 260px; margin-top: 4px; color: var(--erp-danger); font-size: var(--erp-font-size-caption); font-weight: 400; white-space: normal; text-transform: none; letter-spacing: normal; }
-.entry-grid__link { min-width: 0; gap: 0; }
+.entry-grid__link { width: 100%; min-width: 0; gap: 0; }
 .entry-grid__link :deep(.link-field__control) { gap: 0; }
 .entry-grid__link :deep(.p-autocomplete), .entry-grid__link :deep(.p-autocomplete-input), .entry-grid__link :deep(.p-autocomplete-dropdown) { height: var(--erp-control-height-compact); }
 .entry-grid__link :deep(.p-autocomplete-input) { padding: 0 7px; font: inherit; }

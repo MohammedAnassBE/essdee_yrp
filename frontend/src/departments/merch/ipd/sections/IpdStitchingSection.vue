@@ -26,6 +26,7 @@
 					:removable-rows="!editor.readonly"
 					@update:model-value="updatePanels"
 					@remove-row="togglePanel($event, false)"
+					settings-doctype="YRP Item Production Detail" settings-child-doctype="SD YRP Stiching Item Detail"
 				/>
 			</template>
 			<IpdFields v-if="part === 'details'" :fields="fields" :section="sectionKey" />
@@ -68,6 +69,7 @@
 						:removable-rows="!editor.readonly"
 						@update:model-value="updateMarkers"
 						@remove-row="removeGroup"
+						:add-row="editor.readonly ? null : addGroup"
 					/>
 					<p v-for="problem in markerProblems" :key="problem.message" class="ipd-grid-notice ipd-grid-notice--error" role="alert"><i class="pi pi-exclamation-circle" aria-hidden="true" />{{ problem.message }}</p>
 			</template>

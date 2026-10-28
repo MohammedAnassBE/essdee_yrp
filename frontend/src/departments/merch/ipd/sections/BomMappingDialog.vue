@@ -15,7 +15,7 @@
 							<span>{{ side.title }}</span>
 							<Button v-if="!readOnly" label="Add row" icon="pi pi-plus" text :disabled="saving" :aria-label="`Add ${side.title} row`" @click="tables[side.field].push({ attribute: null, same_attribute: 0 })" />
 						</h3>
-						<table v-if="tables[side.field].length" class="ipd-simple-table bom-mapping-compact bom-mapping-attributes">
+						<table v-if="tables[side.field].length" v-entry-table="{ add: readOnly || saving ? null : () => tables[side.field].push({ attribute: null, same_attribute: 0 }) }" class="ipd-simple-table bom-mapping-compact bom-mapping-attributes">
 							<caption class="bom-mapping-sr-only">{{ side.title }}</caption>
 							<thead><tr><th scope="col">Attribute</th><th scope="col" class="bom-mapping-narrow">Same Attribute</th><th v-if="!readOnly" scope="col" class="bom-mapping-narrow"><span class="bom-mapping-sr-only">Remove</span></th></tr></thead>
 							<tbody>
@@ -45,7 +45,7 @@
 				<p v-if="columns.all_same" class="erp-help-text">All item attributes use the same values on the BOM item.</p>
 				<p v-if="dropped" class="ipd-grid-notice" role="status">{{ dropped }} saved {{ dropped === 1 ? 'line no longer matches' : 'lines no longer match' }} the IPD Cutting combinations.</p>
 				<div v-if="columns.item.length" ref="grid" class="bom-mapping-scroll">
-					<table class="ipd-simple-table bom-mapping-compact bom-mapping-grid">
+					<table v-entry-table class="ipd-simple-table bom-mapping-compact bom-mapping-grid">
 						<caption class="bom-mapping-sr-only">BOM mapping combinations</caption>
 						<thead>
 							<tr>
@@ -112,6 +112,7 @@ import { computed, inject, nextTick, ref, watch } from "vue"
 
 import { getIpdBomMapping } from "../../../../api/merch.js"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
+import { vEntryTable } from "../../../../components/common/childGrid/entryTable.js"
 import { disableRows, enableRows, fillColumn, freshGrid, gridFromValues, mappingOutput, setRowIncluded } from "./bomMapping.js"
 import "./sections.css"
 

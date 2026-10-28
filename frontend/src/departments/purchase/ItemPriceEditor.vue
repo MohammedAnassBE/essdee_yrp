@@ -55,7 +55,7 @@
 							</div>
 							<label v-if="dependsOnAttribute" class="price-field"><span class="erp-field-label">{{ fieldLabel("attribute", "Attribute") }}<span class="erp-required-mark" aria-hidden="true">*</span></span><Select :model-value="form.attribute" :options="editor.attributes || []" option-label="attribute" option-value="attribute" fluid :aria-label="fieldLabel('attribute', 'Attribute')" :disabled="Boolean(saving)" @update:model-value="changeAttribute" /></label>
 						</div>
-						<DataTable v-if="form.item_price_values.length" :value="form.item_price_values" data-key="key" size="small" scrollable class="erp-data-table price-values-grid">
+						<DataTable v-if="form.item_price_values.length" v-entry-table="{ add: saving ? null : addTier }" :value="form.item_price_values" data-key="key" size="small" scrollable class="erp-data-table price-values-grid">
 							<Column header="No." class="price-values-grid__index"><template #body="{ index }">{{ index + 1 }}</template></Column>
 							<Column v-if="dependsOnAttribute" class="price-values-grid__attribute">
 								<template #header><span>{{ tierLabel("attribute_value", "Attribute Value") }}<span class="erp-required-mark" aria-hidden="true">*</span></span></template>
@@ -95,6 +95,7 @@ import DepartmentPage from "../../components/DepartmentPage.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"

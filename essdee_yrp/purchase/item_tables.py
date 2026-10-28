@@ -15,7 +15,6 @@ SCALAR_FIELDS = (
 	"po_excess_allowed_percentage",
 	"is_cloth_item",
 	"product_category",
-	"hsn_code",
 	"is_ineligible_for_itc",
 )
 TABLE_COLUMNS = {

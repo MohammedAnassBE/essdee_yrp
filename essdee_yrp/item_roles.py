@@ -14,7 +14,7 @@ VARIANT_INHERITED_FIELDS = (
 	"sales_uom",
 	"weight_per_unit",
 	"weight_uom",
-	"hsn_code",
+	"gst_hsn_code",
 	"po_excess_allowed_percentage",
 )
 

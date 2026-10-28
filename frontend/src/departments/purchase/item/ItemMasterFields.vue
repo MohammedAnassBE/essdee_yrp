@@ -5,7 +5,6 @@
 				<LinkField v-model="values.secondary_unit_of_measure" :label="label('secondary_unit_of_measure')" doctype="UOM" show-clear :show-open-button="false" :disabled="disabled" />
 				<label class="item-master-field"><span class="erp-field-label">{{ label('po_excess_allowed_percentage') }}</span><InputNumber v-model="values.po_excess_allowed_percentage" :max-fraction-digits="3" suffix="%" fluid :disabled="disabled" :invalid="Number(values.po_excess_allowed_percentage) < 0" /></label>
 				<LinkField v-model="values.product_category" :label="label('product_category')" doctype="SD YRP Product Category" :search-handler="(text) => searchItemEditorLinks('SD YRP Product Category', text)" show-clear :show-open-button="false" :disabled="disabled" />
-				<label class="item-master-field"><span class="erp-field-label">{{ label('hsn_code') }}</span><InputText v-model="values.hsn_code" fluid :disabled="disabled" /></label>
 				<MultiSelectField v-model="values.categories" :label="label('categories')" :options="categoryOptions" :disabled="disabled" />
 				<label class="item-master-check"><Checkbox :model-value="Boolean(Number(values.is_ineligible_for_itc))" binary :disabled="disabled" @update:model-value="values.is_ineligible_for_itc = $event ? 1 : 0" /><span>{{ label('is_ineligible_for_itc') }}</span></label>
 				<label class="item-master-check"><Checkbox :model-value="Boolean(Number(values.is_cloth_item))" binary :disabled="disabled" @update:model-value="values.is_cloth_item = $event ? 1 : 0" /><span>{{ label('is_cloth_item') }}</span></label>
@@ -26,7 +25,6 @@
 <script setup>
 import Checkbox from "primevue/checkbox"
 import InputNumber from "primevue/inputnumber"
-import InputText from "primevue/inputtext"
 import Message from "primevue/message"
 import Textarea from "primevue/textarea"
 import { computed } from "vue"
@@ -39,7 +37,7 @@ import ItemTableCard from "./ItemTableCard.vue"
 const props = defineProps({ values: { type: Object, required: true }, fields: { type: Object, default: () => ({}) }, categories: { type: Array, default: () => [] }, editable: Boolean, disabled: Boolean, problems: { type: Array, default: () => [] }, part: { type: String, default: "" } })
 const viewFields = [
 	{ name: "secondary_unit_of_measure" }, { name: "po_excess_allowed_percentage", fieldtype: "Percent" },
-	{ name: "product_category" }, { name: "hsn_code" }, { name: "categories" },
+	{ name: "product_category" }, { name: "categories" },
 	{ name: "is_ineligible_for_itc", fieldtype: "Check" }, { name: "is_cloth_item", fieldtype: "Check" },
 ]
 const categoryOptions = computed(() => [...new Set([...props.categories, ...(props.values.categories || [])])].map((value) => ({ value, label: value })))

@@ -1,4 +1,4 @@
-const scalarFields = ["secondary_unit_of_measure", "product_category", "hsn_code"]
+const scalarFields = ["secondary_unit_of_measure", "product_category"]
 const tableColumns = {
 	uoms: ["uom", "conversion_factor"],
 	additional_parameters: ["additional_parameter_key", "additional_parameter_value"],

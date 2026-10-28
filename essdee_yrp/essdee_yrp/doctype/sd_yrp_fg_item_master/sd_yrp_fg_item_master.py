@@ -131,7 +131,7 @@ def create_or_update_item(fg_item):
 	item.item_name = fg_item.name1
 	item.brand = fg_item.brand
 	item.item_group = "Products"
-	item.hsn_code = fg_item.hsn
+	item.gst_hsn_code = fg_item.hsn
 	item.disabled = fg_item.disabled
 	item.is_stock_item = 1
 	item.is_purchase_item = 1

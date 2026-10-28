@@ -18,11 +18,10 @@
 <script setup>
 import Message from "primevue/message"
 import { computed, defineAsyncComponent, reactive } from "vue"
-import { useRoute } from "vue-router"
 
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
-import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
+import { sewingReportTabs } from "../departmentReports.js"
 import { useSewingContext } from "./useSewingContext.js"
 
 const { supplier } = useSewingContext()
@@ -35,19 +34,7 @@ const FinishingDispatchReport = defineAsyncComponent(() => import("../finishing/
 const LotCutQuantityReport = defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue"))
 const InhouseQuantityReport = defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue"))
 const props = defineProps({ capabilities: { type: Object, required: true } })
-const route = useRoute()
-const REPORTS = [
-	{ value: "status-summary", key: "status_summary", label: "Status Summary" },
-	{ value: "dpr", key: "dpr", label: "DPR" },
-	{ value: "scr", key: "scr", label: "SCR" },
-	{ value: "monthly-summary", key: "monthly_summary", label: "Monthly Summary" },
-	{ value: "item-summary", key: "item_summary", label: "Item Summary" },
-	{ value: "finishing-dispatch", key: "finishing_dispatch", label: "Finishing Plan Dispatch" },
-	{ value: "lot-cut-quantity", key: "lot_cut_quantity", label: "Lot Cut Quantity" },
-	{ value: "inhouse-quantity", key: "inhouse_quantity", label: "In-house Quantity" },
-]
-const deskTabs = computed(() => departmentDeskReports(route.path.split("/")[1], props.capabilities.reports))
-const tabs = computed(() => [...REPORTS.filter(tab => props.capabilities.reports?.[tab.key]?.can_read), ...deskTabs.value])
+const tabs = computed(() => sewingReportTabs(props.capabilities.reports))
 function isAllowed(report) {
 	const capability = props.capabilities.reports?.[report.key]
 	return capability?.can_read && capability?.can_report

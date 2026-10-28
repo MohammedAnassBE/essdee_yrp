@@ -5,6 +5,7 @@
 			v-else
 			title="Planning"
 			:items="visibleWorkspaces"
+			:reports="reports"
 			:loading="loading"
 			empty-text="No permitted Planning workspaces"
 			:skeleton-count="8"
@@ -20,10 +21,12 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import { visiblePlanningWorkspaces } from "./planning/planningViews.js"
+import { loadPlanningReports } from "./planning/reports/planningReportLoader.js"
 
 const loading = ref(true)
 const loadError = ref("")
 const sections = ref({})
+const reports = ref([])
 const visibleWorkspaces = computed(() => visiblePlanningWorkspaces(sections.value))
 
 async function load() {
@@ -31,8 +34,10 @@ async function load() {
 	loadError.value = ""
 	try {
 		sections.value = (await getPlanningCapabilities())?.sections || {}
+		reports.value = sections.value.reports?.can_read ? await loadPlanningReports(sections.value.reports) : []
 	} catch (reason) {
 		sections.value = {}
+		reports.value = []
 		loadError.value = reason?.message || "Unable to load the Planning workspace."
 	} finally {
 		loading.value = false

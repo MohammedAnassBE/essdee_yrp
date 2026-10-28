@@ -3,6 +3,8 @@
 		<WorkspaceLauncher
 			title="Sewing"
 			:items="workspaces(capabilities, supplier)"
+			:reports="sewingReportTabs(capabilities.reports)"
+			report-query-key="tab"
 			empty-text="No permitted Sewing workspaces"
 			:skeleton-count="4"
 			compact
@@ -15,6 +17,7 @@
 
 <script setup>
 import WorkspaceLauncher from "../../components/common/WorkspaceLauncher.vue"
+import { sewingReportTabs } from "../departmentReports.js"
 import { documentWorkspaces } from "../fabric-store/storeWorkspaces.js"
 import SewingBackLink from "./SewingBackLink.vue"
 import SewingWorkspaceShell from "./SewingWorkspaceShell.vue"

@@ -5,6 +5,7 @@
 			v-else
 			title="Cut Panel Store"
 			:items="visibleWorkspaces"
+			:reports="cutPanelReportTabs(sections.reports?.reports)"
 			:loading="loading"
 			empty-text="No permitted Cut Panel Store workspaces"
 			:skeleton-count="6"
@@ -19,6 +20,7 @@ import { getCutPanelStoreCapabilities } from "../api/cutPanelStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import { cutPanelReportTabs } from "./departmentReports.js"
 
 const loading = ref(true)
 const error = ref("")

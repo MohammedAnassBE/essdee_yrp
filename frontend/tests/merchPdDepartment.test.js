@@ -56,7 +56,7 @@ test("the department combines Merch, Purchase and PD sections in the registry", 
 		bill_tracking: ["/merch/bill-tracking", "/purchase/bill-tracking"],
 		lotwise_item_profits: ["/pd/lotwise-item-profits"],
 	})
-	assert.equal(Object.keys(getWorkspacePaths(departments.find((item) => item.key === "merch-purchase"))).length, 17, "other combined departments keep every section")
+	assert.equal(Object.keys(getWorkspacePaths(departments.find((item) => item.key === "merch-purchase"))).length, 18, "other combined departments keep every section")
 	assert.deepEqual(locked.workspaces, workspaces)
 })
 

@@ -15,16 +15,13 @@ import Skeleton from "primevue/skeleton"
 import { onMounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
-import { getCuttingReportPermissions } from "../../api/cuttingReports.js"
-import { getFinishingCapabilities } from "../../api/finishing.js"
 import { getPlanningCapabilities } from "../../api/planning.js"
-import { getSewingCapabilities } from "../../api/sewing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
-import { legacyPlanningReportQuery, planningReports } from "./reports/planningReportCatalog.js"
+import { legacyPlanningReportQuery } from "./reports/planningReportCatalog.js"
+import { loadPlanningReports } from "./reports/planningReportLoader.js"
 
-const GROUP_LOADERS = { cutting: getCuttingReportPermissions, sewing: getSewingCapabilities, finishing: getFinishingCapabilities }
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
@@ -35,11 +32,7 @@ async function load() {
 	loading.value = true
 	loadError.value = ""
 	try {
-		const section = (await getPlanningCapabilities())?.sections?.reports || {}
-		const groups = Object.keys(GROUP_LOADERS).filter(group => section.groups?.[group] === true)
-		const loaded = await Promise.all(groups.map(group => GROUP_LOADERS[group]()))
-		const capabilities = Object.fromEntries(groups.map((group, index) => [group, loaded[index] || {}]))
-		reports.value = planningReports({ ...capabilities, production: section.groups?.production === true ? section.production : {} })
+		reports.value = await loadPlanningReports((await getPlanningCapabilities())?.sections?.reports)
 	} catch (reason) {
 		reports.value = []
 		loadError.value = reason?.message || "Unable to load Planning reports."

@@ -63,7 +63,7 @@ export const departments = [
 		label: "Merch",
 		shortLabel: "MR",
 		path: "/merch",
-		sections: { lots: "lots", item_production_details: "item-production-details", production_orders: "production-orders", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", process_costs: "process-costs", bill_tracking: "bill-tracking", purchase_invoices: "purchase-invoices", reports: "reports" },
+		sections: { lots: "lots", item_production_details: "item-production-details", production_orders: "production-orders", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", cutting_plans: "cutting-plans", process_costs: "process-costs", bill_tracking: "bill-tracking", purchase_invoices: "purchase-invoices", reports: "reports" },
 		component: () => import("./Merch.vue"),
 	},
 	{

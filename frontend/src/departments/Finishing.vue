@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Finishing" :show-title="false" flat inline-navigation>
 		<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loading" @retry="load" />
-		<WorkspaceLauncher v-else title="Finishing" :items="visibleWorkspaces" :loading="loading" empty-text="No permitted Finishing workspaces" :skeleton-count="6" />
+		<WorkspaceLauncher v-else title="Finishing" :items="visibleWorkspaces" :reports="reports" :loading="loading" empty-text="No permitted Finishing workspaces" :skeleton-count="6" />
 	</DepartmentPage>
 </template>
 
@@ -9,6 +9,7 @@
 import { computed, onMounted, ref } from "vue"
 
 import { getFinishingCapabilities } from "../api/finishing.js"
+import { finishingReportTabs } from "./departmentReports.js"
 import { documentWorkspaces } from "./fabric-store/storeWorkspaces.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
@@ -17,6 +18,7 @@ import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 const loading = ref(true)
 const loadError = ref("")
 const sections = ref({})
+const reports = computed(() => finishingReportTabs(sections.value.reports?.reports))
 const workspaces = [
 	{ key: "plans", label: "Finishing Plan", description: "Inward, packing, dispatch, OCR and audit for each lot.", icon: "pi pi-box", to: "/finishing/plans" },
 	{ key: "reports", label: "Reports", description: "Packing, dispatch, ironing, rejection, rework and stock reports.", icon: "pi pi-chart-bar", to: "/finishing/reports" },

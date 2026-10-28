@@ -845,6 +845,18 @@ const routes = [
 		path: "/merch/work-orders/:workOrderId", name: MERCH_ROUTES.workOrder, component: FabricWorkOrder,
 		props: { backTo: "/merch/work-orders", backLabel: "Work Orders", viewRouteName: MERCH_ROUTES.workOrder, newRouteName: MERCH_ROUTES.workOrderNew, editRouteName: MERCH_ROUTES.workOrderEdit, processCostViewRouteName: MERCH_ROUTES.processCost },
 	},
+	{
+		path: "/merch/cutting-plans", name: MERCH_ROUTES.cuttingPlans, component: CuttingPlans,
+		props: { backTo: "/merch", backLabel: "Merch", viewRouteName: MERCH_ROUTES.cuttingPlan, newRouteName: MERCH_ROUTES.cuttingPlanNew },
+	},
+	{
+		path: "/merch/cutting-plans/new", name: MERCH_ROUTES.cuttingPlanNew, component: CuttingPlanEditorPage,
+		props: { backTo: "/merch/cutting-plans", backLabel: "Cutting Plans", viewRouteName: MERCH_ROUTES.cuttingPlan },
+	},
+	{
+		path: "/merch/cutting-plans/:cuttingPlanId", name: MERCH_ROUTES.cuttingPlan, component: CuttingPlan,
+		props: { backTo: "/merch/cutting-plans", backLabel: "Cutting Plans" },
+	},
 	...departmentDocumentRoutes("merch", "Merch", ["/merch/delivery-challans", "/merch/goods-received-notes"]),
 	{
 		path: "/merch/bill-tracking", name: MERCH_ROUTES.billTrackings, component: BillTrackings,

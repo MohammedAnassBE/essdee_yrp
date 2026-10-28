@@ -5,6 +5,7 @@
 			v-else
 			:title="storeName"
 			:items="visibleWorkspaces"
+			:reports="storeReportTabs(reportCapabilities, basePath.slice(1), reportKeys)"
 			:loading="loading"
 			:empty-text="`No permitted ${storeName} workspaces`"
 		/>
@@ -19,6 +20,7 @@ import { getFabricStoreCapabilities } from "../api/fabricStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLauncher from "../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
+import { storeReportTabs } from "./departmentReports.js"
 import { storeWorkspaces } from "./fabric-store/storeWorkspaces.js"
 
 const CUT_PANEL_STICKER_KEYS = ["box_stickers", "excel_stickers"]
@@ -37,6 +39,7 @@ const props = defineProps({
 const loading = ref(true)
 const error = ref("")
 const sections = ref({})
+const reportCapabilities = ref({})
 const workspaces = computed(() => [...props.extraWorkspaces, ...storeWorkspaces(props.basePath, props.reportKeys)])
 const visibleWorkspaceKeys = computed(() => new Set([
 	...props.extraWorkspaces.map((workspace) => workspace.key),
@@ -59,6 +62,7 @@ async function load() {
 			props.extraCapabilitiesLoader ? props.extraCapabilitiesLoader() : null,
 		])
 		sections.value = { ...payload?.sections, ...extraPayload?.sections }
+		reportCapabilities.value = payload?.sections?.reports?.reports || {}
 		for (const key of stickerKeys) {
 			if (cutPanelPayload?.sections?.[key]) sections.value[key] = cutPanelPayload.sections[key]
 		}

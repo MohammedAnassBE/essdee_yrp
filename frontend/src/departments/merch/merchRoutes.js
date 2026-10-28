@@ -28,4 +28,7 @@ export const MERCH_ROUTES = {
 	purchaseInvoiceNew: "merch-purchase-invoice-new",
 	purchaseInvoice: "merch-purchase-invoice",
 	purchaseInvoiceEdit: "merch-purchase-invoice-edit",
+	cuttingPlans: "merch-cutting-plans",
+	cuttingPlanNew: "merch-cutting-plan-new",
+	cuttingPlan: "merch-cutting-plan",
 }

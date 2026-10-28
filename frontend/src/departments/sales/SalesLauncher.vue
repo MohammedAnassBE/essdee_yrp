@@ -5,6 +5,7 @@
 			v-else
 			title="Sales"
 			:items="visibleItems"
+			:reports="salesReportTabs(capabilities)"
 			:loading="loading"
 			:skeleton-count="2"
 			empty-text="No permitted Sales workspaces"
@@ -18,6 +19,7 @@ import { computed, onMounted, ref } from "vue"
 import { getSalesCapabilities } from "../../api/sales.js"
 import WorkspaceLauncher from "../../components/common/WorkspaceLauncher.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
+import { salesReportTabs } from "../departmentReports.js"
 
 const loading = ref(true)
 const error = ref("")

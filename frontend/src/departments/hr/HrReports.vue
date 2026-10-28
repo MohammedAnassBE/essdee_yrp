@@ -17,21 +17,14 @@ import { getHrCapabilities } from "../../api/hr.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
+import { hrReportTabs } from "../departmentReports.js"
 
-const REPORTS = [
-	{
-		key: "attendance",
-		value: "attendance",
-		label: "Attendance",
-		icon: "pi pi-users",
-		component: defineAsyncComponent(() => import("../../components/reports/AttendanceStrengthReport.vue")),
-	},
-]
+const AttendanceStrengthReport = defineAsyncComponent(() => import("../../components/reports/AttendanceStrengthReport.vue"))
 
 const loading = ref(true)
 const loadError = ref("")
 const capabilities = ref({ reports: {} })
-const tabs = computed(() => REPORTS.filter((report) => capabilities.value.reports?.[report.key]?.can_read))
+const tabs = computed(() => hrReportTabs(capabilities.value.reports).map((tab) => ({ ...tab, component: AttendanceStrengthReport })))
 
 async function load() {
 	loading.value = true

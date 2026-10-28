@@ -1,5 +1,5 @@
 <template>
-	<Merch title="Merch & Purchase" :items="merchPurchaseLauncherItems()" :load-capabilities="getMerchPurchaseCapabilities" />
+	<Merch title="Merch & Purchase" :items="merchPurchaseLauncherItems()" :load-capabilities="getMerchPurchaseCapabilities" report-department="merch-purchase" />
 </template>
 
 <script setup>

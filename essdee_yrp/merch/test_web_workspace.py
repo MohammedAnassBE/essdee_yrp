@@ -1,7 +1,13 @@
 from unittest import TestCase
 from unittest.mock import call, patch
 
+import frappe
+from frappe.tests import IntegrationTestCase
+
 from essdee_yrp.merch import web_workspace
+from essdee_yrp.merch_purchase import web_workspace as merch_purchase_workspace
+
+MERCH_USER = "merch.cutting.plan@example.test"
 
 
 class TestMerchWebWorkspace(TestCase):
@@ -101,3 +107,23 @@ class TestMerchWebWorkspace(TestCase):
 					})
 					for other in sections.keys() - {key}:
 						self.assertFalse(result[other]["can_read"])
+
+
+class TestMerchCuttingPlanCard(IntegrationTestCase):
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def test_merch_user_reads_cutting_plans_without_creating_them(self):
+		if frappe.db.exists("User", MERCH_USER):
+			user = frappe.get_doc("User", MERCH_USER)
+			user.set("roles", [])
+		else:
+			user = frappe.get_doc({"doctype": "User", "email": MERCH_USER, "first_name": "Merch Cutting", "send_welcome_email": 0})
+		user.append("roles", {"role": "Merch User"})
+		user.save(ignore_permissions=True)
+		frappe.set_user(MERCH_USER)
+		expected = {"label": "Cutting Plan", "can_read": True, "can_create": False}
+		self.assertEqual(web_workspace.get_capabilities()["sections"]["cutting_plans"], expected)
+		self.assertEqual(merch_purchase_workspace.get_capabilities()["sections"]["cutting_plans"], expected)
+		self.assertTrue(frappe.has_permission("SD YRP Cutting Plan", "print"))
+		self.assertFalse(frappe.has_permission("SD YRP Cutting Plan", "submit"))

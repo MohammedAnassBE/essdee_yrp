@@ -18,21 +18,17 @@ import { getSalesCapabilities } from "../../api/sales.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
+import { salesReportTabs } from "../departmentReports.js"
 import PpoReport from "./PpoReport.vue"
 
-const REPORTS = [
-	{ key: "ppo_report", value: "ppo-report", label: "PPO Report", icon: "pi pi-file", component: PpoReport },
-	{ key: "finishing_dispatch", value: "finishing-dispatch", label: "Finishing Plan Dispatch", icon: "pi pi-truck", component: defineAsyncComponent(() => import("../finishing/reports/FinishingDispatchReport.vue")) },
-]
+const COMPONENTS = {
+	ppo_report: PpoReport,
+	finishing_dispatch: defineAsyncComponent(() => import("../finishing/reports/FinishingDispatchReport.vue")),
+}
 const loading = ref(true)
 const error = ref("")
 const capabilities = ref({ sections: {}, reports: {} })
-const tabs = computed(() => {
-	const section = capabilities.value.sections?.reports
-	if (!section?.can_read) return []
-	return REPORTS.filter(report => capabilities.value.reports?.[report.key]?.can_read)
-		.map(report => report.key === "ppo_report" ? { ...report, props: { canExport: Boolean(capabilities.value.reports.ppo_report.can_export) } } : report)
-})
+const tabs = computed(() => salesReportTabs(capabilities.value).map((tab) => ({ ...tab, component: COMPONENTS[tab.key] })))
 
 async function load() {
 	loading.value = true

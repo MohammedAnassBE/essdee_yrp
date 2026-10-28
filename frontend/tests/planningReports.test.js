@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import { legacyPlanningReportQuery, planningReports } from "../src/departments/planning/reports/planningReportCatalog.js"
+import { loadPlanningReports } from "../src/departments/planning/reports/planningReportLoader.js"
 
 const tick = async () => { for (let index = 0; index < 5; index += 1) { await new Promise(done => setImmediate(done)); await Vue.nextTick() } }
 const nodes = (root, type) => findNodes(root, node => node.type === type)
@@ -59,9 +60,11 @@ test("the Planning page loads only permitted groups and redirects old group link
 		"primevue/message": stub("message"), "primevue/skeleton": stub("skeleton"),
 		"vue-router": { useRoute: () => ({ query: { group: "cutting", report: "daily-production" }, hash: "" }), useRouter: () => ({ replace: to => navigations.push(to) }) },
 		"../../api/planning.js": { getPlanningCapabilities: async () => ({ sections: { reports: { groups: { cutting: true, sewing: false, production: true }, production: { work_order: { can_read: true } } } } }) },
-		"../../api/cuttingReports.js": { getCuttingReportPermissions: async () => { calls.push("cutting"); return { "daily-production": true } } },
-		"../../api/sewing.js": { getSewingCapabilities: async () => { calls.push("sewing"); return sewing } },
-		"../../api/finishing.js": { getFinishingCapabilities: async () => { calls.push("finishing"); return {} } },
+		"./reports/planningReportLoader.js": { loadPlanningReports: section => loadPlanningReports(section, {
+			cutting: async () => { calls.push("cutting"); return { "daily-production": true } },
+			sewing: async () => { calls.push("sewing"); return sewing },
+			finishing: async () => { calls.push("finishing"); return {} },
+		}) },
 		"../../components/DepartmentPage.vue": stub("page"),
 		"../../components/common/WorkspaceLoadError.vue": stub("error"),
 		"../../components/reports/ReportWorkspace.vue": stub("workspace"),

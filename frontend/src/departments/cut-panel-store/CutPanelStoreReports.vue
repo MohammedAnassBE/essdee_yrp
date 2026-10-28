@@ -10,18 +10,14 @@ import Message from "primevue/message"
 import { computed } from "vue"
 
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
-import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
 import StockBalanceReport from "../../components/reports/StockBalanceReport.vue"
+import { cutPanelReportTabs } from "../departmentReports.js"
 import CutBundleBalanceReport from "./CutBundleBalanceReport.vue"
 
 const props = defineProps({ capability: { type: Object, default: () => ({}) } })
-const tabs = [
-	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: StockBalanceReport },
-	{ key: "cut_bundle_balance", value: "cut-bundle-balance", label: "Cut Bundle Balance", icon: "pi pi-box", component: CutBundleBalanceReport },
-]
-const deskTabs = computed(() => departmentDeskReports("cut-panel-store", props.capability?.reports).map((tab) => ({ ...tab, component: DeskBackedReport })))
-const visibleTabs = computed(() => [...tabs.filter((tab) => props.capability?.reports?.[tab.key]?.can_read), ...deskTabs.value])
+const COMPONENTS = { stock_balance: StockBalanceReport, cut_bundle_balance: CutBundleBalanceReport }
+const visibleTabs = computed(() => cutPanelReportTabs(props.capability?.reports).map((tab) => ({ ...tab, component: COMPONENTS[tab.key] || DeskBackedReport })))
 </script>
 
 <style scoped>

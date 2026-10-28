@@ -21,33 +21,30 @@
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import { computed, onMounted, ref } from "vue"
-import { useRoute } from "vue-router"
 
 import { getCuttingReportPermissions } from "../api/cuttingReports.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DeskBackedReport from "../components/reports/DeskBackedReport.vue"
-import { departmentDeskReports } from "../components/reports/deskReportConfig.js"
 import ReportWorkspace from "../components/reports/ReportWorkspace.vue"
 import StockBalanceReport from "../components/reports/StockBalanceReport.vue"
 import CuttingDetailReport from "./cutting/reports/CuttingDetailReport.vue"
 import DailyCutSheetReport from "./cutting/reports/DailyCutSheetReport.vue"
 import DailyProductionReport from "./cutting/reports/DailyProductionReport.vue"
 import MultiCCRReport from "./cutting/reports/MultiCCRReport.vue"
+import { cuttingReportTabs } from "./departmentReports.js"
 
-const route = useRoute()
 const loadingPermissions = ref(true)
 const permissionError = ref("")
 const reportPermissions = ref({})
-const tabs = [
-	{ value: "daily-production", label: "Daily Production", icon: "pi pi-chart-line", component: DailyProductionReport },
-	{ value: "daily-cut-sheet", label: "Daily Cut Sheet", icon: "pi pi-table", component: DailyCutSheetReport },
-	{ value: "multi-ccr", label: "Multi CCR", icon: "pi pi-chart-scatter", component: MultiCCRReport },
-	{ value: "cutting-detail", label: "Cutting Detail", icon: "pi pi-chart-bar", component: CuttingDetailReport },
-	{ value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: StockBalanceReport },
-]
-const deskTabs = computed(() => departmentDeskReports(route.path.split("/")[1], Object.fromEntries(Object.entries(reportPermissions.value).map(([key, can_read]) => [key.replaceAll("-", "_"), { can_read }]))))
-const visibleTabs = computed(() => [...tabs.filter((tab) => reportPermissions.value[tab.value]), ...deskTabs.value.map((tab) => ({ ...tab, component: DeskBackedReport }))])
+const COMPONENTS = {
+	"daily-production": DailyProductionReport,
+	"daily-cut-sheet": DailyCutSheetReport,
+	"multi-ccr": MultiCCRReport,
+	"cutting-detail": CuttingDetailReport,
+	"stock-balance": StockBalanceReport,
+}
+const visibleTabs = computed(() => cuttingReportTabs(reportPermissions.value).map((tab) => ({ ...tab, component: COMPONENTS[tab.value] || DeskBackedReport })))
 
 async function load() {
 	loadingPermissions.value = true

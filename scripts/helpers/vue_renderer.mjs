@@ -22,6 +22,10 @@ const sharedModules = {
 	"documentShortcuts.js": await import("../../frontend/src/utils/documentShortcuts.js"),
 	// Keyboard shortcuts bind to window; tests that cover them pass the real composable explicitly.
 	"useDocumentShortcuts.js": { useDocumentShortcuts() {} },
+	"departmentReports.js": await import("../../frontend/src/departments/departmentReports.js"),
+	"workspaceSearch.js": await import("../../frontend/src/components/common/workspaceSearch.js"),
+	// The launcher search binds to window and the router; tests that cover it pass the real component explicitly.
+	"WorkspaceSearch.vue": () => null,
 }
 const sharedModule = (specifier) => sharedModules[specifier.split("/").pop()]
 

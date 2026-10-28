@@ -15,6 +15,7 @@ SECTIONS = {
 	"work_orders": ("Work Order", "YRP Work Order"),
 	"delivery_challans": ("Delivery Challans", "YRP Delivery Challan"),
 	"goods_received_notes": ("Goods Received Notes", "YRP Goods Received Note"),
+	"cutting_plans": ("Cutting Plan", "SD YRP Cutting Plan"),
 	"process_costs": ("Process Cost", "YRP Process Cost"),
 	"bill_tracking": ("Vendor Bill Tracking", "YRP Bill Tracking"),
 	"purchase_invoices": ("Purchase Invoice", "YRP Purchase Invoice"),

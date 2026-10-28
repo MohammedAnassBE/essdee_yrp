@@ -34,7 +34,7 @@ function loadRouter() {
 
 test("Merch & Purchase combines every Merch and Purchase card once", () => {
 	const keys = items.map((item) => item.key)
-	assert.deepEqual(keys, ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "process_costs", "bill_tracking", "purchase_invoices", "items", "item_prices", "purchase_orders", "stock_transfers", "item_conversions", "box_stickers", "excel_stickers", "reports"])
+	assert.deepEqual(keys, ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "cutting_plans", "process_costs", "bill_tracking", "purchase_invoices", "items", "item_prices", "purchase_orders", "stock_transfers", "item_conversions", "box_stickers", "excel_stickers", "reports"])
 	assert.equal(new Set(keys).size, keys.length)
 	for (const key of [...merchLauncherItems(), ...purchaseLauncherItems()].map((item) => item.key).concat(PURCHASE_STORE_WORKSPACE_KEYS)) assert.ok(keys.includes(key), key)
 	assert.deepEqual(items.filter((item) => item.label === "Lot").map((item) => item.to), ["/merch/lots"])
@@ -103,10 +103,12 @@ test("the combined Reports page lists Merch and Purchase desk reports once each"
 	assert.deepEqual(new Set(tabs), new Set([...departmentDeskReports("merch", capabilities), ...departmentDeskReports("purchase", capabilities)].map((tab) => tab.value)))
 	assert.ok(tabs.includes("grn-report") && tabs.includes("lot-purchase-summary"))
 	const page = source("../src/departments/merch/MerchReports.vue")
-	assert.match(page, /"merch-purchase": \{ load: getMerchPurchaseCapabilities, deskDepartments: \["merch", "purchase"\] \}/)
-	assert.match(page, /key: "stock_balance"/)
-	assert.match(page, /key: "lot_cut_quantity"/)
-	assert.match(page, /reports\.value\[report\.key\]\?\.can_read/)
+	const catalog = source("../src/departments/departmentReports.js")
+	assert.match(page, /"merch-purchase": getMerchPurchaseCapabilities/)
+	assert.match(catalog, /"merch-purchase": \["merch", "purchase"\]/)
+	assert.match(catalog, /key: "stock_balance"/)
+	assert.match(catalog, /key: "lot_cut_quantity"/)
+	assert.match(page, /merchReportTabs\(props\.department, reports\.value\)/)
 })
 
 test("Purchase shows Vendor Bill Tracking once, with routes and record links kept inside Purchase", () => {
@@ -125,4 +127,26 @@ test("Purchase shows Vendor Bill Tracking once, with routes and record links kep
 	const purchaseLocked = getLockedDepartment({ ui_config: { meta: { render_mode: "Registered Experience", experience_key: "purchase" }, config: { experience_props: { workspaces: purchaseLayout } } } })
 	assert.ok(purchaseLayout.includes("bill_tracking"))
 	assert.equal(getLockedRedirect(router.resolve("/purchase/bill-tracking/BT-1"), purchaseLocked), undefined)
+})
+
+test("Merch and Merch & Purchase open Cutting Plan lists, records and the editor inside Merch", () => {
+	const router = loadRouter()
+	const merchWorkspaces = JSON.parse(JSON.parse(source("../../essdee_yrp/fixtures/yrp_ui_layout.json")).find((row) => row.experience_key === "merch").config).experience_props.workspaces
+	const merchLocked = getLockedDepartment({ ui_config: { meta: { render_mode: "Registered Experience", experience_key: "merch" }, config: { experience_props: { workspaces: merchWorkspaces } } } })
+	for (const launcher of [merchLauncherItems(), items]) {
+		const card = launcher.find((item) => item.key === "cutting_plans")
+		assert.deepEqual([card.label, card.to], ["Cutting Plan", "/merch/cutting-plans"])
+	}
+	for (const [path, name] of [["/merch/cutting-plans", MERCH_ROUTES.cuttingPlans], ["/merch/cutting-plans/new", MERCH_ROUTES.cuttingPlanNew], ["/merch/cutting-plans/CP-1", MERCH_ROUTES.cuttingPlan]]) {
+		const route = router.resolve(path)
+		assert.equal(route.name, name, path)
+		for (const department of [merchLocked, locked]) assert.equal(getLockedRedirect(route, department), undefined, path)
+	}
+	assert.deepEqual(JSON.parse(JSON.stringify(router.resolve("/merch/cutting-plans").matched.at(-1).props.default)), {
+		backTo: "/merch", backLabel: "Merch", viewRouteName: MERCH_ROUTES.cuttingPlan, newRouteName: MERCH_ROUTES.cuttingPlanNew,
+	})
+	assert.ok(merchWorkspaces.includes("cutting_plans"))
+	assert.equal(webDocumentPath("SD YRP Cutting Plan", "CP/1", "/web/merch/lots/LOT-1"), "/web/merch/cutting-plans/CP%2F1")
+	assert.equal(canOpenList("/merch/cutting-plans", { user: { name: "merch@example.com", can_read: ["SD YRP Lot"] } }), false)
+	assert.deepEqual(getLockedRedirect(router.resolve("/planning/cutting-plans"), merchLocked), notInLayout("/planning/cutting-plans"))
 })

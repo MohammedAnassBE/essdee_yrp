@@ -13,6 +13,15 @@
 				<p v-if="eyebrow" class="erp-page-header__eyebrow">{{ eyebrow }}</p>
 				<h1 :id="headingId">{{ title }}</h1>
 			</div>
+			<div v-if="!loading && visibleItems.length" class="workspace-launcher__search">
+				<WorkspaceSearch
+					:cards="visibleItems"
+					:reports="searchReports"
+					:reports-to="reportsCard?.to"
+					:report-query-key="reportQueryKey"
+					@select-card="selectedCardKey = $event"
+				/>
+			</div>
 			<div v-if="$slots.context" class="workspace-launcher__context"><slot name="context" /></div>
 		</header>
 
@@ -24,7 +33,7 @@
 		</div>
 		<div v-else-if="visibleItems.length" class="workspace-launcher__grid">
 			<RouterLink
-				v-for="item in visibleItems"
+				v-for="item in shownItems"
 				:key="item.key"
 				class="workspace-launcher__card erp-card"
 				:to="item.to"
@@ -46,11 +55,13 @@
 
 <script setup>
 import Skeleton from "primevue/skeleton"
-import { computed } from "vue"
+import { computed, ref } from "vue"
 import { RouterLink } from "vue-router"
 import { isWorkspaceInLayout } from "../../router/departmentLock.js"
 import { canOpenList } from "../../router/listPermission.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
+import { visibleWorkspaceCards } from "./workspaceSearch.js"
+import WorkspaceSearch from "./WorkspaceSearch.vue"
 
 const props = defineProps({
 	title: { type: String, required: true },
@@ -60,9 +71,15 @@ const props = defineProps({
 	skeletonCount: { type: Number, default: 4 },
 	compact: { type: Boolean, default: false },
 	eyebrow: { type: String, default: "Department workspace" },
+	reports: { type: Array, default: () => [] },
+	reportQueryKey: { type: String, default: "report" },
 })
+const selectedCardKey = ref("")
 
 const visibleItems = computed(() => props.items.filter((item) => isWorkspaceInLayout(item) && canOpenList(item.to)))
+const shownItems = computed(() => visibleWorkspaceCards(visibleItems.value, selectedCardKey.value))
+const reportsCard = computed(() => visibleItems.value.find((item) => item.key === "reports"))
+const searchReports = computed(() => reportsCard.value ? props.reports : [])
 const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
 </script>
 
@@ -79,9 +96,22 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 	min-width: 0;
 }
 
+.workspace-launcher__search {
+	width: min(360px, 36%);
+	margin-left: auto;
+}
+
 .workspace-launcher__context {
 	width: min(380px, 40%);
 	margin-left: auto;
+}
+
+.workspace-launcher__search + .workspace-launcher__context {
+	margin-left: var(--erp-space-3);
+}
+
+.workspace-launcher__header:has(.workspace-launcher__context) .workspace-launcher__search {
+	align-self: flex-end;
 }
 
 .workspace-launcher__grid {
@@ -201,8 +231,10 @@ const headingId = computed(() => `${props.title.toLowerCase().replace(/[^a-z0-9]
 	.workspace-launcher--compact .workspace-launcher__header {
 		flex-wrap: wrap;
 	}
-	.workspace-launcher--compact .workspace-launcher__context {
+	.workspace-launcher--compact .workspace-launcher__context,
+	.workspace-launcher--compact .workspace-launcher__search {
 		width: 100%;
+		margin-left: 0;
 		padding-left: 46px;
 	}
 }

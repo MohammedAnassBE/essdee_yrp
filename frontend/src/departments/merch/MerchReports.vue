@@ -15,38 +15,29 @@ import { computed, defineAsyncComponent, onMounted, ref } from "vue"
 import { getMerchCapabilities, getMerchPurchaseCapabilities } from "../../api/merch.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
-import { combinedDeskReports } from "../../components/reports/deskReportConfig.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
+import { merchReportTabs } from "../departmentReports.js"
 import { departments } from "../registry.js"
 
-const REPORTS = [
-	{ key: "work_in_progress", value: "work-in-progress", label: "Work In Progress", icon: "pi pi-chart-bar", component: defineAsyncComponent(() => import("./reports/WorkInProgressReport.vue")) },
-	{ key: "inward_quantity", value: "inward-quantity", label: "Inward Quantity", icon: "pi pi-sign-in", component: defineAsyncComponent(() => import("../planning/reports/InwardQuantityReport.vue")) },
-	{ key: "work_order", value: "work-order", label: "Work Order", icon: "pi pi-briefcase", component: defineAsyncComponent(() => import("../planning/reports/WorkOrderReport.vue")) },
-	{ key: "planning_work_in_progress", value: "planning-work-in-progress", label: "Work In Progress", icon: "pi pi-chart-line", component: defineAsyncComponent(() => import("../planning/reports/WorkInProgressReport.vue")) },
-	{ key: "size_wise_stock", value: "size-wise-stock", label: "Size-wise Stock", icon: "pi pi-th-large", component: defineAsyncComponent(() => import("../planning/reports/SizeWiseStockReport.vue")) },
-	{ key: "multi_ccr", value: "multi-ccr", label: "Multi CCR", icon: "pi pi-chart-scatter", component: defineAsyncComponent(() => import("../cutting/reports/MultiCCRReport.vue")) },
-	{ key: "ppo_report", value: "ppo-report", label: "PPO Report", icon: "pi pi-file", component: defineAsyncComponent(() => import("../sales/PpoReport.vue")), props: { canExport: true } },
-	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue")) },
-	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")), capabilityProps: (report) => ({ canReadCuttingPlan: Boolean(report.can_read_cutting_plan) }) },
-]
-/** Report pages by department key: whose capabilities load and whose desk reports join the tabs. */
-const SOURCES = {
-	merch: { load: getMerchCapabilities, deskDepartments: ["merch"] },
-	"merch-purchase": { load: getMerchPurchaseCapabilities, deskDepartments: ["merch", "purchase"] },
+const COMPONENTS = {
+	work_in_progress: defineAsyncComponent(() => import("./reports/WorkInProgressReport.vue")),
+	inward_quantity: defineAsyncComponent(() => import("../planning/reports/InwardQuantityReport.vue")),
+	work_order: defineAsyncComponent(() => import("../planning/reports/WorkOrderReport.vue")),
+	planning_work_in_progress: defineAsyncComponent(() => import("../planning/reports/WorkInProgressReport.vue")),
+	size_wise_stock: defineAsyncComponent(() => import("../planning/reports/SizeWiseStockReport.vue")),
+	multi_ccr: defineAsyncComponent(() => import("../cutting/reports/MultiCCRReport.vue")),
+	ppo_report: defineAsyncComponent(() => import("../sales/PpoReport.vue")),
+	stock_balance: defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue")),
+	lot_cut_quantity: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")),
 }
+const LOADERS = { merch: getMerchCapabilities, "merch-purchase": getMerchPurchaseCapabilities }
 const props = defineProps({ department: { type: String, default: "merch" } })
-const source = { ...departments.find((item) => item.key === props.department), ...SOURCES[props.department] }
+const source = { ...departments.find((item) => item.key === props.department), load: LOADERS[props.department] }
 const loading = ref(true)
 const loadError = ref("")
 const reports = ref({})
-const deskTabs = computed(() => combinedDeskReports(source.deskDepartments, reports.value).map((tab) => ({ ...tab, component: DeskBackedReport })))
-const tabs = computed(() => [
-	...REPORTS.filter((report) => reports.value[report.key]?.can_read)
-		.map((report) => ({ ...report, props: { ...report.props, ...report.capabilityProps?.(reports.value[report.key]) } })),
-	...deskTabs.value,
-])
+const tabs = computed(() => merchReportTabs(props.department, reports.value).map((tab) => ({ ...tab, component: COMPONENTS[tab.key] || DeskBackedReport })))
 async function load() {
 	loading.value = true
 	loadError.value = ""

@@ -3,7 +3,7 @@ import { MERCH_ROUTES } from "./merchRoutes.js"
 
 export { MERCH_ROUTES }
 
-export const MERCH_SECTION_ORDER = ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "process_costs", "bill_tracking", "purchase_invoices", "reports"]
+export const MERCH_SECTION_ORDER = ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "cutting_plans", "process_costs", "bill_tracking", "purchase_invoices", "reports"]
 
 export const IPD_LIST_PATH = "/merch/item-production-details"
 
@@ -36,6 +36,13 @@ export function merchLauncherItems() {
 			description: "Process work orders with deliverables, receivables and closing.",
 			icon: "pi pi-briefcase",
 			to: "/merch/work-orders",
+		},
+		{
+			key: "cutting_plans",
+			label: "Cutting Plan",
+			description: "Plans, markers, lay sheets and production movements.",
+			icon: "pi pi-th-large",
+			to: "/merch/cutting-plans",
 		},
 		...documentWorkspaces("/merch"),
 		{

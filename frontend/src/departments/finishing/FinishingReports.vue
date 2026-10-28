@@ -12,33 +12,31 @@
 <script setup>
 import Skeleton from "primevue/skeleton"
 import { computed, defineAsyncComponent, onMounted, ref } from "vue"
-import { useRoute } from "vue-router"
 
 import { getFinishingCapabilities } from "../../api/finishing.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import DeskBackedReport from "../../components/reports/DeskBackedReport.vue"
-import { departmentDeskReports } from "../../components/reports/deskReportConfig.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import ReportWorkspace from "../../components/reports/ReportWorkspace.vue"
+import { finishingReportTabs } from "../departmentReports.js"
 import "./finishing.css"
 
-const REPORTS = [
-	{ key: "stock_balance", value: "stock-balance", label: "Stock Balance", icon: "pi pi-warehouse", component: defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue")) },
-	{ key: "packing_dpr", value: "packing-dpr", label: "Packing DPR", icon: "pi pi-box", component: defineAsyncComponent(() => import("./reports/FinishingPackingDpr.vue")) },
-	{ key: "dispatch_report", value: "dispatch-report", label: "Dispatch Report", icon: "pi pi-truck", component: defineAsyncComponent(() => import("./reports/FinishingDispatchReport.vue")) },
-	{ key: "ironing_dpr", value: "ironing-dpr", label: "Ironing DPR", icon: "pi pi-sliders-h", component: defineAsyncComponent(() => import("./reports/FinishingIroningDpr.vue")) },
-	{ key: "finishing_plan_report", value: "finishing-plan-report", label: "Finishing Plan Report", icon: "pi pi-table", component: defineAsyncComponent(() => import("./reports/FinishingPlanReport.vue")) },
-	{ key: "rejection_details", value: "rejection-details", label: "Rejection Details", icon: "pi pi-ban", component: defineAsyncComponent(() => import("./reports/FinishingRejectionReport.vue")) },
-	{ key: "rework_completion", value: "rework-completion", label: "Rework Completion", icon: "pi pi-check-square", component: defineAsyncComponent(() => import("./reports/FinishingReworkCompletion.vue")) },
-	{ key: "lot_cut_quantity", value: "lot-cut-quantity", label: "Lot Cut Quantity", icon: "pi pi-th-large", component: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")), capabilityProps: (report) => ({ canReadCuttingPlan: Boolean(report.can_read_cutting_plan) }) },
-	{ key: "inhouse_quantity", value: "inhouse-quantity", label: "In-house Quantity", icon: "pi pi-building", component: defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue")) },
-]
+const COMPONENTS = {
+	stock_balance: defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue")),
+	packing_dpr: defineAsyncComponent(() => import("./reports/FinishingPackingDpr.vue")),
+	dispatch_report: defineAsyncComponent(() => import("./reports/FinishingDispatchReport.vue")),
+	ironing_dpr: defineAsyncComponent(() => import("./reports/FinishingIroningDpr.vue")),
+	finishing_plan_report: defineAsyncComponent(() => import("./reports/FinishingPlanReport.vue")),
+	rejection_details: defineAsyncComponent(() => import("./reports/FinishingRejectionReport.vue")),
+	rework_completion: defineAsyncComponent(() => import("./reports/FinishingReworkCompletion.vue")),
+	lot_cut_quantity: defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue")),
+	inhouse_quantity: defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue")),
+}
 
-const route = useRoute()
 const loading = ref(true)
 const loadError = ref("")
 const reports = ref({})
-const tabs = computed(() => [...REPORTS.filter((report) => reports.value[report.key]?.can_read).map((report) => ({ ...report, props: report.capabilityProps?.(reports.value[report.key]) })), ...departmentDeskReports(route.path.split("/")[1], reports.value).map(tab => ({ ...tab, component: DeskBackedReport }))])
+const tabs = computed(() => finishingReportTabs(reports.value).map((tab) => ({ ...tab, component: COMPONENTS[tab.key] || DeskBackedReport })))
 
 async function load() {
 	loading.value = true

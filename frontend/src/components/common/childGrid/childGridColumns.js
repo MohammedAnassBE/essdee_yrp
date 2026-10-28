@@ -62,6 +62,11 @@ function savedPercent(entry) {
 	return Number.isFinite(percent) && percent > 0 ? percent : null
 }
 
+/** The previous value when next is structurally equal; a fresh DataTable column list remounts every cell editor. */
+export function keepIfUnchanged(previous, next) {
+	return previous !== undefined && JSON.stringify(previous) === JSON.stringify(next) ? previous : next
+}
+
 /** Visible columns in display order with `percent` (configurable only) and a default px `width`, from the schema plus Frappe GridView entries. */
 export function resolveGridColumns(columns, saved) {
 	const byKey = new Map(columns.filter(isConfigurable).map((column) => [column.key, column]))

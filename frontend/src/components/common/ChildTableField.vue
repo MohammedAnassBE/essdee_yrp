@@ -46,7 +46,7 @@
 				/>
 			</template>
 			<template v-if="!isDisabled" #row-actions="{ index }">
-				<Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove row ${index + 1}`" @click="removeRow(index)" />
+				<Button icon="pi pi-trash" severity="danger" text rounded tabindex="-1" :aria-label="`Remove row ${index + 1}`" @click="removeRow(index)" />
 			</template>
 			<template #empty>
 				<div class="child-table-field__empty">

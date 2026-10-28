@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, toValue, watch } from "vue"
 
 import { callMethod, callRead } from "../../../api/frappe.js"
-import { gridViewEntries, resolveGridColumns } from "./childGridColumns.js"
+import { gridViewEntries, keepIfUnchanged, resolveGridColumns } from "./childGridColumns.js"
 import { createGridViewStore } from "./gridViewStore.js"
 
 export const gridViewStore = createGridViewStore({ read: callRead, write: callMethod })
@@ -11,7 +11,7 @@ export function useGridColumns(columns, { parentDoctype, childDoctype } = {}) {
 	const saved = ref(null)
 	const error = ref("")
 	const canConfigure = computed(() => Boolean(toValue(parentDoctype) && toValue(childDoctype)))
-	const visibleColumns = computed(() => resolveGridColumns(toValue(columns) || [], saved.value))
+	const visibleColumns = computed((previous) => keepIfUnchanged(previous, resolveGridColumns(toValue(columns) || [], saved.value)))
 
 	async function load() {
 		saved.value = null

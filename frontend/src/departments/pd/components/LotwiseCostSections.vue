@@ -167,10 +167,11 @@
 
 <script setup>
 import Button from "primevue/button"
+import { computed } from "vue"
 
 import ChildTableField from "../../../components/common/ChildTableField.vue"
 import FormField from "../../../components/common/FormField.vue"
-import { LOTWISE_SECTIONS, lotwiseChildMeta } from "../pdViews.js"
+import { LOTWISE_SECTIONS, LOTWISE_TABLE_COLUMNS, lotwiseChildMeta } from "../pdViews.js"
 import LotwiseTotalsRail from "./LotwiseTotalsRail.vue"
 
 const props = defineProps({
@@ -193,8 +194,14 @@ function fieldByName(fieldname) {
 	return props.fields[fieldname]
 }
 
+// Built once per metadata load: a fresh meta per render remounts every table cell and drops the clicked cell's focus.
+const childMetas = computed(() => Object.fromEntries(Object.keys(LOTWISE_TABLE_COLUMNS).map((table) => [
+	table,
+	lotwiseChildMeta(table, props.metadataByName[fieldByName(table).options]),
+])))
+
 function childMetaFor(fieldname) {
-	return lotwiseChildMeta(fieldname, props.metadataByName[fieldByName(fieldname).options])
+	return childMetas.value[fieldname]
 }
 </script>
 

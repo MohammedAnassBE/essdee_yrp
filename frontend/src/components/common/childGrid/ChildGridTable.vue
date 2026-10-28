@@ -1,5 +1,5 @@
 <template>
-	<div ref="root" v-entry-table="{ add: canAdd ? add : null, isRowBlank: rowIsBlank, fixed: false }" class="child-grid-table">
+	<div ref="root" v-entry-table="{ add: canAdd ? add : null, isRowBlank: rowIsBlank, fixed: false }" class="child-grid-table" :style="widthVariables">
 		<DataTable
 			:value="rows"
 			size="small"
@@ -8,14 +8,14 @@
 			:table-style="{ tableLayout: 'fixed', width: `${tableWidth}px` }"
 			:pt="{ tableContainer: { role: 'region', 'aria-label': `${title} rows` } }"
 		>
-			<Column v-if="showIndex" column-key="__index" header="#" :style="widthStyle(INDEX_WIDTH)" class="child-grid-table__index">
+			<Column v-if="showIndex" column-key="__index" header="#" :style="widthStyle(`${INDEX_WIDTH}px`)" class="child-grid-table__index">
 				<template #body="{ index }">{{ index + 1 }}</template>
 			</Column>
-			<Column v-for="(column, index) in visibleColumns" :key="column.key" :column-key="column.key" :style="widthStyle(columnWidths[index])">
+			<Column v-for="(column, index) in visibleColumns" :key="column.key" :column-key="column.key" :style="widthStyle(`var(--child-grid-column-${index})`)">
 				<template #header><span class="child-grid-table__label" :title="column.label">{{ column.label }}<span v-if="column.reqd" class="erp-required-mark" aria-hidden="true">*</span></span></template>
 				<template #body="slotProps"><slot :name="`cell-${column.key}`" v-bind="slotProps" :column="column">{{ slotProps.data[column.key] }}</slot></template>
 			</Column>
-			<Column v-if="hasTrailingColumn" column-key="__settings" :style="widthStyle(trailingWidth)" class="child-grid-table__trailing">
+			<Column v-if="hasTrailingColumn" column-key="__settings" :style="widthStyle(`${trailingWidth}px`)" class="child-grid-table__trailing">
 				<template #header><ChildGridSettings v-if="grid.canConfigure.value" :title="title" :columns="columns" :visible-columns="visibleColumns" :save="grid.save" :reset="grid.reset" /></template>
 				<template #body="slotProps"><slot name="row-actions" v-bind="slotProps" /></template>
 			</Column>
@@ -59,8 +59,11 @@ const reservedWidth = computed(() => (props.showIndex ? INDEX_WIDTH : 0) + (hasT
 const columnWidths = computed(() => layoutWidths(visibleColumns.value, Math.max(containerWidth.value - 2, 0), reservedWidth.value))
 const tableWidth = computed(() => columnWidths.value.reduce((sum, width) => sum + width, 0) + reservedWidth.value)
 
+// Columns read widths through CSS variables: DataTable remounts every cell when its column list re-renders.
+const widthVariables = computed(() => Object.fromEntries(columnWidths.value.map((width, index) => [`--child-grid-column-${index}`, `${width}px`])))
+
 function widthStyle(width) {
-	return { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }
+	return { width, minWidth: width, maxWidth: width }
 }
 
 function rowIsBlank(index) {

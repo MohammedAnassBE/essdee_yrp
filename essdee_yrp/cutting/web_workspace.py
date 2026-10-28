@@ -31,6 +31,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_cut_panel_movement.sd_yrp_cut_panel_mo
 	get_cut_bundle_unmoved_data,
 	get_total,
 )
+from essdee_yrp.item_matrix import get_duplicate_row_message
 from essdee_yrp.print_registry import get_document_print_formats, print_format_scope
 
 PLAN_DOCTYPE = "SD YRP Cutting Plan"
@@ -1109,13 +1110,15 @@ def _normalize_stock_item_details(plan, context, operation, item_details):
 	if not isinstance(item_details, list) or not item_details:
 		frappe.throw(_("Add at least one Item."))
 	dimensions = [dict(row) for row in get_stock_dimensions()]
-	seen = set()
+	dimension_labels = {row["fieldname"]: row.get("label") for row in dimensions}
+	seen = {}
 	normalized_groups = []
 	schema_cache = {}
-	for group in item_details:
+	multiple_groups = len(item_details) > 1
+	for group_number, group in enumerate(item_details, 1):
 		if not isinstance(group, dict) or not isinstance(group.get("items"), list):
 			frappe.throw(_("Invalid grouped Item details."))
-		for entry in group["items"]:
+		for row_number, entry in enumerate(group["items"], 1):
 			if not isinstance(entry, dict) or not entry.get("name"):
 				frappe.throw(_("Every Item row needs an Item."))
 			requested_item = entry["name"]
@@ -1138,10 +1141,11 @@ def _normalize_stock_item_details(plan, context, operation, item_details):
 				operation, entry, primary, primary_values, schema.get("secondary_uom")
 			)
 
+			row_label = get_stock_row_label(group_number, row_number, multiple_groups)
+			identity_dimensions = (
+				lot_transfer_fields if lot_transfer_fields is not None else dimension_values
+			)
 			for value_key in values:
-				identity_dimensions = (
-					lot_transfer_fields if lot_transfer_fields is not None else dimension_values
-				)
 				identity = (
 					schema["item"],
 					tuple(sorted(identity_dimensions.items())),
@@ -1150,8 +1154,11 @@ def _normalize_stock_item_details(plan, context, operation, item_details):
 					value_key,
 				)
 				if identity in seen:
-					frappe.throw(_("Duplicate Item and stock-dimension combination is not allowed."))
-				seen.add(identity)
+					details = get_stock_row_details(
+						schema["item"], attributes, primary, value_key, identity_dimensions, dimension_labels
+					)
+					frappe.throw(get_duplicate_row_message(details, row_label, seen[identity]))
+				seen[identity] = row_label
 
 			normalized_entry = {
 				"name": schema["item"],
@@ -1182,6 +1189,25 @@ def _normalize_stock_item_details(plan, context, operation, item_details):
 				}
 			)
 	return normalized_groups
+
+
+def get_stock_row_label(group_number, row_number, multiple_groups):
+	if multiple_groups:
+		return _("Row {0} of table {1}").format(row_number, group_number)
+	return _("Row {0}").format(row_number)
+
+
+def get_stock_row_details(item, attributes, primary, value_key, dimension_values, dimension_labels):
+	"""Readable parts naming one stock cell: item, attribute values, size and dimensions."""
+	details = [item, *attributes.values()]
+	if primary:
+		details.append(f"{_(primary)} {value_key}")
+	details.extend(
+		f"{_(dimension_labels.get(fieldname) or frappe.unscrub(fieldname))} {value}"
+		for fieldname, value in dimension_values.items()
+		if value
+	)
+	return details
 
 
 def _resolve_stock_rows(plan, context, selection_keys):

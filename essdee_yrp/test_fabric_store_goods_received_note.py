@@ -743,6 +743,24 @@ class TestFabricStoreGoodsReceivedNote(TestCase):
 		):
 			save_goods_received_note({"item_details": [{}]}, name=doc.name)
 
+	def test_repeated_received_type_row_names_the_item_and_dimensions(self):
+		saved = {"item_variant": "Cotton Rib-Black", "lot": "LOT-1", "received_type": "Accepted", "quantity": 5}
+		added = dict(saved, received_type="Rejected", quantity=1)
+		with (
+			patch(
+				"essdee_yrp.fabric_store.documents.goods_received_note._dimension_fieldnames",
+				return_value=("lot", "received_type"),
+			),
+			patch("essdee_yrp.fabric_store.documents.goods_received_note.frappe.db.exists", return_value=True),
+			self.assertRaises(frappe.ValidationError) as raised,
+		):
+			_merge_authoritative_rows([saved], [added, dict(added)])
+		self.assertEqual(
+			str(raised.exception),
+			"This item is entered twice: Cotton Rib-Black, Lot LOT-1, Received Type Rejected. "
+			"Remove one row or put the quantities in a single row.",
+		)
+
 	def test_saved_draft_accepts_added_dia_and_preserves_source_fields(self):
 		doc = self.make_document()
 		self.actual_dia_context.return_value = {"enabled": True, "attribute": "Dia", "dia_options": ["14", "14.5"]}
@@ -1327,7 +1345,7 @@ class TestPurchaseOrderLotMerge(TestCase):
 			)
 
 	def test_po_duplicate_lot_and_received_type_is_rejected(self):
-		with self.assertRaisesRegex(frappe.ValidationError, "duplicate lot"):
+		with self.assertRaisesRegex(frappe.ValidationError, "entered twice: FABRIC, Lot LOT-1, Received Type Accepted"):
 			self.merge(
 				[{"quantity": 4}, {"quantity": 6}],
 				lot_options={"PO-ROW": ["LOT-1"]},

@@ -8,6 +8,7 @@ parent Item's primary attribute (normally Size) across one logical row.
 import json
 
 import frappe
+from frappe import _
 from yrp.attribute_links import value as _attribute_value
 from yrp.stock.dimensions import get_dimension_fieldnames
 
@@ -63,6 +64,18 @@ def normalize_item_matrix_row_indexes(rows, *, extra_group_fields=()):
 		row.row_index = f"matrix-{logical_indexes[key]:04d}"
 		normalized.append(row)
 	return normalized
+
+
+def get_duplicate_row_message(details, row=None, first_row=None):
+	"""Plain-language error naming a repeated item row; rows are display labels such as "Row 5"."""
+	summary = ", ".join(str(part) for part in details if part)
+	if row and first_row:
+		return _("{0} is a duplicate of {1}: {2}. Remove one row or put the quantities in a single row.").format(
+			row, first_row, summary
+		)
+	return _("This item is entered twice: {0}. Remove one row or put the quantities in a single row.").format(
+		summary
+	)
 
 
 def _canonical_json(value):

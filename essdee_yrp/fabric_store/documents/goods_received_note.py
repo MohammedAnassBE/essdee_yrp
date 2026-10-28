@@ -49,6 +49,7 @@ from essdee_yrp.garment_grn import (
 	calculate_grn_receivables,
 	get_grn_calculation_context,
 )
+from essdee_yrp.item_matrix import get_duplicate_row_message
 from essdee_yrp.overrides.goods_received_note import (
 	_lock_versioned_cloth_lot,
 	get_empty_draft_rows,
@@ -756,6 +757,18 @@ def _canonical_json(value) -> str:
 	return json.dumps(value, separators=(",", ":"), sort_keys=True, default=str)
 
 
+def get_grn_row_details(row, dimensions: tuple[str, ...]) -> list[str]:
+	"""Readable parts naming one GRN item row: item variant and its stock dimensions."""
+	return [
+		row.get("item_variant"),
+		*(
+			f"{_(frappe.unscrub(fieldname))} {row.get(fieldname)}"
+			for fieldname in dimensions
+			if row.get(fieldname)
+		),
+	]
+
+
 def _dimension_fieldnames() -> tuple[str, ...]:
 	return tuple(
 		dimension.get("fieldname")
@@ -866,7 +879,7 @@ def _merge_purchase_order_rows(authoritative, browser_rows, lot_options, lot_fie
 			continue
 		key = _business_key(browser, dimensions, include_received_type=True)
 		if key in seen:
-			frappe.throw(_("The item matrix contains a duplicate lot / Received Type row."))
+			frappe.throw(get_duplicate_row_message(get_grn_row_details(browser, dimensions)))
 		siblings = lineages.get(_business_key(browser, lineage_dimensions, include_received_type=False))
 		if not siblings:
 			frappe.throw(
@@ -970,7 +983,7 @@ def _merge_received_type_rows(authoritative, browser_rows):
 			frappe.throw(_("Select a valid Received Type."))
 		new_key = (*lineage_key, received_type)
 		if new_key in addition_keys:
-			frappe.throw(_("The item matrix contains a duplicate Received Type row."))
+			frappe.throw(get_duplicate_row_message(get_grn_row_details(browser, dimensions)))
 		clone = _copy_operator_values(authoritative[lineage_candidates[0]], browser)
 		clone.pop("name", None)
 		clone["received_type"] = received_type

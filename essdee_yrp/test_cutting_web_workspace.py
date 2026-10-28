@@ -535,15 +535,27 @@ class TestCuttingWebWorkspace(UnitTestCase):
 			}
 		]
 		get_doc.return_value.check_permission = MagicMock()
-		item_details = self._stock_item_details()
-		item_details.append(self._stock_item_details()[0])
-
-		with self.assertRaisesRegex(frappe.ValidationError, "Duplicate Item"):
-			_normalize_stock_item_details(
-				frappe._dict(name="CP-TEST", lot="LOT-TEST"),
-				frappe._dict(default_received_type="Accepted"),
-				"stock_reconciliation",
-				item_details,
+		same_table = self._stock_item_details()
+		same_table[0]["items"].insert(0, {**same_table[0]["items"][0], "values": {"M": {"qty": 1}}})
+		same_table[0]["items"].append(same_table[0]["items"][1])
+		other_table = self._stock_item_details()
+		other_table.append(self._stock_item_details()[0])
+		cases = (
+			(same_table, "Row 3 is a duplicate of Row 2"),
+			(other_table, "Row 1 of table 2 is a duplicate of Row 1 of table 1"),
+		)
+		for item_details, rows in cases:
+			with self.subTest(rows=rows), self.assertRaises(frappe.ValidationError) as raised:
+				_normalize_stock_item_details(
+					frappe._dict(name="CP-TEST", lot="LOT-TEST"),
+					frappe._dict(default_received_type="Accepted"),
+					"stock_reconciliation",
+					item_details,
+				)
+			self.assertEqual(
+				str(raised.exception),
+				f"{rows}: ITEM-TEMPLATE, Cut, Red, Size S, Lot LOT-TEST. "
+				"Remove one row or put the quantities in a single row.",
 			)
 
 	@patch("essdee_yrp.cutting.web_workspace.frappe.get_doc")

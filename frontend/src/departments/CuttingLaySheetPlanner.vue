@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width activity-doctype="SD YRP Cutting Laysheet Planner" :activity-name="record.name || ''" :activity-record="record">
+	<DepartmentPage title="LaySheet Planner" :back-to="backTo" back-label="LaySheet Planner" :show-title="false" flat full-width activity-doctype="SD YRP Cutting Laysheet Planner" :activity-name="record.name || ''" :activity-record="record">
 		<div class="planner-workspace erp-workspace">
 			<div v-if="loading && !payload.record" class="planner-workspace__loading"><Skeleton height="76px" /><Skeleton height="520px" /></div>
 			<WorkspaceLoadError v-else-if="error && !record.name" title="LaySheet Planner unavailable" :message="error" :loading="loading" @retry="load" />
@@ -14,7 +14,7 @@
 						</div>
 					</div>
 					<div class="planner-record-actions">
-						<DocumentDeleteButton doctype="SD YRP Cutting Laysheet Planner" :name="record.name" :docstatus="record.docstatus" :disabled="loading || actionBusy" redirect-to="/cutting/lay-sheet-planner" />
+						<DocumentDeleteButton doctype="SD YRP Cutting Laysheet Planner" :name="record.name" :docstatus="record.docstatus" :disabled="loading || actionBusy" :redirect-to="backTo" />
 						<DocumentPrintButton doctype="SD YRP Cutting Laysheet Planner" :name="record.name" :docstatus="record.docstatus" :disabled="loading || actionBusy" />
 						<Button v-if="activeTab === 'inputs' && actions.can_edit_inputs" label="Save Inputs" icon="pi pi-save" severity="secondary" outlined :loading="saving" :disabled="actionBusy || !plannerInputs?.canSave" @click="plannerInputs?.save()" /><Button v-if="actions.can_optimize" :label="actions.can_retry ? 'Retry Optimization' : results.successful?.length ? 'Re-optimize' : 'Optimize'" icon="pi pi-calculator" :loading="optimizing" :disabled="actionBusy" @click="optimize" /><Button icon="pi pi-refresh" aria-label="Refresh LaySheet Plan" severity="secondary" text rounded :loading="loading" :disabled="actionBusy" @click="load" /></div>
 				</header>
@@ -69,6 +69,7 @@ import ReportRunStatus from "../components/reports/ReportRunStatus.vue"
 import PlannerInputs from "./cutting/planner/PlannerInputs.vue"
 import PlannerPlanWorkspace from "./cutting/planner/PlannerPlanWorkspace.vue"
 
+defineProps({ backTo: { type: String, default: "/cutting/lay-sheet-planner" } })
 const ACTIVE_STATUSES = ["Queued", "Running"]
 const route = useRoute()
 const plannerName = computed(() => String(route.params.plannerId || ""))

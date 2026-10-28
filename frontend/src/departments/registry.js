@@ -114,7 +114,7 @@ export const departments = [
 		label: "PD",
 		shortLabel: "PD",
 		path: "/pd",
-		sections: { products: "products", product_releases: "product-releases", lotwise_item_profits: "lotwise-item-profits" },
+		sections: { products: "products", product_releases: "product-releases", lotwise_item_profits: "lotwise-item-profits", lay_sheet_planner: "lay-sheet-planner" },
 		component: () => import("./PD.vue"),
 	},
 	{

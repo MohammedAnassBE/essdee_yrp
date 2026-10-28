@@ -13,6 +13,7 @@ import { PURCHASE_ROUTES } from "../src/departments/purchase/purchaseViews.js"
 import { departments, getWorkspacePaths } from "../src/departments/registry.js"
 import { getLockedDepartment, getLockedRedirect, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
 import { canOpenList, NO_PERMISSION_PATH } from "../src/router/listPermission.js"
+import { webDocumentPath } from "../src/router/webDocumentRoutes.js"
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8")
 const layout = JSON.parse(source("../../essdee_yrp/fixtures/yrp_ui_layout.json")).find((row) => row.experience_key === "merch-pd")
@@ -41,7 +42,7 @@ test("Merch PD shows Lot, Item Production Detail, Purchase Order, Vendor Bill Tr
 	assert.deepEqual(workspaces, ["lots", "item_production_details", "purchase_orders", "bill_tracking", "lotwise_item_profits"], "the shipped layout lists every card")
 	assert.equal(layout.name, "Merch PD")
 	assert.equal(layout.render_mode, "Registered Experience")
-	assert.deepEqual(pdLauncherItems().map((item) => item.key), ["products", "product_releases", "lotwise_item_profits"])
+	assert.deepEqual(pdLauncherItems().map((item) => item.key), ["products", "product_releases", "lotwise_item_profits", "lay_sheet_planner"])
 })
 
 test("the department combines Merch, Purchase and PD sections in the registry", () => {
@@ -85,4 +86,25 @@ test("cards for unreadable DocTypes are hidden", () => {
 	assert.deepEqual(visibleMerchLauncherItems(sections, items).map((item) => item.key), ["lots", "item_production_details"])
 	assert.match(source("../src/departments/MerchPd.vue"), /:load-capabilities="getMerchPdCapabilities"/)
 	assert.match(source("../src/api/merch.js"), /essdee_yrp\.merch_pd\.web_workspace\.get_capabilities/)
+})
+
+test("PD opens the LaySheet Planner list, editor and records inside PD", () => {
+	const router = loadRouter()
+	const pdWorkspaces = JSON.parse(JSON.parse(source("../../essdee_yrp/fixtures/yrp_ui_layout.json")).find((row) => row.experience_key === "pd").config).experience_props.workspaces
+	const pdLocked = getLockedDepartment({ ui_config: { meta: { render_mode: "Registered Experience", experience_key: "pd" }, config: { experience_props: { workspaces: pdWorkspaces } } } })
+	const card = pdLauncherItems().find((item) => item.key === "lay_sheet_planner")
+	assert.deepEqual([card.label, card.to], ["LaySheet Planner", "/pd/lay-sheet-planner"])
+	assert.ok(pdWorkspaces.includes("lay_sheet_planner"))
+	for (const [path, name] of [["/pd/lay-sheet-planner", PD_ROUTES.laySheetPlanners], ["/pd/lay-sheet-planner/new", PD_ROUTES.laySheetPlannerNew], ["/pd/lay-sheet-planner/CLP-1", PD_ROUTES.laySheetPlanner]]) {
+		const route = router.resolve(path)
+		assert.equal(route.name, name, path)
+		assert.equal(getLockedRedirect(route, pdLocked), undefined, path)
+	}
+	assert.deepEqual(JSON.parse(JSON.stringify(router.resolve("/pd/lay-sheet-planner").matched.at(-1).props.default)), {
+		backTo: "/pd", backLabel: "PD", viewRouteName: PD_ROUTES.laySheetPlanner, newRouteName: PD_ROUTES.laySheetPlannerNew,
+	})
+	assert.equal(router.resolve("/cutting/lay-sheet-planner").matched.at(-1).components.default, router.resolve("/pd/lay-sheet-planner").matched.at(-1).components.default, "PD reuses the Cutting planner list")
+	assert.equal(webDocumentPath("SD YRP Cutting Laysheet Planner", "CLP/1", "/web/pd/lay-sheet-planner"), "/web/pd/lay-sheet-planner/CLP%2F1")
+	assert.equal(canOpenList("/pd/lay-sheet-planner", { user: { name: "pd@example.com", can_read: ["SD YRP Product"] } }), false)
+	assert.deepEqual(getLockedRedirect(router.resolve("/cutting/lay-sheet-planner"), pdLocked), notInLayout("/cutting/lay-sheet-planner"))
 })

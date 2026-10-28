@@ -50,6 +50,19 @@ class TestPdCapabilities(TestCase):
 		self.assertTrue(sections["product_releases"]["can_read"])
 		self.assertFalse(sections["product_releases"]["can_write"])
 		self.assertFalse(sections["lotwise_item_profits"]["can_read"])
+		self.assertFalse(sections["lay_sheet_planner"]["can_read"])
+
+	def test_lay_sheet_planner_section_follows_planner_permissions(self):
+		def allowed(doctype, ptype="read", doc=None, **kwargs):
+			return doctype == "SD YRP Cutting Laysheet Planner" and ptype in ("read", "create")
+
+		with patch.object(frappe, "has_permission", side_effect=allowed):
+			section = self.workspace().get_capabilities()["sections"]["lay_sheet_planner"]
+		self.assertEqual(section["doctype"], "SD YRP Cutting Laysheet Planner")
+		self.assertEqual(section["label"], "LaySheet Planner")
+		self.assertTrue(section["can_read"])
+		self.assertTrue(section["can_create"])
+		self.assertFalse(section["can_write"])
 
 	def test_capability_labels_are_translated_at_call_time(self):
 		language = "en"

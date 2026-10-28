@@ -8,4 +8,7 @@ export const PD_ROUTES = {
 	lotwiseList: "pd-lotwise-item-profits",
 	lotwiseNew: "pd-lotwise-item-profit-new",
 	lotwise: "pd-lotwise-item-profit",
+	laySheetPlanners: "pd-lay-sheet-planners",
+	laySheetPlannerNew: "pd-lay-sheet-planner-new",
+	laySheetPlanner: "pd-lay-sheet-planner",
 }

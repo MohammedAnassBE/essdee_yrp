@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" back-to="/cutting" back-label="Cutting" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width>
 		<div class="cutting-list erp-workspace">
 			<WorkspaceLoadError v-if="loadError" :message="loadError" :loading="loadingCapability" @retry="load" />
 			<WorkspaceLoadError v-else-if="capability && !capability.can_read" title="LaySheet Planner unavailable" message="You do not have permission to view LaySheet Planner documents." :retryable="false" />
@@ -41,6 +41,13 @@ import ListView from "../components/common/ListView.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
 
+const props = defineProps({
+	backTo: { type: String, default: "/cutting" },
+	backLabel: { type: String, default: "Cutting" },
+	viewRouteName: { type: String, default: "cutting-lay-sheet-planner" },
+	newRouteName: { type: String, default: "cutting-lay-sheet-planner-new" },
+})
+
 const router = useRouter()
 const capability = ref(null)
 const loadError = ref("")
@@ -49,11 +56,11 @@ const defaultColumns = ["description", "lot", "item", "optimization_status", "se
 const statusOptions = ["Not Started", "Queued", "Running", "Completed", "Failed"]
 
 function openPlan(row) {
-	if (row?.name) router.push(`/cutting/lay-sheet-planner/${encodeURIComponent(row.name)}`)
+	if (row?.name) router.push({ name: props.viewRouteName, params: { plannerId: row.name } })
 }
 
 function createPlan() {
-	router.push("/cutting/lay-sheet-planner/new")
+	router.push({ name: props.newRouteName })
 }
 
 async function load() {

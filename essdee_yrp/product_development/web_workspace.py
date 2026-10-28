@@ -20,6 +20,7 @@ SECTIONS = {
 	"products": (PRODUCT, "Products"),
 	"product_releases": (RELEASE, "Product Releases"),
 	"lotwise_item_profits": (LOTWISE, "Lotwise Item Profit"),
+	"lay_sheet_planner": ("SD YRP Cutting Laysheet Planner", "LaySheet Planner"),
 }
 PRODUCT_FIELDS = (
 	"style_no",

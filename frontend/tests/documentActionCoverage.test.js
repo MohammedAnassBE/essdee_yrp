@@ -64,7 +64,7 @@ test("D1–D7 page actions use the saved identity, status, and list destination"
 		["CuttingPlan", "SD YRP Cutting Plan", ':redirect-to="backTo"'],
 		["CuttingOrder", "SD YRP Cutting Order", 'redirect-to="/cutting/orders"'],
 		["CuttingBulkLaySheet", "SD YRP Cutting Bulk Lay Sheets", 'redirect-to="/cutting/bulk-lay-sheets"'],
-		["CuttingLaySheetPlanner", "SD YRP Cutting Laysheet Planner", 'redirect-to="/cutting/lay-sheet-planner"'],
+		["CuttingLaySheetPlanner", "SD YRP Cutting Laysheet Planner", ':redirect-to="backTo"'],
 		["finishing/FinishingPlan", "SD YRP Finishing Plan", ':redirect-to="backTo"'],
 		["finishing/FinishingDispatch", "SD YRP Finishing Plan Dispatch", ':redirect-to="`${basePath}/dispatches`"'],
 		["purchase/ItemPage", "Item", 'redirect-to="/purchase/items"'],

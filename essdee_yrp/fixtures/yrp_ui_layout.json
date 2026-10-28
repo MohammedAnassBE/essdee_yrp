@@ -216,14 +216,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"products\",\n   \"product_releases\",\n   \"lotwise_item_profits\"\n  ]\n }\n}",
-  "description": "/web PD department workspace only: products, product_releases, lotwise_item_profits.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"products\",\n   \"product_releases\",\n   \"lotwise_item_profits\",\n   \"lay_sheet_planner\"\n  ]\n }\n}",
+  "description": "/web PD department workspace only: products, product_releases, lotwise_item_profits, lay_sheet_planner.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "pd",
   "layout_name": "PD",
-  "modified": "2026-10-15 10:10:21.286134",
+  "modified": "2026-10-28 15:00:00.000000",
   "name": "PD",
   "render_mode": "Registered Experience"
  },

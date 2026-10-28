@@ -308,6 +308,15 @@ const routes = [
 		props: true,
 	},
 	{
+		path: "/pd/lay-sheet-planner", name: PD_ROUTES.laySheetPlanners, component: CuttingLaySheetPlanners,
+		props: { backTo: "/pd", backLabel: "PD", viewRouteName: PD_ROUTES.laySheetPlanner, newRouteName: PD_ROUTES.laySheetPlannerNew },
+	},
+	{
+		path: "/pd/lay-sheet-planner/new", name: PD_ROUTES.laySheetPlannerNew, component: CuttingLaySheetPlannerEditorPage,
+		props: { backTo: "/pd/lay-sheet-planner", viewRouteName: PD_ROUTES.laySheetPlanner },
+	},
+	{ path: "/pd/lay-sheet-planner/:plannerId", name: PD_ROUTES.laySheetPlanner, component: CuttingLaySheetPlanner, props: { backTo: "/pd/lay-sheet-planner" } },
+	{
 		path: "/cutting/plans",
 		name: "cutting-plans",
 		component: CuttingPlans,

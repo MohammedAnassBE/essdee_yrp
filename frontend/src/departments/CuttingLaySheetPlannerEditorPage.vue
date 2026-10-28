@@ -1,7 +1,7 @@
 <template>
-	<DepartmentPage title="LaySheet Planner" back-to="/cutting/lay-sheet-planner" back-label="LaySheet Planner" :show-title="false" flat full-width>
+	<DepartmentPage title="LaySheet Planner" :back-to="backTo" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<section class="planner-new erp-workspace erp-card erp-editor-shell">
-			<header class="erp-editor-header"><div><span>New document</span><h1>New LaySheet Plan</h1></div><div class="planner-new__actions erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="router.push('/cutting/lay-sheet-planner')" /><Button v-if="payload.actions?.can_edit_inputs" label="Save" icon="pi pi-save" :loading="saving" :disabled="saving || !plannerInputs?.canSave" @click="plannerInputs?.save()" /></div></header>
+			<header class="erp-editor-header"><div><span>New document</span><h1>New LaySheet Plan</h1></div><div class="planner-new__actions erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="router.push(backTo)" /><Button v-if="payload.actions?.can_edit_inputs" label="Save" icon="pi pi-save" :loading="saving" :disabled="saving || !plannerInputs?.canSave" @click="plannerInputs?.save()" /></div></header>
 			<WorkspaceLoadError v-if="loadFailed" title="LaySheet Planner unavailable" :message="error" :loading="loading" @retry="load" />
 			<div v-if="loading" class="planner-new__loading"><Skeleton height="480px" /></div>
 			<PlannerInputs v-else-if="!loadFailed" ref="plannerInputs" :record="payload.record" :editable="payload.actions?.can_edit_inputs" :saving="saving" @save="save" />
@@ -23,6 +23,10 @@ import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue
 import PlannerInputs from "./cutting/planner/PlannerInputs.vue"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../utils/newDocumentDefaults.js"
 
+const props = defineProps({
+	backTo: { type: String, default: "/cutting/lay-sheet-planner" },
+	viewRouteName: { type: String, default: "cutting-lay-sheet-planner" },
+})
 const router = useRouter()
 const payload = ref({})
 const loading = ref(true)
@@ -47,7 +51,7 @@ async function load() {
 onMounted(load)
 async function save(values) {
 	saving.value = true; actionError.value = ""
-	try { const saved = await saveLaySheetPlanner(values); const name = saved?.record?.name; if (name) router.replace({ name: "cutting-lay-sheet-planner", params: { plannerId: name } }) }
+	try { const saved = await saveLaySheetPlanner(values); const name = saved?.record?.name; if (name) router.replace({ name: props.viewRouteName, params: { plannerId: name } }) }
 	catch (reason) { actionError.value = reason?.message || "Unable to save the LaySheet Plan." }
 	finally { saving.value = false }
 }

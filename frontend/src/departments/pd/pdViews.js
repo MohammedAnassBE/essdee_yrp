@@ -31,6 +31,13 @@ export function pdLauncherItems() {
 			icon: "pi pi-calculator",
 			to: "/pd/lotwise-item-profits",
 		},
+		{
+			key: "lay_sheet_planner",
+			label: "LaySheet Planner",
+			description: "Optimize size quantities into efficient marker and lay plans.",
+			icon: "pi pi-sitemap",
+			to: "/pd/lay-sheet-planner",
+		},
 	]
 }
 

@@ -24,7 +24,9 @@
 					<TabPanels>
 						<TabPanel value="inputs"><PlannerInputs ref="plannerInputs" :record="record" :editable="actions.can_edit_inputs" :saving="saving" @save="saveInputs" /></TabPanel>
 						<TabPanel value="plan">
+							<div v-if="optimizationActive" class="planner-run-status"><ReportRunStatus :state="optimizationRunState" :tracking-started-at="optimizationTrackingStartedAt" /></div>
 							<PlannerPlanWorkspace
+								v-else
 								:successful="results.successful"
 								:failed="results.failed"
 								:selected="record.selected_strategy"
@@ -63,9 +65,11 @@ import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../components/documents/DocumentStatusBadge.vue"
+import ReportRunStatus from "../components/reports/ReportRunStatus.vue"
 import PlannerInputs from "./cutting/planner/PlannerInputs.vue"
 import PlannerPlanWorkspace from "./cutting/planner/PlannerPlanWorkspace.vue"
 
+const ACTIVE_STATUSES = ["Queued", "Running"]
 const route = useRoute()
 const plannerName = computed(() => String(route.params.plannerId || ""))
 const payload = ref({})
@@ -77,6 +81,7 @@ const error = ref("")
 const actionError = ref("")
 const activeTab = ref("inputs")
 const plannerInputs = ref(null)
+const optimizationTrackingStartedAt = ref(null)
 let pollTimer = null
 let loadSequence = 0
 let actionSequence = 0
@@ -86,6 +91,8 @@ const record = computed(() => payload.value.record || {})
 const results = computed(() => payload.value.results || { successful: [], failed: [] })
 const actions = computed(() => payload.value.actions || {})
 const actionBusy = computed(() => saving.value || optimizing.value || Boolean(selecting.value))
+const optimizationActive = computed(() => optimizing.value || ACTIVE_STATUSES.includes(record.value.optimization_status))
+const optimizationRunState = computed(() => record.value.optimization_status === "Running" ? "running" : "queued")
 const optimizationFailure = computed(() => record.value.optimization_status === "Failed" ? record.value.optimization_error || "No feasible lay plan was found." : "")
 const selectedResult = computed(() => {
 	const successful = results.value.successful || []
@@ -108,7 +115,7 @@ async function load() {
 		if (sequence !== loadSequence || requestedPlanner !== plannerName.value) return
 		payload.value = next || {}
 		if (initializedPlanner !== requestedPlanner) {
-			activeTab.value = next?.results?.successful?.length ? "plan" : "inputs"
+			activeTab.value = next?.results?.successful?.length || ACTIVE_STATUSES.includes(next?.record?.optimization_status) ? "plan" : "inputs"
 			initializedPlanner = requestedPlanner
 		}
 		if (next?.actions?.should_poll) schedulePoll(600)
@@ -137,12 +144,12 @@ async function optimize() {
 	const requestedPlanner = plannerName.value
 	const requestedLoadSequence = loadSequence
 	const expectedModified = record.value.modified
-	optimizing.value = true; actionError.value = ""
+	optimizing.value = true; actionError.value = ""; activeTab.value = "plan"
 	try {
 		const status = await startLaySheetOptimization(requestedPlanner, expectedModified)
 		if (actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) return
-		applyStatus(status); activeTab.value = "plan"
-		if (status?.actions?.should_poll || ["Queued", "Running"].includes(status?.status)) schedulePoll(500)
+		applyStatus(status)
+		if (status?.actions?.should_poll || ACTIVE_STATUSES.includes(status?.status)) schedulePoll(500)
 	} catch (reason) { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) actionError.value = reason?.message || "Unable to start lay optimization." }
 	finally { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) optimizing.value = false }
 }
@@ -156,7 +163,7 @@ async function poll() {
 		if (disposed || planner !== plannerName.value || sequence !== loadSequence) return
 		applyStatus(status)
 		if (status?.terminal || ["Completed", "Failed"].includes(status?.status)) { await load(); if (status.status === "Completed") activeTab.value = "plan"; return }
-		if (status?.actions?.should_poll || ["Queued", "Running"].includes(status?.status)) schedulePoll(1000)
+		if (status?.actions?.should_poll || ACTIVE_STATUSES.includes(status?.status)) schedulePoll(1000)
 	} catch (reason) {
 		if (disposed || planner !== plannerName.value || sequence !== loadSequence) return
 		error.value = reason?.message || "Unable to refresh optimization status."
@@ -183,6 +190,7 @@ async function selectStrategy(strategy) {
 	} catch (reason) { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) actionError.value = reason?.message || "Unable to select this strategy." }
 	finally { if (!actionIsStale(sequence, requestedPlanner, requestedLoadSequence)) selecting.value = "" }
 }
+watch(optimizationActive, (active) => { optimizationTrackingStartedAt.value = active ? Date.now() : null }, { immediate: true })
 watch(plannerName, () => { disposed = false; initializedPlanner = ""; activeTab.value = "inputs"; payload.value = {}; saving.value = false; optimizing.value = false; selecting.value = ""; load() }, { immediate: true })
 onBeforeUnmount(() => { disposed = true; loadSequence += 1; actionSequence += 1; stopPolling() })
 </script>
@@ -192,6 +200,7 @@ onBeforeUnmount(() => { disposed = true; loadSequence += 1; actionSequence += 1;
 .planner-tabs { display: flex; min-height: 0; flex: 1; overflow: hidden; flex-direction: column; }.planner-tabs :deep(.p-tablist) { flex: 0 0 auto; background: var(--erp-surface-soft); border-bottom: 1px solid var(--erp-border); }.planner-tabs :deep(.p-tablist-tab-list) { padding: 0 12px; gap: 8px; background: transparent; border: 0; }.planner-tabs :deep(.p-tab) { min-height: 48px; padding: 0 11px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 680; }.planner-tabs :deep(.p-tab-active) { color: var(--erp-accent-dark); }.planner-tabs :deep(.p-tablist-active-bar) { height: 2px; background: var(--erp-accent); }.planner-tabs :deep(.p-tabpanels) { min-height: 0; padding: 0; flex: 1; overflow-y: auto; background: var(--erp-surface); }.planner-tabs :deep(.p-tabpanel) { min-height: 100%; }
 .planner-tabs--plan :deep(.p-tabpanels), .planner-tabs--plan :deep(.p-tabpanel) { overflow: hidden; }
 .planner-tabs--plan :deep(.p-tabpanel) { height: 100%; min-height: 0; }
+.planner-run-status { padding: var(--erp-space-4); }
 @media (max-width: 700px) { .planner-tabs--plan :deep(.p-tabpanels), .planner-tabs--plan :deep(.p-tabpanel) { height: auto; min-height: 0; overflow-y: visible; } }
 @media (max-width: 700px) { .planner-workspace { height: auto; min-height: calc(100dvh - var(--erp-shell-header-height) - 82px); overflow: visible; }.planner-record-header { align-items: flex-start; flex-direction: column; }.planner-tabs { min-height: 0; overflow: visible; }.planner-record-actions { width: 100%; } }
 @media (max-width: 650px) { .planner-record-identity { align-items: flex-start; flex-direction: column; }.planner-record-meta { flex-wrap: wrap; }.planner-header-fact:first-of-type { padding-left: 0; border-left: 0; } }

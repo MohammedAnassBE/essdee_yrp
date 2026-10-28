@@ -319,6 +319,8 @@ def get_editor(name=None):
 	else:
 		_require_permission("create")
 		doc = frappe.new_doc(DOCTYPE)
+		if _doc_value(doc, "max_plies") is None:
+			doc.max_plies = 10000
 		if _doc_value(doc, "tolerance_pct") is None:
 			doc.tolerance_pct = 3
 		if _doc_value(doc, "max_lays") is None:

@@ -126,13 +126,14 @@ class TestCuttingLaySheetPlannerWebWorkspace(TestCase):
 			_normalise_values({**values, "optimization_status": "Completed"}, doc)
 
 	def test_editor_defaults_and_active_input_lock_are_permission_aware(self):
-		new_doc = planner_doc(name=None, order_details=[], tolerance_pct=None, max_lays=None)
+		new_doc = planner_doc(name=None, order_details=[], max_plies=None, tolerance_pct=None, max_lays=None)
 		active = planner_doc(status="Running")
 		with (
 			patch("essdee_yrp.cutting.planner_workspace.frappe.new_doc", return_value=new_doc),
 			patch("essdee_yrp.cutting.planner_workspace.frappe.has_permission", return_value=True),
 		):
 			payload = get_editor()
+		self.assertEqual(payload["record"]["max_plies"], 10000)
 		self.assertEqual(payload["record"]["tolerance_pct"], 3)
 		self.assertEqual(payload["record"]["max_lays"], 8)
 		self.assertTrue(payload["permissions"]["can_create"])

@@ -144,7 +144,7 @@ class SDYRPLot(Document):
 			if set_combination not in [None, ""]:
 				set_combination = set_combination.copy()
 				set_combination.update({"variant": item.item_variant})
-				set_combination = frozenset(set_combination)
+				set_combination = frappe.as_json(set_combination)
 
 				previous_data[set_combination] = {
 					"cut_qty": item.cut_qty,
@@ -167,7 +167,7 @@ class SDYRPLot(Document):
 				if key not in [None, ""]:
 					key = key.copy()
 					key.update({"variant": item["item_variant"]})
-					key = frozenset(key)
+					key = frappe.as_json(key)
 					if previous_data.get(key):
 						item.update(
 							{

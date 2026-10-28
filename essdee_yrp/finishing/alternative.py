@@ -298,6 +298,8 @@ def _append_conversions_to_lot(lot_doc, conversions):
 	_rebuild_lot_order_items(lot_doc, ipd)
 	lot_doc.total_order_quantity = sum(flt(row.quantity) for row in lot_doc.get("lot_order_details") or [])
 	lot_doc.total_quantity = sum(flt(row.qty) for row in lot_doc.get("items") or [])
+	# Box rows are rebuilt from the piece rows above; stop SDYRPLot.calculate_order re-spreading them.
+	lot_doc.flags.items_derived = True
 	lot_doc.save(ignore_permissions=True)
 
 
@@ -370,6 +372,8 @@ def _reduce_source_lot_quantity(source_lot, conversions):
 	_rebuild_lot_order_items(lot_doc, ipd)
 	lot_doc.total_order_quantity = sum(flt(row.quantity) for row in lot_doc.get("lot_order_details") or [])
 	lot_doc.total_quantity = sum(flt(row.qty) for row in lot_doc.get("items") or [])
+	# Box rows are rebuilt from the piece rows above; stop SDYRPLot.calculate_order re-spreading them.
+	lot_doc.flags.items_derived = True
 	lot_doc.save(ignore_permissions=True)
 
 

@@ -1,7 +1,7 @@
 <template>
 	<section class="planner-order-matrix">
 		<header><div><span>Size quantities</span><h3>Order Details</h3></div><Button v-if="editable" label="Add Size" icon="pi pi-plus" size="small" severity="secondary" outlined @click="addRow" /></header>
-		<div v-if="rows.length" class="planner-order-table-wrap" tabindex="0" role="region" aria-label="Order quantity editor"><table><thead><tr><th>#</th><th>Size</th><th class="numeric">Order Quantity</th><th v-if="editable">Actions</th></tr></thead><tbody><tr v-for="(row, index) in rows" :key="row._row_key" class="planner-order-row"><td><span class="row-number">{{ index + 1 }}</span></td><td><InputText :model-value="row.size" :aria-label="`Size row ${index + 1}`" :disabled="!editable" fluid @update:model-value="update(index, 'size', $event)" /></td><td><InputNumber :model-value="row.qty" :aria-label="`Quantity row ${index + 1}`" :min="0" :use-grouping="false" :disabled="!editable" fluid @update:model-value="update(index, 'qty', $event)" /></td><td v-if="editable" class="row-actions"><Button icon="pi pi-trash" aria-label="Remove size" severity="danger" text rounded @click="removeRow(index)" /></td></tr></tbody><tfoot><tr><td colspan="2">Total Order Quantity</td><td class="numeric"><strong>{{ total.toLocaleString() }}</strong></td><td v-if="editable"></td></tr></tfoot></table></div>
+		<div v-if="rows.length" class="planner-order-table-wrap" tabindex="0" role="region" aria-label="Order quantity editor"><table v-entry-table="{ add: editable ? addRow : null, fixed: false }"><thead><tr><th>#</th><th>Size</th><th class="numeric">Order Quantity</th><th v-if="editable">Actions</th></tr></thead><tbody><tr v-for="(row, index) in rows" :key="row._row_key" class="planner-order-row"><td><span class="row-number">{{ index + 1 }}</span></td><td><InputText :model-value="row.size" :aria-label="`Size row ${index + 1}`" :disabled="!editable" fluid @update:model-value="update(index, 'size', $event)" /></td><td><InputNumber :model-value="row.qty" :aria-label="`Quantity row ${index + 1}`" :min="0" :use-grouping="false" :disabled="!editable" fluid @update:model-value="update(index, 'qty', $event)" /></td><td v-if="editable" class="row-actions"><Button icon="pi pi-trash" aria-label="Remove size" severity="danger" text rounded @click="removeRow(index)" /></td></tr></tbody><tfoot><tr><td colspan="2">Total Order Quantity</td><td class="numeric"><strong>{{ total.toLocaleString() }}</strong></td><td v-if="editable"></td></tr></tfoot></table></div>
 		<div v-else class="planner-order-empty"><i class="pi pi-table"></i><strong>No size quantities</strong><span>Add at least one size. Zero-demand sizes are allowed when another size has demand.</span></div>
 	</section>
 </template>
@@ -11,6 +11,8 @@ import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
 import InputText from "primevue/inputtext"
 import { computed } from "vue"
+
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({ rows: { type: Array, default: () => [] }, editable: Boolean })
 const emit = defineEmits(["update:rows"])

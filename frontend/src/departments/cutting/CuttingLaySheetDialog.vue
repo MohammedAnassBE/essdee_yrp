@@ -47,6 +47,7 @@
 					</TabPanel>
 					<TabPanel value="cloth">
 						<Message v-if="detailError" severity="error" :closable="false">{{ detailError }}</Message>
+						<LaySheetManualBundles v-if="sheet.is_manual_entry" :sheet="sheet" :colours="editorAttributes.colour" :editable="canEditDetails" :busy="detailBusy === 'manual-save'" :load-set-fields="loadManualSetFields" @save="saveManualBundles" />
 						<section class="data-block editable-data-block">
 							<header><div class="data-block__title"><h3>Cloth Details</h3><span>{{ sheet.cloth_details?.length || 0 }} rows</span></div><Button v-if="canEditDetails" label="Add Cloth" icon="pi pi-plus" size="small" @click="openClothEditor()" /></header>
 							<MaterialRequirementGroups
@@ -209,6 +210,7 @@ import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
+import LaySheetManualBundles from "./laysheet/LaySheetManualBundles.vue"
 import RecordDialogHeader from "./RecordDialogHeader.vue"
 
 const props = defineProps({
@@ -545,13 +547,34 @@ async function deleteAccessoryConfirmed(index) {
 	}
 }
 
-async function persistDetails(clothDetails, accessoryDetails, message) {
+async function loadManualSetFields(colour) {
+	const result = await callMethod(laysheetMethod("get_input_fields"), {
+		cutting_marker: sheet.value.cutting_marker,
+		colour,
+		select_attributes: editorAttributes.value,
+	})
+	return result?.input_fields || []
+}
+
+async function saveManualBundles(manualItems) {
+	detailBusy.value = "manual-save"
+	try {
+		await persistDetails((sheet.value.cloth_details || []).map(clothRow), (sheet.value.accessory_details || []).map(accessoryRow), "Bundle details saved.", manualItems)
+	} catch (reason) {
+		actionError.value = reason.message || "Unable to save the bundle details."
+	} finally {
+		detailBusy.value = ""
+	}
+}
+
+async function persistDetails(clothDetails, accessoryDetails, message, manualItems = undefined) {
 	const saved = await callMethod(laysheetMethod("save_web_laysheet_details"), {
 		...parentArgs.value,
 		cutting_laysheet: sheet.value.name,
 		cloth_details: clothDetails,
 		accessory_details: accessoryDetails,
 		modified: sheet.value.modified,
+		...(manualItems ? { manual_items: manualItems } : {}),
 	})
 	sheet.value = saved
 	success.value = message

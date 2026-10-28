@@ -24,6 +24,7 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant, get_parent_item
 
 from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
+from essdee_yrp.cutting.laysheet_manual_items import build_manual_item_details, get_web_manual_items
 from essdee_yrp.cutting.parent_adapter import (
 	get_completed_incomplete_json,
 	get_detail_doc,
@@ -484,7 +485,7 @@ def save_item_details(items, cutting_plan, calculated_parts, is_manual_entry, cu
 							f"{panel} is not mentioned with {item['cloth_type']}-{_attribute_value(item['dia'])}"
 						)
 
-		effective_bits = item.get("no_of_bits", 0)
+		effective_bits = item.get("no_of_bits") or 0
 		if item["fabric_type"] == "Tubler":
 			effective_bits = effective_bits * 2
 		item_list.append(
@@ -496,10 +497,10 @@ def save_item_details(items, cutting_plan, calculated_parts, is_manual_entry, cu
 				"shade": item["shade"],
 				"weight": item["weight"],
 				"actual_dia": _attribute_value(item["actual_dia"]),
-				"no_of_rolls": item.get("no_of_rolls", 0),
-				"no_of_bits": item.get("no_of_bits", 0),
+				"no_of_rolls": item.get("no_of_rolls") or 0,
+				"no_of_bits": item.get("no_of_bits") or 0,
 				"effective_bits": effective_bits,
-				"end_bit_weight": item.get("end_bit_weight", 0),
+				"end_bit_weight": item.get("end_bit_weight") or 0,
 				"comments": item.get("comments", None),
 				"fabric_type": item["fabric_type"],
 				"used_weight": item.get("used_weight", 0),
@@ -808,6 +809,12 @@ def get_web_laysheet(cutting_plan=None, cutting_laysheet=None, cutting_order=Non
 		_attribute_row(row, ("size", "colour")) for row in doc.cutting_laysheet_bundles
 	]
 	details["print_formats"] = get_document_print_formats(doc)
+	if doc.is_manual_entry:
+		sizes = get_primary_values(doc.name)
+		details["sizes"] = sizes
+		details["manual_items"] = get_web_manual_items(
+			fetch_manual_item_details(doc.cutting_laysheet_manual_items, doc.name), sizes
+		)
 
 	can_write = bool(frappe.has_permission(doc.doctype, "write", doc=doc))
 	can_print = bool(frappe.has_permission(doc.doctype, "print", doc=doc))
@@ -914,8 +921,9 @@ def save_web_laysheet_details(
 	accessory_details=None,
 	modified=None,
 	cutting_order=None,
+	manual_items=None,
 ):
-	"""Save the popup's cloth and accessory editors through normal LaySheet validation."""
+	"""Save the popup's cloth, accessory and manual bundle editors through normal LaySheet validation."""
 	parent_doc, parent_dt, parent_name, parent_field = _web_laysheet_parent(cutting_plan, cutting_order)
 	parent_doc.check_permission("read")
 	doc = frappe.get_doc("SD YRP Cutting LaySheet", cutting_laysheet)
@@ -941,9 +949,7 @@ def save_web_laysheet_details(
 		frappe.throw("This Lay Sheet changed after it was opened. Reload it and try again.")
 	doc.item_details = {
 		"cloth_items": cloth_details,
-		"manual_items": fetch_manual_item_details(doc.cutting_laysheet_manual_items, doc.name)
-		if doc.is_manual_entry
-		else {},
+		"manual_items": get_web_manual_item_details(doc, manual_items, cutting_plan, cutting_order),
 	}
 	if accessory_details:
 		doc.item_accessory_details = accessory_details
@@ -954,6 +960,30 @@ def save_web_laysheet_details(
 		doc.item_accessory_details = None
 	doc.save()
 	return get_web_laysheet(cutting_plan, doc.name, cutting_order=cutting_order)
+
+
+def get_web_manual_item_details(doc, manual_items, cutting_plan=None, cutting_order=None):
+	"""Manual bundle rows to save: the posted rows, or the stored ones when none were posted."""
+	manual_items = frappe.parse_json(manual_items) if isinstance(manual_items, string_types) else manual_items
+	if manual_items is None:
+		if not doc.is_manual_entry:
+			return {}
+		return fetch_manual_item_details(doc.cutting_laysheet_manual_items, doc.name)
+	if not doc.is_manual_entry:
+		frappe.throw("Bundle entries can be entered only on a Manual Entry Cutting LaySheet")
+	colours = get_select_attributes(cutting_plan=cutting_plan, cutting_order=cutting_order)["colour"]
+	set_fields = {}
+
+	def get_set_fields(colour):
+		if colour not in set_fields:
+			set_fields[colour] = get_input_fields(doc.cutting_marker, colour, {"colour": sorted(colours)})[
+				"input_fields"
+			]
+		return set_fields[colour]
+
+	return build_manual_item_details(
+		manual_items, get_primary_values(doc.name), colours, doc.is_set_item, get_set_fields
+	)
 
 
 def validate_cutting_plan_cloth_balance(laysheet_doc, cutting_plan):

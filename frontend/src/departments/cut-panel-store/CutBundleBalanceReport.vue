@@ -27,7 +27,7 @@
 		</template>
 
 		<div class="erp-table-wrap cut-bundle-balance__table-wrap" role="region" aria-label="Cut Bundle Balance results" tabindex="0">
-			<table class="erp-data-table report-table cut-bundle-balance__table">
+			<table class="erp-data-table report-table cut-bundle-balance__table" data-column-layout="results" data-column-order>
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead>
 					<tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]">{{ column.label }}</th></tr>
@@ -55,6 +55,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue"
 import { cellTypeClass } from "../../composables/reportColumns.js"
 import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
+import { useOrderedColumns } from "../../composables/useReportColumnLayout.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import LinkField from "../../components/common/LinkField.vue"
@@ -79,7 +80,7 @@ const {
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "cut-bundle-balance", sourceColumns, sourceRows })
 
-const columns = computed(() => reportColumns.value.filter(column => column.fieldname !== "name"))
+const columns = useOrderedColumns("results", () => reportColumns.value.filter(column => column.fieldname !== "name"), { report: "Cut Bundle Balance" })
 const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => column.kind === "base" && column.fieldname === "qty" ? number(cellValue(row, column)) : cellText(row, column) })
 function cellText(row, column) { return formatDisplayByFieldtype(cellValue(row, column), column.fieldtype, { fallback: "" }) }
 const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))

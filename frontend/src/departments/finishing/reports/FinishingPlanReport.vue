@@ -16,7 +16,7 @@
 			<div class="finishing-stack">
 				<FinishingReportHeading title="Finishing Plan Report" :period="period" />
 				<div class="finishing-scroll fp-report__scroll" role="region" tabindex="0" aria-label="Finishing Plan Report results">
-					<table ref="table" class="finishing-table report-table fp-report__table">
+					<table ref="table" class="finishing-table report-table fp-report__table" data-column-layout="results" data-column-order>
 						<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 						<thead>
 							<tr>
@@ -42,6 +42,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 
 import { cellTypeClass } from "../../../composables/reportColumns.js"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
+import { useOrderedColumns } from "../../../composables/useReportColumnLayout.js"
 import { useReportColumns } from "../../../composables/useReportColumns.js"
 import { useWebReport } from "../../../composables/useWebReport.js"
 import LinkField from "../../../components/common/LinkField.vue"
@@ -66,10 +67,11 @@ const {
 	generate: generateReport, filtersChanged, clear, download,
 } = useWebReport({ reportKey: "finishing-plan" })
 const {
-	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	columns: allColumns, displayColumns: pickedColumns, rows, linkSources, fieldsBySource,
 	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "finishing-plan", sourceColumns, sourceRows })
+const columns = useOrderedColumns("results", pickedColumns, { report: "Finishing Plan Report", isPinned: isFrozen })
 const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => formattedCell(column, row) })
 const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
 

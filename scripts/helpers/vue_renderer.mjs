@@ -26,6 +26,11 @@ const sharedModules = {
 	"workspaceSearch.js": await import("../../frontend/src/components/common/workspaceSearch.js"),
 	// The launcher search binds to window and the router; tests that cover it pass the real component explicitly.
 	"WorkspaceSearch.vue": () => null,
+	// Column resize and move handles need a real DOM; tables render their columns in the given order.
+	"useReportColumnLayout.js": {
+		provideReportColumnLayout: () => ({ isCustomized: Vue.computed(() => false), reset() {} }),
+		useOrderedColumns: (_layoutKey, columns) => Vue.computed(() => Vue.toValue(columns) || []),
+	},
 }
 const sharedModule = (specifier) => sharedModules[specifier.split("/").pop()]
 

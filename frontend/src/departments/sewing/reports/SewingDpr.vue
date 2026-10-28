@@ -21,7 +21,7 @@
 					<h2>Daily Production Report · {{ formatDate(section.date) }} · {{ section.stage }}</h2>
 					<p class="dpr-section__total"><span>Total Qty</span><strong>{{ section.total.toLocaleString(undefined, { maximumFractionDigits: 3 }) }}</strong></p>
 				</header>
-				<SewingReportMatrix v-for="table in section.tables" :key="table.lot" :label="`${formatDate(section.date)} ${section.stage} ${table.lot}`" :columns="table.columns" :rows="table.rows">
+				<SewingReportMatrix v-for="table in section.tables" :key="table.lot" :label="`${formatDate(section.date)} ${section.stage} ${table.lot}`" layout-key="dpr-lot" :columns="table.columns" :rows="table.rows">
 					<template #cell-remarks="{ row }"><InputText v-model="remarks[`${section.key}|${table.lot}|${row.key}`]" class="dpr-remarks" size="small" :aria-label="`Remarks for ${row.colour} ${row.station}`" placeholder="Remarks" /></template>
 				</SewingReportMatrix>
 			</section>

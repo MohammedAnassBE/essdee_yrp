@@ -50,7 +50,7 @@ test("reports show only Generate and Copy, with the rest in the more-actions men
 		const trigger = buttons(root)[2]
 		assert.equal(trigger.props["aria-haspopup"], "menu")
 		assert.equal(trigger.props["aria-controls"], nodes(root, "menu")[0].props.id)
-		assert.deepEqual(menuItems(root).map(item => [item.label, Boolean(item.disabled)]), [["Reset", false], ["Export", false], ["Pick Columns", false]])
+		assert.deepEqual(menuItems(root).map(item => [item.label, Boolean(item.disabled)]), [["Reset", false], ["Reset columns", true], ["Export", false], ["Pick Columns", false]])
 		for (const item of menuItems(root)) item.command()
 		await tick()
 		assert.deepEqual([emitted, opened.length, pick.length], [["reset"], 1, 1])
@@ -61,7 +61,7 @@ test("menu items keep their disabled state and Copy keeps its progress state", a
 	const { root } = mountShell({ copyable: true, generated: false, loading: true, exportSource: { doctype: "X" } })
 	try {
 		await tick()
-		assert.deepEqual(menuItems(root).map(item => [item.label, item.disabled]), [["Reset", true], ["Export", true]])
+		assert.deepEqual(menuItems(root).map(item => [item.label, item.disabled]), [["Reset", true], ["Reset columns", true], ["Export", true]])
 	} finally { root.__vue_app__.unmount() }
 	const ready = mountShell({ copyable: true, generated: true, hasResults: true })
 	try {
@@ -70,7 +70,7 @@ test("menu items keep their disabled state and Copy keeps its progress state", a
 		await tick()
 		const copy = buttons(ready.root)[1]
 		assert.deepEqual([copy.props.label, copy.props.loading], ["Copying", true])
-		assert.deepEqual(menuItems(ready.root).map(item => item.label), ["Reset"])
+		assert.deepEqual(menuItems(ready.root).map(item => item.label), ["Reset", "Reset columns"])
 	} finally { ready.root.__vue_app__.unmount() }
 })
 

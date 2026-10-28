@@ -1,10 +1,10 @@
 <template>
 	<div class="sewing-report-matrix erp-table-wrap" role="region" :aria-label="label" tabindex="0">
-		<table class="erp-table report-table">
+		<table class="erp-table report-table" :data-column-layout="layoutKey || label" data-column-order>
 			<caption>{{ label }}</caption>
-			<thead><tr><th v-for="(column, index) in columns" :key="column.key" scope="col" :class="[cellClass(column, index), { nowrap: !String(column.label).includes(' ') }]" :style="cellStyle(index)">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="columns" :filter="inlineFilter" :cell-class="cellClass" :cell-style="(column, index) => cellStyle(index)" /></thead>
-			<tbody><tr v-for="(row, rowIndex) in visibleRows" :key="row.key ?? rowIndex"><td v-for="(column, index) in columns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key], column) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key], column) }}</slot></td></tr></tbody>
-			<tfoot v-if="footerTotals"><tr class="report-total-row"><th v-for="(column, index) in columns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === 0 ? 'row' : undefined">{{ index === 0 ? totalLabel : format(footerTotals[column.key]) }}</th></tr></tfoot>
+			<thead><tr><th v-for="(column, index) in orderedColumns" :key="column.key" scope="col" :class="[cellClass(column, index), { nowrap: !String(column.label).includes(' ') }]" :style="cellStyle(index)">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="orderedColumns" :filter="inlineFilter" :cell-class="cellClass" :cell-style="(column, index) => cellStyle(index)" /></thead>
+			<tbody><tr v-for="(row, rowIndex) in visibleRows" :key="row.key ?? rowIndex"><td v-for="(column, index) in orderedColumns" :key="column.key" :class="[cellClass(column, index), cellTone?.(row, column)]" :style="cellStyle(index)" :title="column.width ? format(row[column.key], column) : undefined"><slot :name="`cell-${column.key}`" :row="row">{{ format(row[column.key], column) }}</slot></td></tr></tbody>
+			<tfoot v-if="footerTotals"><tr class="report-total-row"><th v-for="(column, index) in orderedColumns" :key="column.key" :class="cellClass(column, index)" :style="cellStyle(index)" :scope="index === totalLabelIndex ? 'row' : undefined">{{ index === totalLabelIndex ? totalLabel : format(footerTotals[column.key]) }}</th></tr></tfoot>
 		</table>
 	</div>
 </template>
@@ -16,6 +16,7 @@ import { columnTotal } from "../../../components/reports/inlineFilters.js"
 import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import { cellTypeClass } from "../../../composables/reportColumns.js"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
+import { useOrderedColumns } from "../../../composables/useReportColumnLayout.js"
 import { formatDisplayByFieldtype } from "../../../utils/dateFormat.js"
 
 const props = defineProps({
@@ -27,7 +28,12 @@ const props = defineProps({
 	cellTone: { type: Function, default: null },
 	/** Off for reports that render one matrix per group. */
 	inlineFilters: { type: Boolean, default: false },
+	/** Tables sharing a key share column widths and order, e.g. one DPR table per lot. */
+	layoutKey: { type: String, default: "" },
 })
+const orderedColumns = useOrderedColumns(() => props.layoutKey || props.label, () => props.columns, { isPinned: column => Boolean(column.frozen) })
+// A moved numeric column keeps its total; the label goes to the first text column.
+const totalLabelIndex = computed(() => Math.max(0, orderedColumns.value.findIndex(column => !column.numeric)))
 const inlineFilter = useInlineFilters(() => props.rows, () => props.columns, { cellValue: (row, column) => row[column.key], cellText: (row, column) => format(row[column.key], column) })
 const visibleRows = computed(() => props.inlineFilters ? inlineFilter.filteredRows.value : props.rows)
 // Footer totals are sums of the shown rows, so a column filter recomputes them like Desk's total row.
@@ -39,7 +45,7 @@ const footerTotals = computed(() => {
 const frozenOffsets = computed(() => {
 	const offsets = []
 	let left = 0
-	for (const column of props.columns) {
+	for (const column of orderedColumns.value) {
 		if (!column.frozen) break
 		if (!column.width) throw new Error(`Frozen column "${column.label}" needs a width.`)
 		offsets.push(left)
@@ -51,10 +57,10 @@ function cellClass(column, index) {
 	const frozenCount = frozenOffsets.value.length
 	// Short identifiers (Lot, Line, Type) stay on one line; only columns marked wrap may break.
 	const typeClass = column.numeric ? "report-cell--num" : (column.fieldtype || column.wrap) ? cellTypeClass(column) : undefined
-	return [typeClass, { numeric: column.numeric, sized: column.width, frozen: index < frozenCount, "frozen-last": index === frozenCount - 1, "report-cell--last-column": index === props.columns.length - 1 }]
+	return [typeClass, { numeric: column.numeric, sized: column.width, frozen: index < frozenCount, "frozen-last": index === frozenCount - 1, "report-cell--last-column": index === orderedColumns.value.length - 1 }]
 }
 function cellStyle(index) {
-	const column = props.columns[index]
+	const column = orderedColumns.value[index]
 	if (!column.width) return undefined
 	const width = `${column.width}px`
 	return { width, minWidth: width, maxWidth: width, left: index < frozenOffsets.value.length ? `${frozenOffsets.value[index]}px` : undefined }

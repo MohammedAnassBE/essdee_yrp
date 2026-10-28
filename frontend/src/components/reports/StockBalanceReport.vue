@@ -50,7 +50,7 @@
 		</template>
 
 		<div class="erp-table-wrap report-table-frame stock-table-wrap" role="region" aria-label="Stock Balance results" tabindex="0">
-			<table class="erp-data-table report-table stock-table">
+			<table class="erp-data-table report-table stock-table" data-column-layout="results" data-column-order>
 				<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: `${column.width}px` }" /></colgroup>
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]">{{ column.label || column.fieldname }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
@@ -74,6 +74,7 @@ import { callMethod, searchLink } from "../../api/frappe.js"
 import { cellTypeClass } from "../../composables/reportColumns.js"
 import { useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
+import { useOrderedColumns } from "../../composables/useReportColumnLayout.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
@@ -108,12 +109,13 @@ const {
 	generate: generateReport, filtersChanged, clear, download,
 } = useWebReport({ reportKey: "stock-balance" })
 const {
-	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	columns: allColumns, displayColumns: pickedColumns, rows, linkSources, fieldsBySource,
 	hasLinkedColumns, layoutError, loadLayout, loadFieldOptions, applyLayout,
 	saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: "stock-balance", sourceColumns, sourceRows })
 // The inward split cell is server text like "2026-10-23: 5", one line per date.
 const displayCell = (row, column) => column.fieldname === "inward_split" ? formatDatesInText(cellValue(row, column)) : stockCellValue(cellValue(row, column), column)
+const columns = useOrderedColumns("results", pickedColumns, { report: "Stock Balance" })
 const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: displayCell })
 const dataRows = computed(() => inlineFilter.filteredRows.value.filter((row) => !row.is_total_row))
 // Export rebuilds rows on the server, so only the mounted table is stepped.

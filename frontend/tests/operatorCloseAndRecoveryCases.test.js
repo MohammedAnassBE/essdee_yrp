@@ -196,7 +196,8 @@ test("F-B38: internal name is retained as the row key and excluded from displaye
 	const source = read("departments/cut-panel-store/CutBundleBalanceReport.vue")
 	assert.match(source, /:key="`\$\{row.name/)
 	const declaration = source.split("\n").find(line => line.startsWith("const columns ="))
-	const columns = new Function("computed", "reportColumns", `${declaration}\nreturn columns`)(Vue.computed, Vue.ref([{ fieldname: "name" }, { fieldname: "lot" }]))
+	const useOrderedColumns = (_layoutKey, columns) => Vue.computed(() => Vue.toValue(columns))
+	const columns = new Function("useOrderedColumns", "reportColumns", `${declaration}\nreturn columns`)(useOrderedColumns, Vue.ref([{ fieldname: "name" }, { fieldname: "lot" }]))
 	assert.deepEqual(columns.value, [{ fieldname: "lot" }])
 })
 

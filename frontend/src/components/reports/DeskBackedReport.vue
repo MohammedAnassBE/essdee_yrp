@@ -11,7 +11,7 @@
 		</template>
 		<template #status><ReportRunStatus :state="state" :job="job" :error="reportError" @rebuild="generate" /></template>
 		<div class="erp-table-wrap report-table-frame" role="region" :aria-label="`${config.title} results`" tabindex="0">
-			<table class="erp-data-table report-table desk-report-table">
+			<table class="erp-data-table report-table desk-report-table" data-column-layout="results" data-column-order>
 				<thead><tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]" :style="{ minWidth: `${column.width}px` }">{{ column.label }}</th></tr><ReportFilterRow :columns="columns" :filter="inlineFilter" /></thead>
 				<tbody>
 					<tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row }"><td v-for="(column, columnIndex) in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column), cellToneClass(row, column), { 'report-cell--last-column': columnIndex === columns.length - 1 }]">{{ stockCellValue(cellValue(row, column), column) }}</td></tr>
@@ -33,6 +33,7 @@ import { useRoute } from "vue-router"
 import { cellTypeClass } from "../../composables/reportColumns.js"
 import { ROW_RENDER_STEP, useIncrementalRows } from "../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../composables/useInlineFilters.js"
+import { useOrderedColumns } from "../../composables/useReportColumnLayout.js"
 import { useReportColumns } from "../../composables/useReportColumns.js"
 import { useWebReport } from "../../composables/useWebReport.js"
 import DateField from "../common/DateField.vue"
@@ -58,9 +59,10 @@ const {
 	loading, isBusy, generated, isBackgroundResult, statusOnly, generate: generateReport, filtersChanged, clear, download,
 } = useWebReport({ reportKey: props.reportKey })
 const {
-	columns: allColumns, displayColumns: columns, rows, linkSources, fieldsBySource,
+	columns: allColumns, displayColumns: pickedColumns, rows, linkSources, fieldsBySource,
 	layoutError, loadLayout, loadFieldOptions, applyLayout, saveLayout, resetLayout, cellAlign, cellValue,
 } = useReportColumns({ reportKey: props.reportKey, sourceColumns, sourceRows })
+const columns = useOrderedColumns("results", pickedColumns, { report: config.title })
 
 const inlineFilter = useInlineFilters(rows, columns, { cellValue, cellText: (row, column) => stockCellValue(cellValue(row, column), column) })
 const exportSource = computed(() => config.renderedExport

@@ -1,9 +1,9 @@
 <template>
 	<div class="finishing-scroll planning-report-scroll" role="region" tabindex="0" :aria-label="title + ' results'">
-		<table class="finishing-table report-table">
-			<colgroup><col v-for="column in columns" :key="column.key" :style="{ width: column.width + 'px' }" /></colgroup>
-			<thead><tr><th v-for="column in columns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="columns" :filter="inlineFilter" /></thead>
-			<tbody><tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row, 'report-group-start': isGroupStart(row, index) }"><template v-for="(column, columnIndex) in columns" :key="column.key"><td v-if="spanOf(column, row, index)" :rowspan="spanOf(column, row, index) > 1 ? spanOf(column, row, index) : undefined" :class="[cellAlign(column), cellTypeClass(column), cellTone(column, row) ? 'planning-tone--' + cellTone(column, row) : '', { 'planning-report-first': columnIndex === 0, 'report-cell--last-column': columnIndex === columns.length - 1 }]" :title="cellTone(column, row) || undefined"><RouterLink v-if="cellLink(column, row)" :to="cellLink(column, row)">{{ formattedCell(column, row) }}</RouterLink><template v-else>{{ formattedCell(column, row) }}</template><slot name="annotation" :column="column" :row="row" /></td></template></tr><tr v-if="unrenderedCount" ref="moreRowsSentinel" class="planning-report-more" data-export-ignore><td :colspan="columns.length"><div class="planning-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ visibleRows.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr></tbody>
+		<table class="finishing-table report-table" :data-column-layout="title" data-column-order>
+			<colgroup><col v-for="column in orderedColumns" :key="column.key" :style="{ width: column.width + 'px' }" /></colgroup>
+			<thead><tr><th v-for="column in orderedColumns" :key="column.key" :class="[cellAlign(column), cellTypeClass(column)]">{{ column.label }}</th></tr><ReportFilterRow v-if="inlineFilters" :columns="orderedColumns" :filter="inlineFilter" /></thead>
+			<tbody><tr v-for="(row, index) in renderedRows" :key="index" :class="{ 'report-total-row': row.is_total_row, 'report-group-start': isGroupStart(row, index) }"><template v-for="(column, columnIndex) in orderedColumns" :key="column.key"><td v-if="spanOf(column, row, index)" :rowspan="spanOf(column, row, index) > 1 ? spanOf(column, row, index) : undefined" :class="[cellAlign(column), cellTypeClass(column), cellTone(column, row) ? 'planning-tone--' + cellTone(column, row) : '', { 'planning-report-first': columnIndex === 0, 'report-cell--last-column': columnIndex === orderedColumns.length - 1 }]" :title="cellTone(column, row) || undefined"><RouterLink v-if="cellLink(column, row)" :to="cellLink(column, row)">{{ formattedCell(column, row) }}</RouterLink><template v-else>{{ formattedCell(column, row) }}</template><slot name="annotation" :column="column" :row="row" /></td></template></tr><tr v-if="unrenderedCount" ref="moreRowsSentinel" class="planning-report-more" data-export-ignore><td :colspan="orderedColumns.length"><div class="planning-report-more__inner"><span>Showing {{ renderedRows.length.toLocaleString() }} of {{ visibleRows.length.toLocaleString() }} rows</span><Button label="Show more rows" size="small" severity="secondary" text @click="renderMoreRows" /></div></td></tr></tbody>
 		</table>
 	</div>
 </template>
@@ -17,6 +17,7 @@ import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import { cellTypeClass } from "../../../composables/reportColumns.js"
 import { ROW_RENDER_STEP, useIncrementalRows } from "../../../composables/useIncrementalRows.js"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
+import { useOrderedColumns } from "../../../composables/useReportColumnLayout.js"
 
 const props = defineProps({
 	title: { type: String, required: true },
@@ -33,6 +34,7 @@ const props = defineProps({
 	inlineFilters: { type: Boolean, default: false },
 })
 
+const orderedColumns = useOrderedColumns(() => props.title, () => props.columns)
 const inlineFilter = useInlineFilters(() => props.rows, () => props.columns, {
 	cellValue: (row, column) => props.cellValue(row, column),
 	cellText: (row, column) => props.formattedCell(column, row),

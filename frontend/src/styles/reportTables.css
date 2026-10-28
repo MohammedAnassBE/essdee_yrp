@@ -161,3 +161,57 @@ tr.report-total-row > * {
 .finishing-table th.finishing-tone {
 	color: var(--erp-text);
 }
+
+/* Column resize handles and header drag-to-move, added by columnLayoutController.js. */
+.report-col-resize {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 3;
+	width: 7px;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.report-col-resize::after {
+	content: "";
+	position: absolute;
+	top: 20%;
+	bottom: 20%;
+	right: 2px;
+	width: 2px;
+	border-radius: 1px;
+	background: var(--erp-border-strong);
+	opacity: 0;
+	transition: opacity .12s;
+}
+
+th:hover > .report-col-resize::after { opacity: .7; }
+.report-col-resize:hover::after,
+.is-column-resizing .report-col-resize:hover::after { opacity: 1; background: var(--erp-accent); }
+th.is-column-movable { cursor: grab; }
+body.is-column-moving, body.is-column-moving * { cursor: grabbing !important; user-select: none; }
+body.is-column-resizing, body.is-column-resizing * { cursor: col-resize !important; user-select: none; }
+
+.report-col-drop-indicator {
+	position: fixed;
+	z-index: 1000;
+	width: 3px;
+	border-radius: 2px;
+	background: var(--erp-accent);
+	pointer-events: none;
+}
+
+table.is-column-sized > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* A copied image shows full cell text, wrapped inside the viewer's column widths. */
+.report-capture-print table.is-column-sized > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+	overflow: visible;
+	text-overflow: clip;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}

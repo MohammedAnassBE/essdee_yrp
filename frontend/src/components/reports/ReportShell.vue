@@ -87,6 +87,7 @@ import { renderedReportRows } from "./reportExport.js"
 import { provideFullRender } from "../../composables/useIncrementalRows.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import { usePageNavigation } from "../navigation/pageNavigationContext.js"
+import { provideReportColumnLayout } from "../../composables/useReportColumnLayout.js"
 
 const props = defineProps({
 	title: { type: String, required: true },
@@ -117,14 +118,16 @@ const showInlineHeading = computed(() => Boolean(pageNavigation?.inline?.value))
 const emit = defineEmits(["generate", "reset"])
 
 const exporter = ref(null)
+const resultsRoot = ref(null)
+const columnLayout = provideReportColumnLayout(props.title, resultsRoot)
 const moreActions = computed(() => [
 	{ label: "Reset", icon: "pi pi-refresh", disabled: props.loading, command: () => emit("reset") },
+	{ label: "Reset columns", icon: "pi pi-table", disabled: !columnLayout.isCustomized.value, command: columnLayout.reset },
 	props.exportSource && { label: "Export", icon: "pi pi-download", visible: Boolean(exporter.value?.canExport), disabled: props.loading || !props.generated || !props.hasResults, command: () => exporter.value.open() },
 	...props.actions,
 ])
 
 const reportRoot = ref(null)
-const resultsRoot = ref(null)
 const getRenderedRows = () => renderedReportRows(resultsRoot.value)
 const renderAllRows = provideFullRender()
 const { copying, copied, runCopy } = useCopyFeedback({ success: "Report copied to clipboard" })

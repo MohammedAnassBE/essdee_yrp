@@ -28,6 +28,7 @@ const sharedModules = {
 	// The launcher search binds to window and the router; tests that cover it pass the real component explicitly.
 	"WorkspaceSearch.vue": () => null,
 	"childGridColumns.js": await import("../../frontend/src/components/common/childGrid/childGridColumns.js"),
+	"rowSelection.js": await import("../../frontend/src/components/common/childGrid/rowSelection.js"),
 	// Child grid keyboard and column settings touch the DOM and Frappe user settings; tables render default columns.
 	"entryTable.js": { vEntryTable: {} },
 	"useGridColumns.js": {

@@ -3,7 +3,7 @@ import { nextTick } from "vue"
 import { enterTarget } from "./childGridColumns.js"
 
 const CONTROL_SELECTOR = [
-	"input:not([type=hidden]):not(:disabled):not([readonly])",
+	"input:not([type=hidden]):not(:disabled):not([readonly]):not([data-row-select])",
 	"textarea:not(:disabled):not([readonly])",
 	"[role=combobox]:not(input):not([aria-disabled=true])",
 ].join(",")

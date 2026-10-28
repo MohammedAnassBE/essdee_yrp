@@ -2,7 +2,7 @@
 	<ItemTableCard :label="field.label || 'UOM Conversion Details'" :editable="editable">
 		<template #actions><Button v-if="editable" label="Add UOM" icon="pi pi-plus" size="small" severity="secondary" outlined :disabled="disabled || !values.stock_uom" @click="addRow" /></template>
 		<Message v-for="message in uniqueProblemMessages(problems)" :key="message" severity="error" :closable="false">{{ message }}</Message>
-		<ChildGridTable :rows="rows" :columns="columns" :title="field.label || 'UOM Conversion Details'" parent-doctype="Item" child-doctype="UOM Conversion Detail" :can-add="editable && !disabled && Boolean(values.stock_uom)" :add="addRow">
+		<ChildGridTable :rows="rows" :columns="columns" :title="field.label || 'UOM Conversion Details'" parent-doctype="Item" child-doctype="UOM Conversion Detail" :can-add="editable && !disabled && Boolean(values.stock_uom)" :add="addRow" :remove-row="editable && !disabled ? (index) => values.uoms.splice(index, 1) : null" :can-remove-row="(row) => !isDefaultRow(row)">
 			<template #cell-uom="{ data }">
 				<LinkField v-if="editable && !isDefaultRow(data)" v-model="data.uom" doctype="UOM" :aria-label="columnLabel('uom', 'UOM')" :show-open-button="false" :disabled="disabled" :invalid="!data.uom" />
 				<span v-else>{{ data.uom }}<small v-if="isDefaultRow(data)"> · Default</small></span>
@@ -12,7 +12,6 @@
 				<span v-else>{{ data.conversion_factor }}</span>
 			</template>
 			<template #cell-conversion="{ data }">{{ uomConversionWording(data, values.stock_uom) }}</template>
-			<template v-if="editable" #row-actions="{ data, index }"><Button v-if="!isDefaultRow(data)" icon="pi pi-trash" severity="danger" text :disabled="disabled" :aria-label="`Remove ${data.uom || 'UOM'} conversion`" @click="values.uoms.splice(index, 1)" /></template>
 		</ChildGridTable>
 		<p v-if="!values.stock_uom" class="item-table-hint">Choose the Default Unit of Measure to start the conversion table.</p>
 	</ItemTableCard>

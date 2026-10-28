@@ -33,5 +33,6 @@ test("restricted editor opens only the process add action and embellishment pane
 	assert.match(section, /<div v-if="!editor\.readonly" class="ipd-inline-add">/)
 	const editor = source("departments/merch/ipd/useIpdEditor.js")
 	assert.match(editor, /readonly: approvedEdits, approvedEdits/)
-	assert.match(source("components/common/EntryGrid.vue"), /v-if="row\.removable !== false"/)
+	assert.match(source("components/common/EntryGrid.vue"), /:disabled="row\.removable === false"/)
+	assert.match(source("components/common/EntryGrid.vue"), /props\.rows\.filter\(\(row\) => row\.removable !== false\)/)
 })

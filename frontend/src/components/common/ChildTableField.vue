@@ -24,6 +24,7 @@
 			:child-doctype="field.options || ''"
 			:can-add="!isDisabled"
 			:add="addRow"
+			:remove-row="isDisabled ? null : removeRow"
 			show-index
 			class="child-table-field__table"
 		>
@@ -44,9 +45,6 @@
 					:aria-label="`${column.label || column.fieldname}, row ${index + 1}`"
 					@update:model-value="setCell(index, column.fieldname, $event)"
 				/>
-			</template>
-			<template v-if="!isDisabled" #row-actions="{ index }">
-				<Button icon="pi pi-trash" severity="danger" text rounded tabindex="-1" :aria-label="`Remove row ${index + 1}`" @click="removeRow(index)" />
 			</template>
 			<template #empty>
 				<div class="child-table-field__empty">

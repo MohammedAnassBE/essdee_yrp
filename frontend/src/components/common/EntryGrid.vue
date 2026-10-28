@@ -17,7 +17,7 @@
 				role="grid"
 				:aria-label="ariaLabel || title"
 				:aria-rowcount="rows.length + 1"
-				:aria-colcount="gridColumns.length + 1"
+				:aria-colcount="gridColumns.length + 1 + (isRemovable ? 1 : 0)"
 				:aria-readonly="readonly || undefined"
 				:style="tableStyle"
 				@keydown="onKeydown"
@@ -26,6 +26,7 @@
 				@entry-grid-finish-edit="finishCellEdit"
 			>
 				<colgroup>
+					<col v-if="isRemovable" :style="{ width: `${SELECT_WIDTH}px` }">
 					<col :style="{ width: `${rowHeaderWidth}px` }">
 					<col v-for="(column, colIndex) in gridColumns" :key="column.key" :style="{ width: `${columnWidths[colIndex]}px` }">
 					<col v-if="hasRowTotals" :style="{ width: `${TOTAL_WIDTH}px` }">
@@ -33,6 +34,7 @@
 				</colgroup>
 				<thead>
 					<tr role="row" aria-rowindex="1">
+						<th v-if="isRemovable" scope="col" class="entry-grid__select" @keydown.stop><input type="checkbox" class="entry-grid__checkbox" :checked="rowSelection.isAllSelected.value" :indeterminate="rowSelection.isPartlySelected.value" :disabled="!selectableKeys.length" :aria-label="`Select all ${title || ariaLabel || 'grid'} rows`" @change="rowSelection.toggleAll($event.target.checked)"></th>
 						<th scope="col" class="entry-grid__corner" :class="{ 'entry-grid__index': isIndexHeader }" role="columnheader">{{ rowHeaderLabel }}</th>
 						<template v-for="(column, colIndex) in gridColumns" :key="column.key">
 							<th v-if="readonly || !column.fill" scope="col" role="columnheader" :class="alignClass(column)" :style="{ minWidth: `${columnMinWidth(column)}px` }">{{ column.label }}</th>
@@ -47,11 +49,12 @@
 							</th>
 						</template>
 						<th v-if="hasRowTotals" scope="col" class="entry-grid__number">{{ totalLabel }}</th>
-						<th v-if="hasTrailingColumn" scope="col" class="entry-grid__trailing"><ChildGridSettings v-if="gridSettings.canConfigure.value" :title="title || ariaLabel || 'grid'" :columns="schemaColumns" :visible-columns="gridColumns" :save="gridSettings.save" :reset="gridSettings.reset" /><span v-else class="entry-grid__sr">Remove</span></th>
+						<th v-if="hasTrailingColumn" scope="col" class="entry-grid__trailing"><ChildGridSettings :title="title || ariaLabel || 'grid'" :columns="schemaColumns" :visible-columns="gridColumns" :save="gridSettings.save" :reset="gridSettings.reset" /></th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="(row, rowIndex) in rows" :key="row.key" role="row" :aria-rowindex="rowIndex + 2">
+						<td v-if="isRemovable" class="entry-grid__select" @keydown.stop><input type="checkbox" class="entry-grid__checkbox" data-row-select tabindex="-1" :checked="rowSelection.isSelected(row.key)" :disabled="row.removable === false" :aria-label="`Select ${row.label}`" @change="rowSelection.toggle(row.key, $event.target.checked)"></td>
 						<th scope="row" role="rowheader" class="entry-grid__row-header" :class="{ 'entry-grid__index': isIndexHeader }"><DocumentLink v-if="row.link_doctype" :doctype="row.link_doctype" :name="row.link_name" :label="row.label" /><template v-else>{{ row.label }}</template></th>
 						<td
 							v-for="(column, colIndex) in gridColumns"
@@ -77,13 +80,12 @@
 							<div v-else class="entry-grid__box" :class="boxClasses(rowIndex, colIndex)" :title="cellError(rowIndex, colIndex) || derivedTitle(rowIndex, colIndex)"><DocumentLink v-if="cellTarget(rowIndex, colIndex)" v-bind="cellTarget(rowIndex, colIndex)" :label="cellText(rowIndex, colIndex)" /><template v-else>{{ cellText(rowIndex, colIndex) }}</template></div>
 						</td>
 						<td v-if="hasRowTotals" class="entry-grid__total entry-grid__number">{{ formatTotal(rowTotal(modelValue, row, gridColumns)) }}</td>
-						<td v-if="hasTrailingColumn" class="entry-grid__remove">
-							<template v-if="isRemovable"><Button v-if="row.removable !== false" icon="pi pi-times" text rounded severity="secondary" size="small" :aria-label="`Remove ${row.label}`" @click="emit('remove-row', row.key)" /></template>
-						</td>
+						<td v-if="hasTrailingColumn" />
 					</tr>
 				</tbody>
 				<tfoot v-if="hasColumnTotals">
 					<tr role="row">
+						<td v-if="isRemovable" class="entry-grid__select" />
 						<th scope="row" class="entry-grid__row-header">{{ totalLabel }}</th>
 						<td v-for="column in gridColumns" :key="column.key" class="entry-grid__footer-total" :class="alignClass(column)">{{ column.type === "number" ? formatTotal(totals_[column.key]) : "" }}</td>
 						<td v-if="hasRowTotals" class="entry-grid__footer-total entry-grid__number">{{ formatTotal(grandTotal) }}</td>
@@ -92,6 +94,10 @@
 				</tfoot>
 			</table>
 		</div>
+		<footer v-if="rowSelection.selected.value.length" class="entry-grid__footer">
+			<span>{{ rowSelection.selected.value.length }} selected</span>
+			<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="deleteSelectedRows" />
+		</footer>
 		<p :id="`${gridId}-error`" class="entry-grid__error" role="status" aria-live="polite">{{ activeError }}</p>
 	</section>
 </template>
@@ -103,6 +109,7 @@ import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch } from "
 import LinkField from "./LinkField.vue"
 import ChildGridSettings from "./childGrid/ChildGridSettings.vue"
 import { enterTarget, isRowBlank, labelWidth, layoutWidths } from "./childGrid/childGridColumns.js"
+import { useRowSelection } from "./childGrid/rowSelection.js"
 import { useContainerWidth, useGridColumns } from "./childGrid/useGridColumns.js"
 import DocumentLink from "./DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
@@ -142,6 +149,7 @@ const INDEX_HEADER = "#"
 const FILL_MIN_WIDTH = 220
 const TOTAL_WIDTH = 110
 const TRAILING_WIDTH = 44
+const SELECT_WIDTH = 32
 
 const props = defineProps({
 	rows: { type: Array, default: () => [] },
@@ -202,9 +210,11 @@ const canAddRows = computed(() => !props.readonly && typeof props.addRow === "fu
 const isIndexHeader = computed(() => props.rowHeaderLabel === INDEX_HEADER)
 const rowHeaderWidth = computed(() => rowHeaderColumnWidth(props.rows, isIndexHeader.value))
 const isRemovable = computed(() => props.removableRows && !props.readonly)
-const hasTrailingColumn = computed(() => isRemovable.value || gridSettings.canConfigure.value)
+const hasTrailingColumn = gridSettings.canConfigure
+const selectableKeys = computed(() => isRemovable.value ? props.rows.filter((row) => row.removable !== false).map((row) => row.key) : [])
+const rowSelection = useRowSelection(selectableKeys)
 const scrollerWidth = useContainerWidth(scroller)
-const reservedWidth = computed(() => rowHeaderWidth.value + (hasRowTotals.value ? TOTAL_WIDTH : 0) + (hasTrailingColumn.value ? TRAILING_WIDTH : 0))
+const reservedWidth = computed(() => (isRemovable.value ? SELECT_WIDTH : 0) + rowHeaderWidth.value + (hasRowTotals.value ? TOTAL_WIDTH : 0) + (hasTrailingColumn.value ? TRAILING_WIDTH : 0))
 const columnWidths = computed(() => {
 	if (!gridSettings.canConfigure.value) return gridColumns.value.map(headerMinWidth)
 	const widths = layoutWidths(gridColumns.value, Math.max(scrollerWidth.value - 2, 0), reservedWidth.value)
@@ -212,7 +222,7 @@ const columnWidths = computed(() => {
 })
 const tableStyle = computed(() => {
 	const width = reservedWidth.value + columnWidths.value.reduce((sum, columnWidth) => sum + columnWidth, 0)
-	return { width: gridSettings.canConfigure.value ? `${width}px` : `max(100%, ${width}px)` }
+	return { width: gridSettings.canConfigure.value ? `${width}px` : `max(100%, ${width}px)`, "--entry-grid-select-width": isRemovable.value ? `${SELECT_WIDTH}px` : "0px" }
 })
 
 watch(() => [props.rows.length, gridColumns.value.length], clampActive)
@@ -507,6 +517,10 @@ function handleShortcut(event) {
 	return false
 }
 
+function deleteSelectedRows() {
+	return rowSelection.removeSelected((key) => emit("remove-row", key), () => isRemovable.value)
+}
+
 function runTool(tool) {
 	if (props.readonly || !props.rows.length) return
 	if (tool === "paste") { pasteFromClipboard(); return }
@@ -596,7 +610,11 @@ defineExpose({ focusCell })
 .entry-grid__table:focus { outline: none; }
 .entry-grid__table thead th { height: 34px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .04em; text-align: left; text-transform: uppercase; white-space: nowrap; border: 1px solid var(--erp-border); background: var(--erp-surface-muted); }
 .entry-grid__table thead th.entry-grid__number { text-align: right; }
-.entry-grid__corner, .entry-grid__row-header { position: sticky; left: 0; z-index: var(--erp-layer-content); }
+.entry-grid__corner, .entry-grid__row-header { position: sticky; left: var(--entry-grid-select-width, 0px); z-index: var(--erp-layer-content); }
+.entry-grid__table .entry-grid__select { position: sticky; left: 0; z-index: var(--erp-layer-content); padding: 0; text-align: center; border: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 72%, var(--erp-surface)); }
+.entry-grid__checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.entry-grid__checkbox:disabled { cursor: not-allowed; opacity: .45; }
+.entry-grid__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border-top: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .entry-grid__row-header { padding: 0 10px; overflow: hidden; color: var(--erp-text); font-weight: 600; text-align: left; white-space: nowrap; text-overflow: ellipsis; border: 1px solid var(--erp-border); background: color-mix(in srgb, var(--erp-surface-soft) 72%, var(--erp-surface)); }
 .entry-grid__table td { padding: 3px; overflow: hidden; border: 1px solid var(--erp-border); }
 .entry-grid__table thead th:not(.entry-grid__fill-header) { overflow: hidden; text-overflow: ellipsis; }
@@ -616,7 +634,6 @@ defineExpose({ focusCell })
 .entry-grid__total, .entry-grid__footer-total { padding: 0 10px !important; color: var(--erp-text); font-weight: 700; white-space: nowrap; background: var(--erp-surface-soft); }
 .entry-grid__number { text-align: right; }
 .entry-grid tfoot td, .entry-grid tfoot th { height: 34px; border-top: 1px solid var(--erp-border-strong); background: var(--erp-surface-muted); }
-.entry-grid__remove { width: 40px; text-align: center; }
 .entry-grid--header-fill .entry-grid__table thead th { color: var(--erp-text); font-size: var(--erp-font-size-label); letter-spacing: .02em; vertical-align: top; }
 .entry-grid__table thead th.entry-grid__fill-header { padding-block: 8px; }
 .entry-grid__heading { display: block; }
@@ -631,7 +648,6 @@ defineExpose({ focusCell })
 .entry-grid__link :deep(.link-field__control) { gap: 0; }
 .entry-grid__link :deep(.p-autocomplete), .entry-grid__link :deep(.p-autocomplete-input), .entry-grid__link :deep(.p-autocomplete-dropdown) { height: var(--erp-control-height-compact); }
 .entry-grid__link :deep(.p-autocomplete-input) { padding: 0 7px; font: inherit; }
-.entry-grid__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .entry-grid--readonly .entry-grid__box { padding-inline: 0; color: var(--erp-text-secondary); border-color: transparent; background: transparent; }
 @media (max-width: 620px) {
 	.entry-grid__scroll { mask-image: linear-gradient(to right, var(--erp-text) 0, var(--erp-text) calc(100% - 18px), transparent 100%); }

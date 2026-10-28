@@ -2,7 +2,7 @@
 	<ItemTableCard :label="field.label || 'YRP Additional Parameters'" :editable="editable">
 		<template #actions><Button v-if="editable" label="Add parameter" icon="pi pi-plus" size="small" severity="secondary" outlined :disabled="disabled" @click="addRow" /></template>
 		<Message v-if="!editable && problems.length" severity="warn" :closable="false">{{ uniqueProblemMessages(problems).join(' ') }}</Message>
-		<ChildGridTable :rows="values.additional_parameters || []" :columns="columns" :title="field.label || 'YRP Additional Parameters'" parent-doctype="Item" child-doctype="YRP Additional Parameter" :can-add="editable && !disabled" :add="addRow">
+		<ChildGridTable :rows="values.additional_parameters || []" :columns="columns" :title="field.label || 'YRP Additional Parameters'" parent-doctype="Item" child-doctype="YRP Additional Parameter" :can-add="editable && !disabled" :add="addRow" :remove-row="editable && !disabled ? (index) => values.additional_parameters.splice(index, 1) : null">
 			<template #cell-additional_parameter_key="{ data, index }">
 				<LinkField v-if="editable" :model-value="data.additional_parameter_key" doctype="YRP Additional Parameter Key" :aria-label="columnLabel('additional_parameter_key', 'Additional Parameter Key')" :search-handler="(text) => searchItemEditorLinks('YRP Additional Parameter Key', text)" :show-open-button="false" :disabled="disabled" :invalid="problems.some((problem) => problem.row === index)" @update:model-value="changeKey(data, $event)" />
 				<span v-else>{{ data.additional_parameter_key }}</span>
@@ -12,7 +12,6 @@
 				<LinkField v-if="editable" v-model="data.additional_parameter_value" doctype="YRP Additional Parameter Value" :aria-label="columnLabel('additional_parameter_value', 'Additional Parameter Value')" :filters="{ key: data.additional_parameter_key }" :search-handler="(text) => searchItemEditorLinks('YRP Additional Parameter Value', text, data.additional_parameter_key)" show-clear :show-open-button="false" :disabled="disabled || !data.additional_parameter_key" />
 				<span v-else :aria-label="additionalParameterWording(data)">{{ data.additional_parameter_value || '(chosen per PO)' }}</span>
 			</template>
-			<template v-if="editable" #row-actions="{ index }"><Button icon="pi pi-trash" severity="danger" text :disabled="disabled" :aria-label="`Remove parameter ${index + 1}`" @click="values.additional_parameters.splice(index, 1)" /></template>
 			<template #empty>No additional parameters.</template>
 		</ChildGridTable>
 		<p class="item-table-hint">Leave the value empty to choose it on each PO line.</p>

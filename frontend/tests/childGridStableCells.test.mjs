@@ -33,6 +33,22 @@ test("lotwise cost sections build child metadata once instead of on every render
 	assert.match(source, /function childMetaFor\(fieldname\) \{\n\treturn childMetas\.value\[fieldname\]\n\}/)
 })
 
-test("row remove buttons stay out of the Tab order between cells", () => {
-	assert.match(read("components/common/ChildTableField.vue"), /<Button icon="pi pi-trash"[^>]*tabindex="-1"[^>]*removeRow\(index\)/)
+test("child tables select rows with checkboxes instead of a per-row remove button", () => {
+	const field = read("components/common/ChildTableField.vue")
+	assert.doesNotMatch(field, /row-actions|Remove row/)
+	assert.match(field, /:remove-row="isDisabled \? null : removeRow"/)
+	const table = read("components/common/childGrid/ChildGridTable.vue")
+	assert.doesNotMatch(table, /row-actions/)
+	assert.match(table, /<Column v-if="isSelectable" column-key="__select"/)
+	assert.match(table, /<input type="checkbox"[^>]*data-row-select tabindex="-1"/)
+	assert.match(table, /<Column v-if="grid\.canConfigure\.value" column-key="__settings"[^\n]*\n\t+<template #header><ChildGridSettings[^\n]*\n\t+<\/Column>/)
+	assert.match(table, /<Button label="Delete" icon="pi pi-trash" severity="danger"/)
+	for (const path of ["ItemUomConversions", "ItemYarnRatio", "ItemAdditionalParameters"]) {
+		assert.doesNotMatch(read(`departments/purchase/item/${path}.vue`), /row-actions/)
+	}
+	assert.match(read("departments/purchase/item/ItemUomConversions.vue"), /:can-remove-row="\(row\) => !isDefaultRow\(row\)"/)
+})
+
+test("Enter navigation skips the row-select checkbox", () => {
+	assert.match(read("components/common/childGrid/entryTable.js"), /:not\(\[data-row-select\]\)/)
 })

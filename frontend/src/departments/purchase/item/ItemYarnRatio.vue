@@ -2,7 +2,7 @@
 	<ItemTableCard :label="field.label || 'Yarn Ratio'" :editable="editable">
 		<template #actions><Button v-if="editable" label="Add yarn" icon="pi pi-plus" size="small" severity="secondary" outlined :disabled="disabled" @click="addRow" /></template>
 		<Message v-for="problem in problems" :key="problem.message" severity="error" :closable="false">{{ problem.message }}</Message>
-		<ChildGridTable :rows="values.yarn_ratio_details || []" :columns="columns" :title="field.label || 'Yarn Ratio'" parent-doctype="Item" child-doctype="SD YRP Item Yarn Ratio" :can-add="editable && !disabled" :add="addRow">
+		<ChildGridTable :rows="values.yarn_ratio_details || []" :columns="columns" :title="field.label || 'Yarn Ratio'" parent-doctype="Item" child-doctype="SD YRP Item Yarn Ratio" :can-add="editable && !disabled" :add="addRow" :remove-row="editable && !disabled ? (index) => values.yarn_ratio_details.splice(index, 1) : null">
 			<template #cell-yarn_item="{ data }">
 				<LinkField v-if="editable" v-model="data.yarn_item" doctype="Item" :filters="yarnFilters" :aria-label="columnLabel('yarn_item', 'Yarn Item')" :show-open-button="false" :disabled="disabled" />
 				<span v-else>{{ data.yarn_item }}</span>
@@ -11,7 +11,6 @@
 				<InputNumber v-if="editable" v-model="data.ratio" :max-fraction-digits="3" suffix="%" :aria-label="`${data.yarn_item || 'Yarn'} ${columnLabel('ratio', 'Ratio')}`" :disabled="disabled" fluid />
 				<span v-else>{{ data.ratio }}%</span>
 			</template>
-			<template v-if="editable" #row-actions="{ index }"><Button icon="pi pi-trash" severity="danger" text :disabled="disabled" :aria-label="`Remove yarn ${index + 1}`" @click="values.yarn_ratio_details.splice(index, 1)" /></template>
 		</ChildGridTable>
 		<strong>Total: {{ yarnRatioTotal(values.yarn_ratio_details) }}%</strong>
 	</ItemTableCard>

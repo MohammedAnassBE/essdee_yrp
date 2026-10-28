@@ -169,7 +169,7 @@ tr.report-total-row > * {
 	right: 0;
 	bottom: 0;
 	z-index: 3;
-	width: 7px;
+	width: 10px;
 	cursor: col-resize;
 	touch-action: none;
 }
@@ -177,9 +177,9 @@ tr.report-total-row > * {
 .report-col-resize::after {
 	content: "";
 	position: absolute;
-	top: 20%;
-	bottom: 20%;
-	right: 2px;
+	top: 15%;
+	bottom: 15%;
+	right: 0;
 	width: 2px;
 	border-radius: 1px;
 	background: var(--erp-border-strong);
@@ -190,17 +190,35 @@ tr.report-total-row > * {
 th:hover > .report-col-resize::after { opacity: .7; }
 .report-col-resize:hover::after,
 .is-column-resizing .report-col-resize:hover::after { opacity: 1; background: var(--erp-accent); }
+th.is-column-movable > .report-col-resize { cursor: col-resize; }
 th.is-column-movable { cursor: grab; }
-body.is-column-moving, body.is-column-moving * { cursor: grabbing !important; user-select: none; }
-body.is-column-resizing, body.is-column-resizing * { cursor: col-resize !important; user-select: none; }
+/* Only the body and the captured element change, so starting a drag does not restyle every cell. */
+body.is-column-moving, body.is-column-moving th.is-column-movable { cursor: grabbing; user-select: none; }
+body.is-column-resizing { cursor: col-resize; user-select: none; }
 
-.report-col-drop-indicator {
+.report-col-drop-indicator,
+.report-col-resize-guide {
 	position: fixed;
 	z-index: 1000;
 	width: 3px;
 	border-radius: 2px;
 	background: var(--erp-accent);
 	pointer-events: none;
+}
+
+/* A large table previews the new column edge while dragging and relayouts once on release. */
+.report-col-resize-guide { width: 2px; will-change: transform; }
+.report-col-resize-guide::after {
+	content: attr(data-width);
+	position: absolute;
+	top: 4px;
+	left: 6px;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: var(--erp-accent);
+	color: #fff;
+	font-size: var(--erp-font-size-caption);
+	white-space: nowrap;
 }
 
 table.is-column-sized > :is(thead, tbody, tfoot) > tr > :is(th, td) {

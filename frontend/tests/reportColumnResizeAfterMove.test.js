@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-const { attachColumnLayout } = await import("../src/components/reports/columnLayoutController.js")
+const { attachColumnLayout, LIVE_RESIZE_CELL_LIMIT } = await import("../src/components/reports/columnLayoutController.js")
 const { orderColumns } = await import("../src/components/reports/columnLayout.js")
 
 const camel = name => name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
@@ -58,8 +58,18 @@ class Element {
 	}
 }
 
-function createPage(labels) {
-	const view = { getComputedStyle: node => ({ position: node.style.position || "static", left: "auto", overflowX: "visible" }), requestAnimationFrame: () => 1, cancelAnimationFrame() {}, MutationObserver: class { observe() {} disconnect() {} }, innerHeight: 900 }
+function createPage(labels, { rowCount = 1 } = {}) {
+	const frames = new Map()
+	let nextFrame = 0
+	const view = {
+		getComputedStyle: node => ({ position: node.style.position || "static", left: "auto", overflowX: "visible" }),
+		requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame },
+		cancelAnimationFrame: id => frames.delete(id),
+		MutationObserver: class { observe() {} disconnect() {} },
+		innerHeight: 900,
+	}
+	/** Runs the callbacks queued for the next animation frame. */
+	function paint() { const queued = [...frames.values()]; frames.clear(); for (const callback of queued) callback(performance.now()); return queued.length }
 	const doc = { defaultView: view, createElement: tag => new Element(doc, tag) }
 	doc.body = new Element(doc, "body")
 	const root = new Element(doc, "div")
@@ -72,6 +82,7 @@ function createPage(labels) {
 	Object.defineProperty(row, "cells", { get: () => row.children })
 	row.parentElement = table
 	table.tHead = { rows: [row] }
+	Object.defineProperty(table, "rows", { get: () => ({ length: rowCount + 1 }) })
 	root.append(table)
 	const layout = { widths: {}, order: {} }
 	const controller = attachColumnLayout(root, layout)
@@ -81,17 +92,19 @@ function createPage(labels) {
 		row.children = ordered.map(column => cells.get(column.label))
 		controller.sync()
 	}
-	function resize(label, delta) {
+	function press(label) {
 		const handle = cells.get(label).querySelector(":scope > .report-col-resize")
-		const pointer = { button: 0, clientX: 500, pointerId: 1, target: handle, preventDefault() {}, stopPropagation() {} }
-		root.fire("pointerdown", pointer)
-		handle.fire("pointermove", { clientX: 500 + delta })
-		handle.fire("pointerup", {})
-		controller.sync()
+		root.fire("pointerdown", { button: 0, clientX: 500, pointerId: 1, target: handle, preventDefault() {}, stopPropagation() {} })
+		return { move: delta => handle.fire("pointermove", { clientX: 500 + delta }), release: () => { handle.fire("pointerup", {}); controller.sync() } }
+	}
+	function resize(label, delta) {
+		const drag = press(label)
+		drag.move(delta)
+		drag.release()
 	}
 	const widths = () => Object.fromEntries([...cells].map(([label, th]) => [label, th.getBoundingClientRect().width]))
 	const order = () => row.children.map(th => th.text)
-	return { layout, render, resize, widths, order }
+	return { layout, render, resize, press, paint, widths, order, doc }
 }
 
 test("after a column moves, each resize handle still resizes its own column", () => {
@@ -124,4 +137,36 @@ test("widths follow their columns through a move to first and to last", () => {
 	page.resize("Lot", 5)
 	assert.deepEqual(page.widths(), { Lot: 105, Colour: 60, Total: 120 })
 	assert.deepEqual(page.layout.widths, { results: { Colour: 60, Total: 120, Lot: 105 } })
+})
+
+test("a drag applies the latest width once per frame and saves it only on release", () => {
+	const page = createPage(["Item", "Colour", "Total"])
+	page.paint()
+	const drag = page.press("Item")
+	for (const delta of [5, 10, 15, 20]) drag.move(delta)
+	assert.equal(page.widths().Item, 100, "nothing moves between frames")
+	assert.equal(page.paint(), 1, "four pointer moves queue one frame")
+	assert.equal(page.widths().Item, 120)
+	drag.move(-200)
+	page.paint()
+	assert.equal(page.widths().Item, 30, "the minimum width holds")
+	assert.deepEqual(page.layout.widths, {}, "nothing is saved mid-drag")
+	drag.move(35)
+	drag.release()
+	assert.deepEqual(page.layout.widths, { results: { Item: 135 } })
+	assert.deepEqual(page.widths(), { Item: 135, Colour: 100, Total: 100 })
+})
+
+test("a large table previews the drag with a guide line and resizes once on release", () => {
+	const page = createPage(["Item", "Colour", "Total"], { rowCount: LIVE_RESIZE_CELL_LIMIT })
+	const drag = page.press("Colour")
+	drag.move(40)
+	page.paint()
+	const guide = page.doc.body.children.find(node => node.classList.contains("report-col-resize-guide"))
+	assert.equal(guide?.dataset.width, "140px")
+	assert.deepEqual(page.widths(), { Item: 100, Colour: 100, Total: 100 }, "the table is not relaid out mid-drag")
+	drag.release()
+	assert.equal(page.doc.body.children.includes(guide), false)
+	assert.deepEqual(page.widths(), { Item: 100, Colour: 140, Total: 100 })
+	assert.deepEqual(page.layout.widths, { results: { Colour: 140 } })
 })

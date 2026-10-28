@@ -4,6 +4,8 @@ const HANDLE_CLASS = "report-col-resize"
 const SIZED_CLASS = "is-column-sized"
 const MOVABLE_CLASS = "is-column-movable"
 const DRAG_THRESHOLD = 6
+// Each width change lays out every rendered cell (about 10 µs each); above this a drag previews a guide line instead.
+export const LIVE_RESIZE_CELL_LIMIT = 1500
 const INTERACTIVE = "input, textarea, select, button, a, [contenteditable]"
 
 /** Layout key of a table: an explicit data-column-layout, else its caption or region label. */
@@ -42,12 +44,22 @@ function unsizeTable(table) {
 	for (const property of ["table-layout", "width", "min-width", "max-width"]) table.style.removeProperty(property)
 	table.classList.remove(SIZED_CLASS)
 	delete table.dataset.columnWidths
+	delete table.dataset.columnLabels
 }
 
 /** Fixed table layout with one `<col>` per column, so each width holds regardless of cell content. */
 export function sizeTable(table, columns, saved) {
 	const signature = widthSignature(columns, saved)
 	if (table.dataset.columnWidths === signature && ownColgroup(table)) return
+	const labels = JSON.stringify(columns.map(column => column.label))
+	// Same columns in the same order: only the changed <col> widths move, without measuring the table again.
+	if (ownColgroup(table) && table.dataset.columnLabels === labels) {
+		const cols = [...ownColgroup(table).children]
+		columns.forEach((column, index) => { if (saved[column.label]) cols[index].style.width = `${clampColumnWidth(saved[column.label])}px` })
+		setTableWidth(table, cols.reduce((total, col) => total + parseFloat(col.style.width), 0))
+		table.dataset.columnWidths = signature
+		return
+	}
 	unsizeTable(table)
 	const widths = columns.map(column => saved[column.label] ? clampColumnWidth(saved[column.label]) : Math.ceil(column.cell?.getBoundingClientRect().width || 0))
 	for (const group of table.querySelectorAll(":scope > colgroup")) group.style.display = "none"
@@ -62,6 +74,18 @@ export function sizeTable(table, columns, saved) {
 	setTableWidth(table, widths.reduce((total, width) => total + width, 0))
 	table.classList.add(SIZED_CLASS)
 	table.dataset.columnWidths = signature
+	table.dataset.columnLabels = labels
+}
+
+/** True when the table is small enough to relayout on every animation frame of a drag. */
+export function isLiveResizable(table, columnCount) {
+	return (table.rows?.length || 0) * columnCount <= LIVE_RESIZE_CELL_LIMIT
+}
+
+function setColumnWidth(table, index, width) {
+	const cols = [...ownColgroup(table).children]
+	cols[index].style.width = `${width}px`
+	setTableWidth(table, cols.reduce((total, col) => total + parseFloat(col.style.width), 0))
 }
 
 function setTableWidth(table, width) {
@@ -87,8 +111,10 @@ function ensureHandle(cell) {
 export function attachColumnLayout(root, layout) {
 	const view = root.ownerDocument.defaultView
 	let frame = 0
+	let resizingTable = null
 
 	function syncTable(table, index) {
+		if (table === resizingTable) return
 		const key = tableLayoutKey(table, index)
 		const columns = tableColumns(table)
 		const isMovable = table.hasAttribute("data-column-order")
@@ -123,31 +149,45 @@ export function attachColumnLayout(root, layout) {
 		return { ...located, column: located.columns.find(column => column.cell === handle.parentElement) }
 	}
 
+	/**
+	 * Spreadsheet-style resize: the new width is startWidth plus the pointer travel, applied at most once per frame.
+	 * Small tables resize live; large ones move a guide line and relayout once on release. Saved only on release.
+	 */
 	function beginResize(event, handle) {
 		const { table, key, columns, column } = locateHandle(handle)
 		if (!column) return
-		const saved = { ...(layout.widths[key] || {}), [column.label]: clampColumnWidth(column.cell.getBoundingClientRect().width) }
-		// Saved before the drag so a sync mid-drag finds the table already sized and leaves it alone.
-		layout.widths = { ...layout.widths, [key]: saved }
-		sizeTable(table, columns, saved)
-		const startX = event.clientX, startWidth = saved[column.label]
-		let width = startWidth
+		const startX = event.clientX
+		const startWidth = clampColumnWidth(column.cell.getBoundingClientRect().width)
+		const saved = { ...(layout.widths[key] || {}), [column.label]: startWidth }
+		const isLive = isLiveResizable(table, columns.length)
+		resizingTable = table
+		if (isLive) sizeTable(table, columns, saved)
+		const guide = isLive ? null : createIndicator(table, "report-col-resize-guide")
+		let width = startWidth, pending = 0
+		const apply = () => {
+			pending = 0
+			if (isLive) setColumnWidth(table, column.index, width)
+			else placeGuide(guide, table, column.cell.getBoundingClientRect().left + width, width)
+		}
+		apply()
 		const onMove = moveEvent => {
 			width = clampColumnWidth(startWidth + moveEvent.clientX - startX)
-			const cols = [...ownColgroup(table).children]
-			cols[column.index].style.width = `${width}px`
-			setTableWidth(table, cols.reduce((total, col) => total + parseFloat(col.style.width), 0))
+			pending ||= view.requestAnimationFrame(apply)
 		}
 		trackPointer(event, handle, "is-column-resizing", onMove, () => {
-			const widths = { ...saved, [column.label]: width }
-			table.dataset.columnWidths = widthSignature(columns, widths)
-			layout.widths = { ...layout.widths, [key]: widths }
+			if (pending) view.cancelAnimationFrame(pending)
+			guide?.remove()
+			resizingTable = null
+			layout.widths = { ...layout.widths, [key]: { ...saved, [column.label]: width } }
+			sync()
 		})
 	}
 
 	function resetWidth(handle) {
-		const { key, column } = locateHandle(handle)
+		const { table, key, column } = locateHandle(handle)
 		const label = column?.label
+		// A reset column goes back to its content width, which only an unsized table can measure.
+		unsizeTable(table)
 		const { [label]: _removed, ...rest } = layout.widths[key] || {}
 		const { [key]: _table, ...others } = layout.widths
 		layout.widths = Object.keys(rest).length ? { ...others, [key]: rest } : others
@@ -258,9 +298,9 @@ function suppressNextClick(element) {
 	view.setTimeout(() => view.removeEventListener("click", stop, { capture: true }), 0)
 }
 
-function createIndicator(table) {
+function createIndicator(table, className = "report-col-drop-indicator") {
 	const indicator = table.ownerDocument.createElement("div")
-	indicator.className = "report-col-drop-indicator"
+	indicator.className = className
 	indicator.setAttribute("aria-hidden", "true")
 	table.ownerDocument.body.append(indicator)
 	return indicator
@@ -273,4 +313,9 @@ function placeIndicator(indicator, table, x) {
 	indicator.style.left = `${x - 1}px`
 	indicator.style.top = `${top}px`
 	indicator.style.height = `${Math.max(0, Math.min(rect.bottom, view.innerHeight) - top)}px`
+}
+
+function placeGuide(guide, table, x, width) {
+	placeIndicator(guide, table, x)
+	guide.dataset.width = `${width}px`
 }

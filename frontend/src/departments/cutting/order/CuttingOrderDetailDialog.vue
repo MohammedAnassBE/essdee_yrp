@@ -242,13 +242,13 @@ const CombinationMatrix = defineComponent({
 	setup(componentProps) {
 		return () => h("section", { class: "detail-section combination-section" }, [
 			h("header", h("h3", componentProps.title)),
-			componentProps.model?.values?.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, h("table", { class: "detail-table combination-table" }, [
+			componentProps.model?.values?.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, withDirectives(h("table", { class: "detail-table combination-table" }, [
 				h("thead", h("tr", [h("th", "Major Value"), ...(componentProps.model.attributes || []).map((attribute) => h("th", attribute))])),
 				h("tbody", componentProps.model.values.map((row, index) => h("tr", { key: `${row.major_attribute}-${index}` }, [
 					h("td", row.major_attribute),
 					...(componentProps.model.attributes || []).map((attribute) => h("td", componentProps.editable ? h(InputText, { modelValue: row.val?.[attribute] || "", "aria-label": `${attribute} for ${row.major_attribute || `combination row ${index + 1}`}`, "onUpdate:modelValue": (value) => { row.val ||= {}; row.val[attribute] = value }, fluid: true }) : (row.val?.[attribute] || "—"))),
 				]))),
-			])) : h("div", { class: "detail-empty" }, "No combinations generated."),
+			]), [[vEntryTable]])) : h("div", { class: "detail-empty" }, "No combinations generated."),
 		])
 	},
 })

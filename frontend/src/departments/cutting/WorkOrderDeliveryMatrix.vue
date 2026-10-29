@@ -7,7 +7,7 @@
 		<div v-if="groups.length" class="wo-delivery-matrix__groups">
 			<div v-for="(group, groupIndex) in groups" :key="groupKey(group, groupIndex)" class="wo-delivery-matrix__card">
 				<div class="wo-delivery-matrix__scroll" role="region" tabindex="0" :aria-label="`${title} group ${groupIndex + 1}`">
-					<table>
+					<table v-entry-table="{ fixed: false }">
 						<thead>
 							<tr>
 								<th>Item</th>
@@ -40,6 +40,8 @@
 
 <script setup>
 import { computed } from "vue"
+
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	title: { type: String, default: "Deliverables" },

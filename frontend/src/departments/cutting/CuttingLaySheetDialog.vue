@@ -121,7 +121,7 @@
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum No of Plys *</span><InputNumber v-model="maximumPlys" :min="1" fluid /></label>
 				<label v-if="!sheet?.is_manual_entry"><span>Maximum Allow Percent *</span><InputNumber v-model="maximumAllow" :min="0" suffix="%" fluid /></label>
 			</div>
-			<div class="table-scroll" role="region" tabindex="0" aria-label="Bundle generation groups"><table class="laysheet-table"><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="(row, index) in generationParts" :key="row.part"><td>{{ row.part }}</td><td><InputNumber v-model="row.value" :aria-label="`Bundle group for ${row.part || `panel ${index + 1}`}`" :min="1" :disabled="busy === 'generate'" fluid /></td></tr></tbody></table></div>
+			<div class="table-scroll" role="region" tabindex="0" aria-label="Bundle generation groups"><table v-entry-table class="laysheet-table"><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="(row, index) in generationParts" :key="row.part"><td>{{ row.part }}</td><td><InputNumber v-model="row.value" :aria-label="`Bundle group for ${row.part || `panel ${index + 1}`}`" :min="1" :disabled="busy === 'generate'" fluid /></td></tr></tbody></table></div>
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text @click="generateOpen = false" /><Button label="Generate" icon="pi pi-box" :loading="busy === 'generate'" @click="generateBundles" /></template>
 	</Dialog>
@@ -208,6 +208,7 @@ import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import { withShortcutHint } from "../../utils/documentShortcuts.js"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
 import MaterialRequirementGroups from "./shared/MaterialRequirementGroups.vue"
 import LaySheetManualBundles from "./laysheet/LaySheetManualBundles.vue"

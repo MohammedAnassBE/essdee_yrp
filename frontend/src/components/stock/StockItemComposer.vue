@@ -84,21 +84,20 @@
 						<span>{{ activeUom || "UOM" }}</span>
 					</header>
 					<div v-if="activePrimaryValues.length" class="stock-composer__quantity-grid" @keydown.enter="stageFromLastInput">
-						<label v-for="value in activePrimaryValues" :key="value" class="stock-composer__quantity-cell">
-							<strong>{{ value }}</strong>
-							<span>{{ quantityLabel }}</span>
-							<input v-model.number="quantities[value]" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched[value] = true" />
-							<template v-if="rateEditable"><span>Rate</span><input v-model.number="receiptRates[value]" type="number" min="0" step="0.0001" :disabled="disabled" /></template>
-							<template v-if="offersSecondary">
-								<span>{{ itemSchema.secondary_uom }}</span>
-								<input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" :disabled="disabled" />
-							</template>
-						</label>
+						<table v-entry-table="{ fixed: false }">
+							<thead><tr><th scope="col"></th><th v-for="value in activePrimaryValues" :key="value" scope="col">{{ value }}</th></tr></thead>
+							<tbody>
+								<tr><th scope="row">{{ quantityLabel }}</th><td v-for="value in activePrimaryValues" :key="value"><input v-model.number="quantities[value]" type="number" min="0" step="0.001" :aria-label="`${quantityLabel} ${value}`" :disabled="disabled" @input="quantityTouched[value] = true" /></td></tr>
+								<tr v-if="rateEditable"><th scope="row">Rate</th><td v-for="value in activePrimaryValues" :key="value"><input v-model.number="receiptRates[value]" type="number" min="0" step="0.0001" :aria-label="`Rate ${value}`" :disabled="disabled" /></td></tr>
+								<tr v-if="offersSecondary"><th scope="row">{{ itemSchema.secondary_uom }}</th><td v-for="value in activePrimaryValues" :key="value"><input v-model.number="secondaryQuantities[value]" type="number" min="0" step="0.001" :aria-label="`${itemSchema.secondary_uom} ${value}`" :disabled="disabled" /></td></tr>
+							</tbody>
+						</table>
 					</div>
 					<div v-else class="stock-composer__single-quantity" @keydown.enter="stageFromLastInput">
-						<label><span>{{ quantityLabel }} *</span><input v-model.number="quantities.default" type="number" min="0" step="0.001" :disabled="disabled" @input="quantityTouched.default = true" /></label>
-						<label v-if="rateEditable"><span>Rate</span><input v-model.number="receiptRates.default" type="number" min="0" step="0.0001" :disabled="disabled" /></label>
-						<label v-if="offersSecondary"><span>Secondary Qty · {{ itemSchema.secondary_uom }}</span><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :disabled="disabled" /></label>
+						<table v-entry-table="{ fixed: false }">
+							<thead><tr><th scope="col">{{ quantityLabel }} *</th><th v-if="rateEditable" scope="col">Rate</th><th v-if="offersSecondary" scope="col">Secondary Qty · {{ itemSchema.secondary_uom }}</th></tr></thead>
+							<tbody><tr><td><input v-model.number="quantities.default" type="number" min="0" step="0.001" :aria-label="quantityLabel" :disabled="disabled" @input="quantityTouched.default = true" /></td><td v-if="rateEditable"><input v-model.number="receiptRates.default" type="number" min="0" step="0.0001" aria-label="Rate" :disabled="disabled" /></td><td v-if="offersSecondary"><input v-model.number="secondaryQuantities.default" type="number" min="0" step="0.001" :aria-label="`Secondary Qty ${itemSchema.secondary_uom}`" :disabled="disabled" /></td></tr></tbody>
+						</table>
 					</div>
 				</div>
 
@@ -152,6 +151,7 @@ import { callMethod } from "../../api/frappe.js"
 import { getEntryPrimaryValues, mergeStockItemDraft, offersSecondaryQuantity, stockRateLabels } from "../../utils/stockItemComposer.js"
 import { cellAmount, getEntryTotals, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
 import { formatDisplayDate } from "../../utils/dateFormat.js"
+import { vEntryTable } from "../common/childGrid/entryTable.js"
 import { removalOrder, useRowSelection } from "../common/childGrid/rowSelection.js"
 
 const props = defineProps({
@@ -713,34 +713,28 @@ function clone(value) { return value === undefined ? {} : JSON.parse(JSON.string
 }
 
 .stock-composer__quantity-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+	overflow-x: auto;
 }
 
-.stock-composer__quantity-cell {
-	display: grid;
-	gap: var(--erp-space-1);
-	padding: 8px;
-	border-right: 1px solid var(--erp-border-subtle);
-	border-bottom: 1px solid var(--erp-border-subtle);
+.stock-composer .stock-composer__quantity-grid table,
+.stock-composer .stock-composer__single-quantity table {
+	min-width: 0;
 }
 
-.stock-composer__quantity-cell:focus-within {
-	position: relative;
-	z-index: 1;
+.stock-composer__quantity-grid td {
+	min-width: 96px;
+}
+
+.stock-composer__quantity-grid tbody th {
+	position: static;
+	width: 1%;
+	border-top: 1px solid var(--erp-border-subtle);
+	border-bottom: 0;
+}
+
+.stock-composer__quantity-grid td:focus-within,
+.stock-composer__single-quantity td:focus-within {
 	background: color-mix(in srgb, var(--erp-accent) 4%, var(--erp-surface));
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--erp-accent) 36%, var(--erp-surface));
-}
-
-.stock-composer__quantity-cell strong {
-	color: var(--erp-text);
-	font-size: var(--erp-font-size-caption);
-}
-
-.stock-composer__quantity-cell span,
-.stock-composer__single-quantity span {
-	color: var(--erp-text-muted);
-	font-size: var(--erp-font-size-min);
 }
 
 .stock-composer input[type="number"] {
@@ -761,16 +755,12 @@ function clone(value) { return value === undefined ? {} : JSON.parse(JSON.string
 	outline: 2px solid color-mix(in srgb, var(--erp-accent) 12%, transparent);
 }
 
-.stock-composer__single-quantity {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 220px));
-	gap: 10px;
-	padding: 10px;
+.stock-composer .stock-composer__single-quantity table {
+	width: auto;
 }
 
-.stock-composer__single-quantity label {
-	display: grid;
-	gap: var(--erp-space-1);
+.stock-composer__single-quantity td {
+	width: 220px;
 }
 
 .stock-composer__remarks {
@@ -1082,8 +1072,7 @@ function clone(value) { return value === undefined ? {} : JSON.parse(JSON.string
 @media (max-width: 620px) {
 	.stock-composer__fields,
 	.stock-composer__attribute-grid,
-	.stock-composer__item-strip,
-	.stock-composer__single-quantity {
+	.stock-composer__item-strip {
 		grid-template-columns: 1fr;
 	}
 

@@ -166,8 +166,8 @@ test("F-B06 recut labels and columns", () => {
 	const state = setup("departments/fabric-store/WorkOrderActionPanel.vue", {}, "attributeText")
 	assert.equal(state.attributeText({ Stage: "Piece", Panel: "", Colour: "Navy", Empty: null, Space: " " }), "Stage: Piece · Colour: Navy")
 	const source = read("departments/fabric-store/WorkOrderActionPanel.vue")
-	assert.match(source, /'--recut-size-count': primaryValues\(group\).length/)
-	assert.match(source, /repeat\(var\(--recut-size-count\), minmax\(64px, 1fr\)\)/)
+	assert.match(source, /<table v-entry-table="\{ fixed: false \}" class="erp-data-table work-order-recut-table">/)
+	assert.match(source, /<th v-for="value in primaryValues\(group\)" :key="value" class="erp-number">/)
 	assert.doesNotMatch(source, /repeat\(auto-fit, minmax\(110px, 150px\)\)/)
 })
 

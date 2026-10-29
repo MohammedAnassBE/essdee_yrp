@@ -62,7 +62,7 @@
 		<section v-if="movementData.collapsed_details?.length" class="erp-editor-section">
 			<header class="erp-section-header"><div><h3>Collapsed bundles</h3><p>Select a row, then enter the quantity to move.</p></div><span class="erp-count">{{ movementData.collapsed_details.length }} rows</span></header>
 			<div class="erp-table-scroll" role="region" tabindex="0" aria-label="Collapsed bundle quantities">
-				<table class="erp-table"><thead><tr><th class="erp-select-column">Move</th><th>S.No.</th><th>Size</th><th>Colour</th><th>Panel</th><th>Lay No.</th><th>Bundle No.</th><th>Available</th><th>Move Qty</th></tr></thead><tbody>
+				<table v-entry-table class="erp-table"><thead><tr><th class="erp-select-column">Move</th><th>S.No.</th><th>Size</th><th>Colour</th><th>Panel</th><th>Lay No.</th><th>Bundle No.</th><th>Available</th><th>Move Qty</th></tr></thead><tbody>
 					<tr v-for="(row, index) in movementData.collapsed_details" :key="index" :class="{ 'erp-row-selected': row.moved }">
 						<td class="erp-select-column"><label class="erp-check-target"><input v-model="row.moved" type="checkbox" :disabled="!editable" :aria-label="`Move collapsed bundle ${row.bundle_no || index + 1}`" @change="toggleCollapsed(row)" /></label></td>
 						<td>{{ index + 1 }}</td><td>{{ row.size || "—" }}</td><td>{{ row.colour || "—" }}</td><td>{{ row.panel || "—" }}</td><td>{{ row.lay_no || "—" }}</td><td>{{ row.bundle_no || "—" }}</td><td class="erp-number">{{ number(row.quantity, 3) }}</td>
@@ -75,7 +75,7 @@
 		<section v-if="movementData.accessory_data?.length" class="erp-editor-section">
 			<header class="erp-section-header"><div><h3>Accessory fabric</h3><p>Enter only the weight moving with these cut panels.</p></div><span class="erp-count">{{ movementData.accessory_data.length }} rows</span></header>
 			<div class="erp-table-scroll" role="region" tabindex="0" aria-label="Accessory fabric quantities">
-				<table class="erp-table"><thead><tr><th>S.No.</th><th>Cloth</th><th>Cloth Type</th><th>Colour</th><th>Shade</th><th>Dia</th><th>Available Weight</th><th>Move Weight</th></tr></thead><tbody>
+				<table v-entry-table class="erp-table"><thead><tr><th>S.No.</th><th>Cloth</th><th>Cloth Type</th><th>Colour</th><th>Shade</th><th>Dia</th><th>Available Weight</th><th>Move Weight</th></tr></thead><tbody>
 					<tr v-for="(row, index) in movementData.accessory_data" :key="index" :class="{ 'erp-row-selected': Number(row.moved_weight || 0) > 0 }">
 						<td>{{ index + 1 }}</td><td>{{ row.cloth_name || "—" }}</td><td>{{ row.cloth_type || "—" }}</td><td>{{ row.colour || "—" }}</td><td>{{ row.shade || "—" }}</td><td>{{ row.dia || "—" }}</td><td class="erp-number">{{ number(row.weight, 3) }} kg</td>
 						<td><InputNumber v-model="row.moved_weight" :aria-label="`Move weight for ${row.cloth_name || `accessory row ${index + 1}`}`" :min="0" :max="Number(row.weight || 0)" :disabled="!editable" :max-fraction-digits="3" suffix=" kg" fluid @update:model-value="commit" /></td>
@@ -90,6 +90,8 @@
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
 import { computed } from "vue"
+
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	modelValue: { type: Object, default: () => ({}) },

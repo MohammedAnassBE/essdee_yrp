@@ -16,7 +16,7 @@
 				<div v-else class="work-order-garment-calculation">
 					<div class="work-order-garment-calculation__toolbar"><span>Select the combinations to calculate, then adjust quantities if required.</span><div><Button label="Select all" size="small" severity="secondary" outlined @click="setAllGarmentRows(true)" /><Button label="Unselect all" size="small" severity="secondary" text @click="setAllGarmentRows(false)" /></div></div>
 					<div class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Garment calculation quantities">
-						<table class="erp-data-table work-order-calculation-table">
+						<table v-entry-table class="erp-data-table work-order-calculation-table">
 							<thead><tr><th class="work-order-calculation-table__use">Use</th><th v-for="attribute in garmentDisplayAttributes" :key="attribute">{{ attribute }}</th><th v-for="value in garmentPrimaryValues" :key="value" class="erp-number">{{ value === "default" ? "Quantity" : value }}</th><th class="erp-number">Total</th></tr></thead>
 							<tbody><tr v-for="(row, rowIndex) in garmentMatrixRows" :key="row.key || rowIndex" :class="{ 'work-order-calculation-table__row--disabled': !row.selected }"><td><Checkbox v-model="row.selected" binary :aria-label="`Use garment row ${rowIndex + 1}: ${attributeText(row.attributes) || row.key || 'item'}`" /></td><td v-for="attribute in garmentDisplayAttributes" :key="attribute">{{ row.attributes?.[attribute] || "—" }}</td><td v-for="value in garmentPrimaryValues" :key="value" class="erp-number work-order-calculation-table__quantity"><template v-if="row.values?.[value]"><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${attributeText(row.attributes) || row.key || `garment row ${rowIndex + 1}`}`" :min="0" :max-fraction-digits="3" :disabled="!row.selected" fluid /><small>Lot qty {{ number(row.values[value].available_qty) }}</small></template><span v-else>—</span></td><td class="erp-number work-order-calculation-table__total">{{ number(garmentRowTotal(row)) }}</td></tr></tbody>
 							<tfoot><tr><th :colspan="1 + garmentDisplayAttributes.length">Column totals</th><th v-for="value in garmentPrimaryValues" :key="value" class="erp-number">{{ number(garmentColumnTotal(value)) }}</th><th class="erp-number">{{ number(garmentGrandTotal) }}</th></tr></tfoot>
@@ -98,18 +98,18 @@
 			<template v-else-if="mode === 'create_rework'">
 				<div class="work-order-action-panel__fields"><label><span>Supplier type</span><Select v-model="draft.supplier_type" :options="['Same Supplier', 'Different Supplier']" fluid /></label><LinkField v-if="draft.supplier_type === 'Different Supplier'" v-model="draft.supplier" label="Supplier *" doctype="Supplier" :show-open-button="false" /></div>
 				<Message v-if="!reworkRows.length && !error" severity="secondary" :closable="false">No rework items. Rework rows come from this Work Order's submitted GRNs received in a rework type such as Printing Mistake.</Message>
-				<div v-else class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody><tfoot><tr><th colspan="3">Total</th><td class="erp-number">{{ number(reworkTotals(reworkRows).available) }}</td><td class="erp-number">{{ number(reworkTotals(reworkRows).qty) }}</td></tr></tfoot></table></div>
+				<div v-else class="work-order-action-panel__table-wrap" role="region" tabindex="0" aria-label="Rework quantities"><table v-entry-table class="erp-data-table"><thead><tr><th>Source</th><th>Item</th><th>Stock context</th><th class="erp-number">Available</th><th class="erp-number">Rework quantity</th></tr></thead><tbody><tr v-for="(row, rowIndex) in reworkRows" :key="row.source_key"><td>{{ row.source_label || row.source_key }}</td><td>{{ row.item_variant }}</td><td>{{ reworkContext(row) }}</td><td class="erp-number">{{ number(row.available_qty) }}</td><td><InputNumber v-model="row.qty" :aria-label="`Rework quantity for ${row.item_variant || row.source_label || `row ${rowIndex + 1}`}`" :min="0" :max="Number(row.available_qty || 0)" :max-fraction-digits="3" fluid /></td></tr></tbody><tfoot><tr><th colspan="3">Total</th><td class="erp-number">{{ number(reworkTotals(reworkRows).available) }}</td><td class="erp-number">{{ number(reworkTotals(reworkRows).qty) }}</td></tr></tfoot></table></div>
 			</template>
 
 			<template v-else-if="mode === 'create_recut'">
 				<Message v-if="!recutGroups.length" severity="secondary" :closable="false">This Work Order has no calculated SKU rows available for recut.</Message>
 				<div v-else class="work-order-recut-groups">
-					<section v-for="(group, groupIndex) in recutGroups" :key="groupIndex" class="work-order-recut-group">
-						<div v-for="(row, rowIndex) in group.items || []" :key="row.item_variant || row.name || rowIndex" class="work-order-recut-row" :style="{ '--recut-size-count': primaryValues(group).length }">
-							<div><strong>{{ row.item_variant || row.name }}</strong><small>{{ attributeText(row.attributes) }}</small></div>
-							<label v-for="value in primaryValues(group)" :key="value"><span>{{ value === 'default' ? 'Quantity' : value }}</span><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${row.item_variant || row.name || `recut row ${rowIndex + 1}`}`" :min="0" :max-fraction-digits="3" fluid /></label>
-						</div>
-						<div class="work-order-recut-row work-order-recut-row--total" :style="{ '--recut-size-count': primaryValues(group).length }"><strong>Total · {{ number(recutGroupTotals(group, primaryValues(group)).total) }}</strong><span v-for="value in primaryValues(group)" :key="value">{{ number(recutGroupTotals(group, primaryValues(group)).values[value]) }}</span></div>
+					<section v-for="(group, groupIndex) in recutGroups" :key="groupIndex" class="work-order-recut-group" role="region" :aria-label="`Recut quantities ${groupIndex + 1}`">
+						<table v-entry-table="{ fixed: false }" class="erp-data-table work-order-recut-table">
+							<thead><tr><th>Item</th><th v-for="value in primaryValues(group)" :key="value" class="erp-number">{{ value === 'default' ? 'Quantity' : value }}</th></tr></thead>
+							<tbody><tr v-for="(row, rowIndex) in group.items || []" :key="row.item_variant || row.name || rowIndex"><td><div class="work-order-recut-table__item"><strong>{{ row.item_variant || row.name }}</strong><small>{{ attributeText(row.attributes) }}</small></div></td><td v-for="value in primaryValues(group)" :key="value" class="work-order-recut-table__quantity"><InputNumber v-model="row.values[value].qty" :aria-label="`${value === 'default' ? 'Quantity' : value} for ${row.item_variant || row.name || `recut row ${rowIndex + 1}`}`" :min="0" :max-fraction-digits="3" fluid /></td></tr></tbody>
+							<tfoot><tr><th>Total · {{ number(recutGroupTotals(group, primaryValues(group)).total) }}</th><td v-for="value in primaryValues(group)" :key="value" class="erp-number">{{ number(recutGroupTotals(group, primaryValues(group)).values[value]) }}</td></tr></tfoot>
+						</table>
 					</section>
 					<p class="work-order-recut-pieces" role="status">Total recut pieces · <strong>{{ number(recutQuantity) }}</strong></p>
 				</div>
@@ -172,6 +172,7 @@ import { pendingWorkOrderGroups } from "./workOrderClose.js"
 import { fabricClothTotal, recutGroupTotals, recutPieces, reworkTotals } from "./workOrderTotals.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import {
 	buildFabricPayload, canCalculateFabric, fabricColourError, fabricEntryError, fabricEntryLabel,
@@ -223,7 +224,7 @@ const titles = {
 	change_delivery_date: "Change Delivery Date", change_item: "Change Item",
 }
 const title = computed(() => titles[props.mode] || "Work Order Action")
-const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "change_item", "close", "request_close", "approve_close"].includes(props.mode))
+const largePanel = computed(() => ["calculate_garment", "calculate_fabric", "create_rework", "create_recut", "change_item", "close", "request_close", "approve_close"].includes(props.mode))
 const busy = computed(() => loading.value || uploading.value || Boolean(acting.value || approvingDebit.value))
 const isCloseMode = computed(() => ["close", "request_close", "approve_close"].includes(props.mode))
 const actionLabels = {
@@ -388,14 +389,13 @@ watch(() => props.visible, (value, previous) => { if (value && !previous) initia
 .work-order-calculation-table__total { color: var(--erp-accent-dark); font-weight: 800; }
 .work-order-recut-groups { display: grid; gap: var(--erp-space-3); }
 .work-order-recut-group { display: grid; overflow-x: auto; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 4px 14px rgb(28 61 45 / 3%); }
-.work-order-recut-row { display: grid; grid-template-columns: minmax(150px, 2fr) repeat(var(--recut-size-count), minmax(64px, 1fr)); align-items: end; gap: var(--erp-space-3); padding: var(--erp-space-3); border-bottom: 1px solid var(--erp-border); }
-.work-order-recut-row:last-child { border-bottom: 0; }
-.work-order-recut-row--total { align-items: center; color: var(--erp-text); font-weight: 800; background: var(--erp-accent-soft); }
-.work-order-recut-row--total span { text-align: right; font-variant-numeric: tabular-nums; }
+.work-order-recut-table__item { display: grid; gap: 4px; min-width: 150px; }
+.work-order-recut-table__item small { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.work-order-recut-table__quantity { min-width: 84px; }
+.work-order-recut-table__quantity :deep(.p-inputnumber-input) { height: 32px; padding: 5px 8px; text-align: right; }
+.work-order-recut-table tfoot > tr > * { color: var(--erp-text); font-weight: 800; background: var(--erp-accent-soft); }
 .work-order-recut-pieces { margin: 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); text-align: right; }
 .work-order-recut-pieces strong { color: var(--erp-text); }
-.work-order-recut-row > div, .work-order-recut-row label { display: grid; gap: 4px; }
-.work-order-recut-row small, .work-order-recut-row label span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .work-order-fabric-row { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 54%, var(--erp-surface)); background: color-mix(in srgb, var(--erp-surface-soft) 70%, var(--erp-surface)); border-radius: 0 var(--erp-control-radius) var(--erp-control-radius) 0; }
 .work-order-fabric-row > header { display: flex; justify-content: space-between; gap: 12px; }
 .work-order-fabric-row > header div { display: grid; gap: 2px; }

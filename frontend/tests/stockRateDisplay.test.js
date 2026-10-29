@@ -106,9 +106,10 @@ for (const layout of ["grid", "single"]) {
 		assert.equal(rateInputs(root).length, keysFor(layout).length)
 		for (const input of rateInputs(root)) {
 			assert.equal(input.props.type, "number")
-			assert.match(textContent(input.parent), /Rate/)
-			const quantityCell = layout === "grid" ? input.parent : input.parent.parent
-			assert.ok(findNodes(quantityCell, node => node.type === "input" && node.props.step === "0.001").length, "rate sits beside its quantity")
+			const quantityTable = input.parent.parent.parent.parent
+			assert.equal(quantityTable.type, "table")
+			assert.match(textContent(quantityTable), /Rate/)
+			assert.ok(findNodes(quantityTable, node => node.type === "input" && node.props.step === "0.001").length, "rate sits in its quantity table")
 			typeInto(input, 17.25)
 		}
 		await enterQuantities(root)

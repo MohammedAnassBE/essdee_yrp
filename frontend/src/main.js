@@ -8,6 +8,7 @@ import "@fontsource-variable/inter"
 import "primeicons/primeicons.css"
 
 import App from "./App.vue"
+import { guardNumberArrows } from "./components/common/childGrid/entryTable.js"
 import router, { reloadRouteChunk } from "./router/index.js"
 import { initializeTheme } from "./utils/themePreference.js"
 import "./styles/main.css"
@@ -15,6 +16,7 @@ import "./styles/enterprise.css"
 import "./styles/reportTables.css"
 
 initializeTheme()
+document.addEventListener("keydown", guardNumberArrows, true)
 
 window.addEventListener("vite:preloadError", (event) => {
 	event.preventDefault()

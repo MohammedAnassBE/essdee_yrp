@@ -16,7 +16,7 @@
 		</div>
 
 		<div class="erp-table-wrap grn-calculate-panel__matrix" role="region" tabindex="0" aria-label="Goods Received Note receivable quantities">
-			<table class="erp-data-table">
+			<table v-entry-table class="erp-data-table">
 				<thead>
 					<tr>
 						<th class="grn-calculate-panel__select">Use</th>
@@ -71,6 +71,7 @@ import InputNumber from "primevue/inputnumber"
 import { computed, ref, watch } from "vue"
 
 import LinkField from "../../components/common/LinkField.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 
 const props = defineProps({

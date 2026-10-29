@@ -20,15 +20,19 @@
 					<div><span>Source bin</span><strong>{{ source.warehouse || "—" }}</strong></div>
 					<div><span>Available</span><strong>{{ formatQty(source.grn_qty || source.quantity) }}</strong></div>
 				</header>
-				<div class="inspection-entry-panel__split-list">
-					<label class="inspection-entry-panel__select-all"><input type="checkbox" class="inspection-entry-panel__checkbox" data-row-select :checked="isSourceAllSelected(source)" :indeterminate="isSourcePartlySelected(source)" :disabled="!sourceSelectableSplits(source).length" aria-label="Select all inspection splits" @change="toggleSource(source, $event.target.checked)" /><span>Select all</span></label>
-					<div v-for="(split, splitIndex) in source.splits" :key="splitIndex" class="inspection-entry-panel__split">
-						<input type="checkbox" class="inspection-entry-panel__checkbox" data-row-select tabindex="-1" :checked="splitSelection.isSelected(split)" :disabled="!removableSplits.includes(split)" :aria-label="`Select inspection split ${splitIndex + 1}`" @change="splitSelection.toggle(split, $event.target.checked)" />
-						<div class="inspection-entry-panel__target-type"><LinkField v-model="split.target_received_type" label="Target Received Type *" doctype="YRP Received Type" :show-open-button="false" :disabled="Boolean(acting)" /></div>
-						<label><span>Quantity *</span><InputNumber v-model="split.qty" :min="0" :max="Number(source.grn_qty || source.quantity || 0)" :max-fraction-digits="3" fluid :disabled="Boolean(acting)" /></label>
-						<DateField v-model="split.received_date" label="Received Date" :disabled="Boolean(acting)" />
-						<label><span>Comments</span><InputText v-model="split.comments" fluid :disabled="Boolean(acting)" /></label>
-					</div>
+				<div class="inspection-entry-panel__split-list" role="region" :aria-label="`Inspection splits for ${source.item_variant || 'item'}`">
+					<table v-entry-table="{ add: () => addSplit(source), canAdd: !acting, isRowBlank: (index) => isSplitBlank(source.splits[index]), fixed: false }" class="erp-data-table inspection-entry-panel__splits">
+						<thead><tr><th class="inspection-entry-panel__select"><input type="checkbox" class="inspection-entry-panel__checkbox" data-row-select :checked="isSourceAllSelected(source)" :indeterminate="isSourcePartlySelected(source)" :disabled="!sourceSelectableSplits(source).length" aria-label="Select all inspection splits" @change="toggleSource(source, $event.target.checked)" /></th><th>Target Received Type *</th><th class="erp-number">Quantity *</th><th>Received Date</th><th>Comments</th></tr></thead>
+						<tbody>
+							<tr v-for="(split, splitIndex) in source.splits" :key="splitIndex">
+								<td class="inspection-entry-panel__select"><input type="checkbox" class="inspection-entry-panel__checkbox" data-row-select tabindex="-1" :checked="splitSelection.isSelected(split)" :disabled="!removableSplits.includes(split)" :aria-label="`Select inspection split ${splitIndex + 1}`" @change="splitSelection.toggle(split, $event.target.checked)" /></td>
+								<td class="inspection-entry-panel__target-type"><LinkField v-model="split.target_received_type" :aria-label="`Target Received Type for split ${splitIndex + 1}`" doctype="YRP Received Type" :show-open-button="false" :disabled="Boolean(acting)" /></td>
+								<td class="inspection-entry-panel__quantity"><InputNumber v-model="split.qty" :aria-label="`Quantity for split ${splitIndex + 1}`" :min="0" :max="Number(source.grn_qty || source.quantity || 0)" :max-fraction-digits="3" fluid :disabled="Boolean(acting)" /></td>
+								<td class="inspection-entry-panel__date"><DateField v-model="split.received_date" :aria-label="`Received Date for split ${splitIndex + 1}`" :disabled="Boolean(acting)" /></td>
+								<td><InputText v-model="split.comments" :aria-label="`Comments for split ${splitIndex + 1}`" fluid :disabled="Boolean(acting)" /></td>
+							</tr>
+						</tbody>
+					</table>
 				</div>
 				<div v-if="sourceSelectedSplits(source).length" class="inspection-entry-panel__selection">
 					<span>{{ sourceSelectedSplits(source).length }} selected</span>
@@ -66,6 +70,7 @@ import DateField from "../../components/common/DateField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import TimeField from "../../components/common/TimeField.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import { removalOrder, useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 
 const props = defineProps({
@@ -111,6 +116,7 @@ function emptySplit(source) {
 	}
 }
 function addSplit(source) { source.splits.push({ ...emptySplit(source), qty: 0 }) }
+function isSplitBlank(split) { return !Number(split?.qty || 0) && !split?.comments }
 function removeSplit(source, index) { source.splits.splice(index, 1) }
 function sourceSelectableSplits(source) { return source.splits.filter((split) => removableSplits.value.includes(split)) }
 function sourceSelectedSplits(source) { return source.splits.filter((split) => splitSelection.isSelected(split)) }
@@ -134,23 +140,26 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .inspection-entry-panel { display: grid; overflow: hidden; gap: var(--erp-space-3); border: 1px solid color-mix(in srgb, var(--erp-accent) 20%, var(--erp-border)); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .inspection-entry-panel__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid var(--erp-accent); background: color-mix(in srgb, var(--erp-accent-soft) 72%, var(--erp-surface)); }
 .inspection-entry-panel__header > div { display: grid; gap: 2px; }
-.inspection-entry-panel__header span, .inspection-entry-panel__remarks > span, .inspection-entry-panel__split label > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
+.inspection-entry-panel__header span, .inspection-entry-panel__remarks > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .inspection-entry-panel__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
 .inspection-entry-panel > :not(.inspection-entry-panel__header, .inspection-entry-panel__actions) { margin-right: var(--erp-space-3); margin-left: var(--erp-space-3); }
 .inspection-entry-panel__fields { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(150px, 1fr) minmax(260px, 2fr); gap: var(--erp-space-3); }
-.inspection-entry-panel__remarks, .inspection-entry-panel__split label { display: grid; align-content: start; gap: 6px; }
+.inspection-entry-panel__remarks { display: grid; align-content: start; gap: 6px; }
 .inspection-entry-panel__sources { display: grid; gap: var(--erp-space-3); }
 .inspection-entry-panel__source { overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .inspection-entry-panel__source > header { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 9px 11px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .inspection-entry-panel__source > header > div { display: grid; gap: 2px; }
 .inspection-entry-panel__source > header span, .inspection-entry-panel__source > footer span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .inspection-entry-panel__source > header strong { font-size: var(--erp-font-size-caption); }
-.inspection-entry-panel__split-list { display: grid; gap: 8px; padding: 10px; }
-.inspection-entry-panel__split { display: grid; grid-template-columns: 20px minmax(190px, 1.25fr) minmax(110px, .65fr) minmax(155px, .8fr) minmax(180px, 1fr); align-items: end; gap: 8px; }
-.inspection-entry-panel__split > .inspection-entry-panel__checkbox { margin-bottom: 11px; }
+.inspection-entry-panel__split-list { overflow-x: auto; }
+.inspection-entry-panel__splits { min-width: 720px; }
+.inspection-entry-panel__select { width: 36px; }
+.inspection-entry-panel__target-type { min-width: 190px; }
+.inspection-entry-panel__quantity { width: 130px; }
+.inspection-entry-panel__quantity :deep(.p-inputnumber-input) { text-align: right; }
+.inspection-entry-panel__date { width: 170px; }
 .inspection-entry-panel__checkbox { width: 15px; height: 15px; margin: 0; accent-color: var(--erp-accent); cursor: pointer; }
 .inspection-entry-panel__checkbox:disabled { cursor: not-allowed; opacity: .45; }
-.inspection-entry-panel__select-all { display: flex; align-items: center; gap: 8px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
 .inspection-entry-panel__selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--erp-border); color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .inspection-entry-panel__source > footer, .inspection-entry-panel__actions, .inspection-entry-panel__actions > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .inspection-entry-panel__source > footer { padding: 6px 10px; border-top: 1px solid var(--erp-border); }
@@ -160,6 +169,6 @@ function clone(value) { return JSON.parse(JSON.stringify(value || [])) }
 .inspection-entry-panel__existing > div > span { display: grid; gap: 2px; padding: 6px 9px; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); }
 .inspection-entry-panel__existing small { color: var(--erp-text-muted); }
 .inspection-entry-panel__actions { padding: 0 var(--erp-space-3) var(--erp-space-3); }
-@media (max-width: 900px) { .inspection-entry-panel__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .inspection-entry-panel__remarks { grid-column: 1 / -1; } .inspection-entry-panel__split { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .inspection-entry-panel__fields, .inspection-entry-panel__source > header, .inspection-entry-panel__split { grid-template-columns: 1fr; } .inspection-entry-panel__remarks { grid-column: auto; } .inspection-entry-panel__actions { align-items: stretch; flex-direction: column; } .inspection-entry-panel__actions > div { display: grid; width: 100%; grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .inspection-entry-panel__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .inspection-entry-panel__remarks { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .inspection-entry-panel__fields, .inspection-entry-panel__source > header { grid-template-columns: 1fr; } .inspection-entry-panel__remarks { grid-column: auto; } .inspection-entry-panel__actions { align-items: stretch; flex-direction: column; } .inspection-entry-panel__actions > div { display: grid; width: 100%; grid-template-columns: 1fr; } }
 </style>

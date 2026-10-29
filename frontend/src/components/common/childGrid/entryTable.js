@@ -14,7 +14,7 @@ function rowControls(row) {
 }
 
 function bodyRows(table) {
-	return [...(table?.tBodies?.[0]?.rows || [])].filter((row) => rowControls(row).length || row.cells.length > 1)
+	return [...(table?.tBodies || [])].flatMap((body) => [...body.rows]).filter((row) => rowControls(row).length || row.cells.length > 1)
 }
 
 function controlValueBlank(control) {
@@ -86,14 +86,96 @@ async function advance(element, target, wasExpanded) {
 	}
 }
 
-function onKeydown(event) {
-	if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
+function cellControl(target) {
+	if (target.tagName === "TEXTAREA" || target.tagName === "BUTTON" || !target.closest?.("tbody tr")) return null
+	if (!target.matches(CONTROL_SELECTOR) && !target.closest("[role=combobox]")) return null
+	return target.getAttribute("aria-expanded") === "true" ? null : target
+}
+
+function onEnter(event) {
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
 	const target = event.target
 	if (target.tagName === "TEXTAREA" || target.tagName === "BUTTON" || !target.closest?.("tbody tr")) return
 	if (!target.matches(CONTROL_SELECTOR) && !target.closest("[role=combobox]")) return
 	const wasExpanded = target.getAttribute("aria-expanded") === "true"
 	if (!wasExpanded && target.tagName === "INPUT" && target.type !== "checkbox") event.preventDefault()
 	advance(event.currentTarget, target, wasExpanded)
+}
+
+const ARROW_STEPS = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -1, ArrowRight: 1 }
+const isVertical = (key) => key === "ArrowUp" || key === "ArrowDown"
+
+/** Cell to reach from `position` by an arrow key; `cells[row]` lists each input's column, so up and down keep the column. */
+export function arrowTarget(cells, position, key) {
+	const step = ARROW_STEPS[key]
+	if (!isVertical(key)) {
+		const col = position.col + step
+		return col >= 0 && col < cells[position.row].length ? { row: position.row, col } : null
+	}
+	let row = position.row + step
+	while (cells[row] && !cells[row].length) row += step
+	if (!cells[row]) return null
+	const col = cells[row].indexOf(cells[position.row][position.col])
+	return { row, col: col >= 0 ? col : Math.min(position.col, cells[row].length - 1) }
+}
+
+/** Left and right leave an input only from the caret's edge or with all its text selected, like a Desk grid cell. */
+export function isCaretAtEdge(control, key) {
+	if (isVertical(key)) return true
+	let start, end
+	try { [start, end] = [control.selectionStart, control.selectionEnd] } catch { return true }
+	if (start == null) return true
+	const length = String(control.value ?? "").length
+	if (start === 0 && end === length) return true
+	if (start !== end) return false
+	return key === "ArrowLeft" ? start === 0 : end === length
+}
+
+export function isNumberInput(element) {
+	return element?.tagName === "INPUT" && (element.type === "number" || Boolean(element.classList?.contains("p-inputnumber-input")))
+}
+
+function blockKey(event) {
+	event.preventDefault()
+	event.stopPropagation()
+}
+
+function onArrow(event) {
+	const target = event.target
+	if (isVertical(event.key) && isNumberInput(target)) blockKey(event)
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || !cellControl(target) || !isCaretAtEdge(target, event.key)) return
+	const table = tableOf(event.currentTarget)
+	const { controls, row, col } = locate(table, target)
+	if (row < 0 || col < 0) return
+	blockKey(event)
+	const columns = controls.map((cells) => cells.map((control) => control.closest("td, th")?.cellIndex))
+	const next = arrowTarget(columns, { row, col }, event.key)
+	if (next) focusControl(table, next.row, next.col)
+}
+
+function onTab(event) {
+	if (event.ctrlKey || event.metaKey || event.altKey || !cellControl(event.target)) return
+	const table = tableOf(event.currentTarget)
+	const { controls, row, col } = locate(table, event.target)
+	const cells = controls.flatMap((rowControls, rowIndex) => rowControls.map((_, colIndex) => ({ row: rowIndex, col: colIndex })))
+	const next = cells[cells.findIndex((cell) => cell.row === row && cell.col === col) + (event.shiftKey ? -1 : 1)]
+	if (row < 0 || col < 0 || !next) return
+	event.preventDefault()
+	focusControl(table, next.row, next.col)
+}
+
+function onKeydown(event) {
+	if (event.isComposing) return
+	if (event.key === "Enter") onEnter(event)
+	else if (event.key === "Tab") onTab(event)
+	else if (ARROW_STEPS[event.key]) onArrow(event)
+}
+
+/** Document-level keydown guard: ArrowUp/ArrowDown never step a number input; v-entry-table handles its own. */
+export function guardNumberArrows(event) {
+	if (!isVertical(event.key) || !isNumberInput(event.target)) return
+	for (let node = event.target; node; node = node.parentElement) if (state.has(node)) return
+	blockKey(event)
 }
 
 function freezeWidths(element) {
@@ -114,8 +196,9 @@ function freezeWidths(element) {
 }
 
 /**
- * v-entry-table on a bespoke editable table (or its wrapper): Enter moves to the next input and adds a row from
- * the last input of the last row; widths are measured once and fixed so focus or validation never shifts columns.
+ * v-entry-table on a bespoke editable table (or its wrapper): Desk-grid keys like the IPD Item BOM. Arrows move between
+ * inputs and never step a number, Tab moves to the next input, and Enter moves on and adds a row from the last input
+ * of the last row; widths are measured once and fixed so focus or validation never shifts columns.
  * Value: { add?: () => void, canAdd?: boolean, isRowBlank?: (rowIndex) => boolean, fixed?: boolean }.
  */
 export const vEntryTable = {

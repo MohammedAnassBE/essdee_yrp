@@ -42,7 +42,7 @@
 			<section class="marker-section">
 				<div class="section-heading"><div><h3>Size Ratios</h3><small>{{ form.selected_type === 'Machine' ? 'One ratio per size, applied to all selected panels.' : 'Set the ratio for every size and panel.' }}</small></div></div>
 				<div v-if="form.ratio_items.length" class="table-scroll" role="region" tabindex="0" aria-label="Editable marker size ratios">
-					<table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th>Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td><InputNumber v-model="row.ratio" :aria-label="`Ratio for ${row.size}${row.panel ? ` · ${row.panel}` : ''}`" :min="0" :step="0.5" :min-fraction-digits="1" :max-fraction-digits="1" :disabled="!canEdit" fluid /></td></tr></tbody></table>
+					<table v-entry-table class="marker-table"><thead><tr><th>Size</th><th v-if="form.selected_type === 'Manual'">Panel</th><th>Ratio</th></tr></thead><tbody><tr v-for="(row, index) in form.ratio_items" :key="`${row.size}-${row.panel || index}`"><td>{{ row.size }}</td><td v-if="form.selected_type === 'Manual'">{{ row.panel }}</td><td><InputNumber v-model="row.ratio" :aria-label="`Ratio for ${row.size}${row.panel ? ` · ${row.panel}` : ''}`" :min="0" :step="0.5" :min-fraction-digits="1" :max-fraction-digits="1" :disabled="!canEdit" fluid /></td></tr></tbody></table>
 				</div>
 				<div v-else class="empty-note">Select panels, then build the size ratios.</div>
 			</section>

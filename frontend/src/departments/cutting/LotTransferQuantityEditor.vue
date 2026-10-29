@@ -5,7 +5,7 @@
 			<small>Only the quantity can be changed. Delete rows to leave them in the current Lot.</small>
 		</header>
 		<div class="table-scroll" role="region" tabindex="0" aria-label="Lot Transfer quantity rows">
-			<table class="lt-quantity-table">
+			<table v-entry-table class="lt-quantity-table">
 				<thead><tr><th class="lt-row-select"><input type="checkbox" class="lt-row-select__box" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" :disabled="!removableKeys.length" aria-label="Select all rows" @change="selection.toggleAll($event.target.checked)" /></th><th>Cloth</th><th>From Lot</th><th>To Lot</th><th class="numeric">Available</th><th class="numeric">Quantity</th></tr></thead>
 				<tbody>
 					<tr v-for="row in draft" :key="row.name">
@@ -44,6 +44,7 @@ import DocumentShortcuts from "../../components/documents/DocumentShortcuts.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import { updateLotTransferQuantities } from "./cpmApi.js"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import { hasQuantityChanges, quantityDraft, quantityErrors, quantityPayload } from "./lotTransferQuantities.js"
 

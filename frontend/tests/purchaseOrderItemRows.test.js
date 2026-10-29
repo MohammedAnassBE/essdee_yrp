@@ -34,7 +34,7 @@ const Matrix = loadComponent(resolve(rootPath, "frontend/src/components/stock/St
 	"../../utils/dateFormat.js": { formatDisplayDate: (value, fallback) => value || fallback },
 })
 const textContent = (node) => node.type === "comment" ? "" : node.text + node.children.map(textContent).join("")
-const bodyRows = (root) => findNodes(root, node => node.type === "tbody").flatMap(body => body.children.filter(child => child.type === "tr"))
+const bodyRows = (root) => findNodes(findNodes(root, node => node.props.class === "stock-composer__staged")[0] || root, node => node.type === "tbody").flatMap(body => body.children.filter(child => child.type === "tr"))
 const footerTotals = (root) => findNodes(root, node => node.type === "tfoot").flatMap(foot => foot.children.filter(child => child.type === "tr")).map(row => textContent(row).replace(/\s+/g, " "))
 
 const plain = (name, attributes, qty, uom, extra = {}) => ({ name, attributes, dimensions: {}, primary_attribute: "", default_uom: uom, values: { default: { qty, rate: 10 } }, ...extra })

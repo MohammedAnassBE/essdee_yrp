@@ -28,7 +28,7 @@ const Matrix = loadComponent(resolve(rootPath, "frontend/src/components/stock/St
 const textContent = (node) => node.type === "comment" ? "" : node.text + node.children.map(textContent).join("")
 const button = (root, label) => findNodes(root, node => node.type === "button" && node.props.label === label)[0]
 const remarksInput = (root) => findNodes(root, node => node.type === "textarea" && node.props["aria-label"] === "Row remarks")[0]
-const stagedRows = (root) => findNodes(root, node => node.type === "tbody").flatMap(body => body.children.filter(child => child.type === "tr"))
+const stagedRows = (root) => findNodes(findNodes(root, node => node.props.class === "stock-composer__staged")[0], node => node.type === "tbody").flatMap(body => body.children.filter(child => child.type === "tr"))
 
 function mountComposer(operation) {
 	const props = Vue.reactive({ operation, editor: { dimensions: [] }, modelValue: [], schemaLoader: async () => structuredClone(schema), "onUpdate:modelValue": (value) => { props.modelValue = value } })

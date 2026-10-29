@@ -59,7 +59,7 @@
 		<div class="generate-form">
 			<DateField v-model="generation.bundle_generated_date" label="Bundle Generated Date" required />
 			<div class="generate-form__numbers"><label><span>Maximum No of Plys</span><InputNumber v-model="generation.maximum_no_of_plys" :min="1" fluid /></label><label><span>Maximum Allow Percent</span><InputNumber v-model="generation.maximum_allow_percentage" :min="0" suffix="%" fluid /></label></div>
-			<div class="generate-table-wrap" role="region" tabindex="0" aria-label="Bundle generation groups"><table><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="item in generation.groups" :key="item.part"><td>{{ item.part }}</td><td><InputNumber v-model="item.value" :aria-label="`Bundle group for ${item.part}`" :min="1" fluid /></td></tr></tbody></table></div>
+			<div class="generate-table-wrap" role="region" tabindex="0" aria-label="Bundle generation groups"><table v-entry-table><thead><tr><th>Panel</th><th>Bundle Group</th></tr></thead><tbody><tr v-for="item in generation.groups" :key="item.part"><td>{{ item.part }}</td><td><InputNumber v-model="item.value" :aria-label="`Bundle group for ${item.part}`" :min="1" fluid /></td></tr></tbody></table></div>
 		</div>
 		<template #footer><Button label="Close" severity="secondary" text :disabled="busy === 'generate'" @click="generateOpen = false" /><Button label="Generate Bundles" icon="pi pi-box" :loading="busy === 'generate'" :disabled="!generation.bundle_generated_date || !generation.groups.length" @click="generate" /></template>
 	</Dialog>
@@ -100,6 +100,7 @@ import InlinePageNavigation from "../components/navigation/InlinePageNavigation.
 import { usePageTitle } from "../composables/usePageTitle.js"
 import { useActionConfirmation } from "../utils/useActionConfirmation.js"
 import { formatDisplayDate } from "../utils/dateFormat.js"
+import { vEntryTable } from "../components/common/childGrid/entryTable.js"
 import BulkActions from "./cutting/bulk/BulkActions.vue"
 import BulkActiveLaySheet from "./cutting/bulk/BulkActiveLaySheet.vue"
 import BulkBundleTable from "./cutting/bulk/BulkBundleTable.vue"

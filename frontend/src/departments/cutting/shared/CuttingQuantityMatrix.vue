@@ -18,7 +18,7 @@
 				<span>Item</span><strong>{{ itemSections(group)[0].name }}</strong>
 			</p>
 			<div class="quantity-table-scroll" role="region" tabindex="0" :aria-label="`Planned quantities group ${groupIndex + 1}`">
-				<table>
+				<table v-entry-table="{ fixed: false }">
 					<thead>
 						<tr>
 							<th class="quantity-serial" scope="col">S.No.</th>
@@ -66,6 +66,7 @@
 import InputNumber from "primevue/inputnumber"
 import { computed } from "vue"
 
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import { groupAttributes, itemSections } from "./quantityMatrixLayout.js"
 
 const props = defineProps({

@@ -31,7 +31,7 @@
 		<p v-if="movementNotice" class="delivery-challan-return-panel__notice" :class="{ 'is-error': movementError }" role="status">{{ movementNotice }}</p>
 
 		<div v-if="rows.length" class="erp-table-wrap delivery-challan-return-panel__table" role="region" tabindex="0" aria-label="Delivery Challan return quantities">
-			<table class="erp-data-table">
+			<table v-entry-table class="erp-data-table">
 				<thead>
 					<tr>
 						<th>Item Variant</th><th>UOM</th><th class="erp-number">Delivered</th>
@@ -87,6 +87,7 @@ import { computed, ref, watch } from "vue"
 
 import { getDeliveryChallanReturnMovement } from "../../api/fabricStore.js"
 import LinkField from "../../components/common/LinkField.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import { getReturnTotalsByUom } from "../../engine/stock/deliveryChallanTotals.js"
 

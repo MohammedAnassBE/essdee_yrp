@@ -2009,9 +2009,10 @@ class TestEssdeeValuationContract(UnitTestCase):
 			),
 		):
 			plan = calculate_cutting_consumption_plan(grn)
+			# An Actual Dia LaySheet converts other delivered cloth into this input,
+			# so its own undelivered DC quantity must not block it, as in production_api.
 			work_order.deliverables[0].pending_quantity = 5
-			with self.assertRaisesRegex(frappe.ValidationError, "only 0.0 available for cutting input"):
-				calculate_cutting_consumption_plan(grn)
+			self.assertEqual(len(calculate_cutting_consumption_plan(grn)), 2)
 			work_order.deliverables[0].pending_quantity = 0
 			work_order.deliverables.append(
 				frappe._dict(

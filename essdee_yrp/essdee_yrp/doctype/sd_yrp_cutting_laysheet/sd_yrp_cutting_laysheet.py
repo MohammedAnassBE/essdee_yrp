@@ -2713,23 +2713,10 @@ def calculate_cutting_consumption_plan(grn):
 		conversion = get_conversion_factor(source.item_variant, source.uom)
 		factor = flt(conversion.get("conversion_factor")) or 1
 		input_stock_qty = flt(consumed["qty"]) * factor
-		# The Work Order DC is the business source of this cutting input; stock in
-		# the same warehouse/bucket may belong to another transaction. The stock
-		# ledger remains the separate physical authority during base mapped posting.
-		delivered_qty = max(flt(source.qty) - flt(source.pending_quantity), 0)
-		available_qty = max(delivered_qty - flt(source.stock_update), 0)
-		if flt(consumed["qty"]) > available_qty + QTY_TOLERANCE:
-			frappe.throw(
-				_(
-					"Work Order {0} has only {1} available for cutting input {2}, but the LaySheet used {3}."
-				).format(
-					work_order.name,
-					flt(available_qty, 6),
-					source.item_variant,
-					flt(consumed["qty"], 6),
-				)
-			)
 		dimensions = _stock_dimension_values(work_order, source)
+		# Like production_api, only the cutter's stock gates this input, never its
+		# own DC quantity: an Actual Dia LaySheet converts other delivered cloth
+		# into it. The stock ledger rejects a shortfall when the GRN posts.
 		_balance, balance_rate = get_stock_balance(
 			source.item_variant,
 			grn.from_warehouse,
@@ -2893,9 +2880,10 @@ def cancel_laysheet(doc_name):
 		frappe.throw("Some panels are moved, can't cancel the Cutting LaySheet")
 	doc.status = "Cancelled"
 	if doc.goods_received_note:
-		update_cloth_stock(doc, 1, -1)
+		# Return the consumed input dia before converting it back to the Actual Dia.
 		grn_doc = frappe.get_doc("YRP Goods Received Note", doc.goods_received_note)
 		grn_doc.cancel()
+		update_cloth_stock(doc, 1, -1)
 		if frappe.db.exists(
 			"SD YRP Cut Bundle Movement Ledger",
 			{

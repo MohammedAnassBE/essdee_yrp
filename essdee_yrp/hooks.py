@@ -179,6 +179,7 @@ add_to_apps_screen = [
 		"logo": "/assets/essdee_yrp/frontend/favicon.png",
 		"title": "Essdee YRP",
 		"route": "/web",
+		"has_permission": "essdee_yrp.navigation_access.has_web_access",
 	}
 ]
 
@@ -249,16 +250,8 @@ yrp_registered_experiences = {
 	"quality": ["workspaces"],
 }
 
-# Post-login landing: ordinary users land on the custom /web work hub;
-# System Manager / Administrator keep the Desk default (function returns None
-# for them, so Frappe falls through). See essdee_yrp/www_home.py.
-# Disabled: use Frappe's normal landing-page resolution.
-# get_website_user_home_page = "essdee_yrp.www_home.get_website_user_home_page"
-
-# Desk gate: non-(System Manager/Administrator) users are 302'd from
-# /app|/apps|/desk|/ to /web. See essdee_yrp/auth.py.
-# Disabled: let native Desk permissions handle access without forcing /web.
-# before_request = ["essdee_yrp.auth.block_desk_for_non_managers"]
+# Desk and /web page loads follow the role lists in SD YRP MRP Settings.
+before_request = ["essdee_yrp.navigation_access.gate_navigation"]
 
 # Includes in <head>
 # ------------------

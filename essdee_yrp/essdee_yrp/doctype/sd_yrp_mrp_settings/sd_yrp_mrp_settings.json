@@ -92,7 +92,12 @@
   "non_set_piece_sticker",
   "column_break_bsp",
   "set_item_box_sticker",
-  "set_item_piece_sticker"
+  "set_item_piece_sticker",
+  "navigation_access_tab",
+  "navigation_access_section",
+  "desk_access_roles",
+  "column_break_navigation_access",
+  "web_access_roles"
  ],
  "fields": [
   {
@@ -610,11 +615,39 @@
    "fieldtype": "Percent",
    "label": "Partially Dispatched Percentage",
    "non_negative": 1
+  },
+  {
+   "fieldname": "navigation_access_tab",
+   "fieldtype": "Tab Break",
+   "label": "Navigation Access"
+  },
+  {
+   "fieldname": "navigation_access_section",
+   "fieldtype": "Section Break",
+   "label": "Desk and /web Access"
+  },
+  {
+   "description": "Only users with one of these roles can open Desk (/desk, /app). Others are sent to /web when allowed there, otherwise shown a Not Permitted page. Leave empty to keep today's behaviour for everyone. Administrator and System Manager always have access.",
+   "fieldname": "desk_access_roles",
+   "fieldtype": "Table MultiSelect",
+   "label": "Desk Access Roles",
+   "options": "SD YRP Navigation Access Role"
+  },
+  {
+   "fieldname": "column_break_navigation_access",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Only users with one of these roles can open /web. Others are sent to Desk when allowed there, otherwise shown a Not Permitted page. Leave empty to keep today's behaviour for everyone. Administrator and System Manager always have access.",
+   "fieldname": "web_access_roles",
+   "fieldtype": "Table MultiSelect",
+   "label": "Web Access Roles",
+   "options": "SD YRP Navigation Access Role"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-26 10:00:00.000000",
+ "modified": "2026-10-29 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP MRP Settings",

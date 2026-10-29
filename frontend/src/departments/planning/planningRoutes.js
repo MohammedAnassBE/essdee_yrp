@@ -16,6 +16,7 @@ export const PLANNING_ROUTES = {
 	workOrderNew: "planning-work-order-new",
 	workOrder: "planning-work-order",
 	workOrderEdit: "planning-work-order-edit",
+	stockTransfers: "planning-stock-transfers",
 	boxStickers: "planning-box-stickers",
 	boxStickerNew: "planning-box-sticker-print-new",
 	boxSticker: "planning-box-sticker-print",

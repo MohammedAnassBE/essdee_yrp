@@ -55,6 +55,13 @@ export const PLANNING_WORKSPACES = [
 		to: "/planning/dispatches",
 	},
 	{
+		key: "stock_transfers",
+		label: "Stock Transfers",
+		description: "Stock Update, Stock Reconciliation, Stock Entry and Lot Transfer.",
+		icon: "pi pi-arrow-right-arrow-left",
+		to: "/planning/stock-transfers",
+	},
+	{
 		key: "box_stickers",
 		label: "Box Sticker Print",
 		description: "Prepare, preview and print size-based box labels.",

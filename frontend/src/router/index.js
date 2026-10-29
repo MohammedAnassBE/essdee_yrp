@@ -807,6 +807,10 @@ const routes = [
 	},
 	...departmentDocumentRoutes("planning", "Planning", ["/planning/delivery-challans", "/planning/goods-received-notes"]),
 	{
+		path: "/planning/stock-transfers", name: PLANNING_ROUTES.stockTransfers, component: FabricStoreSection,
+		props: { section: "stock_transfers", storeName: "Planning", basePath: "/planning" },
+	},
+	{
 		path: "/planning/box-sticker-prints", name: PLANNING_ROUTES.boxStickers, component: CutPanelStoreSection,
 		props: { section: "box_stickers", backTo: "/planning", backLabel: "Planning", ...PLANNING_BOX_STICKER_PAGES },
 	},

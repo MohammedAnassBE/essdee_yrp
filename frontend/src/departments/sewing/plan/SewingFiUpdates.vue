@@ -18,7 +18,7 @@
 							<td>{{ index + 1 }}</td>
 							<td>{{ row.colour }}</td>
 							<td v-if="group.isSetItem">{{ row.part }}</td>
-							<td><DateField v-model="dates[fiUpdateKey(row)]" :aria-label="`FI Date for ${row.colour}${row.part ? ` ${row.part}` : ''}`" show-clear :disabled="saving" /></td>
+							<td><DateField v-model="dates[fiUpdateKey(row)]" :aria-label="`FI Date for ${row.colour}${row.part ? ` ${row.part}` : ''}`" show-clear :disabled="saving" :show-on-focus="false" /></td>
 						</tr>
 					</tbody>
 				</table>

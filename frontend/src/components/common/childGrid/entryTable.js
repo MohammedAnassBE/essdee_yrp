@@ -6,6 +6,7 @@ const CONTROL_SELECTOR = [
 	"input:not([type=hidden]):not(:disabled):not([readonly]):not([data-row-select])",
 	"textarea:not(:disabled):not([readonly])",
 	"[role=combobox]:not(input):not([aria-disabled=true])",
+	"input[role=combobox][data-pc-section=hiddeninput]:not(:disabled)",
 ].join(",")
 const state = new WeakMap()
 
@@ -92,13 +93,19 @@ function cellControl(target) {
 	return target.getAttribute("aria-expanded") === "true" ? null : target
 }
 
+/** A Select or MultiSelect cell (no typed text) would open its overlay on Enter; Alt+Down, Space and typing still open it. */
+function isClosedPicker(target) {
+	return target.getAttribute("role") === "combobox" && (target.tagName !== "INPUT" || target.readOnly)
+}
+
 function onEnter(event) {
 	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
 	const target = event.target
 	if (target.tagName === "TEXTAREA" || target.tagName === "BUTTON" || !target.closest?.("tbody tr")) return
 	if (!target.matches(CONTROL_SELECTOR) && !target.closest("[role=combobox]")) return
 	const wasExpanded = target.getAttribute("aria-expanded") === "true"
-	if (!wasExpanded && target.tagName === "INPUT" && target.type !== "checkbox") event.preventDefault()
+	if (!wasExpanded && isClosedPicker(target)) blockKey(event)
+	else if (!wasExpanded && target.tagName === "INPUT" && target.type !== "checkbox") event.preventDefault()
 	advance(event.currentTarget, target, wasExpanded)
 }
 

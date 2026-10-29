@@ -98,20 +98,11 @@ test("planner order empty state stays hidden while rows exist", () => {
 	assert.equal(findNodes(root, (node) => node.props?.class === "planner-order-empty").length, 0)
 })
 
-test("marker panel groups add on Enter and hide checkboxes when not editable", () => {
+test("marker panel groups add on Enter from a filled last group and hide checkboxes when not editable", () => {
 	const source = read("CuttingMarkerDialog.vue")
-	assert.match(source, /<table v-entry-table="\{ add: canEdit \? addGroup : null \}" class="marker-table group-table" @keydown\.enter\.capture="addGroupOnEnter"><thead><tr><th v-if="canEdit" class="select-column">/)
+	assert.match(source, /<table v-entry-table="\{ add: canEdit \? addGroup : null, isRowBlank: \(index\) => !form\.group_items\[index\]\?\.selected\?\.length \}" class="marker-table group-table"><thead><tr><th v-if="canEdit" class="select-column">/)
 	assert.match(source, /<td v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1"/)
-})
-
-test("marker panel groups add a group on Enter from the last filled MultiSelect, which v-entry-table cannot see", () => {
-	const source = read("CuttingMarkerDialog.vue")
-	assert.match(source, /class="marker-table group-table" @keydown\.enter\.capture="addGroupOnEnter">/)
-	const handler = source.match(/async function addGroupOnEnter\(event\) \{[\s\S]*?\n\}/)[0]
-	assert.match(handler, /Panels for group \$\{count\}/)
-	assert.match(handler, /aria-expanded"\) === "true"/)
-	assert.match(handler, /selected\?\.length\) return/)
-	assert.match(handler, /event\.stopPropagation\(\)[\s\S]*addGroup\(\)[\s\S]*Panels for group \$\{count \+ 1\}[\s\S]*focus\(\)/)
+	assert.doesNotMatch(source, /addGroupOnEnter/)
 })
 
 test("every select checkbox, header included, is skipped by Enter navigation", () => {

@@ -434,8 +434,9 @@ function onEditorKeydown(event) {
 	if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); stopEdit(); return }
 	if (event.key === "Enter") {
 		event.preventDefault(); event.stopPropagation()
-		if (canAddRows.value && !event.shiftKey) { commitEdit(); enterNext(); return }
-		commitEdit(event.shiftKey ? "up" : "down")
+		if (event.shiftKey) { commitEdit("up"); return }
+		commitEdit()
+		enterNext()
 		return
 	}
 	if (event.key === "Tab") {
@@ -474,8 +475,8 @@ function handleNavigation(event) {
 	if (ARROWS[event.key]) { event.preventDefault(); move(ARROWS[event.key], event.shiftKey); return true }
 	if (event.key === "Tab") { onTab(event); return true }
 	event.preventDefault()
-	if (canAddRows.value && !event.shiftKey) enterNext()
-	else move(event.shiftKey ? "up" : "down")
+	if (event.shiftKey) move("up")
+	else enterNext()
 	return true
 }
 async function enterNext() {
@@ -483,7 +484,7 @@ async function enterNext() {
 	const { row } = active.value
 	const bounds = { rows: props.rows.length, cols: gridColumns.value.length }
 	const rowBlank = isRowBlank(props.modelValue?.[props.rows[row]?.key], gridColumns.value)
-	const next = enterTarget(active.value, bounds, isEditable, { canAdd: true, rowBlank })
+	const next = enterTarget(active.value, bounds, isEditable, { canAdd: canAddRows.value, rowBlank })
 	if (next.action === "move") select(next.cell)
 	if (next.action === "add") await addRowAndFocus()
 }

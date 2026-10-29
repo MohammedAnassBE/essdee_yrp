@@ -28,7 +28,7 @@
 								<td class="inspection-entry-panel__select"><input type="checkbox" class="inspection-entry-panel__checkbox" data-row-select tabindex="-1" :checked="splitSelection.isSelected(split)" :disabled="!removableSplits.includes(split)" :aria-label="`Select inspection split ${splitIndex + 1}`" @change="splitSelection.toggle(split, $event.target.checked)" /></td>
 								<td class="inspection-entry-panel__target-type"><LinkField v-model="split.target_received_type" :aria-label="`Target Received Type for split ${splitIndex + 1}`" doctype="YRP Received Type" :show-open-button="false" :disabled="Boolean(acting)" /></td>
 								<td class="inspection-entry-panel__quantity"><InputNumber v-model="split.qty" :aria-label="`Quantity for split ${splitIndex + 1}`" :min="0" :max="Number(source.grn_qty || source.quantity || 0)" :max-fraction-digits="3" fluid :disabled="Boolean(acting)" /></td>
-								<td class="inspection-entry-panel__date"><DateField v-model="split.received_date" :aria-label="`Received Date for split ${splitIndex + 1}`" :disabled="Boolean(acting)" /></td>
+								<td class="inspection-entry-panel__date"><DateField v-model="split.received_date" :aria-label="`Received Date for split ${splitIndex + 1}`" :disabled="Boolean(acting)" :show-on-focus="false" /></td>
 								<td><InputText v-model="split.comments" :aria-label="`Comments for split ${splitIndex + 1}`" fluid :disabled="Boolean(acting)" /></td>
 							</tr>
 						</tbody>

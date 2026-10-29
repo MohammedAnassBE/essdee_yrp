@@ -85,6 +85,7 @@ test('grid cells still handle Enter navigation and Delete clearing', () => reada
 	const { root, changes } = mountGrid(false)
 	assert.equal(dispatch(nodes(root, 'td')[0], 'onKeydown', { key: 'Enter' }).defaultPrevented, true)
 	await Vue.nextTick()
+	await Vue.nextTick()
 	assert.deepEqual(nodes(root, 'td').map(node => node.props.tabindex), [-1, 0])
 	assert.equal(dispatch(nodes(root, 'td')[1], 'onKeydown', { key: 'Delete' }).defaultPrevented, true)
 	await Vue.nextTick()

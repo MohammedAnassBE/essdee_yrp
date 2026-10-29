@@ -21,6 +21,7 @@
 			show-icon
 			icon="pi pi-calendar"
 			:show-button-bar="showButtonBar"
+			:show-on-focus="showOnFocus"
 			:show-clear="showClear"
 			:manual-input="allowsManualInput"
 			:placeholder="resolvedPlaceholder"
@@ -78,6 +79,7 @@ const props = defineProps({
 	required: { type: Boolean, default: false },
 	showClear: { type: Boolean, default: false },
 	showButtonBar: { type: Boolean, default: true },
+	showOnFocus: { type: Boolean, default: true },
 	showSeconds: { type: Boolean, default: true },
 	manualInput: { type: Boolean, default: true },
 	fluid: { type: Boolean, default: true },

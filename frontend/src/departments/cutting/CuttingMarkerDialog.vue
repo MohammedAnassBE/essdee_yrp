@@ -50,7 +50,7 @@
 			<section v-if="form.panels.length" class="marker-section">
 				<div class="section-heading"><div><h3>Panel Groups</h3><small>Every selected panel must belong to one group.</small></div><Button v-if="canEdit" label="Add Group" icon="pi pi-plus" text size="small" @click="addGroup" /></div>
 				<div v-if="form.group_items.length" class="table-scroll" role="region" tabindex="0" aria-label="Editable panel groups">
-					<table v-entry-table="{ add: canEdit ? addGroup : null }" class="marker-table group-table" @keydown.enter.capture="addGroupOnEnter"><thead><tr><th v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="groupSelection.isAllSelected.value" :indeterminate="groupSelection.isPartlySelected.value" aria-label="Select all panel groups" @change="groupSelection.toggleAll($event.target.checked)"></th><th class="group-column">Group</th><th>Panels</th></tr></thead><tbody><tr v-for="(group, index) in form.group_items" :key="group.id ?? index"><td v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="groupSelection.isSelected(index)" :aria-label="`Select group ${index + 1}`" @change="groupSelection.toggle(index, $event.target.checked)"></td><td>Group {{ index + 1 }}</td><td><MultiSelect v-model="group.selected" :aria-label="`Panels for group ${index + 1}`" :options="form.panels" display="chip" :disabled="!canEdit" fluid /></td></tr></tbody></table>
+					<table v-entry-table="{ add: canEdit ? addGroup : null, isRowBlank: (index) => !form.group_items[index]?.selected?.length }" class="marker-table group-table"><thead><tr><th v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="groupSelection.isAllSelected.value" :indeterminate="groupSelection.isPartlySelected.value" aria-label="Select all panel groups" @change="groupSelection.toggleAll($event.target.checked)"></th><th class="group-column">Group</th><th>Panels</th></tr></thead><tbody><tr v-for="(group, index) in form.group_items" :key="group.id ?? index"><td v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="groupSelection.isSelected(index)" :aria-label="`Select group ${index + 1}`" @change="groupSelection.toggle(index, $event.target.checked)"></td><td>Group {{ index + 1 }}</td><td><MultiSelect v-model="group.selected" :aria-label="`Panels for group ${index + 1}`" :options="form.panels" display="chip" :disabled="!canEdit" fluid /></td></tr></tbody></table>
 				</div>
 				<footer v-if="groupSelection.selected.value.length" class="row-selection-footer"><span>{{ groupSelection.selected.value.length }} selected</span><Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="groupSelection.removeSelected((index) => form.group_items.splice(index, 1))" /></footer>
 			</section>
@@ -101,7 +101,7 @@ import Message from "primevue/message"
 import MultiSelect from "primevue/multiselect"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
-import { computed, nextTick, reactive, ref, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
@@ -227,19 +227,6 @@ function oldRatioForSize(size) {
 
 function addGroup() {
 	form.group_items.push({ id: Date.now(), selected: [] })
-}
-
-/** The panel MultiSelect hides its input from v-entry-table, so Enter on the last filled group adds the next one here. */
-async function addGroupOnEnter(event) {
-	const count = form.group_items.length
-	const isLastGroup = event.target.getAttribute("aria-label") === `Panels for group ${count}`
-	if (!canEdit.value || !isLastGroup || event.target.getAttribute("aria-expanded") === "true" || !form.group_items[count - 1].selected?.length) return
-	const table = event.currentTarget
-	event.preventDefault()
-	event.stopPropagation()
-	addGroup()
-	await nextTick()
-	table.querySelector(`[aria-label="Panels for group ${count + 1}"]`)?.focus()
 }
 
 async function save(submit) {

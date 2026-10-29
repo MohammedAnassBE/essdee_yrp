@@ -42,13 +42,18 @@
 						</header>
 						<div class="purchase-form-section__content">
 							<Message v-if="attributesLocked" severity="warn" :closable="false">{{ editor.attribute_lock_message || "Attributes are locked because variants exist. Values can still be added or removed." }}</Message>
+							<label v-if="canEditAttributes && form.attributes.length" class="attribute-select-all"><input type="checkbox" class="attribute-checkbox" data-row-select :checked="attributeSelection.isAllSelected.value" :indeterminate="attributeSelection.isPartlySelected.value" :disabled="!attributeKeys.length" aria-label="Select all attributes" @change="attributeSelection.toggleAll($event.target.checked)"><span>Select all</span></label>
 							<div v-if="form.attributes.length" class="attribute-rows">
-								<article v-for="(row, index) in form.attributes" :key="row.key" class="attribute-row">
+								<article v-for="(row, index) in form.attributes" :key="row.key" class="attribute-row" :class="{ 'attribute-row--selectable': canEditAttributes }">
+									<input v-if="canEditAttributes" type="checkbox" class="attribute-checkbox" data-row-select tabindex="-1" :checked="attributeSelection.isSelected(row.key)" :disabled="!attributeKeys.includes(row.key)" :aria-label="`Select attribute ${index + 1}`" @change="attributeSelection.toggle(row.key, $event.target.checked)">
 									<LinkField :ref="(field) => { attributeFields[row.key] = field }" :model-value="row.attribute" label="Attribute *" doctype="Item Attribute" :filters="otherAttributeFilter(row)" :show-open-button="false" required :disabled="formDisabled || attributesLocked" @update:model-value="changeAttribute(row, $event)" />
-									<Button v-if="canEditAttributes" icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove attribute ${index + 1}`" :disabled="formDisabled" @click="removeAttribute(index)" />
 								</article>
 							</div>
-							<div v-else class="attribute-empty"><i class="pi pi-sliders-h" /><span>No attributes. This will be saved as a plain item.</span></div>
+							<footer v-if="attributeSelection.selected.value.length" class="attribute-selection">
+								<span>{{ attributeSelection.selected.value.length }} selected</span>
+								<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" :disabled="formDisabled" @click="deleteSelectedAttributes" />
+							</footer>
+							<div v-if="!form.attributes.length" class="attribute-empty"><i class="pi pi-sliders-h" /><span>No attributes. This will be saved as a plain item.</span></div>
 							<div v-if="selectedAttributeOptions.length" class="purchase-form-grid">
 								<label class="purchase-field purchase-field--primary"><span class="erp-field-label">{{ fieldLabel("primary_attribute", "Primary Attribute") }}</span><Select v-model="form.primary_attribute" :options="selectedAttributeOptions" option-label="label" option-value="value" show-clear fluid :disabled="formDisabled || !attributeEditing.primary" @update:model-value="changePrimary" /></label>
 								<label class="purchase-field purchase-field--dependent"><span class="erp-field-label">{{ fieldLabel("dependent_attribute", "Dependent Attribute") }}</span><Select v-model="form.dependent_attribute" :options="dependentAttributeOptions" option-label="label" option-value="value" show-clear fluid placeholder="None" :disabled="formDisabled || !attributeEditing.dependent" /></label>
@@ -86,6 +91,7 @@ import DepartmentPage from "../../components/DepartmentPage.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
@@ -135,6 +141,8 @@ const canCreateAttributeValue = computed(() => attributeEditing.value.createValu
 const storedMappings = computed(() => storedAttributeMappings(editor.value.values?.attributes))
 const valuesRow = computed(() => form.attributes.find((row) => row.attribute && row.attribute === valuesAttribute.value) || null)
 const formDisabled = computed(() => saving.value || !canEditPermission.value)
+const attributeKeys = computed(() => canEditAttributes.value && !formDisabled.value ? form.attributes.map((row) => row.key) : [])
+const attributeSelection = useRowSelection(attributeKeys)
 const canSave = computed(() => !loading.value && !saving.value && canEditPermission.value && itemCanSave(form))
 const dependentAttributeOptions = computed(() => selectedAttributeOptions.value.filter((option) => option.value !== form.primary_attribute))
 const combinationAttributes = computed(() => itemCombinationAttributes(form, editor.value.options?.numeric_attributes))
@@ -212,6 +220,10 @@ function removeAttribute(index) {
 	attributeRowsChanged.value = true
 	if (!selectedNames.value.has(form.primary_attribute)) form.primary_attribute = ""
 	if (!selectedNames.value.has(form.dependent_attribute)) form.dependent_attribute = ""
+}
+
+function deleteSelectedAttributes() {
+	return attributeSelection.removeSelected((key) => removeAttribute(form.attributes.findIndex((row) => row.key === key)), () => !formDisabled.value)
 }
 
 function changeAttribute(row, attribute) {
@@ -301,7 +313,13 @@ watch(() => [form.dependent_attribute, form.primary_attribute, form.stock_uom, [
 .purchase-code-hint { display: flex; min-width: 0; min-height: var(--erp-control-height); align-items: center; gap: 5px; margin: 0; padding: 0 11px; border-left: 3px solid var(--erp-accent); background: var(--erp-accent-soft); }
 .purchase-code-hint code { overflow-wrap: anywhere; color: var(--erp-accent-hover); font-family: inherit; font-weight: 750; }
 .attribute-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--erp-space-3); }
-.attribute-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--erp-space-1); }
+.attribute-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); align-items: end; gap: var(--erp-space-2); }
+.attribute-row--selectable { grid-template-columns: auto minmax(0, 1fr); }
+.attribute-row--selectable > .attribute-checkbox { margin-bottom: calc((var(--erp-control-height) - 15px) / 2); }
+.attribute-select-all { display: inline-flex; align-items: center; gap: 7px; justify-self: start; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); cursor: pointer; }
+.attribute-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.attribute-checkbox:disabled { cursor: not-allowed; opacity: .45; }
+.attribute-selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .attribute-empty { display: flex; min-height: 90px; align-items: center; justify-content: center; gap: 9px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
 .attribute-empty i { color: var(--erp-accent); }
 @media (max-width: 900px) { .purchase-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

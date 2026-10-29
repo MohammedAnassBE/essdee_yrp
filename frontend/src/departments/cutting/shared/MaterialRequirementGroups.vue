@@ -29,6 +29,7 @@
 				<table class="material-requirement-table requirement-table">
 					<thead>
 						<tr>
+							<th v-if="editable" class="material-requirement-table__select"><input type="checkbox" class="material-requirement-table__checkbox" data-row-select :checked="isGroupSelected(group)" :indeterminate="isGroupPartlySelected(group)" :aria-label="`Select all ${kind} rows for ${group.accessory || group.item || 'this item'}`" @change="toggleGroup(group, $event.target.checked)"></th>
 							<th
 								v-for="column in columns"
 								:key="column.field"
@@ -41,6 +42,7 @@
 					</thead>
 					<tbody>
 						<tr v-for="entry in group.rows" :key="entry.row.name || entry.row.cloth_item_variant || entry.sourceIndex">
+							<td v-if="editable" class="material-requirement-table__select"><input type="checkbox" class="material-requirement-table__checkbox" data-row-select tabindex="-1" :checked="rowSelection.isSelected(entry.sourceIndex)" :aria-label="`Select ${kind} row ${entry.sourceIndex + 1}`" @change="rowSelection.toggle(entry.sourceIndex, $event.target.checked)"></td>
 							<td
 								v-for="column in columns"
 								:key="column.field"
@@ -53,13 +55,16 @@
 							</td>
 							<td v-if="editable" class="material-requirement-table__actions">
 								<Button icon="pi pi-pencil" severity="secondary" text rounded :aria-label="`Edit ${kind}`" @click="emit('edit', entry.row, entry.sourceIndex)" />
-								<Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Delete ${kind}`" :loading="busyKey === `${kind}-${entry.sourceIndex}`" @click="emit('delete', entry.sourceIndex)" />
 							</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 		</section>
+		<footer v-if="rowSelection.selected.value.length" class="material-requirement-groups__footer">
+			<span>{{ rowSelection.selected.value.length }} selected</span>
+			<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" :disabled="Boolean(busyKey)" @click="deleteSelected" />
+		</footer>
 	</div>
 </template>
 
@@ -67,6 +72,8 @@
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 import { computed } from "vue"
+
+import { removalOrder, useRowSelection } from "../../../components/common/childGrid/rowSelection.js"
 
 const props = defineProps({
 	rows: { type: Array, default: () => [] },
@@ -90,6 +97,19 @@ const materialGroups = computed(() => {
 	return Array.from(grouped.values())
 })
 
+const selectableKeys = computed(() => props.editable ? props.rows.map((_, index) => index) : [])
+const rowSelection = useRowSelection(selectableKeys)
+
+function groupKeys(group) { return group.rows.map((entry) => entry.sourceIndex) }
+function isGroupSelected(group) { return groupKeys(group).every((key) => rowSelection.isSelected(key)) }
+function isGroupPartlySelected(group) { return !isGroupSelected(group) && groupKeys(group).some((key) => rowSelection.isSelected(key)) }
+function toggleGroup(group, on) { for (const key of groupKeys(group)) rowSelection.toggle(key, on) }
+/** Emits the selected source indexes last first, so the parent removes them in one confirmed batch. */
+function deleteSelected() {
+	const indexes = removalOrder(selectableKeys.value, rowSelection.selected.value)
+	rowSelection.toggleAll(false)
+	emit("delete", indexes)
+}
 function clean(value) { return String(value || "").trim() }
 function variantCount(count) { return `${count} ${count === 1 ? "variant" : "variants"}` }
 function formatValue(column, row) {
@@ -124,7 +144,10 @@ function formatValue(column, row) {
 .material-requirement-table .requirement-balance--positive { color: var(--erp-success-text); background: var(--erp-success-soft); }
 .material-requirement-table .requirement-balance--negative { color: var(--erp-danger); background: var(--erp-danger-soft); }
 .material-requirement-table .requirement-balance--zero { color: var(--erp-text-muted); background: var(--erp-surface-soft); }
-.material-requirement-table__actions { width: 78px; text-align: right !important; white-space: nowrap; }
+.material-requirement-table .material-requirement-table__select { width: 32px; padding: 0; text-align: center; }
+.material-requirement-table__checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.material-requirement-groups__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border-top: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
+.material-requirement-table__actions { width: 44px; text-align: right !important; white-space: nowrap; }
 .material-requirement-table__actions :deep(.p-button) { width: 1.8rem; height: 1.8rem; }
 @media (max-width: 700px) {
 	.material-requirement-group__header { align-items: flex-start; flex-direction: column; }

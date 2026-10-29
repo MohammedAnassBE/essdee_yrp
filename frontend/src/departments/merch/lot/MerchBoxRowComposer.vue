@@ -14,6 +14,7 @@
 				v-else
 				class="lot-group lot-order-composer"
 				aria-label="Add box quantity row"
+				@keydown.enter="addOnLastEnter"
 			>
 				<header class="lot-group__header">
 					<strong>Add row</strong>
@@ -222,5 +223,13 @@ function addRow() {
 	} catch (reason) {
 		error.value = reason.message
 	}
+}
+/** Enter on the composer's last input adds the row, like clicking Add row. */
+function addOnLastEnter(event) {
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
+	const inputs = event.currentTarget.querySelectorAll("input:not([type=hidden]):not(:disabled)")
+	if (event.target !== inputs[inputs.length - 1]) return
+	event.preventDefault()
+	addRow()
 }
 </script>

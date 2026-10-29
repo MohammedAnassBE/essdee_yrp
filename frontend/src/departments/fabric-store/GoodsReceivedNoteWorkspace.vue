@@ -121,6 +121,7 @@
 							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
 								<table v-entry-table class="erp-data-table">
 									<thead><tr>
+										<th v-if="hasSubRowSelect && block.kind === 'items'" class="grn-row-select"><input type="checkbox" class="grn-row-select__box" data-row-select :checked="isSectionAllSelected(section)" :indeterminate="isSectionPartlySelected(section)" :disabled="!sectionSelectableRows(section).length" aria-label="Select all removable rows" @change="toggleSection(section, $event.target.checked)" /></th>
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
 										<th v-if="hasActualDia && block.kind === 'items'">Actual Dia</th>
 										<th v-if="hasActualDia && block.kind === 'items'">Balance</th>
@@ -137,6 +138,7 @@
 									</tr></thead>
 									<tbody>
 										<tr v-for="(row, rowIndex) in section.items" :key="rowKey(row, rowIndex)">
+											<td v-if="hasSubRowSelect && block.kind === 'items'" class="grn-row-select"><input type="checkbox" class="grn-row-select__box" data-row-select tabindex="-1" :checked="subRowSelection.isSelected(row)" :disabled="!canRemoveSubRow(section.group, row)" :aria-label="`Select row ${rowIndex + 1}`" @change="subRowSelection.toggle(row, $event.target.checked)" /></td>
 											<td v-for="column in identityColumns(section.group)" :key="column.key">{{ identityValue(row, column) }}</td>
 											<td v-if="hasActualDia && block.kind === 'items'">
 												<Select :model-value="row.attributes?.[actualDia.attribute]" :options="unusedDias(section.group, row, actualDia, true)" aria-label="Actual Dia" :invalid="Boolean(row.actual_dia_error)" @update:model-value="changeDia(row, $event)" />
@@ -144,7 +146,6 @@
 													<Select v-model="row.actual_dia_selection" :options="unusedDias(section.group, row, actualDia)" placeholder="Choose Dia" aria-label="Dia to add" />
 													<Button label="Add Dia" text size="small" :disabled="!row.actual_dia_selection" @click="addDia(section.group, row)" />
 												</div>
-												<Button v-if="canRemoveActualDia(row)" icon="pi pi-trash" aria-label="Remove Dia" text size="small" @click="removeLot(section.group, row)" />
 												<small v-if="row.actual_dia_error" class="grn-dia-error" role="alert">{{ row.actual_dia_error }}</small>
 											</td>
 											<td v-if="hasActualDia && block.kind === 'items'" class="erp-number">{{ formatQty(receivableBalance(section.group, row)) }}</td>
@@ -154,7 +155,6 @@
 												</Select>
 												<span v-else><DocumentLink doctype="SD YRP Lot" :name="row.dimensions?.[lotFieldname]" :label="row.dimensions?.[lotFieldname]" /></span>
 												<Button v-if="unusedLots(section.group, row).length" label="Add lot" text size="small" @click="addLot(section.group, row)" />
-												<Button v-if="canRemoveLot(section.group, row)" label="Remove" text size="small" @click="removeLot(section.group, row)" />
 											</td>
 										<template v-if="hasPrimaryAttribute(section.group)">
 											<td v-for="value in primaryValues(section.group)" :key="value" class="erp-number goods-received-note-matrix__quantity goods-received-note-matrix__primary-cell">
@@ -193,6 +193,10 @@
 									</tfoot>
 								</table>
 							</div>
+							<footer v-if="hasSubRowSelect && block.kind === 'items' && sectionSelectedRows(section).length" class="grn-row-select__footer">
+								<span>{{ sectionSelectedRows(section).length }} selected</span>
+								<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="deleteSelectedSubRows(section)" />
+							</footer>
 						</article>
 					</div>
 				</section>
@@ -309,6 +313,7 @@ import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, lotNamesInO
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
 import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
+import { removalOrder, useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },
@@ -419,6 +424,9 @@ const { collapsedStockNotice } = useCollapsedStockGuard({
 const actualDia = computed(() => workspace.value.actual_dia || { enabled: false, dia_options: [] })
 const hasActualDia = computed(() => canEditDraft.value && actualDia.value.enabled)
 const lotFieldname = computed(() => workspace.value.lot_fieldname || "lot")
+const hasSubRowSelect = computed(() => hasActualDia.value || canEditLots.value)
+const removableSubRows = computed(() => itemGroups.value.flatMap((group) => (group.items || []).filter((row) => canRemoveSubRow(group, row))))
+const subRowSelection = useRowSelection(removableSubRows)
 const canEditLots = computed(() => canEditDraft.value && form.against === "Purchase Order" && !form.is_return && itemsNeedLotEditor(itemGroups.value, workspace.value.lot_options, lotFieldname.value))
 function canEditMatrixBlock(kind) {
 	if (!canEdit.value || workspace.value.special_source?.read_only) return false
@@ -891,7 +899,7 @@ function logicalRowCount(groups) { return (groups || []).reduce((total, group) =
 function rowTotal(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.qty || 0), 0) }
 function rowValue(row) { return Object.values(row.values || {}).reduce((total, value) => total + Number(value?.amount ?? (Number(value?.qty || 0) * Number(value?.rate || row.rate || 0))), 0) }
 function tableTotals(section) { return getTableTotals(section.items, primaryValues(section.group), { pending: availableQuantity, amount: rowValue }) }
-function leadingColumnCount(section, block) { return identityColumns(section.group).length + (block.kind === "items" ? (hasActualDia.value ? 2 : 0) + (canEditLots.value ? 1 : 0) : 0) }
+function leadingColumnCount(section, block) { return identityColumns(section.group).length + (block.kind === "items" ? (hasActualDia.value ? 2 : 0) + (canEditLots.value ? 1 : 0) + (hasSubRowSelect.value ? 1 : 0) : 0) }
 function hasSecondaryForValue(section, value) { return section.items.some((row) => secondaryUom(row, value)) }
 function secondaryUnit(section, value) { return section.items.map((row) => secondaryUom(row, value)).find(Boolean) || "" }
 function formatTotalQty(value) { return value === null ? "—" : formatQty(value) }
@@ -982,6 +990,17 @@ function canRemoveLot(group, row) {
 	return lotSiblings(group, row).length > 1 && Object.values(row.values || {}).every((value) => !Number(value.qty) && !Number(value.secondary_qty))
 }
 function removeLot(group, row) { group.items.splice(group.items.indexOf(row), 1); markDirty() }
+function canRemoveSubRow(group, row) { return (hasActualDia.value && canRemoveActualDia(row)) || (canEditLots.value && canRemoveLot(group, row)) }
+function sectionSelectableRows(section) { return section.items.filter((row) => canRemoveSubRow(section.group, row)) }
+function sectionSelectedRows(section) { return section.items.filter((row) => subRowSelection.isSelected(row)) }
+function isSectionAllSelected(section) { return sectionSelectableRows(section).length > 0 && sectionSelectableRows(section).every((row) => subRowSelection.isSelected(row)) }
+function isSectionPartlySelected(section) { return sectionSelectedRows(section).length > 0 && !isSectionAllSelected(section) }
+function toggleSection(section, on) { for (const row of sectionSelectableRows(section)) subRowSelection.toggle(row, on) }
+function deleteSelectedSubRows(section) {
+	const chosen = sectionSelectedRows(section)
+	for (const row of chosen) subRowSelection.toggle(row, false)
+	for (const row of removalOrder(section.items, chosen)) if (canRemoveSubRow(section.group, row)) removeLot(section.group, row)
+}
 function identityColumns(group) {
 	const columns = (group.attributes || []).map((key) => ({ key, label: titleCase(key), source: "attributes" }))
 	const dimensions = []
@@ -1085,6 +1104,10 @@ function documentDeleted() {
 .goods-received-note-matrix__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
 .goods-received-note-matrix__header > strong { padding: 3px 8px; color: var(--erp-accent); font-size: var(--erp-font-size-min); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
 .goods-received-note-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, var(--erp-surface)); }
+.grn-row-select { width: 36px; padding-inline: 0 !important; text-align: center !important; }
+.grn-row-select__box { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.grn-row-select__box:disabled { cursor: not-allowed; opacity: .45; }
+.grn-row-select__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--erp-border); color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .goods-received-note-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
 .goods-received-note-matrix__group > header { display: flex; min-height: 40px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .goods-received-note-matrix__group > header div { display: grid; gap: 2px; }

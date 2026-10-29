@@ -1,8 +1,9 @@
 <template>
 	<section class="planner-order-matrix">
 		<header><div><span>Size quantities</span><h3>Order Details</h3></div><Button v-if="editable" label="Add Size" icon="pi pi-plus" size="small" severity="secondary" outlined @click="addRow" /></header>
-		<div v-if="rows.length" class="planner-order-table-wrap" tabindex="0" role="region" aria-label="Order quantity editor"><table v-entry-table="{ add: editable ? addRow : null, fixed: false }"><thead><tr><th>#</th><th>Size</th><th class="numeric">Order Quantity</th><th v-if="editable">Actions</th></tr></thead><tbody><tr v-for="(row, index) in rows" :key="row._row_key" class="planner-order-row"><td><span class="row-number">{{ index + 1 }}</span></td><td><InputText :model-value="row.size" :aria-label="`Size row ${index + 1}`" :disabled="!editable" fluid @update:model-value="update(index, 'size', $event)" /></td><td><InputNumber :model-value="row.qty" :aria-label="`Quantity row ${index + 1}`" :min="0" :use-grouping="false" :disabled="!editable" fluid @update:model-value="update(index, 'qty', $event)" /></td><td v-if="editable" class="row-actions"><Button icon="pi pi-trash" aria-label="Remove size" severity="danger" text rounded @click="removeRow(index)" /></td></tr></tbody><tfoot><tr><td colspan="2">Total Order Quantity</td><td class="numeric"><strong>{{ total.toLocaleString() }}</strong></td><td v-if="editable"></td></tr></tfoot></table></div>
+		<div v-if="rows.length" class="planner-order-table-wrap" tabindex="0" role="region" aria-label="Order quantity editor"><table v-entry-table="{ add: editable ? addRow : null, fixed: false }"><thead><tr><th v-if="editable" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" aria-label="Select all sizes" @change="selection.toggleAll($event.target.checked)"></th><th class="index-column">#</th><th class="size-column">Size</th><th class="numeric quantity-column">Order Quantity</th></tr></thead><tbody><tr v-for="(row, index) in rows" :key="row._row_key" class="planner-order-row"><td v-if="editable" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(index)" :aria-label="`Select size row ${index + 1}`" @change="selection.toggle(index, $event.target.checked)"></td><td><span class="row-number">{{ index + 1 }}</span></td><td><InputText :model-value="row.size" :aria-label="`Size row ${index + 1}`" :disabled="!editable" fluid @update:model-value="update(index, 'size', $event)" /></td><td><InputNumber :model-value="row.qty" :aria-label="`Quantity row ${index + 1}`" :min="0" :use-grouping="false" :disabled="!editable" fluid @update:model-value="update(index, 'qty', $event)" /></td></tr></tbody><tfoot><tr><td :colspan="editable ? 3 : 2">Total Order Quantity</td><td class="numeric"><strong>{{ total.toLocaleString() }}</strong></td></tr></tfoot></table></div>
 		<div v-else class="planner-order-empty"><i class="pi pi-table"></i><strong>No size quantities</strong><span>Add at least one size. Zero-demand sizes are allowed when another size has demand.</span></div>
+		<footer v-if="selection.selected.value.length" class="planner-order-selection"><span>{{ selection.selected.value.length }} selected</span><Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="deleteSelected" /></footer>
 	</section>
 </template>
 
@@ -13,14 +14,17 @@ import InputText from "primevue/inputtext"
 import { computed } from "vue"
 
 import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../../components/common/childGrid/rowSelection.js"
 
 const props = defineProps({ rows: { type: Array, default: () => [] }, editable: Boolean })
 const emit = defineEmits(["update:rows"])
 let rowSequence = 0
+const selection = useRowSelection(computed(() => props.editable ? props.rows.map((_, index) => index) : []))
 const total = computed(() => props.rows.reduce((sum, row) => sum + Number(row.qty || 0), 0))
 function cloneRows() { return props.rows.map((row) => ({ ...row })) }
 function addRow() { emit("update:rows", [...cloneRows(), { _row_key: `new-size-${++rowSequence}`, name: "", size: "", qty: 0 }]) }
 function removeRow(index) { const rows = cloneRows(); rows.splice(index, 1); emit("update:rows", rows) }
+function deleteSelected() { return selection.removeSelected(removeRow, () => props.editable) }
 function update(index, field, value) { const rows = cloneRows(); rows[index][field] = value; emit("update:rows", rows) }
 </script>
 
@@ -30,31 +34,31 @@ function update(index, field, value) { const rows = cloneRows(); rows[index][fie
 .planner-order-matrix table { width: 600px; min-width: 600px; table-layout: fixed; border-right: 1px solid var(--erp-border); border-collapse: collapse; }
 .planner-order-matrix th, .planner-order-matrix td { padding: 4px 8px; text-align: left; border-right: 1px solid var(--erp-border); border-bottom: 1px solid var(--erp-border); }
 .planner-order-matrix th { padding-block: 7px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); background: var(--erp-surface); }
-.planner-order-matrix th:nth-child(1) { width: 56px; }
-.planner-order-matrix th:nth-child(2) { width: 256px; }
-.planner-order-matrix th:nth-child(3) { width: 228px; }
-.planner-order-matrix th:nth-child(4) { width: 60px; }
+.planner-order-matrix th.select-column { width: 36px; }
+.planner-order-matrix th.index-column { width: 56px; }
+.planner-order-matrix th.size-column { width: 256px; }
+.planner-order-matrix th.quantity-column { width: auto; }
+.planner-order-matrix .select-column { padding-inline: 0; text-align: center; }
+.row-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.planner-order-selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border-top: 1px solid var(--erp-border); }
 .planner-order-matrix th:last-child, .planner-order-matrix td:last-child { border-right: 0; }
 .planner-order-matrix :deep(.p-inputtext), .planner-order-matrix :deep(.p-inputnumber), .planner-order-matrix :deep(.p-inputnumber-input) { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
 .planner-order-matrix :deep(.p-inputtext), .planner-order-matrix :deep(.p-inputnumber-input) { min-height: var(--erp-control-height-compact); height: var(--erp-control-height-compact); padding-block: 5px; }
 .planner-order-matrix tfoot td { color: var(--erp-text); background: var(--erp-accent-soft); border-bottom: 0; }
 .numeric { text-align: right !important; font-variant-numeric: tabular-nums; }
 .row-number { display: inline-grid; width: 22px; height: 22px; place-items: center; color: var(--erp-accent-dark); font-size: var(--erp-font-size-min); font-weight: 760; background: var(--erp-accent-soft); border-radius: 50%; }
-.row-actions { width: 60px; text-align: center !important; }
-.row-actions :deep(.p-button) { width: var(--erp-control-height-compact); min-width: var(--erp-control-height-compact); height: var(--erp-control-height-compact); min-height: var(--erp-control-height-compact); padding: 0; }
 .planner-order-empty { display: grid; min-height: 160px; place-content: center; justify-items: center; gap: 6px; color: var(--erp-text-muted); text-align: center; }.planner-order-empty i { color: var(--erp-accent); font-size: 1.5rem; }.planner-order-empty strong { color: var(--erp-text); }
 @media (max-width: 620px) {
 	.planner-order-table-wrap { overflow-x: hidden; }
 	.planner-order-matrix table { width: 100%; min-width: 0; border-right: 0; }
 	.planner-order-matrix th, .planner-order-matrix td { overflow: hidden; padding-inline: 4px; }
-	.planner-order-matrix th:nth-child(1) { width: 40px; }
-	.planner-order-matrix th:nth-child(2) { width: auto; }
-	.planner-order-matrix th:nth-child(3) { width: 112px; white-space: normal; }
-	.planner-order-matrix th:nth-child(4) { width: 42px; }
-	.row-actions { width: 42px; }
+	.planner-order-matrix th.select-column { width: 32px; }
+	.planner-order-matrix th.index-column { width: 40px; }
+	.planner-order-matrix th.size-column { width: auto; }
+	.planner-order-matrix th.quantity-column { width: 112px; white-space: normal; }
 }
 @media (max-width: 1024px), (pointer: coarse) {
-	.planner-order-matrix > header :deep(.p-button), .row-actions :deep(.p-button) { min-width: 44px; min-height: 44px; }
+	.planner-order-matrix > header :deep(.p-button) { min-width: 44px; min-height: 44px; }
 	.planner-order-matrix :deep(.p-inputtext), .planner-order-matrix :deep(.p-inputnumber-input) { height: 44px; min-height: 44px; }
 }
 </style>

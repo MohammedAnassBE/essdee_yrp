@@ -5,6 +5,9 @@
             <div class="row" v-if="items && items.length > 0">
                 <table class='table table-sm table-bordered'>
                     <tr>
+                        <th class="row-select"><input type="checkbox" data-row-select aria-label="Select all rows"
+                            :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value"
+                            @change="selection.toggleAll($event.target.checked)"></th>
                         <th>S.No</th>
                         <th>Cloth Type</th>
                         <th>Colour</th>
@@ -13,9 +16,10 @@
                         <th>Weight in Kg's</th>
                         <th>No of Rolls</th>
                         <th v-if="is_print_panel">Panel Count</th>
-                        <th>Delete</th>
                     </tr>
                     <tr v-for="(item,idx) in items" :key='idx'>
+                        <td class="row-select"><input type="checkbox" data-row-select tabindex="-1" aria-label="Select row"
+                            :checked="selection.isSelected(idx)" @change="selection.toggle(idx, $event.target.checked)"></td>
                         <td>{{idx + 1}}</td>
                         <td>{{item.cloth_type}}</td>
                         <td>{{item.colour}}</td>
@@ -24,12 +28,9 @@
                         <td>{{item.weight}}</td>
                         <td>{{item.no_of_rolls}}</td>
                         <td v-if="is_print_panel">{{ item.panel_count }}</td>
-                        <td>
-                            <div class="pull-right cursor-pointer" @click="delete_item(idx)"
-                                v-html="frappe.utils.icon('delete', 'md', 'mr-1')"></div>
-                        </td>
                     </tr>
                 </table>
+                <SelectionFooter class="w-100" :count="selection.selected.value.length" @delete="delete_selected" />
             </div>
             <div v-else>
                 <h3 v-if='is_print_panel' style="text-align: center;">Add Cloth Items to Print Panel Details</h3>
@@ -39,7 +40,7 @@
         <div class="row pt-3" v-if="show_button1">
             <button class="btn btn-success pull-left" @click="add_cloth_item()">Add Cloth Items</button>
         </div>
-        <div class="html-container col mt-1">
+        <div class="html-container col mt-1" v-enter-submits="submit_form">
             <div class="row">
                 <div class="cloth-type col-md-4"></div>
                 <div class="cloth-colour col-md-4"></div>
@@ -63,6 +64,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js";
 
 let items = ref([])
 let select_attributes = ref({})
@@ -78,6 +80,7 @@ let panel_count = null
 let docstatus = ref(null)
 let show_button1 = ref(true)
 let is_print_panel = ref(false)
+const selection = useRowSelection(() => items.value.map((_, index) => index))
 
 onMounted(()=> {
     if(cur_frm.is_new()){
@@ -200,6 +203,16 @@ function delete_item(index){
     make_clean()
 }
 
+function submit_form(){
+    if(!show_button1.value){
+        add_item()
+    }
+}
+
+function delete_selected(){
+    selection.removeSelected(delete_item)
+}
+
 function get_items(){
     return items.value
 }
@@ -214,3 +227,11 @@ defineExpose({
 })
 
 </script>
+
+<style scoped>
+.row-select {
+    width: 32px;
+    text-align: center;
+    vertical-align: middle;
+}
+</style>

@@ -1,33 +1,42 @@
 <template>
     <div ref="root">
         <table v-if="items && Object.keys(items).length > 0" class="table table-sm table-bordered">
-            <tr>
-                <th> Process </th>
-                <th> {{ stiching_attr }}</th>
-                <th v-if="!panels_only"></th>
-            </tr>
-            <tr v-for="item in Object.keys(items)" :key="item">
-                <td>{{item}}</td>
-                <td>
-                   <label style="display: flex; gap: 6px; align-items: center; margin: 0;" v-for="panel in row_panels(item)" :key="panel">
-                        <input type="checkbox" :checked="items[item].includes(panel)" @change="toggle_panel(item, panel, $event.target.checked)">
-                        <span>{{panel}}</span>
-                   </label>
-                </td>
-                <td v-if="!panels_only">
-                    <div class="cursor-pointer" @click="delete_item(item)"
-					v-html="frappe.utils.icon('delete', 'md', 'mr-1')"></div>
-                </td>
-            </tr>
+            <thead>
+                <tr>
+                    <th v-if="can_remove" style="width: 32px">
+                        <input type="checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" @change="selection.toggleAll($event.target.checked)">
+                    </th>
+                    <th> Process </th>
+                    <th> {{ stiching_attr }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="item in Object.keys(items)" :key="item">
+                    <td v-if="can_remove">
+                        <input type="checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(item)" @change="selection.toggle(item, $event.target.checked)">
+                    </td>
+                    <td>{{item}}</td>
+                    <td>
+                       <label style="display: flex; gap: 6px; align-items: center; margin: 0;" v-for="panel in row_panels(item)" :key="panel">
+                            <input type="checkbox" :checked="items[item].includes(panel)" @change="toggle_panel(item, panel, $event.target.checked)">
+                            <span>{{panel}}</span>
+                       </label>
+                    </td>
+                </tr>
+            </tbody>
         </table>
-        <div class="process-name col-md-5"></div>
-        <div class="panel-checks row p-4" style="display: flex; gap: 10px"></div>
+        <SelectionFooter :count="selection.selected.value.length" @delete="selection.removeSelected(delete_item, () => can_remove)" />
+        <div v-enter-submits="add_process">
+            <div class="process-name col-md-5"></div>
+            <div class="panel-checks row p-4" style="display: flex; gap: 10px"></div>
+        </div>
         <button v-if="show_button1 && !panels_only" class="btn btn-success" @click="create_inputs()"> Add Process</button>
         <button v-if="show_button2" class="btn btn-success" @click="add_process()">Add</button>
     </div>
 </template>
 <script setup>
-import {ref, onMounted} from 'vue';
+import {ref, computed, onMounted} from 'vue';
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js";
 
 let show_button1 = ref(true)
 let panels_only = ref(false)
@@ -40,6 +49,9 @@ let process = null
 let selected_panels = ref([])
 let items = ref({})
 let panel_values = []
+const can_write = cur_frm.doc.docstatus === 0 && cur_frm.has_perm("write")
+const can_remove = computed(() => can_write && !panels_only.value)
+const selection = useRowSelection(() => can_remove.value ? Object.keys(items.value || {}) : [])
 
 onMounted(()=> {
     if(cur_frm.stiching_attribute_mapping){

@@ -5,27 +5,26 @@
                 <tr>
                     <th style="width:5%;">S.No</th>
                     <th style="width:30%;">Group Panel</th>
-                    <th style="width:40%;">Split Groups</th>
+                    <th style="width:40%;">
+                        <input v-if="group_keys.length" type="checkbox" data-row-select :checked="isAllSelected" :indeterminate="isPartlySelected" @change="toggleAll($event.target.checked)" />
+                        Split Groups
+                    </th>
                     <th style="width:25%;"></th>
                 </tr>
                 <tr v-for="(panel, idx) in props.panels" :key="panel">
                     <td>{{ idx + 1 }}</td>
                     <td>{{ panel }}</td>
                     <td>
-                        <div v-for="(group, index) in panel_groups[panel]" :key="index" class="group-item">
+                        <label v-for="(group, index) in panel_groups[panel]" :key="index" class="group-item">
+                            <input type="checkbox" data-row-select tabindex="-1" :checked="isSelected(group_key(panel, index))" @change="toggle(group_key(panel, index), $event.target.checked)" />
                             <span>{{ group }}</span>
-                            <svg class="x-icon" xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24" @click="removeGroup(panel, index)" title="Remove group">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </div>
+                        </label>
                         <div style="text-align: center;" @click="create_tool_tip_index(idx, panel)">
                             <button class="plus-btn-style">Add Group</button>
                         </div>
                     </td>
                     <td>
-                        <div v-if="tooltipindex === idx" class="tooltip-area">
+                        <div v-if="tooltipindex === idx" v-enter-submits="add_groups" class="tooltip-area">
                             <div v-for="(key, panel) in current_group" :key="panel" class="checkbox-row">
                             <label>
                                 <input type="checkbox" v-model="current_group[panel]" />
@@ -37,12 +36,14 @@
                     </td>
                 </tr>
             </table>
+            <SelectionFooter :count="selected.length" @delete="removeSelected(remove_group_key)" />
         </div>
     </div>
 </template>
 
 <script setup>
-import { watch, ref } from 'vue'
+import { watch, ref, computed } from 'vue'
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js"
 
 const props = defineProps(['panels'])
 let panel_groups = ref({})
@@ -82,6 +83,14 @@ function removeGroup(panel, index) {
     if (panel_groups.value[panel]) {
         panel_groups.value[panel].splice(index, 1)
     }
+}
+
+const group_key = (panel, index) => JSON.stringify([panel, index])
+const group_keys = computed(() => (props.panels || []).flatMap((panel) => (panel_groups.value[panel] || []).map((group, index) => group_key(panel, index))))
+const { selected, isAllSelected, isPartlySelected, isSelected, toggle, toggleAll, removeSelected } = useRowSelection(group_keys)
+
+function remove_group_key(key) {
+    removeGroup(...JSON.parse(key))
 }
 
 watch(
@@ -140,28 +149,6 @@ tr:hover td {
     color: #3178c6;
     box-shadow: 0 2px 6px rgba(49, 120, 198, 0.15);
     user-select: none;
-}
-
-.x-icon {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    stroke: #5a5a5a;
-    stroke-width: 3;
-    background-color: #d9e4f5;
-    border-radius: 50%;
-    padding: 2px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    transition: all 0.25s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.x-icon:hover {
-    stroke: #e74c3c;
-    background-color: #f8d7da;
-    box-shadow: 0 4px 8px rgba(231, 76, 60, 0.4);
 }
 
 .tooltip-area {

@@ -6,6 +6,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import * as fieldErrors from "../src/utils/fieldErrors.js"
 import * as stockHeaders from "../src/departments/fabric-store/stockHeaderFields.js"
 import * as stockEntryAutofill from "../src/departments/fabric-store/stockEntryAutofill.js"
+import * as rowSelection from "../src/components/common/childGrid/rowSelection.js"
 
 const component = (path, modules) => loadComponent(resolve(`frontend/src/${path}.vue`), modules)
 const Button = props => Vue.h("button", props, props.label)
@@ -323,6 +324,7 @@ test("saved clean Cutting Marker shows Submit or disabled Save before entering e
 			"primevue/dialog": (props, { slots }) => props.visible ? Vue.h("dialog", props, [slots.default?.(), slots.footer?.()]) : null,
 			"../../components/documents/DocumentSaveButton.vue": await saveButton(),
 			"../../utils/useActionConfirmation.js": { useActionConfirmation: () => () => {} },
+			"../../components/common/childGrid/rowSelection.js": rowSelection,
 			"../../api/frappe.js": { callMethod: async () => ({ marker: { name: "MARKER-1", docstatus: 0, permissions: { can_write: true, can_submit: canSubmit } } }) },
 		})
 		const props = Vue.reactive({ visible: false, markerName: "MARKER-1" })

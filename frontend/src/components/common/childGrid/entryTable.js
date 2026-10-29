@@ -101,7 +101,7 @@ function freezeWidths(element) {
 	const headers = [...(table?.tHead?.rows?.[0]?.cells || [])]
 	const current = state.get(element)
 	const signature = `${headers.length}:${headers.map((cell) => cell.textContent.trim()).join("|")}`
-	if (!headers.length || current.signature === signature || !table.tBodies[0]?.rows.length || !table.offsetWidth) return
+	if (!current || !headers.length || current.signature === signature || !table.tBodies[0]?.rows.length || !table.offsetWidth) return
 	table.style.tableLayout = "auto"
 	table.style.width = ""
 	for (const cell of headers) cell.style.width = ""

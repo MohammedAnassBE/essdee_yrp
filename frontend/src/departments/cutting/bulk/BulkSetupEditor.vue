@@ -25,17 +25,18 @@
 			<section class="bulk-lots-card">
 				<header><div><span class="section-kicker">Production split</span><h2>Split Lots</h2></div><Button label="Add Split Lot" icon="pi pi-plus" size="small" severity="secondary" outlined :disabled="busy" @click="addRow" /></header>
 				<div v-if="form.lot_details.length" class="bulk-lots-table-wrap" role="region" tabindex="0" aria-label="Split Lot setup">
-					<table class="bulk-lots-table"><thead><tr><th class="sequence-column">#</th><th>Split Lot</th><th>Cutting Plan</th><th>Cutting Marker</th><th class="actions-column">Actions</th></tr></thead><tbody>
+					<table v-entry-table="{ add: canEditRows && !busy ? addRow : null }" class="bulk-lots-table"><thead><tr><th v-if="canEditRows" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" :disabled="busy || !removableIndexes.length" aria-label="Select all split lots" @change="selection.toggleAll($event.target.checked)"></th><th class="sequence-column">#</th><th>Split Lot</th><th>Cutting Plan</th><th>Cutting Marker</th></tr></thead><tbody>
 						<tr v-for="(row, index) in form.lot_details" :key="row._row_key" class="bulk-setup-row">
+							<td v-if="canEditRows" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(index)" :disabled="busy || Boolean(row.cutting_laysheet)" :aria-label="`Select split lot row ${index + 1}`" @change="selection.toggle(index, $event.target.checked)"></td>
 							<td><span class="row-number">{{ index + 1 }}</span></td>
 							<td><LinkField v-model="row.lot" doctype="SD YRP Lot" :disabled="busy || Boolean(row.cutting_laysheet)" :show-open-button="false" show-clear @clear="clearRowLot(row)" @select="clearRowLot(row, false)" /></td>
 							<td><LinkField v-model="row.cutting_plan" doctype="SD YRP Cutting Plan" :filters="planFilters(row)" :disabled="busy || !row.lot || Boolean(row.cutting_laysheet)" :show-open-button="false" show-clear @clear="row.cutting_marker = ''" @select="row.cutting_marker = ''" /></td>
 							<td><LinkField v-model="row.cutting_marker" doctype="SD YRP Cutting Marker" :filters="markerFilters(row)" :disabled="busy || !row.cutting_plan || Boolean(row.cutting_laysheet)" :show-open-button="false" show-clear /></td>
-							<td><Button icon="pi pi-trash" aria-label="Remove split lot" severity="danger" text rounded :disabled="busy || Boolean(row.cutting_laysheet)" @click="removeRow(index)" /></td>
 						</tr>
 					</tbody></table>
 				</div>
 				<div v-else class="bulk-lots-empty"><i class="pi pi-clone"></i><strong>No split lots yet</strong><span>Add each split lot with its submitted Plan and Marker.</span></div>
+				<footer v-if="selection.selected.value.length" class="bulk-lots-selection"><span>{{ selection.selected.value.length }} selected</span><Button label="Delete" icon="pi pi-trash" severity="danger" size="small" :disabled="busy" @click="deleteSelected" /></footer>
 			</section>
 		</div>
 	</section>
@@ -54,6 +55,8 @@ import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../../components/common/childGrid/rowSelection.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null } })
@@ -73,6 +76,9 @@ const actionError = ref("")
 let rowSequence = 0
 
 const busy = computed(() => loading.value || saving.value)
+const canEditRows = computed(() => Boolean(props.name ? permissions.can_write : permissions.can_create))
+const removableIndexes = computed(() => canEditRows.value ? form.lot_details.flatMap((row, index) => row.cutting_laysheet ? [] : [index]) : [])
+const selection = useRowSelection(removableIndexes)
 const loadFailed = computed(() => Boolean(error.value && !hasLoaded.value))
 const canSave = computed(() => {
 	const permitted = props.name ? permissions.can_write : permissions.can_create
@@ -103,6 +109,7 @@ async function load() {
 }
 function addRow() { form.lot_details.push({ _row_key: `new-row-${++rowSequence}`, name: "", lot: "", cutting_plan: "", cutting_marker: "" }) }
 function removeRow(index) { form.lot_details.splice(index, 1) }
+function deleteSelected() { return selection.removeSelected(removeRow, () => !busy.value) }
 function clearRowLot(row, clearLot = true) { if (clearLot) row.lot = ""; row.cutting_plan = ""; row.cutting_marker = "" }
 function planFilters(row) { return { lot: row.lot || "", docstatus: 1, cp_status: ["!=", "Completed"] } }
 function markerFilters(row) { return { cutting_plan: row.cutting_plan || "", docstatus: 1 } }
@@ -137,7 +144,9 @@ watch(() => props.name, load, { immediate: true })
 .bulk-lots-table th { padding: 9px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); text-align: left; background: var(--erp-surface-muted); border-bottom: 1px solid var(--erp-border); }
 .bulk-lots-table td { padding: 9px 10px; vertical-align: middle; border-bottom: 1px solid var(--erp-border); }
 .bulk-lots-table tbody tr:last-child td { border-bottom: 0; }
-.sequence-column { width: 44px; }.actions-column { width: 64px; text-align: center !important; }.row-number { display: inline-grid; width: 24px; height: 24px; place-items: center; color: var(--erp-accent); font-size: var(--erp-font-size-min); font-weight: 760; background: var(--erp-accent-soft); border-radius: 50%; }
+.sequence-column { width: 44px; }.bulk-lots-table .select-column { width: 36px; padding-inline: 0; text-align: center; }.row-number { display: inline-grid; width: 24px; height: 24px; place-items: center; color: var(--erp-accent); font-size: var(--erp-font-size-min); font-weight: 760; background: var(--erp-accent-soft); border-radius: 50%; }
+.row-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }.row-checkbox:disabled { cursor: not-allowed; opacity: .45; }
+.bulk-lots-selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .bulk-lots-empty { display: grid; min-height: 190px; margin-top: var(--erp-space-3); place-content: center; justify-items: center; gap: 7px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }.bulk-lots-empty i { color: var(--erp-accent); font-size: 1.5rem; }.bulk-lots-empty strong { color: var(--erp-text); }
 @media (max-width: 900px) { .bulk-setup-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .bulk-setup-card, .bulk-lots-card { padding: var(--erp-space-3); }.bulk-setup-fields { grid-template-columns: 1fr; }.bulk-lots-table-wrap { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }

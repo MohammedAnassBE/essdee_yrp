@@ -3,15 +3,17 @@ import test from "node:test"
 import fs from "node:fs"
 import { computed, nextTick, reactive, ref, watch } from "vue"
 
+import { useRowSelection } from "../src/components/common/childGrid/rowSelection.js"
+
 function setup(doc, browser = { setTimeout: () => 0, clearTimeout: () => {} }) {
 	let unmount
 	const calls = []
 	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingPlanActions.vue", import.meta.url), "utf8").split("<script setup>")[1].split("</script>")[0].replace(/^import .*$/gm, "")
-	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyCompletedReportImage", "window", "watch", "onBeforeUnmount", `${source}\nreturn { runPlanAction, dialogError, feedback, showFeedback }`)(
+	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyCompletedReportImage", "window", "watch", "onBeforeUnmount", "useRowSelection", `${source}\nreturn { runPlanAction, dialogError, feedback, showFeedback }`)(
 		ref, computed, reactive,
 		() => ({ doc, data: {} }), () => () => {},
 		async (method, args) => { calls.push({ method: method.split(".").pop(), args }) },
-		() => {}, browser, watch, callback => { unmount = callback },
+		() => {}, browser, watch, callback => { unmount = callback }, useRowSelection,
 	)
 	return { ...api, calls, unmount }
 }

@@ -20,7 +20,7 @@ const Composer = loadComponent(resolve(rootPath, "frontend/src/components/stock/
 })
 const textContent = (node) => node.type === "comment" ? "" : node.text + node.children.map(textContent).join("")
 const button = (root, label) => findNodes(root, node => node.type === "button" && node.props.label === label)[0]
-const zeroValuationBox = (root) => findNodes(root, node => node.type === "input" && node.props.type === "checkbox")[0]
+const zeroValuationBox = (root) => findNodes(root, node => node.type === "input" && node.props.type === "checkbox" && !("data-row-select" in node.props))[0]
 
 function mountComposer(operation, purpose) {
 	const props = Vue.reactive({ operation, purpose, editor: { dimensions: [] }, modelValue: [], schemaLoader: async () => structuredClone(schema), "onUpdate:modelValue": (value) => { props.modelValue = value } })

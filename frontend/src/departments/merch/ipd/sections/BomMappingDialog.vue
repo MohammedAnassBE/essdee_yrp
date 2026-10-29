@@ -17,9 +17,10 @@
 						</h3>
 						<table v-if="tables[side.field].length" v-entry-table="{ add: readOnly || saving ? null : () => tables[side.field].push({ attribute: null, same_attribute: 0 }) }" class="ipd-simple-table bom-mapping-compact bom-mapping-attributes">
 							<caption class="bom-mapping-sr-only">{{ side.title }}</caption>
-							<thead><tr><th scope="col">Attribute</th><th scope="col" class="bom-mapping-narrow">Same Attribute</th><th v-if="!readOnly" scope="col" class="bom-mapping-narrow"><span class="bom-mapping-sr-only">Remove</span></th></tr></thead>
+							<thead><tr><th v-if="!readOnly" scope="col" class="bom-mapping-select"><input type="checkbox" class="bom-mapping-checkbox" data-row-select :checked="selections[side.field].isAllSelected.value" :indeterminate="selections[side.field].isPartlySelected.value" :disabled="saving" :aria-label="`Select all ${side.title} rows`" @change="selections[side.field].toggleAll($event.target.checked)"></th><th scope="col">Attribute</th><th scope="col" class="bom-mapping-narrow">Same Attribute</th></tr></thead>
 							<tbody>
 								<tr v-for="(attributeRow, index) in tables[side.field]" :key="index">
+									<td v-if="!readOnly" class="bom-mapping-select"><input type="checkbox" class="bom-mapping-checkbox" data-row-select tabindex="-1" :checked="selections[side.field].isSelected(index)" :disabled="saving" :aria-label="`Select ${side.title} row ${index + 1}`" @change="selections[side.field].toggle(index, $event.target.checked)"></td>
 									<td>
 										<span v-if="readOnly">{{ attributeRow.attribute }}</span>
 										<Select v-else v-model="attributeRow.attribute" :options="detail[side.options]" :disabled="saving" :aria-label="`${side.title} row ${index + 1} Attribute`" placeholder="Select attribute" />
@@ -28,11 +29,14 @@
 										<span v-if="readOnly">{{ Number(attributeRow.same_attribute) ? 'Yes' : 'No' }}</span>
 										<Checkbox v-else v-model="attributeRow.same_attribute" binary :true-value="1" :false-value="0" :disabled="saving" :aria-label="`${side.title} row ${index + 1} Same Attribute`" />
 									</td>
-									<td v-if="!readOnly" class="bom-mapping-center"><Button icon="pi pi-trash" text severity="secondary" :aria-label="`Remove ${side.title} row ${index + 1}`" :disabled="saving" @click="tables[side.field].splice(index, 1)" /></td>
 								</tr>
 							</tbody>
 						</table>
 						<p v-else class="bom-mapping-empty">No attributes</p>
+						<footer v-if="!readOnly && selections[side.field].selected.value.length" class="bom-mapping-selection">
+							<span>{{ selections[side.field].selected.value.length }} selected</span>
+							<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" :disabled="saving" @click="deleteSelected(side.field)" />
+						</footer>
 					</section>
 				</div>
 				<div v-if="!readOnly" class="bom-mapping-actions">
@@ -113,6 +117,7 @@ import { computed, inject, nextTick, ref, watch } from "vue"
 import { getIpdBomMapping } from "../../../../api/merch.js"
 import { IPD_EDITOR_KEY } from "../useIpdEditor.js"
 import { vEntryTable } from "../../../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../../../components/common/childGrid/rowSelection.js"
 import { disableRows, enableRows, fillColumn, freshGrid, gridFromValues, mappingOutput, setRowIncluded } from "./bomMapping.js"
 import "./sections.css"
 
@@ -137,6 +142,7 @@ const readOnly = computed(() => props.readonly || editor.readonly || Boolean(det
 const columns = computed(() => detail.value?.columns || { item: [], bom: [], same: [], all_same: false })
 const tablesChanged = computed(() => JSON.stringify(tables.value) !== generatedTables.value)
 const output = computed(() => mappingOutput(rows.value, columns.value))
+const selections = Object.fromEntries(sides.map(({ field }) => [field, useRowSelection(() => readOnly.value ? [] : tables.value[field].map((_, index) => index))]))
 const dialogWidth = computed(() => columns.value.item.length + columns.value.bom.length > 3 ? "min(1200px, 96vw)" : "min(1040px, 96vw)")
 
 watch(() => [props.visible, props.bomRow], () => {
@@ -146,6 +152,9 @@ watch(() => [props.visible, props.bomRow], () => {
 
 function close(visible) {
 	if (!saving.value) emit("update:visible", visible)
+}
+function deleteSelected(field) {
+	return selections[field].removeSelected((index) => tables.value[field].splice(index, 1), () => !readOnly.value && !saving.value)
 }
 function problem(row, column) {
 	return attempted.value ? output.value.problems[row.key]?.[column] || "" : ""
@@ -176,6 +185,7 @@ async function load(fresh) {
 		if (sequence !== loadSequence) return
 		detail.value = result
 		tables.value = Object.fromEntries(sides.map(({ field }) => [field, result[field].map((row) => ({ ...row }))]))
+		for (const selection of Object.values(selections)) selection.toggleAll(false)
 		generatedTables.value = JSON.stringify(tables.value)
 		const loaded = fresh ? { rows: freshGrid(result.combinations, result.columns), dropped: 0 } : gridFromValues(result.combinations, result.columns, result.values)
 		rows.value = loaded.rows
@@ -229,6 +239,10 @@ async function save() {
 .bom-mapping-attributes :deep(.p-select) { min-width: 180px; max-width: 100%; }
 .bom-mapping-narrow { width: 1px; white-space: nowrap; }
 .bom-mapping-center { text-align: center !important; }
+.bom-mapping-compact .bom-mapping-select { width: 32px; padding-inline: 0; text-align: center; }
+.bom-mapping-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.bom-mapping-checkbox:disabled { cursor: not-allowed; opacity: .45; }
+.bom-mapping-selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .bom-mapping-index { width: 1px; text-align: right !important; font-weight: 500; }
 .bom-mapping-scroll { overflow: auto; max-height: 55vh; }
 .bom-mapping-grid { width: 100%; }

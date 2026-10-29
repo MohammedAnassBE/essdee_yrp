@@ -2,9 +2,13 @@
     <div ref='root'>
         <div v-if="is_manual_entry">
             <h3>Bundle Details</h3>
-            <table class="table table-sm table-bordered" v-if="primary_values.length && Object.keys(manual_items).length">
+            <table class="table table-sm table-bordered" v-if="primary_values.length && Object.keys(manual_items).length"
+                v-entry-table="{ add: is_read_only ? null : add_manual_item, isRowBlank: is_manual_row_blank, fixed: false }">
                 <thead>
                     <tr>
+                        <th v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select aria-label="Select all rows"
+                            :checked="manual_selection.isAllSelected.value" :indeterminate="manual_selection.isPartlySelected.value"
+                            @change="manual_selection.toggleAll($event.target.checked)"></th>
                         <th>S.No</th>
                         <th style="width:135px;">Colour</th>
                         <th style="width:135px;">Major Colour</th>
@@ -12,11 +16,13 @@
                         <th style="width:70px;">Shade</th>
                         <th style="width:100px;">Quantity</th>
                         <th v-for="primary in primary_values" :key="primary">{{ primary }}</th>
-                        <th v-if="!disabled">Delete</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="(item, rowIndex) in Object.values(manual_items)" :key="rowIndex">
+                        <td v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select tabindex="-1" aria-label="Select row"
+                            :checked="manual_selection.isSelected(item.manual_index)"
+                            @change="manual_selection.toggle(item.manual_index, $event.target.checked)"></td>
                         <td>{{ rowIndex + 1 }}</td>
                         <td>
                             <select v-model="item.colour" class="form-control form-control-sm" @input="get_set_colour(item, $event.target.value)" :disabled="disabled">
@@ -42,13 +48,10 @@
                         <td v-for="primary in primary_values" :key="primary">
                             <input type="number" v-model.number="item[primary]" @blur="make_dirty()" :disabled="disabled" class="form-control form-control-sm" />
                         </td>
-
-                        <td v-if="!disabled">
-                            <div class="cursor-pointer" @click="delete_group_item(item)" v-html="frappe.utils.icon('delete', 'md')"></div>
-                        </td>
                     </tr>
                 </tbody>
             </table>
+            <SelectionFooter :count="manual_selection.selected.value.length" @delete="delete_selected_manual_items" />
             <button v-if="!disabled" class="btn btn-success" @click="add_manual_item()" style="margin-top:10px;">Add Item</button>
         </div>
         <div style="margin-top:20px;">
@@ -56,6 +59,9 @@
                 <h3>Cloth Details</h3>
                 <table class='table table-sm table-bordered'>
                     <tr>
+                        <th v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select aria-label="Select all rows"
+                            :checked="cloth_selection.isAllSelected.value" :indeterminate="cloth_selection.isPartlySelected.value"
+                            @change="cloth_selection.toggleAll($event.target.checked)"></th>
                         <th>S.No</th>
                         <th>Cloth Type</th>
                         <th>Colour</th>
@@ -72,6 +78,8 @@
 						<th v-if="!locked_status">Edit</th>
                     </tr>
                     <tr v-for="(item,idx) in items" :key='idx'>
+                        <td v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select tabindex="-1" aria-label="Select row"
+                            :checked="cloth_selection.isSelected(idx)" @change="cloth_selection.toggle(idx, $event.target.checked)"></td>
                         <td>{{idx + 1}}</td>
                         <td>{{item.cloth_type}}</td>
                         <td>{{frappe.yrp.attribute_value(item.colour)}} <span v-if="parsedSetCombination(item).major_colour">({{parsedSetCombination(item).major_colour}})</span></td>
@@ -88,16 +96,15 @@
 						<td v-if="!locked_status">
                             <div class="pull-right cursor-pointer" @click="add_cloth_item(idx)"
                                 v-html="frappe.utils.icon('edit', 'md', 'mr-1')"></div>
-                            <div class="pull-right cursor-pointer" @click="delete_item(idx)"
-                                v-html="frappe.utils.icon('delete', 'md', 'mr-1')"></div>
                         </td>
                     </tr>
                 </table>
+                <SelectionFooter class="w-100" :count="cloth_selection.selected.value.length" @delete="delete_selected_cloth_items" />
             </div>
 			<div class="row pt-3" v-if="!locked_status && show_button1 && docstatus != null">
                 <button class="btn btn-success pull-left" @click="add_cloth_item(null)">Add Cloth Items</button>
             </div>
-            <div class="html-container col mt-1">
+            <div class="html-container col mt-1" v-enter-submits="submit_form">
                 <div class="row">
                     <div class="cloth-type col-md-4"></div>
                     <div class="cloth-colour col-md-4"></div>
@@ -145,6 +152,7 @@
 </template>
 <script setup>
 import {ref, onMounted, computed, watch, nextTick} from 'vue';
+import { SelectionFooter, useRowSelection, vEnterSubmits, vEntryTable } from "yrp/public/js/utils/entryGrid.js";
 let show_button1 = ref(true)
 let show_button2 = ref(false)
 let show_button3 = ref(false)
@@ -189,6 +197,28 @@ let multiplierRefs = ref({})
 let primaryValueRefs = ref({})
 let disabled = ref(false)
 let is_set_item = cur_frm.doc.is_set_item
+const is_read_only = computed(() => locked_status.value || cur_frm.doc.docstatus > 0 || !cur_frm.has_perm("write"))
+const manual_selection = useRowSelection(() => is_read_only.value ? [] : Object.values(manual_items.value).map(item => item.manual_index))
+const cloth_selection = useRowSelection(() => is_read_only.value ? [] : items.value.map((_, index) => index))
+
+function delete_selected_manual_items(){
+    manual_selection.removeSelected((key) => delete_group_item(Object.values(manual_items.value).find(item => item.manual_index === key)), () => !is_read_only.value)
+}
+
+function delete_selected_cloth_items(){
+    cloth_selection.removeSelected(delete_item, () => !is_read_only.value)
+}
+
+function is_manual_row_blank(rowIndex){
+    const item = Object.values(manual_items.value)[rowIndex]
+    return !item.colour && !item.major_colour && !item.set_colour && !item.shade && primary_values.value.every(primary => !item[primary])
+}
+
+function submit_form(){
+    if(locked_status.value) return
+    if(show_button2.value) add_item()
+    else if(show_button3.value) update_item()
+}
 
 function delete_group_item(item){
     let idx = item['manual_index']
@@ -918,5 +948,10 @@ defineExpose({
 <style scoped>
 .table{
     margin: 0 !important;
+}
+.row-select {
+    width: 32px;
+    text-align: center;
+    vertical-align: middle;
 }
 </style>

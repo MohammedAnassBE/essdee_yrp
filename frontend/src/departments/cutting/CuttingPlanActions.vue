@@ -73,7 +73,7 @@
 
 	<Dialog v-model:visible="recutOpen" modal dismissable-mask :header="recutType === 'Print Panel' ? 'Add Print Panel Details' : 'Add Recut Fabric Details'" class="action-dialog action-dialog--wide">
 		<div class="dialog-stack">
-			<div class="recut-form">
+			<div class="recut-form" @keydown.enter="addRecutRowOnEnter">
 				<label><span>Cloth Type</span><Select v-model="recutForm.cloth_type" :options="recutOptions.cloth_type" fluid /></label>
 				<label><span>Colour</span><Select v-model="recutForm.colour" :options="recutOptions.colour" filter fluid /></label>
 				<label><span>Dia</span><Select v-model="recutForm.dia" :options="recutOptions.dia" filter fluid /></label>
@@ -84,8 +84,9 @@
 				<div class="recut-form__button"><Button label="Add Item" icon="pi pi-plus" outlined @click="addRecutRow" /></div>
 			</div>
 			<div v-if="recutRows.length" class="table-scroll" role="region" tabindex="0" :aria-label="recutType === 'Print Panel' ? 'Print panel rows' : 'Recut fabric rows'">
-				<table class="action-table"><thead><tr><th>S.No.</th><th>Cloth Type</th><th>Colour</th><th>Dia</th><th>Shade</th><th>Weight</th><th>Rolls</th><th v-if="recutType === 'Print Panel'">Panel Count</th><th></th></tr></thead><tbody><tr v-for="(row, index) in recutRows" :key="index"><td>{{ index + 1 }}</td><td>{{ row.cloth_type }}</td><td>{{ row.colour }}</td><td>{{ row.dia }}</td><td>{{ row.shade }}</td><td>{{ row.weight }}</td><td>{{ row.no_of_rolls }}</td><td v-if="recutType === 'Print Panel'">{{ row.panel_count }}</td><td><Button icon="pi pi-trash" severity="danger" text rounded aria-label="Remove row" @click="recutRows.splice(index, 1)" /></td></tr></tbody></table>
+				<table class="action-table"><thead><tr><th class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="recutSelection.isAllSelected.value" :indeterminate="recutSelection.isPartlySelected.value" aria-label="Select all rows" @change="recutSelection.toggleAll($event.target.checked)"></th><th>S.No.</th><th>Cloth Type</th><th>Colour</th><th>Dia</th><th>Shade</th><th>Weight</th><th>Rolls</th><th v-if="recutType === 'Print Panel'">Panel Count</th></tr></thead><tbody><tr v-for="(row, index) in recutRows" :key="index"><td class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="recutSelection.isSelected(index)" :aria-label="`Select row ${index + 1}`" @change="recutSelection.toggle(index, $event.target.checked)"></td><td>{{ index + 1 }}</td><td>{{ row.cloth_type }}</td><td>{{ row.colour }}</td><td>{{ row.dia }}</td><td>{{ row.shade }}</td><td>{{ row.weight }}</td><td>{{ row.no_of_rolls }}</td><td v-if="recutType === 'Print Panel'">{{ row.panel_count }}</td></tr></tbody></table>
 			</div>
+			<footer v-if="recutSelection.selected.value.length" class="row-selection-footer"><span>{{ recutSelection.selected.value.length }} selected</span><Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="recutSelection.removeSelected((index) => recutRows.splice(index, 1))" /></footer>
 		</div>
 		<template #footer>
 			<Button label="Close" severity="secondary" text @click="recutOpen = false" />
@@ -131,6 +132,7 @@ import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import CuttingCompletedReport from "./CuttingCompletedReport.vue"
 import { copyCompletedReportImage } from "./completedReportExport.js"
+import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 
 const props = defineProps({
@@ -164,6 +166,7 @@ const recutType = ref("Recut")
 const recutRows = ref([])
 const recutOptions = reactive({ cloth_type: [], colour: [], dia: [] })
 const recutForm = reactive(emptyRecutForm())
+const recutSelection = useRowSelection(computed(() => recutRows.value.map((_, index) => index)))
 const lotTransferOpen = ref(false)
 const targetLot = ref("")
 const approvalOpen = ref(false)
@@ -297,6 +300,12 @@ function addRecutRow() {
 	}
 	recutRows.value.push({ ...recutForm })
 	Object.assign(recutForm, emptyRecutForm())
+}
+
+function addRecutRowOnEnter(event) {
+	if (event.target.closest("label") !== event.currentTarget.querySelector("label:last-of-type")) return
+	event.preventDefault()
+	addRecutRow()
 }
 
 async function saveRecut() {
@@ -488,6 +497,9 @@ function toggleMoreActions(event) {
 .recut-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .recut-form label, .dialog-field { display: grid; gap: 5px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; }
 .recut-form__button { display: flex; align-items: end; }
+.action-table .select-column { width: 36px; padding-inline: 0; text-align: center; }
+.row-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.row-selection-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 
 :global(.action-dialog) { width: min(94vw, 980px); }
 :global(.action-dialog--small) { width: min(92vw, 480px); }

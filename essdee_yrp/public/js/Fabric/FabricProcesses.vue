@@ -113,14 +113,32 @@
 						<div v-if="usesInputRecipe" class="fp-field fp-recipe-field">
 							<span>{{ __("Input materials and ratios (stored on this IPD)") }}</span>
 							<div class="fp-recipe-list" data-testid="fp-input-recipe">
-								<div v-for="(row, ri) in draft.input_materials" :key="row.key" class="fp-recipe-row">
-									<div class="fp-recipe-item" :data-recipe-input-index="ri"></div>
-									<label class="fp-recipe-ratio">
-										<input v-model.number="row.ratio" type="number" min="0" max="100" step="0.001" :data-testid="'fp-input-ratio-' + ri" />
-										<span>%</span>
-									</label>
-									<button class="fp-chip-x" :title="__('Remove input')" @click="removeInputMaterial(ri)">×</button>
-								</div>
+								<table class="fp-recipe-table" v-entry-table="{ add: addInputMaterial, isRowBlank: (index) => !draft.input_materials[index]?.item && !Number(draft.input_materials[index]?.ratio), fixed: false }">
+									<thead>
+										<tr>
+											<th class="fp-recipe-select">
+												<input type="checkbox" data-row-select :checked="recipeSelection.isAllSelected.value" :indeterminate="recipeSelection.isPartlySelected.value" @change="recipeSelection.toggleAll($event.target.checked)" />
+											</th>
+											<th>{{ __("Item") }}</th>
+											<th class="fp-recipe-ratio-head">{{ __("Ratio") }}</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-for="(row, ri) in draft.input_materials" :key="row.key" class="fp-recipe-row">
+											<td class="fp-recipe-select">
+												<input type="checkbox" data-row-select tabindex="-1" :checked="recipeSelection.isSelected(row.key)" @change="recipeSelection.toggle(row.key, $event.target.checked)" />
+											</td>
+											<td><div class="fp-recipe-item" :data-recipe-input-index="ri"></div></td>
+											<td>
+												<label class="fp-recipe-ratio">
+													<input v-model.number="row.ratio" type="number" min="0" max="100" step="0.001" :data-testid="'fp-input-ratio-' + ri" />
+													<span>%</span>
+												</label>
+											</td>
+										</tr>
+									</tbody>
+								</table>
+								<SelectionFooter :count="recipeSelection.selected.value.length" @delete="deleteSelectedInputMaterials" />
 								<div class="fp-recipe-total" :class="{ 'is-invalid': !recipeTotalValid }">
 									{{ __("Total") }}: {{ recipeTotal }}%
 								</div>
@@ -342,6 +360,7 @@
 // never a wildcard), grouped with its rule's Introduce rows by mapping_index.
 // ---------------------------------------------------------------------------
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import { SelectionFooter, useRowSelection, vEntryTable } from "yrp/public/js/utils/entryGrid.js";
 
 const steps = ref([]);
 const editable = ref(true);
@@ -387,6 +406,9 @@ async function mountRecipeInputControls() {
 	if (!isInputRecipeDraft() || !root.value) return;
 	disposeRecipeInputControls();
 	await nextTick();
+	if (!root.value) return;
+	// Overlapping calls (batch delete) must not stack a second control per row.
+	disposeRecipeInputControls();
 	root.value.querySelectorAll(".fp-recipe-item").forEach((node) => {
 		const index = Number(node.dataset.recipeInputIndex);
 		const row = draft.value?.input_materials?.[index];
@@ -1086,6 +1108,13 @@ function removeInputMaterial(index) {
 	draft.value.input_materials.splice(index, 1);
 	nextTick(() => mountRecipeInputControls());
 }
+const recipeSelection = useRowSelection(() => (draft.value?.input_materials || []).map((row) => row.key));
+function deleteSelectedInputMaterials() {
+	recipeSelection.removeSelected(
+		(key) => removeInputMaterial(draft.value.input_materials.findIndex((row) => row.key === key)),
+		() => Boolean(draft.value),
+	);
+}
 // A rule pairs one consumed input combination with one produced output
 // combination. Missing keys read as "" (v-model creates them on first type).
 function blankRule(d) {
@@ -1425,8 +1454,12 @@ defineExpose({ load_data, get_steps: () => JSON.parse(JSON.stringify(steps.value
 .fp-field > small { color: var(--text-muted); font-size: var(--text-xs); line-height: 1.4; }
 .fp-recipe-field { flex: 1.25; min-width: 280px; }
 .fp-recipe-list { border: 1px solid var(--border-color); border-radius: var(--border-radius, 6px); overflow: hidden; }
-.fp-recipe-row, .fp-recipe-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; }
-.fp-recipe-row + .fp-recipe-row, .fp-recipe-total { border-top: 1px solid var(--border-color); }
+.fp-recipe-table { width: 100%; border-collapse: collapse; }
+.fp-recipe-table th { padding: 5px 10px; font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); background: var(--subtle-fg, var(--control-bg)); }
+.fp-recipe-table td { padding: 7px 10px; border-top: 1px solid var(--border-color); vertical-align: middle; }
+.fp-recipe-select { width: 32px; }
+.fp-recipe-ratio-head { width: 125px; }
+.fp-recipe-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-top: 1px solid var(--border-color); }
 .fp-recipe-row span, .fp-recipe-total { color: var(--text-muted); }
 .fp-recipe-item { flex: 1; min-width: 180px; }
 .fp-recipe-ratio { display: flex; align-items: center; gap: 4px; width: 105px; }

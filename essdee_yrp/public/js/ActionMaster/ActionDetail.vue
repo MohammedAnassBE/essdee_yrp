@@ -4,6 +4,9 @@
             <table class="table table-sm table-bordered">
                 <thead>
                     <tr>
+                        <th v-if="can_edit" class="row-select">
+                            <input type="checkbox" data-row-select :checked="isAllSelected" :indeterminate="isPartlySelected" @change="toggleAll($event.target.checked)" />
+                        </th>
                         <th>S.No</th>
                         <th>Action</th>
                         <th>Lead Time</th>
@@ -37,6 +40,9 @@
                     animation="200" ghost-class="drag-ghost" @end="save_new_order">
                     <template #item="{ element, index }">
                         <tr>
+                            <td v-if="can_edit" class="row-select">
+                                <input type="checkbox" data-row-select tabindex="-1" :checked="isSelected(index)" @change="toggle(index, $event.target.checked)" />
+                            </td>
                             <td>
                                 <span class="drag-handle" style="cursor: grab;">☰</span>
                                 {{ index + 1 }}
@@ -53,20 +59,20 @@
                             <td>
                                 <span v-if="element.one_colour_process">✅</span>
                             </td>
-                            <td style="display: flex;">
+                            <td>
                                 <div class="cursor-pointer" @click="edit_item(index)" v-html="frappe.utils.icon('edit', 'md')"></div>
-                                <div class="cursor-pointer" @click="delete_item(index)" v-html="frappe.utils.icon('delete', 'md')"></div>
                             </td>
                         </tr>
                     </template>
                 </draggable>
             </table>
+            <SelectionFooter :count="selected.length" @delete="removeSelected(delete_item)" />
         </div>
         <div v-if="!preview">
             <div v-if="!show_div">
                 <button @click="add_action()" class="btn btn-success">Add Action</button>
             </div>
-            <div v-if="show_div">
+            <div v-if="show_div" v-enter-submits="add_items">
                 <div class="row pl-3">
                     <div class="cur-action col-md-2"></div>
                     <div class="col-md-4" v-if="in_edit">
@@ -102,8 +108,9 @@
 <script setup>
 
 import draggable from 'vuedraggable'
-import { ref, nextTick } from "vue";
+import { ref, nextTick, computed } from "vue";
 import MultiSelect from "../components/MultiSelect.vue";
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js";
 
 let items = ref([])
 let show_div = ref(false)
@@ -121,8 +128,12 @@ let edit_index = ref(null)
 let check_value = null
 let one_colour = null
 let preview = ref(false)
+const can_edit = computed(() => !preview.value && cur_frm.doc.docstatus === 0 && Boolean(cur_frm.perm?.[0]?.write))
+const { selected, isAllSelected, isPartlySelected, isSelected, toggle, toggleAll, removeSelected } = useRowSelection(
+    computed(() => can_edit.value ? items.value.map((row, index) => index) : []))
 
 function save_new_order() {
+    toggleAll(false)
     make_dirty()
 }
 
@@ -312,6 +323,11 @@ defineExpose({
 .drag-ghost {
     opacity: 0.6;
     background: #f0f0f0;
+  }
+
+  .row-select {
+    width: 30px;
+    text-align: center;
   }
 
   .drag-handle {

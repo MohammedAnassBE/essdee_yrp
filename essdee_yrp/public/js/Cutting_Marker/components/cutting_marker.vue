@@ -9,7 +9,7 @@
         <div v-if="items && items.length > 0" class="pt-5">
             <h4 v-if="doc_panels.length > 0">Panels: {{doc_panels}}</h4>
             <h3>Ratios</h3>
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered" v-entry-table="{ fixed: false }">
                 <tr>
                     <td>Size</td>
                     <td v-if="show_panel">Panel</td>
@@ -32,27 +32,30 @@
             <h3>Group Panels</h3>
             <table class="table table-sm table-bordered">
                 <tr>
+                    <td v-if="can_delete_groups" class="row-select"><input type="checkbox" data-row-select aria-label="Select all rows"
+                        :checked="group_selection.isAllSelected.value" :indeterminate="group_selection.isPartlySelected.value"
+                        @change="group_selection.toggleAll($event.target.checked)"></td>
                     <td>Panels</td>
-                    <td v-if="docstatus == 0">Delete</td>
                 </tr>
-                <tr v-for="item in grp_items" :key="item">
+                <tr v-for="(item, index) in grp_items" :key="item">
+                    <td v-if="can_delete_groups" class="row-select"><input type="checkbox" data-row-select tabindex="-1" aria-label="Select row"
+                        :checked="group_selection.isSelected(index)" @change="group_selection.toggle(index, $event.target.checked)"></td>
                     <td v-if="item.defaultList.length > 0">
                         <MultiSelect :options="item.options" :setDefault="true" :defaultList="item.defaultList" :triggerEvent="update_selected" :item_key="item['id']" :docstatus="docstatus"/>
                     </td>
                     <td v-else>
                         <MultiSelect :options="options" :setDefault="true" :defaultList="[]" :triggerEvent="update_selected" :item_key="item['id']"/>
                     </td>
-                    <td v-if="docstatus == 0">
-                        <div class="cursor-pointer" @click="delete_group_item(item)" v-html="frappe.utils.icon('delete', 'md')"></div>
-                    </td>
                 </tr>
             </table>
+            <SelectionFooter :count="group_selection.selected.value.length" @delete="delete_selected_groups" />
         </div>
         <button v-if="docstatus == 0 && version == 'V3'" style="margin-top:10px;" @click="add_groups()" class="btn btn-success">Add Groups</button>
     </div>
 </template>
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { SelectionFooter, useRowSelection, vEntryTable } from "yrp/public/js/utils/entryGrid.js";
 import MultiSelect from "../../components/MultiSelect.vue";
 
 let items = ref([])
@@ -72,6 +75,8 @@ let version = cur_frm.doc.version
 let grp_panel = null
 let options = []
 let component_active = true
+const can_delete_groups = computed(() => docstatus.value == 0 && cur_frm.has_perm("write"))
+const group_selection = useRowSelection(() => can_delete_groups.value ? grp_items.value.map((_, index) => index) : [])
 
 onMounted(() => {
     if(doc_panels){
@@ -121,6 +126,10 @@ function delete_group_item(item){
     }
     grp_items.value = x
     make_dirty()
+}
+
+function delete_selected_groups(){
+    group_selection.removeSelected((index) => delete_group_item(grp_items.value[index]), () => can_delete_groups.value)
 }
 
 function load_data(item){
@@ -295,3 +304,11 @@ defineExpose({
 })
 
 </script>
+
+<style scoped>
+.row-select {
+    width: 32px;
+    text-align: center;
+    vertical-align: middle;
+}
+</style>

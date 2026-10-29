@@ -4,6 +4,9 @@
             <h3>Accessory Detail</h3>
             <table class='table table-sm table-bordered'>
                 <tr>
+                    <th v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select aria-label="Select all rows"
+                        :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value"
+                        @change="selection.toggleAll($event.target.checked)"></th>
                     <th>S.No</th>
                     <th>Accessory</th>
                     <th>Cloth Type</th>
@@ -16,6 +19,8 @@
 					<th v-if="!locked_status">Edit</th>
                 </tr>
                 <tr v-for="(item,idx) in items" :key='idx'>
+                    <td v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select tabindex="-1" aria-label="Select row"
+                        :checked="selection.isSelected(idx)" @change="selection.toggle(idx, $event.target.checked)"></td>
                     <td>{{idx + 1}}</td>
                     <td>{{item.accessory}}</td>
                     <td>{{item.cloth_type}}</td>
@@ -28,16 +33,15 @@
 					<td v-if="!locked_status">
                         <div class="pull-right cursor-pointer" @click="add_cloth_item(idx)"
                             v-html="frappe.utils.icon('edit', 'md', 'mr-1')"></div>
-                        <div class="pull-right cursor-pointer" @click="delete_item(idx)"
-                            v-html="frappe.utils.icon('delete', 'md', 'mr-1')"></div>
                     </td>
                 </tr>
             </table>
+            <SelectionFooter class="w-100" :count="selection.selected.value.length" @delete="delete_selected" />
         </div>
 		<div class="row pt-3" v-if="!locked_status && show_button1 && docstatus != null && had_accessory">
             <button class="btn btn-success pull-left" @click="add_cloth_item(null)">Add Accessory</button>
         </div>
-        <div class="html-container col mt-1">
+        <div class="html-container col mt-1" v-enter-submits="submit_form">
             <div>
                 <div class="accessory-type col-md-4"></div>
             </div>
@@ -67,6 +71,7 @@
 </template>
 <script setup>
 import {ref, onMounted, computed, watch} from 'vue';
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js";
 let had_accessory = ref(true)
 let show_button1 = ref(true)
 let show_button2 = ref(false)
@@ -93,6 +98,8 @@ let status = ref(cur_frm.doc.status)
 const locked_status = computed(() =>
 	["Approval Pending", "Label Printed", "Cancelled"].includes(status.value)
 )
+const is_read_only = computed(() => locked_status.value || cur_frm.doc.docstatus > 0 || !cur_frm.has_perm("write"))
+const selection = useRowSelection(() => is_read_only.value ? [] : items.value.map((_, index) => index))
 
 function set_status(new_status){
     status.value = new_status
@@ -221,6 +228,16 @@ function delete_item(index){
     }
     items.value = new_arr
     make_clean()
+}
+
+function delete_selected(){
+    selection.removeSelected(delete_item, () => !is_read_only.value)
+}
+
+function submit_form(){
+    if(locked_status.value) return
+    if(show_button2.value) add_item()
+    else if(show_button3.value) update_item()
 }
 
 function update_item(){
@@ -371,5 +388,10 @@ defineExpose({
 <style scoped>
 .table{
     margin: 0 !important;
+}
+.row-select {
+    width: 32px;
+    text-align: center;
+    vertical-align: middle;
 }
 </style>

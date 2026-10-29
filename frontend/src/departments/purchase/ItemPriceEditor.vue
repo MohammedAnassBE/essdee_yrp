@@ -56,6 +56,10 @@
 							<label v-if="dependsOnAttribute" class="price-field"><span class="erp-field-label">{{ fieldLabel("attribute", "Attribute") }}<span class="erp-required-mark" aria-hidden="true">*</span></span><Select :model-value="form.attribute" :options="editor.attributes || []" option-label="attribute" option-value="attribute" fluid :aria-label="fieldLabel('attribute', 'Attribute')" :disabled="Boolean(saving)" @update:model-value="changeAttribute" /></label>
 						</div>
 						<DataTable v-if="form.item_price_values.length" v-entry-table="{ add: saving ? null : addTier }" :value="form.item_price_values" data-key="key" size="small" scrollable class="erp-data-table price-values-grid">
+							<Column class="price-values-grid__select">
+								<template #header><input type="checkbox" class="price-values-grid__checkbox" data-row-select :checked="tierSelection.isAllSelected.value" :indeterminate="tierSelection.isPartlySelected.value" :disabled="!tierKeys.length" aria-label="Select all price rows" @change="tierSelection.toggleAll($event.target.checked)"></template>
+								<template #body="{ data, index }"><input type="checkbox" class="price-values-grid__checkbox" data-row-select tabindex="-1" :checked="tierSelection.isSelected(data.key)" :disabled="!tierKeys.includes(data.key)" :aria-label="`Select row ${index + 1}`" @change="tierSelection.toggle(data.key, $event.target.checked)"></template>
+							</Column>
 							<Column header="No." class="price-values-grid__index"><template #body="{ index }">{{ index + 1 }}</template></Column>
 							<Column v-if="dependsOnAttribute" class="price-values-grid__attribute">
 								<template #header><span>{{ tierLabel("attribute_value", "Attribute Value") }}<span class="erp-required-mark" aria-hidden="true">*</span></span></template>
@@ -65,9 +69,12 @@
 								<template #header><span>{{ tierLabel(fieldname, fieldname) }}<span class="erp-required-mark" aria-hidden="true">*</span></span></template>
 								<template #body="{ data, index }"><InputNumber v-model="data[fieldname]" :min="0" :max-fraction-digits="tierPrecision(fieldname)" :use-grouping="false" fluid :aria-label="`${tierLabel(fieldname, fieldname)} ${index + 1}`" :disabled="Boolean(saving)" /></template>
 							</Column>
-							<Column class="price-values-grid__remove"><template #body="{ index }"><Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove row ${index + 1}`" :disabled="Boolean(saving)" @click="removeTier(index)" /></template></Column>
 						</DataTable>
 						<div v-else class="price-tier-empty">Add at least one row.</div>
+						<footer v-if="tierSelection.selected.value.length" class="price-values-grid__footer">
+							<span>{{ tierSelection.selected.value.length }} selected</span>
+							<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" :disabled="Boolean(saving)" @click="deleteSelectedTiers" />
+						</footer>
 					</section>
 				</form>
 			</section>
@@ -96,6 +103,7 @@ import InlinePageNavigation from "../../components/navigation/InlinePageNavigati
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -162,6 +170,8 @@ const attributeValues = computed(() => itemPriceAttributeValues(editor.value.att
 const attributeHint = computed(() => itemPriceAttributeHint(form.item_name, editor.value.attributes || []))
 const canSave = computed(() => !loading.value && !itemLoading.value && itemPriceCanSave(form))
 const saveAction = computed(() => itemPriceSaveAction(editor.value))
+const tierKeys = computed(() => saving.value ? [] : form.item_price_values.map((row) => row.key))
+const tierSelection = useRowSelection(tierKeys)
 
 function fieldLabel(fieldname, fallback) {
 	return itemPriceFieldLabel(editor.value.fields, fieldname, fallback)
@@ -270,6 +280,10 @@ function addTier() {
 
 function removeTier(index) {
 	form.item_price_values.splice(index, 1)
+}
+
+function deleteSelectedTiers() {
+	return tierSelection.removeSelected((key) => removeTier(form.item_price_values.findIndex((row) => row.key === key)), () => !saving.value)
 }
 
 async function save(applyAction) {
@@ -383,7 +397,10 @@ watch(requestKey, load, { immediate: true })
 .price-values-grid :deep(.price-values-grid__attribute) { min-width: 200px; }
 .price-values-grid :deep(.price-values-grid__number) { min-width: 130px; }
 .price-values-grid :deep(.price-values-grid__number input) { text-align: right; font-variant-numeric: tabular-nums; }
-.price-values-grid :deep(.price-values-grid__remove) { width: 52px; text-align: center; }
+.price-values-grid :deep(.price-values-grid__select) { width: 36px; padding-inline: 0; text-align: center; }
+.price-values-grid__checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.price-values-grid__checkbox:disabled { cursor: not-allowed; opacity: .45; }
+.price-values-grid__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .price-tier-empty { display: grid; min-height: 90px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); place-items: center; }
 @media (max-width: 1100px) { .price-editor__card-grid { grid-template-columns: 1fr; } .price-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) {

@@ -1,15 +1,20 @@
 <template>
-    <div>
-        <table class="table table-sm table-bordered" v-if="rows.length > 0">
+    <div @keydown.capture="select_typed_dia">
+        <table class="table table-sm table-bordered" v-if="rows.length > 0"
+            v-entry-table="{ add: is_read_only ? null : add_row, isRowBlank: is_row_blank, fixed: false }">
             <thead>
                 <tr>
+                    <th v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select aria-label="Select all rows"
+                        :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value"
+                        @change="selection.toggleAll($event.target.checked)"></th>
                     <th style="width: 30%;">Name</th>
                     <th>Dia</th>
-                    <th style="width: 60px;">Delete</th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-for="(row, index) in rows" :key="row.id">
+                    <td v-if="!is_read_only" class="row-select"><input type="checkbox" data-row-select tabindex="-1" aria-label="Select row"
+                        :checked="selection.isSelected(index)" @change="selection.toggle(index, $event.target.checked)"></td>
                     <td>
                         <input type="text" class="form-control form-control-sm" v-model="row.name1" @input="make_dirty" placeholder="Enter name" />
                     </td>
@@ -28,7 +33,7 @@
                                     v-model="row.search"
                                     @input="onSearchInput(index)"
                                     @focus="openDropdown(index)"
-                                    @keydown.enter.prevent="selectFirst(index)"
+                                    :data-dia-row="index"
                                     placeholder="Type to search Dia..."
                                 />
                                 <div class="dia-dropdown" v-if="activeRow === index && filteredOptions(index).length > 0">
@@ -44,20 +49,21 @@
                             </div>
                         </div>
                     </td>
-                    <td class="text-center align-middle">
-                        <div class="cursor-pointer" @click="delete_row(index)" v-html="frappe.utils.icon('delete', 'md')"></div>
-                    </td>
                 </tr>
             </tbody>
         </table>
+        <SelectionFooter :count="selection.selected.value.length" @delete="delete_selected" />
         <button class="btn btn-xs btn-secondary" @click="add_row" style="margin-top: 5px;">Add Row</button>
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { SelectionFooter, useRowSelection, vEntryTable } from "yrp/public/js/utils/entryGrid.js";
 
 const rows = ref([]);
+const is_read_only = computed(() => cur_frm.doc.docstatus > 0 || !cur_frm.has_perm("write"));
+const selection = useRowSelection(() => is_read_only.value ? [] : rows.value.map((_, index) => index));
 const allDiaValues = ref([]);
 const activeRow = ref(null);
 let nextId = 0;
@@ -114,11 +120,21 @@ function selectDia(index, val) {
     make_dirty();
 }
 
-function selectFirst(index) {
+/** Enter in a Dia search with typed text picks the first match instead of moving to the next cell. */
+function select_typed_dia(event) {
+    const index = Number(event.target.dataset?.diaRow);
+    if (event.key !== 'Enter' || Number.isNaN(index) || !rows.value[index].search) return;
+    event.preventDefault();
+    event.stopPropagation();
     const opts = filteredOptions(index);
     if (opts.length > 0) {
         selectDia(index, opts[0]);
     }
+}
+
+function is_row_blank(index) {
+    const row = rows.value[index];
+    return !row.name1 && !frappe.yrp.attribute_value(row.dia).length;
 }
 
 function removeDia(index, val) {
@@ -139,6 +155,10 @@ function add_row() {
 function delete_row(index) {
     rows.value.splice(index, 1);
     make_dirty();
+}
+
+function delete_selected() {
+    selection.removeSelected(delete_row, () => !is_read_only.value);
 }
 
 function make_dirty() {
@@ -174,6 +194,11 @@ defineExpose({
 </script>
 
 <style scoped>
+.row-select {
+    width: 32px;
+    text-align: center;
+    vertical-align: middle;
+}
 .dia-cell {
     display: flex;
     flex-direction: column;

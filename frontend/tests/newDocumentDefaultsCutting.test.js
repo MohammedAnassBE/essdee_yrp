@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Vue } from "../../scripts/helpers/vue_renderer.mjs"
 import * as defaults from "../src/utils/newDocumentDefaults.js"
+import { useRowSelection } from "../src/components/common/childGrid/rowSelection.js"
 
 const LIST = "/cutting/plans?from=list"
 const read = path => readFileSync(resolve(`frontend/src/${path}`), "utf8")
@@ -12,7 +13,7 @@ function setup(path, bindings, names) {
 	const values = {
 		...Vue, watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {}, onBeforeRouteLeave: () => {},
 		defineProps: () => ({}), defineEmits: () => () => {}, useDocumentShortcuts: () => {}, useRouter: () => ({ push() {}, replace() {} }),
-		takeNewDocumentDefaults: defaults.takeNewDocumentDefaults, withNewDocumentDefaults: defaults.withNewDocumentDefaults, ...bindings,
+		takeNewDocumentDefaults: defaults.takeNewDocumentDefaults, withNewDocumentDefaults: defaults.withNewDocumentDefaults, useRowSelection, ...bindings,
 	}
 	return new Function(...Object.keys(values), `${script(path)}\nreturn { ${names} }`)(...Object.values(values))
 }

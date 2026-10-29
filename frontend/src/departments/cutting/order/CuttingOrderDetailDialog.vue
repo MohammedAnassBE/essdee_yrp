@@ -39,7 +39,8 @@
 						</section>
 						<section class="detail-section">
 							<header><div><h3>Item Attributes</h3><small>Attribute mappings and their available values.</small></div><Button v-if="canEdit" label="Add Attribute" icon="pi pi-plus" text size="small" @click="addAttribute" /></header>
-							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table v-entry-table="{ add: canEdit ? addAttribute : null }" class="detail-table"><thead><tr><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th><th v-if="canEdit"></th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td><InputText v-model="row.attribute" :aria-label="`Attribute row ${index + 1}`" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :aria-label="`Values for attribute row ${index + 1}`" :disabled="!canEdit" fluid /></td><td v-if="canEdit"><Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove attribute row ${index + 1}`" @click="attributes.splice(index, 1)" /></td></tr></tbody></table></div>
+							<div class="table-scroll" role="region" tabindex="0" aria-label="Item attribute mappings"><table v-entry-table="{ add: canEdit ? addAttribute : null }" class="detail-table"><thead><tr><th v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="attributeSelection.isAllSelected.value" :indeterminate="attributeSelection.isPartlySelected.value" :disabled="!attributes.length" aria-label="Select all attribute rows" @change="attributeSelection.toggleAll($event.target.checked)"></th><th>Attribute</th><th>Mapping</th><th>Values (comma separated)</th></tr></thead><tbody><tr v-for="(row, index) in attributes" :key="row._row_key || index"><td v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="attributeSelection.isSelected(index)" :aria-label="`Select attribute row ${index + 1}`" @change="attributeSelection.toggle(index, $event.target.checked)"></td><td><InputText v-model="row.attribute" :aria-label="`Attribute row ${index + 1}`" :disabled="!canEdit || Boolean(row._row_key && !row._row_key.startsWith('new:'))" fluid /></td><td>{{ row.mapping || "Created on save" }}</td><td><InputText v-model="row.valuesText" :aria-label="`Values for attribute row ${index + 1}`" :disabled="!canEdit" fluid /></td></tr></tbody></table></div>
+							<RowSelectionFooter :selection="attributeSelection" @delete="attributeSelection.removeSelected((index) => attributes.splice(index, 1))" />
 							<div v-if="!attributes.length" class="detail-empty">Save the item once to load its default attributes.</div>
 						</section>
 					</TabPanel>
@@ -104,6 +105,7 @@ import Tabs from "primevue/tabs"
 import Tag from "primevue/tag"
 import { computed, defineComponent, h, reactive, ref, watch, withDirectives } from "vue"
 import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../../components/common/childGrid/rowSelection.js"
 
 import { getCuttingOrderDetail, saveCuttingOrderDetail } from "../../../api/cuttingOrder.js"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
@@ -127,6 +129,7 @@ const stitchingCombination = reactive({ attributes: [], values: [] })
 const permissions = reactive({ can_create: false, can_write: false })
 const cleanSignature = ref("")
 const canEdit = computed(() => form.name ? permissions.can_write : permissions.can_create)
+const attributeSelection = useRowSelection(computed(() => canEdit.value ? attributes.value.map((_, index) => index) : []))
 const signature = computed(() => JSON.stringify(payloadValues()))
 const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 
@@ -200,16 +203,36 @@ function splitValues(value) { return String(value || "").split(",").map((item) =
 function clone(value) { return JSON.parse(JSON.stringify(value ?? null)) }
 function emptyForm() { return { name: "", modified: "", item: "", version: 0, attribute_no: 0, is_set_item: 0, set_item_attribute: "", major_attribute_value: "", major_panel_value: "", is_same_colour: 0 } }
 
+function selectBox(attributes) {
+	return h("input", { type: "checkbox", class: "row-checkbox", ...attributes })
+}
+
+const RowSelectionFooter = defineComponent({
+	props: { selection: { type: Object, required: true } },
+	emits: ["delete"],
+	setup(componentProps, { emit: childEmit }) {
+		return () => {
+			const count = componentProps.selection.selected.value.length
+			return count ? h("footer", { class: "row-selection-footer" }, [h("span", `${count} selected`), h(Button, { label: "Delete", icon: "pi pi-trash", severity: "danger", size: "small", onClick: () => childEmit("delete") })]) : null
+		}
+	},
+})
+
 const RowEditor = defineComponent({
 	props: { title: String, addLabel: String, editable: Boolean, rows: { type: Array, default: () => [] } },
 	emits: ["add", "remove"],
 	setup(componentProps, { slots, emit: childEmit }) {
+		const selection = useRowSelection(computed(() => componentProps.editable ? componentProps.rows.map((_, index) => index) : []))
+		const label = componentProps.title || "detail"
+		const selectAll = () => h("th", { class: "select-column" }, selectBox({ "data-row-select": "", checked: selection.isAllSelected.value, indeterminate: selection.isPartlySelected.value, "aria-label": `Select all ${label} rows`, onChange: (event) => selection.toggleAll(event.target.checked) }))
+		const selectRow = (index) => h("td", { class: "select-column" }, selectBox({ "data-row-select": "", tabindex: -1, checked: selection.isSelected(index), "aria-label": `Select ${label} row ${index + 1}`, onChange: (event) => selection.toggle(index, event.target.checked) }))
 		return () => h("section", { class: "detail-section row-editor" }, [
 			h("header", [h("h3", componentProps.title), componentProps.editable ? h(Button, { label: componentProps.addLabel, icon: "pi pi-plus", text: true, size: "small", onClick: () => childEmit("add") }) : null]),
 			componentProps.rows.length ? h("div", { class: "table-scroll", role: "region", tabindex: 0, "aria-label": componentProps.title }, withDirectives(h("table", { class: "detail-table" }, [
-				h("thead", h("tr", [h("th", "S.No."), slots.header?.(), componentProps.editable ? h("th") : null])),
-				h("tbody", componentProps.rows.map((row, index) => h("tr", { key: row._row_key || index }, [h("td", index + 1), slots.row?.({ row, index }), componentProps.editable ? h("td", h(Button, { icon: "pi pi-trash", severity: "danger", text: true, rounded: true, "aria-label": `Remove ${componentProps.title || "detail"} row ${index + 1}`, onClick: () => childEmit("remove", index) })) : null]))),
+				h("thead", h("tr", [componentProps.editable ? selectAll() : null, h("th", "S.No."), slots.header?.()])),
+				h("tbody", componentProps.rows.map((row, index) => h("tr", { key: row._row_key || index }, [componentProps.editable ? selectRow(index) : null, h("td", index + 1), slots.row?.({ row, index })]))),
 			]), [[vEntryTable, { add: componentProps.editable ? () => childEmit("add") : null }]])) : h("div", { class: "detail-empty" }, `No ${String(componentProps.title || "rows").toLowerCase()} yet.`),
+			h(RowSelectionFooter, { selection, onDelete: () => selection.removeSelected((index) => childEmit("remove", index), () => componentProps.editable) }),
 		])
 	},
 })
@@ -256,6 +279,9 @@ const CombinationMatrix = defineComponent({
 .detail-table th:last-child, .detail-table td:last-child { border-right: 0; }
 .detail-table tr:last-child td { border-bottom: 0; }
 .detail-table td:first-child { width: 58px; color: var(--erp-text-muted); }
+.detail-table th.select-column, .detail-table td.select-column { width: 36px; padding-inline: 0; text-align: center; }
+.row-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.row-selection-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .detail-empty { display: grid; min-height: 88px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); background: var(--erp-surface-soft); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); place-items: center; }
 .combination-section + .combination-section { margin-top: 12px; }
 .combination-actions { display: flex; margin-bottom: 12px; justify-content: flex-end; }

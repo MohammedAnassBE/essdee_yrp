@@ -5,6 +5,9 @@
 				<td v-if="i.primary_attribute">
 					<table v-if="i.items && i.items.length > 0" class="table table-sm table-bordered">
 						<tr>
+							<th v-if="can_edit" class="row-select">
+								<input type="checkbox" data-row-select :checked="isAllSelected" :indeterminate="isPartlySelected" @change="toggleAll($event.target.checked)" />
+							</th>
 							<th>S.No.</th>
 							<th>Item</th>
 							<th v-for="(j, idx) in i.final_state_attr" :key="idx">{{ j }}</th>
@@ -13,6 +16,9 @@
 							</th>
 						</tr>
 						<tr v-for="(j, item1_index) in i.items" :key="item1_index">
+							<td v-if="can_edit" :rowspan="3" class="row-select">
+								<input type="checkbox" data-row-select tabindex="-1" :checked="isSelected(item1_index)" @change="toggle(item1_index, $event.target.checked)" />
+							</td>
 							<td :rowspan="3">{{ item1_index + 1 }}</td>
 							<td :rowspan="3">{{ i.item }}</td>
 							<td v-for="(k, idx) in j.attributes" :key="idx" :rowspan="3">{{ k }}</td>
@@ -35,6 +41,9 @@
 				<td v-else>
 					<table v-if="i.items && i.items.length > 0" class="table table-sm table-bordered">
 						<tr>
+							<th v-if="can_edit" class="row-select">
+								<input type="checkbox" data-row-select :checked="isAllSelected" :indeterminate="isPartlySelected" @change="toggleAll($event.target.checked)" />
+							</th>
 							<th>S.No.</th>
 							<th>Item</th>
 							<th v-for="(j, idx) in i.final_state_attr" :key="idx">{{ j }}</th>
@@ -43,6 +52,9 @@
 							<th>MRP</th>
 						</tr>
 						<tr v-for="(j, item1_index) in i.items" :key="item1_index">
+							<td v-if="can_edit" class="row-select">
+								<input type="checkbox" data-row-select tabindex="-1" :checked="isSelected(item1_index)" @change="toggle(item1_index, $event.target.checked)" />
+							</td>
 							<td>{{ item1_index + 1 }}</td>
 							<td>{{ i.item }}</td>
 							<template v-if="i.final_state_attr">
@@ -56,13 +68,14 @@
 				</td>
 			</tr>
 		</table>
+		<SelectionFooter :count="selected.length" @delete="removeSelected(delete_item)" />
 		<div>
 			<div v-if='!show_parameters'>
 				<button class="btn btn-success" @click="show_add_items()">Fetch Item</button>
 			</div>
 		</div>
 		<div>
-			<form @submit.prevent>
+			<form @submit.prevent v-enter-submits="() => button_show && add_item()">
 				<div>
 					<div class="dependent-attr row pl-4" style="display: flex; gap: 10px"></div>
 				</div>
@@ -83,7 +96,8 @@
 	</div>
 </template>
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js";
 const root = ref(null);
 const sample_doc = ref({});
 const item = ref([]);
@@ -97,6 +111,9 @@ const edit = ref(false);
 const edit_index = ref(null);
 const button_show = ref(false);
 const show_parameters = ref(false)
+const can_edit = computed(() => docstatus.value === 0 && Boolean(cur_frm.perm?.[0]?.write))
+const { selected, isAllSelected, isPartlySelected, isSelected, toggle, toggleAll, removeSelected } = useRowSelection(
+	computed(() => can_edit.value ? (list_item.value[0]?.items || []).map((row, index) => index) : []))
 
 onMounted(() => {
 	docstatus.value = cur_frm.doc.docstatus;
@@ -417,3 +434,9 @@ defineExpose({
   show_add_items,
 });
 </script>
+<style scoped>
+.row-select {
+	width: 30px;
+	text-align: center;
+}
+</style>

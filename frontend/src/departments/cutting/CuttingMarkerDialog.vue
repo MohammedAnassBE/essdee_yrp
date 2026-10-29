@@ -49,13 +49,10 @@
 
 			<section v-if="form.panels.length" class="marker-section">
 				<div class="section-heading"><div><h3>Panel Groups</h3><small>Every selected panel must belong to one group.</small></div><Button v-if="canEdit" label="Add Group" icon="pi pi-plus" text size="small" @click="addGroup" /></div>
-				<div class="group-list">
-					<div v-for="(group, index) in form.group_items" :key="group.id ?? index" class="group-row">
-						<span>Group {{ index + 1 }}</span>
-						<MultiSelect v-model="group.selected" :aria-label="`Panels for group ${index + 1}`" :options="form.panels" display="chip" :disabled="!canEdit" fluid />
-						<Button v-if="canEdit" icon="pi pi-trash" severity="danger" text rounded :aria-label="`Remove group ${index + 1}`" @click="form.group_items.splice(index, 1)" />
-					</div>
+				<div v-if="form.group_items.length" class="table-scroll" role="region" tabindex="0" aria-label="Editable panel groups">
+					<table v-entry-table="{ add: canEdit ? addGroup : null }" class="marker-table group-table" @keydown.enter.capture="addGroupOnEnter"><thead><tr><th v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select :checked="groupSelection.isAllSelected.value" :indeterminate="groupSelection.isPartlySelected.value" aria-label="Select all panel groups" @change="groupSelection.toggleAll($event.target.checked)"></th><th class="group-column">Group</th><th>Panels</th></tr></thead><tbody><tr v-for="(group, index) in form.group_items" :key="group.id ?? index"><td v-if="canEdit" class="select-column"><input type="checkbox" class="row-checkbox" data-row-select tabindex="-1" :checked="groupSelection.isSelected(index)" :aria-label="`Select group ${index + 1}`" @change="groupSelection.toggle(index, $event.target.checked)"></td><td>Group {{ index + 1 }}</td><td><MultiSelect v-model="group.selected" :aria-label="`Panels for group ${index + 1}`" :options="form.panels" display="chip" :disabled="!canEdit" fluid /></td></tr></tbody></table>
 				</div>
+				<footer v-if="groupSelection.selected.value.length" class="row-selection-footer"><span>{{ groupSelection.selected.value.length }} selected</span><Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="groupSelection.removeSelected((index) => form.group_items.splice(index, 1))" /></footer>
 			</section>
 			</template>
 
@@ -104,10 +101,12 @@ import Message from "primevue/message"
 import MultiSelect from "primevue/multiselect"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
-import { computed, reactive, ref, watch } from "vue"
+import { computed, nextTick, reactive, ref, watch } from "vue"
 
 import { callMethod } from "../../api/frappe.js"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import { withShortcutHint } from "../../utils/documentShortcuts.js"
 import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 import DocumentPrintButton from "./DocumentPrintButton.vue"
@@ -151,6 +150,7 @@ const canWrite = computed(() => record.value ? Boolean(record.value.permissions?
 const canEdit = computed(() => canWrite.value && (!record.value || editingExisting.value))
 const canStartEdit = computed(() => Boolean(record.value) && Number(record.value.docstatus) === 0 && canWrite.value && !editingExisting.value)
 const canSubmit = computed(() => canWrite.value && Boolean(record.value ? record.value.permissions?.can_submit : context.value.can_submit))
+const groupSelection = useRowSelection(computed(() => canEdit.value ? form.group_items.map((_, index) => index) : []))
 const statusLabel = computed(() => ["Draft", "Submitted", "Cancelled"][Number(record.value?.docstatus || 0)] || "Draft")
 const markerOverviewDefinitions = [
 	{ key: "identity", label: "Marker identity", description: "Marker type and panel coverage", icon: "pi pi-id-card", fields: ["marker_name", "selected_type", "panel_count", "group_count"] },
@@ -227,6 +227,19 @@ function oldRatioForSize(size) {
 
 function addGroup() {
 	form.group_items.push({ id: Date.now(), selected: [] })
+}
+
+/** The panel MultiSelect hides its input from v-entry-table, so Enter on the last filled group adds the next one here. */
+async function addGroupOnEnter(event) {
+	const count = form.group_items.length
+	const isLastGroup = event.target.getAttribute("aria-label") === `Panels for group ${count}`
+	if (!canEdit.value || !isLastGroup || event.target.getAttribute("aria-expanded") === "true" || !form.group_items[count - 1].selected?.length) return
+	const table = event.currentTarget
+	event.preventDefault()
+	event.stopPropagation()
+	addGroup()
+	await nextTick()
+	table.querySelector(`[aria-label="Panels for group ${count + 1}"]`)?.focus()
 }
 
 async function save(submit) {
@@ -373,8 +386,11 @@ function documentDeleted() {
 .marker-table tr:last-child td { border-bottom: 0; }
 .marker-table th:last-child, .marker-table td:last-child { border-right: 0; }
 .empty-note { display: grid; place-items: center; min-height: 64px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); background: var(--erp-surface-soft); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }
-.group-list { display: grid; gap: 8px; }
-.group-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 38px; align-items: center; gap: 8px; color: var(--erp-text-secondary); font-size: var(--erp-font-size-caption); font-weight: 700; }
+.group-table td { vertical-align: middle; }
+.group-table .select-column { width: 36px; padding-inline: 0; text-align: center; }
+.group-table .group-column { width: 96px; }
+.row-checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.row-selection-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .marker-chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .marker-chip-list span { padding: 4px 9px; color: var(--erp-text); background: var(--erp-surface-soft); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); font-size: var(--erp-font-size-min); font-weight: 700; }
 .marker-group-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -387,8 +403,6 @@ function documentDeleted() {
 @media (max-width: 700px) {
 	.marker-loading, .marker-fields { grid-template-columns: 1fr; }
 	.marker-group-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.group-row { grid-template-columns: 1fr 38px; }
-	.group-row > span { grid-column: 1 / -1; }
 	.table-scroll { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); }
 }
 </style>

@@ -1,22 +1,29 @@
 <template>
     <div>
         <table class="table table-sm table-bordered" v-if="grp_items.length > 0">
-            <tr>
-                <td>Panels</td>
-                <td>Delete</td>
-            </tr>
-            <tr v-for="item in grp_items" :key="item">
-                <td v-if="item.defaultList.length > 0">
-                    <MultiSelect :options="item.options" :setDefault="true" :defaultList="item.defaultList" :triggerEvent="update_selected" :item_key="item['id']" :docstatus="docstatus"/>
-                </td>
-                <td v-else>
-                    <MultiSelect :options="options" :setDefault="true" :defaultList="[]" :triggerEvent="update_selected" :item_key="item['id']"/>
-                </td>
-                <td>
-                    <div class="cursor-pointer" @click="delete_group_item(item)" v-html="frappe.utils.icon('delete', 'md')"></div>
-                </td>
-            </tr>
+            <thead>
+                <tr>
+                    <th v-if="!read_only" style="width: 32px">
+                        <input type="checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" @change="selection.toggleAll($event.target.checked)">
+                    </th>
+                    <th>Panels</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="item in grp_items" :key="item">
+                    <td v-if="!read_only">
+                        <input type="checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(item.id)" @change="selection.toggle(item.id, $event.target.checked)">
+                    </td>
+                    <td v-if="item.defaultList.length > 0">
+                        <MultiSelect :options="item.options" :setDefault="true" :defaultList="item.defaultList" :triggerEvent="update_selected" :item_key="item['id']" :docstatus="docstatus"/>
+                    </td>
+                    <td v-else>
+                        <MultiSelect :options="options" :setDefault="true" :defaultList="[]" :triggerEvent="update_selected" :item_key="item['id']"/>
+                    </td>
+                </tr>
+            </tbody>
         </table>
+        <SelectionFooter :count="selection.selected.value.length" @delete="selection.removeSelected((id) => delete_group_item(grp_items.find((item) => item.id === id)), () => !read_only)" />
         <button style="margin-top:10px;" @click="add_groups()" class="btn btn-success">Add Groups</button>
 
     </div>
@@ -25,11 +32,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import MultiSelect from "../components/MultiSelect.vue";
+import { SelectionFooter, useRowSelection } from "yrp/public/js/utils/entryGrid.js";
 
 let grp_items = ref([])
 let options = ref([])
 let grp_panel = null
 let docstatus = cur_frm.doc.docstatus || 0
+const read_only = docstatus > 0 || !cur_frm.has_perm("write") || (!cur_frm.is_new() && cur_frm.doc.approval_status === "Approved")
+const selection = useRowSelection(() => read_only ? [] : grp_items.value.map((item) => item.id))
 
 onMounted(()=> {
     let panels = []

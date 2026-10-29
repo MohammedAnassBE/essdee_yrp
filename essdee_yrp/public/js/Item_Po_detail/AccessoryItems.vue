@@ -1,19 +1,27 @@
 <template>
     <div ref='root'>
         <table v-if="Object.keys(items).length > 0" class='table table-sm table-bordered'>
-            <tr>
-                <th>Acceesory</th>
-                <th v-if="is_set_item">Part</th>
-                <th>Delete</th>
-            </tr>
-            <tr v-for="(item,val) in items" :key='item'>
-                <td>{{val}}</td>
-                <td v-if="is_set_item">{{item}}</td>
-                <td @click="delete_item(val)"
-                  v-html="frappe.utils.icon('delete', 'md')"></td>
-            </tr>
+            <thead>
+                <tr>
+                    <th v-if="!read_only" style="width: 32px">
+                        <input type="checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" @change="selection.toggleAll($event.target.checked)">
+                    </th>
+                    <th>Acceesory</th>
+                    <th v-if="is_set_item">Part</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="(item,val) in items" :key='val'>
+                    <td v-if="!read_only">
+                        <input type="checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(val)" @change="selection.toggle(val, $event.target.checked)">
+                    </td>
+                    <td>{{val}}</td>
+                    <td v-if="is_set_item">{{item}}</td>
+                </tr>
+            </tbody>
         </table>
-        <div class="row">
+        <SelectionFooter :count="selection.selected.value.length" @delete="selection.removeSelected(delete_item, () => !read_only)" />
+        <div class="row" v-enter-submits="add_item">
             <div class="accessory-item col-md-5"></div>
             <div class="part-item col-md-5"></div>
         </div>
@@ -27,6 +35,7 @@
 
 <script setup>
 import {ref, onMounted} from 'vue';
+import { SelectionFooter, useRowSelection, vEnterSubmits } from "yrp/public/js/utils/entryGrid.js";
 let root = ref(null)
 let items = ref({})
 let sample_doc = ref({})
@@ -36,6 +45,8 @@ let cloth_types = null
 let show_button1 = ref(true)
 let show_button2 = ref(false)
 let is_set_item = cur_frm.doc.is_set_item
+const read_only = cur_frm.doc.docstatus > 0 || !cur_frm.has_perm("write") || (!cur_frm.is_new() && cur_frm.doc.approval_status === "Approved")
+const selection = useRowSelection(() => read_only ? [] : Object.keys(items.value))
 
 function create_inputs(){
     let el = root.value

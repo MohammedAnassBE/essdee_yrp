@@ -1,9 +1,12 @@
 <template>
     <div ref="root">
         <!-- Dynamic Size Ratio Packing: every row is an auditable GRN packing batch. -->
-        <table v-if="mode === 'Size Ratio Packing'" class="table table-sm table-sm-bordered bordered-table">
+        <table v-if="mode === 'Size Ratio Packing'" v-entry-table="{ add: () => add_batch(), fixed: false }" class="table table-sm table-sm-bordered bordered-table">
             <thead class="dark-border">
                 <tr>
+                    <th class="row-select">
+                        <input type="checkbox" data-row-select :checked="isAllSelected" :indeterminate="isPartlySelected" :disabled="ratio_batches.length === 1" @change="toggleAll($event.target.checked)" />
+                    </th>
                     <th>Colour</th>
                     <th>Boxes</th>
                     <th v-for="(size, i) in primary_values" :key="i">{{ size }}</th>
@@ -13,7 +16,10 @@
                 </tr>
             </thead>
             <tbody class="dark-border">
-                <tr v-for="(batch, bi) in ratio_batches" :key="batch.key">
+                <tr v-for="batch in ratio_batches" :key="batch.key">
+                    <td class="row-select">
+                        <input type="checkbox" data-row-select tabindex="-1" :checked="isSelected(batch.key)" :disabled="ratio_batches.length === 1" @change="toggle(batch.key, $event.target.checked)" />
+                    </td>
                     <td>
                         <select v-model="batch.colour" class="form-control">
                             <option value="">Select</option>
@@ -31,11 +37,13 @@
                     </td>
                     <td><b>{{ batch_total_pieces(batch) }}</b></td>
                     <td>
-                        <button class="btn btn-xs btn-default" @click="copy_batch(batch)">Copy</button>
-                        <button class="btn btn-xs btn-danger" @click="remove_batch(bi)" :disabled="ratio_batches.length === 1">×</button>
+                        <button class="btn btn-xs btn-default" tabindex="-1" @click="copy_batch(batch)">Copy</button>
                     </td>
                 </tr>
+            </tbody>
+            <tfoot class="dark-border">
                 <tr>
+                    <td></td>
                     <td><b>Total</b></td>
                     <td><b>{{ total_boxes }}</b></td>
                     <td v-for="(size, i) in primary_values" :key="i"><b>{{ round3(box_qty[size]) }}</b></td>
@@ -43,8 +51,9 @@
                     <td><b>{{ round3(grn_total) }}</b></td>
                     <td><button class="btn btn-xs btn-primary" @click="add_batch()">Add Ratio</button></td>
                 </tr>
-            </tbody>
+            </tfoot>
         </table>
+        <SelectionFooter v-if="mode === 'Size Ratio Packing'" :count="selected.length" @delete="remove_selected_batches" />
 
         <!-- Size Wise Packing: enter free pieces per colour x size -->
         <table v-else-if="mode === 'Size Wise Packing'" class="table table-sm table-sm-bordered bordered-table">
@@ -95,6 +104,7 @@
 
 <script setup>
 import { ref, reactive, watch, computed } from 'vue';
+import { SelectionFooter, useRowSelection, vEntryTable } from "yrp/public/js/utils/entryGrid.js";
 
 const root = ref(null);
 const primary_values = ref([])
@@ -140,6 +150,11 @@ function make_batch(source = null) {
 function add_batch(source = null) { ratio_batches.push(make_batch(source)) }
 function copy_batch(batch) { add_batch(batch) }
 function remove_batch(index) { if (ratio_batches.length > 1) ratio_batches.splice(index, 1) }
+const { selected, isAllSelected, isPartlySelected, isSelected, toggle, toggleAll, removeSelected } = useRowSelection(
+    computed(() => ratio_batches.length > 1 ? ratio_batches.map(batch => batch.key) : []))
+function remove_selected_batches() {
+    removeSelected(key => remove_batch(ratio_batches.findIndex(batch => batch.key === key)), () => ratio_batches.length > 1)
+}
 function batch_pieces_per_box(batch) {
     return primary_values.value.reduce((sum, size) => sum + (Number(batch.ratio[size]) || 0), 0)
 }
@@ -267,6 +282,10 @@ defineExpose({
 .bordered-table thead {
     background-color: #f8f9fa;
     font-weight: bold;
+}
+
+.bordered-table .row-select {
+    width: 30px;
 }
 
 .dark-border{

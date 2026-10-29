@@ -13,13 +13,14 @@
 			<table v-entry-table="{ add: editable && !busy ? addRow : null }" class="laysheet-table manual-bundles__table">
 				<thead>
 					<tr>
+						<th v-if="editable" class="manual-bundles__select"><input type="checkbox" class="manual-bundles__checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" :disabled="busy" aria-label="Select all bundle rows" @change="selection.toggleAll($event.target.checked)"></th>
 						<th>S.No</th><th>Colour</th><th>Major Colour</th><th v-if="isSetItem">Set Colour</th><th>Shade</th><th>Quantity</th>
 						<th v-for="size in sizes" :key="size" class="manual-bundles__number">{{ size }}</th>
-						<th v-if="editable" aria-label="Actions"></th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="(row, index) in rows" :key="row.key">
+						<td v-if="editable" class="manual-bundles__select"><input type="checkbox" class="manual-bundles__checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(index)" :disabled="busy" :aria-label="`Select bundle row ${index + 1}`" @change="selection.toggle(index, $event.target.checked)"></td>
 						<td>{{ index + 1 }}</td>
 						<template v-if="editable">
 							<td><Select v-model="row.colour" :options="colours" filter fluid :aria-label="`Colour for bundle row ${index + 1}`" @change="colourChanged(row)" /></td>
@@ -28,7 +29,6 @@
 							<td><InputText v-model="row.shade" fluid :aria-label="`Shade for bundle row ${index + 1}`" @input="touch" /></td>
 							<td><InputNumber v-model="row.quantity" :min="1" :use-grouping="false" fluid :aria-label="`Quantity for bundle row ${index + 1}`" @input="touch" /></td>
 							<td v-for="size in sizes" :key="size"><InputNumber v-model="row.multipliers[size]" :min="0" :use-grouping="false" fluid :aria-label="`${size} multiplier for bundle row ${index + 1}`" @input="touch" /></td>
-							<td><Button icon="pi pi-trash" severity="danger" text rounded :aria-label="`Delete bundle row ${index + 1}`" :disabled="busy" @click="removeRow(index)" /></td>
 						</template>
 						<template v-else>
 							<td>{{ row.colour }}</td><td>{{ row.major_colour }}</td><td v-if="isSetItem">{{ row.set_colour }}</td><td>{{ row.shade }}</td><td>{{ row.quantity }}</td>
@@ -39,6 +39,7 @@
 			</table>
 		</div>
 		<div v-else class="empty-data">No bundle details yet.</div>
+		<footer v-if="selection.selected.value.length" class="manual-bundles__selection"><span>{{ selection.selected.value.length }} selected</span><Button label="Delete" icon="pi pi-trash" severity="danger" size="small" :disabled="busy" @click="deleteSelected" /></footer>
 	</section>
 </template>
 
@@ -50,6 +51,7 @@ import Message from "primevue/message"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
 import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
+import { useRowSelection } from "../../../components/common/childGrid/rowSelection.js"
 
 import { applySetFieldDefaults, emptyManualRow, manualRowsFromSheet, manualRowsPayload, validateManualRows } from "./manualBundles.js"
 
@@ -68,6 +70,7 @@ const error = ref("")
 let rowKey = 0
 const sizes = computed(() => props.sheet.sizes || [])
 const isSetItem = computed(() => Boolean(props.sheet.is_set_item))
+const selection = useRowSelection(computed(() => props.editable ? rows.value.map((_, index) => index) : []))
 
 watch(() => [props.sheet.name, props.sheet.modified], reset, { immediate: true })
 
@@ -96,6 +99,10 @@ function removeRow(index) {
 	touch()
 }
 
+function deleteSelected() {
+	return selection.removeSelected(removeRow, () => props.editable && !props.busy)
+}
+
 async function colourChanged(row) {
 	touch()
 	if (!row.colour) return
@@ -119,4 +126,8 @@ function save() {
 .manual-bundles__table td :deep(.p-select), .manual-bundles__table td :deep(.p-inputtext) { min-width: 6rem; }
 .manual-bundles__table td :deep(.p-inputnumber-input) { min-width: 4.5rem; text-align: right; }
 .manual-bundles__number { text-align: right; }
+.manual-bundles__table .manual-bundles__select { width: 36px; padding-inline: 0; text-align: center; }
+.manual-bundles__checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
+.manual-bundles__checkbox:disabled { cursor: not-allowed; opacity: .45; }
+.manual-bundles__selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 </style>

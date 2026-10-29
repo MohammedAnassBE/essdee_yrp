@@ -497,24 +497,26 @@ async function saveAccessory() {
 	}
 }
 
-async function deleteCloth(index) {
+/** `indexes` arrive last first, so each splice leaves the remaining indexes valid. */
+async function deleteCloth(indexes) {
+	const many = indexes.length > 1
 	return confirmAction({
-		header: "Delete cloth detail?",
-		message: "Delete this cloth detail? This removes it from the Lay Sheet.",
+		header: many ? `Delete ${indexes.length} cloth details?` : "Delete cloth detail?",
+		message: many ? `Delete these ${indexes.length} cloth details? This removes them from the Lay Sheet.` : "Delete this cloth detail? This removes it from the Lay Sheet.",
 		acceptLabel: "Delete Cloth",
 		rejectLabel: "Keep Cloth",
 		acceptIcon: "pi pi-trash",
-		accept: () => deleteClothConfirmed(index),
+		accept: () => deleteClothConfirmed(indexes),
 	})
 }
 
-async function deleteClothConfirmed(index) {
-	detailBusy.value = `cloth-${index}`
+async function deleteClothConfirmed(indexes) {
+	detailBusy.value = "cloth-delete"
 	detailError.value = ""
 	try {
 		const rows = (sheet.value.cloth_details || []).map(clothRow)
-		rows.splice(index, 1)
-		await persistDetails(rows, (sheet.value.accessory_details || []).map(accessoryRow), "Cloth detail deleted.")
+		for (const index of indexes) rows.splice(index, 1)
+		await persistDetails(rows, (sheet.value.accessory_details || []).map(accessoryRow), indexes.length > 1 ? "Cloth details deleted." : "Cloth detail deleted.")
 	} catch (reason) {
 		actionError.value = reason.message || "Unable to delete the cloth detail."
 	} finally {
@@ -522,24 +524,25 @@ async function deleteClothConfirmed(index) {
 	}
 }
 
-async function deleteAccessory(index) {
+async function deleteAccessory(indexes) {
+	const many = indexes.length > 1
 	return confirmAction({
-		header: "Delete accessory detail?",
-		message: "Delete this accessory detail? This removes it from the Lay Sheet.",
+		header: many ? `Delete ${indexes.length} accessory details?` : "Delete accessory detail?",
+		message: many ? `Delete these ${indexes.length} accessory details? This removes them from the Lay Sheet.` : "Delete this accessory detail? This removes it from the Lay Sheet.",
 		acceptLabel: "Delete Accessory",
 		rejectLabel: "Keep Accessory",
 		acceptIcon: "pi pi-trash",
-		accept: () => deleteAccessoryConfirmed(index),
+		accept: () => deleteAccessoryConfirmed(indexes),
 	})
 }
 
-async function deleteAccessoryConfirmed(index) {
-	detailBusy.value = `accessory-${index}`
+async function deleteAccessoryConfirmed(indexes) {
+	detailBusy.value = "accessory-delete"
 	detailError.value = ""
 	try {
 		const rows = (sheet.value.accessory_details || []).map(accessoryRow)
-		rows.splice(index, 1)
-		await persistDetails((sheet.value.cloth_details || []).map(clothRow), rows, "Accessory detail deleted.")
+		for (const index of indexes) rows.splice(index, 1)
+		await persistDetails((sheet.value.cloth_details || []).map(clothRow), rows, indexes.length > 1 ? "Accessory details deleted." : "Accessory detail deleted.")
 	} catch (reason) {
 		actionError.value = reason.message || "Unable to delete the accessory detail."
 	} finally {

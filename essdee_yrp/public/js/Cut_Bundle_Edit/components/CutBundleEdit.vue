@@ -50,9 +50,13 @@
                     </div>
                 </div>
                 <div style="width: 50%; border: 1px solid black; padding: 5px;">
+                    <label v-if="can_edit && output_bundles.length" class="select-all-style">
+                        <input type="checkbox" data-row-select :checked="isAllSelected" :indeterminate="isPartlySelected" @change="toggleAll($event.target.checked)" />
+                        Select All
+                    </label>
                     <div style="display: flex; flex-wrap: wrap; gap: 5px;">
                         <div v-for="(input, index) in output_bundles" :key="index" class="catalog">
-                            <div v-if="docstatus === 0" @click="delete_bundle(index)" class="cancel-style">✖</div>
+                            <input v-if="can_edit" type="checkbox" data-row-select tabindex="-1" class="select-style" :checked="isSelected(index)" @change="toggle(index, $event.target.checked)" />
                             <div v-if="docstatus === 0" @click="edit_bundle(index)" class="edit-style">✎</div>
                             <div class="catalog-content">
                                 <div class="catalog-footer" v-if="input.set_combination">
@@ -83,6 +87,7 @@
                             <button class="plus-btn-style" @click="addBundle(input)">➕ Add</button>
                         </div>
                     </div>
+                    <SelectionFooter :count="selected.length" @delete="removeSelected(delete_bundle)" />
                 </div>
             </div>
         </div>
@@ -90,7 +95,8 @@
 </template>
 
 <script setup>
-import {ref, onMounted, createApp} from 'vue';
+import {ref, onMounted, createApp, computed} from 'vue';
+import { SelectionFooter, useRowSelection } from "yrp/public/js/utils/entryGrid.js";
 import CutPanelMovementBundle from '../../Cut_Panel_Movement/components/CutPanelMovementBundle.vue';
 import CutBundlePanelGroup from "./CutBundlePanelGroup.vue";
 
@@ -111,6 +117,9 @@ let colours = ref([])
 const bundleRef = ref(null)
 let cur_set_comb = ref(null)
 let docstatus = cur_frm.doc.docstatus
+const can_edit = docstatus === 0 && Boolean(cur_frm.perm?.[0]?.write)
+const { selected, isAllSelected, isPartlySelected, isSelected, toggle, toggleAll, removeSelected } = useRowSelection(
+    computed(() => can_edit ? output_bundles.value.map((bundle, index) => index) : []))
 
 onMounted(()=> {
     if(docstatus == 0 && !cur_frm.is_new()){
@@ -583,20 +592,25 @@ defineExpose({
   font-size: 14px;
 }
 
-.cancel-style {
+.select-style {
     position: absolute;
-    top: 6px;
-    right: 10px;
+    top: 8px;
+    left: 10px;
     cursor: pointer;
-    font-weight: bold;
-    color: red;
-    font-size: 18px;
+}
+
+.select-all-style {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    font-weight: normal;
 }
 
 .edit-style {
     position: absolute;
     top: 6px;
-    right: 27px;
+    right: 10px;
     cursor: pointer;
     font-weight: bold;
     color: red;

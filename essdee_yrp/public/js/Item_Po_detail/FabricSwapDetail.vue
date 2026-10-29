@@ -7,12 +7,29 @@
 				</span>
 				<button v-if="!locked" class="btn btn-xs fsw-del" @click="remove_group(gi)">&times;</button>
 			</div>
-			<div v-for="(pair, pi) in group.pairs" :key="pair.key" class="fsw-pair">
-				<div :class="input_class(pair.key, 'from')" class="fsw-input"></div>
-				<span class="fsw-arrow">&rarr;</span>
-				<div :class="input_class(pair.key, 'to')" class="fsw-input"></div>
-				<button v-if="!locked" class="btn btn-xs fsw-del" @click="remove_pair(gi, pi)">&times;</button>
-			</div>
+			<table v-if="group.pairs.length" class="fsw-pairs" v-entry-table="{ add: read_only ? null : () => add_pair(groups.indexOf(group)), isRowBlank: (index) => !group.pairs[index]?.to, fixed: false }">
+				<thead v-if="!read_only">
+					<tr>
+						<th class="fsw-select">
+							<input type="checkbox" data-row-select :checked="selection_for(group).isAllSelected.value" :indeterminate="selection_for(group).isPartlySelected.value" @change="selection_for(group).toggleAll($event.target.checked)">
+						</th>
+						<th>{{ __("From") }} {{ config.value_label }}</th>
+						<th></th>
+						<th>{{ __("To") }} {{ config.value_label }}</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="pair in group.pairs" :key="pair.key" class="fsw-pair">
+						<td v-if="!read_only" class="fsw-select">
+							<input type="checkbox" data-row-select tabindex="-1" :checked="selection_for(group).isSelected(pair.key)" @change="selection_for(group).toggle(pair.key, $event.target.checked)">
+						</td>
+						<td><div :class="input_class(pair.key, 'from')" class="fsw-input"></div></td>
+						<td class="fsw-arrow">&rarr;</td>
+						<td><div :class="input_class(pair.key, 'to')" class="fsw-input"></div></td>
+					</tr>
+				</tbody>
+			</table>
+			<SelectionFooter :count="selection_for(group).selected.value.length" @delete="delete_selected_pairs(group)" />
 			<button v-if="!locked" class="btn btn-xs btn-default fsw-add-pair" @click="add_pair(gi)">
 				+ {{ __("Add mapping") }}
 			</button>
@@ -28,6 +45,7 @@
 
 <script setup>
 import { ref, computed, nextTick } from "vue";
+import { SelectionFooter, useRowSelection, vEntryTable } from "yrp/public/js/utils/entryGrid.js";
 
 const root = ref(null);
 const groups = ref([]);
@@ -39,6 +57,22 @@ let key_counter = 0;
 let add_pin_control = null;
 
 const has_wildcard = computed(() => groups.value.some((g) => g.pin === ""));
+const read_only = computed(() => locked.value || cur_frm.doc.docstatus > 0 || !cur_frm.has_perm("write"));
+const selections = new Map();
+
+function selection_for(group) {
+	if (!selections.has(group.key)) {
+		selections.set(group.key, useRowSelection(() => (read_only.value ? [] : group.pairs.map((pair) => pair.key))));
+	}
+	return selections.get(group.key);
+}
+
+function delete_selected_pairs(group) {
+	selection_for(group).removeSelected(
+		(key) => remove_pair(groups.value.indexOf(group), group.pairs.findIndex((pair) => pair.key === key)),
+		() => !read_only.value,
+	);
+}
 
 function load_data(data, change_cb) {
 	on_change = change_cb || null;
@@ -220,11 +254,18 @@ defineExpose({
 .fsw-card-title {
 	font-weight: 600;
 }
-.fsw-pair {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: 4px 0;
+.fsw-pairs {
+	border-collapse: separate;
+	border-spacing: 8px 4px;
+	margin: 0 -8px;
+}
+.fsw-pairs th {
+	font-weight: normal;
+	color: var(--text-muted);
+	font-size: var(--text-sm);
+}
+.fsw-select {
+	width: 20px;
 }
 .fsw-input {
 	width: 180px;

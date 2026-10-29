@@ -4,7 +4,7 @@
 		<template v-if="itemDetails">
 			<LotOrderItemsTab :order-items="boxOrderView(itemDetails)" />
 			<Button v-if="!composerOpen" label="Add row" icon="pi pi-plus" severity="secondary" outlined :disabled="disabled" @click="emit('update:composerOpen', true)" />
-			<section v-else class="lot-group lot-order-composer" aria-label="Add box quantity row">
+			<section v-else class="lot-group lot-order-composer" aria-label="Add box quantity row" @keydown.enter="addOnLastEnter">
 				<header class="lot-group__header"><strong>Add row</strong></header>
 				<div class="lot-section__body">
 					<div class="lot-composer-attributes">
@@ -50,5 +50,13 @@ function addRow() {
 		emit("update:composerOpen", false)
 		error.value = ""
 	} catch (reason) { error.value = reason.message }
+}
+/** Enter on the composer's last input adds the row, like clicking Add row. */
+function addOnLastEnter(event) {
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return
+	const inputs = event.currentTarget.querySelectorAll("input:not([type=hidden]):not(:disabled)")
+	if (event.target !== inputs[inputs.length - 1]) return
+	event.preventDefault()
+	addRow()
 }
 </script>

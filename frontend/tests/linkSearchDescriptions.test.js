@@ -111,6 +111,7 @@ test("LinkMultiSelectField searches the server and keeps chosen labels", async (
 	assert.equal(field().props["filter-match-mode"], "link-search-server")
 	assert.equal(registered["link-search-server"](), true)
 	field().props.onFilter({ value: "maze capri" })
+	await new Promise((done) => setTimeout(done, 0))
 	await tick(); await tick()
 	assert.deepEqual(searches[0], ["SD YRP Lot", "maze capri", {}, 20, true, { allowVariants: false }])
 	assert.deepEqual(field().props.options, [{ value: "F0325-65", label: "F0325-65", description: "Maze Capri Set R.N.S" }])

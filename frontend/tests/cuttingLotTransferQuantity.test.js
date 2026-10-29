@@ -3,6 +3,7 @@ import fs from "node:fs"
 import test from "node:test"
 import { computed, nextTick, reactive, ref, watch } from "vue"
 
+import { useRowSelection } from "../src/components/common/childGrid/rowSelection.js"
 import { hasQuantityChanges, quantityDraft, quantityErrors, quantityPayload } from "../src/departments/cutting/lotTransferQuantities.js"
 
 const read = (path) => fs.readFileSync(new URL(`../src/departments/${path}`, import.meta.url), "utf8")
@@ -42,24 +43,27 @@ test("quantity changes and deleted rows are detected and sent as name and qty on
 
 function editor(record, api = async () => record) {
 	const confirmations = [], emitted = [], calls = []
-	const state = new Function("ref", "computed", "watch", "defineProps", "defineEmits", "useActionConfirmation", "updateLotTransferQuantities", "hasQuantityChanges", "quantityDraft", "quantityErrors", "quantityPayload", `${script("cutting/LotTransferQuantityEditor.vue")}\nreturn { draft, dirty, hasErrors, requestDelete, save, error }`)(
+	const state = new Function("ref", "computed", "watch", "defineProps", "defineEmits", "useActionConfirmation", "updateLotTransferQuantities", "hasQuantityChanges", "quantityDraft", "quantityErrors", "quantityPayload", "useRowSelection", `${script("cutting/LotTransferQuantityEditor.vue")}\nreturn { draft, dirty, hasErrors, selection, requestDelete, save, error }`)(
 		ref, computed, watch, () => ({ cuttingPlan: "CP-1", record }), () => (...args) => emitted.push(args),
 		() => (options) => confirmations.push(options),
 		async (...args) => { calls.push(args); return api(...args) },
-		hasQuantityChanges, quantityDraft, quantityErrors, quantityPayload,
+		hasQuantityChanges, quantityDraft, quantityErrors, quantityPayload, useRowSelection,
 	)
 	return { ...state, confirmations, emitted, calls }
 }
 
 test("quantity editor deletes a row only after confirmation and blocks deleting the last row", async () => {
 	const state = editor({ name: "LT-1", modified: "2026-10-23 10:00:00", quantity_rows: rows })
-	state.requestDelete(state.draft.value[1])
+	state.selection.toggle("ROW-BLUE", true)
+	state.requestDelete()
 	assert.equal(state.draft.value.length, 2)
 	assert.equal(state.confirmations[0].acceptLabel, "Delete Row")
-	state.confirmations[0].accept()
+	await state.confirmations[0].accept()
 	assert.deepEqual(state.draft.value.map((row) => row.name), ["ROW-RED"])
 	assert.equal(state.dirty.value, true)
-	state.requestDelete(state.draft.value[0])
+	state.selection.toggle("ROW-RED", true)
+	assert.equal(state.selection.selected.value.length, 0)
+	state.requestDelete()
 	assert.equal(state.confirmations.length, 1)
 	assert.equal(state.draft.value.length, 1)
 })
@@ -81,9 +85,9 @@ test("quantity editor saves the edited draft with the loaded modified stamp", as
 
 test("created Lot Transfer is announced so the plan can open it without a page reload", async () => {
 	const emitted = []
-	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyElementAsImage", "window", "watch", "onBeforeUnmount", `${script("cutting/CuttingPlanActions.vue")}\nreturn { targetLot, saveLotTransfer, feedback }`)(
+	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyElementAsImage", "window", "watch", "onBeforeUnmount", "useRowSelection", `${script("cutting/CuttingPlanActions.vue")}\nreturn { targetLot, saveLotTransfer, feedback }`)(
 		ref, computed, reactive, () => ({ doc: { name: "CP-1", lot: "LOT-A" }, data: {} }), () => (...args) => emitted.push(args),
-		async () => "LT-9", () => {}, { setTimeout: () => 0, clearTimeout: () => {} }, watch, () => {},
+		async () => "LT-9", () => {}, { setTimeout: () => 0, clearTimeout: () => {} }, watch, () => {}, useRowSelection,
 	)
 	api.targetLot.value = "LOT-B"
 	await api.saveLotTransfer()

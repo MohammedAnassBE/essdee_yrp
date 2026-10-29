@@ -2,7 +2,7 @@
 	<section class="dependent-attribute-view" :aria-label="`${dependentAttribute} combination`">
 		<h3>{{ dependentAttribute }} combination</h3>
 		<div class="erp-table-wrap">
-			<table class="erp-data-table dependent-attribute-table">
+			<table v-entry-table class="erp-data-table dependent-attribute-table">
 				<thead>
 					<tr>
 						<th scope="col">{{ dependentAttribute }}</th>
@@ -42,6 +42,8 @@
 import Checkbox from "primevue/checkbox"
 import InputText from "primevue/inputtext"
 import Select from "primevue/select"
+
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	dependentAttribute: { type: String, required: true },

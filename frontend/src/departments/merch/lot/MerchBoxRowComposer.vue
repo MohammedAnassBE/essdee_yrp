@@ -50,7 +50,7 @@
 						tabindex="0"
 						aria-label="New box quantities"
 					>
-						<table class="erp-data-table lot-table">
+						<table v-entry-table class="erp-data-table lot-table">
 							<thead>
 								<tr>
 									<th>Details</th>
@@ -169,6 +169,7 @@ import { computed, ref, watch } from "vue"
 import { callMethod } from "../../../api/frappe.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import { addLotOrderRow, lotOrderEntry } from "../../purchase/lot/lotEditor.js"
 import { boxCellError, boxGridErrors } from "./merchLotViews.js"
 const props = defineProps({

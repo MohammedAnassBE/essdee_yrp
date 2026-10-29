@@ -1,6 +1,6 @@
 <template>
 	<div class="process-cost-grid">
-		<EntryGrid :rows="grid.rows" :columns="columns" :model-value="grid.model" :readonly="readonly" title="Process Cost Values" row-header-label="Attribute Value" :errors="errors" :toolbar="readonly ? [] : ['fillDown', 'paste', 'clear']" :removable-rows="!readonly && tiers.length > 1" @update:model-value="updateModel" @remove-row="removeRow" />
+		<EntryGrid :rows="grid.rows" :columns="columns" :model-value="grid.model" :readonly="readonly" title="Process Cost Values" row-header-label="Attribute Value" :errors="errors" :toolbar="readonly ? [] : ['fillDown', 'paste', 'clear']" :removable-rows="!readonly && tiers.length > 1" :add-row="readonly || (attribute && !tierValue) ? null : addTier" @update:model-value="updateModel" @remove-row="removeRow" />
 		<p v-if="message" class="process-cost-grid__error" role="alert">{{ message }}</p>
 		<ul v-if="cellMessages.length" class="process-cost-grid__error" aria-live="polite"><li v-for="text in cellMessages" :key="text">{{ text }}</li></ul>
 		<div v-if="!readonly" class="process-cost-grid__tiers">

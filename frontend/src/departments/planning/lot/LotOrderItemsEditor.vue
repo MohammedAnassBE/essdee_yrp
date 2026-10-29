@@ -11,7 +11,7 @@
 						<div v-for="attribute in itemDetails.final_state_attr" :key="attribute"><label :for="`lot-row-${attribute}`">{{ attribute }}</label><LinkField doctype="Item Attribute Value" v-model="entry.attributes[attribute]" :input-id="`lot-row-${attribute}`" :aria-label="attribute" :search-handler="attributeSearch(attribute)" :show-open-button="false" :disabled="disabled" /></div>
 					</div>
 					<div v-if="itemDetails.primary_attribute" class="erp-table-wrap lot-table-wrap" role="region" tabindex="0" aria-label="New box quantities">
-						<table class="erp-data-table lot-table"><thead><tr><th>Details</th><th v-for="size in itemDetails.primary_attribute_values" :key="size" class="erp-number">{{ size }} {{ itemDetails.default_uom }}</th></tr></thead>
+						<table v-entry-table class="erp-data-table lot-table"><thead><tr><th>Details</th><th v-for="size in itemDetails.primary_attribute_values" :key="size" class="erp-number">{{ size }} {{ itemDetails.default_uom }}</th></tr></thead>
 							<tbody><tr v-for="stage in stages" :key="stage.key"><td class="lot-stage-label"><span>{{ stage.label }}</span></td><td v-for="size in itemDetails.primary_attribute_values" :key="size" class="erp-number"><InputNumber v-model="entry.values[size][stage.key]" :aria-label="`${stage.label} ${size} ${itemDetails.default_uom}`" :max-fraction-digits="3" :disabled="disabled" fluid /></td></tr></tbody>
 						</table>
 					</div>
@@ -32,6 +32,7 @@ import { ref, watch } from "vue"
 import { callMethod } from "../../../api/frappe.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import LotEmptyState from "./LotEmptyState.vue"
 import LotOrderItemsTab from "./LotOrderItemsTab.vue"
 import { addLotOrderRow, boxOrderView, lotOrderEntry } from "./lotEditor.js"

@@ -16,7 +16,7 @@
 			<template v-else-if="mode === 'update_quantity_ratio'">
 				<label class="ppo-action-field"><span>Requested by *</span><Select v-model="form.requested_by" :options="requestedByOptions" fluid /></label>
 				<label class="ppo-action-field"><span>Reason *</span><Textarea v-model="form.reason" rows="2" fluid /></label>
-				<div class="ppo-action-matrix ppo-action-field--wide"><table><thead><tr><th>Size</th><th>Quantity</th><th>Ratio</th></tr></thead><tbody><tr v-for="row in editableRows" :key="row.size"><th>{{ row.size }}</th><td><InputNumber v-model="row.quantity" :min="0" :max-fraction-digits="0" :use-grouping="false" /></td><td><InputNumber v-model="row.ratio" :min="0" :max-fraction-digits="3" :use-grouping="false" /></td></tr></tbody></table></div>
+				<div class="ppo-action-matrix ppo-action-field--wide"><table v-entry-table="{ fixed: false }"><thead><tr><th>Size</th><th>Quantity</th><th>Ratio</th></tr></thead><tbody><tr v-for="row in editableRows" :key="row.size"><th>{{ row.size }}</th><td><InputNumber v-model="row.quantity" :min="0" :max-fraction-digits="0" :use-grouping="false" /></td><td><InputNumber v-model="row.ratio" :min="0" :max-fraction-digits="3" :use-grouping="false" /></td></tr></tbody></table></div>
 			</template>
 			<template v-else-if="mode === 'transfer_quantity'">
 				<LinkField v-model="form.target_production_order" label="Target Production Order *" doctype="YRP Production Order" :show-open-button="false" />
@@ -42,6 +42,7 @@ import Select from "primevue/select"
 import Textarea from "primevue/textarea"
 import { computed, reactive, ref, watch } from "vue"
 
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import { productionOrderChangeableStatuses, productionOrderLotFilters } from "./productionOrderOptions.js"

@@ -99,7 +99,7 @@
 				</header>
 
 				<div v-if="rows.length" ref="tableWrap" class="box-sticker-table-wrap" tabindex="0" role="region" aria-label="Box Sticker quantities">
-					<table>
+					<table v-entry-table="{ fixed: false }">
 						<thead>
 							<tr>
 								<th>Size</th>
@@ -271,6 +271,7 @@ import {
 } from "../../api/cutPanelStore.js"
 import { printQzRaw } from "../../api/qzPrinter.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import LinkField from "../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentActionStrip from "../../components/documents/DocumentActionStrip.vue"

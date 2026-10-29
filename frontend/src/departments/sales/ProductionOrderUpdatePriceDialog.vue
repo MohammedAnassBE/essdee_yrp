@@ -6,7 +6,7 @@
 			<template v-else-if="!loadError">
 				<section class="ppo-price-panel">
 					<div class="ppo-price-scroll" role="region" tabindex="0" aria-label="Production Order MRP by size">
-						<table class="ppo-price-table">
+						<table v-entry-table="{ fixed: false }" class="ppo-price-table">
 							<thead><tr><th scope="col">Size</th><th v-for="size in primaryValues" :key="size" scope="col">{{ size }}</th><th scope="col">Total</th><th scope="col">Select</th></tr></thead>
 							<tbody>
 								<tr v-for="row in matrixRows" :key="row.key">
@@ -38,7 +38,7 @@
 						</div>
 					</header>
 					<div class="ppo-price-scroll" role="region" tabindex="0" aria-label="Lot-wise MRP">
-						<table class="ppo-price-table">
+						<table v-entry-table="{ fixed: false }" class="ppo-price-table">
 							<thead><tr><th scope="col">Lot</th><th scope="col">Status</th><th scope="col">Price Source</th><th v-for="size in primaryValues" :key="size" scope="col">{{ size }}</th></tr></thead>
 							<tbody>
 								<tr v-for="(lot, lotIndex) in lots" :key="lot.lot">
@@ -81,6 +81,7 @@ import Skeleton from "primevue/skeleton"
 import { computed, ref, useId, watch } from "vue"
 
 import { getPriceUpdateContext } from "../../api/sales.js"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({ visible: Boolean, productionOrder: { type: String, required: true }, busy: Boolean, error: { type: String, default: "" } })
 const emit = defineEmits(["update:visible", "submit"])

@@ -5,7 +5,7 @@
 			<strong>{{ formatNumber(totalQuantity) }} boxes</strong>
 		</header>
 		<div class="ppo-matrix__table-wrap" tabindex="0" role="region" aria-label="Production Order size matrix">
-			<table class="ppo-matrix__main" :style="tableStyle">
+			<table v-entry-table="{ fixed: false }" class="ppo-matrix__main" :style="tableStyle">
 				<thead><tr><th>Size</th><th v-for="row in rows" :key="`size-${row.size}`">{{ row.size || "—" }}</th><th>Total</th></tr></thead>
 				<tbody>
 					<tr class="ppo-matrix__row--quantity">
@@ -59,6 +59,8 @@
 <script setup>
 import InputNumber from "primevue/inputnumber"
 import { computed } from "vue"
+
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	rows: { type: Array, default: () => [] },

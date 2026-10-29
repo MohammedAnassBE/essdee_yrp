@@ -1,7 +1,7 @@
 <template>
 	<section class="purchase-invoice-items erp-card" aria-label="Purchase Invoice items">
 		<div v-if="rows.length" class="purchase-invoice-items__table" role="region" tabindex="0">
-			<table>
+			<table v-entry-table="{ fixed: false }">
 				<thead>
 					<tr>
 						<th>Item</th>
@@ -50,6 +50,7 @@
 </template>
 
 <script setup>
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import InputNumber from "primevue/inputnumber"
 

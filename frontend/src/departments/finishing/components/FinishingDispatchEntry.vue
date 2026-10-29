@@ -10,7 +10,7 @@
 			</table>
 		</div>
 		<div class="finishing-scroll" role="region" tabindex="0" aria-label="Dispatch entry">
-			<table v-if="dynamic" class="finishing-table">
+			<table v-if="dynamic" v-entry-table="{ fixed: false }" class="finishing-table">
 				<thead><tr><th>GRN</th><th>Colour</th><th>Ratio</th><th class="erp-number">Received</th><th class="erp-number">Already Dispatched</th><th class="erp-number">Available</th><th class="erp-number">Dispatch Boxes</th><th class="erp-number">Dispatch Pieces</th></tr></thead>
 				<tbody>
 					<tr v-for="batch in batches" :key="batch.batch_row">
@@ -22,7 +22,7 @@
 					<tr class="finishing-table__total-row"><td colspan="6">Total</td><td class="erp-number">{{ formatQuantity(totalBoxes) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>
 				</tbody>
 			</table>
-			<table v-else-if="mode === 'Size Ratio Packing'" class="finishing-table">
+			<table v-else-if="mode === 'Size Ratio Packing'" v-entry-table="{ fixed: false }" class="finishing-table">
 				<thead><tr><th>Colour</th><th class="erp-number">Boxes</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
 					<tr v-if="showPacked" class="dispatch-entry__reference"><td>Packed</td><td></td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
@@ -36,7 +36,7 @@
 					<tr class="finishing-table__total-row"><td>Dispatch</td><td class="erp-number">{{ formatQuantity(totalBoxes) }}</td><td v-for="size in sizes" :key="size" class="erp-number" :class="{ 'dispatch-entry--over': over(size) }">{{ formatQuantity(bySize[size]) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>
 				</tbody>
 			</table>
-			<table v-else-if="mode === 'Size Wise Packing'" class="finishing-table">
+			<table v-else-if="mode === 'Size Wise Packing'" v-entry-table="{ fixed: false }" class="finishing-table">
 				<thead><tr><th>Colour \ Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
 					<tr v-if="showPacked" class="dispatch-entry__reference"><td>Packed</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
@@ -49,7 +49,7 @@
 					<tr class="finishing-table__total-row"><td>Dispatch</td><td v-for="size in sizes" :key="size" class="erp-number" :class="{ 'dispatch-entry--over': over(size) }">{{ formatQuantity(bySize[size]) }}</td><td class="erp-number">{{ formatQuantity(grandTotal) }}</td></tr>
 				</tbody>
 			</table>
-			<table v-else class="finishing-table">
+			<table v-else v-entry-table="{ fixed: false }" class="finishing-table">
 				<thead><tr><th>Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 				<tbody>
 					<tr v-if="showPacked" class="dispatch-entry__reference"><td>Packed</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(packedOf(size)) }}</td><td class="erp-number">{{ formatQuantity(packed.total_packed) }}</td></tr>
@@ -70,6 +70,7 @@ import { computed, reactive } from "vue"
 
 import { colourDetails, dispatchBySize, packingMode, packingRatio } from "../finishingEntries.js"
 import { formatQuantity } from "../finishingViews.js"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	label: { type: String, default: "Finishing Plan" },

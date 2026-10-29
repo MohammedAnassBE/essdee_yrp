@@ -49,7 +49,7 @@
 			<div v-for="row in availableRows" :key="`${row.source_fp}-${row.lot}-${row.warehouse}`" class="finishing-section">
 				<h4 class="old-lot__lot"><DocumentLink doctype="SD YRP Lot" :name="row.lot" :label="row.lot" /> <small><DocumentLink doctype="SD YRP Finishing Plan" :name="row.source_fp" :label="row.source_fp" /> · {{ row.warehouse_name }}</small></h4>
 				<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`Available loose pieces in ${row.lot}`">
-					<table class="finishing-table">
+					<table v-entry-table="{ fixed: false }" class="finishing-table">
 						<thead>
 							<tr>
 								<th class="finishing-table__index">#</th>
@@ -107,6 +107,7 @@
 
 <script setup>
 import DocumentLink from "../../../components/common/DocumentLink.vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"

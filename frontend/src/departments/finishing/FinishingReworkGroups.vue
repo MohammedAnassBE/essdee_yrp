@@ -18,7 +18,7 @@
 					<section v-for="group in groups" :key="group.key" class="finishing-section" :aria-label="group.key">
 						<h3 class="finishing-section__title">{{ group.key }}</h3>
 						<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`${group.key} rework rows`">
-							<table class="finishing-table report-table">
+							<table v-entry-table="{ fixed: false }" class="finishing-table report-table">
 								<thead>
 									<tr>
 										<th class="finishing-table__colour">Colour</th>
@@ -81,6 +81,7 @@ import { getReworkGroups, updateReworkPartial, updateReworkRejection } from "../
 import DepartmentPage from "../../components/DepartmentPage.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
 import ReportShell from "../../components/reports/ReportShell.vue"
 import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 import RelatedDocumentWorkspaceDialog from "../fabric-store/RelatedDocumentWorkspaceDialog.vue"

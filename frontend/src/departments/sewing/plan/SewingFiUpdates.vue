@@ -11,7 +11,7 @@
 			<p v-if="!groups.length" class="erp-empty-state">No pending FI dates to update.</p>
 			<article v-for="group in groups" :key="group.lot" class="sewing-fi-updates__lot erp-card" :data-fi-lot="group.lot">
 				<header><strong>{{ group.lot }}</strong><span>{{ group.item }}</span><small>{{ group.rows.length }} pending</small></header>
-				<table class="sewing-fi-updates__table">
+				<table v-entry-table="{ fixed: false }" class="sewing-fi-updates__table">
 					<thead><tr><th>#</th><th>Colour</th><th v-if="group.isSetItem">{{ group.setAttribute }}</th><th>FI Date</th></tr></thead>
 					<tbody>
 						<tr v-for="(row, index) in group.rows" :key="fiUpdateKey(row)" :data-fi-row="`${row.colour}|${row.part || ''}`">
@@ -39,6 +39,7 @@ import Skeleton from "primevue/skeleton"
 import { computed, onUnmounted, reactive, ref, watch } from "vue"
 import { getSewingFiUpdates, updateSewingFiDates } from "../../../api/sewing.js"
 import DateField from "../../../components/common/DateField.vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import { useSewingContext } from "../useSewingContext.js"

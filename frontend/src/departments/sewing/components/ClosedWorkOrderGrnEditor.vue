@@ -6,7 +6,7 @@
 		<p>Enter quantities in the returned Received Type buckets. Pending quantities share one Work Order balance.</p>
 		<section v-for="(group, groupIndex) in groups" :key="groupIndex" class="closed-grn-editor__group">
 			<div class="closed-grn-editor__scroll" tabindex="0" role="region" :aria-label="`${group.primary_attribute || 'Item'} receipt quantities`">
-				<table>
+				<table v-entry-table="{ fixed: false }">
 					<thead><tr><th>Item</th><th>Received Type</th><th v-for="attribute in group.attributes || []" :key="attribute">{{ attribute }}</th><th v-for="key in primaryValues(group)" :key="key">{{ key === 'default' ? 'Quantity' : key }}</th><th class="closed-grn-editor__total">Total</th><th>UOM</th></tr></thead>
 					<tbody><tr v-for="(row, index) in group.items || []" :key="index">
 						<td>{{ row.name }}</td><td>{{ row.dimensions?.received_type || 'Default' }}</td><td v-for="attribute in group.attributes || []" :key="attribute">{{ row.attributes?.[attribute] }}</td>
@@ -30,6 +30,7 @@
 <script setup>
 import { computed } from "vue"
 import FormField from "../../../components/common/FormField.vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import { closedGrnRowTotal, closedGrnTotals } from "../sewingQuantityTotals.js"
 
 const props = defineProps({ groups: { type: Array, required: true }, values: { type: Object, required: true }, namingField: { type: Object, required: true }, disabled: { type: Boolean, default: false } })

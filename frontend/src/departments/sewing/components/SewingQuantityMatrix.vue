@@ -1,7 +1,7 @@
 <template>
 	<div class="sewing-quantity-matrix">
 		<div class="sewing-quantity-matrix__scroll" role="region" :aria-label="`${label} quantity matrix`" tabindex="0">
-			<table>
+			<table v-entry-table="{ fixed: false }">
 				<caption v-if="showCaption">{{ label }} · Quantities by colour and size</caption>
 				<thead><tr><th scope="col">Colour</th><th v-if="partHeader" scope="col" class="sewing-quantity-matrix__part">{{ partHeader }}</th><th v-for="size in sizes" :key="size" scope="col">{{ size }}</th><th scope="col" class="sewing-quantity-matrix__total">Total</th></tr></thead>
 				<tbody>
@@ -35,6 +35,7 @@
 
 <script setup>
 import { computed, useId } from "vue"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import { sewingMatrixTotals } from "../sewingQuantityTotals.js"
 import { sewingPartLabel } from "../setItemParts.js"
 const props = defineProps({

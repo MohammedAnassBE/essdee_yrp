@@ -1,7 +1,7 @@
 <template>
 	<div class="sewing-consumption-table">
 		<div class="sewing-consumption-table__scroll" role="region" :aria-label="`${label} consumption mapping`" tabindex="0">
-			<table>
+			<table v-entry-table="{ fixed: false }">
 				<caption>{{ label }}<span v-if="uom"> · UOM {{ uom }}</span></caption>
 				<thead><tr><th v-for="column in columns" :key="column" scope="col">{{ column }}</th><th v-if="showBom" scope="col">BOM quantity</th><th scope="col">{{ editableField === 'quantity' ? 'Consumption quantity' : editableField }}</th></tr></thead>
 				<tbody><tr v-for="(row, index) in rows" :key="index">
@@ -15,6 +15,7 @@
 </template>
 
 <script setup>
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 defineProps({ label: { type: String, required: true }, uom: { type: String, default: "" }, columns: { type: Array, default: () => [] }, rows: { type: Array, default: () => [] }, editableField: { type: String, default: "quantity" }, showBom: Boolean, valuesInRow: Boolean, disabled: Boolean })
 const emit = defineEmits(["edit"])
 function display(value) { return value === null || value === undefined || value === "" ? "N/A" : typeof value === "object" ? JSON.stringify(value) : value }

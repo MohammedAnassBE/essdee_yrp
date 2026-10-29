@@ -1,6 +1,6 @@
 <template>
 	<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`${inputLabel} entry`">
-		<table class="finishing-table finishing-entry-matrix">
+		<table v-entry-table="{ fixed: false }" class="finishing-table finishing-entry-matrix">
 			<thead>
 				<tr>
 					<th class="finishing-table__index">S.No</th>
@@ -14,10 +14,7 @@
 			<tbody v-for="(colour, index) in colours" :key="colour">
 				<tr v-for="(reference, referenceIndex) in references" :key="reference.key">
 					<template v-if="referenceIndex === 0">
-						<td :rowspan="rowSpan" class="finishing-table__index">
-							<span>{{ index + 1 }}</span>
-							<input v-if="checkable" v-model="modelValue[colour].checked" type="checkbox" class="finishing-entry-matrix__check" :aria-label="`Include ${colourLabel(colour)}`" :disabled="disabled" />
-						</td>
+						<td :rowspan="rowSpan" class="finishing-table__index"><span>{{ index + 1 }}</span></td>
 						<td :rowspan="rowSpan" class="finishing-table__colour">{{ colourLabel(colour) }}</td>
 						<td v-if="payload.is_set_item" :rowspan="rowSpan">{{ rows[colour].part || "—" }}</td>
 					</template>
@@ -34,7 +31,10 @@
 						<td class="finishing-table__colour">{{ colourLabel(colour) }}</td>
 						<td v-if="payload.is_set_item">{{ rows[colour].part || "—" }}</td>
 					</template>
-					<td class="finishing-table__type"><strong>{{ inputLabel }}</strong></td>
+					<td class="finishing-table__type">
+						<input v-if="checkable && references.length" v-model="modelValue[colour].checked" type="checkbox" class="finishing-entry-matrix__check" :aria-label="`Include ${colourLabel(colour)}`" :disabled="disabled" />
+						<strong>{{ inputLabel }}</strong>
+					</td>
 					<td v-for="size in sizes" :key="size" class="finishing-entry-matrix__cell">
 						<span v-if="!(size in modelValue[colour].sizes)" class="finishing-entry-matrix__off" :aria-label="`${colourLabel(colour)} has no ${size}`">—</span>
 						<input
@@ -75,6 +75,7 @@
 <script setup>
 import { computed } from "vue"
 
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import { inputTotals, referenceTotals } from "../finishingEntryTotals.js"
 import { colourLabel, formatQuantity } from "../finishingViews.js"
 
@@ -112,6 +113,7 @@ function invalid(value) {
 
 <style scoped>
 .finishing-entry-matrix__check { width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--erp-accent); }
+.finishing-table__type .finishing-entry-matrix__check { margin: 0 6px 0 0; vertical-align: middle; }
 .finishing-entry-matrix .finishing-table__index { white-space: nowrap; }
 .finishing-entry-matrix .finishing-table__index span { display: block; }
 .finishing-entry-matrix__input-row > td { background: color-mix(in srgb, var(--erp-accent-soft) 45%, var(--erp-surface)); }

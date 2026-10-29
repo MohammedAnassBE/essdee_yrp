@@ -5,7 +5,7 @@
 			<span class="rework-entry__type">{{ receivedType }}</span>
 		</header>
 		<div class="finishing-scroll" role="region" tabindex="0" :aria-label="`${title} sizes`">
-			<table class="finishing-table report-table">
+			<table v-entry-table="{ fixed: false }" class="finishing-table report-table">
 				<thead>
 					<tr><th class="report-cell--text">Size</th><th v-for="item in items" :key="item.row_name" class="erp-number report-cell--num">{{ item[sizeField] }}</th><th class="erp-number report-cell--num">Total</th></tr>
 				</thead>
@@ -39,6 +39,7 @@ import { computed } from "vue"
 
 import { reworkTotals } from "../finishingEntryTotals.js"
 import { formatQuantity } from "../finishingViews.js"
+import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 
 const props = defineProps({
 	title: { type: String, required: true },

@@ -1,44 +1,46 @@
 <template>
 	<div class="finishing-scroll" role="region" tabindex="0" aria-label="Packed box entry">
-		<table v-if="mode === 'Size Ratio Packing'" v-entry-table="{ add: disabled ? null : () => addBatch(), fixed: false }" class="finishing-table finishing-packing-entry">
-			<thead>
-				<tr>
-					<th v-if="!disabled" class="packing-entry__select"><input type="checkbox" class="packing-entry__checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" :disabled="!removableKeys.length" aria-label="Select all ratios" @change="selection.toggleAll($event.target.checked)" /></th>
-					<th><span class="sr-only">Copy</span></th>
-					<th>Colour</th>
-					<th class="erp-number">Boxes</th>
-					<th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th>
-					<th class="erp-number">Pcs/Box (Required: {{ combo }})</th>
-					<th class="erp-number">Total Pcs</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="(batch, index) in state.batches" :key="batch.key">
-					<td v-if="!disabled" class="packing-entry__select"><input type="checkbox" class="packing-entry__checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(batch.key)" :disabled="!removableKeys.includes(batch.key)" :aria-label="`Select ratio ${index + 1}`" @change="selection.toggle(batch.key, $event.target.checked)" /></td>
-					<td><Button label="Copy" severity="secondary" text size="small" tabindex="-1" :aria-label="`Copy ratio ${index + 1}`" :disabled="disabled" @click="addBatch(batch)" /></td>
-					<td><Select v-model="batch.colour" :options="colours" placeholder="Select" :aria-label="`Ratio ${index + 1} colour`" :disabled="disabled" /></td>
-					<td><input v-model="batch.box_quantity" type="number" min="0" step="1" class="finishing-entry-input" :aria-label="`Ratio ${index + 1} boxes`" :disabled="disabled" /></td>
-					<td v-for="size in sizes" :key="size"><input v-model="batch.ratio[size]" type="number" min="0" step="1" class="finishing-entry-input" :aria-label="`Ratio ${index + 1} ${size}`" :disabled="disabled" /></td>
-					<td class="erp-number"><strong :class="batchPiecesPerBox(batch, sizes) === combo ? 'packing-entry--ok' : 'packing-entry--bad'">{{ batchPiecesPerBox(batch, sizes) }} / {{ combo }}</strong></td>
-					<td class="erp-number"><strong>{{ formatQuantity(Number(batch.box_quantity || 0) * batchPiecesPerBox(batch, sizes)) }}</strong></td>
-				</tr>
-			</tbody>
-			<tfoot>
-				<tr class="finishing-table__total-row">
-					<td :colspan="disabled ? 1 : 2"><Button label="Add Ratio" icon="pi pi-plus" size="small" :disabled="disabled" @click="addBatch()" /></td>
-					<td>Total</td>
-					<td class="erp-number">{{ formatQuantity(totalBoxes) }}</td>
-					<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(boxQuantities[size]) }}</td>
-					<td></td>
-					<td class="erp-number">{{ formatQuantity(total) }}</td>
-				</tr>
-			</tfoot>
-		</table>
-		<footer v-if="mode === 'Size Ratio Packing' && selection.selected.value.length" class="packing-entry__footer">
-			<span>{{ selection.selected.value.length }} selected</span>
-			<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="deleteSelected" />
-		</footer>
-		<table v-else-if="mode === 'Size Wise Packing'" class="finishing-table finishing-packing-entry">
+		<template v-if="mode === 'Size Ratio Packing'">
+			<table v-entry-table="{ add: disabled ? null : () => addBatch(), fixed: false }" class="finishing-table finishing-packing-entry">
+				<thead>
+					<tr>
+						<th v-if="!disabled" class="packing-entry__select"><input type="checkbox" class="packing-entry__checkbox" data-row-select :checked="selection.isAllSelected.value" :indeterminate="selection.isPartlySelected.value" :disabled="!removableKeys.length" aria-label="Select all ratios" @change="selection.toggleAll($event.target.checked)" /></th>
+						<th><span class="sr-only">Copy</span></th>
+						<th>Colour</th>
+						<th class="erp-number">Boxes</th>
+						<th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th>
+						<th class="erp-number">Pcs/Box (Required: {{ combo }})</th>
+						<th class="erp-number">Total Pcs</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="(batch, index) in state.batches" :key="batch.key">
+						<td v-if="!disabled" class="packing-entry__select"><input type="checkbox" class="packing-entry__checkbox" data-row-select tabindex="-1" :checked="selection.isSelected(batch.key)" :disabled="!removableKeys.includes(batch.key)" :aria-label="`Select ratio ${index + 1}`" @change="selection.toggle(batch.key, $event.target.checked)" /></td>
+						<td><Button label="Copy" severity="secondary" text size="small" tabindex="-1" :aria-label="`Copy ratio ${index + 1}`" :disabled="disabled" @click="addBatch(batch)" /></td>
+						<td><Select v-model="batch.colour" :options="colours" placeholder="Select" :aria-label="`Ratio ${index + 1} colour`" :disabled="disabled" /></td>
+						<td><input v-model="batch.box_quantity" type="number" min="0" step="1" class="finishing-entry-input" :aria-label="`Ratio ${index + 1} boxes`" :disabled="disabled" /></td>
+						<td v-for="size in sizes" :key="size"><input v-model="batch.ratio[size]" type="number" min="0" step="1" class="finishing-entry-input" :aria-label="`Ratio ${index + 1} ${size}`" :disabled="disabled" /></td>
+						<td class="erp-number"><strong :class="batchPiecesPerBox(batch, sizes) === combo ? 'packing-entry--ok' : 'packing-entry--bad'">{{ batchPiecesPerBox(batch, sizes) }} / {{ combo }}</strong></td>
+						<td class="erp-number"><strong>{{ formatQuantity(Number(batch.box_quantity || 0) * batchPiecesPerBox(batch, sizes)) }}</strong></td>
+					</tr>
+				</tbody>
+				<tfoot>
+					<tr class="finishing-table__total-row">
+						<td :colspan="disabled ? 1 : 2"><Button label="Add Ratio" icon="pi pi-plus" size="small" :disabled="disabled" @click="addBatch()" /></td>
+						<td>Total</td>
+						<td class="erp-number">{{ formatQuantity(totalBoxes) }}</td>
+						<td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(boxQuantities[size]) }}</td>
+						<td></td>
+						<td class="erp-number">{{ formatQuantity(total) }}</td>
+					</tr>
+				</tfoot>
+			</table>
+			<footer v-if="selection.selected.value.length" class="packing-entry__footer">
+				<span>{{ selection.selected.value.length }} selected</span>
+				<Button label="Delete" icon="pi pi-trash" severity="danger" size="small" @click="deleteSelected" />
+			</footer>
+		</template>
+		<table v-else-if="mode === 'Size Wise Packing'" v-entry-table="{ fixed: false }" class="finishing-table finishing-packing-entry">
 			<thead><tr><th>Colour \ Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 			<tbody>
 				<tr v-for="colour in colours" :key="colour">
@@ -49,7 +51,7 @@
 				<tr class="finishing-table__total-row"><td>Total</td><td v-for="size in sizes" :key="size" class="erp-number">{{ formatQuantity(boxQuantities[size]) }}</td><td class="erp-number">{{ formatQuantity(total) }}</td></tr>
 			</tbody>
 		</table>
-		<table v-else class="finishing-table finishing-packing-entry">
+		<table v-else v-entry-table="{ fixed: false }" class="finishing-table finishing-packing-entry">
 			<thead><tr><th>Size</th><th v-for="size in sizes" :key="size" class="erp-number">{{ size }}</th><th class="erp-number">Total</th></tr></thead>
 			<tbody>
 				<tr>

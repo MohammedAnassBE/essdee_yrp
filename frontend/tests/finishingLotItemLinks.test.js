@@ -26,7 +26,7 @@ test("entry dialog alternative item uses the shared item link search scoped to a
 })
 
 test("finishing lot and item filters go through the shared link search", () => {
-	const files = ["FinishingReworkGroups.vue", "FinishingReworkDetails.vue", "reports/FinishingRejectionReport.vue", "reports/FinishingReworkCompletion.vue", "reports/FinishingPlanReport.vue", "reports/FinishingIroningDpr.vue", "reports/FinishingPackingDpr.vue", "reports/FinishingDispatchReport.vue"]
+	const files = ["FinishingReworkDetails.vue", "reports/FinishingRejectionReport.vue", "reports/FinishingReworkCompletion.vue", "reports/FinishingPlanReport.vue", "reports/FinishingIroningDpr.vue", "reports/FinishingPackingDpr.vue", "reports/FinishingDispatchReport.vue"]
 	for (const file of files) {
 		const source = read(file)
 		assert.match(source, /(LinkField|AsyncLinkMultiSelect) v-model="filters\.(lot|lots)" doctype="SD YRP Lot"/, file)

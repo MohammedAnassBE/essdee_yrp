@@ -103,7 +103,6 @@ class TestFinishingWebWorkspace(TestCase):
 				"plans",
 				"reports",
 				"rework_details",
-				"rework_groups",
 				"dispatches",
 				"work_orders",
 				"delivery_challans",
@@ -192,11 +191,10 @@ class TestFinishingWebWorkspace(TestCase):
 		with self._permissions(denied={("SD YRP GRN Rework Item", "write")}):
 			sections = self._workspace().get_capabilities()["sections"]
 		self.assertTrue(sections["rework_details"]["can_read"])
-		self.assertFalse(sections["rework_groups"]["can_write"])
+		self.assertFalse(sections["rework_details"]["can_write"])
 		with self._permissions(denied={("SD YRP GRN Rework Item", "read")}):
 			sections = self._workspace().get_capabilities()["sections"]
 		self.assertNotIn("rework_details", sections)
-		self.assertNotIn("rework_groups", sections)
 
 	def test_dispatch_card_flags_follow_doctype_permissions(self):
 		with self._permissions(denied={("SD YRP Finishing Plan Dispatch", "submit")}):

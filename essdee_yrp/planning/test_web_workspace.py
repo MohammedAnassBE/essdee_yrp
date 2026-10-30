@@ -66,3 +66,27 @@ class TestPlanningStockTransfersSection(TestCase):
 			"stock_transfers": {"can_read": True, "label": "Stock Transfers", "operations": operations},
 		})
 		self.assertEqual(self.sections({}), {})
+
+
+class TestPlanningReworkAndPurchaseOrderSections(TestCase):
+	def sections(self, finishing_sections, store_sections):
+		empty = {"sections": {}}
+		with (
+			patch.object(web_workspace.sewing_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.finishing_workspace, "get_capabilities", return_value={"sections": finishing_sections}),
+			patch.object(web_workspace.sales_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.fabric_store_workspace, "get_capabilities", return_value={"sections": store_sections}),
+			patch.object(web_workspace.cutting_capabilities, "get_capabilities", return_value={}),
+			patch.object(web_workspace, "_reports_section", return_value={"can_read": False}),
+			patch.object(web_workspace.frappe, "has_permission", return_value=False),
+		):
+			return web_workspace.get_capabilities()["sections"]
+
+	def test_cards_follow_finishing_rework_and_store_purchase_order_read(self):
+		rework = {"label": "Rework Details", "can_read": True, "can_write": False}
+		purchase_orders = {"label": "Purchase Orders", "can_read": True, "can_create": False}
+		self.assertEqual(
+			self.sections({"rework_details": rework}, {"purchase_orders": purchase_orders}),
+			{"rework_details": rework, "purchase_orders": purchase_orders},
+		)
+		self.assertEqual(self.sections({}, {}), {})

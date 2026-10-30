@@ -1,4 +1,4 @@
-/** Client checks and payloads for the Rework Details and Rework Grouped Details actions. */
+/** Client checks and payloads for the Rework Details actions. */
 
 function outOfRange(value, pending) {
 	const number = Number(value || 0)

@@ -23,7 +23,6 @@ const workspaces = [
 	{ key: "plans", label: "Finishing Plan", description: "Inward, packing, dispatch, OCR and audit for each lot.", icon: "pi pi-box", to: "/finishing/plans" },
 	{ key: "reports", label: "Reports", description: "Packing, dispatch, ironing, rejection, rework and stock reports.", icon: "pi pi-chart-bar", to: "/finishing/reports" },
 	{ key: "rework_details", label: "Rework Details", description: "Clear rework pieces into Accepted or Rejected stock per GRN.", icon: "pi pi-replay", to: "/finishing/rework-details" },
-	{ key: "rework_groups", label: "Rework Grouped Details", description: "Rework rows grouped by item and lot with size-wise entry.", icon: "pi pi-objects-column", to: "/finishing/rework-groups" },
 	{ key: "dispatches", label: "Finishing Plan Dispatch", description: "Dispatch packed boxes from several Finishing Plans together.", icon: "pi pi-truck", to: "/finishing/dispatches" },
 	{ key: "work_orders", label: "Work Orders", description: "Work Orders: make DCs and receive GRNs.", icon: "pi pi-briefcase", to: "/finishing/work-orders" },
 	...documentWorkspaces("/finishing"),

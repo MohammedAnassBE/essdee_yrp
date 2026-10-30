@@ -59,6 +59,8 @@ MRP_ROLE_GRANTS = {
 		doctype: {"Production Planner": STORE_ENTRY}
 		for doctype in ("YRP Stock Entry", "YRP Stock Reconciliation", "SD YRP Lot Transfer")
 	},
+	# Planning's read-only Purchase Order section.
+	"Purchase Order": {"Production Planner": VIEW},
 	# Attribute values back link fields on every department's forms.
 	"YRP Item Attribute Value": {"All": ("read", "select")},
 }

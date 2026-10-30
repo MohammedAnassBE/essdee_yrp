@@ -51,7 +51,6 @@ export const downloadRejectionDetails = (filters) => downloadMethodFile(`${REPOR
 export const getReworkCompletion = (filters) => callMethod(`${REPORTS_METHOD}.get_rework_completion`, filters)
 export const getReworkDetails = (filters) => callMethod(`${REPORTS_METHOD}.get_rework_details`, filters)
 export const downloadReworkDetails = (filters) => downloadMethodFile(`${REPORTS_METHOD}.download_rework_details`, filters, "rework_details.xlsx")
-export const getReworkGroups = (filters) => callMethod(`${REPORTS_METHOD}.get_rework_groups`, filters)
 export const updateReworkRejection = (rows, completed, lot) => callMethod(`${REWORK_METHOD}.update_rejected_quantity`, { rejection_data: rows, completed, lot })
 export const updateReworkPartial = (rows, lot) => callMethod(`${REWORK_METHOD}.update_partial_quantity`, { data: rows, lot })
 

@@ -153,7 +153,6 @@ def get_capabilities() -> dict:
 	rework = _permission_flags(REWORK_DOCTYPE, ("read", "write"))
 	if rework["can_read"]:
 		sections["rework_details"] = _section("Rework Details", REWORK_DOCTYPE, rework)
-		sections["rework_groups"] = _section("Rework Grouped Details", REWORK_DOCTYPE, rework)
 	dispatches = _permission_flags(DISPATCH_DOCTYPE, ("read", "create", "write", "submit", "cancel"))
 	if dispatches["can_read"]:
 		sections["dispatches"] = _section("Finishing Plan Dispatch", DISPATCH_DOCTYPE, dispatches)

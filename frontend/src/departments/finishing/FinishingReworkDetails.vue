@@ -1,5 +1,5 @@
 <template>
-	<DepartmentPage title="Rework Details" back-to="/finishing" back-label="Finishing" :show-title="false" flat full-width inline-navigation>
+	<DepartmentPage title="Rework Details" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<div class="finishing-rework erp-workspace" data-finishing-page="rework-details">
 			<ReportShell :export-source="{ doctype: 'SD YRP Finishing Plan' }" title="Rework Details" :generated="generated" :loading="loading" :has-results="seriesRows.length > 0" copyable :before-copy="expandAllForCopy" keep-results-while-loading @generate="generate" @reset="reset">
 				<template #filters>
@@ -68,6 +68,11 @@ import { firstColourLabel } from "./reports/finishingReports.js"
 import { reworkRowsError } from "./reports/reworkRules.js"
 import { useReportRequest } from "./reports/useReportRequest.js"
 import "./finishing.css"
+
+defineProps({
+	backTo: { type: String, default: "/finishing" },
+	backLabel: { type: String, default: "Finishing" },
+})
 
 const toast = useToast()
 const confirmAction = useActionConfirmation()

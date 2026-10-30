@@ -62,6 +62,20 @@ export const PLANNING_WORKSPACES = [
 		to: "/planning/stock-transfers",
 	},
 	{
+		key: "rework_details",
+		label: "Rework Details",
+		description: "Rework pieces pending per GRN.",
+		icon: "pi pi-replay",
+		to: "/planning/rework-details",
+	},
+	{
+		key: "purchase_orders",
+		label: "Purchase Order",
+		description: "Purchase quantities, suppliers and delivery dates.",
+		icon: "pi pi-shopping-cart",
+		to: "/planning/purchase-orders",
+	},
+	{
 		key: "box_stickers",
 		label: "Box Sticker Print",
 		description: "Prepare, preview and print size-based box labels.",

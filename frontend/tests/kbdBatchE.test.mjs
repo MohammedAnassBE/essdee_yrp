@@ -12,7 +12,6 @@ const directiveTables = [
 	["finishing/components/FinishingPackingEntry.vue", 3],
 	["finishing/components/FinishingDispatchEntry.vue", 4],
 	["finishing/components/FinishingReworkEntry.vue", 1],
-	["finishing/FinishingReworkGroups.vue", 1],
 	["finishing/plan/FinishingOldLotTab.vue", 1],
 	["sewing/components/SewingQuantityMatrix.vue", 1],
 	["sewing/components/SewingConsumptionTable.vue", 1],

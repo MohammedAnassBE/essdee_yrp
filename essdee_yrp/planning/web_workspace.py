@@ -87,6 +87,8 @@ def get_capabilities() -> dict:
 		"delivery_challans": fabric_store_sections.get("delivery_challans") or {},
 		"goods_received_notes": fabric_store_sections.get("goods_received_notes") or {},
 		"dispatches": finishing_sections.get("dispatches") or {},
+		"rework_details": finishing_sections.get("rework_details") or {},
+		"purchase_orders": fabric_store_sections.get("purchase_orders") or {},
 		"stock_transfers": {"can_read": True, **fabric_store_sections["stock_transfers"]}
 		if "stock_transfers" in fabric_store_sections else {},
 		"box_stickers": _with_label(

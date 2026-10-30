@@ -41,7 +41,6 @@ const FinishingPlans = () => import("../departments/finishing/FinishingPlans.vue
 const FinishingPlan = () => import("../departments/finishing/FinishingPlan.vue")
 const FinishingReports = () => import("../departments/finishing/FinishingReports.vue")
 const FinishingReworkDetails = () => import("../departments/finishing/FinishingReworkDetails.vue")
-const FinishingReworkGroups = () => import("../departments/finishing/FinishingReworkGroups.vue")
 const FinishingDispatches = () => import("../departments/finishing/FinishingDispatches.vue")
 const FinishingDispatch = () => import("../departments/finishing/FinishingDispatch.vue")
 const SalesSection = () => import("../departments/sales/SalesSection.vue")
@@ -262,7 +261,6 @@ const routes = [
 	{ path: "/finishing/plans/:finishingPlanId", name: "finishing-plan", component: FinishingPlan },
 	{ path: "/finishing/reports", name: "finishing-reports", component: FinishingReports },
 	{ path: "/finishing/rework-details", name: "finishing-rework-details", component: FinishingReworkDetails },
-	{ path: "/finishing/rework-groups", name: "finishing-rework-groups", component: FinishingReworkGroups },
 	{ path: "/finishing/dispatches", name: "finishing-dispatches", component: FinishingDispatches },
 	{ path: "/finishing/dispatches/new", name: "finishing-dispatch-new", component: FinishingDispatch },
 	{ path: "/finishing/dispatches/:dispatchId", name: "finishing-dispatch", component: FinishingDispatch },
@@ -809,6 +807,18 @@ const routes = [
 	{
 		path: "/planning/stock-transfers", name: PLANNING_ROUTES.stockTransfers, component: FabricStoreSection,
 		props: { section: "stock_transfers", storeName: "Planning", basePath: "/planning" },
+	},
+	{
+		path: "/planning/rework-details", name: PLANNING_ROUTES.reworkDetails, component: FinishingReworkDetails,
+		props: { backTo: "/planning", backLabel: "Planning" },
+	},
+	{
+		path: "/planning/purchase-orders", name: PLANNING_ROUTES.purchaseOrders, component: FabricStoreSection,
+		props: { section: "purchase_orders", storeName: "Planning", basePath: "/planning", purchaseOrderViewRouteName: PLANNING_ROUTES.purchaseOrder },
+	},
+	{
+		path: "/planning/purchase-orders/:purchaseOrderId", name: PLANNING_ROUTES.purchaseOrder, component: FabricPurchaseOrder,
+		props: { backTo: "/planning/purchase-orders", backLabel: "Purchase Orders", viewRouteName: PLANNING_ROUTES.purchaseOrder },
 	},
 	{
 		path: "/planning/box-sticker-prints", name: PLANNING_ROUTES.boxStickers, component: CutPanelStoreSection,

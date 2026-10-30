@@ -61,6 +61,11 @@ class TestMrpRolePermissions(IntegrationTestCase):
 				self.assertTrue(all(permissions[ptype] for ptype in ("read", "write", "create", "submit")))
 				self.assertFalse(permissions["cancel"] or permissions["delete"])
 
+	def test_production_planner_only_views_purchase_orders(self):
+		permissions = self.role_permissions("Purchase Order", "Production Planner")
+		self.assertTrue(permissions["read"])
+		self.assertFalse(any(permissions[ptype] for ptype in ("write", "create", "submit", "cancel", "delete")))
+
 	def test_merch_roles_run_stock_balance(self):
 		for report, roles in MRP_REPORT_ROLES.items():
 			custom_role = frappe.get_doc("Custom Role", {"report": report})

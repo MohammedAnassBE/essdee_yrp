@@ -13,7 +13,6 @@ const FILES = [
 	"reports/FinishingReworkCompletion.vue",
 	"components/FinishingSeriesTable.vue",
 	"components/FinishingReworkEntry.vue",
-	"FinishingReworkGroups.vue",
 ]
 const read = (file) => fs.readFileSync(path.join(finishing, file), "utf8")
 

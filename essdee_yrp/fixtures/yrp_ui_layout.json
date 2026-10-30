@@ -168,14 +168,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"plans\",\n   \"reports\",\n   \"rework_details\",\n   \"rework_groups\",\n   \"dispatches\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\"\n  ]\n }\n}",
-  "description": "/web Finishing department workspace only: plans, reports, rework_details, rework_groups, dispatches, work_orders, delivery_challans, goods_received_notes.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"plans\",\n   \"reports\",\n   \"rework_details\",\n   \"dispatches\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\"\n  ]\n }\n}",
+  "description": "/web Finishing department workspace only: plans, reports, rework_details, dispatches, work_orders, delivery_challans, goods_received_notes.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "finishing",
   "layout_name": "Finishing",
-  "modified": "2026-10-22 13:32:41.732266",
+  "modified": "2026-10-30 12:00:00.000000",
   "name": "Finishing",
   "render_mode": "Registered Experience"
  },
@@ -204,14 +204,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"cutting_plans\",\n   \"sewing_plans\",\n   \"finishing_plans\",\n   \"lots\",\n   \"production_orders\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"dispatches\",\n   \"stock_transfers\",\n   \"box_stickers\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Planning department workspace only: cutting_plans, sewing_plans, finishing_plans, lots, production_orders, work_orders, delivery_challans, goods_received_notes, dispatches, stock_transfers, box_stickers, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"cutting_plans\",\n   \"sewing_plans\",\n   \"finishing_plans\",\n   \"lots\",\n   \"production_orders\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"dispatches\",\n   \"stock_transfers\",\n   \"rework_details\",\n   \"purchase_orders\",\n   \"box_stickers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Planning department workspace only: cutting_plans, sewing_plans, finishing_plans, lots, production_orders, work_orders, delivery_challans, goods_received_notes, dispatches, stock_transfers, rework_details, purchase_orders, box_stickers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "planning",
   "layout_name": "Production Planner",
-  "modified": "2026-10-29 12:00:00.000000",
+  "modified": "2026-10-30 12:00:00.000000",
   "name": "Production Planner",
   "render_mode": "Registered Experience"
  },

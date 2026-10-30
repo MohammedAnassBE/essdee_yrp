@@ -54,6 +54,11 @@ MRP_ROLE_GRANTS = {
 			"Item",
 		)
 	},
+	# Planning's Stock Transfers section.
+	**{
+		doctype: {"Production Planner": STORE_ENTRY}
+		for doctype in ("YRP Stock Entry", "YRP Stock Reconciliation", "SD YRP Lot Transfer")
+	},
 	# Attribute values back link fields on every department's forms.
 	"YRP Item Attribute Value": {"All": ("read", "select")},
 }

@@ -72,7 +72,7 @@
 							<div class="goods-received-note-tab-matrices">
 								<section v-for="block in matrixBlocks" :key="`readonly-${block.key}`" class="goods-received-note-tab-matrix">
 									<header><div><span>{{ block.kind === 'items' ? 'Receivables' : 'Corrections' }}</span><h2>{{ block.title }}</h2></div><strong>{{ logicalRowCount(block.groups) }} rows</strong></header>
-									<StockItemMatrix :dimensions="workspace.dimensions || []" :groups="block.groups" doctype="YRP Goods Received Note" group-by-item show-lot-column show-availability show-pricing show-amount :currency="workspace.record?.currency || ''" />
+									<StockItemMatrix :dimensions="workspace.dimensions || []" :groups="block.groups" doctype="YRP Goods Received Note" group-by-item pinned-header show-lot-column show-availability show-pricing show-amount :currency="workspace.record?.currency || ''" />
 								</section>
 								<div v-if="!matrixBlocks.length" class="goods-received-note-matrix__empty"><i class="pi pi-inbox" /><span>No Goods Received Note item rows are available.</span></div>
 							</div>
@@ -118,7 +118,7 @@
 					<div class="goods-received-note-matrix__stack">
 						<article v-for="section in itemSections(block.groups)" :key="section.key" class="goods-received-note-matrix__group">
 							<header><div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong><small v-if="section.lot && !canEditLots"><DocumentLink doctype="SD YRP Lot" :name="section.lot" :label="section.lot" /></small></div></header>
-							<div class="erp-table-wrap goods-received-note-matrix__scroll" tabindex="0" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
+							<div v-synced-horizontal-scroll class="erp-table-wrap erp-pinned-table goods-received-note-matrix__scroll" role="region" :aria-label="`Receipt quantities for ${section.name || 'item'}`">
 								<table v-entry-table class="erp-data-table">
 									<thead><tr>
 										<th v-if="hasSubRowSelect && block.kind === 'items'" class="grn-row-select"><input type="checkbox" class="grn-row-select__box" data-row-select :checked="isSectionAllSelected(section)" :indeterminate="isSectionPartlySelected(section)" :disabled="!sectionSelectableRows(section).length" aria-label="Select all removable rows" @change="toggleSection(section, $event.target.checked)" /></th>
@@ -192,6 +192,7 @@
 										</tr>
 									</tfoot>
 								</table>
+								<div class="erp-pinned-table__scrollbar" data-horizontal-scrollbar aria-hidden="true" hidden><div /></div>
 							</div>
 							<footer v-if="hasSubRowSelect && block.kind === 'items' && sectionSelectedRows(section).length" class="grn-row-select__footer">
 								<span>{{ sectionSelectedRows(section).length }} selected</span>
@@ -313,6 +314,7 @@ import { canEditLotForEntry, itemsNeedLotEditor, lotChoicesForEntry, lotNamesInO
 import GrnCalculatePanel from "./GrnCalculatePanel.vue"
 import InspectionEntryPanel from "./InspectionEntryPanel.vue"
 import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
+import { vSyncedHorizontalScroll } from "../../components/common/childGrid/syncedHorizontalScroll.js"
 import { removalOrder, useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 
 const props = defineProps({
@@ -1098,7 +1100,7 @@ function documentDeleted() {
 .goods-received-note-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, var(--erp-surface)); }
 .goods-received-note-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .goods-received-note-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.goods-received-note-matrix { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: none; }
+.goods-received-note-matrix { overflow: clip; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: none; }
 .goods-received-note-matrix__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .goods-received-note-matrix__header > div { display: grid; gap: 2px; }
 .goods-received-note-matrix__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
@@ -1108,7 +1110,7 @@ function documentDeleted() {
 .grn-row-select__box { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
 .grn-row-select__box:disabled { cursor: not-allowed; opacity: .45; }
 .grn-row-select__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--erp-border); color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
-.goods-received-note-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
+.goods-received-note-matrix__group { overflow: clip; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
 .goods-received-note-matrix__group > header { display: flex; min-height: 40px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .goods-received-note-matrix__group > header div { display: grid; gap: 2px; }
 .goods-received-note-matrix__group > header strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
@@ -1117,7 +1119,6 @@ function documentDeleted() {
 .goods-received-note-matrix__available-heading, .goods-received-note-matrix__available { background: var(--erp-attention-soft); }
 .goods-received-note-matrix__quantity-heading, .goods-received-note-matrix__quantity { background: var(--erp-accent-soft); }
 .goods-received-note-matrix__available { min-width: 82px; color: var(--erp-attention-text); font-weight: 750; }
-.goods-received-note-matrix__scroll { max-height: max(320px, calc(100dvh - 240px)); }
 .goods-received-note-matrix__quantity { min-width: 74px; }
 .goods-received-note-matrix__secondary { min-width: 106px; }
 .goods-received-note-matrix__scroll td.goods-received-note-matrix__primary-cell { padding-inline: 5px; }

@@ -18,10 +18,10 @@ test("GRN and Delivery Challan hide the totals rail while the draft is editable"
 	}
 })
 
-test("GRN and Delivery Challan quantity grids stay compact and keep their own horizontal scrollbar in view", () => {
+test("GRN and Delivery Challan quantity grids stay compact without an inner vertical scroller", () => {
 	for (const [page, prefix] of [["GoodsReceivedNoteWorkspace.vue", "goods-received-note"], ["DeliveryChallanWorkspace.vue", "delivery-challan"]]) {
 		const workspace = source(`departments/fabric-store/${page}`)
-		assert.match(workspace, new RegExp(`\\.${prefix}-matrix__scroll \\{ max-height: max\\(320px, calc\\(100dvh - 240px\\)\\); \\}`), page)
+		assert.doesNotMatch(workspace, new RegExp(`\\.${prefix}-matrix__scroll \\{[^}]*max-height`), page)
 		assert.match(workspace, new RegExp(`\\.${prefix}-matrix :deep\\(\\.p-inputnumber\\) \\{ min-width: 64px; \\}`), page)
 		assert.match(workspace, new RegExp(`\\.${prefix}-matrix__secondary-inline \\{ display: grid; grid-template-columns: minmax\\(0, 1fr\\);`), page)
 		assert.match(workspace, new RegExp(`<td class="${prefix}-matrix__comments"><InputText`), page)

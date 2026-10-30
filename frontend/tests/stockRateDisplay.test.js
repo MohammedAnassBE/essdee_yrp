@@ -93,9 +93,9 @@ for (const layout of ["grid", "single"]) {
 	test(`case 5: unrelated rates hidden and Purchase Order pricing unchanged (${layout})`, () => {
 		assert.deepEqual(priceTexts(mountComponent(Matrix, { doctype: "YRP Work Order", groups: [groupFor(layout)] })), [])
 		assert.deepEqual(priceTexts(mountComponent(Matrix, { doctype: "Purchase Order", groups: [groupFor(layout)] })), [])
-		const expected = layout === "grid" ? ["Rate INR 1,234.57", "Amount INR 2,469.13", "Rate INR 0", "Amount INR 0", "Amount INR 2,469.13"] : ["Rate INR 1,234.57", "Amount INR 2,469.13"]
+		const expected = layout === "grid" ? ["Rate INR 1,234.57", "Tax —", "Amount INR 2,469.13", "Rate INR 0", "Tax —", "Amount INR 0", "Amount INR 2,469.13"] : ["Rate INR 1,234.57", "Tax —", "Amount INR 2,469.13"]
 		assert.deepEqual(priceTexts(mountComponent(Matrix, { doctype: "Purchase Order", groups: [groupFor(layout)], showPricing: true, currency: "INR" })), expected)
-		assert.ok(priceTexts(mountComponent(Matrix, { doctype: "Purchase Order", groups: [groupFor(layout)], showPricing: true, showAmount: false })).every(text => text.startsWith("Rate ")))
+		assert.ok(priceTexts(mountComponent(Matrix, { doctype: "Purchase Order", groups: [groupFor(layout)], showPricing: true, showAmount: false })).every(text => text.startsWith("Rate ") || text.startsWith("Tax ")))
 		const { root } = mountComposer("purchase_order", layout, { modelValue: [groupFor(layout)], currency: "INR" })
 		assert.deepEqual(priceTexts(root), layout === "grid" ? expected : [...expected, "Amount INR 2,469.13"])
 	})

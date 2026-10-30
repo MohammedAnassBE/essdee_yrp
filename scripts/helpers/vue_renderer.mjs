@@ -31,6 +31,7 @@ const sharedModules = {
 	"rowSelection.js": await import("../../frontend/src/components/common/childGrid/rowSelection.js"),
 	// Child grid keyboard and column settings touch the DOM and Frappe user settings; tables render default columns.
 	"entryTable.js": { vEntryTable: {} },
+	"syncedHorizontalScroll.js": { vSyncedHorizontalScroll: {} },
 	"useGridColumns.js": {
 		useGridColumns: (columns) => ({
 			visibleColumns: Vue.computed(() => resolveGridColumns(Vue.toValue(columns) || [], null)),

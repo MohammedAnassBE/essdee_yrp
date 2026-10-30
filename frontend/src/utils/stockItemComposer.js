@@ -9,6 +9,11 @@ export const stockRateLabels = {
 	"SD YRP Lot Transfer": "Rate",
 }
 
+/** Purchase Order tax is a YRP Tax Slab named by its percentage; blank means untaxed. */
+export function formatTaxPercent(tax) {
+	return tax === null || tax === undefined || tax === "" ? "—" : `${tax}%`
+}
+
 // production_api offers Secondary Qty on these item editors, only for Items with a Secondary UOM.
 const SECONDARY_QUANTITY_OPERATIONS = new Set(["stock_entry", "stock_update", "purchase_order"])
 

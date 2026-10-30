@@ -1,5 +1,5 @@
 <template>
-	<section class="item-matrix" :class="{ 'item-matrix--grouped-by-item': groupByItem }">
+	<section class="item-matrix" :class="{ 'item-matrix--grouped-by-item': groupByItem, 'item-matrix--pinned-header': pinnedHeader }">
 		<header class="item-matrix__header">
 			<div>
 				<span class="item-matrix__eyebrow">Item breakdown</span>
@@ -23,7 +23,7 @@
 					<span>{{ group.items?.length || 0 }} {{ group.items?.length === 1 ? "row" : "rows" }}</span>
 				</header>
 
-				<div class="item-matrix__scroll" tabindex="0" role="region" :aria-label="`${groupByItem ? group.itemIdentity || 'Item' : 'Item'} quantity matrix`">
+				<div v-synced-horizontal-scroll class="item-matrix__scroll" :class="{ 'erp-pinned-table': pinnedHeader }" :tabindex="pinnedHeader ? undefined : 0" role="region" :aria-label="`${groupByItem ? group.itemIdentity || 'Item' : 'Item'} quantity matrix`">
 					<table>
 						<thead>
 							<tr>
@@ -51,6 +51,7 @@
 									<small v-if="showAvailability && hasAvailability(row.values?.[value])" class="item-matrix__available">Available {{ formatQty(availabilityQty(row.values[value])) }}</small>
 									<small v-if="showFulfillment && !pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 									<small v-if="rateLabel" class="item-matrix__price">{{ rateLabel }} {{ formatMoney(row.values?.[value]?.rate) }}</small>
+									<small v-if="isPurchaseOrder && showPricing" class="item-matrix__price">Tax {{ formatTaxPercent(row.values?.[value]?.tax) }}</small>
 									<small v-if="displayAmount" class="item-matrix__price">Amount {{ formatMoney(cellAmount(row.values?.[value])) }}</small>
 									<small v-if="showFulfillment && pricingBeforeFulfillment && hasFulfillment(row.values?.[value])" class="item-matrix__pending">{{ fulfillmentLabel(row.values[value]) }}</small>
 								</td>
@@ -79,6 +80,7 @@
 							</tr>
 						</tfoot>
 					</table>
+					<div v-if="pinnedHeader" class="erp-pinned-table__scrollbar" data-horizontal-scrollbar aria-hidden="true" hidden><div /></div>
 				</div>
 			</article>
 		</div>
@@ -89,8 +91,9 @@
 import { groupItemsForDisplay } from "../../engine/stock/groupItemsForDisplay.js"
 import { computed } from "vue"
 import DocumentLink from "../common/DocumentLink.vue"
+import { vSyncedHorizontalScroll } from "../common/childGrid/syncedHorizontalScroll.js"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
-import { stockRateLabels } from "../../utils/stockItemComposer.js"
+import { formatTaxPercent, stockRateLabels } from "../../utils/stockItemComposer.js"
 import { cellAmount, getUomTotals, rowAmount } from "../../engine/stock/stockItemTotals.js"
 import { formatDisplayDate } from "../../utils/dateFormat.js"
 
@@ -108,6 +111,7 @@ const props = defineProps({
 	showAmount: { type: Boolean, default: true },
 	pricingBeforeFulfillment: { type: Boolean, default: false },
 	currency: { type: String, default: "" },
+	pinnedHeader: { type: Boolean, default: false },
 })
 
 const logicalRowCount = computed(() => props.groups.reduce((total, group) => total + (group.items?.length || 0), 0))
@@ -343,6 +347,21 @@ function groupKey(group, index) { return group.itemGroupKey || `${group.primary_
 	max-height: none;
 	overflow-x: auto;
 	overflow-y: visible;
+}
+
+.item-matrix--pinned-header,
+.item-matrix--pinned-header .item-matrix__group,
+.item-matrix--pinned-header .item-matrix__scroll {
+	min-width: 0;
+	overflow: clip;
+}
+
+.item-matrix--pinned-header .item-matrix__footer :is(th, td) {
+	position: static;
+}
+
+.item-matrix--pinned-header thead th {
+	height: auto;
 }
 
 .item-matrix table {

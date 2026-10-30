@@ -111,7 +111,7 @@
 	gap: var(--erp-space-3);
 }
 .lot-section {
-	overflow: hidden;
+	overflow: clip;
 	min-width: 0;
 	background: var(--erp-surface);
 }
@@ -470,12 +470,16 @@
 	grid-template-columns: minmax(0, 1fr);
 }
 
+.lot-document-dialog.p-dialog .p-dialog-content {
+	padding-top: 0;
+}
+
 .lot-document-dialog__content {
 	display: grid;
 	min-height: 180px;
 	overflow-y: visible;
 	gap: 10px;
-	padding: 2px;
+	padding: 6px 2px 2px;
 }
 
 .lot-document-dialog__loading {

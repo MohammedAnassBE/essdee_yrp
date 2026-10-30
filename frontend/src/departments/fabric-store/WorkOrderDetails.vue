@@ -56,7 +56,7 @@ function formatValue(field) {
 .work-order-field span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .work-order-field strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
 .work-order-field--wide strong { min-width: 0; overflow: visible; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: pre-line; }
-.work-order-section { overflow: hidden; border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface)); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
+.work-order-section { overflow: clip; border-color: color-mix(in srgb, var(--erp-border) 84%, var(--erp-surface)); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
 .work-order-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-bottom: 1px solid var(--erp-border); border-left: 3px solid color-mix(in srgb, var(--erp-accent) 68%, var(--erp-surface)); background: color-mix(in srgb, var(--erp-surface-soft) 78%, var(--erp-surface)); }
 .work-order-section > header div { display: grid; gap: 2px; }
 .work-order-section > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; text-transform: uppercase; }

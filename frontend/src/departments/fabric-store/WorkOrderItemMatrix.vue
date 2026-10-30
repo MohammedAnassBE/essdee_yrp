@@ -11,7 +11,7 @@
 				</div>
 				<span>{{ section.items.length }} {{ section.items.length === 1 ? "combination" : "combinations" }}</span>
 			</header>
-			<div class="erp-table-wrap work-order-item-matrix__scroll" role="region" tabindex="0" :aria-label="`${section.name || 'Work Order item'} quantities`">
+			<div v-synced-horizontal-scroll class="erp-table-wrap erp-pinned-table work-order-item-matrix__scroll" role="region" :aria-label="`${section.name || 'Work Order item'} quantities`">
 				<table class="erp-data-table work-order-item-matrix__table">
 					<thead>
 						<tr v-if="mode === 'items' && !hasPrimaryBreakdown(section.group)">
@@ -90,6 +90,7 @@
 						</tr>
 					</tfoot>
 				</table>
+				<div class="erp-pinned-table__scrollbar" data-horizontal-scrollbar aria-hidden="true" hidden><div /></div>
 			</div>
 		</section>
 	</div>
@@ -101,6 +102,7 @@
 <script setup>
 import { computed } from "vue"
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import { vSyncedHorizontalScroll } from "../../components/common/childGrid/syncedHorizontalScroll.js"
 import { sumStageRows } from "./workOrderTotals.js"
 
 const props = defineProps({
@@ -237,7 +239,7 @@ function money(value) {
 
 <style scoped>
 .work-order-matrix-stack { display: grid; min-width: 0; gap: var(--erp-space-3); }
-.work-order-item-matrix { overflow: hidden; min-width: 0; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 3px 10px rgb(28 61 45 / 3%); }
+.work-order-item-matrix { overflow: clip; min-width: 0; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); box-shadow: 0 3px 10px rgb(28 61 45 / 3%); }
 .work-order-item-group__header { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; background: color-mix(in srgb, var(--erp-surface-soft) 76%, var(--erp-surface)); border-bottom: 1px solid var(--erp-border); }
 .work-order-item-group__header > div { display: grid; min-width: 0; gap: 2px; }
 .work-order-item-group__header strong,
@@ -245,7 +247,6 @@ function money(value) {
 .work-order-item-group__header strong { color: var(--erp-text); font-size: var(--erp-font-size-caption); }
 .work-order-item-group__header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; }
 .work-order-item-group__header > span { flex: 0 0 auto; padding: 3px 7px; background: var(--erp-surface); border: 1px solid var(--erp-border); border-radius: var(--erp-pill-radius); }
-.work-order-item-matrix__scroll { max-height: none; overflow-x: auto; overflow-y: visible; }
 .work-order-item-matrix__table { min-width: 620px; }
 .work-order-item-matrix__table th,
 .work-order-item-matrix__table td { white-space: nowrap; }

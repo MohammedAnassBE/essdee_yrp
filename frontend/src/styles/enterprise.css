@@ -679,6 +679,41 @@
 	scrollbar-gutter: stable;
 }
 
+.erp-pinned-table {
+	--erp-pinned-head-height: 56px;
+	overflow: clip;
+	scrollbar-gutter: auto;
+}
+
+.erp-pinned-table thead th {
+	z-index: calc(var(--erp-layer-content) + 1);
+	height: var(--erp-pinned-head-height);
+	box-shadow: inset 0 -1px 0 var(--erp-border);
+}
+
+.erp-pinned-table tbody :is(input, button, [tabindex]) {
+	scroll-margin-top: calc(var(--erp-pinned-head-height) + 8px);
+}
+
+.erp-pinned-table__scrollbar {
+	position: sticky;
+	z-index: calc(var(--erp-layer-content) + 1);
+	bottom: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	background: var(--erp-surface);
+}
+
+.erp-pinned-table__scrollbar > div {
+	height: 1px;
+}
+
+@media (max-width: 900px) {
+	.fabric-document-workspace--page .erp-pinned-table thead th {
+		top: var(--erp-shell-header-height);
+	}
+}
+
 .erp-data-table {
 	width: 100%;
 	border-collapse: collapse;

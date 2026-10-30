@@ -375,8 +375,8 @@ watch(() => [route.params.workOrderId, props.quality], () => loadWorkspace(false
 .work-order-page__lot { flex: 0 0 auto; color: var(--erp-accent-hover); font-variant-numeric: tabular-nums; }
 .work-order-page__title-separator { flex: 0 0 auto; color: var(--erp-text-muted); font-weight: 500; }
 .work-order-page__total span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
-.work-order-tabs { min-width: 0; overflow: hidden; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
-.work-order-tablist { position: sticky; z-index: var(--erp-layer-sticky); top: 0; background: var(--erp-surface); }
+.work-order-tabs { min-width: 0; overflow: clip; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: 0 7px 20px rgb(28 61 45 / 4%); }
+.work-order-tablist { background: var(--erp-surface); }
 .work-order-panels { padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-bg) 72%, var(--erp-surface)); }
 .work-order-panels :deep(.p-tabpanel) { padding: 0; }
 .work-order-page__totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }

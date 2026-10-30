@@ -72,7 +72,7 @@
 							<div class="delivery-challan-tab-matrices">
 								<section v-for="block in matrixBlocks" :key="`readonly-${block.key}`" class="delivery-challan-tab-matrix">
 									<header><div><span>{{ block.kind === 'items' ? 'Deliverables' : 'Corrections' }}</span><h2>{{ block.title }}</h2></div><strong>{{ logicalRowCount(block.groups) }} rows</strong></header>
-									<StockItemMatrix :dimensions="workspace.dimensions || []" :groups="block.groups" doctype="YRP Delivery Challan" group-by-item show-lot-column show-fulfillment :show-received="false" />
+									<StockItemMatrix :dimensions="workspace.dimensions || []" :groups="block.groups" doctype="YRP Delivery Challan" group-by-item pinned-header show-lot-column show-fulfillment :show-received="false" />
 								</section>
 								<div v-if="!matrixBlocks.length" class="delivery-challan-matrix__empty"><i class="pi pi-inbox" /><span>No Delivery Challan item rows are available.</span></div>
 							</div>
@@ -121,7 +121,7 @@
 								<div><strong><DocumentLink doctype="Item" :name="section.name" :label="section.name || 'Unspecified item'" /></strong></div>
 								<label v-if="canEditMatrixBlock(block.kind)" class="delivery-challan-matrix__fill" :title="isTableFilled(section.items, primaryValues(section.group)) ? 'Untick to remove quantity' : 'Tick to fill pending quantity'"><Checkbox :model-value="isTableFilled(section.items, primaryValues(section.group))" binary :aria-label="`Fill quantity for ${section.name || 'item'}`" @update:model-value="fillTable(section, $event)" /><span>Fill quantity</span></label>
 							</header>
-							<div class="erp-table-wrap delivery-challan-matrix__scroll" tabindex="0" role="region" :aria-label="`Delivery quantities for ${section.name || 'item'}`">
+							<div v-synced-horizontal-scroll class="erp-table-wrap erp-pinned-table delivery-challan-matrix__scroll" role="region" :aria-label="`Delivery quantities for ${section.name || 'item'}`">
 								<table v-entry-table class="erp-data-table">
 									<thead><tr>
 										<th v-for="column in identityColumns(section.group)" :key="column.key">{{ column.label }}</th>
@@ -165,6 +165,7 @@
 										</tr>
 									</tfoot>
 								</table>
+								<div class="erp-pinned-table__scrollbar" data-horizontal-scrollbar aria-hidden="true" hidden><div /></div>
 							</div>
 						</article>
 					</div>
@@ -264,6 +265,7 @@ import { useCollapsedStockGuard } from "./collapsedStock.js"
 import FabricStockOperationDialog from "./FabricStockOperationDialog.vue"
 import RelatedDocumentWorkspaceDialog from "./RelatedDocumentWorkspaceDialog.vue"
 import { vEntryTable } from "../../components/common/childGrid/entryTable.js"
+import { vSyncedHorizontalScroll } from "../../components/common/childGrid/syncedHorizontalScroll.js"
 
 const props = defineProps({
 	presentation: { type: String, default: "page" },
@@ -954,13 +956,13 @@ function documentDeleted() {
 .delivery-challan-field-fact { display: grid; min-height: 50px; align-content: center; gap: 4px; padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--erp-border) 76%, var(--erp-surface)); }
 .delivery-challan-field-fact span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 750; letter-spacing: .035em; text-transform: uppercase; }
 .delivery-challan-field-fact strong { overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-.delivery-challan-matrix { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: none; }
+.delivery-challan-matrix { overflow: clip; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: none; }
 .delivery-challan-matrix__header { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--erp-border); background: var(--erp-surface-soft); }
 .delivery-challan-matrix__header > div { display: grid; gap: 2px; }
 .delivery-challan-matrix__header h2 { margin: 0; font-size: var(--erp-font-size-section); }
 .delivery-challan-matrix__header > strong { padding: 3px 8px; color: var(--erp-accent); font-size: var(--erp-font-size-min); background: var(--erp-accent-soft); border-radius: var(--erp-pill-radius); }
 .delivery-challan-matrix__stack { display: grid; gap: var(--erp-space-3); padding: var(--erp-space-3); background: color-mix(in srgb, var(--erp-surface-soft) 66%, var(--erp-surface)); }
-.delivery-challan-matrix__group { overflow: hidden; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
+.delivery-challan-matrix__group { overflow: clip; min-width: 0; border: 1px solid var(--erp-border); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: none; }
 .delivery-challan-matrix__group > header { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-bottom: 1px solid var(--erp-border); }
 .delivery-challan-matrix__group > header div { display: grid; gap: 2px; }
 .delivery-challan-matrix__fill { display: inline-flex; align-items: center; gap: 6px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); font-weight: 700; cursor: pointer; }
@@ -970,7 +972,6 @@ function documentDeleted() {
 .delivery-challan-matrix__pending-heading, .delivery-challan-matrix__pending { background: var(--erp-attention-soft); }
 .delivery-challan-matrix__quantity-heading, .delivery-challan-matrix__quantity { background: var(--erp-accent-soft); }
 .delivery-challan-matrix__pending { min-width: 78px; color: var(--erp-attention-text); font-weight: 750; }
-.delivery-challan-matrix__scroll { max-height: max(320px, calc(100dvh - 240px)); }
 .delivery-challan-matrix__quantity { min-width: 74px; }
 .delivery-challan-matrix__secondary { min-width: 106px; }
 .delivery-challan-matrix__scroll td.delivery-challan-matrix__primary-cell { padding-inline: 5px; }

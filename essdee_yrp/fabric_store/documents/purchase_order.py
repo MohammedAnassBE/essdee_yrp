@@ -425,6 +425,7 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 		dimension = dict(source)
 		dimension["locked"] = False
 		dimensions.append(dimension)
+	default_dimensions = get_purchase_order_default_dimensions(dimensions, frappe_api)
 	return {
 		"doctype": "Purchase Order",
 		"name": doc.get("name") or "",
@@ -434,7 +435,7 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 		"item_groups": group_items(doc.get("items") or [], "Purchase Order"),
 		"dimensions": dimensions,
 		"locked_dimensions": [],
-		"default_dimensions": {},
+		"default_dimensions": default_dimensions,
 		"item_filters": {
 			"disabled": 0,
 			"variant_of": ["is", "not set"],
@@ -451,6 +452,14 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 			),
 		},
 	}
+
+
+def get_purchase_order_default_dimensions(dimensions, frappe_api=frappe) -> dict:
+	"""Prefill Received Type on new item rows from YRP Stock Settings."""
+	if not any(dimension["fieldname"] == "received_type" for dimension in dimensions):
+		return {}
+	received_type = frappe_api.db.get_single_value("YRP Stock Settings", "default_received_type")
+	return {"received_type": received_type} if received_type else {}
 
 
 def save_purchase_order_document(

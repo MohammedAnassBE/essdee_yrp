@@ -7,6 +7,7 @@ from essdee_yrp.fabric_store.documents.purchase_order import (
 	_capability_candidates,
 	_related_documents,
 	execute_purchase_order_command,
+	get_purchase_order_default_dimensions,
 	get_purchase_order_editor,
 	get_purchase_order_workspace,
 	save_purchase_order_document,
@@ -44,6 +45,17 @@ class TestFabricStorePurchaseOrder(TestCase):
 			},
 		)
 		self.assertTrue(editor["permissions"]["can_create_item_price"])
+
+	def test_default_dimensions_prefill_received_type_from_stock_settings(self):
+		frappe_api = MagicMock()
+		frappe_api.db.get_single_value.return_value = "Accepted"
+		received_type = [{"fieldname": "lot"}, {"fieldname": "received_type"}]
+
+		self.assertEqual(get_purchase_order_default_dimensions(received_type, frappe_api), {"received_type": "Accepted"})
+		frappe_api.db.get_single_value.assert_called_once_with("YRP Stock Settings", "default_received_type")
+		self.assertEqual(get_purchase_order_default_dimensions([{"fieldname": "lot"}], frappe_api), {})
+		frappe_api.db.get_single_value.return_value = None
+		self.assertEqual(get_purchase_order_default_dimensions(received_type, frappe_api), {})
 
 	def test_plain_item_round_trips_through_shared_purchase_order_grouping(self):
 		from yrp.stock.save_stock_items import group_items_for_ui, ungroup_items_from_ui

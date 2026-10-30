@@ -1,5 +1,5 @@
 <template>
-	<ItemTableCard :label="field.label || 'Yarn Ratio'" :editable="editable">
+	<ItemTableCard class="item-yarn-ratio" :label="field.label || 'Yarn Ratio'" :editable="editable">
 		<template #actions><Button v-if="editable" label="Add yarn" icon="pi pi-plus" size="small" severity="secondary" outlined :disabled="disabled" @click="addRow" /></template>
 		<Message v-for="problem in problems" :key="problem.message" severity="error" :closable="false">{{ problem.message }}</Message>
 		<ChildGridTable :rows="values.yarn_ratio_details || []" :columns="columns" :title="field.label || 'Yarn Ratio'" parent-doctype="Item" child-doctype="SD YRP Item Yarn Ratio" :can-add="editable && !disabled" :add="addRow" :remove-row="editable && !disabled ? (index) => values.yarn_ratio_details.splice(index, 1) : null">
@@ -29,9 +29,14 @@ import { yarnRatioTotal } from "./itemTables.js"
 const props = defineProps({ values: { type: Object, required: true }, itemName: { type: String, default: "" }, field: { type: Object, default: () => ({}) }, editable: Boolean, disabled: Boolean, problems: { type: Array, default: () => [] } })
 const columnLabel = (name, fallback) => props.field.columns?.[name]?.label || fallback
 const columns = computed(() => [
-	{ key: "yarn_item", label: columnLabel("yarn_item", "Yarn Item"), fieldtype: "Link", reqd: 1, width: 260 },
-	{ key: "ratio", label: columnLabel("ratio", "Ratio"), fieldtype: "Percent", reqd: 1, width: 120 },
+	{ key: "yarn_item", label: columnLabel("yarn_item", "Yarn Item"), fieldtype: "Link", reqd: 1, width: 300 },
+	{ key: "ratio", label: columnLabel("ratio", "Ratio"), fieldtype: "Percent", reqd: 1, width: 100 },
 ])
 const yarnFilters = computed(() => ({ disabled: 0, is_cloth_item: 0, variant_of: ["is", "not set"], ...(props.itemName ? { name: ["!=", props.itemName] } : {}) }))
 const addRow = () => props.values.yarn_ratio_details.push({ yarn_item: "", ratio: null })
 </script>
+
+<style scoped>
+.item-yarn-ratio { width: 50%; justify-self: start; }
+@media (max-width: 900px) { .item-yarn-ratio { width: 100%; } }
+</style>

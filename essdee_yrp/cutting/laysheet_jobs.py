@@ -1,6 +1,6 @@
 import frappe
 from frappe.realtime import get_user_room
-from frappe.utils.background_jobs import get_queue_args, truncate_failed_registry
+from frappe.utils.background_jobs import truncate_failed_registry
 
 DONE_EVENT = "yrp_laysheet_job_done"
 STATUS_TTL_SECONDS = 6 * 60 * 60
@@ -75,6 +75,14 @@ def _finish(token: str, doctype: str, docname: str, user: str, status: str):
 def _store_status(token: str, doctype: str, docname: str, status: str):
 	value = {"doctype": doctype, "docname": docname, "status": status}
 	frappe.cache.set_value(_cache_key(token), value, expires_in_sec=STATUS_TTL_SECONDS)
+
+
+def get_queue_args(job) -> dict:
+	"""The kwargs `frappe.enqueue` stored on the job; older Frappe releases lack a helper for this."""
+	try:
+		return job.kwargs
+	except Exception:
+		return {}
 
 
 def _cache_key(token: str) -> str:

@@ -8,6 +8,7 @@
 			<div class="received-type-control col-md-2"></div>
 			<div class="col-md-2 d-flex gap-2 pb-2">
 				<button class="btn btn-primary btn-sm" @click="generate">Generate</button>
+				<button class="btn btn-default btn-sm" @click="paste_lots">Paste Lots</button>
 				<button class="btn btn-default btn-sm" @click="toggle_all">
 					{{ all_selected ? "Clear" : "Select All" }}
 				</button>
@@ -31,14 +32,14 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-for="(row, index) in rows" :key="row_key(row, index)">
-						<td><input v-model="selected" type="checkbox" :value="row" /></td>
+					<tr v-for="(row, index) in display_rows" :key="row.key">
+						<td><input type="checkbox" :checked="selected_indexes.has(index)" @change="toggle_row(index)" /></td>
 						<td>{{ index + 1 }}</td>
 						<td>{{ row.lot }}</td><td>{{ row.item_name }}</td><td>{{ row.item }}</td>
 						<td>{{ row.warehouse }}</td><td>{{ row.received_type }}</td>
-						<td class="text-right">{{ format_number(row.bal_qty) }} {{ row.stock_uom }}</td>
-						<td class="text-right">{{ format_currency(row.val_rate) }}</td>
-						<td><button class="btn btn-default btn-xs" @click="single_entry(row)">Create</button></td>
+						<td class="text-right">{{ row.balance }}</td>
+						<td class="text-right">{{ row.rate }}</td>
+						<td><button class="btn btn-default btn-xs" @click="single_entry(rows[index])">Create</button></td>
 					</tr>
 				</tbody>
 			</table>
@@ -48,18 +49,25 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 
 const METHOD = "essdee_yrp.essdee_yrp.doctype.sd_yrp_stock_summary.sd_yrp_stock_summary.";
 const root = ref(null);
-const rows = ref([]);
-const selected = ref([]);
+const rows = shallowRef([]);
+const selected_indexes = ref(new Set());
+const selected = computed(() => rows.value.filter((_, index) => selected_indexes.value.has(index)));
 const loading = ref(false);
 const generated = ref(false);
 const controls = {};
 const control_doc = {};
 
-const all_selected = computed(() => rows.value.length && selected.value.length === rows.value.length);
+const display_rows = computed(() => rows.value.map((row, index) => ({
+	...row,
+	key: row_key(row, index),
+	balance: `${format_number(row.bal_qty)} ${row.stock_uom || ""}`,
+	rate: format_currency(row.val_rate),
+})));
+const all_selected = computed(() => rows.value.length && selected_indexes.value.size === rows.value.length);
 
 onMounted(async () => {
 	await frappe.model.with_doctype("SD YRP Lot MultiSelect");
@@ -101,7 +109,7 @@ function call(method, args) {
 
 async function generate() {
 	loading.value = true;
-	selected.value = [];
+	selected_indexes.value = new Set();
 	try {
 		rows.value = (await call("get_stock_summary", {
 			lot: controls.lot.get_value(),
@@ -117,7 +125,11 @@ async function generate() {
 }
 
 function toggle_all() {
-	selected.value = all_selected.value ? [] : [...rows.value];
+	selected_indexes.value = all_selected.value ? new Set() : new Set(rows.value.keys());
+}
+
+function toggle_row(index) {
+	if (!selected_indexes.value.delete(index)) selected_indexes.value.add(index);
 }
 
 function require_selection() {
@@ -160,6 +172,43 @@ function open_doc(doctype, name) {
 	if (name) frappe.set_route("Form", doctype, name);
 }
 
+function open_doc_in_new_tab(doctype, name) {
+	if (name) window.open(frappe.utils.get_form_link(doctype, name), "_blank");
+}
+
+function parse_lot_names(text, format) {
+	const separator = format === "Comma separated" ? /,/ : /[\t\r\n]+/;
+	return [...new Set(String(text || "").split(separator).map((name) => name.trim()).filter(Boolean))];
+}
+
+function paste_lots() {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Paste Lots"),
+		fields: [
+			{ fieldname: "format", fieldtype: "Select", label: "Format", options: ["One per line", "Comma separated"], default: "One per line" },
+			{ fieldname: "lots", fieldtype: "Small Text", label: "Lots", reqd: 1 },
+		],
+		primary_action_label: __("Add Lots"),
+		async primary_action(values) {
+			const names = parse_lot_names(values.lots, values.format);
+			const { message } = await frappe.call({
+				method: "frappe.client.get_list",
+				args: { doctype: "SD YRP Lot", filters: { name: ["in", names] }, fields: ["name"], limit_page_length: 0 },
+			});
+			const found = (message || []).map((row) => row.name);
+			const missing = names.filter((name) => !found.includes(name));
+			const current = (controls.lot.get_value() || []).map((row) => row.lot);
+			const lots = [...new Set([...current, ...names.filter((name) => found.includes(name))])];
+			await controls.lot.set_value(lots.map((lot) => ({ lot })));
+			dialog.hide();
+			if (missing.length) {
+				frappe.msgprint({ title: __("Lots not found"), indicator: "orange", message: missing.join(", ") });
+			}
+		},
+	});
+	dialog.show();
+}
+
 function bulk_entry() {
 	const warehouse = require_selection();
 	purpose_dialog((purpose) => location_dialog(purpose, warehouse, async (locations) => {
@@ -193,7 +242,7 @@ function reconcile() {
 function reduce() {
 	const warehouse = require_selection();
 	frappe.confirm(__("Create a Stock Update draft for the selected balances?"), async () => {
-		open_doc("YRP Stock Update", await call("reduce_stock", { selected_items: selected.value, warehouse }));
+		open_doc_in_new_tab("YRP Stock Update", await call("reduce_stock", { selected_items: selected.value, warehouse }));
 	});
 }
 

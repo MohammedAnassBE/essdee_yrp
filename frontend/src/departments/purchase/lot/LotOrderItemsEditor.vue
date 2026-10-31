@@ -1,9 +1,31 @@
 <template>
 	<div class="lot-tab-stack">
-		<Message v-if="productionOrder && hasOrderDetails" severity="secondary" :closable="false">Box quantities are recalculated from Lot Order Details when you save.</Message>
+		<Message v-if="isLocked" severity="warn" :closable="false">Locked: Time &amp; Action exists or the Lot was transferred.</Message>
+		<Message v-else-if="productionOrder && hasOrderDetails" severity="secondary" :closable="false">Box quantities are recalculated from Lot Order Details when you save.</Message>
 		<template v-if="itemDetails">
-			<LotOrderItemsTab :order-items="boxOrderView(itemDetails)" />
-			<Button v-if="!composerOpen" label="Add row" icon="pi pi-plus" severity="secondary" outlined :disabled="disabled" @click="emit('update:composerOpen', true)" />
+			<section class="lot-section">
+				<header><div><span>Order quantities</span><h2>Box quantities ({{ itemDetails.default_uom || "—" }})</h2></div><span class="lot-count">{{ countLabel(itemDetails.items.length, "row") }}</span></header>
+				<div v-if="itemDetails.items.length" class="erp-table-wrap lot-table-wrap" role="region" tabindex="0" aria-label="Lot order quantities">
+					<table v-entry-table class="erp-data-table lot-table lot-order-quantities">
+						<thead><tr><th>S.No</th><th v-for="attribute in attributes" :key="attribute">{{ attribute }}</th><th>Details</th><th v-for="size in sizes" :key="String(size)" class="erp-number">{{ size === null ? "Value" : `${size} ${itemDetails.default_uom || ""}` }}</th><th class="erp-number">Total</th></tr></thead>
+						<tbody v-for="(item, index) in itemDetails.items" :key="index">
+							<tr v-for="(stage, stageIndex) in ORDER_STAGES" :key="stage.key">
+								<td class="lot-order-quantities__lead">{{ stageIndex ? "" : index + 1 }}</td>
+								<td v-for="attribute in attributes" :key="attribute" class="lot-order-quantities__lead">{{ stageIndex ? "" : item.attributes?.[attribute] || "—" }}</td>
+								<td class="lot-stage-label"><span>{{ stage.label }}</span></td>
+								<td v-for="size in sizes" :key="String(size)" class="erp-number">
+									<template v-if="locked">{{ formatQuantity(orderCell(item, size)?.[stage.key]) }}</template>
+									<InputNumber v-else :model-value="orderCell(item, size)?.[stage.key] ?? 0" :min="0" :max-fraction-digits="3" fluid :disabled="disabled" :aria-label="`${stage.label} ${size ?? ''} row ${index + 1}`" @update:model-value="setOrderCell(item, size, stage.key, $event)" />
+								</td>
+								<td class="erp-number lot-total">{{ stage.key === "qty" ? quantityTotal(orderRowTotal(item, sizes)) : "" }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<LotEmptyState v-else title="No order quantities" reason="Add a row to enter box quantities." />
+			</section>
+			<template v-if="!locked && attributes.length">
+				<Button v-if="!composerOpen" label="Add row" icon="pi pi-plus" severity="secondary" outlined :disabled="disabled" @click="emit('update:composerOpen', true)" />
 			<section v-else class="lot-group lot-order-composer" aria-label="Add box quantity row" @keydown.enter="addOnLastEnter">
 				<header class="lot-group__header"><strong>Add row</strong></header>
 				<div class="lot-section__body">
@@ -19,8 +41,10 @@
 					<Button label="Add row" icon="pi pi-plus" :disabled="disabled" @click="addRow" />
 				</div>
 			</section>
+			</template>
+			<Button v-else-if="!locked && !itemDetails.items.length" label="Add row" icon="pi pi-plus" severity="secondary" outlined :disabled="disabled" @click="emit('update:itemDetails', { ...itemDetails, items: [blankOrderRow(itemDetails)] })" />
 		</template>
-		<LotEmptyState v-else title="No order items" reason="Choose an Item Production Detail with a final state to load box quantities." />
+		<LotEmptyState v-else title="No order quantities" reason="Choose an Item Production Detail with a final state to load box quantities." />
 		<DocumentErrorDialog :message="error" @dismiss="error = ''" />
 	</div>
 </template>
@@ -28,19 +52,23 @@
 import Button from "primevue/button"
 import InputNumber from "primevue/inputnumber"
 import Message from "primevue/message"
-import { ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 import { callMethod } from "../../../api/frappe.js"
 import LinkField from "../../../components/common/LinkField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import LotEmptyState from "./LotEmptyState.vue"
-import LotOrderItemsTab from "./LotOrderItemsTab.vue"
-import { addLotOrderRow, boxOrderView, lotOrderEntry } from "./lotEditor.js"
-const props = defineProps({ itemDetails: { type: Object, default: null }, composerOpen: Boolean, productionOrder: { type: String, default: "" }, hasOrderDetails: Boolean, disabled: Boolean })
+import { ORDER_STAGES, addLotOrderRow, blankOrderRow, isBoxLocked, lotOrderEntry, orderCell, orderRowTotal, orderSizes, setOrderCell } from "./lotEditor.js"
+import { countLabel, formatQuantity, quantityTotal } from "./lotViews.js"
+/** The one editable Order Quantities grid (Qty/Ratio/MRP rows × sizes), bound to the Lot's box quantities. */
+const props = defineProps({ itemDetails: { type: Object, default: null }, composerOpen: Boolean, productionOrder: { type: String, default: "" }, hasOrderDetails: Boolean, isLocked: Boolean, boxLocked: Boolean, disabled: Boolean })
 const emit = defineEmits(["update:itemDetails", "update:composerOpen"])
 const entry = ref(null)
 const error = ref("")
-const stages = [{ key: "qty", label: "Qty" }, { key: "ratio", label: "Ratio" }, { key: "mrp", label: "MRP" }]
+const stages = ORDER_STAGES
+const attributes = computed(() => props.itemDetails?.final_state_attr || [])
+const sizes = computed(() => (props.itemDetails ? orderSizes(props.itemDetails) : []))
+const locked = computed(() => props.boxLocked || isBoxLocked({ order_details: props.isLocked }, props.productionOrder, props.hasOrderDetails))
 watch(() => props.itemDetails, (details) => { entry.value = details ? lotOrderEntry(details) : null }, { immediate: true })
 function attributeSearch(attribute) {
 	return async (text) => (await callMethod("yrp.yrp.doctype.yrp_item.yrp_item.search_item_attribute_values", { txt: text, attribute, item: props.itemDetails.item })).map((value) => ({ name: value, label: value }))

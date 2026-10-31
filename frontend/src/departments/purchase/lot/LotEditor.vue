@@ -5,11 +5,15 @@
 			<template #header-actions><DocumentActionStrip class="lot-editor-actions" :actions="editorActions" /></template>
 			<template #matrix>
 				<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
-					<TabList class="lot-tablist"><Tab v-for="tab in tabs" :key="tab.key" :value="tab.key">{{ tab.label }}<span v-if="tab.count !== null">{{ tab.count }}</span><span v-else-if="tab.key === 'order-items'">{{ itemDetails?.items.length || 0 }}</span></Tab></TabList>
+					<TabList class="lot-tablist"><Tab v-for="tab in tabs" :key="tab.key" :value="tab.key">{{ tab.label }}</Tab></TabList>
 					<TabPanels ref="panels" class="lot-panels">
-						<TabPanel v-if="activeTab === 'details'" value="details"><LotEditorDetails :form="form" :derived="derived" :fields="fields" :fabric-meta="fabricMeta" :attempted-save="attemptedSave" :disabled="Boolean(acting)" @set-field="setField" @fabric-rows="form.lot_fabric_details = $event" /></TabPanel>
-						<TabPanel v-else-if="activeTab === 'order-items'" value="order-items"><LotOrderItemsEditor v-model:item-details="itemDetails" v-model:composer-open="composerOpen" :production-order="form.production_order || ''" :has-order-details="Boolean(orderItemDetails.length)" :disabled="Boolean(acting)" /></TabPanel>
-						<TabPanel v-else-if="activeTab === 'order-details'" value="order-details"><LotOrderDetailsEditor :groups="orderItemDetails" :colour-attribute="colourAttribute" :version="derived.version || ''" :is-locked="locks.order_details" :disabled="Boolean(acting)" /></TabPanel>
+						<TabPanel v-if="activeTab === 'lot'" value="lot">
+							<LotEditorMain v-model:expanded="expanded" :form="form" :derived="derived" :fields="fields" :fabric-meta="fabricMeta" :order-item-details="orderItemDetails" :scroll-to="scrollTo" :attempted-save="attemptedSave" :disabled="Boolean(acting)" @set-field="setField" @fabric-rows="form.lot_fabric_details = $event">
+								<template #quantities><LotOrderItemsEditor v-model:item-details="itemDetails" v-model:composer-open="composerOpen" :production-order="form.production_order || ''" :has-order-details="Boolean(orderItemDetails.length)" :is-locked="locks.order_details" :disabled="Boolean(acting)" /></template>
+								<template #order-details><LotOrderDetailsEditor :groups="orderItemDetails" :colour-attribute="colourAttribute" :version="derived.version || ''" :is-locked="locks.order_details" :disabled="Boolean(acting)" /></template>
+							</LotEditorMain>
+						</TabPanel>
+						<TabPanel v-else :value="activeTab"><LotEditorTabWorkspace :tab="activeTab" :workspace="tabWorkspace" :loading="tabLoading" :error="tabError" @retry="loadTabWorkspace" /></TabPanel>
 					</TabPanels>
 				</Tabs>
 			</template>
@@ -28,7 +32,8 @@ import { nextTick, ref, watch } from "vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
 import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.vue"
-import LotEditorDetails from "./LotEditorDetails.vue"
+import LotEditorMain from "./LotEditorMain.vue"
+import LotEditorTabWorkspace from "./LotEditorTabWorkspace.vue"
 import LotEditorRail from "./LotEditorRail.vue"
 import LotIdentity from "./LotIdentity.vue"
 import LotOrderDetailsEditor from "./LotOrderDetailsEditor.vue"
@@ -37,8 +42,8 @@ import { useLotEditor } from "./useLotEditor.js"
 import "./lot.css"
 const props = defineProps({ lotId: { type: String, default: "" } })
 const { form, derived, record, fields, locks, colourAttribute, itemDetails, orderItemDetails, fabricMeta, loading, acting, loadError, actionError,
-	attemptedSave, composerOpen, reloadItemsVisible, isDirty, shellWorkspace, tabs, activeTab, editorActions,
-	setField, confirmReloadItems, reload, refresh } = useLotEditor(props.lotId)
+	attemptedSave, composerOpen, reloadItemsVisible, isDirty, shellWorkspace, tabs, activeTab, expanded, scrollTo, editorActions,
+	tabWorkspace, tabLoading, tabError, loadTabWorkspace, setField, confirmReloadItems, reload, refresh } = useLotEditor(props.lotId)
 const panels = ref(null)
 watch(activeTab, async () => { await nextTick(); if (panels.value?.$el) panels.value.$el.scrollTop = 0 })
 </script>

@@ -1,6 +1,6 @@
 <template>
 	<div class="lot-tab-stack">
-		<LotBomTab :bom="bom ? { ...bom, additional: [] } : null" />
+		<LotBomTab :bom="{ ...(bom || {}), additional: [] }" />
 		<section class="lot-section">
 			<div class="lot-section__body lot-tab-stack">
 				<ChildTableField

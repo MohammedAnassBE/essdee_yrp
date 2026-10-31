@@ -259,7 +259,7 @@
 						!entry.legacy.length
 					"
 					title="No cloth program"
-					reason="No requirement, program or movement is recorded for this route."
+					reason="No program or movement is recorded for this route."
 				/>
 			</div>
 		</section>
@@ -317,12 +317,6 @@ const cards = computed(() => {
 
 function fabricMatrices(entry) {
 	return [
-		{
-			key: "requirement",
-			label: "Requirement (finished cloth, Kg)",
-			rows: entry.requirement || [],
-			options: {},
-		},
 		{
 			key: "program",
 			label: "Knitting Program (Dia × Colour, Kg)",

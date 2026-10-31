@@ -3,16 +3,17 @@ import { useRoute, useRouter } from "vue-router"
 import { useToast } from "primevue/usetoast"
 import { getMeta } from "../../../api/frappe.js"
 import { getLotProductionDetailContext, getLotProductionOrderItem } from "../../../api/purchase.js"
-import { getMerchLotEditor as getLotForm, saveMerchLot as saveLot } from "../../../api/merch.js"
+import { getMerchLotEditor as getLotForm, getMerchLotWorkspace, saveMerchLot as saveLot } from "../../../api/merch.js"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import { MERCH_ROUTES } from "../merchViews.js"
 import {
 	clearedLotContext,
 	clone,
 	lotEditorCleanSignature,
-	lotEditorTabs,
 	lotSavePayload,
 } from "../../purchase/lot/lotEditor.js"
+import { lotEditorTabs } from "../../purchase/lot/lotLayout.js"
+import { useLotLayout, useLotTabWorkspace } from "../../purchase/lot/useLotLayout.js"
 import { boxGridErrors } from "./merchLotViews.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 import { withSavedHandoff } from "../../../utils/documentLiveState.js"
@@ -43,7 +44,7 @@ export function useMerchLotEditor(lotId) {
 	const actionError = ref("")
 	const cleanSignature = ref("")
 	const attemptedSave = ref(false)
-	const composerOpen = ref(!lotId)
+	const composerOpen = ref(false)
 	const reloadItemsVisible = ref(false)
 	let pendingField = null
 	let loadSequence = 0
@@ -72,28 +73,9 @@ export function useMerchLotEditor(lotId) {
 			? { record: { ...record.value, status: form.status, doctype: "SD YRP Lot" } }
 			: {},
 	)
-	const tabs = computed(() => [
-		...lotEditorTabs(form, orderItemDetails.value, isNew),
-		...(!isNew
-			? [
-					{
-						key: "fabric",
-						label: "Cloth Program",
-						count: readOnlyWorkspace.value.fabrics?.length || 0,
-					},
-				]
-			: []),
-	])
-	const activeTab = computed({
-		get: () =>
-			tabs.value.some((tab) => tab.key === route.query.tab) ? route.query.tab : "details",
-		set: (tab) =>
-			router.replace({
-				query: { ...route.query, tab },
-				hash: route.hash,
-				state: preserveListNavigationState(),
-			}),
-	})
+	const tabs = lotEditorTabs(isNew)
+	const { activeTab, expanded, scrollTo, openSection } = useLotLayout(tabs, route, router)
+	const { tabWorkspace, tabLoading, tabError } = useLotTabWorkspace(lotId, activeTab, getMerchLotWorkspace)
 	const editorActions = computed(() => [
 		{
 			key: "cancel",
@@ -144,7 +126,7 @@ export function useMerchLotEditor(lotId) {
 		readOnlyWorkspace.value = payload.workspace || {}
 		fabricMeta.value = metadata.find((document) => document.name === "SD YRP Lot Fabric Detail")
 		if (!fabricMeta.value) throw new Error("Fabric Details metadata is missing.")
-		composerOpen.value = isNew
+		composerOpen.value = false
 		cleanSignature.value = lotEditorCleanSignature(payload, signature.value)
 		attemptedSave.value = false
 		showMessages(payload.messages)
@@ -272,7 +254,6 @@ export function useMerchLotEditor(lotId) {
 		if (!isCurrentEvent(sequence)) return
 		Object.assign(derived, result.derived)
 		itemDetails.value = result.item_details
-		composerOpen.value = true
 		showMessages(result.messages)
 	}
 	function viewTarget(name, modified) {
@@ -297,12 +278,13 @@ export function useMerchLotEditor(lotId) {
 	function isSaveValid() {
 		if (!canSave.value || acting.value) return
 		if (Object.keys(boxGridErrors(itemDetails.value)).length) {
-			activeTab.value = "order-items"
+			activeTab.value = "lot"
 			actionError.value = "Fix Order Items: Qty, Ratio and MRP cannot be negative."
 			return
 		}
 		if (hasMissingRequiredFields()) {
-			activeTab.value = "details"
+			activeTab.value = "lot"
+			if (form.lot_fabric_details.some((row) => !row.cloth_item)) openSection("fabric-details")
 			return
 		}
 		if (invalidGridCells.size) {
@@ -372,6 +354,11 @@ export function useMerchLotEditor(lotId) {
 		shellWorkspace,
 		tabs,
 		activeTab,
+		expanded,
+		scrollTo,
+		tabWorkspace,
+		tabLoading,
+		tabError,
 		editorActions,
 		setField,
 		confirmReloadItems,

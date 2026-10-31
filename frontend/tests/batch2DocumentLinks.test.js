@@ -15,6 +15,7 @@ import * as stockItemComposer from '../src/utils/stockItemComposer.js'
 import * as stockItemTotals from '../src/engine/stock/stockItemTotals.js'
 import * as lotViews from '../src/departments/purchase/lot/lotViews.js'
 import * as lotEditor from '../src/departments/purchase/lot/lotEditor.js'
+import * as lotLayout from '../src/departments/purchase/lot/lotLayout.js'
 import * as program from '../src/engine/lotClothProgram.js'
 import * as costViews from '../src/departments/merch/process-cost/processCostViews.js'
 import * as priceViews from '../src/departments/purchase/purchaseViews.js'
@@ -145,16 +146,16 @@ test('B5 IPD identity and copy banner link raw names while retaining display lab
  assert.deepEqual(links(banner), [['IPD/1', '/web/merch/item-production-details/IPD%2F1']])
 }))
 
-for (const department of ['purchase', 'planning']) {
- test(`B6 ${department} Lot BOM links process, item and UOM`, () => readable(() => {
-  const root = mountComponent(component(`departments/${department}/lot/LotBomTab`), { bom: { summary: [{ process_name: 'Stitching', item: 'A/B', uom: 'Nos', required_qty: 1 }] } })
-  assert.deepEqual(links(root), [['Stitching', '/desk/yrp-process/Stitching'], ['A/B', '/web/purchase/items/A%2FB'], ['Nos', '/desk/uom/Nos']])
- }))
- test(`B6 ${department} derived Lot facts link UOM and raw stage names`, () => readable(() => {
-  const root = mountComponent(component(`departments/${department}/lot/LotEditorDetails`), { form: { lot_fabric_details: [] }, derived: { uom: 'Nos', packing_uom: 'Box', pack_in_stage: 'Cut', pack_in_stage_name: 'IAV/1', pack_out_stage: 'Packed' }, fields: lotEditor.LOT_EDIT_GROUPS.flatMap(group => group.fields.map(fieldname => ({ fieldname }))), fabricMeta: {} })
-  assert.deepEqual(links(root), [['Nos', '/desk/uom/Nos'], ['Cut', '/desk/yrp-item-attribute-value/IAV%2F1'], ['Box', '/desk/uom/Box']])
- }))
-}
+test('B6 Lot BOM links process, item and UOM', () => readable(() => {
+ const root = mountComponent(component('departments/purchase/lot/LotBomTab'), { bom: { summary: [{ process_name: 'Stitching', item: 'A/B', uom: 'Nos', required_qty: 1 }] } })
+ assert.deepEqual(links(root), [['Stitching', '/desk/yrp-process/Stitching'], ['A/B', '/web/purchase/items/A%2FB'], ['Nos', '/desk/uom/Nos']])
+}))
+test('B6 derived Lot facts link UOM and raw stage names', () => readable(() => {
+ const derived = { uom: 'Nos', packing_uom: 'Box', pack_in_stage: 'Cut', pack_in_stage_name: 'IAV/1', pack_out_stage: 'Packed' }
+ const facts = lotLayout.derivedFacts(derived, ['uom', 'pack_in_stage', 'pack_out_stage', 'packing_uom'])
+ const root = mountComponent(component('departments/purchase/lot/LotFacts'), { facts, ariaLabel: 'Facts' })
+ assert.deepEqual(links(root), [['Nos', '/desk/uom/Nos'], ['Cut', '/desk/yrp-item-attribute-value/IAV%2F1'], ['Box', '/desk/uom/Box']])
+}))
 
 test('B7 ProcessCostGrid links attribute row labels with their raw names', () => readable(() => {
  const root = mountComponent(component('departments/merch/process-cost/ProcessCostGrid'), { readonly: true, tiers: [{ attribute_value: 'IAV/1', attribute_value_label: 'Small', min_order_qty: 1, price: 2 }] })
@@ -299,7 +300,9 @@ test('B3 StockItemMatrix accepts stock dimension options without explicit fieldt
  assert.deepEqual(links(root), [['A', '/web/purchase/items/A']])
 }))
 
-test('B6 Merch derived Lot facts link UOM and raw stage names', () => readable(() => {
- const root = mountComponent(component('departments/merch/lot/MerchLotEditorDetails'), { form: { lot_fabric_details: [] }, derived: { uom: 'Nos', packing_uom: 'Box', pack_in_stage: 'Cut', pack_in_stage_name: 'IAV/1', pack_out_stage: 'Packed' }, fields: lotEditor.LOT_EDIT_GROUPS.flatMap(group => group.fields.map(fieldname => ({ fieldname }))), fabricMeta: {} })
- assert.deepEqual(links(root), [['Nos', '/desk/uom/Nos'], ['Cut', '/desk/yrp-item-attribute-value/IAV%2F1'], ['Box', '/desk/uom/Box']])
+test('B6 Merch editor From IPD and Order Details facts link UOM and raw stage names', () => readable(async () => {
+ const { LOT_IPD_FIELDS, LOT_ORDER_DETAIL_FIELDS, derivedFacts } = await import('../src/departments/purchase/lot/lotLayout.js')
+ const derived = { uom: 'Nos', packing_uom: 'Box', pack_in_stage: 'Cut', pack_in_stage_name: 'IAV/1', pack_out_stage: 'Packed', tech_pack_version: 'TP1' }
+ const facts = mountComponent(component('departments/purchase/lot/LotFacts'), { facts: derivedFacts(derived, [...LOT_IPD_FIELDS, ...LOT_ORDER_DETAIL_FIELDS]), ariaLabel: 'Facts' })
+ assert.deepEqual(links(facts), [['Nos', '/desk/uom/Nos'], ['Cut', '/desk/yrp-item-attribute-value/IAV%2F1'], ['Cut', '/desk/yrp-item-attribute-value/IAV%2F1'], ['Box', '/desk/uom/Box']])
 }))

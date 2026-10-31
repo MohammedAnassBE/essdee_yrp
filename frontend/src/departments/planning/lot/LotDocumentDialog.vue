@@ -155,13 +155,13 @@ import StockItemMatrix from "../../../components/stock/StockItemMatrix.vue"
 import { webDocumentPath } from "../../../router/webDocumentRoutes.js"
 import { formatDocumentOverviewValue } from "../../../utils/documentOverview.js"
 import WorkOrderItemMatrix from "../../fabric-store/WorkOrderItemMatrix.vue"
-import LotEmptyState from "./LotEmptyState.vue"
+import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import {
 	LOT_DOCUMENT_SECTIONS,
 	countLabel,
 	formatLotSummaryValue,
 	formatLotTime,
-} from "./lotViews.js"
+} from "../../purchase/lot/lotViews.js"
 import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
 
 const props = defineProps({

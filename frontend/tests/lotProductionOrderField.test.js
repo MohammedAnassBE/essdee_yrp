@@ -1,10 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import * as planning from "../src/departments/planning/lot/lotEditor.js"
 import * as purchase from "../src/departments/purchase/lot/lotEditor.js"
 
-for (const [name, editor] of [["purchase", purchase], ["planning", planning]]) {
+for (const [name, editor] of [["purchase", purchase]]) {
 	test(`${name} Lot editor explains the Production Order IPD lock`, () => {
 		assert.equal(editor.lotFieldDescription({ fieldname: "production_order", read_only: true }), "Locked once an IPD is linked.")
 		assert.equal(editor.lotFieldDescription({ fieldname: "production_order", read_only: false }), "Submitted PPOs for this item only.")

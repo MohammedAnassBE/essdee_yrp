@@ -5,8 +5,8 @@ import test from "node:test"
 const read = (file) => fs.readFileSync(new URL(`../src/departments/${file}`, import.meta.url), "utf8")
 const importsDirective = /import \{ vEntryTable \} from "\.\.\/\.\.\/\.\.\/components\/common\/childGrid\/entryTable\.js"/
 
-const composers = ["merch/lot/MerchBoxRowComposer.vue", "planning/lot/LotOrderItemsEditor.vue", "purchase/lot/LotOrderItemsEditor.vue"]
-const orderDetails = ["planning/lot/LotOrderDetailsEditor.vue", "purchase/lot/LotOrderDetailsEditor.vue"]
+const composers = ["purchase/lot/LotOrderItemsEditor.vue"]
+const orderDetails = ["purchase/lot/LotOrderDetailsEditor.vue"]
 
 for (const file of composers) {
 	test(`${file}: the box quantity composer grid uses v-entry-table with fixed rows`, () => {

@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { planBadge } from "../src/departments/planning/lot/lotViews.js"
+import { planBadge } from "../src/departments/purchase/lot/lotViews.js"
 import { formatReportCell } from "../src/departments/finishing/reports/finishingReports.js"
 
 test("planning plan badge shows the build date as DD-MM-YYYY", () => {

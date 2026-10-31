@@ -4,6 +4,8 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import * as purchaseActions from "../src/departments/purchase/lot/lotPurchaseActions.js"
 import * as duplicateAction from "../src/composables/useDuplicateAction.js"
 import * as merchViews from "../src/departments/merch/lot/merchLotViews.js"
+import * as lotLayout from "../src/departments/purchase/lot/lotLayout.js"
+import * as lotViews from "../src/departments/purchase/lot/lotViews.js"
 
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
 const stub = type => (props, { slots }) => Vue.h(type, props, Object.values(slots || {}).map(slot => slot?.({ headingId: "h" })))
@@ -25,13 +27,16 @@ function mountMerchLot(workspace) {
 		"../../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({}) },
 		"../../fabric-store/FabricDocumentWorkspace.vue": stub("workspace"),
 		"../../purchase/lot/LotIdentity.vue": stub("identity"),
-		"../../purchase/lot/LotOrderItemsTab.vue": stub("order-items"),
-		"../../purchase/lot/LotOrderDetailsTab.vue": stub("order-details"),
+		"../../purchase/lot/LotViewMain.vue": stub("lot-main"),
+		"../../purchase/lot/LotBomPanel.vue": stub("bom-panel"),
+		"../../purchase/lot/lotEditor.js": { editTabFor: tab => lotLayout.resolveLotTab(tab).tab },
+		"../../purchase/lot/lotLayout.js": lotLayout,
+		"../../purchase/lot/lotViews.js": lotViews,
+		"../../purchase/lot/useLotLayout.js": { useLotLayout: () => ({ activeTab: Vue.ref("lot"), expanded: Vue.ref([]), scrollTo: Vue.ref(""), openSection() {} }) },
 		"../../purchase/lot/LotFabricTab.vue": stub("fabric"),
 		"../../purchase/lot/LotEmptyState.vue": stub("empty"),
 		"../../purchase/lot/LotPurchaseOrderDialog.vue": stub("po-dialog"),
 		"../../purchase/lot/lotPurchaseActions.js": purchaseActions,
-		"../../sales/LotOcrTable.vue": stub("ocr"),
 		"../merchViews.js": { MERCH_ROUTES: { lotEdit: "merch-lot-edit", lotNew: "merch-lot-new" } },
 		"../../../composables/useDuplicateAction.js": duplicateAction,
 		"./merchLotViews.js": merchViews,

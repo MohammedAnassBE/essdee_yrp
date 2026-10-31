@@ -1,31 +1,3 @@
-import { LOT_DETAIL_GROUPS } from "../../purchase/lot/lotViews.js"
-
-export const MERCH_LOT_TABS = [
-	{ key: "details", label: "Details" },
-	{ key: "order-items", label: "Order Items" },
-	{ key: "order-details", label: "Lot Order Details" },
-	{ key: "fabric", label: "Cloth Program" },
-	{ key: "ppo", label: "PPO" },
-	{ key: "bom", label: "BOM Summary" },
-	{ key: "ocr", label: "OCR Detail" },
-]
-
-export function merchLotTabs(workspace = {}) {
-	const hasOcr = !Object.hasOwn(workspace, "ocr")
-		|| Object.keys(workspace.ocr?.processes || {}).length > 0 || Number(workspace.ocr?.total_dispatch) > 0
-	return MERCH_LOT_TABS.filter(tab => tab.key !== "ocr" || hasOcr)
-}
-export const MERCH_DETAIL_GROUPS = LOT_DETAIL_GROUPS.map((group) => ({
-	...group,
-	fields: group.key === "order" ? [...group.fields, "expected_delivery_date"] : group.fields,
-})).concat([
-	{
-		key: "ipd",
-		label: "From IPD",
-		fields: ["tech_pack_version", "pattern_version", "packing_combo"],
-	},
-])
-
 const ACTION_ICONS = {
 	edit: "pi pi-pencil",
 	build_cloth_programs: "pi pi-sitemap",
@@ -94,10 +66,6 @@ export function merchLotActions(workspace, execute, acting = "") {
 				command: () => execute(key),
 			}
 		})
-}
-
-export function isBoxLocked(locks, productionOrder, hasOrderDetails) {
-	return Boolean(locks?.order_details || (productionOrder && hasOrderDetails))
 }
 
 export function majorPieceTotal(groups) {
@@ -171,17 +139,4 @@ export function boxGrid(details) {
 			0,
 		)
 	return { rows, columns, values, sizes }
-}
-
-export function applyBoxGrid(details, values) {
-	const result = structuredClone(JSON.parse(JSON.stringify(details)))
-	const sizes = details.primary_attribute ? details.primary_attribute_values : ["default"]
-	result.items.forEach((item, index) =>
-		sizes.forEach((size, sizeIndex) => {
-			const cell = details.primary_attribute ? (item.values[size] ||= {}) : item.values
-			for (const field of ["qty", "ratio", "mrp"])
-				cell[field] = values[index][`${sizeIndex}:${field}`]
-		}),
-	)
-	return result
 }

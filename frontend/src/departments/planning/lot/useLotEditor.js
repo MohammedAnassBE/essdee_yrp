@@ -2,10 +2,12 @@ import { computed, onBeforeUnmount, reactive, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useToast } from "primevue/usetoast"
 import { getMeta } from "../../../api/frappe.js"
-import { getLotForm, getLotProductionDetailContext, getLotProductionOrderItem, saveLot } from "../../../api/planning.js"
+import { getLotForm, getLotProductionDetailContext, getLotProductionOrderItem, getLotWorkspace, saveLot } from "../../../api/planning.js"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import { PLANNING_ROUTES } from "../planningViews.js"
-import { clearedLotContext, clone, lotEditorCleanSignature, lotEditorTabs, lotSavePayload } from "./lotEditor.js"
+import { clearedLotContext, clone, lotEditorCleanSignature, lotSavePayload } from "../../purchase/lot/lotEditor.js"
+import { lotEditorTabs } from "../../purchase/lot/lotLayout.js"
+import { useLotLayout, useLotTabWorkspace } from "../../purchase/lot/useLotLayout.js"
 import { withSavedHandoff } from "../../../utils/documentLiveState.js"
 
 export function useLotEditor(lotId) {
@@ -27,7 +29,7 @@ export function useLotEditor(lotId) {
 	const actionError = ref("")
 	const cleanSignature = ref("")
 	const attemptedSave = ref(false)
-	const composerOpen = ref(!lotId)
+	const composerOpen = ref(false)
 	const reloadItemsVisible = ref(false)
 	let pendingField = null
 	let loadSequence = 0
@@ -40,11 +42,9 @@ export function useLotEditor(lotId) {
 	const canSave = computed(() => isDirty.value && Boolean(form.lot_name) && (isNew || Boolean(record.value?.modified)))
 	const hasStaleError = computed(() => /changed after you opened it/i.test(actionError.value))
 	const shellWorkspace = computed(() => record.value ? { record: { ...record.value, status: form.status, doctype: "SD YRP Lot" } } : {})
-	const tabs = computed(() => lotEditorTabs(form, orderItemDetails.value, isNew))
-	const activeTab = computed({
-		get: () => tabs.value.some((tab) => tab.key === route.query.tab) ? route.query.tab : "details",
-		set: (tab) => router.replace({ query: { ...route.query, tab }, hash: route.hash, state: preserveListNavigationState() }),
-	})
+	const tabs = lotEditorTabs(isNew)
+	const { activeTab, expanded, scrollTo, openSection } = useLotLayout(tabs, route, router)
+	const { tabWorkspace, tabLoading, tabError, loadTabWorkspace } = useLotTabWorkspace(lotId, activeTab, getLotWorkspace)
 	const editorActions = computed(() => [
 		{ key: "cancel", label: "Cancel", icon: "pi pi-times", command: cancel, disabled: Boolean(acting.value) },
 		...(record.value && !loadError.value ? [{ key: "save", label: isNew ? "Create Lot" : "Save", icon: "pi pi-save", primary: true, shortcut: "save",
@@ -68,7 +68,7 @@ export function useLotEditor(lotId) {
 		orderItemDetails.value = clone(payload.order_item_details)
 		fabricMeta.value = metadata.find((document) => document.name === "SD YRP Lot Fabric Detail")
 		if (!fabricMeta.value) throw new Error("Fabric Details metadata is missing.")
-		composerOpen.value = isNew
+		composerOpen.value = false
 		cleanSignature.value = lotEditorCleanSignature(payload, signature.value)
 		attemptedSave.value = false
 		showMessages(payload.messages)
@@ -159,7 +159,6 @@ export function useLotEditor(lotId) {
 		if (!isCurrentEvent(sequence)) return
 		Object.assign(derived, result.derived)
 		itemDetails.value = result.item_details
-		composerOpen.value = true
 		showMessages(result.messages)
 	}
 	function viewTarget(name, modified) {
@@ -169,7 +168,10 @@ export function useLotEditor(lotId) {
 		return lotId ? router.push(viewTarget(lotId, record.value?.modified)) : router.push({ name: PLANNING_ROUTES.lots })
 	}
 	function hasMissingRequiredFields() {
-		return fields.value.some((field) => field.reqd && !form[field.fieldname]) || form.lot_fabric_details.some((row) => !row.cloth_item)
+		if (form.lot_fabric_details.some((row) => !row.cloth_item)) openSection("fabric-details")
+		else if (fields.value.some((field) => field.reqd && !form[field.fieldname])) activeTab.value = "lot"
+		else return false
+		return true
 	}
 	async function save() {
 		attemptedSave.value = true
@@ -193,6 +195,7 @@ export function useLotEditor(lotId) {
 	onBeforeUnmount(() => { isUnmounted = true; ++eventSequence; ++mutationSequence; ++loadSequence })
 	load()
 	return { form, derived, record, fields, locks, colourAttribute, itemDetails, orderItemDetails, fabricMeta, loading, acting, loadError, actionError,
-		attemptedSave, composerOpen, reloadItemsVisible, isDirty, hasStaleError, shellWorkspace, tabs, activeTab, editorActions,
+		attemptedSave, composerOpen, reloadItemsVisible, isDirty, hasStaleError, shellWorkspace, tabs, activeTab, expanded, scrollTo, editorActions,
+		tabWorkspace, tabLoading, tabError, loadTabWorkspace,
 		setField, confirmReloadItems, reload, refresh, load }
 }

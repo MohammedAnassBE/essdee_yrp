@@ -40,134 +40,40 @@
 						Read only. You can view this lot. Editing needs write permission on SD YRP
 						Lot.
 					</Message>
-					<Tabs
-						v-model:value="activeTab"
-						scrollable
-						class="lot-tabs erp-tabs"
-					>
+					<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
 						<TabList class="lot-tablist">
-							<Tab
-								v-for="tab in tabs"
-								:key="tab.key"
-								:value="tab.key"
-							>
+							<Tab v-for="tab in LOT_TABS" :key="tab.key" :value="tab.key">
 								{{ tab.label }}
+								<span v-if="lotTabCount(workspace, tab.key) !== null">{{ lotTabCount(workspace, tab.key) }}</span>
 							</Tab>
 						</TabList>
 						<TabPanels class="lot-panels">
-							<TabPanel
-								v-if="activeTab === 'details'"
-								value="details"
-							>
-								<DocumentOverview
-									:fields="detailFields"
-									:definitions="MERCH_DETAIL_GROUPS"
-									id-prefix="merch-lot"
-									aria-label="Lot details"
-									include-empty
-								/>
+							<TabPanel v-if="activeTab === 'lot'" value="lot">
+								<LotViewMain v-model:expanded="expanded" :workspace="workspace" :scroll-to="scrollTo" :has-ppo="Boolean(workspace.ppo)" include-empty>
+									<template #quantities-actions>
+										<Message v-if="workspace.locks?.order_details" severity="warn" :closable="false">Locked: Time &amp; Action exists or the Lot was transferred.</Message>
+										<Button v-if="workspace.permissions?.can_write" class="lot-main__action" label="Change box quantity" icon="pi pi-pencil" severity="secondary" text @click="openEditor('lot')" />
+									</template>
+									<template #order-details-actions>
+										<Button v-if="workspace.permissions?.can_write" class="lot-main__action" label="Edit Lot Order Details" icon="pi pi-pencil" severity="secondary" text @click="openEditor('order-details')" />
+									</template>
+									<template #ppo>
+										<MerchLotPpoPanel :ppo="workspace.ppo" :item="header.item" :capability="workspace.capabilities?.change_ppo" :acting="Boolean(acting)" show-panel @update:visible="ppoVisible = $event" />
+									</template>
+								</LotViewMain>
 							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'order-items'"
-								value="order-items"
-							>
-								<Message
-									v-if="workspace.locks?.order_details"
-									severity="warn"
-									:closable="false"
-								>
-									Locked: Time &amp; Action exists or the Lot was transferred.
-								</Message>
-								<Button
-									v-if="workspace.permissions?.can_write"
-									label="Change box quantity"
-									icon="pi pi-pencil"
-									severity="secondary"
-									text
-									@click="openEditor('order-items')"
-								/>
-								<LotOrderItemsTab :order-items="workspace.order_items" />
-							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'order-details'"
-								value="order-details"
-							>
-								<Button
-									v-if="workspace.permissions?.can_write"
-									label="Edit Lot Order Details"
-									icon="pi pi-pencil"
-									severity="secondary"
-									text
-									@click="openEditor('order-details')"
-								/>
-								<LotOrderDetailsTab :order-details="workspace.order_details" />
-							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'fabric'"
-								value="fabric"
-							>
-								<div
-									v-if="
-										!workspace.fabrics?.length &&
-										!workspace.other_conversions?.length
-									"
-									class="lot-tab-stack"
-								>
-									<LotEmptyState
-										title="No cloth program yet."
-										reason="Build Cloth Program picks colours and excess % to plan the demanded cloths."
-									/>
-									<DocumentActionStrip
-										:actions="
-											actions.filter(
-												(action) => action.key === 'build_cloth_programs',
-											)
-										"
-									/>
+							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
+								<div v-if="!workspace.fabrics?.length && !workspace.other_conversions?.length" class="lot-tab-stack">
+									<LotEmptyState title="No cloth program yet." reason="Build Cloth Program picks colours and excess % to plan the demanded cloths." />
+									<DocumentActionStrip :actions="actions.filter((action) => action.key === 'build_cloth_programs')" />
 								</div>
-								<LotFabricTab
-									v-else
-									:fabrics="workspace.fabrics"
-									:other-conversions="workspace.other_conversions"
-								/>
+								<LotFabricTab v-else :fabrics="workspace.fabrics" :other-conversions="workspace.other_conversions" />
 							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'ppo'"
-								value="ppo"
-							>
-								<MerchLotPpoPanel
-									v-model:visible="ppoVisible"
-									:ppo="workspace.ppo"
-									:item="header.item"
-									:capability="workspace.capabilities?.change_ppo"
-									:acting="Boolean(acting)"
-									show-panel
-									@link="execute('change_ppo', $event)"
-								/>
-							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'bom'"
-								value="bom"
-							>
-								<MerchLotBomTab
-									:bom="workspace.bom"
-									:additional-items="workspace.bom_additional_items"
-									:can-edit="
-										workspace.capabilities?.update_bom_additional_items?.allowed
-									"
-									:acting="Boolean(acting)"
-									@save="execute('update_bom_additional_items', $event)"
-									@error="actionError = $event"
-								/>
-							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'ocr'"
-								value="ocr"
-							>
-								<LotOcrTable
-									:payload="workspace.ocr"
-									linked
-								/>
+							<TabPanel v-else-if="activeTab === 'bom'" value="bom">
+								<LotBomPanel :workspace="workspace">
+									<template #actions><DocumentActionStrip :actions="actions.filter((action) => action.key === 'calculate_bom')" /></template>
+									<MerchLotBomTab :bom="workspace.bom" :additional-items="workspace.bom_additional_items" :can-edit="workspace.capabilities?.update_bom_additional_items?.allowed" :acting="Boolean(acting)" @save="execute('update_bom_additional_items', $event)" @error="actionError = $event" />
+								</LotBomPanel>
 							</TabPanel>
 						</TabPanels>
 					</Tabs>
@@ -181,7 +87,6 @@
 			</FabricDocumentWorkspace>
 		</section>
 		<MerchLotPpoPanel
-			v-if="activeTab !== 'ppo'"
 			v-model:visible="ppoVisible"
 			:item="header.item"
 			:capability="workspace.capabilities?.change_ppo"
@@ -233,20 +138,22 @@ import DepartmentPage from "../../../components/DepartmentPage.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
-import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.vue"
 import LotIdentity from "../../purchase/lot/LotIdentity.vue"
-import LotOrderItemsTab from "../../purchase/lot/LotOrderItemsTab.vue"
-import LotOrderDetailsTab from "../../purchase/lot/LotOrderDetailsTab.vue"
+import LotBomPanel from "../../purchase/lot/LotBomPanel.vue"
+import LotViewMain from "../../purchase/lot/LotViewMain.vue"
+import { editTabFor } from "../../purchase/lot/lotEditor.js"
+import { LOT_TABS } from "../../purchase/lot/lotLayout.js"
+import { lotTabCount } from "../../purchase/lot/lotViews.js"
+import { useLotLayout } from "../../purchase/lot/useLotLayout.js"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import LotPurchaseOrderDialog from "../../purchase/lot/LotPurchaseOrderDialog.vue"
 import { purchaseOrderLinkActions } from "../../purchase/lot/lotPurchaseActions.js"
-import LotOcrTable from "../../sales/LotOcrTable.vue"
 import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
 import { MERCH_ROUTES } from "../merchViews.js"
-import { MERCH_DETAIL_GROUPS, merchLotCommandSuccess, merchLotTabs, merchLotActions } from "./merchLotViews.js"
+import { merchLotCommandSuccess, merchLotActions } from "./merchLotViews.js"
 import MerchClothProgramDialog from "./MerchClothProgramDialog.vue"
 import MerchLotBomTab from "./MerchLotBomTab.vue"
 import MerchLotDocuments from "./MerchLotDocuments.vue"
@@ -254,7 +161,6 @@ import MerchLotPpoPanel from "./MerchLotPpoPanel.vue"
 import "../../purchase/lot/lot.css"
 import "./merchLot.css"
 const props = defineProps({ lotId: { type: String, required: true } })
-const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const workspace = ref({})
@@ -274,21 +180,10 @@ const header = computed(() =>
 		(workspace.value.header || []).map((field) => [field.fieldname, field.value]),
 	),
 )
-const detailFields = computed(() => [
-	...(workspace.value.header || []),
-	...(workspace.value.details || []),
-	...(workspace.value.ipd_facts || []),
-])
 const shellWorkspace = computed(() =>
 	workspace.value.name ? { record: { ...workspace.value, doctype: "SD YRP Lot" } } : {},
 )
-const tabs = computed(() => merchLotTabs(workspace.value))
-const activeTab = computed({
-	get: () =>
-		tabs.value.some((tab) => tab.key === route.query.tab) ? route.query.tab : "details",
-	set: (tab) =>
-		router.replace({ query: { ...route.query, tab }, state: preserveListNavigationState() }),
-})
+const { activeTab, expanded, scrollTo } = useLotLayout(LOT_TABS, useRoute(), router)
 const duplicateAction = useDuplicateAction({
 	canCreate: () => workspace.value.permissions?.can_create,
 	newRouteName: MERCH_ROUTES.lotNew,
@@ -308,7 +203,7 @@ function openEditor(tab = activeTab.value) {
 	return router.push({
 		name: MERCH_ROUTES.lotEdit,
 		params: { lotId: props.lotId },
-		query: { tab: ["order-items", "order-details"].includes(tab) ? tab : "details" },
+		query: { tab: tab === "order-details" ? tab : editTabFor(tab) },
 		state: preserveListNavigationState(props.lotId, workspace.value.modified),
 	})
 }

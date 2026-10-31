@@ -3,9 +3,7 @@ import fs from "node:fs"
 import test from "node:test"
 
 const files = [
-	"../src/departments/planning/lot/LotOrderItemsEditor.vue",
 	"../src/departments/purchase/lot/LotOrderItemsEditor.vue",
-	"../src/departments/merch/lot/MerchBoxRowComposer.vue",
 ]
 
 function handlerFrom(source, addRow) {

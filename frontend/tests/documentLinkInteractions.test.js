@@ -4,7 +4,6 @@ import test from 'node:test'
 import { Vue, findNodes, loadComponent, mountComponent } from '../../scripts/helpers/vue_renderer.mjs'
 import * as grid from '../src/components/common/entryGrid.js'
 import * as purchaseLotViews from '../src/departments/purchase/lot/lotViews.js'
-import * as planningLotViews from '../src/departments/planning/lot/lotViews.js'
 import * as targets from '../src/utils/linkTarget.js'
 
 const nodes = (root, type) => findNodes(root, node => node.type === type)
@@ -17,6 +16,7 @@ function component(path, lotViews = purchaseLotViews) {
 		'./entryGrid.js': grid,
 		'./LinkField.vue': control,
 		'./lotViews.js': lotViews,
+		'../../purchase/lot/lotViews.js': lotViews,
 		'primevue/button': control,
 		'primevue/skeleton': control,
 		'../../../components/documents/DocumentStatusBadge.vue': control,
@@ -94,7 +94,7 @@ test('grid cells still handle Enter navigation and Delete clearing', () => reada
 	assert.equal(changes[0].r2.item, null)
 }))
 
-for (const [department, lotViews] of [['purchase', purchaseLotViews], ['planning', planningLotViews]]) {
+for (const [department, lotViews] of [['purchase', purchaseLotViews], ['planning', purchaseLotViews]]) {
 	for (const canRead of [false, true]) {
 		test(`${department} rail Supplier ${canRead ? 'anchor stops' : 'fallback permits'} document card clicks`, () => readable(canRead ? ['Supplier'] : [], () => {
 			const opened = []

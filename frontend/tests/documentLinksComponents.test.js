@@ -6,7 +6,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import * as overview from "../src/utils/documentOverview.js"
 import * as values from "../src/utils/documentValues.js"
 import * as autocompleteKeys from "../src/components/common/autocompleteKeys.js"
-import { MERCH_DETAIL_GROUPS } from "../src/departments/merch/lot/merchLotViews.js"
+import { LOT_HEADER_GROUPS, LOT_IPD_FIELDS, LOT_ORDER_DETAIL_FIELDS, LOT_TRANSFER_FIELDS, workspaceFacts } from "../src/departments/purchase/lot/lotLayout.js"
 
 import * as target from "../src/utils/linkTarget.js"
 import * as quickEntry from "../src/utils/quickEntry.js"
@@ -109,9 +109,13 @@ test("Merch Lot overview links every requested Link fact using Lot metadata and 
 		const previous = globalThis.location
 		globalThis.location = { pathname: "/web/merch/lots/Lot" }
 		try {
-			const root = mountComponent(component("components/documents/DocumentOverview"), { fields, definitions: MERCH_DETAIL_GROUPS })
-			assert.deepEqual(nodes(root, "a").map(node => [text(node), node.props.href]).sort(), Object.values(values).filter(([, href]) => href).map(([name, href, label]) => [label ?? name, href]).sort())
-			assert.equal(nodes(root, "dd").length, fields.length)
+			const header = mountComponent(component("components/documents/DocumentOverview"), { fields, definitions: LOT_HEADER_GROUPS })
+			const sectionFields = [...new Set([...LOT_ORDER_DETAIL_FIELDS, ...LOT_IPD_FIELDS, ...LOT_TRANSFER_FIELDS])]
+			const sections = mountComponent(component("departments/purchase/lot/LotFacts"), { facts: workspaceFacts(fields, sectionFields), ariaLabel: "Lot sections" })
+			const anchors = [...nodes(header, "a"), ...nodes(sections, "a")].map(node => [text(node), node.props.href])
+			assert.deepEqual([...new Set(anchors.map(String))].sort(), Object.values(values).filter(([, href]) => href).map(([name, href, label]) => String([label ?? name, href])).sort())
+			const shown = new Set([...LOT_HEADER_GROUPS.flatMap(group => group.fields), ...sectionFields])
+			assert.ok(fields.every(field => shown.has(field.fieldname)), "every Lot fact has a place on the Lot tab")
 		} finally { globalThis.location = previous }
 	})
 })
@@ -169,7 +173,7 @@ test("FormView read mode resolves Dynamic Link records and gates links", () => r
 	assert.deepEqual(nodes(root, "a").map(node => node.props.href), ["/web/purchase/items/A%2FB", "/web/purchase/items/Dynamic"])
 }))
 
-for (const department of ["purchase", "planning"]) {
+for (const department of ["purchase"]) {
 	test(`${department} LotIdentity links the header Item with unchanged display text`, () => readable(["Item"], () => {
 		const root = mountComponent(component(`departments/${department}/lot/LotIdentity`, undefined, {
 			"../../../components/documents/DocumentStatusBadge.vue": control,

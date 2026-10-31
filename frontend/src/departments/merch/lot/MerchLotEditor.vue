@@ -37,81 +37,61 @@
 				>
 					{{ quantityWarning }}
 				</Message>
-				<Tabs
-					v-model:value="activeTab"
-					scrollable
-					class="lot-tabs erp-tabs"
-				>
+				<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
 					<TabList class="lot-tablist">
-						<Tab
-							v-for="tab in tabs"
-							:key="tab.key"
-							:value="tab.key"
-						>
+						<Tab v-for="tab in tabs" :key="tab.key" :value="tab.key">
 							{{ tab.label }}
-							<span v-if="tab.count !== null">{{ tab.count }}</span>
-							<span v-else-if="tab.key === 'order-items'">
-								{{ itemDetails?.items.length || 0 }}
-							</span>
+							<span v-if="tab.key === 'fabric'">{{ readOnlyWorkspace.fabrics?.length || 0 }}</span>
 						</Tab>
 					</TabList>
-					<TabPanels
-						ref="panels"
-						class="lot-panels"
-					>
-						<TabPanel
-							v-if="activeTab === 'details'"
-							value="details"
-						>
-							<MerchLotEditorDetails
+					<TabPanels ref="panels" class="lot-panels">
+						<TabPanel v-if="activeTab === 'lot'" value="lot">
+							<LotEditorMain
+								v-model:expanded="expanded"
 								:form="form"
 								:derived="derived"
 								:fields="fields"
 								:fabric-meta="fabricMeta"
+								:order-item-details="orderItemDetails"
+								:ipd-fields="LOT_IPD_FIELDS"
+								:scroll-to="scrollTo"
 								:attempted-save="attemptedSave"
 								:disabled="Boolean(acting)"
 								@set-field="setField"
 								@fabric-rows="form.lot_fabric_details = $event"
-							/>
+							>
+								<template #quantities>
+									<LotOrderItemsEditor
+										v-model:item-details="itemDetails"
+										v-model:composer-open="composerOpen"
+										:production-order="form.production_order || ''"
+										:has-order-details="Boolean(orderItemDetails.length)"
+										:is-locked="locks.order_details"
+										:box-locked="locks.box_locked"
+										:disabled="Boolean(acting)"
+									/>
+								</template>
+								<template #order-details>
+									<MerchColourwiseEditor
+										:groups="orderItemDetails"
+										:colour-attribute="colourAttribute"
+										:version="derived.version || ''"
+										:is-locked="locks.order_details"
+										:disabled="Boolean(acting)"
+									/>
+									<LotOrderDetailsTab v-if="readOnlyWorkspace.order_details" :order-details="readOnlyWorkspace.order_details" />
+								</template>
+							</LotEditorMain>
 						</TabPanel>
-						<TabPanel
-							v-else-if="activeTab === 'order-items'"
-							value="order-items"
-						>
-							<MerchBoxQuantityEditor
-								v-model:item-details="itemDetails"
-								v-model:composer-open="composerOpen"
-								:production-order="form.production_order || ''"
-								:has-order-details="Boolean(orderItemDetails.length)"
-								:is-locked="locks.order_details"
-								:box-locked="locks.box_locked"
-								:disabled="Boolean(acting)"
-							/>
+						<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
+							<LotFabricTab :fabrics="readOnlyWorkspace.fabrics" :other-conversions="readOnlyWorkspace.other_conversions" />
 						</TabPanel>
-						<TabPanel
-							v-else-if="activeTab === 'order-details'"
-							value="order-details"
-						>
-							<MerchColourwiseEditor
-								:groups="orderItemDetails"
-								:colour-attribute="colourAttribute"
-								:version="derived.version || ''"
-								:is-locked="locks.order_details"
-								:disabled="Boolean(acting)"
-							/>
-							<LotOrderDetailsTab
-								v-if="readOnlyWorkspace.order_details"
-								:order-details="readOnlyWorkspace.order_details"
-							/>
-						</TabPanel>
-						<TabPanel
-							v-else-if="activeTab === 'fabric'"
-							value="fabric"
-						>
-							<LotFabricTab
-								:fabrics="readOnlyWorkspace.fabrics"
-								:other-conversions="readOnlyWorkspace.other_conversions"
-							/>
+						<TabPanel v-else-if="activeTab === 'bom'" value="bom">
+							<p v-if="tabLoading" class="lot-edit-hint" role="status">Loading BOM…</p>
+							<Message v-else-if="tabError" severity="error" :closable="false">{{ tabError }}</Message>
+							<LotBomPanel v-else-if="tabWorkspace" :workspace="tabWorkspace">
+								<MerchLotBomTab :bom="tabWorkspace.bom" :additional-items="tabWorkspace.bom_additional_items" :can-edit="false" :acting="Boolean(acting)" />
+							</LotBomPanel>
 						</TabPanel>
 					</TabPanels>
 				</Tabs>
@@ -150,13 +130,16 @@ import DocumentActionStrip from "../../../components/documents/DocumentActionStr
 import DocumentConfirmationDialog from "../../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.vue"
-import MerchLotEditorDetails from "./MerchLotEditorDetails.vue"
+import MerchLotBomTab from "./MerchLotBomTab.vue"
+import LotBomPanel from "../../purchase/lot/LotBomPanel.vue"
+import LotEditorMain from "../../purchase/lot/LotEditorMain.vue"
+import { LOT_IPD_FIELDS } from "../../purchase/lot/lotLayout.js"
 import MerchLotDocuments from "./MerchLotDocuments.vue"
 import LotOrderDetailsTab from "../../purchase/lot/LotOrderDetailsTab.vue"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotIdentity from "../../purchase/lot/LotIdentity.vue"
 import MerchColourwiseEditor from "./MerchColourwiseEditor.vue"
-import MerchBoxQuantityEditor from "./MerchBoxQuantityEditor.vue"
+import LotOrderItemsEditor from "../../purchase/lot/LotOrderItemsEditor.vue"
 import { useMerchLotEditor } from "./useMerchLotEditor.js"
 import { totalsWarning } from "./merchLotViews.js"
 import "../../purchase/lot/lot.css"
@@ -186,6 +169,11 @@ const {
 	shellWorkspace,
 	tabs,
 	activeTab,
+	expanded,
+	scrollTo,
+	tabWorkspace,
+	tabLoading,
+	tabError,
 	editorActions,
 	setField,
 	confirmReloadItems,

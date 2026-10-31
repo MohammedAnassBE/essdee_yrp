@@ -27,62 +27,30 @@
 				<template #matrix>
 					<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
 						<TabList ref="tabList" class="lot-tablist">
-							<Tab v-for="tab in tabs" :key="tab.key" :value="tab.key">
+							<Tab v-for="tab in LOT_TABS" :key="tab.key" :value="tab.key">
 								{{ tab.label }}
-								<span v-if="lotTabCount(workspace, tab.key) !== null">
-									{{ lotTabCount(workspace, tab.key) }}
-								</span>
+								<span v-if="lotTabCount(workspace, tab.key) !== null">{{ lotTabCount(workspace, tab.key) }}</span>
 							</Tab>
 						</TabList>
 						<TabPanels ref="tabPanels" class="lot-panels">
-							<TabPanel v-if="activeTab === 'details'" value="details">
-								<DocumentOverview
-									v-if="detailGroups.length"
-									:fields="detailFields"
-									:definitions="LOT_DETAIL_GROUPS"
-									id-prefix="lot-details"
-									aria-label="Lot details"
-								/>
-								<LotEmptyState
-									v-else
-									title="No lot details recorded"
-									reason="No order, production, packing, BOM or transfer facts are recorded."
-								/>
-							</TabPanel>
-							<TabPanel v-else-if="activeTab === 'order-items'" value="order-items">
-								<LotOrderItemsTab :order-items="workspace.order_items" />
-							</TabPanel>
-							<TabPanel
-								v-else-if="activeTab === 'order-details'"
-								value="order-details"
-							>
-								<LotOrderDetailsTab :order-details="workspace.order_details" />
-							</TabPanel>
-							<TabPanel v-else-if="activeTab === 'bom'" value="bom">
-								<LotBomTab :bom="workspace.bom" />
-							</TabPanel>
-							<TabPanel v-else-if="activeTab === 'ocr'" value="ocr">
-								<section class="lot-section">
-									<header>
-										<div>
-											<span>OCR</span>
-											<h2>Process movement</h2>
-										</div>
-										<span class="lot-count">
-											{{
-												countLabel(ocrProcessCount, "process", "processes")
-											}}
-										</span>
-									</header>
-									<LotOcrTable :payload="workspace.ocr" linked />
-								</section>
+							<TabPanel v-if="activeTab === 'lot'" value="lot">
+								<LotViewMain v-model:expanded="expanded" :workspace="workspace" :scroll-to="scrollTo" />
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
-								<LotFabricTab
-									:fabrics="workspace.fabrics"
-									:lot="workspace.name" :modified="workspace.modified" :can-write="Boolean(workspace.permissions?.can_write)" @changed="load(true)"
-									:other-conversions="workspace.other_conversions"
+								<LotEmptyState
+									v-if="!workspace.permissions?.can_write && !workspace.fabrics?.length && !workspace.other_conversions?.length"
+									title="No cloth program yet"
+									reason="No cloth routes are planned for this Lot."
 								/>
+								<LotFabricTab
+									v-else
+									:fabrics="workspace.fabrics || []"
+									:lot="workspace.name" :modified="workspace.modified" :can-write="Boolean(workspace.permissions?.can_write)" @changed="load(true)"
+									:other-conversions="workspace.other_conversions || []"
+								/>
+							</TabPanel>
+							<TabPanel v-else-if="activeTab === 'bom'" value="bom">
+								<LotBomPanel :workspace="workspace" />
 							</TabPanel>
 						</TabPanels>
 					</Tabs>
@@ -122,35 +90,26 @@ import { useRoute, useRouter } from "vue-router"
 import { getLotDocuments, getLotWorkspace } from "../../../api/purchase.js"
 import DepartmentPage from "../../../components/DepartmentPage.vue"
 import { useDuplicateAction } from "../../../composables/useDuplicateAction.js"
-import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import LotIdentity from "./LotIdentity.vue"
 import LotPurchaseOrderDialog from "./LotPurchaseOrderDialog.vue"
 import { lotPurchaseSummaryRoute, purchaseLotActions } from "./lotPurchaseActions.js"
 import { editTabFor } from "./lotEditor.js"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
-import { buildDocumentOverviewGroups } from "../../../utils/documentOverview.js"
 import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.vue"
-import LotOcrTable from "../../sales/LotOcrTable.vue"
 import { PURCHASE_ROUTES, isCurrentRecordRequest } from "../purchaseViews.js"
-import LotBomTab from "./LotBomTab.vue"
+import LotBomPanel from "./LotBomPanel.vue"
 import LotDocumentDialog from "./LotDocumentDialog.vue"
 import LotDocumentsRail from "./LotDocumentsRail.vue"
 import LotEmptyState from "./LotEmptyState.vue"
 import LotFabricTab from "./LotFabricTab.vue"
-import LotOrderDetailsTab from "./LotOrderDetailsTab.vue"
-import LotOrderItemsTab from "./LotOrderItemsTab.vue"
-import {
-	LOT_DETAIL_GROUPS,
-	countLabel,
-	lotDetailFields,
-	lotTabCount,
-	lotTabs,
-} from "./lotViews.js"
+import LotViewMain from "./LotViewMain.vue"
+import { lotTabCount } from "./lotViews.js"
+import { LOT_TABS } from "./lotLayout.js"
+import { useLotLayout } from "./useLotLayout.js"
 import "./lot.css"
 
 const props = defineProps({ lotId: { type: String, required: true } })
-const route = useRoute()
 const router = useRouter()
 const workspace = ref({})
 const loading = ref(true)
@@ -170,8 +129,6 @@ let loadSequence = 0
 // Responses that land after leaving the page are dropped by the sequence checks.
 onBeforeUnmount(() => { loadSequence += 1 })
 let documentsSequence = 0
-const tabs = computed(() => lotTabs(workspace.value))
-const ocrProcessCount = computed(() => Object.keys(workspace.value.ocr?.processes || {}).length)
 const shellWorkspace = computed(() =>
 	loading.value || !workspace.value.name
 		? {}
@@ -190,19 +147,7 @@ const headerValues = computed(
 )
 const item = computed(() => headerValues.value.get("item"))
 const deliveryDate = computed(() => headerValues.value.get("expected_delivery_date"))
-const detailFields = computed(() => lotDetailFields(workspace.value))
-const detailGroups = computed(() =>
-	buildDocumentOverviewGroups(detailFields.value, LOT_DETAIL_GROUPS),
-)
-const activeTab = computed({
-	get: () => (tabs.value.some((t) => t.key === route.query.tab) ? route.query.tab : "details"),
-	set: (tab) =>
-		router.replace({
-			query: { ...route.query, tab },
-			hash: route.hash,
-			state: preserveListNavigationState(),
-		}),
-})
+const { activeTab, expanded, scrollTo } = useLotLayout(LOT_TABS, useRoute(), router)
 
 const duplicateAction = useDuplicateAction({
 	canCreate: () => workspace.value.permissions?.can_create,

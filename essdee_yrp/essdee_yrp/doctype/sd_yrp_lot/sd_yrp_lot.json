@@ -58,6 +58,7 @@
   "lot_item_order_detail_html",
   "lot_order_details_json",
   "total_order_quantity",
+  "bom_tab",
   "bill_of_materials_section",
   "total_quantity",
   "last_calculated_time",
@@ -194,6 +195,11 @@
    "hidden": 1,
    "label": "Total Final Qty",
    "read_only": 1
+  },
+  {
+   "fieldname": "bom_tab",
+   "fieldtype": "Tab Break",
+   "label": "BOM"
   },
   {
    "fieldname": "bill_of_materials_section",
@@ -560,7 +566,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-22 12:00:00.000000",
+ "modified": "2026-10-31 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Lot",

@@ -812,3 +812,31 @@
 	content: " ↗";
 	color: var(--erp-accent);
 }
+
+.lot-collapsible > header { padding: 0 13px 0 0; }
+.lot-collapsible:not(.is-open) > header { border-bottom: 0; }
+.lot-collapsible__toggle {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 13px;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.lot-collapsible__toggle:hover { background: var(--erp-surface-muted); }
+.lot-collapsible__toggle:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: -2px; }
+.lot-collapsible__toggle > i { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); }
+.lot-collapsible__body { display: grid; min-width: 0; gap: var(--erp-space-3); padding: var(--erp-space-3); }
+.lot-collapsible__body > .lot-table-wrap, .lot-collapsible__body .lot-section { border: 1px solid var(--erp-border); }
+.lot-main > .lot-collapsible, .lot-main > .lot-section { border: 1px solid var(--erp-border); border-radius: var(--erp-radius-md, 8px); }
+.lot-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 0 var(--erp-space-3); margin: 0; }
+.lot-facts dt { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.lot-facts dd { overflow: hidden; margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-md); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+/* No rowspan: equal cell counts per row keep v-entry-table's up/down arrows in the same size column. */
+.lot-order-quantities tbody tr:not(:last-child) .lot-order-quantities__lead { border-bottom-color: transparent; }

@@ -89,7 +89,7 @@ import {
 	countLabel,
 	lotDocumentQuantityLine,
 	lotDocumentSections,
-} from "./lotViews.js"
+} from "../../purchase/lot/lotViews.js"
 import { formatDisplayDate } from "../../../utils/dateFormat.js"
 
 const props = defineProps({

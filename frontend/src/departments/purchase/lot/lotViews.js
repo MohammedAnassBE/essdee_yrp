@@ -1,87 +1,10 @@
 import { formatDisplayDate } from "../../../utils/dateFormat.js"
 
-export const LOT_DETAIL_GROUPS = [
-	{
-		key: "order",
-		label: "Order",
-		icon: "pi pi-shopping-bag",
-		description: "Sales order, season and ownership",
-		fields: ["production_order", "season", "assigned_person", "version", "capacity_planning"],
-	},
-	{
-		key: "production",
-		label: "Production",
-		icon: "pi pi-cog",
-		description: "Production detail and cloth settings",
-		fields: [
-			"production_detail",
-			"primary_item_attribute",
-			"size_set_colour",
-			"uom",
-			"cloth_excess_percentage",
-		],
-	},
-	{
-		key: "packing",
-		label: "Packing",
-		icon: "pi pi-box",
-		description: "Pack stages and total order quantity",
-		fields: ["pack_in_stage", "pack_out_stage", "packing_uom", "total_order_quantity"],
-	},
-	{
-		key: "bom",
-		label: "BOM",
-		icon: "pi pi-list",
-		description: "Last BOM calculation",
-		fields: ["total_quantity", "last_calculated_time"],
-	},
-	{
-		key: "transfer",
-		label: "Transfer",
-		icon: "pi pi-arrow-right-arrow-left",
-		description: "Lot transfer state",
-		fields: ["has_transferred", "is_transferred", "transferred_lot"],
-	},
-]
-
-export function lotDetailFields(workspace = {}) {
-	const fields = [...(workspace.header || []), ...(workspace.details || [])]
-	const allowed = new Set(LOT_DETAIL_GROUPS.flatMap((group) => group.fields))
-	return [
-		...new Map(
-			fields
-				.filter((field) => allowed.has(field.fieldname))
-				.map((field) => [field.fieldname, field]),
-		).values(),
-	]
-}
-
 export function bomSections(bom = {}) {
 	return [
 		{ key: "summary", label: "BOM Summary", rows: bom.summary },
 		{ key: "additional", label: "BOM Additional Items", rows: bom.additional },
 	].filter((section) => section.rows?.length)
-}
-
-export function lotTabs(workspace = {}) {
-	return [
-		{ key: "details", label: "Details", visible: true },
-		{ key: "order-items", label: "Order Items", visible: Boolean(workspace.order_items) },
-		{
-			key: "order-details",
-			label: "Lot Order Details",
-			visible: Boolean(workspace.order_details),
-		},
-		{ key: "bom", label: "BOM Summary", visible: Boolean(workspace.bom) },
-		{ key: "ocr", label: "OCR Detail", visible: Boolean(workspace.ocr) },
-		{
-			key: "fabric",
-			label: "Cloth Program",
-			visible: Boolean(workspace.permissions?.can_write || workspace.fabrics?.length || workspace.other_conversions?.length),
-		},
-	]
-		.filter((tab) => tab.visible)
-		.map(({ key, label }) => ({ key, label }))
 }
 
 export function orderItemRows(orderItems = {}) {
@@ -247,11 +170,6 @@ export function quantityTotal(value, digits = 3) {
 
 export function lotTabCount(workspace, key) {
 	const counts = {
-		"order-items": workspace.order_items?.items?.length || 0,
-		"order-details": (workspace.order_details?.groups || []).reduce(
-			(sum, group) => sum + (group.items?.length || 0),
-			0,
-		),
 		bom: (workspace.bom?.summary?.length || 0) + (workspace.bom?.additional?.length || 0),
 		fabric: workspace.fabrics?.length || 0,
 	}

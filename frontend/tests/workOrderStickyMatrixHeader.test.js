@@ -19,7 +19,6 @@ test("Work Order boxes between the tables and the page or dialog scroller never 
 		["departments/fabric-store/WorkOrderDetails.vue", "work-order-section"],
 		["departments/fabric-store/WorkOrderSummary.vue", "work-order-summary__section"],
 		["departments/FabricWorkOrder.vue", "work-order-tabs"],
-		["departments/planning/lot/lot.css", "lot-section"],
 		["departments/purchase/lot/lot.css", "lot-section"],
 	]
 	for (const [path, selector] of boxes) {
@@ -34,7 +33,7 @@ test("Work Order tab list scrolls away so table headers own the top of the scrol
 })
 
 test("Lot document pop-up has no top padding on its scroller so pinned Work Order headers sit flush", () => {
-	for (const path of ["departments/planning/lot/lot.css", "departments/purchase/lot/lot.css"]) {
+	for (const path of ["departments/purchase/lot/lot.css"]) {
 		assert.match(read(path), /\.lot-document-dialog\.p-dialog \.p-dialog-content \{\s*padding-top: 0;\s*\}/, path)
 	}
 })

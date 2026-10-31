@@ -1,21 +1,16 @@
+import { resolveLotTab } from "./lotLayout.js"
 export const LOT_EDIT_GROUPS = [
 	{ key: "order", eyebrow: "Lot", label: "Lot & order", fields: ["lot_name", "production_order", "item", "production_detail"] },
 	{ key: "planning", eyebrow: "Planning", label: "Owner & schedule", fields: ["assigned_person", "season", "expected_delivery_date", "status"] },
 	{ key: "production", eyebrow: "Production", label: "Production settings", fields: ["primary_item_attribute", "size_set_colour", "capacity_planning"] },
-	{ key: "derived", eyebrow: "From IPD", label: "Derived from Item Production Detail", fields: ["uom", "pack_in_stage", "pack_out_stage", "packing_uom", "version", "cloth_excess_percentage", "total_order_quantity"] },
 ]
 export const IPD_DERIVED_FIELDS = ["uom", "pack_in_stage", "pack_in_stage_name", "packing_uom", "pack_out_stage", "pack_out_stage_name", "dependent_attribute_mapping", "tech_pack_version", "pattern_version", "packing_combo"]
-export const DERIVED_LABELS = { uom: "UOM", pack_in_stage: "Pack In Stage", pack_out_stage: "Pack Out Stage", packing_uom: "Packing UOM", version: "Version", cloth_excess_percentage: "Cloth Excess Percentage", total_order_quantity: "Total Order Quantity" }
 
 export function editTabFor(tab) {
-	return ["order-items", "order-details"].includes(tab) ? tab : "details"
+	return resolveLotTab(tab).tab
 }
-export function lotEditorTabs(form, orderItemDetails, isNew) {
-	return [
-		{ key: "details", label: "Details", visible: true, count: null },
-		{ key: "order-items", label: "Order Items", visible: Boolean(form.item && form.production_detail), count: null },
-		{ key: "order-details", label: "Lot Order Details", visible: !isNew && Boolean(orderItemDetails.length), count: orderItemDetails.reduce((sum, group) => sum + group.items.length, 0) },
-	].filter((tab) => tab.visible)
+export function lotFabricErrors(rows, attemptedSave) {
+	return Object.fromEntries(rows.flatMap((row, index) => attemptedSave && !row.cloth_item ? [[`${index}.cloth_item`, "Cloth Item is required."]] : []))
 }
 export function lotLinkFilters(fieldname, form) {
 	if (fieldname === "production_order") return { docstatus: 1, ...(form.item ? { item: form.item } : {}) }
@@ -39,7 +34,7 @@ export function clearedLotContext(fieldname, form, derived) {
 	return { form: values, derived: clearsDerived ? { ...derived, ...Object.fromEntries(IPD_DERIVED_FIELDS.map((key) => [key, ""])) } : derived, itemDetails: null }
 }
 export function lotSavePayload(form, itemDetails, orderItemDetails) {
-	const fields = LOT_EDIT_GROUPS.filter((group) => group.key !== "derived").flatMap((group) => group.fields)
+	const fields = LOT_EDIT_GROUPS.flatMap((group) => group.fields)
 	return clone({ ...Object.fromEntries(fields.map((key) => [key, form[key]])), lot_fabric_details: form.lot_fabric_details,
 		item_details: itemDetails ? [itemDetails] : [], order_item_details: orderItemDetails })
 }
@@ -94,3 +89,24 @@ export function setColourNote(item, version) {
 	return ["V2", "V3"].includes(version) && item.is_set_item && item.attributes[item.set_attr] !== item.major_attr_value ? item.item_keys.major_colour : null
 }
 export function clone(value) { return JSON.parse(JSON.stringify(value)) }
+export const ORDER_STAGES = [{ key: "qty", label: "Qty" }, { key: "ratio", label: "Ratio" }, { key: "mrp", label: "MRP" }]
+export function isBoxLocked(locks, productionOrder, hasOrderDetails) {
+	return Boolean(locks?.order_details || (productionOrder && hasOrderDetails))
+}
+/** Sizes of the box grid; items without a primary attribute keep one value set. */
+export function orderSizes(details) {
+	return details.primary_attribute ? details.primary_attribute_values : [null]
+}
+export function orderCell(item, size) {
+	return size === null ? item.values : item.values[size]
+}
+export function orderRowTotal(item, sizes) {
+	return sizes.reduce((sum, size) => sum + Number(orderCell(item, size)?.qty || 0), 0)
+}
+export function setOrderCell(item, size, field, value) {
+	const cell = size === null ? item.values : (item.values[size] ||= { qty: 0, ratio: 0, mrp: 0 })
+	cell[field] = value ?? 0
+}
+export function blankOrderRow(details) {
+	return { attributes: {}, primary_attribute: details.primary_attribute, values: lotOrderEntry(details).values }
+}

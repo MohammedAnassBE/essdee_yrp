@@ -1,4 +1,5 @@
 <template>
+	<UserAvatar />
 	<button type="button" class="app-theme-toggle app-logout" aria-label="Log out" title="Log out" @click="confirmation.open('logout')">
 		<i class="pi pi-sign-out" aria-hidden="true" />
 		<span>Log out</span>
@@ -39,7 +40,8 @@
 import Menu from "primevue/menu"
 import { defineAsyncComponent, ref, watch } from "vue"
 
-import { createAccountConfirmation } from "./accountMenu.js"
+import { createAccountConfirmation, getAccountMenuItems } from "./accountMenu.js"
+import UserAvatar from "./UserAvatar.vue"
 
 // Lazy: the dialogs are loaded on first use, so they stay out of the entry chunk.
 const DocumentConfirmationDialog = defineAsyncComponent(() => import("../documents/DocumentConfirmationDialog.vue"))
@@ -54,8 +56,8 @@ const confirmationLoaded = ref(false)
 const passwordDialogLoaded = ref(false)
 watch(() => confirmation.current.value, (current) => { if (current) confirmationLoaded.value = true })
 watch(changingPassword, (open) => { if (open) passwordDialogLoaded.value = true })
-const menuItems = [
-	{ label: "Change Password", icon: "pi pi-key", command: () => { changingPassword.value = true } },
-	{ label: "Log out from all devices", icon: "pi pi-sign-out", class: "app-account-menu__item--danger", command: () => confirmation.open("logout-all") },
-]
+const menuItems = getAccountMenuItems({
+	changePassword: () => { changingPassword.value = true },
+	logOutAllDevices: () => confirmation.open("logout-all"),
+})
 </script>

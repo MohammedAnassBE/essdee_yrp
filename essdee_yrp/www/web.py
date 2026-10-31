@@ -22,10 +22,10 @@ import os
 
 import frappe
 import frappe.sessions
+from frappe.core.doctype.navbar_settings.navbar_settings import get_app_logo
 
 no_cache = 1
 
-ASSET_BASE = "/assets/essdee_yrp/frontend/"
 
 # The exact DocTypes the /web SPA exposes. CHECKLIST RULE (spec §8.1): whenever
 # a routed doctype is added to the frontend, add it HERE so
@@ -86,12 +86,6 @@ _PTYPE_KEYS = {
 }
 
 
-def _website_asset(field, fallback):
-	"""Logo / favicon are sourced from Website Settings so an admin controls them
-	without a rebuild; fall back to the bundled Essdee asset when the field is empty."""
-	return frappe.db.get_single_value("Website Settings", field) or (ASSET_BASE + fallback)
-
-
 def get_context(context):
 	if frappe.session.user == "Guest":
 		frappe.local.flags.redirect_location = "/login?redirect-to=/web"
@@ -102,7 +96,6 @@ def get_context(context):
 
 	context.csrf_token = csrf_token
 	context.boot = get_boot()
-	context.favicon = _website_asset("favicon", "favicon.png")
 	context.no_cache = 1
 	context.no_header = 1
 	context.no_sidebar = 1
@@ -160,12 +153,14 @@ def _apply_accurate_web_perms(user):
 def get_boot():
 	user = json.loads(frappe.as_json(frappe.get_user().load_user()))
 	_apply_accurate_web_perms(user)
+	user["full_name"], user["user_image"] = frappe.db.get_value("User", user["name"], ["full_name", "user_image"])
 	return {
 		"site_name": frappe.local.site,
 		# The SPA uses the separate socket port only under the development server.
 		"socketio_port": frappe.conf.socketio_port or 9000,
 		"dev_server": bool(frappe._dev_server),
-		"app_logo": _website_asset("app_logo", "essdee-logo.png"),
+		# Desk's logo: Website Settings / Navbar Settings app_logo, else the app_logo_url hook.
+		"app_logo": get_app_logo(),
 		"user": user,
 		# Per-user UI config is resolved by Essdee and injected synchronously.
 		# On failure, the SPA uses its compiled-in workspace defaults.

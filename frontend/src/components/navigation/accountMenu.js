@@ -2,6 +2,7 @@ import { computed, ref } from "vue"
 
 import { logOut } from "../../api/frappe.js"
 import { logOutAllDevices } from "../../api/account.js"
+import { hasSystemManagerRole } from "./sessionUser.js"
 
 export const ACCOUNT_CONFIRMATIONS = {
 	logout: {
@@ -49,4 +50,14 @@ export function createAccountConfirmation(actions = { logout: logOut, "logout-al
 	}
 
 	return { pending, busy, error, current, open, cancel, confirm }
+}
+
+/** ⋮ menu items; "Switch to Desk" only for System Managers (Desk always admits them). */
+export function getAccountMenuItems({ changePassword, logOutAllDevices }, boot = globalThis.window?.frappe?.boot) {
+	const items = [{ label: "Change Password", icon: "pi pi-key", command: changePassword }]
+	if (hasSystemManagerRole(boot)) {
+		items.push({ label: "Switch to Desk", icon: "pi pi-desktop", command: () => window.location.assign("/desk") })
+	}
+	items.push({ label: "Log out from all devices", icon: "pi pi-sign-out", class: "app-account-menu__item--danger", command: logOutAllDevices })
+	return items
 }

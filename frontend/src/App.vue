@@ -5,7 +5,8 @@
 
 		<header class="app-topbar">
 			<RouterLink class="app-brand" :to="getHomePath()" aria-label="Essdee YRP administrator home">
-				<span class="app-brand__mark" aria-hidden="true">EY</span>
+				<img v-if="appLogo && !isLogoBroken" class="app-brand__logo" :src="appLogo" alt="" @error="isLogoBroken = true" />
+				<span v-else class="app-brand__mark" aria-hidden="true">EY</span>
 				<span class="app-brand__copy">
 					<span class="app-brand__name">Essdee YRP</span>
 					<span class="app-brand__suite">Operations suite</span>
@@ -60,10 +61,13 @@ import AccountMenu from "./components/navigation/AccountMenu.vue"
 import { reportedPageTitle } from "./composables/usePageTitle.js"
 import { departments } from "./departments/registry.js"
 import { getHomePath, isOutsideLayout, lockedDepartment } from "./router/departmentLock.js"
+import { getAppLogo } from "./utils/appLogo.js"
 import { resolvePageTitle } from "./utils/pageTitle.js"
 import { currentTheme, toggleTheme } from "./utils/themePreference.js"
 
 const route = useRoute()
+const appLogo = getAppLogo()
+const isLogoBroken = ref(false)
 const router = useRouter()
 const isNavigating = ref(false)
 const isDarkTheme = ref(currentTheme() === "dark")

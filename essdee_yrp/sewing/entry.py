@@ -357,6 +357,12 @@ def _lock_mutation_supplier(supplier) -> None:
 		_mutation_scope_changed()
 
 
+def _force_column_index(table: str, column: str) -> str:
+	"""FORCE INDEX hint for the column's index, whatever the site named it (`supplier` or `supplier_index`)."""
+	index = frappe.db.get_column_index(table, column)
+	return f"force index (`{index.Key_name}`)" if index else ""
+
+
 def _assert_entry_cancellable(entry) -> None:
 	"""Repeat the Supplier's distinct-date eligibility and effective permission checks."""
 	# This preliminary read identifies only a candidate scope. Do not lock the
@@ -378,9 +384,9 @@ def _assert_entry_cancellable(entry) -> None:
 	# even when the optimizer estimates a small table is cheaper to scan.
 	# Supplier -> sorted plans -> sorted entries is shared with submission.
 	plan_rows = frappe.db.sql(
-		"""
+		f"""
 			select name, supplier from `tabSD YRP Sewing Plan`
-			force index (supplier_index)
+			{_force_column_index("tabSD YRP Sewing Plan", "supplier")}
 			where supplier = %s order by name for update
 		""",
 		supplier,
@@ -389,10 +395,10 @@ def _assert_entry_cancellable(entry) -> None:
 	plan_suppliers = {row.name: row.supplier for row in plan_rows}
 	entry_rows = (
 		frappe.db.sql(
-			"""
+			f"""
 				select name, sewing_plan, entry_date
 				from `tabSD YRP Sewing Plan Entry Detail`
-				force index (sewing_plan_index)
+				{_force_column_index("tabSD YRP Sewing Plan Entry Detail", "sewing_plan")}
 				where sewing_plan in %(plans)s order by name for update
 			""",
 			{"plans": tuple(plan_suppliers)},

@@ -5,6 +5,10 @@ export function buildPrintUrl({ doctype, name, format, letterHead, triggerPrint 
 	return `/printview?${query}`
 }
 
+export function buildPrintPdfArgs({ doctype, name, format, letterHead }) {
+	return { doctype, name, format, no_letterhead: letterHead ? 0 : 1, ...(letterHead ? { letterhead: letterHead } : {}) }
+}
+
 export function openPrintUrl(url) {
 	return Boolean(window.open(url, "_blank"))
 }

@@ -112,3 +112,15 @@ class TestPurchaseOrderPrint(IntegrationTestCase):
 		self.assertNotIn("no such element", html)
 		self.assertIn("21-09-2026", html)
 		self.assertIn("TIRUPUR, Tamil Nadu - 641602", html)
+
+	def test_purchase_order_default_print_format_is_essdee_fixture(self):
+		from essdee_yrp import hooks
+
+		name = "Purchase Order-main-default_print_format"
+		fixtures = json.loads((Path(__file__).parent / "fixtures/property_setter.json").read_text())
+		setter = next(row for row in fixtures if row["name"] == name)
+		self.assertEqual((setter["doc_type"], setter["property"], setter["value"]), ("Purchase Order", "default_print_format", "Essdee Purchase Order"))
+		names = next(entry["filters"][0][2] for entry in hooks.fixtures if entry["dt"] == "Property Setter")
+		self.assertIn(name, names)
+		self.assertTrue(frappe.db.exists("Print Format", {"name": "Essdee Purchase Order", "doc_type": "Purchase Order", "disabled": 0}))
+		self.assertEqual(frappe.get_meta("Purchase Order").default_print_format, "Essdee Purchase Order")

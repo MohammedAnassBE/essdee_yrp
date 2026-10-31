@@ -308,6 +308,11 @@ export function getRawPrintCommands(doctype, name, format) {
 	return callMethod("frappe.www.printview.get_rendered_raw_commands", { doc: doctype, name, print_format: format })
 }
 
+/** Downloads Frappe's server-rendered PDF, named after the document. */
+export function downloadPrintPdf(args) {
+	return downloadMethodFile("frappe.utils.print_format.download_pdf", args, `${String(args.name).replace(/[ /]/g, "-")}.pdf`)
+}
+
 /** Created/modified stamps plus one page of parsed Version history, newest first. */
 export async function getDocumentActivity(doctype, name, { start = 0, pageLength = 10 } = {}) {
 	const args = { doctype, name, start, page_length: pageLength }

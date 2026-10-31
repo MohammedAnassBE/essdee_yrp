@@ -7,7 +7,8 @@
 		<p v-if="validationError" role="alert">{{ validationError }}</p>
 		<template #footer>
 			<Button label="Cancel" severity="secondary" text @click="printDialogVisible = false" />
-			<Button label="Print" icon="pi pi-print" @click="printPieces" />
+			<Button label="Save as PDF" icon="pi pi-file-pdf" severity="secondary" outlined :loading="savingPdf" :disabled="savingPdf" @click="savePiecesPdf" />
+			<Button label="Print" icon="pi pi-print" :disabled="savingPdf" @click="printPieces" />
 		</template>
 	</Dialog>
 	<DocumentErrorDialog :message="error" title="Print failed" @dismiss="error = ''" />
@@ -18,11 +19,11 @@ import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import { computed, onBeforeUnmount, ref } from "vue"
-import { callMethod } from "../../api/frappe.js"
+import { callMethod, downloadPrintPdf } from "../../api/frappe.js"
 import { useDocumentPermissions } from "../../composables/useDocumentPermissions.js"
 import { getCustomPrintButtons } from "../../utils/customPrintButtons.js"
 import { openPrintUrl } from "../../utils/printUrl.js"
-import { buildProductionOrderPrintUrl, needsProductionOrderPrintDialog, getProductionOrderPrintDescription, validateProductionOrderPiecesPerBox } from "../../utils/productionOrderPrint.js"
+import { buildProductionOrderPdfArgs, buildProductionOrderPrintUrl, needsProductionOrderPrintDialog, getProductionOrderPrintDescription, validateProductionOrderPiecesPerBox } from "../../utils/productionOrderPrint.js"
 import DocumentErrorDialog from "./DocumentErrorDialog.vue"
 
 const props = defineProps({
@@ -39,6 +40,7 @@ const printDialogVisible = ref(false)
 const piecesPerBox = ref(null)
 const description = ref("")
 const validationError = ref("")
+const savingPdf = ref(false)
 let active = true
 onBeforeUnmount(() => { active = false })
 
@@ -76,8 +78,22 @@ async function prepareProductionOrderPrint() {
 
 function printPieces() {
 	validationError.value = validateProductionOrderPiecesPerBox(piecesPerBox.value)
-	if (validationError.value) return
+	if (validationError.value || savingPdf.value) return
 	printDialogVisible.value = false
 	openPrint(buildProductionOrderPrintUrl({ doctype: props.doctype, name: props.record.name, piecesPerBox: piecesPerBox.value }))
+}
+
+async function savePiecesPdf() {
+	validationError.value = validateProductionOrderPiecesPerBox(piecesPerBox.value)
+	if (validationError.value || savingPdf.value) return
+	savingPdf.value = true
+	try {
+		await downloadPrintPdf(buildProductionOrderPdfArgs({ doctype: props.doctype, name: props.record.name, piecesPerBox: piecesPerBox.value }))
+		printDialogVisible.value = false
+	} catch (reason) {
+		validationError.value = `Unable to save PDF: ${reason?.message || "PDF generation failed."}`
+	} finally {
+		savingPdf.value = false
+	}
 }
 </script>

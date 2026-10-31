@@ -28,12 +28,13 @@ const InputNumber = Vue.defineComponent({
 })
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
 const nodes = (root, type) => findNodes(root, node => node.type === type)
+const labeled = (root, label) => nodes(root, "button").find(node => node.props.label === label)
 const options = { formats: ["Standard", "Custom"], default_format: "Custom", letter_heads: ["Company"], default_letter_head: "Company" }
 
 function mountPrint(api, props = {}, rawApi = {}, preparers = printPreparers) {
 	return mountComponent(component("components/documents/DocumentPrintDialog", {
 		"primevue/button": Button, "primevue/dialog": Dialog, "primevue/select": Select, "primevue/inputnumber": InputNumber,
-		"../../api/frappe.js": { getPrintOptions: api, getRawPrintCommands: rawApi.getRawPrintCommands },
+		"../../api/frappe.js": { getPrintOptions: api, getRawPrintCommands: rawApi.getRawPrintCommands, downloadPrintPdf: rawApi.downloadPrintPdf },
 		"../../api/qzPrinter.js": rawApi, "../../utils/printUrl.js": printUrl, "../../utils/printPreparers.js": preparers,
 	}), Vue.reactive({ visible: true, doctype: "Test Doc", name: "DOC/1", ...props }))
 }
@@ -65,14 +66,14 @@ test("shared print dialog prompts for a missing prepared value before printing a
 			const inputs = nodes(root, "input")
 			assert.equal(inputs.length, typed === null ? 0 : 1)
 			if (typed !== null) {
-				nodes(root, "button")[0].props.onClick()
+				labeled(root, "Print").props.onClick()
 				await tick()
 				assert.equal(opened.length, 0)
 				assert.ok(findNodes(root, n => n.text?.includes?.("Pieces per Box is required.")).length)
 				inputs[0].props["onUpdate:modelValue"](typed)
 				await tick()
 			}
-			nodes(root, "button")[0].props.onClick()
+			labeled(root, "Print").props.onClick()
 			const query = new URL(opened[0][0], "https://test.local").searchParams
 			assert.equal(query.get("format"), "Essdee Production Order")
 			assert.equal(query.get("pieces_per_box"), expected)
@@ -86,14 +87,14 @@ test("print dialog loads defaults and prints the selected format and letter head
 	globalThis.window = { open: (...args) => { opened.push(args); return {} } }
 	try {
 		const root = mountPrint(async (...args) => { assert.deepEqual(args, ["Test Doc", "DOC/1"]); return options }, { "onUpdate:visible": value => visibility.push(value) })
-		assert.equal(nodes(root, "button")[0].props.disabled, true)
+		assert.equal(labeled(root, "Print").props.disabled, true)
 		await tick()
 		assert.deepEqual(nodes(root, "select").map(n => n.props.modelValue), ["Custom", "Company"])
 		assert.equal(nodes(root, "select")[1].props.showClear, true)
 		nodes(root, "select")[0].props["onUpdate:modelValue"]("Standard")
 		nodes(root, "select")[1].props["onUpdate:modelValue"](null)
 		await tick()
-		nodes(root, "button")[0].props.onClick()
+		labeled(root, "Print").props.onClick()
 		const query = new URL(opened[0][0], "https://test.local").searchParams
 		assert.equal(query.get("format"), "Standard")
 		assert.equal(query.get("no_letterhead"), "1")
@@ -104,14 +105,14 @@ test("print dialog shows server errors and blocked popup messages", async () => 
 	const failed = mountPrint(async () => { throw new Error("Print permission denied") })
 	await tick()
 	assert.ok(findNodes(failed, n => n.text.includes("Print permission denied")).length)
-	assert.equal(nodes(failed, "button")[0].props.disabled, true)
+	assert.equal(labeled(failed, "Print").props.disabled, true)
 	const oldWindow = globalThis.window
 	globalThis.window = { open: () => null }
 	try {
 		const visibility = []
 		const root = mountPrint(async () => options, { "onUpdate:visible": value => visibility.push(value) })
 		await tick()
-		nodes(root, "button")[0].props.onClick()
+		labeled(root, "Print").props.onClick()
 		await tick()
 		assert.ok(findNodes(root, n => n.text.includes("Please enable pop-ups to print.")).length)
 		assert.deepEqual(visibility, [])
@@ -153,7 +154,7 @@ test("selecting a raw format sends rendered commands to the selected QZ printer"
 		assert.ok(printer, "Raw formats must offer a QZ printer selection")
 		printer.props["onUpdate:modelValue"]("Other Printer")
 		await tick()
-		await nodes(root, "button")[0].props.onClick()
+		await labeled(root, "Print").props.onClick()
 		assert.deepEqual(printed, [["Other Printer", "^XA^FDLabel^FS^XZ"]])
 		assert.deepEqual(opened, [])
 		assert.deepEqual(visibility, [false])
@@ -171,7 +172,7 @@ test("raw print errors keep the dialog open without falling back to printview", 
 		printQzRaw: async () => { throw new Error("Printer disconnected") },
 	})
 	await tick()
-	await nodes(root, "button")[0].props.onClick()
+	await labeled(root, "Print").props.onClick()
 	await tick()
 	assert.ok(findNodes(root, n => n.text.includes("Printer disconnected")).length)
 	assert.deepEqual(visibility, [])
@@ -407,11 +408,11 @@ test("shell falls back to permission loading only when can_print is absent", () 
 	} finally { globalThis.window = oldWindow }
 })
 
-function mountCustomPrint(api, overrides = {}) {
+function mountCustomPrint(api, { downloadPrintPdf, ...overrides } = {}) {
 	return mountComponent(component("components/documents/CustomPrintButtons", {
 		"primevue/button": Button, "primevue/dialog": Dialog,
 		"primevue/inputnumber": InputNumber,
-		"../../api/frappe.js": { callMethod: api },
+		"../../api/frappe.js": { callMethod: api, downloadPrintPdf },
 		"../../composables/useDocumentPermissions.js": { useDocumentPermissions: (source, enabled) => useDocumentPermissions(source, enabled) },
 		"../../utils/customPrintButtons.js": { getCustomPrintButtons },
 		"../../utils/productionOrderPrint.js": productionOrderPrint,
@@ -543,4 +544,76 @@ test("Cutting Plan delete uses the human label in confirmation and toast", async
 	const buttons = source.match(/<DocumentDeleteButton\b[^>]+\/>/g)
 	assert.equal(buttons.length, 2)
 	for (const button of buttons) assert.match(button, /document-label="Cutting Plan"/)
+})
+
+test("print dialog saves the selected format and letter head as a PDF and closes", async () => {
+	const saved = [], visibility = []
+	let finish
+	const root = mountPrint(async () => options, { "onUpdate:visible": value => visibility.push(value) }, { downloadPrintPdf: args => { saved.push(args); return saved.length > 1 ? Promise.resolve() : new Promise(resolve => { finish = resolve }) } })
+	await tick()
+	const pending = labeled(root, "Save as PDF").props.onClick()
+	await tick()
+	assert.deepEqual(saved, [{ doctype: "Test Doc", name: "DOC/1", format: "Custom", no_letterhead: 0, letterhead: "Company" }])
+	assert.equal(labeled(root, "Save as PDF").props.loading, true)
+	assert.equal(labeled(root, "Print").props.disabled, true)
+	finish(); await pending; await tick()
+	assert.equal(labeled(root, "Save as PDF").props.loading, false)
+	assert.deepEqual(visibility, [false])
+	nodes(root, "select")[1].props["onUpdate:modelValue"](null)
+	await tick()
+	await labeled(root, "Save as PDF").props.onClick()
+	assert.deepEqual(saved[1], { doctype: "Test Doc", name: "DOC/1", format: "Custom", no_letterhead: 1 })
+})
+
+test("print dialog keeps PDF failures visible and hides Save as PDF for raw formats", async () => {
+	const visibility = []
+	const root = mountPrint(async () => ({ ...options, formats: ["Custom", "Raw"], raw_formats: ["Raw"] }), { "onUpdate:visible": value => visibility.push(value) }, {
+		getQzPrinters: async () => ["Label Printer"],
+		downloadPrintPdf: async () => { throw new Error("wkhtmltopdf is not installed") },
+	})
+	await tick()
+	await labeled(root, "Save as PDF").props.onClick()
+	await tick()
+	assert.ok(findNodes(root, n => n.props?.role === "alert" && n.text === "Unable to save PDF: wkhtmltopdf is not installed").length)
+	assert.deepEqual(visibility, [])
+	nodes(root, "select")[0].props["onUpdate:modelValue"]("Raw")
+	await tick()
+	assert.equal(labeled(root, "Save as PDF"), undefined)
+})
+
+test("print dialog asks the Production Order preparer value before saving a PDF", async () => {
+	const real = printPreparers.getPrintPreparer("YRP Production Order", "Essdee Production Order")
+	const preparers = { ...printPreparers, getPrintPreparer: (doctype, format) => format === "Essdee Production Order" ? { ...real, load: async () => ({ fg_item_exists: true, pieces_per_box: 0 }) } : null }
+	const saved = []
+	const root = mountPrint(async () => ({ formats: ["Essdee Production Order"], default_format: "Essdee Production Order", letter_heads: [], default_letter_head: "" }), { doctype: "YRP Production Order", name: "PPO-1" }, { downloadPrintPdf: async args => saved.push(args) }, preparers)
+	await tick(); await tick()
+	await labeled(root, "Save as PDF").props.onClick()
+	await tick()
+	assert.deepEqual(saved, [])
+	assert.ok(findNodes(root, n => n.text?.includes?.("Pieces per Box is required.")).length)
+	nodes(root, "input")[0].props["onUpdate:modelValue"](12)
+	await tick()
+	await labeled(root, "Save as PDF").props.onClick()
+	assert.deepEqual(saved, [{ doctype: "YRP Production Order", name: "PPO-1", format: "Essdee Production Order", no_letterhead: 1, pieces_per_box: 12 }])
+})
+
+test("custom Production Order pieces dialog saves a PDF with pieces per box", async () => {
+	const saved = []
+	let fail = true
+	const root = mountCustomPrint(async () => ({ fg_item_exists: false, pieces_per_box: null }), { downloadPrintPdf: async args => { saved.push(args); if (fail) throw new Error("PDF generator missing") } })
+	await nodes(root, "button")[0].props.onClick()
+	await tick()
+	await labeled(root, "Save as PDF").props.onClick()
+	await tick()
+	assert.deepEqual(saved, [])
+	nodes(root, "input")[0].props["onUpdate:modelValue"](9)
+	await labeled(root, "Save as PDF").props.onClick()
+	await tick()
+	assert.ok(findNodes(root, n => n.text === "Unable to save PDF: PDF generator missing").length)
+	assert.equal(nodes(root, "dialog").length, 1)
+	fail = false
+	await labeled(root, "Save as PDF").props.onClick()
+	await tick()
+	assert.deepEqual(saved.at(-1), { doctype: "YRP Production Order", name: "PPO/1 & 2#x", format: "Essdee Production Order", pieces_per_box: 9 })
+	assert.equal(nodes(root, "dialog").length, 0)
 })

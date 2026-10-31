@@ -1,7 +1,13 @@
 import { buildPrintUrl } from "./printUrl.js"
 
+const PRODUCTION_ORDER_FORMAT = "Essdee Production Order"
+
 export function buildProductionOrderPrintUrl({ doctype, name, piecesPerBox }) {
-	return buildPrintUrl({ doctype, name, format: "Essdee Production Order", noLetterhead: null }) + "&pieces_per_box=" + encodeURIComponent(piecesPerBox)
+	return buildPrintUrl({ doctype, name, format: PRODUCTION_ORDER_FORMAT, noLetterhead: null }) + "&pieces_per_box=" + encodeURIComponent(piecesPerBox)
+}
+
+export function buildProductionOrderPdfArgs({ doctype, name, piecesPerBox }) {
+	return { doctype, name, format: PRODUCTION_ORDER_FORMAT, pieces_per_box: piecesPerBox }
 }
 
 export function needsProductionOrderPrintDialog(settings) {

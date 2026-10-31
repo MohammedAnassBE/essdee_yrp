@@ -1,18 +1,19 @@
 <template>
-	<Dialog :visible="visible" modal :closable="!printing" :close-on-escape="!printing" header="Print document" class="erp-dialog--sm" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal :closable="!busy" :close-on-escape="!busy" header="Print document" class="erp-dialog--sm" @update:visible="emit('update:visible', $event)">
 		<p v-if="loading" role="status">Loading print options…</p>
 		<div v-else-if="loaded" class="document-print-dialog__fields">
-			<label>Print Format<Select v-model="format" :options="formats" :disabled="printing" required fluid /></label>
-			<label v-if="!isRaw">Letter Head<Select v-model="letterHead" :options="letterHeads" :disabled="printing" show-clear fluid placeholder="No letter head" /></label>
+			<label>Print Format<Select v-model="format" :options="formats" :disabled="busy" required fluid /></label>
+			<label v-if="!isRaw">Letter Head<Select v-model="letterHead" :options="letterHeads" :disabled="busy" show-clear fluid placeholder="No letter head" /></label>
 			<template v-if="needsPreparedInput">
-				<label>{{ preparer.label }}<InputNumber v-model="preparedInput" input-id="document-print-prepared-input" :use-grouping="false" :max-fraction-digits="0" :required="true" :invalid="Boolean(preparedError)" :disabled="printing" aria-describedby="document-print-prepared-description" fluid /></label>
+				<label>{{ preparer.label }}<InputNumber v-model="preparedInput" input-id="document-print-prepared-input" :use-grouping="false" :max-fraction-digits="0" :required="true" :invalid="Boolean(preparedError)" :disabled="busy" aria-describedby="document-print-prepared-description" fluid /></label>
 				<p id="document-print-prepared-description" class="document-print-dialog__hint">{{ preparer.getDescription(preparedSettings) }}<template v-if="preparedError"><br><span role="alert">{{ preparedError }}</span></template></p>
 			</template>
-			<label v-if="isRaw">Printer<Select v-model="printer" :options="printers" :loading="loadingPrinters" :disabled="loadingPrinters || printing" required fluid /></label>
+			<label v-if="isRaw">Printer<Select v-model="printer" :options="printers" :loading="loadingPrinters" :disabled="loadingPrinters || busy" required fluid /></label>
 		</div>
 		<p v-if="error" role="alert">{{ error }}</p>
 		<template #footer>
-			<Button label="Print" icon="pi pi-print" :loading="loading || printing || preparing" :disabled="loading || printing || preparing || !loaded || !format || (isRaw && (loadingPrinters || !printer))" @click="print" />
+			<Button v-if="!isRaw" label="Save as PDF" icon="pi pi-file-pdf" severity="secondary" outlined :loading="savingPdf" :disabled="busy || !loaded || !format" @click="savePdf" />
+			<Button label="Print" icon="pi pi-print" :loading="loading || printing || preparing" :disabled="busy || !loaded || !format || (isRaw && (loadingPrinters || !printer))" @click="print" />
 		</template>
 	</Dialog>
 </template>
@@ -23,10 +24,10 @@ import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
-import { getPrintOptions, getRawPrintCommands } from "../../api/frappe.js"
+import { downloadPrintPdf, getPrintOptions, getRawPrintCommands } from "../../api/frappe.js"
 import { getQzPrinters, printQzRaw } from "../../api/qzPrinter.js"
 import { getPrintPreparer, withPrintParam } from "../../utils/printPreparers.js"
-import { buildPrintUrl, openPrintUrl } from "../../utils/printUrl.js"
+import { buildPrintPdfArgs, buildPrintUrl, openPrintUrl } from "../../utils/printUrl.js"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -44,6 +45,7 @@ const printers = ref([])
 const printer = ref("")
 const loadingPrinters = ref(false)
 const printing = ref(false)
+const savingPdf = ref(false)
 const letterHeads = ref([])
 const format = ref("")
 const letterHead = ref("")
@@ -54,6 +56,7 @@ const preparedInput = ref(null)
 const preparedError = ref("")
 const preparedValue = computed(() => preparer.value && preparedSettings.value ? preparer.value.getValue(preparedSettings.value) : null)
 const needsPreparedInput = computed(() => Boolean(preparer.value && preparedSettings.value && preparedValue.value === null))
+const busy = computed(() => loading.value || printing.value || preparing.value || savingPdf.value)
 
 watch(() => [props.visible, props.doctype, props.name], async ([visible, doctype, name], _old, onCleanup) => {
 	let stale = false
@@ -116,14 +119,27 @@ watch(() => [props.visible, props.name, preparer.value], async ([visible, name, 
 	}
 })
 
-function getPreparedUrl(url) {
-	if (!preparer.value) return url
-	if (!preparedSettings.value) return ""
+function getPreparedArgs() {
+	if (!preparer.value) return {}
+	if (!preparedSettings.value) return null
 	if (needsPreparedInput.value) {
 		preparedError.value = preparer.value.validate(preparedInput.value)
-		if (preparedError.value) return ""
+		if (preparedError.value) return null
 	}
-	return withPrintParam(url, preparer.value.param, preparedValue.value ?? preparedInput.value)
+	return { [preparer.value.param]: preparedValue.value ?? preparedInput.value }
+}
+
+async function savePdf() {
+	if (busy.value || !loaded.value || !format.value || isRaw.value) return
+	const prepared = getPreparedArgs()
+	if (!prepared) return
+	savingPdf.value = true; error.value = ""
+	try {
+		await downloadPrintPdf({ ...buildPrintPdfArgs({ doctype: props.doctype, name: props.name, format: format.value, letterHead: letterHead.value }), ...prepared })
+		emit("update:visible", false)
+	} catch (reason) {
+		error.value = `Unable to save PDF: ${reason?.message || "PDF generation failed."}`
+	} finally { savingPdf.value = false }
 }
 
 async function print() {
@@ -140,9 +156,11 @@ async function print() {
 		} finally { printing.value = false }
 		return
 	}
-	if (preparing.value) return
-	const url = getPreparedUrl(buildPrintUrl({ doctype: props.doctype, name: props.name, format: format.value, letterHead: letterHead.value }))
-	if (!url) return
+	if (preparing.value || savingPdf.value) return
+	const prepared = getPreparedArgs()
+	if (!prepared) return
+	let url = buildPrintUrl({ doctype: props.doctype, name: props.name, format: format.value, letterHead: letterHead.value })
+	for (const [param, value] of Object.entries(prepared)) url = withPrintParam(url, param, value)
 	if (!openPrintUrl(url)) {
 		error.value = "Please enable pop-ups to print."
 		return

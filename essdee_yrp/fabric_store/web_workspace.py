@@ -1483,6 +1483,19 @@ def execute_work_order_command(
 	)
 
 
+def get_stock_transfers_section() -> dict | None:
+	"""Return the Stock Transfers section with the operations the user can read, or None."""
+
+	operations = {}
+	for key, doctype in STOCK_OPERATION_DOCTYPES.items():
+		capability = _capability(doctype, OPERATION_LABELS[key])
+		if capability["can_read"]:
+			operations[key] = capability
+	if not operations:
+		return None
+	return {"label": SECTION_LABELS["stock_transfers"], "operations": operations}
+
+
 @frappe.whitelist()
 @report_access_scope()
 def get_capabilities() -> dict:
@@ -1498,16 +1511,9 @@ def get_capabilities() -> dict:
 		if capability["can_read"]:
 			sections[key] = capability
 
-	operations = {}
-	for key, doctype in STOCK_OPERATION_DOCTYPES.items():
-		capability = _capability(doctype, OPERATION_LABELS[key])
-		if capability["can_read"]:
-			operations[key] = capability
-	if operations:
-		sections["stock_transfers"] = {
-			"label": SECTION_LABELS["stock_transfers"],
-			"operations": operations,
-		}
+	stock_transfers = get_stock_transfers_section()
+	if stock_transfers:
+		sections["stock_transfers"] = stock_transfers
 
 	reports = {}
 	if can_run_report("YRP Stock Balance"):

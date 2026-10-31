@@ -10,6 +10,7 @@
 			<FinishingDispatchReport v-else-if="report.value === 'finishing-dispatch'" />
 			<LotCutQuantityReport v-else-if="report.value === 'lot-cut-quantity'" :can-read-cutting-plan="Boolean(props.capabilities.reports?.lot_cut_quantity?.can_read_cutting_plan)" />
 			<InhouseQuantityReport v-else-if="report.value === 'inhouse-quantity'" />
+			<StockBalanceReport v-else-if="report.value === 'stock-balance'" />
 			<DeskBackedReport v-else :report-key="report.value" :supplier="report.value === 'finishing-inward-updates' ? supplier : ''" />
 		</ReportWorkspace>
 	</section>
@@ -33,6 +34,7 @@ const SewingItemSummary = defineAsyncComponent(() => import("./reports/SewingIte
 const FinishingDispatchReport = defineAsyncComponent(() => import("../finishing/reports/FinishingDispatchReport.vue"))
 const LotCutQuantityReport = defineAsyncComponent(() => import("../../components/reports/LotCutQuantityReport.vue"))
 const InhouseQuantityReport = defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue"))
+const StockBalanceReport = defineAsyncComponent(() => import("../../components/reports/StockBalanceReport.vue"))
 const props = defineProps({ capabilities: { type: Object, required: true } })
 const tabs = computed(() => sewingReportTabs(props.capabilities.reports))
 function isAllowed(report) {

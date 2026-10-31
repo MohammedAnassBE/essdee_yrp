@@ -5,6 +5,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from essdee_yrp.fabric_store.web_workspace import can_run_report, get_stock_transfers_section
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
 from essdee_yrp.planning.reports import inhouse_quantity
 from essdee_yrp.purchase.lot_cut_quantity import get_lot_cut_quantity_capability
@@ -91,6 +92,9 @@ def get_capabilities() -> dict:
 		flags = _permission_flags(doctype)
 		if flags["can_read"]:
 			sections[key] = {"doctype": doctype, "label": _(label), **flags}
+	stock_transfers = get_stock_transfers_section()
+	if stock_transfers:
+		sections["stock_transfers"] = {"can_read": True, **stock_transfers}
 
 	reports = {}
 	if plan["can_read"] and plan["can_report"]:
@@ -105,6 +109,8 @@ def get_capabilities() -> dict:
 		}
 		if inhouse_quantity.can_view():
 			reports["inhouse_quantity"] = _report_capability("In-house Quantity")
+		if can_run_report("YRP Stock Balance"):
+			reports["stock_balance"] = _report_capability("Stock Balance")
 
 	from essdee_yrp.desk_web_reports import department_report_capabilities
 

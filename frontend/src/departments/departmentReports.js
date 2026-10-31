@@ -82,6 +82,7 @@ export const SEWING_REPORTS = [
 	{ value: "finishing-dispatch", key: "finishing_dispatch", label: "Finishing Plan Dispatch" },
 	{ value: "lot-cut-quantity", key: "lot_cut_quantity", label: "Lot Cut Quantity" },
 	{ value: "inhouse-quantity", key: "inhouse_quantity", label: "In-house Quantity" },
+	{ value: "stock-balance", key: "stock_balance", label: "Stock Balance" },
 ]
 
 export function sewingReportTabs(reports = {}) {

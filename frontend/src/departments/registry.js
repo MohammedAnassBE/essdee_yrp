@@ -5,7 +5,7 @@ export const departments = [
 		label: "Cutting",
 		shortLabel: "CT",
 		path: "/cutting",
-		sections: { "cutting-plans": "plans", "cutting-orders": "orders", "bulk-lay-sheets": "bulk-lay-sheets", "lay-sheet-planner": "lay-sheet-planner", reports: "reports" },
+		sections: { "cutting-plans": "plans", "cutting-orders": "orders", "bulk-lay-sheets": "bulk-lay-sheets", "lay-sheet-planner": "lay-sheet-planner", "stock-transfers": "stock-transfers", reports: "reports" },
 		component: () => import("./Cutting.vue"),
 	},
 	{
@@ -37,7 +37,7 @@ export const departments = [
 		label: "Sewing",
 		shortLabel: "SW",
 		path: "/sewing",
-		sections: { plans: "plans", work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports", attendance: "attendance" },
+		sections: { plans: "plans", work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", stock_transfers: "stock-transfers", reports: "reports", attendance: "attendance" },
 		component: () => import("./Sewing.vue"),
 	},
 	{

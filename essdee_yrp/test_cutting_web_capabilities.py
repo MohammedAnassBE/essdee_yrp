@@ -58,3 +58,23 @@ class TestCuttingWebCapabilities(TestCase):
 
 		self.assertFalse(capabilities["reports"]["can_read"])
 		self.assertFalse(capabilities["reports"]["can_create"])
+
+	def test_stock_transfers_lists_only_readable_stock_operations(self):
+		allowed = {("YRP Stock Entry", "read"), ("YRP Stock Reconciliation", "read"), ("YRP Stock Entry", "create")}
+		with patch(
+			"essdee_yrp.cutting.web_capabilities.frappe.has_permission",
+			side_effect=lambda doctype, ptype, **_kwargs: (doctype, ptype) in allowed,
+		):
+			section = get_capabilities()["stock-transfers"]
+
+		self.assertEqual((section["label"], section["can_read"]), ("Stock Transfers", True))
+		self.assertEqual(set(section["operations"]), {"stock_entry", "stock_reconciliation"})
+		self.assertTrue(section["operations"]["stock_entry"]["can_create"])
+		self.assertFalse(section["operations"]["stock_reconciliation"]["can_create"])
+
+	def test_stock_transfers_is_hidden_without_a_readable_stock_operation(self):
+		with patch(
+			"essdee_yrp.cutting.web_capabilities.frappe.has_permission",
+			side_effect=lambda doctype, ptype, **_kwargs: (doctype, ptype) == ("YRP Stock Update", "create"),
+		):
+			self.assertNotIn("stock-transfers", get_capabilities())

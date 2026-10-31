@@ -36,6 +36,7 @@ class TestSewingWebWorkspace(TestCase):
 				"work_orders": "Work Orders",
 				"delivery_challans": "Delivery Challans",
 				"goods_received_notes": "Goods Received Notes",
+				"stock_transfers": "Stock Transfers",
 				"reports": "Reports",
 				"attendance": "Attendance Report",
 			},
@@ -59,6 +60,7 @@ class TestSewingWebWorkspace(TestCase):
 				"finishing_dispatch": "Finishing Plan Dispatch",
 				"lot_cut_quantity": "Lot Cut Quantity",
 				"inhouse_quantity": "In-house Quantity",
+				"stock_balance": "Stock Balance",
 				"grn_report": "GRN Report",
 				"grn_summary": "GRN Summary",
 				"dc_report": "DC Report",
@@ -117,8 +119,8 @@ class TestSewingWebWorkspace(TestCase):
 
 	def test_report_and_attendance_sections_require_plan_read_and_report(self):
 		for denied_permission, expected_sections in (
-			("read", {"work_orders", "delivery_challans", "goods_received_notes"}),
-			("report", {"plans", "work_orders", "delivery_challans", "goods_received_notes"}),
+			("read", {"work_orders", "delivery_challans", "goods_received_notes", "stock_transfers"}),
+			("report", {"plans", "work_orders", "delivery_challans", "goods_received_notes", "stock_transfers"}),
 		):
 			with self.subTest(denied_permission=denied_permission):
 				payload = self._capabilities(denied={("SD YRP Sewing Plan", denied_permission)})
@@ -141,6 +143,24 @@ class TestSewingWebWorkspace(TestCase):
 				"can_report": False,
 			},
 		)
+
+	def test_stock_transfers_lists_only_readable_stock_operations(self):
+		payload = self._capabilities(allowed={("YRP Stock Update", "read"), ("SD YRP Lot Transfer", "read")})
+		section = payload["sections"]["stock_transfers"]
+		self.assertEqual((section["label"], section["can_read"]), ("Stock Transfers", True))
+		self.assertEqual(
+			{key: operation["doctype"] for key, operation in section["operations"].items()},
+			{"stock_update": "YRP Stock Update", "lot_transfer": "SD YRP Lot Transfer"},
+		)
+		self.assertNotIn("stock_transfers", self._capabilities(allowed={("YRP Stock Entry", "create")})["sections"])
+
+	def test_stock_balance_follows_the_stock_balance_report_access(self):
+		workspace = self._workspace()
+		for allowed in (True, False):
+			with self.subTest(allowed=allowed), patch.object(workspace, "can_run_report", return_value=allowed) as can_run:
+				reports = self._capabilities()["reports"]
+				self.assertIs("stock_balance" in reports, allowed)
+				can_run.assert_any_call("YRP Stock Balance")
 
 	def test_report_capabilities_never_grant_mutations(self):
 		payload = self._capabilities()

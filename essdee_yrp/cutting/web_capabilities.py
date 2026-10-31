@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import frappe
 
+from essdee_yrp.fabric_store.web_workspace import get_stock_transfers_section
 
 WORKSPACE_DOCTYPES = {
 	"cutting-plans": "SD YRP Cutting Plan",
@@ -30,7 +31,7 @@ def _can_read_reports() -> bool:
 
 
 @frappe.whitelist()
-def get_capabilities() -> dict[str, dict[str, bool]]:
+def get_capabilities() -> dict[str, dict]:
 	"""Return effective permissions for each independent Cutting destination."""
 
 	capabilities = {
@@ -41,4 +42,7 @@ def get_capabilities() -> dict[str, dict[str, bool]]:
 		"can_read": _can_read_reports(),
 		"can_create": False,
 	}
+	stock_transfers = get_stock_transfers_section()
+	if stock_transfers:
+		capabilities["stock-transfers"] = {"can_read": True, "can_create": False, **stock_transfers}
 	return capabilities

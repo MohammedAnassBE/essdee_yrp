@@ -24,6 +24,7 @@ const workspaces = [
 	{ key: "cutting-orders", label: "Cutting Orders", description: "Plan and complete cutting orders with their production details.", icon: "pi pi-file-edit", to: "/cutting/orders" },
 	{ key: "bulk-lay-sheets", label: "Bulk LaySheets", description: "Manage multi-lot lay sheets, bundles and dispatch workflows.", icon: "pi pi-clone", to: "/cutting/bulk-lay-sheets" },
 	{ key: "lay-sheet-planner", label: "LaySheet Planner", description: "Optimize size quantities into efficient marker and lay plans.", icon: "pi pi-sitemap", to: "/cutting/lay-sheet-planner" },
+	{ key: "stock-transfers", label: "Stock Transfers", description: "Stock Update, Stock Reconciliation, Stock Entry and Lot Transfer.", icon: "pi pi-arrow-right-arrow-left", to: "/cutting/stock-transfers" },
 	{ key: "reports", label: "Reports", description: "Production, cut sheet, cutting detail and stock reports.", icon: "pi pi-chart-bar", to: "/cutting/reports" },
 ]
 const visibleWorkspaces = computed(() => workspaces.filter((workspace) => capabilities.value[workspace.key]?.can_read))

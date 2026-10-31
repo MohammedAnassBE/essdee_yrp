@@ -108,14 +108,14 @@
   "render_mode": "Configurable Layout"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"cutting-plans\",\n   \"cutting-orders\",\n   \"bulk-lay-sheets\",\n   \"lay-sheet-planner\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Cutting department workspace only: cutting-plans, cutting-orders, bulk-lay-sheets, lay-sheet-planner, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"cutting-plans\",\n   \"cutting-orders\",\n   \"bulk-lay-sheets\",\n   \"lay-sheet-planner\",\n   \"stock-transfers\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Cutting department workspace only: cutting-plans, cutting-orders, bulk-lay-sheets, lay-sheet-planner, stock-transfers, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "cutting",
   "layout_name": "Cutting",
-  "modified": "2026-10-15 10:10:21.129018",
+  "modified": "2026-10-31 12:00:00.000000",
   "name": "Cutting",
   "render_mode": "Registered Experience"
  },
@@ -156,14 +156,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"plans\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"reports\",\n   \"attendance\"\n  ]\n }\n}",
-  "description": "/web Sewing department workspace only: plans, work_orders, delivery_challans, goods_received_notes, reports, attendance.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"plans\",\n   \"work_orders\",\n   \"delivery_challans\",\n   \"goods_received_notes\",\n   \"stock_transfers\",\n   \"reports\",\n   \"attendance\"\n  ]\n }\n}",
+  "description": "/web Sewing department workspace only: plans, work_orders, delivery_challans, goods_received_notes, stock_transfers, reports, attendance.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "sewing",
   "layout_name": "Sewing",
-  "modified": "2026-10-22 13:32:41.710584",
+  "modified": "2026-10-31 12:00:00.000000",
   "name": "Sewing",
   "render_mode": "Registered Experience"
  },

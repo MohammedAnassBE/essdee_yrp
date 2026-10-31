@@ -240,6 +240,10 @@ const routes = [
 	...departmentDocumentRoutes("sewing", "Sewing", ["/sewing/delivery-challans", "/sewing/goods-received-notes"], { pages: false }),
 	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
 	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
+	{
+		path: "/sewing/stock-transfers", name: "sewing-stock-transfers", component: FabricStoreSection,
+		props: { section: "stock_transfers", storeName: "Sewing", basePath: "/sewing" },
+	},
 	{ path: "/finishing/plans", name: "finishing-plans", component: FinishingPlans },
 	{
 		path: "/finishing/work-orders", name: "finishing-work-orders", component: FabricStoreSection,
@@ -373,6 +377,10 @@ const routes = [
 		path: "/cutting/lay-sheet-planner/:plannerId",
 		name: "cutting-lay-sheet-planner",
 		component: CuttingLaySheetPlanner,
+	},
+	{
+		path: "/cutting/stock-transfers", name: "cutting-stock-transfers", component: FabricStoreSection,
+		props: { section: "stock_transfers", storeName: "Cutting", basePath: "/cutting" },
 	},
 	{
 		path: "/cutting/plans/:cuttingPlanId",

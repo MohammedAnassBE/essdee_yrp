@@ -27,6 +27,7 @@ const definitions = [
 	{ key: "plans", label: "Sewing Plan", description: "Review plans and production for a Sewing Unit.", icon: "pi pi-sitemap", path: "/sewing/plans" },
 	{ key: "work_orders", label: "Work Orders", description: "Review production requirements, deliveries and receipts.", icon: "pi pi-briefcase", path: "/sewing/work-orders" },
 	...documentWorkspaces("/sewing").map(({ to, ...item }) => ({ ...item, path: to })),
+	{ key: "stock_transfers", label: "Stock Transfers", description: "Stock Update, Stock Reconciliation, Stock Entry and Lot Transfer.", icon: "pi pi-arrow-right-arrow-left", path: "/sewing/stock-transfers" },
 	{ key: "reports", label: "Reports", description: "Review production reports for a Sewing Unit.", icon: "pi pi-chart-bar", path: "/sewing/reports" },
 	{ key: "attendance", label: "Attendance Report", description: "Review worker strength across all Sewing Units.", icon: "pi pi-users", path: "/sewing/attendance" },
 ]

@@ -9,6 +9,7 @@ from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import get_mapping_document
 from yrp.utils import update_if_string_instance
 
+from essdee_yrp.cutting.laysheet_jobs import enqueue_tracked_job
 from essdee_yrp.print_helpers import set_attribute_display_values
 
 
@@ -189,7 +190,12 @@ class SDYRPCuttingOrder(Document):
 @frappe.whitelist()
 def calculate_laysheets(cutting_order):
 	frappe.get_doc("SD YRP Cutting Order", cutting_order).check_permission("write")
-	frappe.enqueue(calc_laysheets, "short", cutting_order=cutting_order, enqueue_after_commit=True)
+	return enqueue_tracked_job(
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.calc_laysheets",
+		"SD YRP Cutting Order",
+		cutting_order,
+		cutting_order=cutting_order,
+	)
 
 
 def calc_laysheets(cutting_order):

@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Production Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="ppo-page-frame">
-			<FabricDocumentWorkspace print-label="Print Format" :show-delete="false" doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)">
+			<FabricDocumentWorkspace print-label="Print Format" :show-delete="false" doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)" :live-reload="() => load(true)">
 				<template #header="{ record, headingId }">
 					<div class="ppo-page__identity">
 						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 class="erp-doc-title" :id="headingId"><DocumentLink doctype="Item" :name="record.item" :label="record.item || 'Production Order'" /></h1></div>

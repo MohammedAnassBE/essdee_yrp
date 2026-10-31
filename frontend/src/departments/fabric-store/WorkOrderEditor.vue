@@ -3,9 +3,10 @@
 		<header class="work-order-editor__header erp-editor-header">
 			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Work Order" : "New Work Order" }}</h1></div>
 			<div class="erp-editor-actions">
+				<DocumentSaveState :saving="saving === 'draft'" :dirty="dirty" />
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
 				<Button v-if="calculationMode" :label="calculationLabel" icon="pi pi-calculator" severity="secondary" outlined :disabled="busy" @click="openCalculation" />
-				<Button v-if="canDraft" label="Save Work Order" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
+				<Button v-if="canDraft" label="Save Work Order" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave || live.state.value === 'deleted'" @click="save(false)" />
 			</div>
 		</header>
 
@@ -13,6 +14,7 @@
 			:message="loadFailed ? '' : error"
 			title="Work Order could not be saved"
 		/>
+		<DocumentLiveBar :state="live.state.value" :modified-at="live.remoteModified.value" :dirty="dirty" :reloading="live.reloading.value" @reload="live.refresh()" />
 		<div v-if="loading" class="work-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Work Order editor"><Skeleton height="170px" /><Skeleton height="420px" /></div>
 		<section v-else-if="loadFailed" class="work-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Work Order could not be loaded</strong><span>{{ error || "Try loading the Work Order again." }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="work-order-editor__body">
@@ -118,6 +120,9 @@ import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentLiveBar from "../../components/documents/DocumentLiveBar.vue"
+import DocumentSaveState from "../../components/documents/DocumentSaveState.vue"
+import { useLiveDocument } from "../../composables/useLiveDocument.js"
 import WorkOrderActionPanel from "./WorkOrderActionPanel.vue"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
 import { applyPlannedEndDate } from "./workOrderDates.js"
@@ -146,8 +151,19 @@ const pendingSourceChange = ref(null)
 const queuedSourceChanges = new Map()
 let allowNavigation = false
 let pendingNavigation = null
+let loadSequence = 0
+let saveGeneration = 0
+let unmounted = false
 
 const busy = computed(() => loading.value || Boolean(saving.value))
+const live = useLiveDocument({
+	doctype: "YRP Work Order",
+	name: () => props.name,
+	localModified: () => editor.value.modified,
+	isDirty: dirty,
+	isBusy: busy,
+	reload: refreshEditor,
+})
 const noReceivables = computed({ get: () => Boolean(Number(form.no_receivables)), set: (value) => { form.no_receivables = value ? 1 : 0 } })
 const editWoDate = computed({ get: () => Boolean(Number(form.edit_wo_date)), set: (value) => { form.edit_wo_date = value ? 1 : 0 } })
 const isRework = computed(() => Boolean(Number(form.is_rework)))
@@ -204,23 +220,44 @@ function numberText(value) {
 	const number = Number(value)
 	return Number.isFinite(number) ? number.toLocaleString("en-IN") : String(value)
 }
+/** `background` (live updates) keeps the editor on screen and rethrows load errors. */
 async function load() {
+	const sequence = ++loadSequence
 	loading.value = true; loadFailed.value = false; error.value = ""
 	try {
-		editor.value = await getWorkOrderEditor(props.name, props.source) || {}
-		for (const key of Object.keys(form)) delete form[key]
-		forgetAutofill(form)
-		Object.assign(form, editor.value.values || {})
-		for (const dimension of (editor.value.dimensions || [])) {
-			if (dimension?.fieldname && !standardFieldnames.has(dimension.fieldname)) form[dimension.fieldname] = dimension.value ?? ""
-		}
-		deliverableDetails.value = clone(editor.value.deliverable_details)
-		receivableDetails.value = clone(editor.value.receivable_details)
-		selectionContext.value = clone(editor.value.selection_context || {})
-		if (!props.name && !duplicateFrom.value) await applyNewDefaults()
-		dirty.value = false
-	} catch (reason) { loadFailed.value = true; error.value = reason?.message || "Unable to load the Work Order editor." }
-	finally { loading.value = false }
+		const loadedEditor = await getWorkOrderEditor(props.name, props.source) || {}
+		if (sequence !== loadSequence) return
+		await applyEditor(loadedEditor)
+	} catch (reason) {
+		if (sequence !== loadSequence) return
+		loadFailed.value = true; error.value = reason?.message || "Unable to load the Work Order editor."
+	}
+	finally { if (sequence === loadSequence) loading.value = false }
+}
+/** Live update: refetches in place. Returns false, keeping the draft, if it was edited (unless `discard`), saved or busy meanwhile. */
+async function refreshEditor({ discard = false } = {}) {
+	const sequence = ++loadSequence
+	const [requestedName, saves, draftAtStart] = [props.name, saveGeneration, draftFingerprint()]
+	const loadedEditor = await getWorkOrderEditor(requestedName, props.source) || {}
+	if (unmounted || sequence !== loadSequence || requestedName !== props.name) return true
+	// Edits made after the request (even after a discard confirm) always win over its response.
+	if (saves !== saveGeneration || busy.value || draftFingerprint() !== draftAtStart || (!discard && dirty.value)) return false
+	await applyEditor(loadedEditor)
+}
+function draftFingerprint() { return JSON.stringify([form, deliverableDetails.value, receivableDetails.value]) }
+async function applyEditor(loadedEditor) {
+	editor.value = loadedEditor
+	for (const key of Object.keys(form)) delete form[key]
+	forgetAutofill(form)
+	Object.assign(form, editor.value.values || {})
+	for (const dimension of (editor.value.dimensions || [])) {
+		if (dimension?.fieldname && !standardFieldnames.has(dimension.fieldname)) form[dimension.fieldname] = dimension.value ?? ""
+	}
+	deliverableDetails.value = clone(editor.value.deliverable_details)
+	receivableDetails.value = clone(editor.value.receivable_details)
+	selectionContext.value = clone(editor.value.selection_context || {})
+	if (!props.name && !duplicateFrom.value) await applyNewDefaults()
+	dirty.value = false
 }
 /** Fills the list's filter values into an empty new Work Order, through the same source and party changes a user makes. */
 async function applyNewDefaults() {
@@ -332,14 +369,14 @@ function openCalculation() {
 }
 async function calculationChanged() { await load() }
 async function save(submit) {
-	saving.value = submit ? "submit" : "draft"; error.value = ""
+	saving.value = submit ? "submit" : "draft"; error.value = ""; saveGeneration += 1
 	try {
 		const payload = await saveWorkOrder({ ...form, deliverable_details: clone(deliverableDetails.value), receivable_details: clone(receivableDetails.value) }, { name: props.name, submit, expectedModified: editor.value.modified })
 		const record = payload?.record || {}
 		dirty.value = false; allowNavigation = true
 		toast.add({ severity: "success", summary: submit ? "Work Order submitted" : "Work Order saved", detail: record.name || "Your changes are saved.", life: 3500 })
 		emit("saved", record)
-	} catch (reason) { error.value = reason?.message || "Unable to save this Work Order." }
+	} catch (reason) { if (!live.handleSaveError(reason)) error.value = reason?.message || "Unable to save this Work Order." }
 	finally { saving.value = "" }
 }
 function requestCancel() { if (!dirty.value) return emit("cancel"); pendingCancel.value = true; discardVisible.value = true }
@@ -350,7 +387,7 @@ function calculatedRowText(row) { return [row.quantity ?? row.qty, row.uom, row.
 
 onBeforeRouteLeave((_to, _from, next) => { if (allowNavigation || !dirty.value) return next(); pendingNavigation = next; discardVisible.value = true })
 onMounted(() => { window.addEventListener("beforeunload", beforeUnload); load() })
-onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
+onBeforeUnmount(() => { unmounted = true; loadSequence += 1; window.removeEventListener("beforeunload", beforeUnload) })
 watch(() => props.name, load)
 </script>
 

@@ -13,6 +13,10 @@ const rows = [
 	{ name: "ROW-BLUE", item: "CLOTH-BLUE", label: "Jersey · Blue · 30", qty: 40, available: 40 },
 ]
 
+// Calculate LaySheets follows its queued job over the socket; covered in livePopups.test.js.
+const trackedJobStub = () => ({ isRunning: ref(false), run: (queue) => queue() })
+const { LAYSHEET_JOB_RESULTS } = await import("../src/composables/useTrackedJob.js")
+
 test("lot transfer quantity must be above zero and within the plan balance", () => {
 	const draft = quantityDraft(rows)
 	assert.deepEqual(quantityErrors(draft), {})
@@ -85,9 +89,9 @@ test("quantity editor saves the edited draft with the loaded modified stamp", as
 
 test("created Lot Transfer is announced so the plan can open it without a page reload", async () => {
 	const emitted = []
-	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyElementAsImage", "window", "watch", "onBeforeUnmount", "useRowSelection", `${script("cutting/CuttingPlanActions.vue")}\nreturn { targetLot, saveLotTransfer, feedback }`)(
+	const api = new Function("ref", "computed", "reactive", "defineProps", "defineEmits", "callMethod", "copyElementAsImage", "window", "watch", "onBeforeUnmount", "useRowSelection", "useTrackedJob", "LAYSHEET_JOB_RESULTS", `${script("cutting/CuttingPlanActions.vue")}\nreturn { targetLot, saveLotTransfer, feedback }`)(
 		ref, computed, reactive, () => ({ doc: { name: "CP-1", lot: "LOT-A" }, data: {} }), () => (...args) => emitted.push(args),
-		async () => "LT-9", () => {}, { setTimeout: () => 0, clearTimeout: () => {} }, watch, () => {}, useRowSelection,
+		async () => "LT-9", () => {}, { setTimeout: () => 0, clearTimeout: () => {} }, watch, () => {}, useRowSelection, trackedJobStub, LAYSHEET_JOB_RESULTS,
 	)
 	api.targetLot.value = "LOT-B"
 	await api.saveLotTransfer()

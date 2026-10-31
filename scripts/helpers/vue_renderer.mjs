@@ -12,12 +12,34 @@ const sharedModules = {
 	"listClickFilters.js": await import("../../frontend/src/components/common/listClickFilters.js"),
 	"listDateRangeFilters.js": await import("../../frontend/src/components/common/listDateRangeFilters.js"),
 	"listScrollState.js": await import("../../frontend/src/components/common/listScrollState.js"),
+	// Lists run without a socket: a requested live refresh refetches right away; tests that cover it pass the real module.
+	"listLiveRefresh.js": {
+		...await import("../../frontend/src/components/common/listLiveRefresh.js"),
+		useListLiveRefresh: ({ refetch }) => ({ request: (change) => refetch(change, { canApply: () => true }), discardPending() {} }),
+	},
+	// Components render without a socket; live behaviour is covered by the live*.test files.
+	"useDocRealtime.js": { useDocRealtime: () => ({ stop() {} }) },
+	"useRefetchOnReturn.js": { useRefetchOnReturn: () => ({ stop() {} }) },
+	"useRelatedDocumentsRealtime.js": { useRelatedDocumentsRealtime: () => ({ stop() {} }) },
+	"useTrackedJob.js": {
+		LAYSHEET_JOB_RESULTS: (await import("../../frontend/src/composables/useTrackedJob.js")).LAYSHEET_JOB_RESULTS,
+		useTrackedJob: () => ({ isRunning: Vue.ref(false), run: (queue) => queue() }),
+	},
+	"useRelativeTime.js": { useRelativeTime: () => Vue.computed(() => "") },
+	"useLiveDocument.js": {
+		useLiveDocument: () => ({ state: Vue.ref(""), remoteModified: Vue.ref(""), reloading: Vue.ref(false), refresh: async () => {}, handleSaveError: () => false, clear() {} }),
+	},
+	"documentLiveState.js": await import("../../frontend/src/utils/documentLiveState.js"),
+	"useBackgroundData.js": await import("../../frontend/src/composables/live/useBackgroundData.js"),
 	"newDocumentDefaults.js": await import("../../frontend/src/utils/newDocumentDefaults.js"),
 	"reportColumns.js": await import("../../frontend/src/composables/reportColumns.js"),
 	// Tab titles need the app router; components under test only report them.
 	"usePageTitle.js": { usePageTitle() {} },
 	// The activity footer loads its own data; tests that cover it pass the real component explicitly.
 	"DocumentActivity.vue": () => null,
+	// Live document chrome needs a socket and dialogs; liveDocument.test.js covers it.
+	"DocumentLiveBar.vue": () => null,
+	"DocumentSaveState.vue": () => null,
 	// Template-only placeholder (no <script>); rendered as a marker node.
 	"ListPageSkeleton.vue": () => Vue.h("list-page-skeleton"),
 	"documentShortcuts.js": await import("../../frontend/src/utils/documentShortcuts.js"),

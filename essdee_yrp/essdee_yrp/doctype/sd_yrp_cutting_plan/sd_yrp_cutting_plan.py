@@ -8,14 +8,15 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, now, sbool
 from yrp import attribute_links as attribute_db
-from yrp.attribute_read_context import attribute_read_scope
 from yrp.attribute_links import value as _attribute_value
+from yrp.attribute_read_context import attribute_read_scope
 from yrp.utils import update_if_string_instance
 from yrp.yrp.doctype.yrp_item.yrp_item import get_attribute_details, get_or_create_variant
 from yrp.yrp.doctype.yrp_item_production_detail.yrp_item_production_detail import get_ipd_primary_values
 
 from essdee_yrp.cutting.cloth_substitution import expand_cutting_rows
 from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
+from essdee_yrp.cutting.laysheet_jobs import enqueue_tracked_job
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_laysheet.sd_yrp_cutting_laysheet import (
 	_save_laysheet_terminal_transition,
 	apply_laysheet_to_parent,
@@ -759,7 +760,12 @@ def calculate_laysheets(cutting_plan, ignore_phantom_panels=False):
 			),
 		)
 	# Run after commit so the job reads the LaySheet statuses this request saved.
-	frappe.enqueue(calc, "short", cutting_plan=cutting_plan, enqueue_after_commit=True)
+	return enqueue_tracked_job(
+		"essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_plan.sd_yrp_cutting_plan.calc",
+		"SD YRP Cutting Plan",
+		cutting_plan,
+		cutting_plan=cutting_plan,
+	)
 
 
 def calc(cutting_plan):

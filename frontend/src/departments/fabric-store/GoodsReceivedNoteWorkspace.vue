@@ -12,10 +12,11 @@
 			:show-lifecycle-actions="false"
 			:compact-mobile-rail="Boolean(workspace.record?.name)"
 			:show-rail="!canEditDraft"
-			@reload="load(true)"
+			@reload="load(true)" :live-reload="refreshInBackground"
 			@action="runWorkspaceAction"
 			@close="emit('closed')"
 			@deleted="documentDeleted"
+			@live-state="liveState = $event"
 		>
 			<template #header="{ record, headingId }">
 				<div class="goods-received-note-header__identity" :class="{ 'goods-received-note-header__identity--embedded': presentation === 'embedded' }">
@@ -334,6 +335,7 @@ const error = ref("")
 const panelError = ref("")
 const dirty = ref(false)
 const editingSubmitted = ref(false)
+const liveState = ref("")
 const workspace = ref({})
 const lotItems = ref({})
 const currentName = ref("")
@@ -530,10 +532,13 @@ async function load(refresh = false) {
 	try {
 		const nextWorkspace = await getGoodsReceivedNoteWorkspace(requestedName, requestedContext) || {}
 		if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return
+		const tab = activeTab.value
 		applyWorkspace(nextWorkspace)
+		if (refresh) activeTab.value = tab
 	} catch (reason) {
 		if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return
-		clearWorkspaceState(requestedName)
+		// A failed refresh keeps the loaded document on screen next to the error.
+		if (!refresh) clearWorkspaceState(requestedName)
 		error.value = reason?.message || "Unable to load this Goods Received Note."
 	} finally {
 		if (!loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) {
@@ -541,6 +546,28 @@ async function load(refresh = false) {
 			acting.value = ""
 		}
 	}
+}
+
+/** Live update: refetches in place, keeping tab and edit mode. Returns false, keeping edits, when edited (unless `discard`) or acted on meanwhile. */
+async function refreshInBackground({ discard = false } = {}) {
+	const sequence = ++loadSequence
+	const actions = actionSequence
+	const draftAtStart = draftFingerprint()
+	const requestedName = currentName.value
+	const requestedRouteName = props.name
+	const requestedSource = JSON.stringify(props.sourceContext || {})
+	const nextWorkspace = await getGoodsReceivedNoteWorkspace(requestedName, clone(props.sourceContext || {})) || {}
+	if (loadIsStale(sequence, requestedName, requestedRouteName, requestedSource)) return true
+	// Edits made after the request (even after a discard confirm) always win over its response.
+	if (actions !== actionSequence || acting.value || draftFingerprint() !== draftAtStart || (!discard && dirty.value)) return false
+	const view = { tab: activeTab.value, editing: editingSubmitted.value }
+	applyWorkspace(nextWorkspace)
+	activeTab.value = view.tab
+	editingSubmitted.value = view.editing
+}
+
+function draftFingerprint() {
+	return JSON.stringify([form, itemGroups.value, correctionGroups.value])
 }
 
 function loadIsStale(sequence, requestedName, requestedRouteName, requestedSource) {
@@ -726,6 +753,7 @@ async function duplicateGoodsReceivedNote() {
 }
 
 async function save(submit) {
+	if (liveState.value === "deleted") return
 	const sequence = ++actionSequence
 	const requestedRouteName = props.name
 	const requestedName = currentName.value
@@ -756,7 +784,7 @@ async function save(submit) {
 }
 
 async function runCommand(command, payload = {}, destructive = false) {
-	if (!currentName.value) return null
+	if (!currentName.value || liveState.value === "deleted") return null
 	const sequence = ++actionSequence
 	const requestedRouteName = props.name
 	const requestedName = currentName.value

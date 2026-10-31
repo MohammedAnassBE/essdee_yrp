@@ -209,7 +209,8 @@ async function assignSelected({ assignedTo, remarks }) {
 		const result = await bulkAssignBills(assignedTo, names, remarks) || {}
 		bulkSummary.value = bulkAssignSummary(result)
 		bulkAssignVisible.value = false
-		await listView.value?.refresh(true)
+		listView.value?.clearSelection()
+		await listView.value?.refresh()
 	} catch (reason) {
 		bulkError.value = reason?.message || "Unable to assign the selected bills."
 	} finally {

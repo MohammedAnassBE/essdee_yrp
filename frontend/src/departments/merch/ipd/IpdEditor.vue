@@ -5,10 +5,12 @@
 			title="Item Production Detail"
 			:workspace="shellWorkspace"
 			:loading="loading"
-			:error="loadError"
+			:error="loadError || (hasStaleError ? actionError : '')"
 			:dirty="isDirty && !navigatingInternally"
 			:acting="acting"
 			:show-lifecycle-actions="false"
+			:show-save-state="false"
+			:live-reload="refresh"
 			@reload="requestReload"
 		>
 			<template #header="{ headingId }">
@@ -53,7 +55,6 @@
 			@dismiss="actionError = ''"
 			@after-hide="focusSaveProblemAfterClose"
 		/>
-		<DocumentErrorDialog :message="hasStaleError ? actionError : ''" retry-label="Reload" @dismiss="actionError = ''" @retry="load(record.name)" />
 	</section>
 </template>
 
@@ -84,7 +85,7 @@ const router = useRouter()
 const editor = useIpdEditor(props.ipdId)
 const {
 	payload, draft, record, isNew, checks, checksRunning, loading, acting, loadError, actionError, savedAt,
-	isDirty, hasStaleError, navigatingInternally, shellWorkspace, actions, load, save, createDraft, runChecks, approve, regenerate, cancel,
+	isDirty, hasStaleError, navigatingInternally, shellWorkspace, actions, load, refresh, save, createDraft, runChecks, approve, regenerate, cancel,
 	followName, focusProblem, firstInvalidCell,
 } = editor
 provide(IPD_EDITOR_KEY, editor.api)

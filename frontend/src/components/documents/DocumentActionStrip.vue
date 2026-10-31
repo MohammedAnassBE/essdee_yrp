@@ -75,10 +75,11 @@
 <script setup>
 import Button from "primevue/button"
 import Menu from "primevue/menu"
-import { computed, ref } from "vue"
+import { computed, inject, ref } from "vue"
 
 import { useDocumentShortcuts } from "../../composables/useDocumentShortcuts.js"
 import { withShortcutHint } from "../../utils/documentShortcuts.js"
+import { DOCUMENT_DELETED_KEY } from "../../utils/documentLiveState.js"
 
 const props = defineProps({
 	actions: { type: Array, default: () => [] },
@@ -102,7 +103,10 @@ const menuItems = computed(() => activeOverflowActions.value.map((action) => ({
 })))
 
 const shortcutAction = (command) => props.actions.find((action) => action.shortcut === command)
-const isRunnable = (action) => Boolean(action && !action.disabled && !action.loading)
+// A document deleted elsewhere can no longer be saved, submitted or cancelled, by click or shortcut.
+const documentDeleted = inject(DOCUMENT_DELETED_KEY, null)
+const isBlockedByDelete = (action) => Boolean(documentDeleted?.value && ["save", "submit", "cancel"].includes(action?.shortcut))
+const isRunnable = (action) => Boolean(action && !action.disabled && !action.loading && !isBlockedByDelete(action))
 useDocumentShortcuts({
 	isBusy: () => props.actions.some((action) => action.loading),
 	canSave: () => isRunnable(shortcutAction("save")),
@@ -116,7 +120,7 @@ useDocumentShortcuts({
 })
 
 function run(action) {
-	if (!action) return
+	if (!action || isBlockedByDelete(action)) return
 	if (action.disabled || action.loading) { showDisabledReason(action); return }
 	clearDisabledReason()
 	action.command?.()

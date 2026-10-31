@@ -3,8 +3,9 @@
 		<header class="purchase-order-editor__header erp-editor-header">
 			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Purchase Order" : "New Purchase Order" }}</h1></div>
 			<div class="erp-editor-actions">
+				<DocumentSaveState :saving="saving === 'draft'" :dirty="dirty" />
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
-				<Button v-if="canDraft" label="Save" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave" @click="save(false)" />
+				<Button v-if="canDraft" label="Save" icon="pi pi-save" :loading="saving === 'draft'" :disabled="busy || !canSave || live.state.value === 'deleted'" @click="save(false)" />
 			</div>
 		</header>
 
@@ -12,6 +13,7 @@
 			:message="loadFailed ? '' : error"
 			title="Purchase Order could not be saved"
 		/>
+		<DocumentLiveBar class="purchase-order-editor__live-bar" :state="live.state.value" :modified-at="live.remoteModified.value" :dirty="dirty" :reloading="live.reloading.value" @reload="live.refresh()" />
 		<div v-if="loading" class="purchase-order-editor__loading" role="status" aria-live="polite" aria-label="Loading Purchase Order editor"><Skeleton height="160px" /><Skeleton height="420px" /></div>
 		<section v-else-if="loadFailed" class="purchase-order-editor__recovery" role="alert"><i class="pi pi-cloud-times" aria-hidden="true" /><div><strong>Purchase Order could not be loaded</strong><span>{{ error || "Try loading the Purchase Order again." }}</span></div><Button label="Retry" icon="pi pi-refresh" severity="secondary" outlined @click="load" /></section>
 		<div v-else class="purchase-order-editor__body">
@@ -136,6 +138,9 @@ import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentLiveBar from "../../components/documents/DocumentLiveBar.vue"
+import DocumentSaveState from "../../components/documents/DocumentSaveState.vue"
+import { useLiveDocument } from "../../composables/useLiveDocument.js"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { changePurchaseOrderDeliveryLocation } from "./purchaseOrderDelivery.js"
@@ -160,11 +165,21 @@ const pendingCancel = ref(false)
 const supplierConfirmVisible = ref(false)
 const pendingSupplierValue = ref(null)
 let allowNavigation = false
+let saveGeneration = 0
+let unmounted = false
 let pendingNavigation = null
 const previewController = createPurchaseOrderPreviewController((pending) => { previewPending.value = pending })
 const draftRevision = createPurchaseOrderDraftRevision()
 
 const busy = computed(() => loading.value || Boolean(saving.value) || composerPreparing.value || previewPending.value)
+const live = useLiveDocument({
+	doctype: "Purchase Order",
+	name: () => props.name,
+	localModified: () => editor.value.modified,
+	isDirty: dirty,
+	isBusy: busy,
+	reload: refreshEditor,
+})
 const duplicateFrom = computed(() => String(props.source?.duplicate_from || ""))
 const deliverToSupplier = computed({ get: () => Boolean(Number(form.deliver_to_supplier)), set: (value) => { form.deliver_to_supplier = value ? 1 : 0 } })
 const deliveryLocationFilters = computed(() => ({ is_company_location: deliverToSupplier.value ? 0 : 1 }))
@@ -213,6 +228,7 @@ function fieldOptions(fieldname) {
 	return values.length ? values : [form[fieldname]].filter(Boolean)
 }
 
+/** `background` (live updates) keeps the editor on screen and rethrows load errors. */
 async function load() {
 	const loadRevision = draftRevision.revise()
 	previewController.revise()
@@ -223,13 +239,7 @@ async function load() {
 	try {
 		const loadedEditor = await getPurchaseOrderEditor(props.name, props.source) || {}
 		if (!draftRevision.isCurrent(loadRevision)) return
-		editor.value = loadedEditor
-		Object.assign(form, editor.value.values || {})
-		if (!props.name && !props.source?.duplicate_from) {
-			Object.assign(form, withNewDocumentDefaults(form, Object.fromEntries(Object.entries(props.newDefaults || {}).filter(([fieldname]) => fieldname in form))))
-		}
-		itemGroups.value = loadPurchaseOrderGroups(editor.value.item_groups)
-		dirty.value = false
+		applyEditor(loadedEditor)
 	} catch (reason) {
 		if (!draftRevision.isCurrent(loadRevision)) return
 		loadFailed.value = true
@@ -237,6 +247,27 @@ async function load() {
 	} finally {
 		if (draftRevision.isCurrent(loadRevision)) loading.value = false
 	}
+}
+/** Live update: refetches in place. Returns false, keeping the draft, if it was edited (unless `discard`), saved or busy meanwhile. */
+async function refreshEditor({ discard = false } = {}) {
+	const [requestedName, saves, revision, draftAtStart] = [props.name, saveGeneration, draftRevision.current(), draftFingerprint()]
+	const loadedEditor = await getPurchaseOrderEditor(requestedName, props.source) || {}
+	if (unmounted || requestedName !== props.name || !draftRevision.isCurrent(revision)) return true
+	// Edits made after the request (even after a discard confirm) always win over its response.
+	if (saves !== saveGeneration || busy.value || draftFingerprint() !== draftAtStart || (!discard && dirty.value)) return false
+	draftRevision.revise()
+	previewController.revise()
+	applyEditor(loadedEditor)
+}
+function draftFingerprint() { return JSON.stringify([form, itemGroups.value]) }
+function applyEditor(loadedEditor) {
+	editor.value = loadedEditor
+	Object.assign(form, editor.value.values || {})
+	if (!props.name && !props.source?.duplicate_from) {
+		Object.assign(form, withNewDocumentDefaults(form, Object.fromEntries(Object.entries(props.newDefaults || {}).filter(([fieldname]) => fieldname in form))))
+	}
+	itemGroups.value = loadPurchaseOrderGroups(editor.value.item_groups)
+	dirty.value = false
 }
 
 function loadItemSchema(_operation, item) { return getPurchaseOrderItemSchema(item, props.name) }
@@ -371,6 +402,7 @@ async function save(submit) {
 	const itemError = validatePurchaseOrderItems(form, itemGroups.value)
 	if (itemError) { error.value = itemError; return }
 	saving.value = submit ? "submit" : "draft"
+	saveGeneration += 1
 	try {
 		const payload = await savePurchaseOrder({ ...form, item_details: clone(itemGroups.value) }, { name: props.name, submit, expectedModified: editor.value.modified })
 		const record = payload?.record || {}
@@ -378,7 +410,7 @@ async function save(submit) {
 		allowNavigation = true
 		toast.add({ severity: "success", summary: submit ? "Purchase Order submitted" : "Purchase Order saved", detail: record.name || "Your changes are saved.", life: 3500 })
 		emit("saved", record)
-	} catch (reason) { error.value = reason?.message || "Unable to save this Purchase Order." }
+	} catch (reason) { if (!live.handleSaveError(reason)) error.value = reason?.message || "Unable to save this Purchase Order." }
 	finally { saving.value = "" }
 }
 
@@ -412,7 +444,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 	discardVisible.value = true
 })
 onMounted(() => { window.addEventListener("beforeunload", beforeUnload); load() })
-onBeforeUnmount(() => { draftRevision.revise(); previewController.revise(); window.removeEventListener("beforeunload", beforeUnload) })
+onBeforeUnmount(() => { unmounted = true; draftRevision.revise(); previewController.revise(); window.removeEventListener("beforeunload", beforeUnload) })
 watch(() => props.name, load)
 </script>
 

@@ -26,7 +26,8 @@
 	</div>
 
 	<Teleport to="body">
-		<Message v-if="feedback" class="plan-action-feedback" :severity="feedbackSeverity" :closable="true" @close="feedback = ''">{{ feedback }}</Message>
+		<Message v-if="laysheetJob.isRunning.value" class="plan-action-feedback" severity="info" :closable="false" role="status"><i class="pi pi-spin pi-spinner" aria-hidden="true" /> Calculating LaySheets in the background. The plan updates when it finishes.</Message>
+		<Message v-else-if="feedback" class="plan-action-feedback" :severity="feedbackSeverity" :closable="true" @close="feedback = ''">{{ feedback }}</Message>
 	</Teleport>
 
 	<Dialog v-model:visible="completedReportOpen" modal dismissable-mask maximizable header="Completed Cut Quantity" class="action-dialog action-dialog--wide completed-report-dialog">
@@ -134,6 +135,7 @@ import CuttingCompletedReport from "./CuttingCompletedReport.vue"
 import { copyCompletedReportImage } from "./completedReportExport.js"
 import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import { formatDisplayDatetime } from "../../utils/dateFormat.js"
+import { LAYSHEET_JOB_RESULTS, useTrackedJob } from "../../composables/useTrackedJob.js"
 
 const props = defineProps({
 	doc: { type: Object, required: true },
@@ -179,7 +181,7 @@ const moreActionItems = computed(() => {
 		permissions.value.can_run_plan_actions ? [
 			{ label: "Generate", icon: "pi pi-play", disabled, command: () => runPlanAction("generate") },
 			{ label: "Fetch Received Cloth", icon: "pi pi-download", disabled, command: () => runPlanAction("fetch") },
-			{ label: "Calculate LaySheets", icon: "pi pi-calculator", disabled, command: () => runPlanAction("calculate") },
+			{ label: laysheetJob.isRunning.value ? "Calculating LaySheets…" : "Calculate LaySheets", icon: "pi pi-calculator", disabled: disabled || laysheetJob.isRunning.value, command: () => runPlanAction("calculate") },
 		] : [],
 		[
 			{ label: "Get Completed", icon: "pi pi-chart-bar", disabled, command: openCompletedReport },
@@ -211,8 +213,16 @@ const hasActions = computed(() => moreActionItems.value.some((item) => !item.sep
 const planActions = {
 	generate: ["get_cloth1", "cutting_plan", "Cloth details generated."],
 	fetch: ["fetch_received_cloth", "docname", "Received cloth refreshed."],
-	calculate: ["calculate_laysheets", "cutting_plan", "LaySheet calculation queued."],
+	calculate: ["calculate_laysheets", "cutting_plan", ""],
 }
+// The queued calculation refreshes the plan only when its own job reports the end.
+const laysheetJob = useTrackedJob({
+	onDone(status) {
+		const result = LAYSHEET_JOB_RESULTS[status]
+		showFeedback(result.message, result.severity)
+		if (result.refresh) emit("refresh")
+	},
+})
 
 async function runPlanAction(action) {
 	const [method, nameArgument, success] = planActions[action]
@@ -220,9 +230,12 @@ async function runPlanAction(action) {
 	busy.value = action
 	clearFeedback()
 	try {
-		await callMethod(planMethod(method), args)
-		showFeedback(success)
-		emit("refresh")
+		if (action === "calculate") await laysheetJob.run(() => callMethod(planMethod(method), args))
+		else {
+			await callMethod(planMethod(method), args)
+			showFeedback(success)
+			emit("refresh")
+		}
 	} catch (reason) {
 		dialogError.value = reason.message || "Unable to complete the action."
 	} finally {

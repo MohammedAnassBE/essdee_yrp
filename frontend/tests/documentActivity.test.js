@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
 import * as activityUtils from "../src/utils/documentActivity.js"
+import { formatRelativeTime } from "../src/composables/live/useRelativeTime.js"
 
 const { activityRefreshKey, describeActivityEntry, formatActivityValue, isSavedDocumentName } = activityUtils
 const source = (path) => readFileSync(resolve(`frontend/src/${path}`), "utf8")
@@ -31,6 +32,8 @@ async function activityComponent(getDocumentActivity) {
 		"primevue/button": Button,
 		"../../api/frappe.js": { getDocumentActivity },
 		"../../utils/documentActivity.js": activityUtils,
+		// The shared 30 s ticker would keep the test process alive; one computed is enough here.
+		"../../composables/live/useRelativeTime.js": { useRelativeTime: (value) => Vue.computed(() => formatRelativeTime(Vue.toValue(value))) },
 	})
 }
 
@@ -128,7 +131,7 @@ test("activity collapses and stays hidden for unsaved documents", async () => {
 	toggle.props.onClick()
 	await tick()
 	assert.doesNotMatch(textOf(root), /created this/)
-	assert.match(textOf(root), /Last modified 23-10-2026 14:30/)
+	assert.match(textOf(root), /Last modified 23-10-2026/)
 	assert.equal(toggle.props["aria-expanded"], false)
 })
 
@@ -179,7 +182,7 @@ test("activity uses the page delivered with the document once, then fetches", as
 	assert.equal(calls.length, 0)
 	assert.equal(toggleOf(root).props["aria-expanded"], false)
 	assert.equal(textOf(toggleOf(root)).trim(), "Activity1+", "delivered page gives the collapsed count")
-	assert.match(textOf(root), /Last modified 23-10-2026 14:30/)
+	assert.match(textOf(root), /Last modified 23-10-2026/)
 	await expand(root)
 	assert.match(textOf(root), /changed Remarks from a to b/)
 	findNodes(root, (node) => node.type === "button" && node.props.label === "Show more")[0].props.onClick()
@@ -249,4 +252,16 @@ test("every routed document page and document dialog wires the activity section"
 		"departments/purchase/lot/LotDocumentDialog.vue",
 	]
 	for (const dialog of dialogs) assert.match(source(dialog), /<DocumentActivity /, dialog)
+})
+
+test("collapsed summary shows the record's latest modified time relative, exact time in the tooltip", async () => {
+	const component = await activityComponent(async () => activityPage([]))
+	const now = new Date(Date.now() - 5 * 60_000)
+	const pad = (part) => String(part).padStart(2, "0")
+	const modified = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+	const root = mountComponent(component, { doctype: "SD YRP Lot", name: "L-1", record: { modified } })
+	await tick()
+	assert.match(textOf(root), /Last modified 5 min ago/)
+	const time = findNodes(root, (node) => node.type === "time")[0]
+	assert.equal(time.props.title, `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`)
 })

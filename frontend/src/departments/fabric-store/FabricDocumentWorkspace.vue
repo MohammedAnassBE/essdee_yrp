@@ -27,6 +27,7 @@
 			</div>
 
 			<div class="fabric-document-workspace__header-actions">
+				<DocumentSaveState v-if="showSaveState" :saving="acting === 'save'" :dirty="dirty" :saved-at="savedAt" />
 				<Button
 					v-if="presentation === 'embedded'"
 					icon="pi pi-times"
@@ -41,6 +42,7 @@
 		</header>
 
 		<div v-if="!loading" class="fabric-document-workspace__commandbar" aria-label="Document actions">
+			<fieldset class="fabric-document-workspace__action-set" :disabled="isDeleted">
 			<div class="fabric-document-workspace__domain-actions">
 				<slot name="header-actions" :workspace="workspace" :acting="acting" />
 			</div>
@@ -56,9 +58,9 @@
 					text
 					rounded
 					aria-label="Refresh"
-					:loading="acting === 'reload'"
+					:loading="acting === 'reload' || live.reloading.value"
 					:disabled="Boolean(acting)"
-					@click="emit('reload')"
+					@click="requestRefresh"
 				/>
 				<CustomPrintButtons v-if="doctype === 'SD YRP Lot'" :doctype="doctype" :record="{ ...record, has_cloth_program: workspace.has_cloth_program ?? record.has_cloth_program }" :permissions="workspace.permissions" :disabled="Boolean(acting)" />
 				<DocumentPrintButton
@@ -82,7 +84,9 @@
 					@deleted="handleDeleted"
 				/>
 			</div>
+			</fieldset>
 		</div>
+		<DocumentLiveBar v-if="!loading" class="fabric-document-workspace__remote-change" :state="live.state.value" :modified-at="live.remoteModified.value" :dirty="dirty" :reloading="live.reloading.value || acting === 'reload'" @reload="live.refresh()" />
 		</div>
 
 		<div v-if="loading" class="fabric-document-workspace__loading" aria-label="Loading document">
@@ -147,10 +151,20 @@
 	</section>
 
 	<DocumentErrorDialog
-		:message="hasWorkspace ? error : ''"
+		:message="hasWorkspace && !isStaleDocumentError(error) ? error : ''"
 		:title="`${title} could not be completed`"
 	/>
 
+	<DocumentConfirmationDialog
+		v-model:visible="refreshConfirmVisible"
+		title="Discard your changes?"
+		message="Refreshing shows the latest saved document and discards your unsaved edits."
+		confirm-label="Discard and Refresh"
+		cancel-label="Keep Editing"
+		confirm-icon="pi pi-refresh"
+		severity="warn"
+		@confirm="confirmRefresh"
+	/>
 	<Dialog v-model:visible="discardVisible" class="erp-dialog--sm" modal header="Discard unsaved changes?" :closable="false">
 		<p class="fabric-document-workspace__discard-copy">This document has unsaved changes. Close it and discard those changes?</p>
 		<template #footer>
@@ -163,16 +177,21 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
-import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, provide, ref, watch } from "vue"
 import { onBeforeRouteLeave } from "vue-router"
 
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import DocumentActivity from "../../components/documents/DocumentActivity.vue"
+import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import DocumentLiveBar from "../../components/documents/DocumentLiveBar.vue"
+import DocumentSaveState from "../../components/documents/DocumentSaveState.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
+import { useLiveDocument } from "../../composables/useLiveDocument.js"
+import { DOCUMENT_DELETED_KEY, isStaleDocumentError, takeSavedHandoff } from "../../utils/documentLiveState.js"
 
 const props = defineProps({
 	doctype: { type: String, required: true },
@@ -189,8 +208,11 @@ const props = defineProps({
 	compactMobileRail: { type: Boolean, default: false },
 	showRail: { type: Boolean, default: true },
 	showActivity: { type: Boolean, default: true },
+	/** Background reload for live updates (keeps tab, scroll and focus). Without it a remote change only shows the bar. */
+	liveReload: { type: Function, default: null },
+	showSaveState: { type: Boolean, default: true },
 })
-const emit = defineEmits(["reload", "action", "close", "deleted"])
+const emit = defineEmits(["reload", "action", "close", "deleted", "live-state"])
 const instance = getCurrentInstance()
 const headingId = computed(() => `${props.doctype.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-workspace-title`)
 
@@ -200,6 +222,33 @@ const record = computed(() => props.workspace.record || {})
 const capabilities = computed(() => props.workspace.capabilities || {})
 const hasWorkspace = computed(() => Boolean(Object.keys(props.workspace || {}).length))
 const canPrint = computed(() => Boolean(record.value.name && (props.workspace.permissions?.can_print === undefined || props.workspace.permissions.can_print)))
+
+const savedAt = ref(props.presentation === "page" ? takeSavedHandoff() : null)
+const live = useLiveDocument({
+	doctype: () => record.value.doctype || props.doctype,
+	name: () => record.value.name || "",
+	localModified: () => record.value.modified,
+	isDirty: () => props.dirty || !props.liveReload,
+	isBusy: () => Boolean(props.acting) || props.loading,
+	reload: async (options) => (props.liveReload ? props.liveReload(options) : emit("reload")),
+})
+const refreshConfirmVisible = ref(false)
+/** Toolbar Refresh: the background path when the page has one (after a discard confirm), else the page's own reload. */
+function requestRefresh() {
+	if (!props.liveReload) return emit("reload")
+	if (props.dirty) refreshConfirmVisible.value = true
+	else live.refresh({ discard: false })
+}
+function confirmRefresh() {
+	refreshConfirmVisible.value = false
+	live.refresh()
+}
+const isDeleted = computed(() => live.state.value === "deleted")
+provide(DOCUMENT_DELETED_KEY, isDeleted)
+watch(() => live.state.value, (state) => emit("live-state", state))
+watch(() => isStaleDocumentError(props.error), (stale) => { if (stale) live.handleSaveError(props.error) })
+watch(() => props.acting, (next, previous) => { if (previous === "save" && !next && !props.error) savedAt.value = Date.now() })
+watch(() => record.value.name, (_name, previous) => { if (previous) savedAt.value = null })
 
 function capabilityLabel(name, fallback) { return name === "save" ? fallback : capabilities.value[name]?.label || fallback }
 function formatValue(value) {
@@ -291,6 +340,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload))
 .fabric-document-workspace__commandbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 4px var(--erp-space-4); border-bottom: 1px solid var(--erp-border); background: var(--erp-surface); flex-wrap: nowrap; }
 .fabric-document-workspace__domain-actions, .fabric-document-workspace__lifecycle-actions { min-width: 0; flex-wrap: nowrap; }
 .fabric-document-workspace__lifecycle-actions { justify-content: flex-end; margin-left: auto; }
+.fabric-document-workspace__remote-change { margin: var(--erp-space-2) var(--erp-space-4); }
+.fabric-document-workspace__action-set { display: contents; min-width: 0; margin: 0; padding: 0; border: 0; }
 .fabric-document-workspace__loading, .fabric-document-workspace__content {
 	min-height: 0;
 	flex: 1;

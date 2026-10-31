@@ -72,6 +72,6 @@ test("Work Order editor routes both parties through the shared autofill", () => 
 	assert.match(editor, /function changeSupplier\(value\) \{ return changeParty\("supplier", value\) \}/)
 	assert.match(editor, /function changeDeliveryLocation\(value\) \{ return changeParty\("delivery_location", value\) \}/)
 	assert.match(editor, /changeWorkOrderParty\(form, partyField, value\)/)
-	assert.match(editor, /forgetAutofill\(form\)\n\t\tObject\.assign\(form, editor\.value\.values/)
+	assert.match(editor, /forgetAutofill\(form\)\n\tObject\.assign\(form, editor\.value\.values/)
 	assert.doesNotMatch(editor, /fillSupplierDefaults/)
 })

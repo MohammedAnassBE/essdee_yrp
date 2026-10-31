@@ -17,6 +17,7 @@
 				:error="loadError"
 				:acting="acting"
 				:show-lifecycle-actions="false"
+				:live-reload="refreshInBackground"
 				@reload="load(true)"
 			>
 				<template #header="{ headingId }">
@@ -113,7 +114,7 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
-import { computed, nextTick, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { getLotDocuments, getLotWorkspace } from "../../../api/planning.js"
@@ -159,6 +160,8 @@ const tabPanels = ref(null)
 const documentVisible = ref(false)
 const selectedDocument = ref({ doctype: "", name: "" })
 let loadSequence = 0
+// Responses that land after leaving the page are dropped by the sequence checks.
+onBeforeUnmount(() => { loadSequence += 1 })
 let documentsSequence = 0
 const tabs = computed(() => lotTabs(workspace.value))
 const ocrProcessCount = computed(() => Object.keys(workspace.value.ocr?.processes || {}).length)
@@ -225,6 +228,14 @@ async function load(refresh = false) {
 			acting.value = ""
 		}
 	}
+}
+
+/** Live update: refetches the Lot in place, keeping the page, tab and scroll. */
+async function refreshInBackground() {
+	const sequence = ++loadSequence
+	const requestedName = props.lotId
+	const payload = await getLotWorkspace(requestedName)
+	if (isCurrentRecordRequest(requestedName, props.lotId, sequence, loadSequence)) workspace.value = payload
 }
 
 async function loadDocuments() {

@@ -10,17 +10,19 @@ function formViewLoad(documentName) {
 	const seen = []
 	const loading = { set value(next) { seen.push(next) }, get value() { return seen.at(-1) } }
 	const state = { value: false }
-	const load = new Function("loading", "loadFailed", "error", "success", "documentName", "clearObject", "fieldErrors", "childErrors", "getMeta", "getDoc", "props", "metas", "replaceForm", "buildInitialValues", "clone", "form", "mode", "resolveInitialMode", "emit", "meta", "cleanDocument", "loadSequence", `${body}\nreturn load`)(
-		loading, state, { value: "" }, { value: "" }, { value: documentName }, () => {}, {}, {}, async () => [], async () => ({ name: "CP-1" }),
+	const live = { refreshes: 0, refresh: async () => { live.refreshes += 1 } }
+	const load = new Function("live", "savedAt", "loading", "loadFailed", "error", "success", "documentName", "clearObject", "fieldErrors", "childErrors", "getMeta", "getDoc", "props", "metas", "replaceForm", "buildInitialValues", "clone", "form", "mode", "resolveInitialMode", "emit", "meta", "cleanDocument", "loadSequence", `${body}\nreturn load`)(
+		live, { value: null }, loading, state, { value: "" }, { value: "" }, { value: documentName }, () => {}, {}, {}, async () => [], async () => ({ name: "CP-1" }),
 		{ doctype: "SD YRP Cutting Plan", name: "CP-1" }, { value: [] }, () => {}, () => ({}), (value) => value, {}, { value: "view" }, () => "view", () => {}, { value: {} }, {}, 0,
 	)
-	return { load, seen }
+	return { load, seen, live }
 }
 
 test("background reload keeps the loaded document on screen", async () => {
-	const { load, seen } = formViewLoad("CP-1")
+	const { load, seen, live } = formViewLoad("CP-1")
 	await load({ background: true })
-	assert.deepEqual(seen, [false, false])
+	assert.deepEqual(seen, [], "the loading skeleton is never shown")
+	assert.equal(live.refreshes, 1, "the live document path reloads in place")
 })
 
 test("plain reload and first load still show the loading state", async () => {

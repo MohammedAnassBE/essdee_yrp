@@ -9,7 +9,7 @@
 				:error="loadError || (isStaleWriteError(actionError) ? '' : actionError)"
 				:acting="acting"
 				:show-lifecycle-actions="false"
-				@reload="load(true)"
+				@reload="load(true)" :live-reload="() => load(true)"
 			>
 				<template #header="{ headingId }">
 					<IpdIdentity

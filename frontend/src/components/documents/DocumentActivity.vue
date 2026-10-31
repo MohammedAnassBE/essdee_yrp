@@ -6,8 +6,8 @@
 				<h2 :id="headingId">Activity</h2>
 				<span v-if="countLabel" class="document-activity__count">{{ countLabel }}</span>
 			</button>
-			<span v-if="!expanded && activity?.modified?.at" class="document-activity__summary">
-				Last modified {{ formatDisplayDatetime(activity.modified.at) }}
+			<span v-if="!expanded && lastModifiedAt" class="document-activity__summary">
+				Last modified <time :datetime="lastModifiedAt" :title="formatDisplayDatetime(lastModifiedAt, { seconds: true })">{{ lastModifiedRelative }}</time>
 			</span>
 		</header>
 		<div v-if="expanded" :id="bodyId" class="document-activity__body">
@@ -62,6 +62,7 @@ import Button from "primevue/button"
 import { computed, ref, watch } from "vue"
 
 import { getDocumentActivity } from "../../api/frappe.js"
+import { useRelativeTime } from "../../composables/live/useRelativeTime.js"
 import { formatDisplayDatetime } from "../../utils/dateFormat.js"
 import { activityRefreshKey, describeActivityEntry, isSavedDocumentName } from "../../utils/documentActivity.js"
 
@@ -89,6 +90,9 @@ let sequence = 0
 let usedInitialPage = null
 let stale = true
 
+// The record's own stamp is newest: collapsed activity is not refetched after every save.
+const lastModifiedAt = computed(() => (isSaved.value && (props.record?.modified || activity.value?.modified?.at)) || "")
+const lastModifiedRelative = useRelativeTime(lastModifiedAt)
 const countLabel = computed(() => activity.value ? `${entries.value.length}${hasMore.value ? "+" : ""}` : "")
 
 async function fetchPage(start) {

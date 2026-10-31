@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask :header="`Print Labels · ${row?.lot || ''}`" class="bulk-print-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal :dismissable-mask="!printing" :closable="!printing" :close-on-escape="!printing" :header="`Print Labels · ${row?.lot || ''}`" class="bulk-print-dialog" @update:visible="emit('update:visible', $event)">
 		<div class="print-form">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<div v-if="loading" class="print-loading"><i class="pi pi-spin pi-spinner"></i><span>Checking workflow and finding printers…</span></div>

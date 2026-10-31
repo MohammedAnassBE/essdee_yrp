@@ -13,6 +13,7 @@
 				<div class="form-toolbar__meta">
 					<small>{{ documentName ? documentName : `New ${doctype}` }}</small>
 					<slot name="header-meta" :doc="form" :meta="meta" :loading="loading" />
+					<DocumentSaveState v-if="!readonly" :saving="saving" :dirty="isDirty" :saved-at="savedAt" />
 				</div>
 			</div>
 			<div class="form-toolbar__actions">
@@ -33,7 +34,7 @@
 						label="Edit"
 						severity="secondary"
 						outlined
-						:disabled="loading"
+						:disabled="loading || live.state.value === 'deleted'"
 						@click="mode = 'edit'"
 					/>
 					<Button
@@ -42,7 +43,7 @@
 						:label="documentName ? 'Save' : 'Create'"
 						:title="withShortcutHint(documentName ? 'Save' : 'Create', 'save')"
 						:loading="saving"
-						:disabled="loading || readonly"
+						:disabled="loading || readonly || live.state.value === 'deleted'"
 						@click="save"
 					/>
 				</template>
@@ -52,6 +53,13 @@
 		<DocumentErrorDialog
 			:message="loadFailed ? '' : error"
 			:title="`${heading} could not be saved`"
+		/>
+		<DocumentLiveBar
+			:state="live.state.value"
+			:modified-at="live.remoteModified.value"
+			:dirty="isDirty"
+			:reloading="live.reloading.value"
+			@reload="live.refresh()"
 		/>
 		<Message v-if="success" severity="success" :closable="false">{{ success }}</Message>
 
@@ -216,7 +224,7 @@ import Column from "primevue/column"
 import DataTable from "primevue/datatable"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
-import { computed, reactive, ref, watch } from "vue"
+import { computed, onScopeDispose, reactive, ref, shallowRef, watch } from "vue"
 
 import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
@@ -224,6 +232,10 @@ import DocumentLink from "./DocumentLink.vue"
 import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
 import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"
+import DocumentLiveBar from "../documents/DocumentLiveBar.vue"
+import DocumentSaveState from "../documents/DocumentSaveState.vue"
+import { useLiveDocument } from "../../composables/useLiveDocument.js"
+import { isDocumentDirty } from "../../utils/documentLiveState.js"
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 import { formatDisplayByFieldtype } from "../../utils/dateFormat.js"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
@@ -275,8 +287,22 @@ const fieldErrors = reactive({})
 const childErrors = reactive({})
 const documentName = ref("")
 const mode = ref("edit")
-let cleanDocument = {}
+const savedAt = ref(null)
+const cleanDocument = shallowRef({})
 let loadSequence = 0
+const isDirty = computed(() => mode.value === "edit" && Boolean(meta.value) && isDocumentDirty(form, cleanDocument.value))
+let editRevision = 0
+let saveGeneration = 0
+// Responses that land after unmount are dropped by the sequence check.
+onScopeDispose(() => { loadSequence += 1 })
+const live = useLiveDocument({
+	doctype: () => props.doctype,
+	name: documentName,
+	localModified: () => form.modified,
+	isDirty,
+	isBusy: () => saving.value || loading.value,
+	reload: reloadInBackground,
+})
 
 const metaByName = computed(() =>
 	Object.fromEntries(metas.value.filter((meta) => meta?.name).map((meta) => [meta.name, meta])),
@@ -318,8 +344,10 @@ watch(
 )
 
 async function load(options) {
+	if (options?.background && documentName.value) return live.refresh({ discard: false })
 	const sequence = ++loadSequence
-	loading.value = !(options?.background && documentName.value)
+	loading.value = true
+	savedAt.value = null
 	loadFailed.value = false
 	error.value = ""
 	success.value = ""
@@ -334,7 +362,7 @@ async function load(options) {
 		metas.value = loadedMetas
 		documentName.value = document?.name || ""
 		replaceForm(buildInitialValues(loadedMetas, document))
-		cleanDocument = clone(form)
+		cleanDocument.value = clone(form)
 		mode.value = resolveInitialMode(Boolean(document))
 		emit("loaded", { doc: { ...form }, meta: meta.value })
 	} catch (reason) {
@@ -344,11 +372,31 @@ async function load(options) {
 		metas.value = []
 		documentName.value = ""
 		replaceForm({})
-		cleanDocument = {}
+		cleanDocument.value = {}
 		mode.value = "view"
 	} finally {
 		if (sequence === loadSequence) loading.value = false
 	}
+}
+
+/** Replaces the saved document in place: no skeleton, and the current mode, scroll and focus stay. Throws on failure. */
+/**
+ * Background refetch for live updates. Returns false, keeping the form, when the response is stale:
+ * the user edited (unless `discard`) or a save started while it was in flight.
+ */
+async function reloadInBackground({ discard = false } = {}) {
+	const sequence = ++loadSequence
+	const [requested, edits, saves] = [documentName.value, editRevision, saveGeneration]
+	const document = await getDoc(props.doctype, requested)
+	if (sequence !== loadSequence || requested !== documentName.value || !document) return true
+	// Edits made after the request (even after a discard confirm) always win over its response.
+	if (saves !== saveGeneration || saving.value || edits !== editRevision || (!discard && isDirty.value)) return false
+	replaceForm(document)
+	cleanDocument.value = clone(form)
+	clearObject(fieldErrors)
+	clearObject(childErrors)
+	error.value = ""
+	emit("loaded", { doc: { ...form }, meta: meta.value })
 }
 
 function buildInitialValues(loadedMetas, document) {
@@ -401,7 +449,7 @@ function cancelEditing() {
 		emit("cancel")
 		return
 	}
-	replaceForm(cleanDocument)
+	replaceForm(clone(cleanDocument.value))
 	clearObject(fieldErrors)
 	clearObject(childErrors)
 	error.value = ""
@@ -414,6 +462,7 @@ function clearObject(object) {
 }
 
 function setValue(fieldname, value) {
+	editRevision += 1
 	form[fieldname] = value
 	delete fieldErrors[fieldname]
 	error.value = ""
@@ -586,17 +635,19 @@ function payload() {
 		if (Object.hasOwn(form, field.fieldname)) values[field.fieldname] = form[field.fieldname]
 	}
 	if (requiresPromptName.value && form.name) values.name = form.name
+	// Frappe rejects the save with TimestampMismatchError when this is older than the stored document.
+	if (documentName.value && form.modified) values.modified = form.modified
 	return values
 }
 
 useDocumentShortcuts({
 	isBusy: () => saving.value,
-	canSave: () => mode.value === "edit" && !loading.value && !loadFailed.value && !props.readonly,
+	canSave: () => mode.value === "edit" && !loading.value && !loadFailed.value && !props.readonly && live.state.value !== "deleted",
 	save,
 })
 
 async function save() {
-	if (loading.value || saving.value || loadFailed.value || props.readonly || !meta.value) return
+	if (loading.value || saving.value || loadFailed.value || props.readonly || !meta.value || live.state.value === "deleted") return
 	error.value = ""
 	success.value = ""
 	if (!validate()) {
@@ -605,24 +656,27 @@ async function save() {
 	}
 
 	saving.value = true
+	saveGeneration += 1
 	try {
 		const saved = documentName.value
 			? await updateDoc(props.doctype, documentName.value, payload())
 			: await createDoc(props.doctype, payload())
 		documentName.value = saved?.name || documentName.value
 		replaceForm(saved || form)
-		cleanDocument = clone(form)
+		cleanDocument.value = clone(form)
+		savedAt.value = Date.now()
+		live.clear()
 		mode.value = "view"
 		success.value = `${props.doctype} ${documentName.value || "document"} saved.`
 		emit("saved", saved)
 	} catch (reason) {
-		error.value = reason.message || `Unable to save ${props.doctype}.`
+		if (!live.handleSaveError(reason)) error.value = reason.message || `Unable to save ${props.doctype}.`
 	} finally {
 		saving.value = false
 	}
 }
 
-defineExpose({ save, reload: load, doc: form, mode })
+defineExpose({ save, reload: load, doc: form, mode, isDirty })
 </script>
 
 <style scoped>

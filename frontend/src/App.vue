@@ -17,6 +17,7 @@
 				<span v-if="activeDepartment" class="app-topbar__context" aria-current="page">
 					{{ activeDepartment.label }}
 				</span>
+				<ConnectionIndicator />
 				<button
 					type="button"
 					class="app-theme-toggle"
@@ -58,6 +59,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
 import ServerMessageDialog from "./components/common/ServerMessageDialog.vue"
 import AccountMenu from "./components/navigation/AccountMenu.vue"
+import ConnectionIndicator from "./components/navigation/ConnectionIndicator.vue"
 import { reportedPageTitle } from "./composables/usePageTitle.js"
 import { departments } from "./departments/registry.js"
 import { getHomePath, isOutsideLayout, lockedDepartment } from "./router/departmentLock.js"

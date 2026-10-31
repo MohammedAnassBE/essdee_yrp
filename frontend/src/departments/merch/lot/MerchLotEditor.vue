@@ -5,10 +5,11 @@
 			title="Lot"
 			:workspace="shellWorkspace"
 			:loading="loading"
-			:error="loadError"
+			:error="loadError || (hasStaleError ? actionError : '')"
 			:dirty="isDirty"
 			:acting="acting"
 			:show-lifecycle-actions="false"
+			:live-reload="refresh"
 			@reload="reload"
 		>
 			<template #header="{ headingId }">
@@ -129,7 +130,7 @@
 			@confirm="confirmReloadItems"
 		/>
 		<DocumentErrorDialog
-			:message="actionError"
+			:message="hasStaleError ? '' : actionError"
 			retry-label="Reload"
 			@dismiss="actionError = ''"
 			@retry="load"
@@ -181,6 +182,7 @@ const {
 	composerOpen,
 	reloadItemsVisible,
 	isDirty,
+	hasStaleError,
 	shellWorkspace,
 	tabs,
 	activeTab,
@@ -188,6 +190,7 @@ const {
 	setField,
 	confirmReloadItems,
 	reload,
+	refresh,
 	load,
 } = useMerchLotEditor(props.lotId)
 provide(ENTRY_GRID_INVALID_KEY, invalidRegistry)

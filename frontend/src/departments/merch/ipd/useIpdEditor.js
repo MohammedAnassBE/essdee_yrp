@@ -79,6 +79,7 @@ export function useIpdEditor(initialName) {
 	let gridSequence = 0
 	let checkSequence = 0
 	let loadSequence = 0
+	let writeGeneration = 0
 	let isUnmounted = false
 
 	const record = computed(() => payload.value?.record || {})
@@ -145,6 +146,20 @@ export function useIpdEditor(initialName) {
 		} finally {
 			if (isCurrent(sequence, loadSequence)) loading.value = false
 		}
+	}
+	/** Live update: refetches the saved IPD in place. Returns false, keeping the draft, when it was edited (unless `discard`), saved or busy meanwhile. */
+	async function refresh({ discard = false } = {}) {
+		const sequence = ++loadSequence
+		const [target, writes, grid, draftAtStart] = [record.value.name, writeGeneration, gridSequence, stableStringify(draft)]
+		const result = await getIpdEditor(target, null)
+		if (!isCurrent(sequence, loadSequence) || target !== record.value.name) return true
+		// Edits made after the request (even after a discard confirm) always win over its response.
+		if (writes !== writeGeneration || grid !== gridSequence || acting.value || stableStringify(draft) !== draftAtStart || (!discard && isDirty.value)) return false
+		if (redirectIfReadOnly(result)) return true
+		removedRows.clear()
+		actionError.value = ""
+		applyPayload(result)
+		runChecks()
 	}
 	function applyFilterDefaults() {
 		const defaults = Object.fromEntries(Object.entries(filterDefaults).filter(([fieldname]) => fieldname in draft))
@@ -293,6 +308,7 @@ export function useIpdEditor(initialName) {
 		const sent = new Map(Object.keys(draft).map((key) => [key, stableStringify(draft[key])]))
 		const edits = {}
 		acting.value = kind
+		writeGeneration += 1
 		actionError.value = ""
 		try {
 			const result = await request()
@@ -400,6 +416,6 @@ export function useIpdEditor(initialName) {
 	return {
 		api, invalidRegistry, payload, draft, record, name, isNew, capabilities, context, grids, sections, states, checks, checksRunning,
 		loading, acting, loadError, actionError, savedAt, isDirty, hasStaleError, navigatingInternally, shellWorkspace, actions,
-		load, save, createDraft, runChecks, approve, regenerate, cancel, followName, focusProblem, firstInvalidCell,
+		load, refresh, save, createDraft, runChecks, approve, regenerate, cancel, followName, focusProblem, firstInvalidCell,
 	}
 }

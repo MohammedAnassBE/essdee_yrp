@@ -26,7 +26,8 @@
 	</div>
 
 	<Teleport to="body">
-		<Message v-if="feedback" class="order-action-feedback" severity="success" closable @close="feedback = ''">{{ feedback }}</Message>
+		<Message v-if="laysheetJob.isRunning.value" class="order-action-feedback" severity="info" :closable="false" role="status"><i class="pi pi-spin pi-spinner" aria-hidden="true" /> Calculating LaySheets in the background. The order updates when it finishes.</Message>
+		<Message v-else-if="feedback" class="order-action-feedback" severity="success" closable @close="feedback = ''">{{ feedback }}</Message>
 	</Teleport>
 	<DocumentErrorDialog :message="actionError" title="Cutting Order action failed" @dismiss="actionError = ''" />
 
@@ -62,6 +63,7 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import CuttingCompletedReport from "../CuttingCompletedReport.vue"
 import { copyCompletedReportImage } from "../completedReportExport.js"
 import { formatDisplayDatetime } from "../../../utils/dateFormat.js"
+import { LAYSHEET_JOB_RESULTS, useTrackedJob } from "../../../composables/useTrackedJob.js"
 
 const props = defineProps({ doc: { type: Object, required: true }, data: { type: Object, default: () => ({}) }, extraActions: { type: Array, default: () => [] } })
 const emit = defineEmits(["refresh"])
@@ -83,7 +85,7 @@ const moreActionsOpen = ref(false)
 const moreActionItems = computed(() => {
 	const disabled = Boolean(busy.value)
 	return [
-		actions.value.can_calculate_laysheets ? { label: "Calculate LaySheets", icon: "pi pi-calculator", disabled, command: calculate } : null,
+		actions.value.can_calculate_laysheets ? { label: laysheetJob.isRunning.value ? "Calculating LaySheets…" : "Calculate LaySheets", icon: "pi pi-calculator", disabled: disabled || laysheetJob.isRunning.value, command: calculate } : null,
 		actions.value.can_get_completed ? { label: "Get Completed", icon: "pi pi-chart-bar", disabled, command: openCompletedReport } : null,
 		actions.value.can_update_completed ? { label: "Update Completed", icon: "pi pi-check-square", disabled, command: openCompletedEditor } : null,
 		...props.extraActions,
@@ -91,12 +93,19 @@ const moreActionItems = computed(() => {
 })
 const hasActions = computed(() => moreActionItems.value.length > 0)
 
+// The queued calculation refreshes the order only when its own job reports the end.
+const laysheetJob = useTrackedJob({
+	onDone(status) {
+		const result = LAYSHEET_JOB_RESULTS[status]
+		if (result.severity === "success") feedback.value = result.message
+		else actionError.value = result.message
+		if (result.refresh) emit("refresh")
+	},
+})
 async function calculate() {
 	busy.value = "calculate"; feedback.value = ""; actionError.value = ""
 	try {
-		await callMethod("essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.calculate_laysheets", { cutting_order: props.doc.name })
-		feedback.value = "LaySheet calculation queued."
-		emit("refresh")
+		await laysheetJob.run(() => callMethod("essdee_yrp.essdee_yrp.doctype.sd_yrp_cutting_order.sd_yrp_cutting_order.calculate_laysheets", { cutting_order: props.doc.name }))
 	} catch (reason) { actionError.value = reason?.message || "Unable to calculate LaySheets." }
 	finally { busy.value = "" }
 }

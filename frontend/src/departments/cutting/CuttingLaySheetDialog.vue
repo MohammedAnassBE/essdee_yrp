@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask maximizable class="laysheet-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal :dismissable-mask="!busy" :closable="!busy" :close-on-escape="!busy" maximizable class="laysheet-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<template #header>
 			<RecordDialogHeader
 				:title="sheet ? `Lay Sheet · ${sheet.name}` : 'Create Lay Sheet'"
@@ -113,7 +113,7 @@
 		</template>
 	</Dialog>
 
-	<Dialog v-model:visible="generateOpen" modal dismissable-mask header="Generate Bundles" class="laysheet-subdialog">
+	<Dialog v-model:visible="generateOpen" modal :dismissable-mask="!busy" :closable="!busy" :close-on-escape="!busy" header="Generate Bundles" class="laysheet-subdialog">
 		<div class="subdialog-stack">
 			<Message v-if="subdialogError" severity="error" :closable="false">{{ subdialogError }}</Message>
 			<DateField v-model="bundleDate" value-type="date" label="Bundle Generated Date" required />
@@ -126,7 +126,7 @@
 		<template #footer><Button label="Close" severity="secondary" text @click="generateOpen = false" /><Button label="Generate" icon="pi pi-box" :loading="busy === 'generate'" @click="generateBundles" /></template>
 	</Dialog>
 
-	<Dialog v-model:visible="printerOpen" modal dismissable-mask header="Print Labels" class="laysheet-subdialog">
+	<Dialog v-model:visible="printerOpen" modal :dismissable-mask="!busy" :closable="!busy" :close-on-escape="!busy" header="Print Labels" class="laysheet-subdialog">
 		<div class="subdialog-stack">
 			<Message v-if="subdialogError" severity="error" :closable="false">{{ subdialogError }}</Message>
 			<div v-if="loadingPrinters" class="printer-loading"><i class="pi pi-spin pi-spinner"></i><span>Connecting to QZ Tray and finding printers…</span></div>

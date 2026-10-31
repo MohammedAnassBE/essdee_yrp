@@ -25,6 +25,8 @@
 <script setup>
 import { computed } from "vue"
 
+import { useRelativeTime } from "../../../composables/live/useRelativeTime.js"
+
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 
@@ -41,9 +43,10 @@ const props = defineProps({
 	headingId: { type: String, required: true },
 	editing: { type: Boolean, default: false },
 })
+const savedRelative = useRelativeTime(() => props.savedAt)
 const draftLabel = computed(() => {
 	if (props.draftState === "saving") return "Saving…"
 	if (props.draftState === "dirty") return "Unsaved changes"
-	return props.savedAt ? `Saved ${props.savedAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })}` : "Saved"
+	return props.savedAt ? `Saved · ${savedRelative.value}` : "Saved"
 })
 </script>

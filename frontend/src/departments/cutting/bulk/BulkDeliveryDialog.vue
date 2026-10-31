@@ -1,5 +1,5 @@
 <template>
-	<Dialog :visible="visible" modal dismissable-mask :header="bulkMode ? 'Create Bulk Delivery Challans' : `Create Delivery Challan · ${row?.lot || ''}`" class="bulk-delivery-dialog" @update:visible="emit('update:visible', $event)">
+	<Dialog :visible="visible" modal :dismissable-mask="!saving" :closable="!saving" :close-on-escape="!saving" :header="bulkMode ? 'Create Bulk Delivery Challans' : `Create Delivery Challan · ${row?.lot || ''}`" class="bulk-delivery-dialog" @update:visible="emit('update:visible', $event)">
 		<div class="delivery-form">
 			<Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 			<Message v-if="bulkMode" severity="info" :closable="false">One submitted Delivery Challan will be created for every pending split lot.</Message>

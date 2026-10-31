@@ -9,7 +9,7 @@
 				:error="error || actionError"
 				:acting="acting"
 				:show-lifecycle-actions="false"
-				@reload="loadWorkspace(true)"
+				@reload="loadWorkspace(true)" :live-reload="refreshWorkspace"
 				@action="runWorkspaceAction"
 			>
 				<template #header="{ record, headingId }">
@@ -110,11 +110,14 @@ import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
 import Textarea from "primevue/textarea"
-import { computed, ref, watch } from "vue"
+import { computed, onScopeDispose, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { changeFabricStoreDocumentStatus, executePurchaseOrderCommand, getPurchaseOrderWorkspace } from "../api/fabricStore.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
+import { coalesceRefetch } from "../composables/live/useBackgroundData.js"
+import { useRefetchOnReturn } from "../composables/live/useRefetchOnReturn.js"
+import { useRelatedDocumentsRealtime } from "../composables/useRelatedDocumentsRealtime.js"
 import { usePageTitle } from "../composables/usePageTitle.js"
 import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
@@ -267,6 +270,24 @@ async function loadWorkspace(isRefresh = false) {
 		}
 	}
 }
+/** Silent refetch: keeps the page, tab and buttons as they are and drops its result if a load or action started meanwhile. */
+const refreshWorkspace = coalesceRefetch(async () => {
+	const requestedId = String(route.params.purchaseOrderId || "")
+	if (!requestedId || loading.value || acting.value) return
+	const [loadAtStart, actionAtStart] = [loadSequence, actionSequence]
+	const data = await getPurchaseOrderWorkspace(requestedId) || {}
+	if (!isDisposed && loadAtStart === loadSequence && actionAtStart === actionSequence && !acting.value && requestedId === String(route.params.purchaseOrderId || "")) workspace.value = data
+})
+let isDisposed = false
+onScopeDispose(() => { isDisposed = true; refreshWorkspace.cancel() })
+useRelatedDocumentsRealtime(() => {
+	const name = workspace.value.record?.name
+	return name ? [
+		{ doctype: "YRP Delivery Challan", filters: { purchase_order: name } },
+		{ doctype: "YRP Goods Received Note", filters: { against: "Purchase Order", against_id: name } },
+	] : []
+}, { knownNames: () => relatedDocuments.value.map((row) => row.name), onChange: refreshWorkspace })
+useRefetchOnReturn(refreshWorkspace)
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 async function runWorkspaceAction(action) {
 	if (action === "save") return editPurchaseOrder()
@@ -317,7 +338,7 @@ function openRelated(doctype, sourceContext = {}, name = "") {
 	relatedSourceContext.value = { ...(sourceContext || {}) }
 	relatedVisible.value = true
 }
-async function relatedChanged() { await loadWorkspace(true) }
+async function relatedChanged() { await refreshWorkspace() }
 function openLotEditor() {
 	lotOriginal.value = [...(workspace.value.linked_lots || [])]
 	lotDraft.value = [...lotOriginal.value]

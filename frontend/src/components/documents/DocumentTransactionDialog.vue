@@ -11,6 +11,7 @@
 		<div ref="content" class="document-transaction-dialog__content">
 			<div v-if="loading" class="document-transaction-dialog__loading"><Skeleton v-for="index in 5" :key="index" height="3rem" /></div>
 			<template v-else>
+				<DocumentLiveBar v-if="remoteChange" state="modified" :modified-at="String(remoteChange.modified || '')" :dirty="dirty" :reloading="refreshing" @reload="load({ background: true })" />
 				<div v-if="payload.record" class="document-transaction-dialog__status-row">
 					<DocumentStatusBadge :docstatus="payload.record.docstatus" :label="payload.record.status" />
 					<small>Updated {{ formatDisplayDatetime(payload.record.modified) }}</small>
@@ -62,6 +63,8 @@
 <script setup>
 import DocumentActivity from "./DocumentActivity.vue"
 import DocumentDeleteButton from "./DocumentDeleteButton.vue"
+import DocumentLiveBar from "./DocumentLiveBar.vue"
+import { useDocRealtime } from "../../composables/live/useDocRealtime.js"
 import { useRouter } from "vue-router"
 import StockEntryMakeDcModal from "../../views/dynamic/StockEntryMakeDcModal.vue"
 import Button from "primevue/button"
@@ -103,6 +106,8 @@ const payload = ref({})
 const receiptVisible = ref(false)
 const receiptEditor = ref(null)
 const dirty = ref(false)
+const refreshing = ref(false)
+const remoteChange = ref(null)
 const closeConfirmationVisible = ref(false)
 const dialogTitle = computed(() => `${payload.value.record?.doctype || props.doctype}${payload.value.record?.name || props.name ? ` · ${payload.value.record?.name || props.name}` : ""}`)
 const summaryFieldnames = computed(() => payload.value.record?.doctype === "YRP Delivery Challan"
@@ -120,20 +125,31 @@ const visibleDetails = computed(() => {
 
 watch(() => [props.visible, props.doctype, props.name], ([visible]) => { if (visible && props.name) load() }, { immediate: true })
 
-async function load() {
-	loading.value = true
+/** `background` keeps the current document on screen while it refetches. */
+async function load({ background = false } = {}) {
+	if (background) refreshing.value = true
+	else { loading.value = true; workflowReady.value = false }
 	error.value = ""
 	dirty.value = false
-	workflowReady.value = false
 	try {
 		const [document, workflow] = await Promise.all([getFabricStoreDocument(props.doctype, props.name), getActiveWorkflow(props.doctype)])
 		payload.value = document || {}
 		activeWorkflow.value = workflow
 		workflowReady.value = true
+		remoteChange.value = null
 	}
 	catch (reason) { error.value = reason?.message || `Unable to load ${props.doctype}.` }
-	finally { loading.value = false }
+	finally { loading.value = false; refreshing.value = false }
 }
+
+useDocRealtime(() => payload.value.record?.doctype || props.doctype, () => props.visible ? payload.value.record?.name || "" : "", {
+	localModified: () => payload.value.record?.modified,
+	isBusy: () => Boolean(acting.value) || loading.value || refreshing.value,
+	onRemoteChange(change) {
+		if (dirty.value) remoteChange.value = change
+		else load({ background: true })
+	},
+})
 
 const content = ref(null)
 const canChangeStatus = (permission) => Boolean(!loading.value && payload.value.record && payload.value.permissions?.[permission] && workflowReady.value && !activeWorkflow.value)
@@ -207,7 +223,7 @@ async function endTransit() {
 	finally { acting.value = "" }
 }
 async function receiptChanged(saved) {
-	await load()
+	await load({ background: true })
 	emit("changed", saved)
 }
 

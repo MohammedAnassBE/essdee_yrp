@@ -124,6 +124,7 @@ test("F-C02 Lot item default", async () => {
 	const context = { item_options: ["SHIRT"], options: [{ item: "SHIRT", production_detail: "IPD" }] }
 	const state = setup("departments/fabric-store/WorkOrderEditor.vue", {
 		defaultOption, getDoc: async () => ({ item: "SHIRT", production_detail: "IPD" }), getWorkOrderSelectionContext: async () => context,
+		useLiveDocument: () => ({ state: Vue.ref(""), handleSaveError: () => false }),
 	}, "applySourceChange, form, selectionContext, loading")
 	state.loading.value = false
 	await state.applySourceChange("lot", "LOT-1")

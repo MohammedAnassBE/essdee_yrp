@@ -235,7 +235,8 @@ async function documentLoaded(payload, force = false) {
 	const remountsFormAfterSuccess = force && !workspaceReady.value && Boolean(workspaceError.value)
 	currentDocument.value = document
 	const sequence = ++loadSequence
-	workspaceLoading.value = true
+	// Refreshes of a loaded plan (live updates, tab actions) keep the tabs on screen.
+	if (!workspaceReady.value) workspaceLoading.value = true
 	if (workspaceReady.value) workspaceError.value = ""
 	try {
 		const pending = !force && pendingView?.name === document.name ? pendingView.promise : null

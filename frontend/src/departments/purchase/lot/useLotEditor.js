@@ -7,6 +7,7 @@ import { preserveListNavigationState } from "../../../router/listDocumentNavigat
 import { PURCHASE_ROUTES } from "../purchaseViews.js"
 import { clearedLotContext, clone, lotEditorCleanSignature, lotEditorTabs, lotSavePayload } from "./lotEditor.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
+import { withSavedHandoff } from "../../../utils/documentLiveState.js"
 
 export function useLotEditor(lotId) {
 	const route = useRoute()
@@ -101,6 +102,18 @@ export function useLotEditor(lotId) {
 			if (isCurrentLoad(sequence)) { loading.value = false; acting.value = "" }
 		}
 	}
+	/** Live update: refetches the saved Lot in place (no skeleton); returns false when the response is stale. */
+	async function refresh({ discard = false } = {}) {
+		const sequence = ++loadSequence
+		const [events, mutations, draftAtStart] = [eventSequence, mutationSequence, signature.value]
+		const [payload, metadata] = await Promise.all([getLotForm(lotId), getMeta("SD YRP Lot")])
+		if (!isCurrentLoad(sequence)) return true
+		// An edit, field cascade or save that started meanwhile keeps the draft; the live bar explains.
+		if (events !== eventSequence || mutations !== mutationSequence || acting.value || signature.value !== draftAtStart || (!discard && isDirty.value)) return false
+		++eventSequence
+		++mutationSequence
+		applyForm(payload, metadata)
+	}
 	async function reload() {
 		if (!isDirty.value) return load()
 		const target = { name: PURCHASE_ROUTES.lotEdit, params: { lotId }, query: { tab: activeTab.value }, state: preserveListNavigationState(lotId, record.value.modified) }
@@ -182,7 +195,7 @@ export function useLotEditor(lotId) {
 			if (!isCurrentMutation(sequence, load)) return
 			cleanSignature.value = signature.value
 			toast.add({ severity: "success", summary: isNew ? "Lot created" : "Lot saved", detail: result.name, life: 3500 })
-			await router.replace(viewTarget(result.name, result.modified))
+			await router.replace(withSavedHandoff(viewTarget(result.name, result.modified)))
 		} catch (reason) {
 			if (isCurrentMutation(sequence, load)) actionError.value = reason.message
 		} finally {
@@ -193,5 +206,5 @@ export function useLotEditor(lotId) {
 	load()
 	return { form, derived, record, fields, locks, colourAttribute, itemDetails, orderItemDetails, fabricMeta, loading, acting, loadError, actionError,
 		attemptedSave, composerOpen, reloadItemsVisible, isDirty, hasStaleError, shellWorkspace, tabs, activeTab, editorActions,
-		setField, confirmReloadItems, reload, load }
+		setField, confirmReloadItems, reload, refresh, load }
 }

@@ -65,14 +65,17 @@ test("list filter, column and bulk-edit editors load on demand", () => {
 	}
 })
 
-function realtimeModule(loadClient) {
-	const code = source("../src/api/realtime.js")
-		.replace('import("socket.io-client")', "loadClient()")
-		.replace(/^export /gm, "")
-	return new Function("loadClient", "window", `${code}\nreturn { getSocket, onRealtime, hasRealtimeListeners }`)(loadClient, {
+let realtimeCopies = 0
+
+/** A fresh copy of the realtime module (own socket state) using `loadClient` for socket.io-client. */
+async function realtimeModule(loadClient) {
+	globalThis.window = {
 		frappe: { boot: { site_name: "site.local" } },
 		location: { origin: "http://site.local", protocol: "http:", hostname: "site.local" },
-	})
+	}
+	const realtime = await import(`../src/api/realtime.js?copy=${++realtimeCopies}`)
+	realtime.setSocketClientLoader(loadClient)
+	return realtime
 }
 
 function fakeSocket() {
@@ -90,7 +93,7 @@ function fakeSocket() {
 test("realtime loads the client once, subscribes in order and connects once", async () => {
 	const socket = fakeSocket()
 	let loads = 0
-	const realtime = realtimeModule(async () => { loads += 1; return { io: (url, options) => { socket.url = url; socket.options = options; return socket } } })
+	const realtime = await realtimeModule(async () => { loads += 1; return { io: (url, options) => { socket.url = url; socket.options = options; return socket } } })
 	const seen = []
 	const offDone = realtime.onRealtime("done", (event) => seen.push(["done", event]))
 	realtime.onRealtime("connect", () => seen.push(["connect"]))
@@ -112,7 +115,7 @@ test("realtime loads the client once, subscribes in order and connects once", as
 
 test("an unsubscribe before the client loads never attaches the handler", async () => {
 	const socket = fakeSocket()
-	const realtime = realtimeModule(async () => ({ io: () => socket }))
+	const realtime = await realtimeModule(async () => ({ io: () => socket }))
 	const off = realtime.onRealtime("done", () => {})
 	off()
 	assert.equal(realtime.hasRealtimeListeners(), false)
@@ -124,7 +127,7 @@ test("an unsubscribe before the client loads never attaches the handler", async 
 test("a failed client load is retried on the next subscription", async () => {
 	const socket = fakeSocket()
 	let loads = 0
-	const realtime = realtimeModule(async () => {
+	const realtime = await realtimeModule(async () => {
 		loads += 1
 		if (loads === 1) throw new TypeError("Failed to fetch dynamically imported module")
 		return { io: () => socket }

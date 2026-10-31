@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Work Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
 		<section class="fabric-work-order-frame">
-			<FabricDocumentWorkspace doctype="YRP Work Order" title="Work Order" :workspace="workspace" :loading="loading" :error="error || actionError" :acting="acting" :show-lifecycle-actions="false" @reload="loadWorkspace(true)" @action="runWorkspaceAction">
+			<FabricDocumentWorkspace doctype="YRP Work Order" title="Work Order" :workspace="workspace" :loading="loading" :error="error || actionError" :acting="acting" :show-lifecycle-actions="false" @reload="loadWorkspace(true)" :live-reload="refreshWorkspace" @action="runWorkspaceAction">
 				<template #header="{ record, headingId }">
 					<div class="work-order-page__identity">
 						<div class="work-order-page__title-row">
@@ -75,10 +75,13 @@ import TabList from "primevue/tablist"
 import TabPanel from "primevue/tabpanel"
 import TabPanels from "primevue/tabpanels"
 import Tabs from "primevue/tabs"
-import { computed, nextTick, ref, watch } from "vue"
+import { computed, nextTick, onScopeDispose, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { executeWorkOrderCommand, getWorkOrderEditor, getWorkOrderWorkspace } from "../api/fabricStore.js"
+import { coalesceRefetch } from "../composables/live/useBackgroundData.js"
+import { useRefetchOnReturn } from "../composables/live/useRefetchOnReturn.js"
+import { useRelatedDocumentsRealtime } from "../composables/useRelatedDocumentsRealtime.js"
 import DepartmentPage from "../components/DepartmentPage.vue"
 import LinkField from "../components/common/LinkField.vue"
 import DocumentActionStrip from "../components/documents/DocumentActionStrip.vue"
@@ -273,6 +276,27 @@ async function loadWorkspace(refresh = false) {
 		if (sequence === loadSequence) { loading.value = false; acting.value = "" }
 	}
 }
+/** Silent refetch: keeps the page, tab and buttons as they are and drops its result if a load or action started meanwhile. */
+const refreshWorkspace = coalesceRefetch(async () => {
+	const requestedId = String(route.params.workOrderId || "")
+	if (!requestedId || loading.value || acting.value) return
+	const [loadAtStart, actionAtStart] = [loadSequence, actionSequence]
+	const data = await getWorkOrderWorkspace(requestedId) || {}
+	if (!isDisposed && loadAtStart === loadSequence && actionAtStart === actionSequence && !acting.value && requestedId === String(route.params.workOrderId || "")) workspace.value = data
+})
+let isDisposed = false
+onScopeDispose(() => { isDisposed = true; refreshWorkspace.cancel() })
+useRelatedDocumentsRealtime(() => {
+	const name = workspace.value.record?.name
+	return name ? [
+		{ doctype: "YRP Delivery Challan", filters: { work_order: name } },
+		{ doctype: "YRP Goods Received Note", filters: { against: "YRP Work Order", against_id: name } },
+	] : []
+}, {
+	knownNames: () => [...deliveryChallans.value, ...goodsReceivedNotes.value].map((row) => row.name),
+	onChange: refreshWorkspace,
+})
+useRefetchOnReturn(refreshWorkspace)
 function capabilityLabel(name, fallback) { return capabilities.value[name]?.label || fallback }
 function statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft" }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
@@ -320,7 +344,7 @@ async function openAction(mode) {
 }
 async function actionChanged(result) {
 	if (actionSourceId.value && actionSourceId.value !== String(route.params.workOrderId || "")) return
-	if (!result?.record) return loadWorkspace(true)
+	if (!result?.record) return refreshWorkspace()
 	const resultName = result.record.name
 	workspace.value = result
 	if (resultName && resultName !== route.params.workOrderId) await router.replace({ name: props.viewRouteName, params: { workOrderId: resultName }, state: preserveListNavigationState(resultName) })
@@ -332,14 +356,14 @@ function createRelated(type) {
 	openRelated("YRP Delivery Challan", "", capability?.source_context || { work_order: workspace.value.record.name })
 }
 function openRelatedRow({ type, row }) { openRelated(type === "delivery_challan" ? "YRP Delivery Challan" : "YRP Goods Received Note", row.name) }
-async function relatedChanged() { await loadWorkspace(true) }
+async function relatedChanged() { await refreshWorkspace() }
 function relatedClosed() {
 	relatedVisible.value = false
 	nextTick(() => activityRail.value?.reopenExpanded?.())
 }
 function openCuttingPlan() { router.push({ name: "cutting-plan-new", query: capabilities.value.create_cutting_plan?.source_context || {} }) }
 function openMaterialIssue() { materialIssueContext.value = { ...(capabilities.value.create_material_issue?.source_context || {}) }; materialIssueVisible.value = true }
-async function materialIssueChanged() { materialIssueVisible.value = false; await loadWorkspace(true) }
+async function materialIssueChanged() { materialIssueVisible.value = false; await refreshWorkspace() }
 function beginGoodsReceivedNote() {
 	const capability = capabilities.value.create_goods_received_note || {}
 	const submitted = deliveryChallans.value.filter((row) => Number(row.docstatus) === 1)

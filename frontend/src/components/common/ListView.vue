@@ -73,7 +73,7 @@
 						outlined
 						title="Refresh"
 						aria-label="Refresh"
-						:loading="loading"
+						:loading="loading || manualRefreshing"
 						@click="refresh"
 					/>
 					<Button
@@ -159,6 +159,15 @@
 				<span>{{ error }}</span>
 			</div>
 			<Button label="Retry" icon="pi pi-refresh" severity="danger" outlined :loading="loading" @click="retryLoad" />
+		</div>
+		<div v-if="showRefreshWaiting" class="list-live-hint" role="status">
+			<i class="pi pi-clock" aria-hidden="true"></i>
+			<span>Refresh will run when you clear the selection.</span>
+		</div>
+		<div v-if="liveRefreshError && !error" class="list-live-error" role="status">
+			<i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+			<span>Couldn't refresh. Showing earlier data.</span>
+			<Button label="Retry" size="small" text :loading="manualRefreshing" @click="refresh" />
 		</div>
 		<Message v-if="bulkNotice" severity="success" closable @close="bulkNotice = ''">
 			{{ bulkNotice }}
@@ -343,7 +352,7 @@
 					v-for="row in rows"
 					:key="row.name"
 					class="mobile-list-record"
-					:class="{ 'mobile-list-record--clickable': clickable }"
+					:class="{ 'mobile-list-record--clickable': clickable, 'list-row--live-changed': isHighlighted(row.name) }"
 					role="listitem"
 					@click="clickable && openRow(row)"
 				>
@@ -542,6 +551,7 @@ import {
 	templateItemFilterItems,
 	templateItemLinkFilters,
 } from "./listItemFilters.js"
+import { changedRowNames, keepSelection, mergeChangedRows, useListLiveRefresh, useRowHighlight } from "./listLiveRefresh.js"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
 import { FormField, ListviewFilters, loadFormField, UserListviewColumns } from "./asyncListParts.js"
 import {
@@ -661,6 +671,8 @@ const bulkEditValue = ref("")
 const showBulkConfirm = ref(false)
 const pendingBulkAction = ref("")
 const pendingBulkRows = ref([])
+const manualRefreshing = ref(false)
+const liveRefreshError = ref("")
 let loadSequence = 0
 let searchTimer = null
 let quickFilterTimer = null
@@ -934,6 +946,20 @@ const statusSelectOptions = computed(() => statusTabs.value.map((tab) => ({
 	label: `${tab.label} (${tab.count})`,
 })))
 
+const liveRefreshHeld = computed(() => Boolean(
+	loading.value || loadingMore.value || bulkActing.value || bulkEditApplying.value ||
+	selectedRows.value.length || showFilters.value || showColumns.value || showBulkEdit.value || showBulkConfirm.value,
+))
+const refreshWaiting = ref(false)
+const showRefreshWaiting = computed(() => refreshWaiting.value && selectedRows.value.length > 0)
+watch(() => selectedRows.value.length, (count) => { if (!count) refreshWaiting.value = false })
+const { isHighlighted, mark: highlightRows } = useRowHighlight()
+const liveRefresh = useListLiveRefresh({
+	doctype: () => props.doctype,
+	isHeld: () => liveRefreshHeld.value,
+	refetch: backgroundLoadRows,
+})
+
 watch(
 	() => [props.doctype, JSON.stringify(props.filters)],
 	() => initialise(),
@@ -1081,7 +1107,7 @@ async function initialise() {
 	}
 }
 
-async function loadStatusCounts(existingSequence = loadSequence) {
+async function loadStatusCounts(existingSequence = loadSequence, { background = false } = {}) {
 	if (!effectiveStatusField.value || !effectiveStatusOptions.value.length) {
 		statusCounts.value = {}
 		return
@@ -1109,7 +1135,7 @@ async function loadStatusCounts(existingSequence = loadSequence) {
 			...values.map((value, index) => [value, counts[index + 1]]),
 		])
 	} catch {
-		if (existingSequence === loadSequence) statusCounts.value = { __all__: total.value }
+		if (existingSequence === loadSequence && !background) statusCounts.value = { __all__: total.value }
 	}
 }
 
@@ -1127,8 +1153,10 @@ function getRowPage(filters, start, pageLength) {
 /** Loads the first `rowLimit` rows: one page after a query change, the whole loaded range on refresh or restore. */
 async function loadRows(existingSequence = null) {
 	const sequence = existingSequence || ++loadSequence
+	liveRefresh.discardPending()
 	loading.value = true
 	error.value = ""
+	liveRefreshError.value = ""
 	loadMoreError.value = ""
 	try {
 		const filters = await resolveItemFilters(allFilters({ expand: false }))
@@ -1153,6 +1181,46 @@ async function loadRows(existingSequence = null) {
 		if (sequence === loadSequence) loading.value = false
 	}
 	if (sequence === loadSequence) applyPendingScroll()
+}
+
+/**
+ * Silent refetch for live changes: no loading state, rows stay on screen on failure, selection and the
+ * loaded range are kept. Loaded `names` are refetched in place; anything else reloads the loaded range.
+ * Returns false when the change must be retried later, including when a hold began mid-flight.
+ */
+async function backgroundLoadRows({ names = [], full = false } = {}, { canApply }) {
+	if (!metadataReady.value || error.value) return true
+	const sequence = loadSequence
+	try {
+		const filters = await resolveItemFilters(allFilters({ expand: false }))
+		if (sequence !== loadSequence) return true
+		if (!canApply()) return false
+		const loadedNames = new Set(rows.value.map((row) => row.name))
+		const inPlace = !full && names.length && names.every((name) => loadedNames.has(name))
+		const [data, count] = await Promise.all([
+			inPlace
+				? getRowPage([...filters, ["name", "in", names]], 0, names.length)
+				: getRowPage(filters, 0, Math.max(pageSize.value, rowLimit)),
+			getCount(props.doctype, filters, { distinct: hasChildTableFilter(filters, props.doctype) }),
+		])
+		if (sequence !== loadSequence) return true
+		if (!canApply()) return false
+		const next = inPlace ? mergeChangedRows(rows.value, data, names) : data
+		highlightRows(changedRowNames(rows.value, next))
+		rows.value = next
+		total.value = count
+		rowLimit = Math.max(pageSize.value, next.length)
+		selectedRows.value = keepSelection(selectedRows.value, next)
+		now.value = new Date()
+		liveRefreshError.value = ""
+		emit("loaded", { rows: next, total: count })
+		loadStatusCounts(sequence, { background: true })
+		return true
+	} catch (reason) {
+		if (sequence !== loadSequence) return true
+		liveRefreshError.value = reason.message || `Unable to refresh ${props.doctype}.`
+		return false
+	}
 }
 
 /** Appends the next page; the total from the last full load is reused and corrected when the end arrives early. */
@@ -1344,12 +1412,19 @@ function quickFiltersChanged({ values, field }) {
 	}, quickFilterDelay)
 }
 
-function refresh() {
-	return reload(true)
+/** Silent refresh of the loaded range; like live updates it waits while rows are selected or a dialog or bulk action is open. */
+async function refresh() {
+	refreshWaiting.value = selectedRows.value.length > 0
+	manualRefreshing.value = true
+	try {
+		await liveRefresh.request({ full: true })
+	} finally {
+		manualRefreshing.value = false
+	}
 }
 
 function retryLoad() {
-	return metadataReady.value ? refresh() : initialise()
+	return metadataReady.value ? reload(true) : initialise()
 }
 
 function clearFilters() {
@@ -1450,7 +1525,7 @@ async function openBulkEditDialog() {
 
 async function refreshAfterBulk() {
 	clearSelection()
-	await reload(true)
+	await refresh()
 }
 
 async function applyBulkEdit() {
@@ -1643,6 +1718,7 @@ function restoreNavigationState() {
 function rowClass(row) {
 	const classes = ["premium-list-row"]
 	if (props.clickable) classes.push("premium-list-row--clickable")
+	if (isHighlighted(row?.name)) classes.push("list-row--live-changed")
 	if (effectiveStatusField.value && hasFilterValue(row?.[effectiveStatusField.value])) {
 		const value = row[effectiveStatusField.value]
 		const option = effectiveStatusOptions.value.find((candidate) => String(typeof candidate === "string" ? candidate : candidate.value) === String(value))
@@ -1711,12 +1787,14 @@ function modifiedTitle(row) {
 }
 
 onBeforeUnmount(() => {
+	// Invalidates every in-flight load so no response lands after unmount.
+	loadSequence += 1
 	loadMoreObserver?.disconnect()
 	if (searchTimer) clearTimeout(searchTimer)
 	if (quickFilterTimer) clearTimeout(quickFilterTimer)
 })
 
-defineExpose({ refresh: reload })
+defineExpose({ refresh, clearSelection })
 </script>
 
 <style scoped>
@@ -1983,6 +2061,34 @@ defineExpose({ refresh: reload })
 .list-load-error > div { display: grid; gap: 2px; min-width: 0; }
 .list-load-error strong { color: var(--erp-text); font-size: var(--erp-font-size-table); }
 .list-load-error > div > span { overflow-wrap: anywhere; font-size: var(--erp-font-size-caption); }
+
+.list-live-error,
+.list-live-hint {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--erp-warning);
+	font-size: var(--erp-font-size-caption);
+}
+
+.list-live-hint { color: var(--erp-text-muted); }
+
+:deep(.premium-list-table .p-datatable-tbody > tr.list-row--live-changed > td),
+.mobile-list-record.list-row--live-changed {
+	background-color: var(--erp-accent-soft);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	:deep(.premium-list-table .p-datatable-tbody > tr.list-row--live-changed > td),
+	.mobile-list-record.list-row--live-changed {
+		animation: list-row-live-fade 1.6s ease-out forwards;
+	}
+}
+
+@keyframes list-row-live-fade {
+	from { background-color: var(--erp-accent-soft); }
+	to { background-color: transparent; }
+}
 
 .bulk-message span {
 	font-size: var(--erp-font-size-caption);

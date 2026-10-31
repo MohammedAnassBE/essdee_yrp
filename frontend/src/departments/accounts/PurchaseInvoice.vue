@@ -18,7 +18,7 @@
 				:acting="acting"
 				:show-lifecycle-actions="false"
 				compact-mobile-rail
-				@reload="load(true)"
+				@reload="load(true)" :live-reload="() => load(true)"
 			>
 				<template #header="{ record, headingId }">
 					<PurchaseInvoiceHeader :record="record" :heading-id="headingId" />

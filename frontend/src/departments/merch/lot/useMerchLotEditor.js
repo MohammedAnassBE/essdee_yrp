@@ -15,6 +15,7 @@ import {
 } from "../../purchase/lot/lotEditor.js"
 import { boxGridErrors } from "./merchLotViews.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
+import { withSavedHandoff } from "../../../utils/documentLiveState.js"
 
 export function useMerchLotEditor(lotId) {
 	const route = useRoute()
@@ -186,6 +187,18 @@ export function useMerchLotEditor(lotId) {
 			}
 		}
 	}
+	/** Live update: refetches the saved Lot in place (no skeleton); returns false when the response is stale. */
+	async function refresh({ discard = false } = {}) {
+		const sequence = ++loadSequence
+		const [events, mutations, draftAtStart] = [eventSequence, mutationSequence, signature.value]
+		const [payload, metadata] = await Promise.all([getLotForm(lotId), getMeta("SD YRP Lot")])
+		if (!isCurrentLoad(sequence)) return true
+		// An edit, field cascade or save that started meanwhile keeps the draft; the live bar explains.
+		if (events !== eventSequence || mutations !== mutationSequence || acting.value || signature.value !== draftAtStart || (!discard && isDirty.value)) return false
+		++eventSequence
+		++mutationSequence
+		applyForm(payload, metadata)
+	}
 	async function reload() {
 		if (!isDirty.value) return load()
 		const target = {
@@ -326,7 +339,7 @@ export function useMerchLotEditor(lotId) {
 			detail: result.name,
 			life: 3500,
 		})
-		await router.replace(viewTarget(result.name, result.modified))
+		await router.replace(withSavedHandoff(viewTarget(result.name, result.modified)))
 	}
 	onBeforeUnmount(() => {
 		isUnmounted = true
@@ -363,6 +376,7 @@ export function useMerchLotEditor(lotId) {
 		setField,
 		confirmReloadItems,
 		reload,
+		refresh,
 		load,
 	}
 }

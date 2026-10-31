@@ -44,37 +44,74 @@ class TestPurchaseOrderApprovalState(TestCase):
 		fixture = next(item for item in hooks.fixtures if item.get("dt") == "Custom DocPerm")
 		self.assertIn("Purchase Order", fixture["filters"][0][2])
 
-	@patch("essdee_yrp.purchase_order_approval.frappe.get_all")
-	def test_mixed_rows_trigger_on_one_exact_purchase_yarn_item(self, get_all):
-		from essdee_yrp.purchase_order_approval import requires_yarn_approval
+	ITEMS = {
+		"YARN": {"item_group": "Purchase - Yarn", "variant_of": None},
+		"YARN-RED": {"item_group": "M_Purchase - Yarn", "variant_of": "YARN-TEMPLATE"},
+		"YARN-TEMPLATE": {"item_group": "Purchase - Yarn", "variant_of": None},
+		"DYED": {"item_group": "Dyed Yarn", "variant_of": None},
+		"CLOTH": {"item_group": "Purchase - Fabric", "variant_of": None},
+		"SIMILAR": {"item_group": "Purchase Yarn", "variant_of": None},
+	}
+	GROUP_TREE = {"Purchase - Yarn": (10, 13), "Dyed Yarn": (11, 12), "M_Purchase - Yarn": (20, 21), "Purchase - Fabric": (30, 31)}
 
-		get_all.return_value = [
-			frappe._dict({"name": "CLOTH", "item_group": "Purchase - Fabric"}),
-			frappe._dict({"name": "YARN", "item_group": "Purchase - Yarn"}),
-		]
-		self.assertTrue(requires_yarn_approval(self._doc("CLOTH", "YARN")))
-		get_all.assert_called_once_with(
-			"Item",
-			filters={"name": ["in", ["CLOTH", "YARN"]]},
-			fields=["name", "item_group"],
-			limit_page_length=0,
+	def fake_get_all(self, configured):
+		def get_all(doctype, filters=None, fields=None, pluck=None, **_kwargs):
+			if doctype == "SD YRP MRP Settings Approval Item Group":
+				return list(configured)
+			if doctype == "Item Group" and "name" in filters:
+				return [frappe._dict(lft=self.GROUP_TREE[name][0], rgt=self.GROUP_TREE[name][1]) for name in filters["name"][1] if name in self.GROUP_TREE]
+			if doctype == "Item Group":
+				return [name for name, (lft, rgt) in self.GROUP_TREE.items() if lft >= filters["lft"][1] and rgt <= filters["rgt"][1]]
+			names = [name for name in filters["name"][1] if name in self.ITEMS]
+			if "item_group" in filters:
+				return [name for name in names if self.ITEMS[name]["item_group"] in filters["item_group"][1]]
+			return [frappe._dict(name=name, **self.ITEMS[name]) for name in names]
+
+		return patch("essdee_yrp.purchase_order_approval.frappe.get_all", side_effect=get_all)
+
+	def test_listed_group_child_group_and_template_variant_need_approval(self):
+		from essdee_yrp.purchase_order_approval import (
+			get_approval_item_codes,
+			is_approval_item,
+			requires_item_approval,
 		)
 
-	@patch("essdee_yrp.purchase_order_approval.frappe.get_all")
-	def test_child_similar_and_empty_rows_do_not_trigger(self, get_all):
-		from essdee_yrp.purchase_order_approval import requires_yarn_approval
+		with self.fake_get_all(["Purchase - Yarn"]):
+			self.assertEqual(get_approval_item_codes(["YARN", "YARN-RED", "DYED", "CLOTH", "SIMILAR"]), {"YARN", "YARN-RED", "DYED"})
+			self.assertTrue(requires_item_approval(self._doc("CLOTH", "YARN-RED")))
+			self.assertFalse(requires_item_approval(self._doc("CLOTH", "SIMILAR")))
+			self.assertFalse(requires_item_approval(self._doc("YARN", managed=False)))
+			self.assertTrue(is_approval_item("DYED"))
+			self.assertFalse(is_approval_item("CLOTH"))
 
-		get_all.return_value = [
-			frappe._dict({"name": "CHILD", "item_group": "Purchase - Yarn / Dyed"}),
-			frappe._dict({"name": "SIMILAR", "item_group": "Purchase Yarn"}),
-		]
-		self.assertFalse(requires_yarn_approval(self._doc("CHILD", "SIMILAR")))
-		get_all.reset_mock()
-		self.assertFalse(requires_yarn_approval(self._doc()))
+	def test_configured_groups_replace_the_default(self):
+		from essdee_yrp.purchase_order_approval import get_approval_item_codes, get_approval_item_groups
+
+		with self.fake_get_all(["Purchase - Fabric", "M_Purchase - Yarn"]):
+			self.assertEqual(get_approval_item_groups(), {"Purchase - Fabric", "M_Purchase - Yarn"})
+			self.assertEqual(get_approval_item_codes(["YARN", "YARN-RED", "CLOTH"]), {"YARN-RED", "CLOTH"})
+
+	def test_empty_list_falls_back_to_purchase_yarn(self):
+		from essdee_yrp.purchase_order_approval import get_approval_item_groups
+
+		with self.fake_get_all([]):
+			self.assertEqual(get_approval_item_groups(), {"Purchase - Yarn", "Dyed Yarn"})
+
+	def test_empty_rows_do_not_query_items(self):
+		from essdee_yrp.purchase_order_approval import requires_item_approval
+
+		with self.fake_get_all(["Purchase - Yarn"]) as get_all:
+			self.assertFalse(requires_item_approval(self._doc()))
 		get_all.assert_not_called()
 
+	def test_approval_item_groups_setting_is_a_table_of_item_groups(self):
+		field = frappe.get_meta("SD YRP MRP Settings").get_field("approval_item_groups")
+		self.assertEqual((field.fieldtype, field.options), ("Table", "SD YRP MRP Settings Approval Item Group"))
+		child = frappe.get_meta("SD YRP MRP Settings Approval Item Group").get_field("item_group")
+		self.assertEqual((child.fieldtype, child.options), ("Link", "Item Group"))
+
 	@patch("essdee_yrp.purchase_order_approval.get_live_request", return_value=None)
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval", return_value=True)
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=True)
 	def test_draft_save_sets_only_standard_status(self, requires, get_live):
 		from essdee_yrp.purchase_order_approval import apply_draft_approval_status
 
@@ -84,7 +121,7 @@ class TestPurchaseOrderApprovalState(TestCase):
 		self.assertEqual(doc.yrp_fulfillment_status, "Draft")
 
 	@patch("essdee_yrp.purchase_order_approval.get_live_request", return_value=None)
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval", return_value=False)
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=False)
 	def test_pending_approval_returns_to_draft_when_last_yarn_item_is_removed(
 		self, requires, get_live
 	):
@@ -95,7 +132,7 @@ class TestPurchaseOrderApprovalState(TestCase):
 		self.assertEqual(doc.status, "Draft")
 		self.assertEqual(doc.yrp_fulfillment_status, "Draft")
 
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval")
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval")
 	def test_non_yrp_purchase_order_is_untouched(self, requires):
 		from essdee_yrp.purchase_order_approval import apply_draft_approval_status
 
@@ -104,7 +141,7 @@ class TestPurchaseOrderApprovalState(TestCase):
 		self.assertEqual(doc.status, "Draft")
 		requires.assert_not_called()
 
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval")
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval")
 	def test_rejection_flag_preserves_draft_once(self, requires):
 		from essdee_yrp.purchase_order_approval import apply_draft_approval_status
 
@@ -134,7 +171,7 @@ class TestPurchaseOrderApprovalTransitions(TestCase):
 	def _raise(self, message, *args, **kwargs):
 		raise RuntimeError(message)
 
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval", return_value=True)
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=True)
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_roles", return_value=["Purchase Manager"])
 	@patch("essdee_yrp.purchase_order_approval.frappe.throw")
 	def test_non_system_manager_cannot_submit_managed_yarn_po(self, throw, get_roles, requires):
@@ -144,7 +181,7 @@ class TestPurchaseOrderApprovalTransitions(TestCase):
 		with self.assertRaisesRegex(RuntimeError, "Only System Manager"):
 			validate_approval_submit(self._doc(status="To Receive", docstatus=1))
 
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval", return_value=True)
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=True)
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_roles", return_value=["System Manager"])
 	def test_system_manager_can_submit_directly_from_draft_or_pending(self, get_roles, requires):
 		from essdee_yrp.purchase_order_approval import validate_approval_submit
@@ -152,7 +189,7 @@ class TestPurchaseOrderApprovalTransitions(TestCase):
 		validate_approval_submit(self._doc(status="Draft"))
 		validate_approval_submit(self._doc(status="Pending Approval"))
 
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval")
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval")
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_roles", return_value=["Purchase Manager"])
 	def test_non_managed_purchase_order_keeps_native_submit_flow(self, get_roles, requires):
 		from essdee_yrp.purchase_order_approval import validate_approval_submit
@@ -161,7 +198,7 @@ class TestPurchaseOrderApprovalTransitions(TestCase):
 		requires.assert_not_called()
 
 	@patch("essdee_yrp.purchase_order_approval.finalize_live_request")
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval", return_value=True)
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=True)
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_roles", return_value=["System Manager"])
 	@patch("essdee_yrp.purchase_order_approval._get_locked_purchase_order")
 	def test_approve_locks_and_submits_to_target_status(
@@ -183,7 +220,7 @@ class TestPurchaseOrderApprovalTransitions(TestCase):
 		self.assertEqual(doc.approved_by, "manager@example.com")
 
 	@patch("essdee_yrp.purchase_order_approval.finalize_live_request")
-	@patch("essdee_yrp.purchase_order_approval.requires_yarn_approval", return_value=True)
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=True)
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_roles", return_value=["System Manager"])
 	@patch("essdee_yrp.purchase_order_approval._get_locked_purchase_order")
 	def test_reject_returns_pending_po_to_draft(self, get_locked, get_roles, requires, finalize):

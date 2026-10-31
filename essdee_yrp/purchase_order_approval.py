@@ -8,7 +8,9 @@ from essdee_yrp.telegram_approval.service import (
 	finish_request_message,
 )
 
-YARN_ITEM_GROUP = "Purchase - Yarn"
+DEFAULT_APPROVAL_ITEM_GROUP = "Purchase - Yarn"
+MRP_SETTINGS_DOCTYPE = "SD YRP MRP Settings"
+APPROVAL_ITEM_GROUP_DOCTYPE = "SD YRP MRP Settings Approval Item Group"
 PENDING_APPROVAL_STATUS = "Pending Approval"
 SYSTEM_MANAGER_ROLE = "System Manager"
 REJECTION_FLAG = "purchase_order_approval_rejection"
@@ -47,25 +49,52 @@ PURCHASE_ORDER_ROUTE_VALUES = {
 }
 
 
-def requires_yarn_approval(doc):
-	if not doc.get("is_yrp_managed"):
-		return False
-	items = sorted(
-		{
-			row.get("item_code")
-			for row in (doc.get("items") or [])
-			if row.get("item_code")
-		}
-	)
-	if not items:
-		return False
-	rows = frappe.get_all(
+def get_approval_item_groups() -> set[str]:
+	"""Configured approval Item Groups with their child groups; none configured means Purchase - Yarn."""
+	groups = frappe.get_all(
+		APPROVAL_ITEM_GROUP_DOCTYPE,
+		filters={"parenttype": MRP_SETTINGS_DOCTYPE, "parentfield": "approval_item_groups"},
+		pluck="item_group",
+	) or [DEFAULT_APPROVAL_ITEM_GROUP]
+	expanded = set(groups)
+	for bounds in frappe.get_all("Item Group", filters={"name": ["in", groups]}, fields=["lft", "rgt"]):
+		expanded.update(
+			frappe.get_all("Item Group", filters={"lft": [">=", bounds.lft], "rgt": ["<=", bounds.rgt]}, pluck="name")
+		)
+	return expanded
+
+
+def get_approval_item_codes(item_codes) -> set[str]:
+	"""Items whose own Item Group, or whose template's Item Group, needs approval."""
+	item_codes = sorted({code for code in item_codes if code})
+	if not item_codes:
+		return set()
+	groups = get_approval_item_groups()
+	items = frappe.get_all(
 		"Item",
-		filters={"name": ["in", items]},
-		fields=["name", "item_group"],
+		filters={"name": ["in", item_codes]},
+		fields=["name", "item_group", "variant_of"],
 		limit_page_length=0,
 	)
-	return any(row.get("item_group") == YARN_ITEM_GROUP for row in rows)
+	templates = sorted({item.variant_of for item in items if item.variant_of})
+	approval_templates = set(
+		frappe.get_all("Item", filters={"name": ["in", templates], "item_group": ["in", sorted(groups)]}, pluck="name")
+		if templates
+		else []
+	)
+	return {item.name for item in items if item.item_group in groups or item.variant_of in approval_templates}
+
+
+def is_approval_item(item_code) -> bool:
+	return item_code in get_approval_item_codes([item_code])
+
+
+def get_approval_items(doc) -> set[str]:
+	return get_approval_item_codes(row.get("item_code") for row in doc.get("items") or [])
+
+
+def requires_item_approval(doc):
+	return bool(doc.get("is_yrp_managed") and get_approval_items(doc))
 
 
 def apply_draft_approval_status(doc, method=None):
@@ -76,7 +105,7 @@ def apply_draft_approval_status(doc, method=None):
 	):
 		return
 	_validate_not_locked_for_edit(doc)
-	if requires_yarn_approval(doc):
+	if requires_item_approval(doc):
 		doc.status = PENDING_APPROVAL_STATUS
 	elif doc.status == PENDING_APPROVAL_STATUS:
 		doc.status = "Draft"
@@ -93,7 +122,7 @@ def _require_system_manager():
 def validate_approval_submit(doc, method=None):
 	if not doc.get("is_yrp_managed"):
 		return
-	if requires_yarn_approval(doc):
+	if requires_item_approval(doc):
 		_require_system_manager()
 
 
@@ -102,15 +131,15 @@ def _get_locked_purchase_order(name):
 	return frappe.get_doc("Purchase Order", name)
 
 
-def _validate_pending_yarn_purchase_order(doc):
+def _validate_pending_approval_purchase_order(doc):
 	if (
 		not doc.get("is_yrp_managed")
 		or doc.docstatus != 0
 		or doc.status != PENDING_APPROVAL_STATUS
 	):
 		frappe.throw("Managed Purchase Order must be in Pending Approval before this action")
-	if not requires_yarn_approval(doc):
-		frappe.throw(f"Purchase Order must contain an item in {YARN_ITEM_GROUP}")
+	if not requires_item_approval(doc):
+		frappe.throw("Purchase Order must contain an item from the approval Item Groups in SD YRP MRP Settings")
 
 
 def _in_telegram_action():
@@ -156,7 +185,7 @@ def _require_send_permissions(doc):
 def _prepare_purchase_order_request(name):
 	doc = _get_locked_purchase_order(name)
 	_require_send_permissions(doc)
-	_validate_pending_yarn_purchase_order(doc)
+	_validate_pending_approval_purchase_order(doc)
 	return doc
 
 
@@ -194,7 +223,7 @@ def finalize_purchase_order_submission(doc, method=None):
 def approve_purchase_order(name):
 	_require_system_manager()
 	doc = _get_locked_purchase_order(name)
-	_validate_pending_yarn_purchase_order(doc)
+	_validate_pending_approval_purchase_order(doc)
 	doc.flags[ACTION_FLAG] = "approve"
 	doc.submit()
 	if not _in_telegram_action():
@@ -206,7 +235,7 @@ def approve_purchase_order(name):
 def reject_purchase_order(name, reason=None):
 	_require_system_manager()
 	doc = _get_locked_purchase_order(name)
-	_validate_pending_yarn_purchase_order(doc)
+	_validate_pending_approval_purchase_order(doc)
 	reason = str(reason or "").strip()
 	doc.flags[REJECTION_FLAG] = True
 	doc.status = "Draft"

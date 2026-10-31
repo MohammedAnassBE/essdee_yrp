@@ -6,6 +6,8 @@
  "field_order": [
   "purchase_order_section",
   "enable_price_validation",
+  "max_approval_item_kg_without_production_order",
+  "approval_item_groups",
   "erp_api_key",
   "erp_api_secret",
   "purchase_invoice_series_map",
@@ -106,6 +108,21 @@
    "fieldname": "enable_price_validation",
    "fieldtype": "Check",
    "label": "Enable Price Validation"
+  },
+  {
+   "default": "500",
+   "description": "Most Kg of approval items a Purchase Order may order when it is not raised against a Production Order. 0 uses the default of 500 kg.",
+   "fieldname": "max_approval_item_kg_without_production_order",
+   "fieldtype": "Float",
+   "label": "Max Approval Item Qty (Kg) Without Production Order",
+   "non_negative": 1
+  },
+  {
+   "description": "Purchase Orders with Items in these Item Groups (or their child groups, or variants of templates in them) need approval. Empty uses Purchase - Yarn.",
+   "fieldname": "approval_item_groups",
+   "fieldtype": "Table",
+   "label": "Approval Item Groups",
+   "options": "SD YRP MRP Settings Approval Item Group"
   },
   {
    "fieldname": "shortned_url_domain",
@@ -647,7 +664,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-29 10:00:00.000000",
+ "modified": "2026-10-31 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP MRP Settings",

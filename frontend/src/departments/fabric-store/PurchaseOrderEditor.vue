@@ -25,6 +25,10 @@
 					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" :label="fieldLabel('transaction_date', 'Order date', false)" :required="isRequired('transaction_date', true)" :disabled="busy || isReadOnly('transaction_date')" @update:model-value="markDirty" />
 					<LinkField v-model="form.company" :label="fieldLabel('company', 'Company', false)" doctype="Company" :required="isRequired('company')" show-clear :disabled="busy || isReadOnly('company')" @update:model-value="markDirty" />
 					<LinkField v-model="form.currency" :label="fieldLabel('currency', 'Currency', false)" doctype="Currency" :required="isRequired('currency')" show-clear :disabled="busy || isReadOnly('currency')" @update:model-value="markDirty" />
+					<template v-if="form.against_id">
+						<label class="purchase-order-editor__control" for="po-against"><span class="erp-field-label">{{ fieldLabel('against', 'Against', false) }}</span><InputText id="po-against" :model-value="form.against" disabled fluid /></label>
+						<label class="purchase-order-editor__control" for="po-against-id"><span class="erp-field-label">{{ fieldLabel('against_id', 'Against ID', false) }}</span><InputText id="po-against-id" :model-value="form.against_id" disabled fluid /></label>
+					</template>
 				</div>
 			</section>
 
@@ -125,6 +129,7 @@ import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Dialog from "primevue/dialog"
 import InputNumber from "primevue/inputnumber"
+import InputText from "primevue/inputtext"
 import Message from "primevue/message"
 import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
@@ -156,7 +161,7 @@ const previewPending = ref(false)
 const error = ref("")
 const loadFailed = ref(false)
 const editor = ref({})
-const form = reactive({ naming_series: "", supplier: "", transaction_date: "", schedule_date: "", company: "", set_warehouse: "", default_delivery_location: "", deliver_to_supplier: 0, currency: "", terms_and_condition: "", comments: "" })
+const form = reactive({ naming_series: "", supplier: "", transaction_date: "", schedule_date: "", company: "", set_warehouse: "", default_delivery_location: "", deliver_to_supplier: 0, currency: "", terms_and_condition: "", comments: "", against: "", against_id: "" })
 const itemGroups = ref([])
 const dirty = ref(false)
 const sourceRevision = ref(0)

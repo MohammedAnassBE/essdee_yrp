@@ -17,6 +17,10 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import (
 )
 from essdee_yrp.finishing.web_reports import can_view_dispatch_report
 from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.purchase_order_against import (
+	can_create_purchase_order_against,
+	get_purchase_orders_against,
+)
 from essdee_yrp.sales import ppo_report
 
 DOCTYPE = "YRP Production Order"
@@ -80,6 +84,7 @@ ACTION_LABELS = {
 	"create_lot": _("Create Lot"),
 	"link_lot": _("Link Lot"),
 	"reopen": _("Reopen Production Order"),
+	"create_purchase_order": _("Create PO"),
 }
 EDITOR_FIELDS = (
 	"naming_series",
@@ -334,6 +339,11 @@ def _production_order_actions(doc, permissions: dict, onload: Mapping) -> dict:
 		ACTION_LABELS["reopen"],
 		denied,
 	)
+	actions["create_purchase_order"] = _action(
+		can_create_purchase_order_against(doc),
+		ACTION_LABELS["create_purchase_order"],
+		denied,
+	)
 	return actions
 
 
@@ -442,6 +452,7 @@ def get_production_order_workspace(production_order: str) -> dict:
 			"matrix": matrix,
 			"ordered": ordered,
 			"linked_lots": onload.get("linked_lots") or [],
+			"purchase_orders": get_purchase_orders_against(DOCTYPE, doc.name),
 			"pending_request": _pending_production_order_request(doc, onload),
 			"histories": {
 				"dates": [_serialize_child_row(row) for row in doc.get("date_change_history") or []],

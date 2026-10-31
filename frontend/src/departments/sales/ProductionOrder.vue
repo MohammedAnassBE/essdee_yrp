@@ -37,12 +37,14 @@
 					<div class="ppo-page__metric"><span>Delivery date</span><strong>{{ formatDate(workspace.record?.delivery_date) }}</strong></div>
 					<div class="ppo-page__metric"><span>Lead time</span><strong>{{ workspace.record?.lead_time_given || 0 }} days</strong></div>
 					<div v-if="workspace.linked_lots?.length" class="ppo-page__lots"><span>Linked Lots</span><strong v-for="lot in workspace.linked_lots" :key="lot"><DocumentLink doctype="SD YRP Lot" :name="lot" :label="lot" /></strong></div>
+					<div v-if="workspace.purchase_orders?.length" class="ppo-page__lots"><span>Purchase Orders</span><button v-for="order in workspace.purchase_orders" :key="order.name" type="button" class="ppo-page__purchase-order" @click="openPurchaseOrder(order.name)">{{ order.supplier_name ? `${order.name} · ${order.supplier_name}` : order.name }}</button></div>
 				</template>
 			</FabricDocumentWorkspace>
 		</section>
 
 		<ProductionOrderActionDialog v-model:visible="actionVisible" :mode="actionMode" :matrix="workspace.matrix || []" :current-status="workspace.record?.status || ''" :item="workspace.record?.item || ''" :busy="Boolean(acting)" @submit="submitAction" />
 		<ProductionOrderUpdatePriceDialog v-model:visible="priceVisible" :production-order="workspace.record?.name || ''" :busy="Boolean(acting)" :error="error" @submit="submitPrice" />
+		<ProductionOrderPurchaseOrderDialog v-model:visible="purchaseOrderVisible" :production-order="workspace.record?.name || ''" :purchase-order="selectedPurchaseOrder" @changed="purchaseOrderChanged" />
 		<ProductionOrderLotOcrDialog v-model:visible="lotOcrVisible" :production-order="workspace.record?.name || ''" :lot="selectedLot" :item="workspace.record?.item || ''" />
 		<DocumentConfirmationDialog v-model:visible="confirmVisible" :title="confirmTitle" :message="confirmMessage" :confirm-label="confirmLabel" :busy="Boolean(acting)" @confirm="confirmAction">
 			<ProductionOrderPendingRequest v-if="approvalRequest" :request="approvalRequest" />
@@ -76,6 +78,7 @@ import ProductionOrderLotOcrDialog from "./ProductionOrderLotOcrDialog.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
 import ProductionOrderOverview from "./ProductionOrderOverview.vue"
 import ProductionOrderPendingRequest from "./ProductionOrderPendingRequest.vue"
+import ProductionOrderPurchaseOrderDialog from "./ProductionOrderPurchaseOrderDialog.vue"
 import { productionOrderApprovalRequest } from "./productionOrderPendingRequest.js"
 import { productionOrderConfirmation, productionOrderSuccess } from "./productionOrderMessages.js"
 import ProductionOrderTransferHistory from "./ProductionOrderTransferHistory.vue"
@@ -103,14 +106,16 @@ const actionVisible = ref(false)
 const actionMode = ref("")
 const priceVisible = ref(false)
 const lotOcrVisible = ref(false)
+const purchaseOrderVisible = ref(false)
+const selectedPurchaseOrder = ref("")
 const selectedLot = ref("")
 const confirmVisible = ref(false)
 const pendingConfirm = ref("")
 let loadSequence = 0
 
 const dialogModes = new Set(["request_changes", "change_dates", "change_status", "update_quantity_ratio", "transfer_quantity", "create_lot", "link_lot"])
-const iconMap = { save: "pi pi-pencil", request_ppo_approval: "pi pi-send", approve_ppo: "pi pi-check-circle", request_changes: "pi pi-undo", update_price: "pi pi-indian-rupee", change_dates: "pi pi-calendar", change_status: "pi pi-sync", update_quantity_ratio: "pi pi-sliders-h", approve_quantity_ratio: "pi pi-check", approve_status: "pi pi-check", transfer_quantity: "pi pi-arrow-right-arrow-left", approve_transfer: "pi pi-check", create_lot: "pi pi-plus", link_lot: "pi pi-link", reopen: "pi pi-lock-open", cancel: "pi pi-ban", delete: "pi pi-trash", amend: "pi pi-copy" }
-const priority = ["approve_ppo", "request_ppo_approval", "approve_quantity_ratio", "approve_status", "approve_transfer", "save", "update_quantity_ratio", "update_price", "change_dates", "change_status", "transfer_quantity", "create_lot", "link_lot", "reopen", "request_changes", "cancel", "amend", "delete"]
+const iconMap = { save: "pi pi-pencil", request_ppo_approval: "pi pi-send", approve_ppo: "pi pi-check-circle", request_changes: "pi pi-undo", update_price: "pi pi-indian-rupee", change_dates: "pi pi-calendar", change_status: "pi pi-sync", update_quantity_ratio: "pi pi-sliders-h", approve_quantity_ratio: "pi pi-check", approve_status: "pi pi-check", transfer_quantity: "pi pi-arrow-right-arrow-left", approve_transfer: "pi pi-check", create_lot: "pi pi-plus", link_lot: "pi pi-link", create_purchase_order: "pi pi-shopping-cart", reopen: "pi pi-lock-open", cancel: "pi pi-ban", delete: "pi pi-trash", amend: "pi pi-copy" }
+const priority = ["approve_ppo", "request_ppo_approval", "approve_quantity_ratio", "approve_status", "approve_transfer", "save", "update_quantity_ratio", "update_price", "change_dates", "change_status", "transfer_quantity", "create_lot", "link_lot", "create_purchase_order", "reopen", "request_changes", "cancel", "amend", "delete"]
 const duplicateAction = useDuplicateAction({
 	canCreate: () => workspace.value.permissions?.can_create,
 	newRouteName: () => props.newRouteName || props.editRouteName.replace(/-edit$/, "-new"),
@@ -145,10 +150,13 @@ async function load(refresh = false) {
 	} catch (reason) { if (sequence === loadSequence) error.value = reason?.message || "Unable to load this Production Order." }
 	finally { if (sequence === loadSequence) { loading.value = false; acting.value = "" } }
 }
+function openPurchaseOrder(name = "") { selectedPurchaseOrder.value = name; purchaseOrderVisible.value = true }
+function purchaseOrderChanged() { load(true) }
 function openLotOcr(lot) { selectedLot.value = lot; lotOcrVisible.value = true }
 function beginAction(command) {
 	if (command === "save") return router.push({ name: props.editRouteName, params: { productionOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
 	if (command === "update_price") { error.value = ""; priceVisible.value = true; return }
+	if (command === "create_purchase_order") return openPurchaseOrder()
 	if (dialogModes.has(command)) { actionMode.value = command; actionVisible.value = true; return }
 	pendingConfirm.value = command; confirmVisible.value = true
 }
@@ -171,7 +179,7 @@ async function runCommand(command, payload = {}) {
 	finally { acting.value = "" }
 }
 function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 }) }
-watch(() => route.params.productionOrderId, () => { priceVisible.value = false; lotOcrVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
+watch(() => route.params.productionOrderId, () => { priceVisible.value = false; lotOcrVisible.value = false; purchaseOrderVisible.value = false; selectedLot.value = ""; load(false) }, { immediate: true })
 </script>
 
 <style scoped>
@@ -228,6 +236,9 @@ watch(() => route.params.productionOrderId, () => { priceVisible.value = false; 
 	overflow-wrap: anywhere;
 }
 .ppo-page__lots { display: grid; gap: 5px; padding: 12px 13px; }
+.ppo-page__purchase-order { padding: 0; color: var(--erp-accent); font: inherit; font-size: var(--erp-font-size-table); text-align: left; overflow-wrap: anywhere; background: none; border: 0; cursor: pointer; }
+.ppo-page__purchase-order:hover { text-decoration: underline; }
+.ppo-page__purchase-order:focus-visible { outline: 2px solid var(--erp-accent); outline-offset: 2px; }
 .ppo-page__lots strong {
 	min-width: 0;
 	color: var(--erp-text);

@@ -36,6 +36,14 @@ frappe.ui.form.on("YRP Production Order", {
       return;
     }
 
+    if (frm.doc.docstatus == 1 && frappe.model.can_create("Purchase Order")) {
+      frm.add_custom_button(
+        __("Purchase Order"),
+        () => create_purchase_order_against(frm),
+        __("Create")
+      );
+    }
+
     const can_manage_production_order = Boolean(
       (frm.doc.__onload || {}).can_manage_production_order
     );
@@ -1315,5 +1323,18 @@ function render_production_order_editor(frm) {
       }
       view.load_data(response.message || {}, can_edit_ppo_ui(frm));
     },
+  });
+}
+
+function create_purchase_order_against(frm) {
+  // no_copy source fields are dropped by route_options, so set them on the new doc.
+  frappe.model.with_doctype("Purchase Order", () => {
+    const purchase_order = frappe.model.get_new_doc("Purchase Order");
+    // Match the /web editor: YRP managed, named by the YRP PO series.
+    purchase_order.is_yrp_managed = 1;
+    purchase_order.naming_series = "YRP-PO-.YYYY.-";
+    purchase_order.against = frm.doc.doctype;
+    purchase_order.against_id = frm.doc.name;
+    frappe.set_route("Form", "Purchase Order", purchase_order.name);
   });
 }

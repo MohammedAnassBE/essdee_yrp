@@ -101,7 +101,7 @@ test("useRelatedDocumentsRealtime subscribes to the related doctypes and refresh
 test("Work Order and Purchase Order pages refresh related cards in the background after pop-up actions", () => {
 	for (const page of ["../src/departments/FabricWorkOrder.vue", "../src/departments/FabricPurchaseOrder.vue"]) {
 		const text = source(page)
-		assert.match(text, /async function relatedChanged\(\) \{ await refreshWorkspace\(\) \}/)
+		assert.match(text, /async function relatedChanged\((payload)?\) \{ await refreshWorkspace\(\)(; emit\("changed", payload\))? \}/)
 		assert.match(text, /useRelatedDocumentsRealtime\(/)
 		assert.match(text, /useRefetchOnReturn\(refreshWorkspace\)/)
 		assert.doesNotMatch(text.match(/const refreshWorkspace = coalesceRefetch\([\s\S]*?\n\}\)/)[0], /acting\.value = |loading\.value = /, "the refresh never flips page busy state")

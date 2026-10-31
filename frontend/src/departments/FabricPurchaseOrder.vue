@@ -1,7 +1,8 @@
 <template>
-	<DepartmentPage title="Purchase Order" :back-to="backTo" :back-label="backLabel" :show-title="false" flat full-width inline-navigation>
+	<component :is="presentation === 'page' ? DepartmentPage : 'div'" v-bind="pageBindings">
 		<section class="fabric-purchase-order-frame">
 			<FabricDocumentWorkspace
+				:presentation="presentation"
 				doctype="Purchase Order"
 				title="Purchase Order"
 				:workspace="workspace"
@@ -11,11 +12,13 @@
 				:show-lifecycle-actions="false"
 				@reload="loadWorkspace(true)" :live-reload="refreshWorkspace"
 				@action="runWorkspaceAction"
+				@close="emit('closed')"
 			>
 				<template #header="{ record, headingId }">
 					<div class="purchase-order-page__identity">
 						<div><h1 class="erp-doc-title" :id="headingId">Purchase Order</h1><span class="erp-doc-id">{{ record.name }}</span></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="purchaseOrderStatusLabel(record)" :tone="purchaseOrderStatusTone(purchaseOrderStatusLabel(record))" />
+						<DocumentStatusBadge v-if="approvalMessage" :label="workspace.approval.live_request ? 'Approval Requested' : 'Pending Approval'" tone="warning" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
 							<div><span>Supplier</span><strong :title="record.supplier_name || record.supplier || '—'"><DocumentLink doctype="Supplier" :name="record.supplier" :label="record.supplier_name || record.supplier || '—'" /></strong></div>
 							<div><span>Order date</span><strong>{{ formatDisplayDate(record.transaction_date) }}</strong></div>
@@ -58,6 +61,7 @@
 				</template>
 
 				<template #panel>
+					<Message v-if="approvalMessage" severity="warn" :closable="false">{{ approvalMessage }}</Message>
 					<Message v-if="workspace.grn && !workspace.grn.can_create && workspace.grn.reason" severity="secondary" :closable="false">{{ workspace.grn.reason }}</Message>
 				</template>
 			</FabricDocumentWorkspace>
@@ -96,7 +100,7 @@
 			</div>
 			<template #footer><Button label="Keep Pending" severity="secondary" text :disabled="acting === 'reject'" @click="rejectVisible = false" /><Button label="Reject Purchase Order" icon="pi pi-times-circle" severity="danger" :disabled="!rejectReason.trim()" :loading="acting === 'reject'" @click="submitRejection" /></template>
 		</Dialog>
-	</DepartmentPage>
+	</component>
 </template>
 
 <script setup>
@@ -132,6 +136,8 @@ import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 
 const props = defineProps({
+	presentation: { type: String, default: "page", validator: (value) => ["page", "embedded"].includes(value) },
+	name: { type: String, default: "" },
 	backTo: { type: String, default: "/fabric-store/purchase-orders" },
 	backLabel: { type: String, default: "Purchase Orders" },
 	viewRouteName: { type: String, default: "fabric-purchase-order" },
@@ -139,8 +145,14 @@ const props = defineProps({
 	editRouteName: { type: String, default: "fabric-purchase-order-edit" },
 })
 
+const emit = defineEmits(["changed", "edit", "open", "closed"])
 const route = useRoute()
 const router = useRouter()
+const isEmbedded = props.presentation === "embedded"
+const documentId = computed(() => props.name || String(route.params.purchaseOrderId || ""))
+const pageBindings = isEmbedded
+	? { class: "fabric-purchase-order--embedded" }
+	: { title: "Purchase Order", backTo: props.backTo, backLabel: props.backLabel, showTitle: false, flat: true, fullWidth: true, inlineNavigation: true }
 const primaryTotalFieldnames = new Set(["total_qty", "grand_total"])
 const loading = ref(true)
 const refreshing = ref(false)
@@ -148,7 +160,7 @@ const acting = ref("")
 const error = ref("")
 const actionError = ref("")
 const workspace = ref({})
-usePageTitle(() => workspace.value.record?.name, () => workspace.value.record?.supplier_name)
+if (!isEmbedded) usePageTitle(() => workspace.value.record?.name, () => workspace.value.record?.supplier_name)
 const relatedVisible = ref(false)
 const relatedDoctype = ref("YRP Goods Received Note")
 const relatedName = ref("")
@@ -168,7 +180,7 @@ const activeTab = ref("overview")
 let loadSequence = 0
 let actionSequence = 0
 const overviewDefinitions = [
-	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by"] },
+	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by", "against", "against_id"] },
 	{ key: "delivery", label: "Supplier & delivery", description: "Supplier and material destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "deliver_to_supplier", "default_delivery_location", "set_warehouse"] },
 	{ key: "schedule", label: "Schedule", description: "Ordering and required dates", icon: "pi pi-calendar", fields: ["transaction_date", "schedule_date"] },
 	{ key: "status", label: "Status & notes", description: "Fulfilment state and instructions", icon: "pi pi-clipboard", fields: ["status", "open_status", "terms_and_condition", "comments"] },
@@ -183,6 +195,12 @@ const overviewFields = computed(() => {
 		fields.push({ fieldname: "is_yrp_managed", label: "YRP Managed", fieldtype: "Check", value: record.is_yrp_managed })
 	}
 	return fields
+})
+const approvalMessage = computed(() => {
+	const approval = workspace.value.approval
+	if (!approval?.pending_approval) return ""
+	if (approval.live_request) return `Approval request ${String(approval.live_request.status || "sent").toLowerCase()}. Waiting for approval before this Purchase Order can be submitted.`
+	return "This Purchase Order contains yarn and needs approval. Send the approval request before it can be submitted."
 })
 const itemGroups = computed(() => workspace.value.matrices?.items || workspace.value.item_groups || [])
 const relatedDocuments = computed(() => [
@@ -212,7 +230,7 @@ const purchaseOrderActions = computed(() => {
 	add("submit", "Submit", "pi pi-check", () => changeStatus("submit"), { shortcut: "submit", confirms: false })
 	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true, shortcut: "cancel" })
 	add("amend", "Amend", "pi pi-copy", () => requestLifecycleAction("amend"), { menuOnly: true })
-	if (workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicatePurchaseOrder, disabled: busy, loading: false, menuOnly: true })
+	if (!isEmbedded && workspace.value.permissions?.can_create) actions.push({ key: "duplicate", label: "Duplicate", icon: "pi pi-clone", command: duplicatePurchaseOrder, disabled: busy, loading: false, menuOnly: true })
 	add("reject", "Reject PO", "pi pi-times-circle", beginRejection, { menuOnly: true })
 	add("create_delivery_challan", "Create Delivery Challan", "pi pi-truck", beginDeliveryChallan, { menuOnly: true })
 	add("refresh_status", "Refresh Status", "pi pi-sync", () => runDomainCommand("refresh_status"), { menuOnly: true })
@@ -224,7 +242,7 @@ const purchaseOrderActions = computed(() => {
 })
 const lotChanged = computed(() => JSON.stringify([...lotOriginal.value].sort()) !== JSON.stringify([...lotDraft.value].sort()))
 async function loadWorkspace(isRefresh = false) {
-	const requestedId = String(route.params.purchaseOrderId || "")
+	const requestedId = documentId.value
 	const sequence = ++loadSequence
 	actionSequence += 1
 	if (isRefresh) {
@@ -255,7 +273,7 @@ async function loadWorkspace(isRefresh = false) {
 	error.value = ""
 	try {
 		const data = await getPurchaseOrderWorkspace(requestedId) || {}
-		if (sequence === loadSequence && requestedId === String(route.params.purchaseOrderId || "")) {
+		if (sequence === loadSequence && requestedId === documentId.value) {
 			workspace.value = data
 		}
 	}
@@ -272,11 +290,11 @@ async function loadWorkspace(isRefresh = false) {
 }
 /** Silent refetch: keeps the page, tab and buttons as they are and drops its result if a load or action started meanwhile. */
 const refreshWorkspace = coalesceRefetch(async () => {
-	const requestedId = String(route.params.purchaseOrderId || "")
+	const requestedId = documentId.value
 	if (!requestedId || loading.value || acting.value) return
 	const [loadAtStart, actionAtStart] = [loadSequence, actionSequence]
 	const data = await getPurchaseOrderWorkspace(requestedId) || {}
-	if (!isDisposed && loadAtStart === loadSequence && actionAtStart === actionSequence && !acting.value && requestedId === String(route.params.purchaseOrderId || "")) workspace.value = data
+	if (!isDisposed && loadAtStart === loadSequence && actionAtStart === actionSequence && !acting.value && requestedId === documentId.value) workspace.value = data
 })
 let isDisposed = false
 onScopeDispose(() => { isDisposed = true; refreshWorkspace.cancel() })
@@ -296,33 +314,36 @@ async function runWorkspaceAction(action) {
 	return runDomainCommand(action)
 }
 async function runDomainCommand(command, payload = {}) {
-	const requestedId = String(route.params.purchaseOrderId || "")
+	const requestedId = documentId.value
 	const source = workspace.value.record
 	const sequence = ++actionSequence
 	acting.value = command
 	actionError.value = ""
 	try {
 		const result = await executePurchaseOrderCommand(source.name, command, payload, source.modified) || {}
-		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return false
+		if (sequence !== actionSequence || requestedId !== documentId.value) return false
 		workspace.value = result
+		emit("changed", result)
 		return true
 	}
-	catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Purchase Order.`; return false }
+	catch (reason) { if (sequence === actionSequence && requestedId === documentId.value) actionError.value = reason?.message || `Unable to ${command.replaceAll("_", " ")} this Purchase Order.`; return false }
 	finally { if (sequence === actionSequence) acting.value = "" }
 }
 async function changeStatus(action) {
-	const requestedId = String(route.params.purchaseOrderId || "")
+	const requestedId = documentId.value
 	const source = workspace.value.record
 	const sequence = ++actionSequence
 	acting.value = action
 	actionError.value = ""
 	try {
 		const changed = await changeFabricStoreDocumentStatus("Purchase Order", source.name, action, source.modified)
-		if (sequence !== actionSequence || requestedId !== String(route.params.purchaseOrderId || "")) return
+		if (sequence !== actionSequence || requestedId !== documentId.value) return
 		const name = changed?.record?.name || source.name
-		if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { purchaseOrderId: name }, state: preserveListNavigationState(name) })
+		if (name !== requestedId && isEmbedded) emit("open", name)
+		else if (name !== requestedId) await router.replace({ name: props.viewRouteName, params: { purchaseOrderId: name }, state: preserveListNavigationState(name) })
 		else await loadWorkspace(true)
-	} catch (reason) { if (sequence === actionSequence && requestedId === String(route.params.purchaseOrderId || "")) actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
+		emit("changed", changed)
+	} catch (reason) { if (sequence === actionSequence && requestedId === documentId.value) actionError.value = reason?.message || `Unable to ${action} this Purchase Order.` }
 	finally { if (sequence === actionSequence) acting.value = "" }
 }
 const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "cancel" ? "Cancel Purchase Order?" : pendingLifecycleCommand.value === "close" ? "Close Purchase Order?" : "Amend Purchase Order?")
@@ -330,7 +351,10 @@ const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "
 const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : pendingLifecycleCommand.value === "close" ? `Close ${workspace.value.record?.name}? No further receipts can be created until it is reopened.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command === "close") await runDomainCommand(command); else if (command) await changeStatus(command) }
-function editPurchaseOrder() { router.push({ name: props.editRouteName, params: { purchaseOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) }) }
+function editPurchaseOrder() {
+	if (isEmbedded) return emit("edit", workspace.value.record.name)
+	router.push({ name: props.editRouteName, params: { purchaseOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) })
+}
 function duplicatePurchaseOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }
 function openRelated(doctype, sourceContext = {}, name = "") {
 	relatedDoctype.value = doctype
@@ -338,7 +362,7 @@ function openRelated(doctype, sourceContext = {}, name = "") {
 	relatedSourceContext.value = { ...(sourceContext || {}) }
 	relatedVisible.value = true
 }
-async function relatedChanged() { await refreshWorkspace() }
+async function relatedChanged(payload) { await refreshWorkspace(); emit("changed", payload) }
 function openLotEditor() {
 	lotOriginal.value = [...(workspace.value.linked_lots || [])]
 	lotDraft.value = [...lotOriginal.value]
@@ -381,7 +405,7 @@ function formatTotal(total) {
 	return formatAmount(total.value, workspace.value.record?.currency)
 }
 
-watch(() => route.params.purchaseOrderId, () => loadWorkspace(false), { immediate: true })
+watch(documentId, () => loadWorkspace(false), { immediate: true })
 </script>
 
 <style scoped>

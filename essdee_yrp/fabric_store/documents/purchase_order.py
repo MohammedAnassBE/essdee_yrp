@@ -31,6 +31,7 @@ from essdee_yrp.fabric_store.documents.common import (
 	send_supplier_notification,
 )
 from essdee_yrp.print_registry import get_document_print_formats
+from essdee_yrp.purchase_order_against import AGAINST_FIELDS, get_purchase_order_against
 from essdee_yrp.purchase_order_approval import (
 	PENDING_APPROVAL_STATUS,
 	SYSTEM_MANAGER_ROLE,
@@ -63,6 +64,7 @@ PURCHASE_ORDER_FIELDS = (
 	"open_status",
 	"yrp_fulfillment_status",
 	"approved_by",
+	*AGAINST_FIELDS,
 )
 
 PURCHASE_ORDER_RECORD_FIELDS = (
@@ -412,13 +414,14 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 				setter("items", rows)
 			else:
 				doc["items"] = rows
+		doc.update(get_purchase_order_against(source.get("against"), source.get("against_id")))
 		permissions = {
 			"can_create": True,
 			"can_write": False,
 			"can_submit": bool(frappe_api.has_permission("Purchase Order", ptype="submit")),
 		}
 
-	values = {fieldname: doc.get(fieldname) for fieldname in PURCHASE_ORDER_EDITOR_FIELDS}
+	values = {fieldname: doc.get(fieldname) for fieldname in (*PURCHASE_ORDER_EDITOR_FIELDS, *AGAINST_FIELDS)}
 	values["is_yrp_managed"] = 1
 	dimensions = []
 	for source in stock_dimensions():
@@ -431,7 +434,7 @@ def get_purchase_order_editor(name: str | None = None, source=None, *, _adapter=
 		"name": doc.get("name") or "",
 		"modified": doc.get("modified") or "",
 		"values": values,
-		"fields": get_effective_fields(doc, PURCHASE_ORDER_EDITOR_FIELDS),
+		"fields": get_effective_fields(doc, (*PURCHASE_ORDER_EDITOR_FIELDS, *AGAINST_FIELDS)),
 		"item_groups": group_items(doc.get("items") or [], "Purchase Order"),
 		"dimensions": dimensions,
 		"locked_dimensions": [],
@@ -504,6 +507,8 @@ def save_purchase_order_document(
 		if fieldname in values
 	}
 	header["is_yrp_managed"] = 1
+	if not name:
+		header.update(get_purchase_order_against(values.get("against"), values.get("against_id")))
 	doc.update(header)
 	rows = ungroup_items(item_details, "Purchase Order")
 	if not rows:

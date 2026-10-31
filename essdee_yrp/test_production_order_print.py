@@ -10,8 +10,8 @@ from essdee_yrp import production_order_workflow as workflow
 
 
 class TestProductionOrderPrint(TestCase):
-	def get_details(self, form=None, **kwargs):
-		doc = _dict(production_order_details=[])
+	def get_details(self, form=None, fg_pieces_per_box=None, **kwargs):
+		doc = _dict(production_order_details=[], item="FG-ITEM")
 		doc.check_permission = MagicMock()
 		quantities = {
 			"S": {"qty": 10, "ratio": 1, "mrp": 100},
@@ -21,6 +21,7 @@ class TestProductionOrderPrint(TestCase):
 			patch.object(frappe, "get_doc", return_value=doc) as get_doc,
 			patch.object(frappe, "form_dict", _dict(form or {})),
 			patch.object(workflow, "get_order_qty", return_value=quantities),
+			patch.object(workflow, "get_fg_pieces_per_box", return_value={"pieces_per_box": fg_pieces_per_box}),
 		):
 			result = workflow.get_production_order_details("PPO-TEST", **kwargs)
 		get_doc.assert_called_once_with("YRP Production Order", "PPO-TEST")
@@ -31,6 +32,11 @@ class TestProductionOrderPrint(TestCase):
 		result = self.get_details()
 		self.assertEqual(result["S"], {"qty": 10, "ratio": 1, "mrp": 100})
 		self.assertNotIn("piece_qty", result["M"])
+
+	def test_details_fall_back_to_fg_item_pieces_per_box(self):
+		result = self.get_details(fg_pieces_per_box=4)
+		self.assertEqual(result["S"]["piece_qty"], 40)
+		self.assertEqual(self.get_details({"pieces_per_box": "5"}, fg_pieces_per_box=4)["S"]["piece_qty"], 50)
 
 	def test_form_pieces_per_box_adds_piece_quantities(self):
 		result = self.get_details({"pieces_per_box": "5"})
@@ -128,13 +134,33 @@ class TestProductionOrderPrint(TestCase):
 		self.assertIn("Qty (Piece) 3675.0 2450.0 6125.0", text)
 		self.assertIn("Ratio 3.0 2.0", text)
 
-	def test_generic_print_renders_without_pieces_per_box(self):
+	def test_generic_print_uses_fg_item_pieces_per_box(self):
+		text = self.render_format({}, fg_pieces_per_box=4)
+		self.assertIn("Qty (Box) 525.0 350.0 875.0", text)
+		self.assertIn("Qty (Piece) 2100.0 1400.0 3500.0", text)
+
+	def test_generic_print_without_any_pieces_per_box_shows_note(self):
 		text = self.render_format({})
 		self.assertIn("Qty (Box) 525.0 350.0 875.0", text)
 		self.assertIn("Ratio 3.0 2.0", text)
-		self.assertNotIn("Qty (Piece)", text)
+		self.assertIn("Qty (Piece) Pieces per Box not set in FG Item Master", text)
 
-	def render_format(self, form):
+	def test_print_format_renders_for_submitted_production_order(self):
+		name = frappe.db.get_value("YRP Production Order", {"docstatus": 1}, "name", order_by="modified desc")
+		if not name:
+			self.skipTest("No submitted YRP Production Order on this site")
+		form = _dict(doctype="YRP Production Order", name=name, format="Essdee Production Order", pieces_per_box="6")
+		with patch.object(frappe, "form_dict", form):
+			html = frappe.get_print(form.doctype, name, form.format)
+		text = " ".join(frappe.utils.strip_html(html).split())
+		self.assertIn(name, text)
+		self.assertIn("Qty (Box)", text)
+		self.assertIn("Qty (Piece)", text)
+
+	def test_production_order_default_print_format_is_essdee(self):
+		self.assertEqual(frappe.get_meta("YRP Production Order").default_print_format, "Essdee Production Order")
+
+	def render_format(self, form, fg_pieces_per_box=None):
 		path = Path(__file__).parent / "essdee_yrp/print_format/essdee_production_order/essdee_production_order.json"
 		html = json.loads(json.loads(path.read_text())["format_data"])[-1]["options"]
 		doc = _dict(production_order_details=[], check_permission=MagicMock())
@@ -144,6 +170,7 @@ class TestProductionOrderPrint(TestCase):
 			patch.object(frappe, "get_doc", side_effect=lambda *args: doc if args[0] == "YRP Production Order" else get_doc(*args)),
 			patch.object(frappe, "form_dict", _dict(form)),
 			patch.object(workflow, "get_order_qty", return_value=quantities),
+			patch.object(workflow, "get_fg_pieces_per_box", return_value={"pieces_per_box": fg_pieces_per_box}),
 		):
 			rendered = frappe.render_template(html, {
 				"doc": _dict(name="PPO-TEST", item="STYLE", production_term=None),

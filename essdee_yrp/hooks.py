@@ -99,6 +99,7 @@ fixtures = [
 					"YRP Goods Received Note-naming_series-options",
 					"YRP Goods Received Note-naming_series-default",
 					"YRP Goods Received Note-main-default_print_format",
+					"YRP Production Order-main-default_print_format",
 					"YRP Goods Received Note-lot-in_standard_filter",
 					"YRP Goods Received Note-transfer_complete-in_standard_filter",
 					"YRP Goods Received Note-posting_date-in_standard_filter",

@@ -33,7 +33,7 @@ function desk(docstatus = 1, { status = "Open", canCreatePurchaseOrder = false }
 	vm.runInContext("render_production_order_editor = () => {}; setup_ppo_approval_actions = () => {};", context)
 	const frm = { doc: { doctype: "YRP Production Order", name: "PPO/1 & 2#x", docstatus, status }, set_df_property() {}, clear_custom_buttons() {}, change_custom_button_type() {}, add_custom_button: (label, click, group) => buttons.push({ label, click, group }) }
 	handlers.refresh(frm)
-	return { calls, opened, dialogs, messages, buttons, routes, newDocs }
+	return { calls, opened, dialogs, messages, buttons, routes, newDocs, frm }
 }
 
 test("Desk Print appears only in the submitted block and fetches frozen print settings", () => {
@@ -78,6 +78,16 @@ test("Desk dialog matches legacy fields, validates, and opens only after valid i
 		dialog.primary_action()
 		assert.equal(dialog.visible, false)
 		assert.equal(new URL(state.opened[0][0]).searchParams.get("pieces_per_box"), "7")
+	}
+})
+
+test("Desk standard print (printer icon / menu / Ctrl+P) asks for pieces per box on every docstatus", () => {
+	for (const docstatus of [0, 1, 2]) {
+		const state = desk(docstatus)
+		state.frm.print_doc()
+		assert.equal(state.calls[0].method, "essdee_yrp.production_order_workflow.get_production_order_print_settings")
+		state.calls[0].callback({ message: { fg_item_exists: true, pieces_per_box: 0 } })
+		assert.equal(state.dialogs[0].title, "Print Production Order")
 	}
 })
 

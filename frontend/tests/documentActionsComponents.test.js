@@ -7,6 +7,7 @@ import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/hel
 import { getRawPrintCommands } from "../src/api/frappe.js"
 import * as printUrl from "../src/utils/printUrl.js"
 import * as productionOrderPrint from "../src/utils/productionOrderPrint.js"
+import * as printPreparers from "../src/utils/printPreparers.js"
 import { getCustomPrintButtons } from "../src/utils/customPrintButtons.js"
 import { useDocumentPermissions } from "../src/composables/useDocumentPermissions.js"
 import * as documentDelete from "../src/utils/documentDelete.js"
@@ -29,13 +30,55 @@ const tick = async () => { await new Promise(resolve => setImmediate(resolve)); 
 const nodes = (root, type) => findNodes(root, node => node.type === type)
 const options = { formats: ["Standard", "Custom"], default_format: "Custom", letter_heads: ["Company"], default_letter_head: "Company" }
 
-function mountPrint(api, props = {}, rawApi = {}) {
+function mountPrint(api, props = {}, rawApi = {}, preparers = printPreparers) {
 	return mountComponent(component("components/documents/DocumentPrintDialog", {
-		"primevue/button": Button, "primevue/dialog": Dialog, "primevue/select": Select,
+		"primevue/button": Button, "primevue/dialog": Dialog, "primevue/select": Select, "primevue/inputnumber": InputNumber,
 		"../../api/frappe.js": { getPrintOptions: api, getRawPrintCommands: rawApi.getRawPrintCommands },
-		"../../api/qzPrinter.js": rawApi, "../../utils/printUrl.js": printUrl,
+		"../../api/qzPrinter.js": rawApi, "../../utils/printUrl.js": printUrl, "../../utils/printPreparers.js": preparers,
 	}), Vue.reactive({ visible: true, doctype: "Test Doc", name: "DOC/1", ...props }))
 }
+
+test("print preparer registry asks Production Order pieces per box only for the Essdee format", () => {
+	const preparer = printPreparers.getPrintPreparer("YRP Production Order", "Essdee Production Order")
+	assert.equal(preparer.param, "pieces_per_box")
+	assert.equal(printPreparers.getPrintPreparer("YRP Production Order", "Standard"), null)
+	assert.equal(printPreparers.getPrintPreparer("Test Doc", "Essdee Production Order"), null)
+	assert.equal(preparer.getValue({ fg_item_exists: true, pieces_per_box: 5 }), 5)
+	assert.equal(preparer.getValue({ fg_item_exists: true, pieces_per_box: 0 }), null)
+	assert.equal(preparer.getDescription({ fg_item_exists: false }), "The item is not available in FG Item Master.")
+	assert.equal(printPreparers.withPrintParam("/printview?a=1", "pieces_per_box", 7), "/printview?a=1&pieces_per_box=7")
+})
+
+test("shared print dialog prompts for a missing prepared value before printing a Production Order", async () => {
+	const oldWindow = globalThis.window
+	const opened = []
+	globalThis.window = { open: (...args) => { opened.push(args); return {} } }
+	try {
+		for (const [settings, typed, expected] of [[{ fg_item_exists: true, pieces_per_box: 5 }, null, "5"], [{ fg_item_exists: false, pieces_per_box: null }, 6, "6"]]) {
+			opened.length = 0
+			const real = printPreparers.getPrintPreparer("YRP Production Order", "Essdee Production Order")
+			const loads = []
+			const preparers = { ...printPreparers, getPrintPreparer: (doctype, format) => doctype === "YRP Production Order" && format === "Essdee Production Order" ? { ...real, load: async name => { loads.push(name); return settings } } : null }
+			const root = mountPrint(async () => ({ formats: ["Essdee Production Order", "Standard"], default_format: "Essdee Production Order", letter_heads: [], default_letter_head: "" }), { doctype: "YRP Production Order", name: "PPO-1" }, {}, preparers)
+			await tick(); await tick()
+			assert.deepEqual(loads, ["PPO-1"])
+			const inputs = nodes(root, "input")
+			assert.equal(inputs.length, typed === null ? 0 : 1)
+			if (typed !== null) {
+				nodes(root, "button")[0].props.onClick()
+				await tick()
+				assert.equal(opened.length, 0)
+				assert.ok(findNodes(root, n => n.text?.includes?.("Pieces per Box is required.")).length)
+				inputs[0].props["onUpdate:modelValue"](typed)
+				await tick()
+			}
+			nodes(root, "button")[0].props.onClick()
+			const query = new URL(opened[0][0], "https://test.local").searchParams
+			assert.equal(query.get("format"), "Essdee Production Order")
+			assert.equal(query.get("pieces_per_box"), expected)
+		}
+	} finally { globalThis.window = oldWindow }
+})
 
 test("print dialog loads defaults and prints the selected format and letter head", async () => {
 	const oldWindow = globalThis.window

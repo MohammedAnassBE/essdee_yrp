@@ -17,6 +17,7 @@ frappe.ui.form.on("YRP Production Order", {
   refresh(frm) {
     render_production_order_editor(frm);
     const is_submitted = frm.doc.docstatus == 1;
+    frm.print_doc = () => prepare_production_order_print(frm);
     frm.set_df_property("delivery_date", "read_only", is_submitted);
     frm.set_df_property("dont_deliver_after", "read_only", is_submitted);
     setup_ppo_approval_actions(frm);

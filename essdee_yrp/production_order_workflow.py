@@ -600,6 +600,8 @@ def get_production_order_details(production_order, pieces_per_box=None):
 	order_qty = get_order_qty(doc.production_order_details)
 	if pieces_per_box is None:
 		pieces_per_box = frappe.form_dict.get("pieces_per_box")
+	if pieces_per_box is None:
+		pieces_per_box = get_fg_pieces_per_box(doc.item)["pieces_per_box"] or None
 	if pieces_per_box is not None:
 		pieces_per_box = validate_pieces_per_box(pieces_per_box)
 		for details in order_qty.values():
@@ -619,10 +621,13 @@ def validate_pieces_per_box(pieces_per_box):
 def get_production_order_print_settings(production_order):
 	doc = frappe.get_doc("YRP Production Order", production_order)
 	doc.check_permission("read")
+	return get_fg_pieces_per_box(doc.item)
 
-	fg_item = frappe.db.exists("SD YRP FG Item Master", doc.item)
+
+def get_fg_pieces_per_box(item):
+	fg_item = frappe.db.exists("SD YRP FG Item Master", item)
 	if not fg_item:
-		fg_item = frappe.db.get_value("SD YRP FG Item Master", {"item": doc.item}, "name")
+		fg_item = frappe.db.get_value("SD YRP FG Item Master", {"item": item}, "name")
 	if not fg_item:
 		return {"fg_item_exists": False, "pieces_per_box": None}
 

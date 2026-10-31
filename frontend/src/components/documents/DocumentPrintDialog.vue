@@ -4,11 +4,15 @@
 		<div v-else-if="loaded" class="document-print-dialog__fields">
 			<label>Print Format<Select v-model="format" :options="formats" :disabled="printing" required fluid /></label>
 			<label v-if="!isRaw">Letter Head<Select v-model="letterHead" :options="letterHeads" :disabled="printing" show-clear fluid placeholder="No letter head" /></label>
+			<template v-if="needsPreparedInput">
+				<label>{{ preparer.label }}<InputNumber v-model="preparedInput" input-id="document-print-prepared-input" :use-grouping="false" :max-fraction-digits="0" :required="true" :invalid="Boolean(preparedError)" :disabled="printing" aria-describedby="document-print-prepared-description" fluid /></label>
+				<p id="document-print-prepared-description" class="document-print-dialog__hint">{{ preparer.getDescription(preparedSettings) }}<template v-if="preparedError"><br><span role="alert">{{ preparedError }}</span></template></p>
+			</template>
 			<label v-if="isRaw">Printer<Select v-model="printer" :options="printers" :loading="loadingPrinters" :disabled="loadingPrinters || printing" required fluid /></label>
 		</div>
 		<p v-if="error" role="alert">{{ error }}</p>
 		<template #footer>
-			<Button label="Print" icon="pi pi-print" :loading="loading || printing" :disabled="loading || printing || !loaded || !format || (isRaw && (loadingPrinters || !printer))" @click="print" />
+			<Button label="Print" icon="pi pi-print" :loading="loading || printing || preparing" :disabled="loading || printing || preparing || !loaded || !format || (isRaw && (loadingPrinters || !printer))" @click="print" />
 		</template>
 	</Dialog>
 </template>
@@ -16,10 +20,12 @@
 <script setup>
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
+import InputNumber from "primevue/inputnumber"
 import Select from "primevue/select"
 import { computed, ref, watch } from "vue"
 import { getPrintOptions, getRawPrintCommands } from "../../api/frappe.js"
 import { getQzPrinters, printQzRaw } from "../../api/qzPrinter.js"
+import { getPrintPreparer, withPrintParam } from "../../utils/printPreparers.js"
 import { buildPrintUrl, openPrintUrl } from "../../utils/printUrl.js"
 
 const props = defineProps({
@@ -41,6 +47,13 @@ const printing = ref(false)
 const letterHeads = ref([])
 const format = ref("")
 const letterHead = ref("")
+const preparer = computed(() => getPrintPreparer(props.doctype, format.value))
+const preparing = ref(false)
+const preparedSettings = ref(null)
+const preparedInput = ref(null)
+const preparedError = ref("")
+const preparedValue = computed(() => preparer.value && preparedSettings.value ? preparer.value.getValue(preparedSettings.value) : null)
+const needsPreparedInput = computed(() => Boolean(preparer.value && preparedSettings.value && preparedValue.value === null))
 
 watch(() => [props.visible, props.doctype, props.name], async ([visible, doctype, name], _old, onCleanup) => {
 	let stale = false
@@ -87,6 +100,32 @@ watch(() => [props.visible, isRaw.value], async ([visible, raw], _old, onCleanup
 	}
 })
 
+watch(() => [props.visible, props.name, preparer.value], async ([visible, name, activePreparer], _old, onCleanup) => {
+	let stale = false
+	onCleanup(() => { stale = true })
+	preparedSettings.value = null; preparedInput.value = null; preparedError.value = ""; preparing.value = false
+	if (!visible || !name || !activePreparer) return
+	preparing.value = true
+	try {
+		const settings = await activePreparer.load(name)
+		if (!stale) preparedSettings.value = settings || {}
+	} catch (reason) {
+		if (!stale) error.value = reason?.message || "Unable to load print settings."
+	} finally {
+		if (!stale) preparing.value = false
+	}
+})
+
+function getPreparedUrl(url) {
+	if (!preparer.value) return url
+	if (!preparedSettings.value) return ""
+	if (needsPreparedInput.value) {
+		preparedError.value = preparer.value.validate(preparedInput.value)
+		if (preparedError.value) return ""
+	}
+	return withPrintParam(url, preparer.value.param, preparedValue.value ?? preparedInput.value)
+}
+
 async function print() {
 	if (loading.value || printing.value || !loaded.value || !format.value) return
 	if (isRaw.value) {
@@ -101,7 +140,10 @@ async function print() {
 		} finally { printing.value = false }
 		return
 	}
-	if (!openPrintUrl(buildPrintUrl({ doctype: props.doctype, name: props.name, format: format.value, letterHead: letterHead.value }))) {
+	if (preparing.value) return
+	const url = getPreparedUrl(buildPrintUrl({ doctype: props.doctype, name: props.name, format: format.value, letterHead: letterHead.value }))
+	if (!url) return
+	if (!openPrintUrl(url)) {
 		error.value = "Please enable pop-ups to print."
 		return
 	}
@@ -112,4 +154,5 @@ async function print() {
 <style scoped>
 .document-print-dialog__fields { display: grid; gap: 16px; }
 .document-print-dialog__fields label { display: grid; gap: 6px; }
+.document-print-dialog__hint { margin: -8px 0 0; color: var(--erp-text-muted); font-size: var(--erp-font-size-sm, 12px); }
 </style>

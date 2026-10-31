@@ -14,6 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 from yrp.attribute_links import value as _attribute_value
+from yrp.stock.shortage import get_stock_qty_precision, get_stock_shortage
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
@@ -754,18 +755,20 @@ def validate_supplier_input_stock(wo, grn, plan, stock_cache):
 	for item in plan:
 		key = (item["item_variant"], tuple(sorted(item["dimensions"].items())))
 		need[key] += flt(item["stock_qty"])
+	precision = get_stock_qty_precision()
 	lines = []
 	for key, required_qty in need.items():
 		item_variant, dimensions = key
 		balance = flt(_supplier_stock(item_variant, dict(dimensions), grn, stock_cache)[0])
-		if required_qty - balance <= QTY_TOLERANCE:
+		shortage = get_stock_shortage(balance, required_qty, precision)
+		if not shortage:
 			continue
 		lines.append(
 			_("{0} - Need: {1}, Stock: {2}, Short: {3}").format(
 				item_variant,
-				f"{flt(required_qty, 3):g}",
-				f"{flt(balance, 3):g}",
-				f"{flt(required_qty - balance, 3):g}",
+				f"{flt(required_qty, precision):g}",
+				f"{flt(balance, precision):g}",
+				f"{shortage:g}",
 			)
 		)
 	if lines:

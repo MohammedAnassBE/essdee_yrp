@@ -21,6 +21,7 @@ export function plainTextFromHtml(value) {
 	return String(value)
 		.replace(/<br\s*\/?\s*>/gi, "\n")
 		.replace(/<\/(?:div|p|li)\s*>/gi, "\n")
+		.replace(/<(?:ol|ul)(?:\s[^>]*)?>/gi, "\n")
 		.replace(/<li(?:\s[^>]*)?>/gi, "• ")
 		.replace(/<\/?(?:a|b|blockquote|code|details|div|em|i|ol|p|pre|section|small|span|strong|summary|ul)(?:\s[^>]*)?>/gi, "")
 		.replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/gi, (entity) => htmlEntities[entity.toLowerCase()] || entity)

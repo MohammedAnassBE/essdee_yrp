@@ -79,3 +79,19 @@ test("the app shell mounts one server message dialog", () => {
 	assert.match(dialog, /setServerMessageHandler\(show\)/)
 	assert.match(dialog, /toast\.add/)
 })
+
+test("a stock shortage list keeps one line per short item", async () => {
+	const message = "Insufficient stock for 2 items:<ul><li>40&apos;s GL Dyed Fabric New-Navy-19 Dia (Lot F0426-86) at S-0163: balance 16.9, requested 16.95, short 0.05</li><li>Rib &lt;Navy&gt; at S-0163: balance 1.0, requested 3.0, short 2.0</li></ul>"
+	const payload = { exc_type: "NegativeStockError", exc: "[]", _server_messages: frappeMessages({ message, title: "Insufficient Stock", raise_exception: 1, indicator: "red" }) }
+	await withFetch({ ok: false, status: 417, json: async () => payload }, async () => {
+		await assert.rejects(callMethod("essdee_yrp.example", {}), (error) => {
+			assert.equal(error.message, "Insufficient stock for 2 items:\n• 40's GL Dyed Fabric New-Navy-19 Dia (Lot F0426-86) at S-0163: balance 16.9, requested 16.95, short 0.05\n• Rib <Navy> at S-0163: balance 1.0, requested 3.0, short 2.0")
+			return true
+		})
+	})
+})
+
+test("the document error dialog scrolls a long message", () => {
+	const dialog = fs.readFileSync(new URL("../src/components/documents/DocumentErrorDialog.vue", import.meta.url), "utf8")
+	assert.match(dialog, /\.document-error-dialog__body p \{[^}]*max-height: [^;]+;[^}]*overflow-y: auto;/)
+})

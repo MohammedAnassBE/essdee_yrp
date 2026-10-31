@@ -75,5 +75,5 @@ function retry() { visible.value = false; emit("retry") }
 .document-error-dialog__icon i { font-size: 18px; }
 .document-error-dialog__body > div { display: grid; gap: 5px; min-width: 0; }
 .document-error-dialog__body strong { color: var(--erp-text); font-size: 14px; }
-.document-error-dialog__body p { margin: 0; color: var(--erp-text-secondary); font-size: 13px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+.document-error-dialog__body p { margin: 0; color: var(--erp-text-secondary); font-size: 13px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; max-height: min(60vh, 480px); overflow-y: auto; }
 </style>

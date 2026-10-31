@@ -1375,6 +1375,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 	if not built:
 		frappe.throw(_("No selected cloth matches the lot's cloth demand."))
 
+	lot_doc.cloth_excess_percentage = excess_percentage
 	_update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_additions)
 	return {
 		"cloths_built": len(built),
@@ -1627,7 +1628,11 @@ def get_cloth_program_context(lot):
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
 	if not lot_doc.production_detail:
-		return {"cloths": [], "defaults": _cloth_program_defaults()}
+		return {
+			"cloths": [],
+			"defaults": _cloth_program_defaults(),
+			"excess_percentage": flt(lot_doc.cloth_excess_percentage),
+		}
 	ipd = frappe.get_cached_doc("YRP Item Production Detail", lot_doc.production_detail)
 	cloths = _cloth_rows_from_ipd(ipd)
 	demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
@@ -1715,6 +1720,7 @@ def get_cloth_program_context(lot):
 	return {
 		"cloths": cloths,
 		"defaults": _cloth_program_defaults(),
+		"excess_percentage": flt(lot_doc.cloth_excess_percentage),
 	}
 
 

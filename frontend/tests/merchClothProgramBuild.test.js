@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildBlockMessage } from "../src/departments/merch/lot/clothProgram.js"
+import { buildBlockMessage, contextExcessPercentage } from "../src/departments/merch/lot/clothProgram.js"
 
 const ready = {
 	cloth_item: "Cotton Rib",
@@ -24,4 +24,11 @@ test("a negative excess blocks Build with its own message", () => {
 
 test("complete cloths allow Build", () => {
 	assert.equal(buildBlockMessage([ready], 5), "")
+})
+
+test("the stored excess from context prefills Build Cloth Program", () => {
+	assert.equal(contextExcessPercentage({ excess_percentage: 7.5 }, 0), 7.5)
+	assert.equal(contextExcessPercentage({ excess_percentage: 0 }, 5), 0)
+	assert.equal(contextExcessPercentage({}, 5), 5)
+	assert.equal(contextExcessPercentage(null), 0)
 })

@@ -2147,7 +2147,6 @@ class TestClothProgram(IntegrationTestCase):
 		demand = {(self.cloth, _attribute_value(self.dia), self.red): 50.9}
 		with patch.object(cloth_program, "compute_cloth_demand", return_value=demand):
 			build_cloth_programs(lot.name, [self.selection], excess_percentage=10)
-		frappe.db.set_value("SD YRP Lot", lot.name, "cloth_excess_percentage", 10)
 		lot.reload()
 		ipd_name = lot.lot_fabric_details[0].production_detail
 		before = frappe.get_doc("YRP Item Production Detail", ipd_name).as_dict()
@@ -2363,7 +2362,7 @@ class TestClothProgram(IntegrationTestCase):
 		)
 		self.assertEqual(res["excess_percentage"], 5)
 		lot.reload()
-		self.assertEqual(flt(lot.cloth_excess_percentage), 0)
+		self.assertEqual(flt(lot.cloth_excess_percentage), 5)
 		requirement = next(r for r in lot.lot_fabric_requirements if r.cloth_item == self.cloth)
 		program = next(r for r in lot.lot_fabric_programs if r.cloth_item == self.cloth)
 		planned = sum(

@@ -125,13 +125,13 @@ import Button from "primevue/button"
 import LinkField from "../../../components/common/LinkField.vue"
 import { callMethod } from "../../../api/frappe.js"
 import { useToast } from "primevue/usetoast"
+import { contextExcessPercentage } from "../../merch/lot/clothProgram.js"
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   lot: { type: String, required: true },
   productionDetail: { type: String, default: null },
   modified: { type: String, default: null },
-  syncedExcessPercentage: { type: [Number, String], default: 0 },
 })
 // "applying" fires right BEFORE the server write so the host can open its
 // realtime local-write suppression window (markLocalWrite) in time — the
@@ -166,9 +166,10 @@ const isDirty = computed(
 async function loadContext() {
   loading.value = true
   entries.value = []
-  excessPercentage.value = Number(props.syncedExcessPercentage || 0)
+  excessPercentage.value = 0
   try {
     const r = await callMethod("essdee_yrp.api.cloth_program.get_cloth_program_context", { lot: props.lot })
+    excessPercentage.value = contextExcessPercentage(r)
     const defaults = (r && r.defaults) || {}
     entries.value = ((r && r.cloths) || []).map((c) => ({
       ...normaliseColourSelection(c, defaults),

@@ -102,7 +102,7 @@ frappe.ui.form.on("SD YRP Lot", {
 							frappe.msgprint(__("This lot's garment has no cloth items to build."));
 							return;
 						}
-						build_cloth_programs_dialog(frm, cloths, defaults);
+						build_cloth_programs_dialog(frm, cloths, defaults, r.message.excess_percentage);
 					}
 				});
 			});
@@ -804,13 +804,13 @@ function mount_actual_dia_conversions(frm) {
 // 	frm.doc.total_cutting_qty = total_cut_qty;
 // }
 
-function build_cloth_programs_dialog(frm, cloths, defaults = {}) {
+function build_cloth_programs_dialog(frm, cloths, defaults = {}, excess_percentage) {
 	const colour_selections = {};
 	const fields = [{
 		label: __("Cloth Excess Percentage"),
 		fieldname: "excess_percentage",
 		fieldtype: "Float",
-		default: Number(frm.doc.cloth_excess_percentage || 0),
+		default: Number(excess_percentage ?? frm.doc.cloth_excess_percentage ?? 0) || 0,
 	}];
 	cloths.forEach((c, i) => {
 		const item_yarns = c.item_yarns || [];

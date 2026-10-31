@@ -183,7 +183,7 @@ import InputNumber from "primevue/inputnumber"
 import { computed, ref, watch } from "vue"
 import { getMerchClothProgramContext, getMerchYarnProfile } from "../../../api/merch.js"
 import LinkField from "../../../components/common/LinkField.vue"
-import { buildBlockMessage, buildSelection, clothErrors, clothSelection } from "./clothProgram.js"
+import { buildBlockMessage, buildSelection, clothErrors, clothSelection, contextExcessPercentage } from "./clothProgram.js"
 const props = defineProps({
 	visible: Boolean,
 	lotId: { type: String, required: true },
@@ -212,7 +212,7 @@ const processFields = [
 let sequence = 0
 async function loadSelections() {
 	const context = await getMerchClothProgramContext(props.lotId)
-	return Promise.all(
+	const cloths = await Promise.all(
 		context.cloths.map(async (cloth) => {
 			if (!cloth.profile?.knitting_process && cloth.item_yarns?.[0]?.yarn_item) {
 				cloth.profile = {
@@ -223,6 +223,7 @@ async function loadSelections() {
 			return clothSelection(cloth, context.defaults)
 		}),
 	)
+	return { cloths, excess: contextExcessPercentage(context, props.excessPercentage) }
 }
 watch(
 	() => props.visible,
@@ -235,8 +236,11 @@ watch(
 		selections.value = []
 		excess.value = props.excessPercentage
 		try {
-			const cloths = await loadSelections()
-			if (request === sequence) selections.value = cloths
+			const loaded = await loadSelections()
+			if (request === sequence) {
+				selections.value = loaded.cloths
+				excess.value = loaded.excess
+			}
 		} catch (error) {
 			if (request === sequence) {
 				emit("update:visible", false)

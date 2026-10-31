@@ -100,6 +100,10 @@ function routeErrors(selection) {
 	return errors
 }
 
+export function contextExcessPercentage(context, fallback = 0) {
+	return Number(context?.excess_percentage ?? fallback) || 0
+}
+
 export function buildBlockMessage(selections, excess) {
 	if (excess < 0) return "Cloth Excess Percentage cannot be negative."
 	const blocked = selections.find((selection) => Object.keys(clothErrors(selection)).length)

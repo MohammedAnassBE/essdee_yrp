@@ -139,12 +139,14 @@ class TestClothProgramRebuild(IntegrationTestCase):
 		self.assertNotEqual(self._rows()[self.dia19].name, old_name)
 		self.assertFalse(frappe.db.exists("SD YRP Lot Fabric Program", old_name))
 
-	def test_popup_excess_does_not_replace_synced_excess(self):
+	def test_build_stores_popup_excess_for_the_next_build(self):
 		self._receive()
 		cloth_program.build_cloth_programs(self.lot.name, [self.selection], excess_percentage=5)
 		self._assert_program(521, 344)
 		self.lot.reload()
-		self.assertEqual(flt(self.lot.cloth_excess_percentage), 0)
+		self.assertEqual(flt(self.lot.cloth_excess_percentage), 5)
+		context = cloth_program.get_cloth_program_context(self.lot.name)
+		self.assertEqual(context["excess_percentage"], 5)
 
 	def test_recalculate_uses_synced_excess(self):
 		self._receive()

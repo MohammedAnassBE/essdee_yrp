@@ -34,6 +34,7 @@ function mountMerchLot(workspace) {
 		"../../purchase/lot/lotViews.js": lotViews,
 		"../../purchase/lot/useLotLayout.js": { useLotLayout: () => ({ activeTab: Vue.ref("lot"), expanded: Vue.ref([]), scrollTo: Vue.ref(""), openSection() {} }) },
 		"../../purchase/lot/LotFabricTab.vue": stub("fabric"),
+		"../../purchase/lot/LotDiaConversionsTab.vue": stub("dia-conversions"),
 		"../../purchase/lot/LotEmptyState.vue": stub("empty"),
 		"../../purchase/lot/LotPurchaseOrderDialog.vue": stub("po-dialog"),
 		"../../purchase/lot/lotPurchaseActions.js": purchaseActions,

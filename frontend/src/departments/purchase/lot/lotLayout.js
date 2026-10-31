@@ -4,6 +4,7 @@ import { linkFieldTarget } from "../../../utils/linkTarget.js"
 export const LOT_TABS = [
 	{ key: "lot", label: "Lot" },
 	{ key: "fabric", label: "Cloth Program" },
+	{ key: "dia-conversions", label: "Actual Dia Conversions" },
 	{ key: "bom", label: "BOM" },
 ]
 

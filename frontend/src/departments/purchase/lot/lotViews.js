@@ -122,23 +122,6 @@ function number(value) {
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
-export function stepSections(steps = []) {
-	return steps
-		.filter((step) => step.rows?.length)
-		.map((step) => ({
-			process_name: step.process_name,
-			shape: step.shape,
-			outputs: step.rows.filter((row) => row.side !== "Input").map(stepRow),
-			inputs: step.rows.filter((row) => row.side === "Input").map(stepRow),
-		}))
-}
-
-function stepRow(row) {
-	const planned = number(row.planned_weight)
-	const received = number(row.received_weight)
-	return { dia: row.dia, colour: row.colour, planned, received, balance: planned - received }
-}
-
 export function isChangedConversion(row) {
 	return row.planned_item !== row.actual_item
 }
@@ -168,10 +151,16 @@ export function quantityTotal(value, digits = 3) {
 	return number(value).toLocaleString("en-IN", { maximumFractionDigits: digits })
 }
 
+/** Conversions of every cloth route plus those not tied to a route. */
+export function lotConversionRows(workspace = {}) {
+	return [...(workspace.fabrics || []).flatMap((fabric) => fabric.conversions || []), ...(workspace.other_conversions || [])]
+}
+
 export function lotTabCount(workspace, key) {
 	const counts = {
 		bom: (workspace.bom?.summary?.length || 0) + (workspace.bom?.additional?.length || 0),
 		fabric: workspace.fabrics?.length || 0,
+		"dia-conversions": lotConversionRows(workspace).length,
 	}
 	return counts[key] ?? null
 }

@@ -84,7 +84,10 @@
 							</LotEditorMain>
 						</TabPanel>
 						<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
-							<LotFabricTab :fabrics="readOnlyWorkspace.fabrics" :other-conversions="readOnlyWorkspace.other_conversions" />
+							<LotFabricTab :fabrics="readOnlyWorkspace.fabrics" />
+						</TabPanel>
+						<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">
+							<LotDiaConversionsTab :fabrics="readOnlyWorkspace.fabrics || []" :other-conversions="readOnlyWorkspace.other_conversions || []" />
 						</TabPanel>
 						<TabPanel v-else-if="activeTab === 'bom'" value="bom">
 							<p v-if="tabLoading" class="lot-edit-hint" role="status">Loading BOM…</p>
@@ -137,6 +140,7 @@ import { LOT_IPD_FIELDS } from "../../purchase/lot/lotLayout.js"
 import MerchLotDocuments from "./MerchLotDocuments.vue"
 import LotOrderDetailsTab from "../../purchase/lot/LotOrderDetailsTab.vue"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
+import LotDiaConversionsTab from "../../purchase/lot/LotDiaConversionsTab.vue"
 import LotIdentity from "../../purchase/lot/LotIdentity.vue"
 import MerchColourwiseEditor from "./MerchColourwiseEditor.vue"
 import LotOrderItemsEditor from "../../purchase/lot/LotOrderItemsEditor.vue"

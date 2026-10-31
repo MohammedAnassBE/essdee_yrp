@@ -19,7 +19,7 @@ test("Merch legacy tab links land on the Lot tab with the matching section", () 
 	assert.deepEqual(resolveLotTab("fabric", lotEditorTabs(true)), { tab: "lot", section: "" })
 })
 
-test("Merch Lot page and editor use the shared three-tab Lot layout", () => {
+test("Merch Lot page and editor use the shared four-tab Lot layout", () => {
 	const page = source("MerchLotPage.vue")
 	assert.match(page, /<LotViewMain\b/)
 	assert.match(page, /useLotLayout\(LOT_TABS, /)
@@ -32,5 +32,6 @@ test("Merch Lot page and editor use the shared three-tab Lot layout", () => {
 	assert.match(composable, /lotEditorTabs\(isNew\)/)
 	assert.match(composable, /useLotTabWorkspace\(lotId, activeTab, getMerchLotWorkspace\)/)
 	assert.doesNotMatch(composable, /activeTab\.value = "(order-items|details)"/)
-	assert.deepEqual(LOT_TABS.map((tab) => tab.key), ["lot", "fabric", "bom"])
+	assert.deepEqual(LOT_TABS.map((tab) => tab.key), ["lot", "fabric", "dia-conversions", "bom"])
+	for (const file of [page, editor]) assert.match(file, /<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">\s*<LotDiaConversionsTab /)
 })

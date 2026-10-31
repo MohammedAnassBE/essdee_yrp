@@ -38,15 +38,17 @@
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
 								<LotEmptyState
-									v-if="!workspace.fabrics?.length && !workspace.other_conversions?.length"
+									v-if="!workspace.fabrics?.length"
 									title="No cloth program yet"
 									reason="No cloth routes are planned for this Lot."
 								/>
 								<LotFabricTab
 									v-else
 									:fabrics="workspace.fabrics || []"
-									:other-conversions="workspace.other_conversions || []"
 								/>
+							</TabPanel>
+							<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">
+								<LotDiaConversionsTab :fabrics="workspace.fabrics || []" :other-conversions="workspace.other_conversions || []" />
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'bom'" value="bom">
 								<LotBomPanel :workspace="workspace" />
@@ -93,6 +95,7 @@ import FabricDocumentWorkspace from "../../fabric-store/FabricDocumentWorkspace.
 import LotBomPanel from "../../purchase/lot/LotBomPanel.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
+import LotDiaConversionsTab from "../../purchase/lot/LotDiaConversionsTab.vue"
 import LotIdentity from "../../purchase/lot/LotIdentity.vue"
 import LotViewMain from "../../purchase/lot/LotViewMain.vue"
 import { editTabFor } from "../../purchase/lot/lotEditor.js"

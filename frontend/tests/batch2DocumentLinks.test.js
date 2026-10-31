@@ -168,11 +168,14 @@ test('B7 Item Price overview retains raw approver when its label is substituted'
  assert.equal(fields[0].link_name, 'user@example.test')
 })
 
-test('B6 Lot fabric links cloth, IPD, ledger processes and conversion raw items', () => readable(() => {
- const root = mountComponent(component('departments/purchase/lot/LotFabricTab'), { fabrics: [{ cloth_item: 'Cloth/1', production_detail: 'IPD/1', steps: [{ process_name: 'Knitting', rows: [{ side: 'Input', planned_weight: 1 }] }], conversions: [{ process_name: 'Knitting', planned_item: 'Plan/1', actual_item: 'Actual/1', actual_quantity: 1, production_detail: 'IPD/2' }] }] })
- const actual = links(root)
- for (const pair of [['Cloth/1', '/web/purchase/items/Cloth%2F1'], ['IPD/1', '/web/merch/item-production-details/IPD%2F1'], ['Knitting', '/desk/yrp-process/Knitting'], ['Plan/1', '/web/purchase/items/Plan%2F1'], ['Actual/1', '/web/purchase/items/Actual%2F1'], ['IPD/2', '/web/merch/item-production-details/IPD%2F2']]) assert.ok(actual.some(value => JSON.stringify(value) === JSON.stringify(pair)), JSON.stringify(pair))
- assert.ok(actual.every(([, href]) => !href.startsWith('/app/')))
+test('B6 Lot fabric links cloth and IPD; Actual Dia conversions link processes and raw items', () => readable(() => {
+ const fabrics = [{ cloth_item: 'Cloth/1', production_detail: 'IPD/1', steps: [{ process_name: 'Knitting', rows: [{ side: 'Input', planned_weight: 1 }] }], conversions: [{ process_name: 'Knitting', planned_item: 'Plan/1', actual_item: 'Actual/1', actual_quantity: 1, production_detail: 'IPD/2' }] }]
+ const fabric = links(mountComponent(component('departments/purchase/lot/LotFabricTab'), { fabrics }))
+ const conversions = links(mountComponent(component('departments/purchase/lot/LotDiaConversionsTab'), { fabrics }))
+ for (const pair of [['Cloth/1', '/web/purchase/items/Cloth%2F1'], ['IPD/1', '/web/merch/item-production-details/IPD%2F1']]) assert.ok(fabric.some(value => JSON.stringify(value) === JSON.stringify(pair)), JSON.stringify(pair))
+ assert.ok(!fabric.some(([label]) => ['Knitting', 'Plan/1'].includes(label)))
+ for (const pair of [['Knitting', '/desk/yrp-process/Knitting'], ['Plan/1', '/web/purchase/items/Plan%2F1'], ['Actual/1', '/web/purchase/items/Actual%2F1'], ['IPD/2', '/web/merch/item-production-details/IPD%2F2']]) assert.ok(conversions.some(value => JSON.stringify(value) === JSON.stringify(pair)), JSON.stringify(pair))
+ assert.ok([...fabric, ...conversions].every(([, href]) => !href.startsWith('/app/')))
 }))
 
 for (const department of ['purchase', 'planning']) {

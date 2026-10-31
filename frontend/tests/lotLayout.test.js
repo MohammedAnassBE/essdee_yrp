@@ -11,9 +11,9 @@ const { editTabFor, lotFabricErrors } = lotEditorModule
 const { LOT_TABS, lotEditorTabs, lotSections, resolveLotTab, hasLotOcr, hasLotTransfer, toggleSection } = lotLayout
 const source = (path) => readFileSync(new URL(`../src/departments/${path}`, import.meta.url), "utf8")
 
-test("Lot pages and editors show Lot, Cloth Program and BOM tabs; a new Lot shows Lot only", () => {
-	assert.deepEqual(LOT_TABS.map((tab) => tab.label), ["Lot", "Cloth Program", "BOM"])
-	assert.deepEqual(lotEditorTabs(false).map((tab) => tab.key), ["lot", "fabric", "bom"])
+test("Lot pages and editors show Lot, Cloth Program, Actual Dia Conversions and BOM tabs; a new Lot shows Lot only", () => {
+	assert.deepEqual(LOT_TABS.map((tab) => tab.label), ["Lot", "Cloth Program", "Actual Dia Conversions", "BOM"])
+	assert.deepEqual(lotEditorTabs(false).map((tab) => tab.key), ["lot", "fabric", "dia-conversions", "bom"])
 	assert.deepEqual(lotEditorTabs(true).map((tab) => tab.key), ["lot"])
 })
 
@@ -24,6 +24,7 @@ test("legacy ?tab= keys land on the Lot tab and expand the matching section", ()
 	assert.deepEqual(resolveLotTab("ppo"), { tab: "lot", section: "ppo" })
 	assert.deepEqual(resolveLotTab("ocr"), { tab: "lot", section: "ocr" })
 	assert.deepEqual(resolveLotTab("fabric"), { tab: "fabric", section: "" })
+	assert.deepEqual(resolveLotTab("dia-conversions"), { tab: "dia-conversions", section: "" })
 	assert.deepEqual(resolveLotTab("bom"), { tab: "bom", section: "" })
 	assert.deepEqual(resolveLotTab(undefined), { tab: "lot", section: "" })
 	assert.deepEqual(resolveLotTab("unknown"), { tab: "lot", section: "" })
@@ -91,6 +92,7 @@ test("Purchase and Planning Lot page and editor use the shared Lot layout", () =
 		assert.match(page, /<LotViewMain /)
 		assert.match(page, /v-for="tab in LOT_TABS"/)
 		assert.match(page, /<LotBomPanel /)
+		assert.match(page, /<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">\s*<LotDiaConversionsTab /)
 		const editor = source(`${department}/lot/LotEditor.vue`)
 		assert.match(editor, /<LotEditorMain /)
 		assert.match(editor, /<template #quantities><LotOrderItemsEditor /)

@@ -63,11 +63,14 @@
 								</LotViewMain>
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
-								<div v-if="!workspace.fabrics?.length && !workspace.other_conversions?.length" class="lot-tab-stack">
+								<div v-if="!workspace.fabrics?.length" class="lot-tab-stack">
 									<LotEmptyState title="No cloth program yet." reason="Build Cloth Program picks colours and excess % to plan the demanded cloths." />
 									<DocumentActionStrip :actions="actions.filter((action) => action.key === 'build_cloth_programs')" />
 								</div>
-								<LotFabricTab v-else :fabrics="workspace.fabrics" :other-conversions="workspace.other_conversions" />
+								<LotFabricTab v-else :fabrics="workspace.fabrics" />
+							</TabPanel>
+							<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">
+								<LotDiaConversionsTab :fabrics="workspace.fabrics || []" :other-conversions="workspace.other_conversions || []" />
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'bom'" value="bom">
 								<LotBomPanel :workspace="workspace">
@@ -148,6 +151,7 @@ import { LOT_TABS } from "../../purchase/lot/lotLayout.js"
 import { lotTabCount } from "../../purchase/lot/lotViews.js"
 import { useLotLayout } from "../../purchase/lot/useLotLayout.js"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
+import LotDiaConversionsTab from "../../purchase/lot/LotDiaConversionsTab.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
 import LotPurchaseOrderDialog from "../../purchase/lot/LotPurchaseOrderDialog.vue"
 import { purchaseOrderLinkActions } from "../../purchase/lot/lotPurchaseActions.js"

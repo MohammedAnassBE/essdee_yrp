@@ -38,7 +38,7 @@
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
 								<LotEmptyState
-									v-if="!workspace.permissions?.can_write && !workspace.fabrics?.length && !workspace.other_conversions?.length"
+									v-if="!workspace.permissions?.can_write && !workspace.fabrics?.length"
 									title="No cloth program yet"
 									reason="No cloth routes are planned for this Lot."
 								/>
@@ -46,8 +46,10 @@
 									v-else
 									:fabrics="workspace.fabrics || []"
 									:lot="workspace.name" :modified="workspace.modified" :can-write="Boolean(workspace.permissions?.can_write)" @changed="load(true)"
-									:other-conversions="workspace.other_conversions || []"
 								/>
+							</TabPanel>
+							<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">
+								<LotDiaConversionsTab :fabrics="workspace.fabrics || []" :other-conversions="workspace.other_conversions || []" />
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'bom'" value="bom">
 								<LotBomPanel :workspace="workspace" />
@@ -103,6 +105,7 @@ import LotDocumentDialog from "./LotDocumentDialog.vue"
 import LotDocumentsRail from "./LotDocumentsRail.vue"
 import LotEmptyState from "./LotEmptyState.vue"
 import LotFabricTab from "./LotFabricTab.vue"
+import LotDiaConversionsTab from "./LotDiaConversionsTab.vue"
 import LotViewMain from "./LotViewMain.vue"
 import { lotTabCount } from "./lotViews.js"
 import { LOT_TABS } from "./lotLayout.js"

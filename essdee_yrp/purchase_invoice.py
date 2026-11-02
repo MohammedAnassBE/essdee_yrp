@@ -154,6 +154,8 @@ def build_purchase_order_invoice_payload(
 	for grn in grn_docs:
 		for grn_item in grn.get("items") or []:
 			qty = flt(grn_item.quantity)
+			if not qty:
+				continue
 			rate = flt(_get_po_material_rate(grn, grn_item))
 			stock_rate = flt(grn_item.rate)
 			tax = grn_item.get("tax") or get_purchase_order_item_tax(grn_item)
@@ -191,6 +193,8 @@ def build_purchase_order_invoice_payload(
 			row["_actual_amount"] += qty * stock_rate
 
 	direct_rows = list(direct.values())
+	if not direct_rows:
+		frappe.throw(_("Selected GRNs have no item with quantity greater than zero."))
 	for row in direct_rows:
 		row["actual_rate"] = (
 			flt(row.pop("_actual_amount")) / flt(row["actual_qty"]) if flt(row["actual_qty"]) else 0

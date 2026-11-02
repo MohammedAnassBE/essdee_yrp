@@ -198,6 +198,34 @@ class TestPurchaseInvoiceCustomization(FrappeTestCase):
 		self.assertAlmostEqual(payload["tax_total"], 50)
 		self.assertAlmostEqual(payload["total"], 1050)
 
+	def _build_purchase_order_payload_for_quantities(self, quantities):
+		items = [
+			frappe._dict(item_variant=f"CONE-{index}", quantity=quantity, rate=10, uom="Kg", tax=None)
+			for index, quantity in enumerate(quantities)
+		]
+		grn = frappe._dict(name="GRN-1", supplier="SUPPLIER-1", items=items)
+		module = "essdee_yrp.purchase_invoice"
+		with (
+			patch(f"{module}._validate_selected_grn"),
+			patch(f"{module}.frappe.get_doc", return_value=grn),
+			patch(f"{module}._get_po_material_rate", return_value=10),
+			patch(f"{module}._get_item_group", return_value="Yarn"),
+			patch(f"{module}._get_tax_rate", return_value=0),
+			patch(f"{module}.get_purchase_order_item_tax", return_value=None),
+		):
+			return build_purchase_order_invoice_payload(["GRN-1"], supplier="SUPPLIER-1")
+
+	def test_purchase_order_payload_skips_zero_quantity_grn_rows(self):
+		payload = self._build_purchase_order_payload_for_quantities([40, 0, 0, 65])
+
+		self.assertEqual([row["item"] for row in payload["items"]], ["CONE-0", "CONE-3"])
+		self.assertEqual([row["item"] for row in payload["commercial_items"]], ["CONE-0", "CONE-3"])
+		self.assertEqual(payload["total_quantity"], 105)
+
+	def test_purchase_order_payload_rejects_grns_with_only_zero_quantity_rows(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "no item with quantity greater than zero"):
+			self._build_purchase_order_payload_for_quantities([0, 0])
+
 	def test_purchase_order_payload_caps_selected_grns_at_server_boundary(self):
 		with self.assertRaises(frappe.ValidationError):
 			build_purchase_order_invoice_payload(

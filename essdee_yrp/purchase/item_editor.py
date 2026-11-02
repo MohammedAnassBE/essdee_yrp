@@ -349,13 +349,13 @@ def get_item_editor(name: str | None = None, duplicate_from: str | None = None) 
 
 
 def get_duplicate_item_editor(source: str) -> dict:
-	"""Unsaved new-Item editor prefilled from `source`; the Item name is left for the user."""
+	"""Unsaved new-Item editor prefilled from `source`, including its Item name."""
 	_reject_variant(frappe.get_doc(ITEM_DOCTYPE, source))
 	values = build_duplicate_values(ITEM_DOCTYPE, source)
 	doc = frappe.new_doc(ITEM_DOCTYPE)
 	doc.update({fieldname: value for fieldname, value in values.items() if value is not None})
 	payload = _editor_payload(doc)
-	payload["values"].update(name=None, stock_uom=doc.stock_uom)
+	payload["values"].update(stock_uom=doc.stock_uom)
 	return payload
 
 

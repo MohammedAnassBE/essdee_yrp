@@ -920,7 +920,8 @@ def get_stock_operation_editor(cutting_plan, operation):
 	}
 
 
-def _get_stock_item_schema_data(item):
+def _get_stock_item_schema_data(item, require_stock_item=True):
+	"""Return the attribute matrix schema; purchase callers also allow non-stock Items."""
 	from yrp.yrp.doctype.yrp_item.yrp_item import (
 		get_attribute_details,
 		get_attribute_values,
@@ -933,14 +934,16 @@ def _get_stock_item_schema_data(item):
 	selected.check_permission("read")
 	if selected.variant_of:
 		frappe.throw(_("Select the template Item {0} instead of its variant {1}.").format(selected.variant_of, selected.name))
-	validate_is_stock_item(selected.name, selected.is_stock_item)
+	if require_stock_item:
+		validate_is_stock_item(selected.name, selected.is_stock_item)
 	validate_cancelled_item(selected.name, selected.docstatus)
 	validate_disabled(selected.name, selected.disabled)
 
 	schema = dict(get_attribute_details(selected.name))
 	parent = frappe.get_doc("Item", schema["item"])
 	parent.check_permission("read")
-	validate_is_stock_item(parent.name, parent.is_stock_item)
+	if require_stock_item:
+		validate_is_stock_item(parent.name, parent.is_stock_item)
 	validate_cancelled_item(parent.name, parent.docstatus)
 	validate_disabled(parent.name, parent.disabled)
 

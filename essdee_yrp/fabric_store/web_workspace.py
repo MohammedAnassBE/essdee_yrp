@@ -406,7 +406,7 @@ def get_purchase_order_item_schema(item: str, purchase_order: str | None = None)
 		frappe.throw(_("Item is required."))
 	from essdee_yrp.cutting.web_workspace import _get_stock_item_schema_data
 
-	return _get_stock_item_schema_data(item)
+	return _get_stock_item_schema_data(item, require_stock_item=False)
 
 
 @frappe.whitelist()

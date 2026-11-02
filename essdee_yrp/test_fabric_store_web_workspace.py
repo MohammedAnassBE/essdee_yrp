@@ -937,7 +937,7 @@ class TestFabricStoreWebWorkspace(TestCase):
 
 		get_supported.assert_called_once_with("Purchase Order", "PO-DRAFT-1")
 		permission.assert_any_call("Purchase Order", ptype="write", doc=doc, throw=True)
-		schema.assert_called_once_with("ITEM")
+		schema.assert_called_once_with("ITEM", require_stock_item=False)
 		self.assertEqual(payload["item"], "ITEM")
 
 	def test_shared_stock_schema_accepts_a_plain_purchase_item(self):
@@ -974,6 +974,33 @@ class TestFabricStoreWebWorkspace(TestCase):
 		self.assertEqual(payload["attribute_values"], {})
 		self.assertEqual(validate_stock.call_count, 2)
 		plain.check_permission.assert_has_calls([call("read"), call("read")])
+
+	def test_purchase_schema_accepts_a_non_stock_item(self):
+		from essdee_yrp.cutting.web_workspace import _get_stock_item_schema_data
+
+		plain = MagicMock()
+		plain.name = "NON-STOCK-ITEM"
+		plain.is_stock_item = 0
+		plain.docstatus = 0
+		plain.disabled = 0
+		plain.variant_of = None
+		plain.attributes = []
+		plain.get.side_effect = lambda key, default=None: getattr(plain, key, default)
+		with (
+			patch("essdee_yrp.cutting.web_workspace.frappe.get_doc", return_value=plain),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_cancelled_item"),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.validate_disabled"),
+			patch(
+				"yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_details",
+				return_value={"item": "NON-STOCK-ITEM", "attributes": []},
+			),
+			patch("yrp.yrp.doctype.yrp_item.yrp_item.get_attribute_values", return_value={}),
+		):
+			payload = _get_stock_item_schema_data("NON-STOCK-ITEM", require_stock_item=False)
+			with self.assertRaisesRegex(frappe.ValidationError, "is not a stock Item"):
+				_get_stock_item_schema_data("NON-STOCK-ITEM")
+
+		self.assertEqual(payload["item"], "NON-STOCK-ITEM")
 
 	def test_shared_stock_schema_rejects_variants_before_loading_attributes(self):
 		from essdee_yrp.cutting.web_workspace import _get_stock_item_schema_data

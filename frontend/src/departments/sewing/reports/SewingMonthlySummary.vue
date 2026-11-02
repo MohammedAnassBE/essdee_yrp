@@ -6,6 +6,7 @@
 				<DateField v-model="filters.toDate" label="To Date" :disabled="loading" />
 				<LinkField v-model="filters.inputType" doctype="SD YRP Sewing Plan Input Type" label="Input Type" :show-open-button="false" show-clear :disabled="loading || filters.showGrn" />
 				<div class="common-field monthly-grn"><label for="monthly-grn">GRN mode</label><Checkbox input-id="monthly-grn" v-model="filters.showGrn" binary :disabled="loading" /></div>
+				<LinkMultiSelectField v-model="filters.lots" doctype="SD YRP Lot" input-id="monthly-lots" label="Lot" aria-label="Lot" placeholder="All Lots" :max-selected-labels="1" display="comma" :disabled="loading" />
 			</template>
 			<SewingReportMatrix label="Monthly quantities by date and Item / Part" :columns="columns" :rows="data.rows || []" :totals="data.grand_total" total-label="Grand Total" inline-filters />
 		</ReportShell>
@@ -19,6 +20,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { getSewingMonthlySummary } from "../../../api/sewing.js"
 import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
+import LinkMultiSelectField from "../../../components/common/LinkMultiSelectField.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import { buildMonthlySummaryPrintUrl } from "../../../utils/sewingPrint.js"
@@ -53,10 +55,10 @@ function handlePrint() {
 	window.open(url, "_blank", "noopener")
 }
 function reset() {
-	Object.assign(props.filters, { fromDate: "", toDate: "", inputType: "", showGrn: false })
+	Object.assign(props.filters, { fromDate: "", toDate: "", inputType: "", showGrn: false, lots: [] })
 	data.value = {}; generated.value = false
 }
-watch(() => [props.filters.fromDate, props.filters.toDate, props.filters.inputType, props.filters.showGrn], () => { data.value = {}; generated.value = false })
+watch(() => [props.filters.fromDate, props.filters.toDate, props.filters.inputType, props.filters.showGrn, [...props.filters.lots]], () => { data.value = {}; generated.value = false })
 onBeforeUnmount(() => { mounted = false; beginRequest() })
 </script>
 

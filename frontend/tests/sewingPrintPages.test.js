@@ -56,3 +56,11 @@ test("Desk rework restores the first Print column with both formats and consiste
 	assert.match(page, /encodeURIComponent\(grn\)/)
 	assert.match(page, /if \(!w\) frappe\.msgprint\(__\("Please enable pop-ups"\)\)/)
 })
+
+test("web monthly summary filters by multiple SD YRP Lots server-side", () => {
+	const page = source("../src/departments/sewing/reports/SewingMonthlySummary.vue")
+	assert.match(page, /<LinkMultiSelectField[^>]*v-model="filters\.lots"[^>]*doctype="SD YRP Lot"/)
+	assert.match(page, /lots: \[\]/)
+	assert.match(source("../src/departments/sewing/SewingReportsWorkspace.vue"), /monthlyFilters = reactive\(\{[^}]*lots: \[\]/)
+	assert.match(source("../src/api/sewing.js"), /get_monthly_summary_data`, \{[^}]*lots: \[\.\.\.filters\.lots\]/)
+})

@@ -46,7 +46,7 @@ function isAllowed(report) {
 const statusFilters = reactive({ lot: [], item: [], colour: [], part: [], fromDate: "", toDate: "" })
 const dprFilters = reactive({ mode: "daily", date: "", fromDate: "", toDate: "", workStation: "", inputType: "", lot: "", item: "" })
 const scrFilters = reactive({ lot: "", colours: [] })
-const monthlyFilters = reactive({ fromDate: "", toDate: "", inputType: "", showGrn: false })
+const monthlyFilters = reactive({ fromDate: "", toDate: "", inputType: "", showGrn: false, lots: [] })
 const itemFilters = reactive({ lots: [], items: [] })
 </script>
 

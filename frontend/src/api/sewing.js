@@ -41,7 +41,7 @@ export function getSewingScr(supplier, lot) {
 export function getSewingMonthlySummary(supplier, filters) {
 	return callMethod(`${PLAN_METHOD}.get_monthly_summary_data`, {
 		supplier, start_date: filters.fromDate, end_date: filters.toDate,
-		input_type: filters.inputType || "", show_grn: filters.showGrn ? 1 : 0,
+		input_type: filters.inputType || "", show_grn: filters.showGrn ? 1 : 0, lots: [...filters.lots],
 	})
 }
 

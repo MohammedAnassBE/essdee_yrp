@@ -46,3 +46,10 @@ test("monthly summary print uses empty strings for missing values", async () => 
 	assert.equal(buildMonthlySummaryPrintUrl({ supplier: null, filters: { fromDate: null, toDate: null, inputType: null } }), expected)
 	assert.equal(buildMonthlySummaryPrintUrl({}), expected)
 })
+
+test("monthly summary print carries selected lots as a JSON list", async () => {
+	const { buildMonthlySummaryPrintUrl } = await builders()
+	const url = buildMonthlySummaryPrintUrl({ supplier: "S-1", filters: { fromDate: "2026-10-01", toDate: "2026-10-31", inputType: "Input", lots: ["L/1", "L 2"] } })
+	assert.equal(new URL(url, "https://test.local").searchParams.get("lots"), JSON.stringify(["L/1", "L 2"]))
+	assert.ok(!buildMonthlySummaryPrintUrl({ filters: { lots: [] } }).includes("lots="))
+})

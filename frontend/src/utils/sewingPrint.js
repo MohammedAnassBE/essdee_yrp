@@ -23,5 +23,6 @@ export function buildMonthlySummaryPrintUrl({ supplier, filters = {} }) {
 	})
 	if (filters.showGrn) params.set("show_grn", "1")
 	else params.set("input_type", filters.inputType || "")
+	if (filters.lots?.length) params.set("lots", JSON.stringify(filters.lots))
 	return `/printview?${params}`
 }

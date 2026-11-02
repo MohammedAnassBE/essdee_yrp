@@ -471,12 +471,13 @@ def get_sewing_plan_dpr_summary(
 
 
 @frappe.whitelist()
-def get_monthly_summary_data(supplier, start_date, end_date, input_type=None, show_grn=0):
+def get_monthly_summary_data(supplier, start_date, end_date, input_type=None, show_grn=0, lots=None):
 	start_date = getdate(start_date)
 	end_date = getdate(end_date)
 	if start_date > end_date:
 		frappe.throw(_("Start Date cannot be after End Date."))
-	plans = _plans(supplier)
+	selected_lots = _json_list(lots)
+	plans = _plans(supplier, lots=selected_lots)
 	plan_map = {row.name: row for row in plans}
 	lots, ipds = _metadata(plans)
 	rows = []
@@ -484,15 +485,18 @@ def get_monthly_summary_data(supplier, start_date, end_date, input_type=None, sh
 		frappe.has_permission("YRP Goods Received Note", "read", throw=True)
 		work_orders = [row.work_order for row in plans if row.work_order]
 		if work_orders:
+			grn_filters = {
+				"supplier": supplier,
+				"against": "YRP Work Order",
+				"against_id": ["in", work_orders],
+				"posting_date": ["between", [start_date, end_date]],
+				"docstatus": 1,
+			}
+			if selected_lots:
+				grn_filters["lot"] = ["in", selected_lots]
 			grns = frappe.get_list(
 				"YRP Goods Received Note",
-				filters={
-					"supplier": supplier,
-					"against": "YRP Work Order",
-					"against_id": ["in", work_orders],
-					"posting_date": ["between", [start_date, end_date]],
-					"docstatus": 1,
-				},
+				filters=grn_filters,
 				fields=["name", "posting_date", "lot"],
 				limit_page_length=0,
 			)
@@ -569,15 +573,10 @@ def get_monthly_summary_print_data(supplier=None):
 	end_date = frappe.form_dict.get("end_date") or start_date
 	show_grn = cint(frappe.form_dict.get("show_grn"))
 	input_type = frappe.form_dict.get("input_type")
+	lots = _json_list(frappe.form_dict.get("lots"))
 	if not show_grn and not input_type:
 		input_type = next(iter(_input_types()), None)
-	data = get_monthly_summary_data(
-		supplier,
-		start_date,
-		end_date,
-		input_type,
-		show_grn,
-	)
+	data = get_monthly_summary_data(supplier, start_date, end_date, input_type, show_grn, lots)
 	for row in data["rows"]:
 		for key in [*data["styles"], "total"]:
 			row[key] = _display_quantity(row.get(key))
@@ -590,6 +589,7 @@ def get_monthly_summary_print_data(supplier=None):
 			"end_date": end_date,
 			"input_type": input_type,
 			"show_grn": show_grn,
+			"lots": lots,
 		}
 	)
 	return data

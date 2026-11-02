@@ -16,6 +16,7 @@ SCALAR_FIELDS = (
 	"is_cloth_item",
 	"product_category",
 	"is_ineligible_for_itc",
+	"is_stock_item",
 )
 TABLE_COLUMNS = {
 	"uoms": ("uom", "conversion_factor"),
@@ -129,6 +130,7 @@ def parse_item_tables(values, stock_uom, doc=None) -> dict:
 		frappe.throw(message)
 	for field in ("is_cloth_item", "is_ineligible_for_itc"):
 		parsed[field] = cint(final.get(field))
+	parsed["is_stock_item"] = 1 if final.get("is_stock_item") is None else cint(final["is_stock_item"])
 	parsed["uoms"] = _parse_uoms(final.get("uoms") or [], stock_uom)
 	parsed["additional_parameters"] = _parse_parameters(final.get("additional_parameters") or [])
 	parsed["yarn_ratio_details"] = [

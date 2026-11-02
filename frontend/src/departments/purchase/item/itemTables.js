@@ -21,6 +21,7 @@ export function itemTableValues(values = {}) {
 		po_excess_allowed_percentage: values.po_excess_allowed_percentage ?? 0,
 		is_cloth_item: Number(values.is_cloth_item || 0),
 		is_ineligible_for_itc: Number(values.is_ineligible_for_itc || 0),
+		is_stock_item: Number(values.is_stock_item ?? 1),
 	}
 }
 

@@ -197,7 +197,6 @@ const composerEditor = computed(() => ({
 		disabled: 0,
 		variant_of: ["is", "not set"],
 		is_purchase_item: 1,
-		is_stock_item: 1,
 	},
 }))
 const composerEntryDefaults = computed(() => ({

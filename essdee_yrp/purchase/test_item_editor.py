@@ -629,7 +629,6 @@ class TestPurchaseItemEditor(TestCase):
 			item_group=doc.item_group,
 			stock_uom=self.secondary_uom,
 			item_code="FORGED-ITEM-CODE",
-			is_stock_item=0,
 			is_purchase_item=0,
 			is_sales_item=1,
 			has_variants=1,
@@ -641,7 +640,7 @@ class TestPurchaseItemEditor(TestCase):
 		self.assertTrue(payload["fields"]["stock_uom"]["read_only"])
 		self.assertEqual(doc.stock_uom, self.uom)
 		self.assertEqual(doc.item_code, created["name"])
-		self.assertEqual((doc.is_stock_item, doc.is_purchase_item, doc.is_sales_item), (1, 1, 0))
+		self.assertEqual((doc.is_purchase_item, doc.is_sales_item), (1, 0))
 		self.assertEqual(doc.has_variants, 0)
 
 	def test_update_preserves_metadata_on_retained_attribute_rows(self):
@@ -1911,6 +1910,7 @@ class TestPurchaseItemEditor(TestCase):
 			product_category=product.name,
 			categories=[category.name],
 			is_ineligible_for_itc=1,
+			is_stock_item=0,
 			brand=self.brand,
 			description="<p>ZZ TEST &amp; original HTML</p>",
 			gst_hsn_code=hsns[0] if hsns else None,
@@ -1936,6 +1936,7 @@ class TestPurchaseItemEditor(TestCase):
 			"description": "<p>ZZ TEST changed</p>",
 			"categories": [],
 			"is_ineligible_for_itc": 0,
+			"is_stock_item": 1,
 			"product_category": None,
 			"gst_hsn_code": hsns[-1] if hsns else None,
 		}

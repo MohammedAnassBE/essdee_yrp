@@ -480,7 +480,6 @@ def create_item(values) -> dict:
 			"description": values.get("description") or None,
 			"disabled": cint(values.get("disabled")),
 			"country_of_origin": frappe.db.get_default("country"),
-			"is_stock_item": 1,
 			"is_purchase_item": 1,
 			"is_sales_item": 0,
 			"has_variants": int(bool(attributes)),

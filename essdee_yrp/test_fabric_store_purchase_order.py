@@ -41,7 +41,6 @@ class TestFabricStorePurchaseOrder(TestCase):
 				"disabled": 0,
 				"variant_of": ["is", "not set"],
 				"is_purchase_item": 1,
-				"is_stock_item": 1,
 			},
 		)
 		self.assertTrue(editor["permissions"]["can_create_item_price"])

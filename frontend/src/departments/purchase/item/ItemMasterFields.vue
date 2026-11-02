@@ -7,6 +7,7 @@
 				<LinkField v-model="values.product_category" :label="label('product_category')" doctype="SD YRP Product Category" :search-handler="(text) => searchItemEditorLinks('SD YRP Product Category', text)" show-clear :show-open-button="false" :disabled="disabled" />
 				<MultiSelectField v-model="values.categories" :label="label('categories')" :options="categoryOptions" :disabled="disabled" />
 				<label class="item-master-check"><Checkbox :model-value="Boolean(Number(values.is_ineligible_for_itc))" binary :disabled="disabled" @update:model-value="values.is_ineligible_for_itc = $event ? 1 : 0" /><span>{{ label('is_ineligible_for_itc') }}</span></label>
+				<label class="item-master-check"><Checkbox :model-value="Boolean(Number(values.is_stock_item))" binary :disabled="disabled" @update:model-value="values.is_stock_item = $event ? 1 : 0" /><span>{{ label('is_stock_item') }}</span></label>
 				<label class="item-master-check"><Checkbox :model-value="Boolean(Number(values.is_cloth_item))" binary :disabled="disabled" @update:model-value="values.is_cloth_item = $event ? 1 : 0" /><span>{{ label('is_cloth_item') }}</span></label>
 			</template>
 			<dl v-else v-for="field in viewFields" :key="field.name" class="item-master-value"><dt>{{ label(field.name) }}</dt><dd>{{ displayValue(field) }}</dd></dl>
@@ -38,7 +39,7 @@ const props = defineProps({ values: { type: Object, required: true }, fields: { 
 const viewFields = [
 	{ name: "secondary_unit_of_measure" }, { name: "po_excess_allowed_percentage", fieldtype: "Percent" },
 	{ name: "product_category" }, { name: "categories" },
-	{ name: "is_ineligible_for_itc", fieldtype: "Check" }, { name: "is_cloth_item", fieldtype: "Check" },
+	{ name: "is_ineligible_for_itc", fieldtype: "Check" }, { name: "is_stock_item", fieldtype: "Check" }, { name: "is_cloth_item", fieldtype: "Check" },
 ]
 const categoryOptions = computed(() => [...new Set([...props.categories, ...(props.values.categories || [])])].map((value) => ({ value, label: value })))
 const label = (name, fallback) => props.fields[name]?.label || fallback || name.replaceAll("_", " ")

@@ -1,11 +1,16 @@
 <template>
 	<DepartmentPage title="Debits" back-to="/accounts" back-label="Accounts" flat full-width>
-		<ListView v-if="isListInLayout" doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" viewport-bounded clickable @row-click="openDebit" />
+		<ListView v-if="isListInLayout" ref="list" doctype="YRP Debit" title="Debits" :default-columns="['work_order', 'debit_no', 'debit_value', 'status']" :allow-bulk-actions="false" viewport-bounded clickable @row-click="openDebit" />
 		<Dialog v-model:visible="visible" modal header="Debit" class="erp-dialog--md">
 			<div v-if="loading">Loading debit…</div>
-			<template v-else-if="record"><DocumentStatusBadge :label="record.status" :docstatus="record.docstatus" /><dl><template v-for="field in fields" :key="field"><dt>{{ field.replaceAll('_', ' ') }}</dt><dd><DocumentLink v-if="fieldTarget(field)" v-bind="fieldTarget(field)" :label="record[field] || '—'" /><template v-else>{{ record[field] || '—' }}</template></dd></template></dl><div class="debit-actions"><Button v-if="canApprove" label="Approve" icon="pi pi-check" :loading="approving" @click="approveDebit" /><Button v-if="record.work_order" label="Open Work Order" severity="secondary" @click="openWorkOrder" /><Button v-if="permissions?.create" label="Duplicate" icon="pi pi-clone" severity="secondary" outlined @click="duplicateDebit" /></div><DocumentActivity doctype="YRP Debit" :name="record.name" :record="record" /></template>
+			<template v-else-if="record"><DocumentStatusBadge :label="record.status" :docstatus="record.docstatus" /><dl><template v-for="field in fields" :key="field"><dt>{{ metadata[field]?.label || (field === "name" ? "ID" : field) }}</dt><dd><DocumentLink v-if="fieldTarget(field)" v-bind="fieldTarget(field)" :label="record[field] || '—'" /><template v-else>{{ record[field] || '—' }}</template></dd></template></dl><div class="debit-actions">
+				<Button v-if="canApprove" label="Approve" icon="pi pi-check" :loading="acting === 'approve'" @click="approveDebit" />
+				<Button v-if="record.docstatus === 0 && permissions?.submit" label="Submit" icon="pi pi-check" :loading="acting === 'submit'" @click="submitDebit" />
+				<Button v-if="record.docstatus === 1 && permissions?.cancel" label="Cancel" icon="pi pi-ban" severity="danger" outlined :loading="acting === 'cancel'" @click="confirmCancel" />
+				<Button v-if="record.docstatus === 2 && permissions?.amend" label="Amend" icon="pi pi-copy" severity="secondary" outlined @click="confirmAmend" />
+				<Button v-if="record.work_order" label="Open Work Order" severity="secondary" @click="openWorkOrder" /><Button v-if="permissions?.create" label="Duplicate" icon="pi pi-clone" severity="secondary" outlined @click="duplicateDebit" /></div><DocumentActivity doctype="YRP Debit" :name="record.name" :record="record" /></template>
 		</Dialog>
-		<Dialog :visible="Boolean(duplicateFrom)" modal header="New Debit" class="erp-dialog--md" @update:visible="closeDuplicate">
+		<Dialog :visible="Boolean(draftSource)" modal :header="amendFrom ? 'Amend Debit' : 'New Debit'" class="erp-dialog--md" @update:visible="closeDuplicate">
 			<div v-if="!draft">Loading debit…</div>
 			<FormView v-else doctype="YRP Debit" title="Debit" :initial-values="draft" :include-fields="debitFields.formOrder" initial-mode="edit" show-cancel compact @saved="openDebit" @cancel="closeDuplicate(false)" />
 		</Dialog>
@@ -19,7 +24,7 @@ import Dialog from "primevue/dialog"
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import debitFields from "../../config/fields/debit.js"
-import { callMethod, getDoc, getMeta } from "../../api/frappe.js"
+import { callMethod, cancelDoc, getDoc, getMeta, submitDoc } from "../../api/frappe.js"
 import DocumentLink from "../../components/common/DocumentLink.vue"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 import DepartmentPage from "../../components/DepartmentPage.vue"
@@ -31,6 +36,7 @@ import DocumentActivity from "../../components/documents/DocumentActivity.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { getHomePath, isOutsideLayout } from "../../router/departmentLock.js"
+import { useActionConfirmation } from "../../utils/useActionConfirmation.js"
 const route = useRoute()
 const router = useRouter()
 const visible = ref(false)
@@ -41,10 +47,14 @@ const error = ref("")
 const isListInLayout = !isOutsideLayout("/accounts/debits")
 const fields = ["name", ...debitFields.detailGroups.flatMap((group) => group.fields)]
 const permissions = useDocumentPermissions(() => ["YRP Debit", record.value?.name, record.value?.docstatus])
+const list = ref(null)
+const confirmAction = useActionConfirmation()
 const duplicateFrom = computed(() => String(route.query.duplicate_from || ""))
+const amendFrom = computed(() => String(route.query.amend_from || ""))
+const draftSource = computed(() => amendFrom.value || duplicateFrom.value)
 const draft = ref(null)
 const canApprove = ref(false)
-const approving = ref(false)
+const acting = ref("")
 const DEBIT_METHOD = "yrp.yrp.doctype.yrp_debit.yrp_debit"
 function fieldTarget(fieldname) {
 	return linkFieldTarget({ ...metadata.value[fieldname], value: record.value?.[fieldname] }, record.value || {})
@@ -52,22 +62,48 @@ function fieldTarget(fieldname) {
 function openDebit(row) { router.push(`/accounts/debits/${encodeURIComponent(row.name)}`) }
 function duplicateDebit() { router.push({ path: "/accounts/debits", query: { duplicate_from: record.value.name } }) }
 function closeDuplicate(open) { if (!open) router.push(isListInLayout ? "/accounts/debits" : getHomePath()) }
-watch(duplicateFrom, async (name) => {
+watch(draftSource, async (name) => {
 	draft.value = null
 	if (!name) return
 	try {
-		const values = await loadDuplicateValues("YRP Debit", route)
-		if (duplicateFrom.value === name) draft.value = Object.fromEntries(debitFields.formOrder.filter((fieldname) => values[fieldname] != null).map((fieldname) => [fieldname, values[fieldname]]))
+		const values = await loadDuplicateValues("YRP Debit", route, amendFrom.value ? "amend_from" : "duplicate_from")
+		if (draftSource.value !== name) return
+		draft.value = Object.fromEntries(debitFields.formOrder.filter((fieldname) => values[fieldname] != null).map((fieldname) => [fieldname, values[fieldname]]))
+		if (amendFrom.value) draft.value.amended_from = name
 	} catch (reason) { error.value = reason.message; closeDuplicate(false) }
 }, { immediate: true })
-async function approveDebit() {
-	approving.value = true
+async function runAction(action, change) {
+	acting.value = action
 	try {
-		await callMethod(`${DEBIT_METHOD}.approve_debit`, { name: record.value.name })
+		await change()
 		record.value = await getDoc("YRP Debit", record.value.name)
 		canApprove.value = false
+		list.value?.refresh()
 	} catch (reason) { error.value = reason.message }
-	finally { approving.value = false }
+	finally { acting.value = "" }
+}
+function approveDebit() { return runAction("approve", () => callMethod(`${DEBIT_METHOD}.approve_debit`, { name: record.value.name })) }
+function submitDebit() { return runAction("submit", () => submitDoc("YRP Debit", record.value.name, record.value.modified)) }
+function confirmCancel() {
+	const { name, modified } = record.value
+	confirmAction({
+		header: "Cancel Debit?",
+		message: `Cancel Debit ${name}? It will no longer count against its Work Order or Purchase Invoice.`,
+		acceptLabel: "Cancel Debit",
+		acceptIcon: "pi pi-ban",
+		accept: () => runAction("cancel", () => cancelDoc("YRP Debit", name, modified)),
+	})
+}
+function confirmAmend() {
+	const { name } = record.value
+	confirmAction({
+		header: "Amend Debit?",
+		message: `Create an amended draft from Debit ${name}?`,
+		acceptLabel: "Amend Debit",
+		acceptIcon: "pi pi-copy",
+		acceptSeverity: "primary",
+		accept: () => router.push({ path: "/accounts/debits", query: { amend_from: name } }),
+	})
 }
 function openWorkOrder() { router.push(`/fabric-store/work-orders/${encodeURIComponent(record.value.work_order)}`) }
 watch(() => route.params.debitId, async (name) => {

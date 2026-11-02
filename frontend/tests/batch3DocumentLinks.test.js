@@ -12,7 +12,7 @@ const require = createRequire(new URL('../package.json', import.meta.url))
 const { parse } = require('@vue/compiler-sfc')
 const { parse: parseScript } = require('@babel/parser')
 const source = path => readFileSync(resolve(`frontend/src/departments/${path}.vue`), 'utf8')
-const debitDuplicateModules = { '../../composables/useDocumentPermissions.js': { useDocumentPermissions: () => Vue.ref(null) }, '../../composables/useDuplicateAction.js': { loadDuplicateValues: async () => null }, '../../components/common/FormView.vue': () => null }
+const debitDuplicateModules = { '../../composables/useDocumentPermissions.js': { useDocumentPermissions: () => Vue.ref(null) }, '../../composables/useDuplicateAction.js': { loadDuplicateValues: async () => null }, '../../components/common/FormView.vue': () => null, '../../utils/useActionConfirmation.js': { useActionConfirmation: () => () => {} } }
 const modules = { 'vue-router': { useRouter: () => ({ push() {} }) }, '../../utils/linkTarget.js': targets }
 const DocumentLink = loadComponent(resolve('frontend/src/components/common/DocumentLink.vue'), modules)
 const text = node => node.type === 'comment' ? '' : node.text + node.children.map(text).join('')

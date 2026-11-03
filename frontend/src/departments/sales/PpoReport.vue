@@ -80,7 +80,7 @@
 								<td v-for="position in maxColumns" :key="`${order.name}-${position}`" class="erp-number ppo-report__quantity">{{ displayQuantity(order.qty_by_position?.[position - 1]) }}</td>
 								<td class="erp-number ppo-report__total">{{ number(order.total) }}</td>
 								<td class="ppo-report__transfer">{{ order.transfer_summary || "—" }}</td>
-								<td class="ppo-report__comments">{{ formatDatesInText(order.comments) || "—" }}</td>
+								<td class="ppo-report__comments" :title="formatDatesInText(order.comments) || undefined">{{ formatDatesInText(order.comments) || "—" }}</td>
 							</tr>
 							<tr v-if="isExpanded(order.name) && dispatchLoading === order.name" class="ppo-report__summary-status"><td :colspan="fixedBeforeGroup + 1">Loading dispatch quantities…</td><td v-for="position in maxColumns" :key="`loading-${order.name}-${position}`"></td><td></td><td></td><td></td></tr>
 							<tr v-else-if="isExpanded(order.name) && !dispatchRows(order.name).length" class="ppo-report__summary-status"><td :colspan="columnCount">No submitted dispatches for this Production Order.</td></tr>
@@ -305,7 +305,8 @@ function reset() {
 .ppo-report__size-column { text-align: center; }
 .ppo-report__quantity { background: #f4fbf7; font-weight: 700; }
 .ppo-report__total { color: #087654; font-weight: 850; }
-.ppo-report__transfer, .ppo-report__comments { min-width: 190px !important; max-width: 280px; white-space: pre-line !important; }
+.ppo-report__transfer { min-width: 190px !important; max-width: 280px; white-space: pre-line !important; }
+.ppo-report__comments { min-width: 190px !important; max-width: 280px; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
 .ppo-report__summary-row > td { background: #f8fbfa; }
 .ppo-report__summary-label { color: var(--erp-text-secondary); font-weight: 700; text-align: right; }
 .ppo-report__summary-quantity { color: #087654; background: #edf9f3 !important; font-weight: 760; }

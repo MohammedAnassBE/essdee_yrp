@@ -176,3 +176,15 @@ test("sales date displays use the shared DD-MM-YYYY helper", async () => {
 	assert.match(salesSource("ProductionOrder.vue"), /formatDatesInText\(workspace\.histories\.comments\)/)
 	assert.match(salesSource("PpoReport.vue"), /formatDatesInText\(order\.comments\)/)
 })
+
+test("PPO report comments stay on one line and show the full comment on hover", () => {
+	const report = salesSource("PpoReport.vue")
+	const cell = report.match(/<td class="ppo-report__comments"[^>]*>/)[0]
+	assert.match(cell, /:title="formatDatesInText\(order\.comments\) \|\| undefined"/)
+	const rule = report.match(/\.ppo-report__comments \{([^}]+)\}/)[1]
+	assert.match(rule, /white-space: nowrap/)
+	assert.match(rule, /overflow: hidden/)
+	assert.match(rule, /text-overflow: ellipsis/)
+	assert.match(rule, /max-width: 280px/)
+	assert.match(report, /\.ppo-report__transfer \{[^}]*white-space: pre-line/)
+})

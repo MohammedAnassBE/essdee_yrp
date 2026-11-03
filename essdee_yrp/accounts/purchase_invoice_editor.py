@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, flt
 from yrp.yrp.doctype.yrp_purchase_invoice.yrp_purchase_invoice import _get_tax_rate
 
 from essdee_yrp.accounts.purchase_invoice_workspace import (
@@ -182,13 +182,28 @@ def _update_grouped_items_in_place(stored_rows, posted_rows) -> None:
 			_set_row_value(stored_row, "expense_head", posted["expense_head"])
 
 
-def apply_grouped_items(doc, posted_rows: list[dict]) -> None:
+def has_same_grouped_quantities(stored_rows, posted_rows) -> bool:
+	posted_by_key = {row.get("group_key"): row for row in posted_rows}
+	return all(
+		"qty" not in posted_by_key[value(row, "group_key")]
+		or flt(posted_by_key[value(row, "group_key")]["qty"]) == flt(value(row, "qty"))
+		for row in stored_rows
+	)
+
+
+def apply_grouped_items(doc, posted_rows: list[dict], grns_changed: bool = False) -> None:
+	"""Update rates in place for a rate-only edit; otherwise replace rows as a fresh GRN fetch."""
 	stored_rows = list(doc.get("essdee_items") or [])
 	stored_keys = {value(row, "group_key") for row in stored_rows}
 	posted_keys = {row.get("group_key") for row in posted_rows}
 	if not posted_rows and not stored_rows:
 		return
-	if doc.get("essdee_rate_table_source") and posted_keys == stored_keys:
+	if (
+		doc.get("essdee_rate_table_source")
+		and not grns_changed
+		and posted_keys == stored_keys
+		and has_same_grouped_quantities(stored_rows, posted_rows)
+	):
 		_update_grouped_items_in_place(stored_rows, posted_rows)
 		return
 
@@ -245,8 +260,10 @@ def save_purchase_invoice(
 	items = _parse_item_rows(items)
 	doc = _load_draft_for_save(name, expected_modified, values.get("bill_tracking"))
 	apply_editor_values(doc, values)
-	doc.set("grn", [{"grn": grn} for grn in dict.fromkeys(grns)])
-	apply_grouped_items(doc, items)
+	stored_grns = [value(row, "grn") for row in doc.get("grn") or []]
+	grns = list(dict.fromkeys(grns))
+	doc.set("grn", [{"grn": grn} for grn in grns])
+	apply_grouped_items(doc, items, grns_changed=stored_grns != grns)
 	if name:
 		doc.save()
 	else:

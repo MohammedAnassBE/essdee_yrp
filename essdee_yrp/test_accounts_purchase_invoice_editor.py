@@ -176,7 +176,7 @@ class TestPurchaseInvoiceEditor(TestCase):
 	def test_save_updates_rates_in_place_for_same_group_keys(self):
 		first = FakeRow(group_key="g1", item="ITEM-1", rate=10, expense_head="EXP-1")
 		second = FakeRow(group_key="g2", item="ITEM-2", rate=20, expense_head="EXP-2")
-		doc = FakeInvoice(essdee_items=[first, second])
+		doc = FakeInvoice(essdee_items=[first, second], grn=[FakeRow(grn="GRN-1"), FakeRow(grn="GRN-2")])
 
 		self.save_existing(
 			doc,
@@ -195,6 +195,58 @@ class TestPurchaseInvoiceEditor(TestCase):
 		self.assertEqual(doc.get("essdee_rate_table_source"), "migrated_v1")
 		self.assertNotIn("essdee_items", [fieldname for fieldname, _value in doc.set_calls])
 		self.assertIn(("grn", [{"grn": "GRN-1"}, {"grn": "GRN-2"}]), doc.set_calls)
+
+	def migrated_invoice_with_group(self, qty):
+		invoice = frappe.new_doc("YRP Purchase Invoice")
+		invoice.name = "E2E-MIG-PI-001"
+		invoice.modified = "2026-10-12 10:00:00"
+		invoice.against = "Purchase Order"
+		invoice.supplier = "E2E-MIG-SUPPLIER-001"
+		invoice.essdee_rate_table_source = "migrated_v1"
+		invoice.approved_by = "Administrator"
+		invoice.append("grn", {"grn": "E2E-MIG-GRN-001"})
+		invoice.append(
+			"essdee_items",
+			{"item": "E2E-MIG-ITEM", "qty": qty, "uom": "Nos", "source_rate": 10, "rate": 10, "group_key": "g1"},
+		)
+		return invoice
+
+	def test_save_migrated_with_extra_grn_on_same_group_key_rebuilds_rows(self):
+		stored = self.migrated_invoice_with_group(qty=2)
+		doc = self.migrated_invoice_with_group(qty=2)
+		fetched = {"item": "E2E-MIG-ITEM", "qty": 5, "uom": "Nos", "source_rate": 10, "rate": 10, "group_key": "g1"}
+
+		with patch.object(type(doc), "save", new=lambda invoice: invoice):
+			self.save_existing(doc, grns=["E2E-MIG-GRN-001", "E2E-MIG-GRN-002"], items=[fetched])
+
+		self.assertEqual(doc.essdee_rate_table_source, "yrp_grn_v1")
+		self.assertEqual(doc.essdee_items[0].qty, 5)
+		with patch.object(type(doc), "get_doc_before_save", return_value=stored):
+			doc._validate_legacy_projection_inputs()
+			doc._reset_changed_commercial_approval()
+		self.assertIsNone(doc.approved_by)
+
+	def test_save_migrated_rate_only_edit_with_same_grns_stays_in_place(self):
+		doc = self.migrated_invoice_with_group(qty=2)
+		stored_row = doc.essdee_items[0]
+		posted = {"item": "E2E-MIG-ITEM", "qty": 2, "uom": "Nos", "source_rate": 10, "rate": 12, "group_key": "g1"}
+
+		with patch.object(type(doc), "save", new=lambda invoice: invoice):
+			self.save_existing(doc, grns=["E2E-MIG-GRN-001"], items=[posted])
+
+		self.assertEqual(doc.essdee_rate_table_source, "migrated_v1")
+		self.assertIs(doc.essdee_items[0], stored_row)
+		self.assertEqual((stored_row.rate, stored_row.qty), (12, 2))
+
+	def test_save_migrated_changed_quantity_with_same_grns_rebuilds_rows(self):
+		doc = self.migrated_invoice_with_group(qty=2)
+		posted = {"item": "E2E-MIG-ITEM", "qty": 3, "uom": "Nos", "source_rate": 10, "rate": 10, "group_key": "g1"}
+
+		with patch.object(type(doc), "save", new=lambda invoice: invoice):
+			self.save_existing(doc, grns=["E2E-MIG-GRN-001"], items=[posted])
+
+		self.assertEqual(doc.essdee_rate_table_source, "yrp_grn_v1")
+		self.assertEqual(doc.essdee_items[0].qty, 3)
 
 	def test_save_replaces_rows_after_fetch(self):
 		doc = FakeInvoice(essdee_items=[FakeRow(group_key="g1", rate=10)])

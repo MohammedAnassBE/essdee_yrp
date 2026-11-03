@@ -218,6 +218,61 @@ class TestClothProgram(IntegrationTestCase):
 			field_order.index("fabric_program_html"),
 		)
 
+	def test_cloth_program_payload_orders_dias_numerically(self):
+		rows = [
+			frappe._dict(dia=dia, colour=colour)
+			for dia, colour in (
+				("20 Dia", "Red"),
+				("12 Dia", "Red"),
+				("8 Dia", "Navy"),
+				("12 Dia", "Navy"),
+				("32 Dia", "Red"),
+			)
+		]
+		with (
+			patch("essdee_yrp.fabric_program._final_options", return_value={}),
+			patch(
+				"essdee_yrp.fabric_program._program_row_payload",
+				side_effect=lambda _ipd, row: {"finished_dia": row.dia, "finished_colour": row.colour},
+			),
+		):
+			visible = _current_program_payloads(frappe._dict(), rows)
+
+		self.assertEqual(
+			[(row["finished_dia"], row["finished_colour"]) for row in visible],
+			[("8 Dia", "Navy"), ("12 Dia", "Navy"), ("12 Dia", "Red"), ("20 Dia", "Red"), ("32 Dia", "Red")],
+		)
+
+	def test_cloth_program_print_orders_dias_numerically_within_each_fabric_type(self):
+		rows = [
+			frappe._dict(cloth_item="Cloth", dia=dia, colour="Red", weight=weight)
+			for dia, weight in (("20 Dia", 84), ("12 Dia", 35), ("8 Dia", 10), ("16 Dia", 56))
+		]
+		lot = MagicMock()
+		lot.get.side_effect = lambda field, default=None: {"lot_fabric_programs": rows}.get(field, default)
+		split = {
+			("Cloth", "20 Dia", "Red"): {
+				"Folding Fabric": {"weight": 84, "addition": 0, "required_weight": 84}
+			},
+			("Cloth", "8 Dia", "Red"): {
+				"Folding Fabric": {"weight": 10, "addition": 0, "required_weight": 10}
+			},
+		}
+		with (
+			patch("essdee_yrp.print_helpers.frappe.get_doc", return_value=lot),
+			patch("essdee_yrp.fabric_program.get_program_fabric_types", return_value=split),
+		):
+			printed = get_cloth_program_print_data("Lot")
+
+		self.assertEqual(
+			[
+				(group["fabric_type"], [route["dia"] for route in group["routes"]])
+				for group in printed["tables"][0]["fabric_groups"]
+			],
+			[("Main Fabric", ["12 Dia", "16 Dia"]), ("Folding Fabric", ["8 Dia", "20 Dia"])],
+		)
+		self.assertEqual(printed["tables"][0]["total"], 185)
+
 	def test_cloth_program_hides_received_rows_from_an_older_ipd_route(self):
 		payloads = {
 			"old": {

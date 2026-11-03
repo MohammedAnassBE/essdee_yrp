@@ -29,6 +29,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 )
 from essdee_yrp.fabric_requirement import compute_cloth_demand, get_fabric_type
 from essdee_yrp.ipd_validations import get_ipd_attribute_values
+from essdee_yrp.panel_wise_consumption import natural_key
 
 
 def fetch_fabric_program_details(lot_doc):
@@ -159,7 +160,9 @@ def _current_program_payloads(ipd, rows):
 		if valid_colours and payload["finished_colour"] not in valid_colours:
 			continue
 		payloads.append(payload)
-	return payloads
+	return sorted(
+		payloads, key=lambda payload: (natural_key(payload["finished_dia"]), payload["finished_colour"] or "")
+	)
 
 
 def get_program_fabric_types(lot_doc):

@@ -17,6 +17,7 @@ from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
 from essdee_yrp.merch.ipd.payload import prime_attribute_values
+from essdee_yrp.panel_wise_consumption import natural_key
 
 
 def get_value_with_pad(value, pad):
@@ -289,7 +290,12 @@ def get_cloth_program_print_data(lot):
 		colours = sorted(cloth["colours"])
 		fabric_groups = OrderedDict()
 		for row in sorted(
-			cloth["routes"], key=lambda route: (route["fabric_type"] != "Main Fabric", route["fabric_type"])
+			cloth["routes"],
+			key=lambda route: (
+				route["fabric_type"] != "Main Fabric",
+				route["fabric_type"],
+				natural_key(route["dia"]),
+			),
 		):
 			fabric = fabric_groups.setdefault(
 				row["fabric_type"],

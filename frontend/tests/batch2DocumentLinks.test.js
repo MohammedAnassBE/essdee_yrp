@@ -46,6 +46,7 @@ const defaults = {
  '../../../../components/common/FormField.vue': formControl,
  '../../../components/common/FormField.vue': formControl,
  './ClothProgramDialog.vue': control,
+ './ClothProgramBuildDialog.vue': control,
  '../../../components/documents/DocumentStatusBadge.vue': control,
  'primevue/column': column, 'primevue/datatable': table,
  'primevue/usetoast': { useToast: () => ({ add() {} }) }, '../../../api/frappe.js': { callMethod: async () => ({}) },

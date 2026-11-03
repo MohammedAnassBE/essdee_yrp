@@ -33,6 +33,7 @@ function mountMerchLot(workspace) {
 		"../../purchase/lot/lotLayout.js": lotLayout,
 		"../../purchase/lot/lotViews.js": lotViews,
 		"../../purchase/lot/useLotLayout.js": { useLotLayout: () => ({ activeTab: Vue.ref("lot"), expanded: Vue.ref([]), scrollTo: Vue.ref(""), openSection() {} }) },
+		"../../purchase/lot/ClothProgramBuildDialog.vue": stub("cloth-build"),
 		"../../purchase/lot/LotFabricTab.vue": stub("fabric"),
 		"../../purchase/lot/LotDiaConversionsTab.vue": stub("dia-conversions"),
 		"../../purchase/lot/LotEmptyState.vue": stub("empty"),
@@ -48,7 +49,7 @@ function mountMerchLot(workspace) {
 	})
 	const root = mountComponent(component, { lotId: "LOT-1" })
 	const find = type => findNodes(root, node => node.type === type)
-	return { loads, actions: () => find("actions")[0].props.actions, dialog: () => find("po-dialog")[0].props }
+	return { loads, find, actions: () => find("actions")[0].props.actions, dialog: () => find("po-dialog")[0].props }
 }
 
 test("PO link actions follow the Purchase Lot write rule and disable while acting", () => {
@@ -81,4 +82,21 @@ test("Merch Lot hides PO link actions from readers", async () => {
 	const page = mountMerchLot({ name: "LOT-1", modified: "m1", permissions: { can_write: false }, capabilities: {} })
 	await tick()
 	assert.deepEqual(page.actions(), [])
+})
+
+test("Merch Build Cloth Program opens the preview popup; its Setup opens the colour and process setup", async () => {
+	const build = { label: "Build Cloth Program", allowed: true, visible: true }
+	const page = mountMerchLot({ name: "LOT-1", modified: "m1", permissions: { can_write: false }, capabilities: { build_cloth_programs: build } })
+	await tick()
+	const props = () => [page.find("cloth-build")[0].props, page.find("cloth")[0].props]
+	page.actions().find(row => row.key === "build_cloth_programs").command()
+	await tick()
+	assert.deepEqual(props().map(row => row.visible), [true, false])
+	assert.deepEqual([props()[0].lot, props()[0].modified], ["LOT-1", "m1"])
+	props()[0].onSetup()
+	await tick()
+	assert.deepEqual(props().map(row => row.visible), [false, true])
+	props()[0].onSaved()
+	await tick()
+	assert.deepEqual(page.loads, ["LOT-1", "LOT-1"])
 })

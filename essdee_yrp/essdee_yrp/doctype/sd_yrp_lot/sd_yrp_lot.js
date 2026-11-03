@@ -89,22 +89,12 @@ frappe.ui.form.on("SD YRP Lot", {
 		}
 		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred
 			&& frm.has_perm("write") && frm.doc.__onload?.can_manage_cloth_program) {
-			frm.add_custom_button("Build Cloth Programs", () => {
-				frappe.call({
-					method: "essdee_yrp.api.cloth_program.get_cloth_program_context",
-					args: { lot: frm.doc.name },
-					freeze: true,
-					freeze_message: __("Loading cloths..."),
-					callback: function (r) {
-						const cloths = (r.message && r.message.cloths) || [];
-						const defaults = (r.message && r.message.defaults) || {};
-						if (!cloths.length) {
-							frappe.msgprint(__("This lot's garment has no cloth items to build."));
-							return;
-						}
-						build_cloth_programs_dialog(frm, cloths, defaults, r.message.excess_percentage);
-					}
-				});
+			frm.add_custom_button(__("Build Cloth Program"), () => {
+				if (frm.is_dirty()) {
+					frappe.msgprint(__("Save the Lot before building the Cloth Program."));
+					return;
+				}
+				open_cloth_program_preview(frm);
 			});
 		}
 		if (!frm.is_new() && frm.doc.production_detail && !frm.doc.is_transferred
@@ -128,16 +118,7 @@ frappe.ui.form.on("SD YRP Lot", {
 			});
 		}
 		if (!frm.is_new() && (frm.doc.lot_fabric_programs || []).length) {
-			frm.add_custom_button(__("Cloth Program"), () => {
-				const url = frappe.urllib.get_full_url(
-					`/printview?doctype=${encodeURIComponent(frm.doc.doctype)}&name=${encodeURIComponent(frm.doc.name)}` +
-					`&trigger_print=1&format=${encodeURIComponent("Essdee Lot Cloth Program")}` +
-					"&no_letterhead=1"
-				);
-				if (!window.open(url)) {
-					frappe.msgprint(__("Please enable pop-ups"));
-				}
-			}, __("Print"));
+			frm.add_custom_button(__("Cloth Program"), () => open_cloth_program_print(frm), __("Print"));
 		}
 		$(frm.fields_dict['items_html'].wrapper).html("")
 		frm.item = new frappe.production.ui.LotOrder(frm.fields_dict['items_html'].wrapper)
@@ -803,6 +784,188 @@ function mount_actual_dia_conversions(frm) {
 // 	frm.doc.total_final_qty = total_final_qty;
 // 	frm.doc.total_cutting_qty = total_cut_qty;
 // }
+
+function open_cloth_program_setup(frm) {
+	frappe.call({
+		method: "essdee_yrp.api.cloth_program.get_cloth_program_context",
+		args: { lot: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Loading cloths..."),
+		callback: function (r) {
+			const cloths = (r.message && r.message.cloths) || [];
+			const defaults = (r.message && r.message.defaults) || {};
+			if (!cloths.length) {
+				frappe.msgprint(__("This lot's garment has no cloth items to build."));
+				return;
+			}
+			build_cloth_programs_dialog(frm, cloths, defaults, r.message.excess_percentage);
+		}
+	});
+}
+
+// Build Cloth Program: Calculate previews only; Save and Print store the program.
+function open_cloth_program_preview(frm) {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Build Cloth Program"),
+		size: "extra-large",
+		fields: [
+			{
+				label: __("Cloth Excess Percentage"),
+				fieldname: "extra_percentage",
+				fieldtype: "Float",
+				default: frm.doc.cloth_excess_percentage || 0,
+				description: __("Adds this percentage to every calculated cloth Colour and Dia."),
+			},
+			{ fieldname: "cloth_program_result", fieldtype: "HTML" },
+		],
+		primary_action_label: __("Save"),
+		primary_action() {
+			save_cloth_program(frm, cloth_program_inputs(dialog)).then(() => dialog.hide());
+		},
+		secondary_action_label: __("Print"),
+		secondary_action() {
+			const inputs = cloth_program_inputs(dialog);
+			const print_window = window.open("", "_blank");
+			save_cloth_program(frm, inputs).then(
+				() => open_cloth_program_print(frm, print_window),
+				() => print_window?.close()
+			);
+		},
+	});
+	dialog.add_custom_action(__("Calculate"), () => calculate_cloth_program(frm, dialog, cloth_program_inputs(dialog)));
+	dialog.add_custom_action(__("Setup"), () => {
+		dialog.hide();
+		open_cloth_program_setup(frm);
+	});
+	dialog.show();
+	calculate_cloth_program(frm, dialog, {});
+}
+
+function cloth_program_inputs(dialog) {
+	const extra_percentage = Number(dialog.get_value("extra_percentage") || 0);
+	if (extra_percentage < 0) {
+		frappe.throw(__("Cloth Excess Percentage cannot be negative."));
+	}
+	const additions = [];
+	dialog.fields_dict.cloth_program_result.$wrapper.find("[data-cloth-program-addition]").each((_index, input) => {
+		additions.push({
+			cloth_item: input.dataset.clothItem,
+			fabric_type: input.dataset.fabricType,
+			colour: input.dataset.colour,
+			additional_weight: Math.trunc(Number(input.value) || 0),
+		});
+	});
+	return { excess_percentage: extra_percentage, additions: JSON.stringify(additions) };
+}
+
+function calculate_cloth_program(frm, dialog, inputs) {
+	frappe.call({
+		method: "essdee_yrp.api.cloth_program.get_cloth_program_preview",
+		args: { lot: frm.doc.name, ...inputs },
+		freeze: true,
+		freeze_message: __("Calculating cloth program..."),
+		callback(r) {
+			dialog.set_value("extra_percentage", r.message.extra_percentage);
+			render_cloth_program_preview(dialog.fields_dict.cloth_program_result.$wrapper, r.message);
+		},
+	});
+}
+
+function save_cloth_program(frm, inputs) {
+	return frappe.call({
+		method: "essdee_yrp.api.cloth_program.recalculate_cloth_program",
+		args: { lot: frm.doc.name, modified: frm.doc.modified, ...inputs },
+		freeze: true,
+		freeze_message: __("Saving Cloth Program..."),
+	}).then(() => {
+		frappe.show_alert({ message: __("Cloth Program saved"), indicator: "green" });
+		return frm.reload_doc();
+	});
+}
+
+function open_cloth_program_print(frm, print_window) {
+	const url = frappe.urllib.get_full_url(
+		`/printview?doctype=${encodeURIComponent(frm.doc.doctype)}&name=${encodeURIComponent(frm.doc.name)}`
+		+ `&trigger_print=1&format=${encodeURIComponent("Essdee Lot Cloth Program")}&no_letterhead=1`
+	);
+	if (print_window) {
+		print_window.location.href = url;
+	} else if (!window.open(url)) {
+		frappe.msgprint(__("Please enable pop-ups"));
+	}
+}
+
+function render_cloth_program_preview($wrapper, preview) {
+	const escape = (value) => frappe.utils.escape_html(String(value ?? ""));
+	const kg = (value) => Math.round(Number(value) || 0).toLocaleString();
+	const signed_kg = (value) => (value > 0 ? `+${kg(value)}` : value ? kg(value) : "—");
+	const tables = preview.tables.map((table) => {
+		const cells = (values) => table.colours.map((colour) => `<th class="text-right">${kg(values[colour])}</th>`).join("");
+		const body = table.fabric_groups.map((group) => `
+			${group.routes.map((route) => `
+				<tr>
+					<td>${escape(route.fabric_type)}</td>
+					<td>${escape(route.dia)}</td>
+					${table.colours.map((colour) => `<td class="text-right">${route.weights[colour] ? kg(route.weights[colour]) : "—"}</td>`).join("")}
+					<td class="text-right"><strong>${kg(route.total)}</strong></td>
+				</tr>`).join("")}
+			<tr class="active">
+				<th>${escape(__("Total {0}", [group.fabric_type]))}</th><th></th>
+				${cells(group.colour_totals)}
+				<th class="text-right">${kg(group.total)}</th>
+			</tr>
+			<tr class="text-primary">
+				<th>${__("Add Weight")}</th>
+				<th class="small text-muted">${__("Kg, negative reduces")}</th>
+				${table.colours.map((colour) => `
+					<th style="padding: 5px;">
+						<input type="number" step="1" class="form-control input-sm text-right" style="min-width: 82px;"
+							value="${group.additions[colour] || ""}" placeholder="0" data-cloth-program-addition
+							data-cloth-item="${escape(table.cloth_item)}" data-fabric-type="${escape(group.fabric_type)}"
+							data-colour="${escape(colour === "No Colour" ? "" : colour)}"
+							aria-label="${escape(__("Add Weight for {0} / {1}", [group.fabric_type, colour]))}">
+					</th>`).join("")}
+				<th class="text-right">${signed_kg(group.additional_total)}</th>
+			</tr>`).join("");
+		return `
+			<div style="margin-bottom: 24px;">
+				<h5 style="margin-bottom: 4px;">${escape(table.cloth_item)}</h5>
+				<div class="text-muted small" style="margin-bottom: 8px;">${__("Knitting Program Kg")}</div>
+				<div class="table-responsive">
+					<table class="table table-bordered table-hover">
+						<thead><tr>
+							<th>${__("Fabric Type")}</th><th>${__("Dia")}</th>
+							${table.colours.map((colour) => `<th class="text-right">${escape(colour)}</th>`).join("")}
+							<th class="text-right">${__("Total")}</th>
+						</tr></thead>
+						<tbody>${body}</tbody>
+						<tfoot><tr>
+							<th>${__("Total")}</th><th></th>
+							${cells(table.colour_totals)}
+							<th class="text-right">${kg(table.total)}</th>
+						</tr></tfoot>
+					</table>
+				</div>
+			</div>`;
+	}).join("");
+	const totals = preview.display_totals;
+	$wrapper.html(`
+		<div style="margin-top: 18px;">
+			<div class="text-muted small" style="margin-bottom: 10px;">
+				${__("Nothing is saved until you click Save or Print. Edit Add Weight and click Calculate.")}
+				${__("Cloth Kg per 1 Kg Yarn")}: <strong>${escape(preview.cloth_per_kg_yarn)}</strong>
+				· ${__("Extra")}: <strong>${escape(preview.extra_percentage)}%</strong>
+			</div>
+			${tables}
+			<div class="text-right" style="margin-top: -8px;">
+				<span style="margin-left: 18px;">${__("Required Kg")}: <strong>${kg(totals.required_weight)}</strong></span>
+				<span style="margin-left: 18px;">${__("Extra Kg")}: <strong>${kg(totals.extra_weight)}</strong></span>
+				<span style="margin-left: 18px;">${__("Added Kg")}: <strong>${signed_kg(totals.manual_additional_weight)}</strong></span>
+				<span style="margin-left: 18px;">${__("Total Knitting Program Kg")}: <strong>${kg(totals.program_weight)}</strong></span>
+			</div>
+		</div>
+	`);
+}
 
 function build_cloth_programs_dialog(frm, cloths, defaults = {}, excess_percentage) {
 	const colour_selections = {};

@@ -398,7 +398,7 @@ def _write_plan_rows(lot_doc, cloth_item, step_plans):
 def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 	"""The knitting program stays USER-OWNED (the WO driver): pre-seed missing
 	or untouched rows from the conversion step's per-dia output sums; leave
-	edited rows alone and warn about the drift."""
+	edited rows (excess, Add Weight) alone."""
 	conversion = next((p for p in step_plans if p["shape"] == "conversion"), None)
 	if not conversion:
 		return
@@ -415,7 +415,6 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 		for r in lot_doc.get("lot_fabric_programs") or []
 		if r.cloth_item == cloth_item
 	}
-	drift = []
 	inserted = 0
 	for (dia, reference_item_variant), kg in per_reference.items():
 		kg = flt(kg, 3)
@@ -438,16 +437,6 @@ def _preseed_knitting_program(lot_doc, cloth_item, step_plans):
 			new_row.save(ignore_permissions=True)
 		elif not flt(row.weight):
 			attribute_db.set_value("SD YRP Lot Fabric Program", row.name, "weight", kg, update_modified=False)
-		elif abs(flt(row.weight) - kg) > 0.001:
-			drift.append(
-				f"{escape_html(cloth_item)} · {escape_html(colour or '')} · "
-				f"{escape_html(dia)}: "
-				f"program {flt(row.weight)} kg vs plan {kg} kg"
-			)
-	if drift:
-		frappe.msgprint(
-			"<br>".join(drift), title=_("Knitting program differs from the plan"), indicator="orange"
-		)
 
 
 def _set_plan_status(fabric_row, status, error):

@@ -151,6 +151,18 @@ class TestClothProgramRebuild(IntegrationTestCase):
 		context = cloth_program.get_cloth_program_context(self.lot.name)
 		self.assertEqual(context["excess_percentage"], 5)
 
+	def test_plan_rebuild_does_not_report_the_excess_as_drift(self):
+		from essdee_yrp.fabric_plan import build_fabric_plan
+
+		cloth_program.build_cloth_programs(self.lot.name, [self.selection], excess_percentage=10)
+		self.lot.reload()
+		frappe.clear_messages()
+		build_fabric_plan(self.lot, self.lot.lot_fabric_details[0], raise_on_unreachable=False)
+		self.assertEqual(frappe.get_message_log(), [])
+		self.assertEqual(
+			{dia: flt(row.weight) for dia, row in self._rows().items()}, {self.dia14: 546, self.dia19: 360}
+		)
+
 	def test_recalculate_uses_synced_excess(self):
 		self._receive()
 		cloth_program.build_cloth_programs(self.lot.name, [self.selection], excess_percentage=5)
@@ -281,6 +293,50 @@ class TestClothProgramAddWeight(IntegrationTestCase):
 		group = printed["tables"][0]["fabric_groups"][0]
 		self.assertEqual((group["additions"], group["additional_total"]), ({self.white: -10}, -10))
 		self.assertEqual(printed["tables"][0]["total"], 814)
+
+	def _lot_state(self):
+		return (
+			frappe.db.get_value(
+				"SD YRP Lot",
+				self.lot.name,
+				["cloth_excess_percentage", "cloth_program_additions", "modified"],
+			),
+			self._weights(),
+		)
+
+	def test_preview_shows_the_save_result_without_writing(self):
+		before = self._lot_state()
+		preview = cloth_program.get_cloth_program_preview(
+			self.lot.name, excess_percentage=10, additions=self._add_weight(-10)
+		)
+		self.assertEqual(self._lot_state(), before)
+		group = preview["tables"][0]["fabric_groups"][0]
+		self.assertEqual(
+			[(route["dia"], route["total"]) for route in group["routes"]],
+			[("ZZ TEST 14 Dia", 540), ("ZZ TEST 19 Dia", 356)],
+		)
+		self.assertEqual((group["additions"], preview["extra_percentage"]), ({self.white: -10}, 10))
+		self.assertEqual(preview["display_totals"]["program_weight"], 896)
+
+		cloth_program.recalculate_cloth_program(
+			self.lot.name, additions=self._add_weight(-10), excess_percentage=10
+		)
+		self.assertEqual(self._weights(), {self.dia14: 540, self.dia19: 356})
+		self.lot.reload()
+		self.assertEqual(flt(self.lot.cloth_excess_percentage), 10)
+
+	def test_preview_defaults_to_the_saved_percentage_and_add_weight(self):
+		cloth_program.recalculate_cloth_program(
+			self.lot.name, additions=self._add_weight(10), excess_percentage=5
+		)
+		preview = cloth_program.get_cloth_program_preview(self.lot.name)
+		self.assertEqual(preview["extra_percentage"], 5)
+		self.assertEqual(preview["tables"][0]["fabric_groups"][0]["additions"], {self.white: 10})
+		self.assertEqual(preview["display_totals"]["program_weight"], sum(self._weights().values()))
+
+	def test_save_rejects_a_negative_percentage(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "negative"):
+			cloth_program.recalculate_cloth_program(self.lot.name, excess_percentage=-1)
 
 	def test_reduction_below_zero_fails_loudly(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "below 0"):

@@ -1391,17 +1391,55 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 	}
 
 
-@frappe.whitelist()
-def recalculate_cloth_program(lot, modified=None, additions=None):
-	"""Recalculate saved Lot demand without creating or modifying cloth IPDs.
+def _set_program_inputs(lot_doc, excess_percentage=None, additions=None):
+	"""Apply the Build Cloth Program popup's percentage and Add Weight totals in memory.
 
-	``additions`` replaces the Lot's Add Weight totals:
-	[{cloth_item, fabric_type, colour, additional_weight}]."""
+	``additions``: [{cloth_item, fabric_type, colour, additional_weight}]."""
+	if excess_percentage is not None:
+		if flt(excess_percentage) < 0:
+			frappe.throw(_("Cloth Excess Percentage cannot be negative."))
+		lot_doc.cloth_excess_percentage = flt(excess_percentage)
+	if additions is not None:
+		lot_doc.cloth_program_additions = frappe.as_json(
+			{"version": 1, "totals": frappe.parse_json(additions) or [], "routes": []}
+		)
+
+
+@frappe.whitelist()
+def get_cloth_program_preview(lot, excess_percentage=None, additions=None):
+	"""Build Cloth Program popup: the matrix Save would store. Writes nothing."""
+	from essdee_yrp.print_helpers import get_cloth_program_matrix
+
+	lot_doc = frappe.get_doc("SD YRP Lot", lot)
+	lot_doc.check_permission("read")
+	_set_program_inputs(lot_doc, excess_percentage, additions)
+	_store_program_additions(lot_doc, flt(lot_doc.cloth_excess_percentage))
+	fabric_types = get_program_fabric_types(lot_doc)
+	if not fabric_types:
+		frappe.throw(_("This lot has no cloth demand. Run Calculate Order Items first."))
+	rows = [
+		frappe._dict(
+			cloth_item=cloth,
+			dia=dia,
+			colour=colour,
+			weight=sum(values["weight"] for values in types.values()),
+		)
+		for (cloth, dia, colour), types in fabric_types.items()
+	]
+	return get_cloth_program_matrix(lot_doc, rows, fabric_types)
+
+
+@frappe.whitelist()
+def recalculate_cloth_program(lot, modified=None, additions=None, excess_percentage=None):
+	"""Save the Lot's Cloth Program without creating or modifying cloth IPDs.
+
+	``excess_percentage`` and ``additions`` (Add Weight totals) replace the saved ones."""
 	attribute_db.get_value("SD YRP Lot", lot, "name", for_update=True)
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("write")
 	require_cloth_program_role()
 	_guard_not_modified(lot_doc, modified)
+	_set_program_inputs(lot_doc, excess_percentage, additions)
 	if lot_doc.is_transferred or lot_doc.docstatus == 2:
 		frappe.throw(_("Cannot recalculate a transferred or cancelled Lot."))
 	demand = compute_cloth_demand(lot_doc.name, apply_allowance=False)
@@ -1411,7 +1449,9 @@ def recalculate_cloth_program(lot, modified=None, additions=None):
 	payload = {}
 	for (cloth, dia, colour), kg in demand.items():
 		if not linked.get(cloth):
-			frappe.throw(_("Cloth {0} has no linked IPD. Use Build Cloth Programs first.").format(cloth))
+			frappe.throw(
+				_("Cloth {0} has no linked IPD. Use Setup in Build Cloth Program first.").format(cloth)
+			)
 		ipd = frappe.get_doc("YRP Item Production Detail", linked[cloth])
 		if ipd.item != cloth or not ipd.is_cloth_item or ipd.approval_status != "Approved":
 			frappe.throw(
@@ -1419,10 +1459,6 @@ def recalculate_cloth_program(lot, modified=None, additions=None):
 			)
 		payload.setdefault(cloth, {})[(dia, colour)] = flt(kg)
 	excess = flt(lot_doc.get("cloth_excess_percentage"))
-	if additions is not None:
-		lot_doc.cloth_program_additions = frappe.as_json(
-			{"version": 1, "totals": frappe.parse_json(additions) or [], "routes": []}
-		)
 	route_additions = _store_program_additions(lot_doc, excess)
 	_update_cloth_program_quantities(lot_doc, payload, excess, route_additions)
 	lot_doc.reload()

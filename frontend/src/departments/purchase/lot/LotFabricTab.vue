@@ -1,6 +1,7 @@
 <template>
 	<div class="lot-tab-stack">
-		<Button v-if="lot && canWrite" label="Build Cloth Program" icon="pi pi-cog" @click="builderOpen = true" />
+		<Button v-if="lot && canWrite" label="Build Cloth Program" icon="pi pi-cog" @click="buildOpen = true" />
+		<ClothProgramBuildDialog v-if="lot" v-model:visible="buildOpen" :lot="lot" :modified="modified" @saved="emit('changed')" @setup="openSetup" />
 		<ClothProgramDialog v-if="lot" v-model:visible="builderOpen" :lot="lot" :modified="modified" @built="emit('changed')" />
 		<section
 			v-for="(entry, index) in cards"
@@ -87,23 +88,14 @@
 										{{ quantityTotal(section.matrix.total) }}
 									</td>
 								</tr>
-								<tr v-if="section.kind === 'program' && (editable || hasAddWeight(entry, section))" class="lot-add-weight">
+								<tr v-if="section.kind === 'program' && hasAddWeight(entry, section)" class="lot-add-weight">
 									<th>Add Weight</th>
 									<td
 										v-for="colour in section.matrix.colours"
 										:key="colour"
 										class="erp-number"
 									>
-										<InputNumber
-											v-if="editable"
-											v-model="drafts[addWeightKey(entry.cloth_item, section.fabricType, colour)]"
-											:use-grouping="false"
-											:max-fraction-digits="0"
-											:aria-label="`Add Weight ${section.fabricType} ${colour}`"
-											placeholder="0"
-											input-class="lot-add-weight__input"
-										/>
-										<span v-else>{{ signedKg(drafts[addWeightKey(entry.cloth_item, section.fabricType, colour)]) }}</span>
+										{{ signedKg(drafts[addWeightKey(entry.cloth_item, section.fabricType, colour)]) }}
 									</td>
 									<td class="erp-number lot-total">{{ signedKg(addWeightTotal(entry, section)) }}</td>
 								</tr>
@@ -155,25 +147,17 @@
 				/>
 			</div>
 		</section>
-		<div v-if="editable && cards.length" class="lot-add-weight__actions">
-			<small class="lot-muted">
-				The percentage and added weights are saved on this Lot; click Calculate again after editing Add Weight. Negative Kg reduces that colour.
-			</small>
-			<Button label="Calculate" icon="pi pi-calculator" :loading="calculating" @click="calculate" />
-		</div>
 	</div>
 </template>
 
 <script setup>
-import { addWeightDrafts, addWeightKey, programDia, programColour, programFabricTypes, serializeAddWeight } from "../../../engine/lotClothProgram.js"
+import { addWeightDrafts, addWeightKey, programDia, programColour, programFabricTypes } from "../../../engine/lotClothProgram.js"
 import Button from "primevue/button"
-import InputNumber from "primevue/inputnumber"
-import { useToast } from "primevue/usetoast"
-import { callMethod } from "../../../api/frappe.js"
+import ClothProgramBuildDialog from "./ClothProgramBuildDialog.vue"
 import ClothProgramDialog from "./ClothProgramDialog.vue"
 import Message from "primevue/message"
 import Tag from "primevue/tag"
-import { computed, ref, watch } from "vue"
+import { computed, ref } from "vue"
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 
 import LotEmptyState from "./LotEmptyState.vue"
@@ -192,12 +176,14 @@ const props = defineProps({
 	fabrics: { type: Array, default: () => [] },
 })
 const emit = defineEmits(["changed"])
+const buildOpen = ref(false)
 const builderOpen = ref(false)
-const toast = useToast()
-const editable = computed(() => Boolean(props.lot && props.canWrite))
-const drafts = ref({})
-const calculating = ref(false)
-watch(() => props.fabrics, (fabrics) => { drafts.value = addWeightDrafts(fabrics) }, { immediate: true })
+const drafts = computed(() => addWeightDrafts(props.fabrics))
+
+function openSetup() {
+	buildOpen.value = false
+	builderOpen.value = true
+}
 
 function hasAddWeight(entry, section) {
 	return section.matrix.colours.some((colour) => Number(drafts.value[addWeightKey(entry.cloth_item, section.fabricType, colour)]))
@@ -213,21 +199,6 @@ function signedKg(value) {
 	return kg > 0 ? `+${kg}` : kg ? String(kg) : "—"
 }
 
-async function calculate() {
-	calculating.value = true
-	try {
-		await callMethod("essdee_yrp.api.cloth_program.recalculate_cloth_program", {
-			lot: props.lot,
-			modified: props.modified,
-			additions: JSON.stringify(serializeAddWeight(props.fabrics, drafts.value)),
-		})
-		emit("changed")
-	} catch (error) {
-		toast.add({ severity: "error", summary: "Calculate failed", detail: error.message })
-	} finally {
-		calculating.value = false
-	}
-}
 const cards = computed(() => {
 	return props.fabrics.map((entry) => ({
 		...entry,
@@ -274,18 +245,3 @@ function legacyRows(rows) {
 	)
 }
 </script>
-
-<style scoped>
-.lot-add-weight__actions {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-.lot-add-weight :deep(.lot-add-weight__input) {
-	width: 100%;
-	min-width: 64px;
-	text-align: right;
-}
-</style>

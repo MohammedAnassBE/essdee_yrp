@@ -74,15 +74,23 @@ export function addWeightDrafts(fabrics) {
 	return drafts
 }
 
-export function serializeAddWeight(fabrics, drafts) {
-	return fabrics.flatMap((entry) =>
-		programFabricTypes({ program: entry.program || [] }).flatMap(({ fabricType, rows }) =>
-			[...new Set(rows.map(programColour))].sort().map((colour) => ({
-				cloth_item: entry.cloth_item,
-				fabric_type: fabricType,
-				colour,
-				additional_weight: Number(drafts[addWeightKey(entry.cloth_item, fabricType, colour)]) || 0,
-			})),
+// Build Cloth Program popup: one Add Weight input per cloth, fabric type and colour of the preview.
+const previewCells = (preview) =>
+	(preview?.tables || []).flatMap((table) =>
+		(table.fabric_groups || []).flatMap((group) =>
+			table.colours.map((colour) => ({ table, group, colour, key: addWeightKey(table.cloth_item, group.fabric_type, colour) })),
 		),
 	)
+
+export function previewAddWeightDrafts(preview) {
+	return Object.fromEntries(previewCells(preview).map(({ group, colour, key }) => [key, Number(group.additions?.[colour]) || 0]))
+}
+
+export function previewAdditions(preview, drafts) {
+	return previewCells(preview).map(({ table, group, colour, key }) => ({
+		cloth_item: table.cloth_item,
+		fabric_type: group.fabric_type,
+		colour: colour === "No Colour" ? "" : colour,
+		additional_weight: Number(drafts[key]) || 0,
+	}))
 }

@@ -267,15 +267,22 @@ def get_cloth_program_print_data(lot):
 	is read only to split each route into MRP's fabric types and the displayed
 	required/excess totals.
 	"""
-	from essdee_yrp.api.cloth_program import _program_final_route
-	from essdee_yrp.fabric_program import get_program_fabric_types, split_program_weight
+	from essdee_yrp.fabric_program import get_program_fabric_types
 
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
-	fabric_types = get_program_fabric_types(lot_doc)
+	return get_cloth_program_matrix(
+		lot_doc, lot_doc.get("lot_fabric_programs") or [], get_program_fabric_types(lot_doc)
+	)
+
+
+def get_cloth_program_matrix(lot_doc, program_rows, fabric_types):
+	"""Cloth Program print/popup matrix for ``program_rows`` split by fabric type."""
+	from essdee_yrp.api.cloth_program import _program_final_route
+	from essdee_yrp.fabric_program import split_program_weight
 
 	grouped = OrderedDict()
-	for row in lot_doc.get("lot_fabric_programs") or []:
+	for row in program_rows:
 		cloth = grouped.setdefault(
 			row.cloth_item,
 			{"cloth_item": row.cloth_item, "routes": [], "colours": set()},

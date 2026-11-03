@@ -96,6 +96,13 @@
 			:acting="Boolean(acting)"
 			@link="execute('change_ppo', $event)"
 		/>
+		<ClothProgramBuildDialog
+			v-model:visible="buildVisible"
+			:lot="lotId"
+			:modified="workspace.modified || ''"
+			@saved="load"
+			@setup="openClothSetup"
+		/>
 		<MerchClothProgramDialog
 			v-model:visible="clothVisible"
 			:lot-id="lotId"
@@ -150,6 +157,7 @@ import { editTabFor } from "../../purchase/lot/lotEditor.js"
 import { LOT_TABS } from "../../purchase/lot/lotLayout.js"
 import { lotTabCount } from "../../purchase/lot/lotViews.js"
 import { useLotLayout } from "../../purchase/lot/useLotLayout.js"
+import ClothProgramBuildDialog from "../../purchase/lot/ClothProgramBuildDialog.vue"
 import LotFabricTab from "../../purchase/lot/LotFabricTab.vue"
 import LotDiaConversionsTab from "../../purchase/lot/LotDiaConversionsTab.vue"
 import LotEmptyState from "../../purchase/lot/LotEmptyState.vue"
@@ -174,6 +182,7 @@ const actionError = ref("")
 const acting = ref("")
 const ppoVisible = ref(false)
 const clothVisible = ref(false)
+const buildVisible = ref(false)
 const purchaseOrderVisible = ref(false)
 const purchaseOrderMode = ref("link")
 const confirmationVisible = ref(false)
@@ -218,7 +227,7 @@ function selectAction(command) {
 		return
 	}
 	if (command === "build_cloth_programs") {
-		clothVisible.value = true
+		buildVisible.value = true
 		return
 	}
 	if (["link_po", "unlink_po"].includes(command)) {
@@ -228,6 +237,10 @@ function selectAction(command) {
 	}
 	pendingCommand.value = command
 	confirmationVisible.value = true
+}
+function openClothSetup() {
+	buildVisible.value = false
+	clothVisible.value = true
 }
 function confirmCommand() {
 	confirmationVisible.value = false
@@ -279,6 +292,7 @@ watch(
 	() => {
 		ppoVisible.value = false
 		clothVisible.value = false
+		buildVisible.value = false
 		purchaseOrderVisible.value = false
 		load()
 	},

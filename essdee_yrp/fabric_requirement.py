@@ -23,6 +23,7 @@ are seeded from.
 """
 
 import json
+import re
 
 import frappe
 from frappe import _
@@ -60,6 +61,16 @@ def add_cloth_detail(weight, cloth_type, cloth_colour, dia, type, accessory_name
 	if accessory_name:
 		d["accessory_name"] = accessory_name
 	return d
+
+
+def get_fabric_type(requirement_type, accessory_name=None):
+	"""MRP's Cloth Program fabric-type label: Main Fabric, or '<Accessory> Fabric'."""
+	if requirement_type != "accessory":
+		return "Main Fabric"
+	label = re.sub(
+		r"\b\w", lambda match: match.group(0).upper(), " ".join(str(accessory_name or "Accessory").split())
+	)
+	return label if re.search(r"\bFabric$", label, re.IGNORECASE) else f"{label} Fabric"
 
 
 def get_stich_details(ipd_doc):
@@ -294,12 +305,18 @@ def _require_cutting_cloth_mapping(cloth_combination, key):
 
 
 def _aggregate_demand(
-	item_detail, variant_rows, cloth_combination, stitching_combination, cloth_label_to_item
+	item_detail,
+	variant_rows,
+	cloth_combination,
+	stitching_combination,
+	cloth_label_to_item,
+	by_fabric_type=False,
 ):
 	"""variant_rows: list of (attr_values dict, pieces qty). Returns
-	{(cloth Item, dia, colour): kg}. Rows whose cloth LABEL (name1) is not in
-	cloth_label_to_item RAISE — deliberate deviation from production_api: the
-	auto-builder must never under-demand silently."""
+	{(cloth Item, dia, colour): kg}, or {(cloth Item, dia, colour, fabric type): kg}
+	with ``by_fabric_type`` so accessory cloth stays apart like MRP's Cloth Program.
+	Rows whose cloth LABEL (name1) is not in cloth_label_to_item RAISE — deliberate
+	deviation from production_api: the auto-builder must never under-demand silently."""
 	cloth_details = {}
 	unmapped = set()
 	for attr_values, qty in variant_rows:
@@ -312,6 +329,8 @@ def _aggregate_demand(
 				_attribute_value(c1["dia"]),
 				_attribute_value(c1["colour"]),
 			)
+			if by_fabric_type:
+				key = (*key, get_fabric_type(c1["type"], c1.get("accessory_name")))
 			cloth_details.setdefault(key, 0)
 			cloth_details[key] += c1["quantity"]
 	if unmapped:
@@ -368,9 +387,10 @@ def _validate_garment_ipd(item_detail):
 		)
 
 
-def compute_cloth_demand(lot_name, apply_allowance=True):
+def compute_cloth_demand(lot_name, apply_allowance=True, by_fabric_type=False):
 	"""Phase 1 SPLIT entrypoint: {(cloth Item, dia, colour): kg} for a garment Lot,
 	driven by its garment IPD's Cutting tab and the Lot's lot_order_details.
+	``by_fabric_type`` adds the Main/accessory fabric type to each key.
 
 	``apply_allowance=False`` returns the exact decimal garment demand. Cloth
 	Program uses that mode because its popup percentage is the operator's sole
@@ -412,7 +432,12 @@ def compute_cloth_demand(lot_name, apply_allowance=True):
 		variant_rows.append((attr_values, qty))
 
 	demand = _aggregate_demand(
-		item_detail, variant_rows, cloth_combination, stitching_combination, cloth_label_to_item
+		item_detail,
+		variant_rows,
+		cloth_combination,
+		stitching_combination,
+		cloth_label_to_item,
+		by_fabric_type=by_fabric_type,
 	)
 	if not apply_allowance:
 		return demand

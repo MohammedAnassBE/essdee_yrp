@@ -48,7 +48,7 @@
 										{{ colour || "Program" }}
 										<Tag
 											v-if="
-												section.key === 'program' &&
+												section.kind === 'program' &&
 												entry.dyed_yarn_colours?.includes(colour)
 											"
 											value="Dyed Yarn"
@@ -139,7 +139,7 @@
 </template>
 
 <script setup>
-import { programDia, programColour } from "../../../engine/lotClothProgram.js"
+import { programDia, programColour, programFabricTypes } from "../../../engine/lotClothProgram.js"
 import Button from "primevue/button"
 import ClothProgramDialog from "./ClothProgramDialog.vue"
 import Message from "primevue/message"
@@ -174,17 +174,18 @@ const cards = computed(() => {
 })
 
 function fabricMatrices(entry) {
-	return [
-		{
-			key: "program",
-			label: "Knitting Program (Dia × Colour, Kg)",
-			rows: entry.program || [],
+	const fabricTypes = programFabricTypes({ program: entry.program || [] })
+	return fabricTypes
+		.map(({ fabricType, rows }) => ({
+			key: `program:${fabricType}`,
+			kind: "program",
+			label: fabricTypes.length > 1 ? `${fabricType} · Knitting Program (Dia × Colour, Kg)` : "Knitting Program (Dia × Colour, Kg)",
+			rows,
 			options: {
 				dia: programDia,
 				colour: programColour,
 			},
-		},
-	]
+		}))
 		.filter((section) => section.rows.length)
 		.map((section) => ({ ...section, matrix: weightMatrix(section.rows, section.options) }))
 }

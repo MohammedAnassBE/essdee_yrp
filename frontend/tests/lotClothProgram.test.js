@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { programDia, programColour, programDias, programDiasWithQuantity, programColourColumns, programRow, serializeClothProgram } from "../src/engine/lotClothProgram.js"
+import { programDia, programColour, programDias, programDiasWithQuantity, programColourColumns, programFabricTypes, programRow, serializeClothProgram } from "../src/engine/lotClothProgram.js"
 
 const route = (finishedColour, finishedDia, weight) => ({
 	dia: "18 Dia", colour: "Greige", finished_colour: finishedColour, finished_dia: finishedDia,
@@ -65,4 +65,17 @@ test("an empty program has a stable placeholder column and no fabricated rows", 
 	assert.deepEqual(programDias({ program: [] }), [])
 	assert.deepEqual(programColourColumns({ program: [] }), [{ key: "", label: "Program" }])
 	assert.deepEqual(serializeClothProgram([]), [])
+})
+
+test("accessory fabric types get their own rows even on the Main Fabric dia", () => {
+	const split = (row, shares) => ({ ...row, fabric_split: shares.map(([fabric_type, weight]) => ({ fabric_type, weight })) })
+	const entry = { program: [
+		split(route("Red", "20 Dia", 119), [["Main Fabric", 35], ["Folding Fabric", 84]]),
+		split(route("Red", "14 Dia", 134), [["Main Fabric", 134]]),
+		route("Navy", "14 Dia", 50),
+	] }
+	const groups = programFabricTypes(entry)
+	assert.deepEqual(groups.map((group) => group.fabricType), ["Main Fabric", "Folding Fabric"])
+	assert.deepEqual(groups[0].rows.map((row) => [programDia(row), programColour(row), row.weight]), [["20 Dia", "Red", 35], ["14 Dia", "Red", 134], ["14 Dia", "Navy", 50]])
+	assert.deepEqual(groups[1].rows.map((row) => [programDia(row), programColour(row), row.weight]), [["20 Dia", "Red", 84]])
 })

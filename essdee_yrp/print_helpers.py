@@ -263,21 +263,15 @@ def get_cloth_program_print_data(lot):
 
 	Printing must never recalculate or mutate a Lot. The saved program rows are
 	the authoritative quantities created by ``build_cloth_programs``; raw demand
-	is read only to split the displayed required/excess totals.
+	is read only to split each route into MRP's fabric types and the displayed
+	required/excess totals.
 	"""
-	from essdee_yrp.fabric_requirement import compute_cloth_demand
+	from essdee_yrp.api.cloth_program import _program_final_route
+	from essdee_yrp.fabric_program import get_program_fabric_types, split_program_weight
 
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("read")
-	additions_payload = parse_json(lot_doc.get("cloth_program_additions")) or {}
-	addition_by_route = {}
-	for row in additions_payload.get("routes") or []:
-		key = (
-			row.get("cloth_item"),
-			_attribute_value(row.get("dia")),
-			_attribute_value(row.get("colour")) or None,
-		)
-		addition_by_route[key] = addition_by_route.get(key, 0) + flt(row.get("additional_weight"))
+	fabric_types = get_program_fabric_types(lot_doc)
 
 	grouped = OrderedDict()
 	for row in lot_doc.get("lot_fabric_programs") or []:
@@ -287,65 +281,63 @@ def get_cloth_program_print_data(lot):
 		)
 		colour = _attribute_value(row.colour) or "No Colour"
 		cloth["colours"].add(colour)
-		cloth["routes"].append(
-			{
-				"dia": _attribute_value(row.dia) or "No Dia",
-				"colour": colour,
-				"weight": flt(row.weight),
-				"addition": addition_by_route.get(
-					(row.cloth_item, _attribute_value(row.dia), _attribute_value(row.colour) or None), 0
-				),
-			}
-		)
+		for share in split_program_weight(flt(row.weight), fabric_types.get(_program_final_route(row), {})):
+			cloth["routes"].append({**share, "dia": _attribute_value(row.dia) or "No Dia", "colour": colour})
 
 	tables = []
 	for cloth in grouped.values():
 		colours = sorted(cloth["colours"])
-		colour_totals = {colour: 0 for colour in colours}
-		route_rows = OrderedDict()
-		additions = {colour: 0 for colour in colours}
-		for row in cloth["routes"]:
-			route = route_rows.setdefault(
-				_attribute_value(row["dia"]),
+		fabric_groups = OrderedDict()
+		for row in sorted(
+			cloth["routes"], key=lambda route: (route["fabric_type"] != "Main Fabric", route["fabric_type"])
+		):
+			fabric = fabric_groups.setdefault(
+				row["fabric_type"],
 				{
-					"fabric_type": "Main Fabric",
-					"dia": _attribute_value(row["dia"]),
+					"fabric_type": row["fabric_type"],
+					"routes": OrderedDict(),
+					"colour_totals": {colour: 0 for colour in colours},
+					"additions": {colour: 0 for colour in colours},
+				},
+			)
+			route = fabric["routes"].setdefault(
+				row["dia"],
+				{
+					"fabric_type": row["fabric_type"],
+					"dia": row["dia"],
 					"weights": {colour: 0 for colour in colours},
 					"total": 0,
 				},
 			)
-			route["weights"][_attribute_value(row["colour"])] += row["weight"]
+			route["weights"][row["colour"]] += row["weight"]
 			route["total"] += row["weight"]
-			colour_totals[_attribute_value(row["colour"])] += row["weight"]
-			additions[_attribute_value(row["colour"])] += row["addition"]
-		fabric_total = sum(colour_totals.values())
-		fabric_group = {
-			"fabric_type": "Main Fabric",
-			"routes": list(route_rows.values()),
-			"colour_totals": colour_totals,
-			"additions": additions,
-			"additional_total": sum(additions.values()),
-			"total": fabric_total,
-		}
+			fabric["colour_totals"][row["colour"]] += row["weight"]
+			fabric["additions"][row["colour"]] += row["addition"]
+		for fabric in fabric_groups.values():
+			fabric["routes"] = list(fabric["routes"].values())
+			fabric["total"] = sum(fabric["colour_totals"].values())
+			fabric["additional_total"] = sum(fabric["additions"].values())
 		tables.append(
 			{
 				"cloth_item": cloth["cloth_item"],
 				"colours": colours,
-				"routes": list(route_rows.values()),
-				"fabric_groups": [fabric_group],
-				"colour_totals": colour_totals,
-				"total": fabric_total,
+				"routes": [route for fabric in fabric_groups.values() for route in fabric["routes"]],
+				"fabric_groups": list(fabric_groups.values()),
+				"colour_totals": {
+					colour: sum(fabric["colour_totals"][colour] for fabric in fabric_groups.values())
+					for colour in colours
+				},
+				"total": sum(fabric["total"] for fabric in fabric_groups.values()),
 			}
 		)
 
 	program_weight = sum(table["total"] for table in tables)
 	manual_weight = sum(group["additional_total"] for table in tables for group in table["fabric_groups"])
-	try:
-		required_weight = sum(
-			flt(weight) for weight in compute_cloth_demand(lot_doc.name, apply_allowance=False).values()
-		)
-	except frappe.ValidationError, frappe.DoesNotExistError:
-		required_weight = max(program_weight - manual_weight, 0)
+	required_weight = (
+		sum(values["required_weight"] for route in fabric_types.values() for values in route.values())
+		if fabric_types
+		else max(program_weight - manual_weight, 0)
+	)
 
 	cpd_values = []
 	for row in lot_doc.get("lot_fabric_details") or []:

@@ -21,6 +21,7 @@
 						:class="{ 'fp-matrix--compact': program_colour_columns(entry).length <= 2 }">
 						<colgroup>
 							<col class="fp-col-dia" />
+							<col class="fp-col-dia" />
 							<col
 								v-for="colour in program_colour_columns(entry)"
 								:key="colour.key"
@@ -30,6 +31,7 @@
 						</colgroup>
 						<thead>
 							<tr>
+								<th rowspan="2" class="fp-dia">{{ __("Fabric Type") }}</th>
 								<th rowspan="2" class="fp-dia">{{ __("Dia") }}</th>
 								<th :colspan="program_colour_columns(entry).length">
 									{{ __("Cloth Program (Kg)") }}
@@ -53,33 +55,34 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-for="dia in program_dias(entry)" :key="dia">
-								<td class="fp-dia">{{ dia }}</td>
+							<tr v-for="line in program_lines(entry)" :key="line.fabric_type + line.dia">
+								<td class="fp-dia">{{ line.fabric_type }}</td>
+								<td class="fp-dia">{{ line.dia }}</td>
 								<td
 									v-for="colour in program_colour_columns(entry)"
 									:key="colour.key"
 									class="fp-num"
 								>
 									<input
-										v-if="editable"
-										:value="program_weight(entry, dia, colour.key)"
+										v-if="editable && is_owner_share(entry, line, colour.key)"
+										:value="line_weight(entry, line, colour.key)"
 										type="number"
 										min="0"
 										step="0.001"
 										class="fp-input"
-										@change="set_program_weight(entry, dia, colour.key, $event.target.value)"
+										@change="set_line_weight(entry, line, colour.key, $event.target.value)"
 									/>
-									<span v-else>{{ program_weight(entry, dia, colour.key) }}</span>
+									<span v-else>{{ line_weight(entry, line, colour.key) }}</span>
 								</td>
-								<td class="fp-num fp-program">{{ program_dia_total(entry, dia) }}</td>
+								<td class="fp-num fp-program">{{ line_total(entry, line) }}</td>
 							</tr>
 							<tr v-if="!program_dias(entry).length">
-								<td :colspan="program_colour_columns(entry).length + 2" class="fp-none">
+								<td :colspan="program_colour_columns(entry).length + 3" class="fp-none">
 									{{ __("No knitting program yet") }}
 								</td>
 							</tr>
 							<tr v-else class="fp-total">
-								<td>{{ __("Total") }}</td>
+								<td colspan="2">{{ __("Total") }}</td>
 								<td
 									v-for="colour in program_colour_columns(entry)"
 									:key="colour.key"
@@ -193,25 +196,62 @@ function program_row(entry, dia, colour) {
 		(row) => program_dia(row) === dia && program_colour(row) === colour);
 }
 
-function program_weight(entry, dia, colour) {
-	return round_kg(program_row(entry, dia, colour)?.weight);
+// MRP splits each route into fabric types; accessory shares come from demand,
+// so only the first (Main Fabric) share of a route is editable.
+function fabric_shares(row) {
+	return row.fabric_split || [{ fabric_type: "Main Fabric", weight: row.weight }];
 }
 
-function set_program_weight(entry, dia, colour, value) {
+function fabric_share(entry, line, colour) {
+	const row = program_row(entry, line.dia, colour);
+	return row && fabric_shares(row).find((share) => share.fabric_type === line.fabric_type);
+}
+
+function program_lines(entry) {
+	const lines = new Map();
+	for (const row of entry.program) {
+		for (const share of fabric_shares(row)) {
+			const line = { fabric_type: share.fabric_type, dia: program_dia(row) };
+			lines.set(line.fabric_type + "\u0000" + line.dia, line);
+		}
+	}
+	return [...lines.values()].sort((a, b) =>
+		(a.fabric_type !== "Main Fabric") - (b.fabric_type !== "Main Fabric")
+		|| a.fabric_type.localeCompare(b.fabric_type)
+		|| dia_number(a.dia) - dia_number(b.dia) || String(a.dia).localeCompare(String(b.dia)));
+}
+
+function is_owner_share(entry, line, colour) {
+	const row = program_row(entry, line.dia, colour);
+	return !row || fabric_shares(row)[0].fabric_type === line.fabric_type;
+}
+
+function line_weight(entry, line, colour) {
+	return round_kg(fabric_share(entry, line, colour)?.weight);
+}
+
+function line_total(entry, line) {
+	return round_kg(program_colour_columns(entry).reduce(
+		(sum, colour) => sum + (Number(fabric_share(entry, line, colour.key)?.weight) || 0), 0));
+}
+
+function set_line_weight(entry, line, colour, value) {
 	const weight = Math.max(0, Number(value) || 0);
-	const row = program_row(entry, dia, colour);
-	if (row) row.weight = weight;
+	const row = program_row(entry, line.dia, colour);
+	if (!row) return;
+	const share = fabric_share(entry, line, colour);
+	if (row.fabric_split && share) {
+		row.weight = (Number(row.weight) || 0) - (Number(share.weight) || 0) + weight;
+		share.weight = weight;
+	} else {
+		row.weight = weight;
+	}
 	mark_dirty();
 }
 
 function program_colour_total(entry, colour) {
 	return round_kg(entry.program.reduce(
 		(sum, row) => sum + (program_colour(row) === colour ? Number(row.weight) || 0 : 0), 0));
-}
-
-function program_dia_total(entry, dia) {
-	return round_kg(entry.program.reduce(
-		(sum, row) => sum + (program_dia(row) === dia ? Number(row.weight) || 0 : 0), 0));
 }
 
 function program_total(entry) {

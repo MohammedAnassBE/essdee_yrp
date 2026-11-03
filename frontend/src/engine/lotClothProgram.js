@@ -35,6 +35,20 @@ export function programRow(entry, dia, colour) {
 	return entry.program.find((row) => programDia(row) === dia && programColour(row) === colour)
 }
 
+// MRP's Cloth Program splits each route by fabric type (Main Fabric, then accessories).
+export function programFabricTypes(entry) {
+	const groups = new Map()
+	for (const row of entry.program) {
+		for (const share of row.fabric_split || [{ fabric_type: "Main Fabric", weight: row.weight }]) {
+			if (!groups.has(share.fabric_type)) groups.set(share.fabric_type, [])
+			groups.get(share.fabric_type).push({ ...row, weight: share.weight })
+		}
+	}
+	return [...groups]
+		.sort(([a], [b]) => (a !== "Main Fabric") - (b !== "Main Fabric") || a.localeCompare(b))
+		.map(([fabricType, rows]) => ({ fabricType, rows }))
+}
+
 export function serializeClothProgram(entries) {
 	return entries.map((entry) => ({
 		cloth_item: entry.cloth_item,

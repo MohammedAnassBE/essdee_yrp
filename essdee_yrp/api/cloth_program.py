@@ -46,8 +46,9 @@ from essdee_yrp.fabric_ipd import (
 from essdee_yrp.fabric_program import (
 	get_greige_colour,
 	get_knitting_output_colour_map,
+	get_program_fabric_types,
 )
-from essdee_yrp.fabric_requirement import compute_cloth_demand
+from essdee_yrp.fabric_requirement import compute_cloth_demand, get_fabric_type
 
 # Build Cloth Programs asks two colour-level questions: whether the input is
 # dyed yarn and whether Knitting outputs the Finished Colour. The physical
@@ -1168,8 +1169,10 @@ def _round_program_weight(value):
 	return math.ceil(value) if value - floor > 0.5 else floor
 
 
-def _synced_program_route_additions(value):
-	"""Return MRP's resolved per-route whole-kg additions keyed for this Lot."""
+def _synced_program_route_additions(value, by_fabric_type=False):
+	"""Return MRP's resolved per-route whole-kg additions keyed for this Lot.
+
+	``by_fabric_type`` adds MRP's Main/accessory fabric type to each key."""
 	if not value:
 		return {}
 	if isinstance(value, str):
@@ -1192,6 +1195,8 @@ def _synced_program_route_additions(value):
 		)
 		if not all(key[:2]) or weight <= 0:
 			continue
+		if by_fabric_type:
+			key = (*key, get_fabric_type(row.get("requirement_type"), row.get("accessory_name")))
 		additions[key] = additions.get(key, 0) + _round_program_weight(weight)
 	return additions
 
@@ -1443,6 +1448,7 @@ def _update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_
 	lot_doc.flags.force_fabric_plan_rebuild = True
 	lot_doc.fabric_requirement_details = frappe.as_json(_requirement_payload(payload))
 	lot_doc.save(ignore_permissions=True)
+	fabric_types = get_program_fabric_types(lot_doc)
 	for row in attribute_db.get_all(
 		"SD YRP Lot Fabric Program",
 		filters={"parent": lot_doc.name, "parenttype": "SD YRP Lot"},
@@ -1463,12 +1469,19 @@ def _update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_
 				and not flt(row.weight)
 			):
 				continue
-			base_weight = _exact_program_base_weight(row, payload)
+			# MRP rounds each fabric type (Main, accessory) of a route on its own.
+			if route_fabric_types := fabric_types.get(route_key):
+				weight = sum(values["weight"] for values in route_fabric_types.values())
+			else:
+				base_weight = _exact_program_base_weight(row, payload)
+				weight = _round_program_weight(base_weight * excess_factor) + route_additions.get(
+					route_key, 0
+				)
 			attribute_db.set_value(
 				"SD YRP Lot Fabric Program",
 				row.name,
 				"weight",
-				_round_program_weight(base_weight * excess_factor) + route_additions.get(route_key, 0),
+				weight,
 				update_modified=False,
 			)
 

@@ -16,7 +16,7 @@ from yrp.attribute_links import value as _attribute_value
 from yrp.attribute_values import ensure_value_master, get_mapping_values
 from yrp.yrp.doctype.yrp_item.yrp_item import ensure_global_attribute_values
 
-from essdee_yrp import fabric_plan
+from essdee_yrp import fabric_plan, fabric_program
 from essdee_yrp.api import cloth_program
 from essdee_yrp.api.cloth_program import (
 	_ensure_lot_fabric_detail,
@@ -40,8 +40,10 @@ from essdee_yrp.fabric_program import (
 	get_fabric_program_details,
 	get_knitting_output_colour,
 	get_knitting_output_colour_map,
+	split_program_weight,
 )
 from essdee_yrp.ipd_validations import allow_generated_cloth_ipd_insert
+from essdee_yrp.print_helpers import get_cloth_program_print_data
 
 
 def _ensure_item_group(name="_Test CPD Group"):
@@ -2450,6 +2452,114 @@ class TestClothProgram(IntegrationTestCase):
 					],
 				}
 			)
+
+	def test_accessory_fabric_type_is_split_from_main_fabric_at_the_same_dia(self):
+		# MRP F0826-38 shape: Folding accessory cloth gets its own Folding Fabric
+		# row even when its cloth/Dia/Colour route equals the Main Fabric route.
+		dia = _attribute_value(self.dia)
+		lot = frappe.get_doc(
+			{
+				"doctype": "SD YRP Lot",
+				"lot_name": "_Test CPD Lot Accessory Split",
+				"cloth_program_additions": frappe.as_json(
+					{
+						"routes": [
+							{
+								"cloth_item": self.cloth,
+								"requirement_type": "accessory",
+								"accessory_name": "Folding",
+								"colour": self.red,
+								"dia": dia,
+								"additional_weight": 2,
+							}
+						],
+					}
+				),
+			}
+		).insert(ignore_permissions=True)
+		by_type = {
+			(self.cloth, dia, self.red, "Main Fabric"): 33.3,
+			(self.cloth, dia, self.red, "Folding Fabric"): 80.0,
+		}
+
+		def demand(_lot, apply_allowance=True, by_fabric_type=False):
+			if by_fabric_type:
+				return by_type
+			return {(self.cloth, dia, self.red): 113.3}
+
+		with (
+			patch.object(cloth_program, "compute_cloth_demand", side_effect=demand),
+			patch.object(fabric_program, "compute_cloth_demand", side_effect=demand),
+		):
+			build_cloth_programs(lot.name, [self.selection], excess_percentage=4.8)
+			lot.reload()
+			program = next(row for row in lot.lot_fabric_programs if row.cloth_item == self.cloth)
+			# round(113.3 * 1.048) + 2 added kg; MRP shows 35 Main + (84 + 2) Folding.
+			self.assertEqual(flt(program.weight), 121)
+
+			display = fetch_fabric_program_details(lot)[0]["program"][0]
+			self.assertEqual(
+				[(row["fabric_type"], row["weight"]) for row in display["fabric_split"]],
+				[("Main Fabric", 35), ("Folding Fabric", 86)],
+			)
+
+			printed = get_cloth_program_print_data(lot.name)
+
+		groups = printed["tables"][0]["fabric_groups"]
+		self.assertEqual([group["fabric_type"] for group in groups], ["Main Fabric", "Folding Fabric"])
+		self.assertEqual(
+			[
+				(route["fabric_type"], route["dia"], route["weights"])
+				for group in groups
+				for route in group["routes"]
+			],
+			[("Main Fabric", dia, {self.red: 35}), ("Folding Fabric", dia, {self.red: 86})],
+		)
+		self.assertEqual([group["additions"] for group in groups], [{self.red: 0}, {self.red: 2}])
+		self.assertEqual(printed["tables"][0]["total"], 121)
+		self.assertEqual(printed["display_totals"]["required_weight"], 113.3)
+
+	def test_program_weight_rounds_each_fabric_type_like_mrp(self):
+		# MRP rounds Main 10.4 -> 10 and Folding 10.4 -> 10 separately (20 kg),
+		# not the merged 20.8 -> 21 kg.
+		dia = _attribute_value(self.dia)
+		lot = frappe.get_doc({"doctype": "SD YRP Lot", "lot_name": "_Test CPD Lot Type Rounding"}).insert(
+			ignore_permissions=True
+		)
+		by_type = {
+			(self.cloth, dia, self.red, "Main Fabric"): 10.4,
+			(self.cloth, dia, self.red, "Folding Fabric"): 10.4,
+		}
+
+		def demand(_lot, apply_allowance=True, by_fabric_type=False):
+			return by_type if by_fabric_type else {(self.cloth, dia, self.red): 20.8}
+
+		with (
+			patch.object(cloth_program, "compute_cloth_demand", side_effect=demand),
+			patch.object(fabric_program, "compute_cloth_demand", side_effect=demand),
+		):
+			build_cloth_programs(lot.name, [self.selection])
+		lot.reload()
+		program = next(row for row in lot.lot_fabric_programs if row.cloth_item == self.cloth)
+		self.assertEqual(flt(program.weight), 20)
+
+	def test_split_program_weight_gives_manual_edits_to_main_fabric(self):
+		fabric_types = {
+			"Folding Fabric": {"weight": 84, "addition": 0},
+			"Main Fabric": {"weight": 35, "addition": 0},
+		}
+		self.assertEqual(
+			[(row["fabric_type"], row["weight"]) for row in split_program_weight(125, fabric_types)],
+			[("Main Fabric", 41), ("Folding Fabric", 84)],
+		)
+		self.assertEqual(
+			[(row["fabric_type"], row["weight"]) for row in split_program_weight(12, {})],
+			[("Main Fabric", 12)],
+		)
+		self.assertEqual(
+			[(row["fabric_type"], row["weight"]) for row in split_program_weight(60, fabric_types)],
+			[("Main Fabric", 17.647), ("Folding Fabric", 42.353)],
+		)
 
 	def test_build_cloth_programs_rejects_negative_excess(self):
 		lot = frappe.get_doc(

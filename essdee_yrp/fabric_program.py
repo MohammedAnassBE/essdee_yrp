@@ -27,6 +27,7 @@ from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings impor
 	get_colour_attribute,
 	get_dia_attribute,
 )
+from essdee_yrp.fabric_requirement import compute_cloth_demand, get_fabric_type
 from essdee_yrp.ipd_validations import get_ipd_attribute_values
 
 
@@ -36,6 +37,7 @@ def fetch_fabric_program_details(lot_doc):
 	program_rows = lot_doc.get("lot_fabric_programs") or []
 	requirement_rows = lot_doc.get("lot_fabric_requirements") or []
 	ledger_rows = lot_doc.get("lot_fabric_step_ledger") or []
+	fabric_types = get_program_fabric_types(lot_doc) if program_rows else {}
 	for fabric in lot_doc.get("lot_fabric_details") or []:
 		if not fabric.production_detail:
 			continue
@@ -45,6 +47,9 @@ def fetch_fabric_program_details(lot_doc):
 			ipd,
 			[r for r in program_rows if r.cloth_item == fabric.cloth_item],
 		)
+		for payload in current_program:
+			route = (fabric.cloth_item, payload["finished_dia"], payload["finished_colour"] or None)
+			payload["fabric_split"] = split_program_weight(payload["weight"], fabric_types.get(route, {}))
 		entries.append(
 			{
 				"cloth_item": fabric.cloth_item,
@@ -155,6 +160,58 @@ def _current_program_payloads(ipd, rows):
 			continue
 		payloads.append(payload)
 	return payloads
+
+
+def get_program_fabric_types(lot_doc):
+	"""MRP's expected kg per fabric type for each final program route.
+
+	Returns {(cloth, dia, colour): {fabric type: {required_weight, weight, addition}}}.
+	A Lot whose demand cannot be computed shows its program unsplit.
+	"""
+	from essdee_yrp.api.cloth_program import _round_program_weight, _synced_program_route_additions
+
+	muted = frappe.flags.mute_messages
+	frappe.flags.mute_messages = True
+	try:
+		demand = compute_cloth_demand(lot_doc.name, apply_allowance=False, by_fabric_type=True)
+	except frappe.ValidationError, frappe.DoesNotExistError:
+		return {}
+	finally:
+		frappe.flags.mute_messages = muted
+	excess_factor = 1 + flt(lot_doc.get("cloth_excess_percentage")) / 100
+	additions = _synced_program_route_additions(lot_doc.get("cloth_program_additions"), by_fabric_type=True)
+	routes = {}
+	for (cloth, dia, colour, fabric_type), kg in demand.items():
+		route = (cloth, dia, colour or None)
+		addition = additions.get((*route, fabric_type), 0)
+		routes.setdefault(route, {})[fabric_type] = {
+			"required_weight": flt(kg),
+			"weight": _round_program_weight(flt(kg) * excess_factor) + addition,
+			"addition": addition,
+		}
+	return routes
+
+
+def split_program_weight(weight, fabric_types):
+	"""Split one saved route's kg into MRP's fabric-type rows, Main Fabric first.
+
+	Accessory rows keep their expected kg; Main Fabric takes the rest, so manual
+	program edits stay on it. A route below its accessory demand splits pro rata.
+	"""
+	main = get_fabric_type("cloth")
+	ordered = sorted(fabric_types.items(), key=lambda item: (item[0] != main, item[0]))
+	shares = [
+		{"fabric_type": fabric_type, "weight": flt(values["weight"]), "addition": flt(values["addition"])}
+		for fabric_type, values in ordered
+	] or [{"fabric_type": main, "weight": 0, "addition": 0}]
+	others = sum(share["weight"] for share in shares[1:])
+	if others <= flt(weight):
+		shares[0]["weight"] = flt(weight) - others
+		return shares
+	expected = others + shares[0]["weight"]
+	for share in shares:
+		share["weight"] = flt(flt(weight) * share["weight"] / expected, 3)
+	return shares
 
 
 def _final_options(ipd):

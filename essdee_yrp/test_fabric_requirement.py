@@ -15,6 +15,7 @@ from essdee_yrp.fabric_requirement import (
 	_validate_garment_ipd,
 	calculate_cloth,
 	get_cloth_combination,
+	get_fabric_type,
 	get_stitching_combination,
 	get_unmapped_accessories,
 )
@@ -354,6 +355,51 @@ class TestFabricRequirement(IntegrationTestCase):
 		self.assertEqual(len(acc), 1)
 		self.assertEqual((acc[0]["dia"], acc[0]["colour"]), ("34 Dia", "Navy"))
 		self.assertAlmostEqual(acc[0]["quantity"], 0.01, places=4)
+
+	def test_aggregate_keeps_accessory_fabric_type_apart_at_the_same_dia(self):
+		# MRP F0826-38: the Folding accessory is its own "Folding Fabric" row,
+		# never folded into the Main Fabric row of the same cloth/dia/colour.
+		ipd = _aishwarya_garment_ipd()
+		ipd.cloth_accessory_json = json.dumps(
+			{"attributes": [], "items": [{"Accessory": "Folding", "Dia": "14 Dia", "Weight": 0.002}]}
+		)
+		ipd.accessory_clothtype_json = json.dumps({"Folding": "MAIN FABRIC"})
+		ipd.stiching_accessory_json = json.dumps(
+			{
+				"items": [
+					{
+						"accessory": "Folding",
+						"major_colour": "Navy",
+						"accessory_colour": "Navy",
+						"cloth_type": "MAIN FABRIC",
+					}
+				]
+			}
+		)
+		cc = get_cloth_combination(ipd)
+		sc = get_stitching_combination(ipd)
+		rows = [({"Size": "80 cm", "Colour": "Navy"}, 100)]
+		labels = {"MAIN FABRIC": "Cotton"}
+
+		split = _aggregate_demand(ipd, rows, cc, sc, labels, by_fabric_type=True)
+		self.assertEqual(
+			set(split),
+			{
+				("Cotton", "14 Dia", "Navy", "Main Fabric"),
+				("Cotton", "14 Dia", "Navy", "Folding Fabric"),
+			},
+		)
+		self.assertAlmostEqual(split[("Cotton", "14 Dia", "Navy", "Main Fabric")], 2.9, places=4)
+		self.assertAlmostEqual(split[("Cotton", "14 Dia", "Navy", "Folding Fabric")], 0.2, places=4)
+
+		merged = _aggregate_demand(ipd, rows, cc, sc, labels)
+		self.assertEqual(list(merged), [("Cotton", "14 Dia", "Navy")])
+		self.assertAlmostEqual(merged[("Cotton", "14 Dia", "Navy")], 3.1, places=4)
+
+	def test_fabric_type_label_matches_mrp(self):
+		self.assertEqual(get_fabric_type("cloth"), "Main Fabric")
+		self.assertEqual(get_fabric_type("accessory", "folding"), "Folding Fabric")
+		self.assertEqual(get_fabric_type("accessory", "Neck  Rib Fabric"), "Neck Rib Fabric")
 
 	def test_renamed_accessory_without_consumption_raises(self):
 		# POLO FLAT KNIT T SHIRT_FK72_B-1: the accessory was renamed to NECK SERI FOLDING

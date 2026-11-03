@@ -1339,7 +1339,7 @@
   "no_copy": 0,
   "non_negative": 0,
   "options": "SD YRP Product Category",
-  "permlevel": 1,
+  "permlevel": 0,
   "placeholder": null,
   "precision": "",
   "print_hide": 0,

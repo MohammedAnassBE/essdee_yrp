@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import add_months, getdate
+from frappe.utils import add_days, add_months, getdate
 
 DIRECTIONS = ("inward", "outward")
 
@@ -71,7 +71,7 @@ MULTI_SELECT_FILTERS = ("item", "item_group")
 BALANCE_KEY = "sle.item, sle.warehouse, IFNULL(sle.lot, ''), IFNULL(sle.received_type, '')"
 BALANCE_LEDGER = """FROM `tabYRP Stock Ledger Entry` sle
 	JOIN `tabItem` variant ON variant.name = sle.item
-	WHERE sle.is_cancelled = 0 AND sle.docstatus < 2 AND sle.posting_date <= %(to_date)s"""
+	WHERE sle.is_cancelled = 0 AND sle.docstatus < 2 AND sle.posting_date <= %(balance_date)s"""
 RECONCILIATION = "'YRP Stock Reconciliation'"
 BALANCE_QUERY = f"""SELECT {BALANCE_KEY}, SUM(sle.qty) {BALANCE_LEDGER} {{conditions}}
 	AND sle.voucher_type != {RECONCILIATION}
@@ -87,7 +87,7 @@ RECONCILED_BALANCE_QUERY = f"""SELECT recon.item, recon.warehouse, recon.lot, re
 	) recon
 	LEFT JOIN `tabYRP Stock Ledger Entry` later ON later.item = recon.item AND later.warehouse = recon.warehouse
 		AND IFNULL(later.lot, '') = recon.lot AND IFNULL(later.received_type, '') = recon.received_type
-		AND later.is_cancelled = 0 AND later.docstatus < 2 AND later.posting_date <= %(to_date)s
+		AND later.is_cancelled = 0 AND later.docstatus < 2 AND later.posting_date <= %(balance_date)s
 		AND later.voucher_type != {RECONCILIATION}
 		AND (later.posting_datetime, later.creation) > (recon.posting_datetime, recon.creation)
 	WHERE recon.position = 1
@@ -204,15 +204,18 @@ def get_data(filters, view, months):
 	rows = get_bucket_rows(filters, view)
 	if view == "month_wise":
 		rows = get_month_rows(rows, months)
-	balances = get_stock_balances(filters, {row["item_variant"] for row in rows})
+	variants = {row["item_variant"] for row in rows}
+	openings = get_stock_balances(filters, variants, add_days(filters.from_date, -1))
+	balances = get_stock_balances(filters, variants, filters.to_date)
 	for row in rows:
 		key = (row["item_variant"], row["warehouse"], row["lot"] or "", row["received_type"] or "")
+		row["opening_stock"] = openings.get(key, 0.0)
 		row["stock_balance"] = balances.get(key, 0.0)
 	return rows
 
 
-def get_stock_balances(filters, variants):
-	"""Closing qty at To Date per variant, warehouse, lot and received type, computed like YRP Stock Balance.
+def get_stock_balances(filters, variants, balance_date):
+	"""Closing qty at balance_date per variant, warehouse, lot and received type, computed like YRP Stock Balance.
 
 	The latest Stock Reconciliation entry sets the balance to its qty_after_transaction; later entries add qty.
 	"""
@@ -223,7 +226,7 @@ def get_stock_balances(filters, variants):
 		for field, condition in FILTER_CONDITIONS.items()
 		if field != "supplier" and filters.get(field)
 	)
-	values = {**filters, "variants": tuple(variants)}
+	values = {**filters, "variants": tuple(variants), "balance_date": balance_date}
 	balances = {}
 	for query in (BALANCE_QUERY, RECONCILED_BALANCE_QUERY):
 		rows = frappe.db.sql(query.format(conditions=f" AND sle.item IN %(variants)s{conditions}"), values)
@@ -292,6 +295,7 @@ def get_columns(view, months):
 		columns.append(qty_column(_("Total Inward"), "total_inward"))
 		columns.append(qty_column(_("Total Outward"), "total_outward"))
 	columns.append(qty_column(_("Difference"), "difference"))
+	columns.append({**qty_column(_("Opening Stock"), "opening_stock"), "disable_total": 1})
 	columns.append({**qty_column(_("Stock Balance"), "stock_balance"), "disable_total": 1})
 	return columns
 

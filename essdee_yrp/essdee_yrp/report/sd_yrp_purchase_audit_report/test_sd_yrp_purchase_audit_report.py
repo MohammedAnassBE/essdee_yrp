@@ -174,7 +174,9 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		self.make_all_movements()
 		columns, _rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "summarized_view": 1})
 		fields = [column["fieldname"] for column in columns]
-		self.assertEqual(fields[-4:], ["total_inward", "total_outward", "difference", "stock_balance"])
+		self.assertEqual(
+			fields[-5:], ["total_inward", "total_outward", "difference", "opening_stock", "stock_balance"]
+		)
 		self.assertNotIn("po_grn", fields)
 
 	def test_month_wise_report_splits_totals_per_month(self):
@@ -198,6 +200,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 				"Total Inward",
 				"Total Outward",
 				"Difference",
+				"Opening Stock",
 				"Stock Balance",
 			],
 		)
@@ -294,3 +297,28 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 				self.assertEqual(
 					{row["lot"]: row["stock_balance"] for row in rows}, {moved: 56, reconciled: 25}
 				)
+
+	def test_opening_stock_is_balance_before_from_date(self):
+		receipt = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		issue = self.make_voucher("YRP Stock Entry", purpose="Material Issue")
+		reconciliation = self.make_voucher("YRP Stock Reconciliation")
+		moved, reconciled = f"LOT-{self.key}", f"RECON-{self.key}"
+		self.add_entry(receipt, 50, date="2099-03-01", lot=moved)
+		self.add_entry(receipt, 10, lot=moved)
+		self.add_entry(issue, -4, lot=moved)
+		self.add_entry(receipt, 7, date="2099-03-01", lot=reconciled)
+		self.add_entry(reconciliation, 0, date="2099-03-05", lot=reconciled, qty_after_transaction=20)
+		self.add_entry(receipt, 3, date="2099-03-09", lot=reconciled)
+		self.add_entry(receipt, 5, lot=reconciled)
+		for view in ({}, {"summarized_view": 1}):
+			with self.subTest(view=view):
+				columns, rows = execute(
+					{"from_date": DATE, "to_date": NEXT_DATE, "warehouse": self.warehouse, **view}
+				)
+				fields = [column["fieldname"] for column in columns]
+				self.assertEqual(fields[-2:], ["opening_stock", "stock_balance"])
+				self.assertEqual(
+					{row["lot"]: row["opening_stock"] for row in rows}, {moved: 50, reconciled: 23}
+				)
+				for row in rows:
+					self.assertEqual(row["opening_stock"] + row["difference"], row["stock_balance"])

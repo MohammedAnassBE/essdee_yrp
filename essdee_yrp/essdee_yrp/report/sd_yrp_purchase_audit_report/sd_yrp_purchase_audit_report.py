@@ -5,6 +5,7 @@ from frappe.utils import add_days, add_months, getdate
 DIRECTIONS = ("inward", "outward")
 
 TRANSFER_PURPOSES = "('Send to Warehouse', 'Receive at Warehouse')"
+LOT_TRANSFER = "sle.voucher_type = 'SD YRP Lot Transfer'"
 
 INWARD_COLUMNS = (
 	(
@@ -16,6 +17,7 @@ INWARD_COLUMNS = (
 	("added_stock", _("Added Stock"), "su.update_type = 'Add'"),
 	("received_warehouse", _("Received Warehouse"), f"se.purpose IN {TRANSFER_PURPOSES}"),
 	("conversion_inward", _("Conversion Inward"), "sle.voucher_type = 'SD YRP Item Conversion'"),
+	("lot_transfer_in", _("Lot Transfer In"), LOT_TRANSFER),
 	("other_inward", _("Other Inward"), "1 = 1"),
 )
 OUTWARD_COLUMNS = (
@@ -24,15 +26,23 @@ OUTWARD_COLUMNS = (
 	("reduced_stock", _("Reduced Stock"), "su.update_type = 'Reduce'"),
 	("sent_warehouse", _("Sent Warehouse"), f"se.purpose IN {TRANSFER_PURPOSES}"),
 	("conversion_outward", _("Conversion Outward"), "sle.voucher_type = 'SD YRP Item Conversion'"),
+	("lot_transfer_out", _("Lot Transfer Out"), LOT_TRANSFER),
 	("other_outward", _("Other Outward"), "1 = 1"),
 )
 
-SUPPLIER = """CASE sle.voucher_type
+INWARD_SUPPLIER = """CASE sle.voucher_type
 	WHEN 'YRP Goods Received Note' THEN grn.supplier
 	WHEN 'YRP Delivery Challan' THEN dc.supplier
 	WHEN 'YRP Stock Entry' THEN se.transfer_supplier
 	WHEN 'YRP Stock Update' THEN su.supplier
 END"""
+OUTWARD_SUPPLIER = """CASE sle.voucher_type
+	WHEN 'YRP Goods Received Note' THEN grn.supplier
+	WHEN 'YRP Delivery Challan' THEN dc.from_location
+	WHEN 'YRP Stock Entry' THEN COALESCE(NULLIF(se.from_supplier, ''), se.transfer_supplier)
+	WHEN 'YRP Stock Update' THEN su.supplier
+END"""
+SUPPLIER = f"IF(sle.qty > 0, {INWARD_SUPPLIER}, {OUTWARD_SUPPLIER})"
 
 PERIODS = {
 	"detailed": (),
@@ -46,15 +56,12 @@ DIMENSIONS = (
 	(ITEM_EXPRESSION, "item"),
 	("sle.item", "item_variant"),
 	("variant.item_group", "item_group"),
-	("supplier.name", "supplier"),
-	("supplier.supplier_name", "supplier_name"),
 	("sle.warehouse", "warehouse"),
 	("sle.lot", "lot"),
 	("sle.received_type", "received_type"),
 )
 
 FILTER_CONDITIONS = {
-	"supplier": "supplier.name = %(supplier)s",
 	"warehouse": "sle.warehouse = %(warehouse)s",
 	"item": f"{ITEM_EXPRESSION} IN %(item)s",
 	"item_variant": "sle.item = %(item_variant)s",
@@ -92,6 +99,25 @@ RECONCILED_BALANCE_QUERY = f"""SELECT recon.item, recon.warehouse, recon.lot, re
 		AND (later.posting_datetime, later.creation) > (recon.posting_datetime, recon.creation)
 	WHERE recon.position = 1
 	GROUP BY recon.item, recon.warehouse, recon.lot, recon.received_type, recon.qty_after_transaction"""
+RECONCILIATION_ADJUSTMENT_QUERY = f"""SELECT item, warehouse, lot, received_type,
+	SUM(qty_after_transaction - COALESCE(previous_qty, 0) - running_qty + COALESCE(previous_running_qty, 0))
+	FROM (
+		SELECT ledger.*,
+			LAG(qty_after_transaction) OVER key_order AS previous_qty,
+			LAG(running_qty) OVER key_order AS previous_running_qty
+		FROM (
+			SELECT sle.item, sle.warehouse, IFNULL(sle.lot, '') AS lot, IFNULL(sle.received_type, '') AS received_type,
+				sle.voucher_type, sle.posting_date, sle.posting_datetime, sle.creation, sle.qty_after_transaction,
+				SUM(IF(sle.voucher_type = {RECONCILIATION}, 0, sle.qty)) OVER (
+					PARTITION BY {BALANCE_KEY} ORDER BY sle.posting_datetime, sle.creation ROWS UNBOUNDED PRECEDING
+				) AS running_qty
+			{BALANCE_LEDGER} {{conditions}}
+		) ledger
+		WHERE voucher_type = {RECONCILIATION}
+		WINDOW key_order AS (PARTITION BY item, warehouse, lot, received_type ORDER BY posting_datetime, creation)
+	) recon
+	WHERE posting_date >= %(from_date)s
+	GROUP BY item, warehouse, lot, received_type"""
 
 
 def execute(filters=None):
@@ -176,13 +202,16 @@ def get_ledger_rows(filters, view):
 		"sle.is_cancelled = 0",
 		"sle.docstatus = 1",
 		"sle.posting_date BETWEEN %(from_date)s AND %(to_date)s",
+		f"sle.voucher_type != {RECONCILIATION}",
 	]
 	conditions += [condition for field, condition in FILTER_CONDITIONS.items() if filters.get(field)]
 	group_fields = [expression for expression, _alias in DIMENSIONS + period]
 	order_fields = [alias for _expression, alias in period + DIMENSIONS]
 	return frappe.db.sql(
 		f"""
-		SELECT {", ".join(selects)}, {get_bucket_expression()} AS bucket, SUM(ABS(sle.qty)) AS qty
+		SELECT {", ".join(selects)}, {get_bucket_expression()} AS bucket, SUM(ABS(sle.qty)) AS qty,
+			GROUP_CONCAT(DISTINCT IF(sle.qty > 0, supplier.name, NULL)) AS suppliers,
+			MAX(IFNULL(supplier.name = %(supplier)s, 0)) AS has_supplier
 		FROM `tabYRP Stock Ledger Entry` sle
 		JOIN `tabItem` variant ON variant.name = sle.item
 		LEFT JOIN `tabYRP Goods Received Note` grn
@@ -195,7 +224,7 @@ def get_ledger_rows(filters, view):
 		GROUP BY {", ".join(group_fields)}, bucket
 		ORDER BY {", ".join(order_fields)}
 		""",
-		filters,
+		{**filters, "supplier": filters.get("supplier")},
 		as_dict=True,
 	)
 
@@ -207,8 +236,11 @@ def get_data(filters, view, months):
 	variants = {row["item_variant"] for row in rows}
 	openings = get_stock_balances(filters, variants, add_days(filters.from_date, -1))
 	balances = get_stock_balances(filters, variants, filters.to_date)
+	adjustments = get_key_quantities(RECONCILIATION_ADJUSTMENT_QUERY, filters, variants, filters.to_date)
 	for row in rows:
 		key = (row["item_variant"], row["warehouse"], row["lot"] or "", row["received_type"] or "")
+		row["suppliers"] = ", ".join(sorted(row["suppliers"]))
+		row["reconciliation_adjustment"] = adjustments.get(key, 0.0)
 		row["opening_stock"] = openings.get(key, 0.0)
 		row["stock_balance"] = balances.get(key, 0.0)
 	return rows
@@ -219,29 +251,49 @@ def get_stock_balances(filters, variants, balance_date):
 
 	The latest Stock Reconciliation entry sets the balance to its qty_after_transaction; later entries add qty.
 	"""
+	balances = {}
+	for query in (BALANCE_QUERY, RECONCILED_BALANCE_QUERY):
+		balances.update(get_key_quantities(query, filters, variants, balance_date))
+	return balances
+
+
+def get_key_quantities(query, filters, variants, balance_date):
+	"""Run a per variant, warehouse, lot and received type quantity query up to balance_date."""
 	if not variants:
 		return {}
 	conditions = "".join(
-		f" AND {condition}"
-		for field, condition in FILTER_CONDITIONS.items()
-		if field != "supplier" and filters.get(field)
+		f" AND {condition}" for field, condition in FILTER_CONDITIONS.items() if filters.get(field)
 	)
 	values = {**filters, "variants": tuple(variants), "balance_date": balance_date}
-	balances = {}
-	for query in (BALANCE_QUERY, RECONCILED_BALANCE_QUERY):
-		rows = frappe.db.sql(query.format(conditions=f" AND sle.item IN %(variants)s{conditions}"), values)
-		balances.update({tuple(row[:4]): row[4] for row in rows})
-	return balances
+	rows = frappe.db.sql(query.format(conditions=f" AND sle.item IN %(variants)s{conditions}"), values)
+	return {tuple(row[:4]): row[4] for row in rows}
+
+
+def get_dimension_key(row):
+	return tuple(row[alias] for _expression, alias in DIMENSIONS)
+
+
+def get_supplier_rows(ledger_rows):
+	"""Keep every movement of the keys that had at least one movement with the filtered supplier."""
+	keys = {get_dimension_key(row) for row in ledger_rows if row.has_supplier}
+	return [row for row in ledger_rows if get_dimension_key(row) in keys]
 
 
 def get_bucket_rows(filters, view):
 	"""Pivot ledger buckets into one row per dimension and period."""
+	ledger_rows = get_ledger_rows(filters, view)
+	if filters.get("supplier"):
+		ledger_rows = get_supplier_rows(ledger_rows)
 	rows = {}
-	for ledger_row in get_ledger_rows(filters, view):
-		bucket, qty = ledger_row.pop("bucket"), ledger_row.pop("qty")
-		key = tuple(ledger_row.values())
-		row = rows.setdefault(key, {**ledger_row, **dict.fromkeys(get_quantity_fields(), 0.0)})
+	for ledger_row in ledger_rows:
+		bucket, qty, suppliers = ledger_row.pop("bucket"), ledger_row.pop("qty"), ledger_row.pop("suppliers")
+		ledger_row.pop("has_supplier")
+		row = rows.setdefault(
+			tuple(ledger_row.values()),
+			{**ledger_row, "suppliers": set(), **dict.fromkeys(get_quantity_fields(), 0.0)},
+		)
 		row[bucket] += qty
+		row["suppliers"].update(suppliers.split(",") if suppliers else ())
 	for row in rows.values():
 		row["total_inward"] = sum(row[field] for field, _label, _condition in INWARD_COLUMNS)
 		row["total_outward"] = sum(row[field] for field, _label, _condition in OUTWARD_COLUMNS)
@@ -257,8 +309,10 @@ def get_month_rows(rows, months):
 	for row in rows:
 		dimensions = {alias: row[alias] for _expression, alias in DIMENSIONS}
 		target = result.setdefault(
-			tuple(dimensions.values()), {**dimensions, **dict.fromkeys(month_fields + list(totals), 0.0)}
+			tuple(dimensions.values()),
+			{**dimensions, "suppliers": set(), **dict.fromkeys(month_fields + list(totals), 0.0)},
 		)
+		target["suppliers"].update(row["suppliers"])
 		for direction in DIRECTIONS:
 			target[get_month_field(row["month"], direction)] += row[f"total_{direction}"]
 		for field in totals:
@@ -279,32 +333,23 @@ def get_columns(view, months):
 		link_column(_("Item"), "item", "Item"),
 		link_column(_("Item Variant"), "item_variant", "Item"),
 		link_column(_("Item Group"), "item_group", "Item Group"),
-		link_column(_("Supplier"), "supplier", "Supplier"),
-		{"label": _("Supplier Name"), "fieldname": "supplier_name", "fieldtype": "Data", "width": 160},
+		{"label": _("Suppliers"), "fieldname": "suppliers", "fieldtype": "Data", "width": 160},
 		link_column(_("Warehouse"), "warehouse", "Warehouse"),
 		link_column(_("Lot"), "lot", "SD YRP Lot"),
 		link_column(_("Received Type"), "received_type", "YRP Received Type"),
 	]
 	if view == "detailed":
-		columns += get_detail_columns()
-	else:
-		for month in months:
-			label = getdate(f"{month}-01").strftime("%b %Y")
-			columns.append(qty_column(f"{label} {_('Inward')}", get_month_field(month, "inward")))
-			columns.append(qty_column(f"{label} {_('Outward')}", get_month_field(month, "outward")))
-		columns.append(qty_column(_("Total Inward"), "total_inward"))
-		columns.append(qty_column(_("Total Outward"), "total_outward"))
+		columns += [qty_column(label, field) for field, label, _condition in INWARD_COLUMNS + OUTWARD_COLUMNS]
+	for month in months:
+		label = getdate(f"{month}-01").strftime("%b %Y")
+		columns.append(qty_column(f"{label} {_('Inward')}", get_month_field(month, "inward")))
+		columns.append(qty_column(f"{label} {_('Outward')}", get_month_field(month, "outward")))
+	columns.append(qty_column(_("Total Inward"), "total_inward"))
+	columns.append(qty_column(_("Total Outward"), "total_outward"))
 	columns.append(qty_column(_("Difference"), "difference"))
+	columns.append(qty_column(_("Reconciliation Adjustment"), "reconciliation_adjustment"))
 	columns.append({**qty_column(_("Opening Stock"), "opening_stock"), "disable_total": 1})
 	columns.append({**qty_column(_("Stock Balance"), "stock_balance"), "disable_total": 1})
-	return columns
-
-
-def get_detail_columns():
-	columns = [qty_column(label, field) for field, label, _condition in INWARD_COLUMNS]
-	columns.append(qty_column(_("Total Inward"), "total_inward"))
-	columns += [qty_column(label, field) for field, label, _condition in OUTWARD_COLUMNS]
-	columns.append(qty_column(_("Total Outward"), "total_outward"))
 	return columns
 
 

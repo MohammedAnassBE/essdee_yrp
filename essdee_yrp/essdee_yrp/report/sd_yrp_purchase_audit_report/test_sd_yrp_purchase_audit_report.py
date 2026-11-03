@@ -108,43 +108,46 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 
 	def test_each_voucher_lands_in_its_column(self):
 		self.make_all_movements()
-		rows = {row["supplier"]: row for row in self.run_report()}
+		(row,) = self.run_report()
 		expected = {
-			self.supplier: {"po_grn": 100, "other_inward": 7, "dc_qty": 30},
-			None: {
-				"se_material_receipt": 20,
-				"se_material_issue": 5,
-				"sent_warehouse": 8,
-				"received_warehouse": 9,
-				"added_stock": 3,
-				"reduced_stock": 2,
-				"conversion_inward": 4,
-				"conversion_outward": 6,
-			},
+			"po_grn": 100,
+			"other_inward": 7,
+			"dc_qty": 30,
+			"se_material_receipt": 20,
+			"se_material_issue": 5,
+			"sent_warehouse": 8,
+			"received_warehouse": 9,
+			"added_stock": 3,
+			"reduced_stock": 2,
+			"conversion_inward": 4,
+			"conversion_outward": 6,
+			"lot_transfer_in": 0,
+			"lot_transfer_out": 0,
 		}
-		self.assertEqual(set(rows), set(expected))
-		for supplier, columns in expected.items():
-			with self.subTest(supplier=supplier):
-				quantities = {field: rows[supplier][field] for field in columns}
-				self.assertEqual(quantities, columns)
+		self.assertEqual({field: row[field] for field in expected}, expected)
+		self.assertEqual(row["suppliers"], self.supplier)
+		self.assertNotIn("supplier", row)
+
+	def test_lot_transfer_has_its_own_columns(self):
+		transfer = self.make_voucher("SD YRP Lot Transfer")
+		self.add_entry(transfer, 12, lot=f"TO-{self.key}")
+		self.add_entry(transfer, -12, lot=f"FROM-{self.key}")
+		rows = {row["lot"]: row for row in self.run_report()}
+		self.assertEqual(rows[f"TO-{self.key}"]["lot_transfer_in"], 12)
+		self.assertEqual(rows[f"FROM-{self.key}"]["lot_transfer_out"], 12)
+		for row in rows.values():
+			self.assertEqual((row["other_inward"], row["other_outward"]), (0, 0))
 
 	def test_totals_and_difference_match_ledger_net(self):
 		self.make_all_movements()
-		rows = self.run_report(summarized_view=1)
-		self.assertEqual({row["supplier"] for row in rows}, {self.supplier, None})
-		total = {
-			field: sum(row[field] for row in rows)
-			for field in ("total_inward", "total_outward", "difference")
-		}
-		self.assertEqual(total["total_inward"], 100 + 7 + 20 + 9 + 3 + 4)
-		self.assertEqual(total["total_outward"], 5 + 8 + 2 + 30 + 6)
+		(row,) = self.run_report(summarized_view=1)
+		self.assertEqual(row["total_inward"], 100 + 7 + 20 + 9 + 3 + 4)
+		self.assertEqual(row["total_outward"], 5 + 8 + 2 + 30 + 6)
 		ledger_net = frappe.db.sql(
 			"SELECT SUM(qty) FROM `tabYRP Stock Ledger Entry` WHERE warehouse = %s", self.warehouse
 		)[0][0]
-		self.assertEqual(total["difference"], ledger_net)
-		for row in rows:
-			self.assertEqual(row["difference"], row["total_inward"] - row["total_outward"])
-			self.assertEqual((row["item"], row["item_variant"]), (self.template, self.variant))
+		self.assertEqual(row["difference"], ledger_net)
+		self.assertEqual((row["item"], row["item_variant"]), (self.template, self.variant))
 
 	def test_detailed_view_collapses_vouchers_per_variant_lot_and_received_type(self):
 		first = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
@@ -175,7 +178,15 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		columns, _rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "summarized_view": 1})
 		fields = [column["fieldname"] for column in columns]
 		self.assertEqual(
-			fields[-5:], ["total_inward", "total_outward", "difference", "opening_stock", "stock_balance"]
+			fields[-6:],
+			[
+				"total_inward",
+				"total_outward",
+				"difference",
+				"reconciliation_adjustment",
+				"opening_stock",
+				"stock_balance",
+			],
 		)
 		self.assertNotIn("po_grn", fields)
 
@@ -200,6 +211,7 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 				"Total Inward",
 				"Total Outward",
 				"Difference",
+				"Reconciliation Adjustment",
 				"Opening Stock",
 				"Stock Balance",
 			],
@@ -216,13 +228,25 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 		columns, _rows = execute({"from_date": DATE, "to_date": NEXT_DATE, "month_wise_report": 1})
 		self.assertIn("po_grn", [column["fieldname"] for column in columns])
 
-	def test_supplier_filter_excludes_documents_without_supplier(self):
+	def test_supplier_filter_keeps_every_movement_of_matching_keys(self):
 		self.make_all_movements()
-		rows = self.run_report(supplier=self.supplier, summarized_view=1)
-		self.assertEqual(
-			[(row["po_grn"], row["other_inward"], row["dc_qty"]) for row in rows], [(100, 7, 30)]
-		)
-		self.assertEqual(rows[0]["supplier"], self.supplier)
+		other = self.make_supplier("Other Maker")
+		other_dc = self.make_voucher("YRP Delivery Challan", supplier=other)
+		self.add_entry(other_dc, -11)
+		receipt = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		self.add_entry(receipt, 5, lot=f"UNRELATED-{self.key}")
+		(row,) = self.run_report(supplier=self.supplier)
+		self.assertEqual(row["lot"], None)
+		self.assertEqual((row["dc_qty"], row["se_material_receipt"], row["po_grn"]), (41, 20, 100))
+		self.assertEqual(self.run_report(supplier=other), [])
+
+	def test_supplier_filter_matches_dc_sent_from_supplier_location(self):
+		receiver = self.make_supplier("Receiver")
+		dc = self.make_voucher("YRP Delivery Challan", supplier=receiver, from_location=self.supplier)
+		self.add_entry(dc, -9)
+		(row,) = self.run_report(supplier=self.supplier)
+		self.assertEqual(row["dc_qty"], 9)
+		self.assertEqual(self.run_report(supplier=receiver), [])
 
 	def test_item_filters_match_template_and_variant(self):
 		receipt = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
@@ -321,4 +345,43 @@ class TestPurchaseAuditReport(IntegrationTestCase):
 					{row["lot"]: row["opening_stock"] for row in rows}, {moved: 50, reconciled: 23}
 				)
 				for row in rows:
+					self.assertEqual(row["reconciliation_adjustment"], 0)
 					self.assertEqual(row["opening_stock"] + row["difference"], row["stock_balance"])
+
+	def test_reconciliation_inside_range_shows_as_adjustment(self):
+		receipt = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		reconciliation = self.make_voucher("YRP Stock Reconciliation")
+		lot = f"RECON-{self.key}"
+		self.add_entry(receipt, 7, date="2099-03-01", lot=lot)
+		self.add_entry(reconciliation, 0, date="2099-03-05", lot=lot, qty_after_transaction=30)
+		self.add_entry(receipt, 5, lot=lot)
+		self.add_entry(reconciliation, -15, date="2099-03-15", lot=lot, qty_after_transaction=20)
+		self.add_entry(receipt, 3, date="2099-03-18", lot=lot)
+		self.add_entry(reconciliation, 0, date="2099-03-19", lot=lot, qty_after_transaction=10)
+		(row,) = self.run_report()
+		fields = (
+			"opening_stock",
+			"total_inward",
+			"total_outward",
+			"reconciliation_adjustment",
+			"stock_balance",
+		)
+		self.assertEqual(tuple(row[field] for field in fields), (30, 8, 0, -28, 10))
+
+	def test_rows_reconcile_to_stock_balance_in_detailed_and_summarized_views(self):
+		self.make_all_movements()
+		receipt = self.make_voucher("YRP Stock Entry", purpose="Material Receipt")
+		transfer = self.make_voucher("SD YRP Lot Transfer")
+		reconciliation = self.make_voucher("YRP Stock Reconciliation")
+		lot = f"LOT-{self.key}"
+		self.add_entry(receipt, 40, date="2099-03-01", lot=lot)
+		self.add_entry(transfer, -15, lot=lot)
+		self.add_entry(reconciliation, 0, date="2099-03-12", lot=lot, qty_after_transaction=18)
+		self.add_entry(transfer, 15, date="2099-03-15")
+		for view in ({}, {"summarized_view": 1}, {"supplier": self.supplier}):
+			with self.subTest(view=view):
+				rows = self.run_report(**view)
+				self.assertTrue(rows)
+				for row in rows:
+					net = row["total_inward"] - row["total_outward"] + row["reconciliation_adjustment"]
+					self.assertEqual(row["opening_stock"] + net, row["stock_balance"])

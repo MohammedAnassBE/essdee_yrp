@@ -155,8 +155,9 @@ test("F-B19 marker title and ratio error", () => {
 	const source = read("departments/cutting/CuttingMarkerDialog.vue")
 	const header = source.match(/<RecordDialogHeader[\s\S]*?:title="([^"]+)"/)[1]
 	const title = new Function("record", "canEdit", `return ${header}`)
-	assert.equal(title({ name: "CM-1" }, false), "Cutting Marker · CM-1")
-	assert.equal(title({ name: "CM-1" }, true), "Edit Cutting Marker · CM-1")
+	assert.equal(title({ name: "CM-1" }, false), "Cutting Marker")
+	assert.equal(title({ name: "CM-1" }, true), "Edit Cutting Marker")
+	assert.match(source, /<RecordDialogHeader[^>]*:name="record\?\.name \|\| ''"/)
 	assert.equal(title(null, true), "Create New Marker")
 	const python = readFileSync(resolve("essdee_yrp/essdee_yrp/doctype/sd_yrp_cutting_marker/sd_yrp_cutting_marker.py"), "utf8")
 	assert.equal(python.split("only 0.5 increments are allowed.").length - 1, 2)

@@ -8,7 +8,7 @@
 					<span v-if="deliveryDate" class="lot-page__date"><span>Delivery</span><strong>{{ formatDisplayDate(deliveryDate) }}</strong></span>
 				</div>
 				<h1 class="erp-doc-title" :id="headingId" :aria-label="[name || draftName || 'New Lot', item].filter(Boolean).join(' · ')">
-					<span class="lot-page__lot">{{ name || draftName || "New Lot" }}</span>
+					<DocumentNameCopy class="lot-page__lot" :name="name" :fallback="draftName || 'New Lot'" />
 					<template v-if="item"><span class="lot-page__title-separator" aria-hidden="true">·</span><DocumentLink doctype="Item" :name="item" /></template>
 				</h1>
 			</div>
@@ -18,6 +18,7 @@
 </template>
 <script setup>
 import DocumentLink from "../../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 import { formatDisplayDate } from "../../../utils/dateFormat.js"
 defineProps({

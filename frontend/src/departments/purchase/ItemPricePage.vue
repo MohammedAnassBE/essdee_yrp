@@ -4,7 +4,7 @@
 			<FabricDocumentWorkspace :show-delete="false" doctype="YRP Item Price" title="Item Price" :workspace="workspace" :loading="loading" :error="loadError" :acting="acting" :show-lifecycle-actions="false" @reload="load">
 				<template #header="{ record: header, headingId }">
 					<div class="item-price-page__identity">
-						<div><h1 class="erp-doc-title" :id="headingId">Item Price</h1><span class="erp-doc-id">{{ header.name }}</span></div>
+						<div><h1 class="erp-doc-title" :id="headingId">Item Price</h1><DocumentNameCopy class="erp-doc-id" :name="header.name" /></div>
 						<DocumentStatusBadge :docstatus="header.docstatus" :label="header.workflow_state" />
 						<div class="item-price-page__facts" role="region" aria-label="Item Price context" tabindex="0">
 							<div><span>{{ fieldLabel("item_name", "Item") }}</span><strong :title="header.item_name"><DocumentLink doctype="Item" :name="header.item_name" :label="header.item_name || '—'" /></strong></div>
@@ -75,6 +75,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import Column from "primevue/column"
 import DataTable from "primevue/datatable"
 import { computed, ref, watch } from "vue"

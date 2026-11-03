@@ -19,7 +19,7 @@
 					<div class="fabric-document-workspace__identity">
 						<div>
 							<h1 class="erp-doc-title" :id="headingId">{{ title }}</h1>
-							<span class="erp-doc-id">{{ record.name || "New document" }}</span>
+							<DocumentNameCopy class="erp-doc-id" :name="record.name" fallback="New document" />
 						</div>
 						<DocumentStatusBadge v-if="record.status" :docstatus="record.docstatus" :label="record.status" />
 					</div>
@@ -189,6 +189,7 @@ import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.
 import DocumentLiveBar from "../../components/documents/DocumentLiveBar.vue"
 import DocumentSaveState from "../../components/documents/DocumentSaveState.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { useLiveDocument } from "../../composables/useLiveDocument.js"
 import { DOCUMENT_DELETED_KEY, isStaleDocumentError, takeSavedHandoff } from "../../utils/documentLiveState.js"

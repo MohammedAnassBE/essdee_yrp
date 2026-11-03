@@ -4,7 +4,7 @@
 			<FabricDocumentWorkspace print-label="Print Format" :show-delete="false" doctype="YRP Production Order" title="Production Order" :workspace="workspace" :loading="loading" :error="error" :acting="acting" :show-lifecycle-actions="false" compact-mobile-rail @reload="load(true)" :live-reload="() => load(true)">
 				<template #header="{ record, headingId }">
 					<div class="ppo-page__identity">
-						<div class="ppo-page__title"><span>Production order · {{ record.name }}</span><h1 class="erp-doc-title" :id="headingId"><DocumentLink doctype="Item" :name="record.item" :label="record.item || 'Production Order'" /></h1></div>
+						<div class="ppo-page__title"><span>Production order · <DocumentNameCopy :name="record.name" /></span><h1 class="erp-doc-title" :id="headingId"><DocumentLink doctype="Item" :name="record.item" :label="record.item || 'Production Order'" /></h1></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status_label" />
 					</div>
 				</template>
@@ -54,6 +54,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"

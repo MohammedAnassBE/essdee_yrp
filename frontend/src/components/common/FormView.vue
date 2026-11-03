@@ -11,7 +11,7 @@
 			<div class="form-toolbar__identity">
 				<h2 :id="headingId">{{ heading }}</h2>
 				<div class="form-toolbar__meta">
-					<small>{{ documentName ? documentName : `New ${doctype}` }}</small>
+					<small><DocumentNameCopy :name="documentName" :fallback="`New ${doctype}`" /></small>
 					<slot name="header-meta" :doc="form" :meta="meta" :loading="loading" />
 					<DocumentSaveState v-if="!readonly" :saving="saving" :dirty="isDirty" :saved-at="savedAt" />
 				</div>
@@ -229,6 +229,7 @@ import { computed, onScopeDispose, reactive, ref, shallowRef, watch } from "vue"
 import { createDoc, getDoc, getMeta, updateDoc } from "../../api/frappe.js"
 import { linkFieldTarget } from "../../utils/linkTarget.js"
 import DocumentLink from "./DocumentLink.vue"
+import DocumentNameCopy from "./DocumentNameCopy.vue"
 import ChildTableField from "./ChildTableField.vue"
 import FormField from "./FormField.vue"
 import DocumentErrorDialog from "../documents/DocumentErrorDialog.vue"

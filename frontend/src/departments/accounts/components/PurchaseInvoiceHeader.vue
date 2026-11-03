@@ -1,7 +1,7 @@
 <template>
 	<div class="purchase-invoice-header">
 		<div class="purchase-invoice-header__identity">
-			<h1 :id="headingId">Purchase Invoice · {{ record.name }}</h1>
+			<h1 :id="headingId">Purchase Invoice · <DocumentNameCopy :name="record.name" /></h1>
 			<DocumentStatusBadge
 				:docstatus="record.docstatus"
 				:label="record.status"
@@ -18,6 +18,7 @@
 
 <script setup>
 import DocumentLink from "../../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 
 defineProps({

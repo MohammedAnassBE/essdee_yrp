@@ -2,7 +2,8 @@
 	<Dialog :visible="visible" modal :dismissable-mask="!busy" :closable="!busy" :close-on-escape="!busy" maximizable class="laysheet-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<template #header>
 			<RecordDialogHeader
-				:title="sheet ? `Lay Sheet · ${sheet.name}` : 'Create Lay Sheet'"
+				:title="sheet ? 'Lay Sheet' : 'Create Lay Sheet'"
+				:name="sheet?.name || ''"
 				document-label="Lay Sheet"
 				:previous-name="previousName"
 				:next-name="nextName"

@@ -6,7 +6,7 @@
 				<template #header="{ record, headingId }">
 					<div class="quality-inspection-header">
 						<div class="quality-inspection-header__title">
-							<h1 class="erp-doc-title" :id="headingId">{{ record.name }}</h1>
+							<h1 class="erp-doc-title" :id="headingId"><DocumentNameCopy :name="record.name" /></h1>
 							<DocumentStatusBadge :docstatus="record.docstatus" />
 							<InspectionResultBadge :result="record.result" />
 							<span v-if="resultSummary.isManual" class="quality-manual-override" :title="resultSummary.note">Manual override</span>
@@ -77,6 +77,7 @@ import DocumentDeleteButton from "../../components/documents/DocumentDeleteButto
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import InspectionDebitDetails from "./components/InspectionDebitDetails.vue"
 import InspectionDebitDialog from "./components/InspectionDebitDialog.vue"
 import InspectionResultDialog from "./components/InspectionResultDialog.vue"

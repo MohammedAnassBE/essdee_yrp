@@ -2,7 +2,8 @@
 	<Dialog :visible="visible" modal dismissable-mask maximizable class="marker-dialog erp-entity-dialog" @update:visible="emit('update:visible', $event)">
 		<template #header>
 			<RecordDialogHeader
-				:title="record?.name ? `${canEdit ? 'Edit Cutting Marker' : 'Cutting Marker'} · ${record.name}` : 'Create New Marker'"
+				:title="record?.name ? (canEdit ? 'Edit Cutting Marker' : 'Cutting Marker') : 'Create New Marker'"
+				:name="record?.name || ''"
 				document-label="Cutting Marker"
 				:previous-name="previousName"
 				:next-name="nextName"

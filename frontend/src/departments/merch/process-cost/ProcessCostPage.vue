@@ -4,7 +4,7 @@
 			<FabricDocumentWorkspace doctype="YRP Process Cost" title="Process Cost" :workspace="workspace" :loading="loading" :error="error" :acting="acting ? 'action' : ''" :show-lifecycle-actions="false" :show-delete="false" @reload="load">
 				<template #header="{ record, headingId }">
 					<div class="fabric-document-workspace__identity">
-						<div><h1 class="erp-doc-title" :id="headingId">Process Cost · <DocumentLink doctype="YRP Process" :name="record.process_name" /></h1><span class="erp-doc-id">{{ record.name }}</span></div>
+						<div><h1 class="erp-doc-title" :id="headingId">Process Cost · <DocumentLink doctype="YRP Process" :name="record.process_name" /></h1><DocumentNameCopy class="erp-doc-id" :name="record.name" /></div>
 						<DocumentStatusBadge :label="record.workflow_state" :docstatus="record.docstatus" />
 					</div>
 				</template>
@@ -39,6 +39,7 @@
 
 <script setup>
 import DocumentLink from "../../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import Message from "primevue/message"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"

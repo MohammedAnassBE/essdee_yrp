@@ -6,7 +6,7 @@
 				<div class="box-sticker-page__identity">
 					<span>Box Sticker Print</span>
 					<div>
-						<h1 id="box-sticker-page-title" class="erp-doc-title">{{ record?.name || "New Box Sticker Print" }}</h1>
+						<h1 id="box-sticker-page-title" class="erp-doc-title"><DocumentNameCopy :name="record?.name" fallback="New Box Sticker Print" /></h1>
 						<DocumentStatusBadge :docstatus="record?.docstatus" :label="record?.status || 'Draft'" />
 					</div>
 					<small :class="{ 'box-sticker-print-hint': printHint }" role="status">{{ printHint || footerSummary }}</small>
@@ -278,6 +278,7 @@ import DocumentActionStrip from "../../components/documents/DocumentActionStrip.
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { loadDuplicateValues, useDuplicateAction } from "../../composables/useDuplicateAction.js"
 import { usePageTitle } from "../../composables/usePageTitle.js"

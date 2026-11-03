@@ -16,7 +16,7 @@
 			>
 				<template #header="{ record, headingId }">
 					<div class="purchase-order-page__identity">
-						<div><h1 class="erp-doc-title" :id="headingId">Purchase Order</h1><span class="erp-doc-id">{{ record.name }}</span></div>
+						<div><h1 class="erp-doc-title" :id="headingId">Purchase Order</h1><DocumentNameCopy class="erp-doc-id" :name="record.name" /></div>
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="purchaseOrderStatusLabel(record)" :tone="purchaseOrderStatusTone(purchaseOrderStatusLabel(record))" />
 						<DocumentStatusBadge v-if="approvalMessage" :label="workspace.approval.live_request ? 'Approval Requested' : 'Pending Approval'" tone="warning" />
 						<div class="purchase-order-page__facts" role="region" aria-label="Purchase Order context" tabindex="0">
@@ -105,6 +105,7 @@
 
 <script setup>
 import DocumentLink from "../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../components/common/DocumentNameCopy.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"

@@ -23,7 +23,7 @@
 				<template #header="{ record, headingId }">
 					<div class="bill-tracking-header">
 						<div class="bill-tracking-header__identity">
-							<h1 :id="headingId">Bill Tracking · {{ record.name }}</h1>
+							<h1 :id="headingId">Bill Tracking · <DocumentNameCopy :name="record.name" /></h1>
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.form_status" />
 						</div>
 						<dl class="bill-tracking-header__facts">
@@ -105,6 +105,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 

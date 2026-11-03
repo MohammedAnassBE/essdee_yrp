@@ -8,7 +8,7 @@
 			<header class="finishing-dispatch__header">
 				<InlinePageNavigation title-target="finishing-dispatch-title" :show-document-navigation="Boolean(dispatchId)" :current-name="dispatchId" document-label="Finishing Plan Dispatch" :navigation-disabled="loading || busy" />
 				<div class="finishing-dispatch__identity">
-					<div class="finishing-dispatch__title"><h1 id="finishing-dispatch-title">Finishing Plan Dispatch</h1><span>{{ record.name || `New · ${record.naming_series || ""}` }}</span></div>
+					<div class="finishing-dispatch__title"><h1 id="finishing-dispatch-title">Finishing Plan Dispatch</h1><DocumentNameCopy :name="record.name" :fallback="`New · ${record.naming_series || ''}`" /></div>
 					<div class="finishing-dispatch__meta">
 						<DocumentStatusBadge :docstatus="record.docstatus" :label="statusLabel" />
 						<span class="finishing-plan__fact"><small>Plans</small><strong>{{ rows.length }}</strong></span>
@@ -71,6 +71,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"

@@ -9,15 +9,17 @@
 			@previous="emit('navigate', previousName)"
 			@next="emit('navigate', nextName)"
 		/>
-		<span class="p-dialog-title">{{ title }}</span>
+		<span class="p-dialog-title">{{ title }}<template v-if="name"> · <DocumentNameCopy :name="name" /></template></span>
 	</div>
 </template>
 
 <script setup>
 import DocumentStepButtons from "../../components/navigation/DocumentStepButtons.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 
 defineProps({
 	title: { type: String, default: "" },
+	name: { type: String, default: "" },
 	documentLabel: { type: String, default: "" },
 	previousName: { type: String, default: "" },
 	nextName: { type: String, default: "" },

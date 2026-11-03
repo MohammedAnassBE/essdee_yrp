@@ -14,7 +14,7 @@
 					:navigation-disabled="loading || busy"
 				/>
 				<div class="finishing-plan__identity">
-					<div class="finishing-plan__title"><h1 id="finishing-plan-title">Finishing Plan</h1><span>{{ finishingPlanId }}</span></div>
+					<div class="finishing-plan__title"><h1 id="finishing-plan-title">Finishing Plan</h1><DocumentNameCopy :name="finishingPlanId" /></div>
 					<div class="finishing-plan__meta">
 						<DocumentStatusBadge :label="record.fp_status || 'Planned'" />
 						<span v-for="fact in headerFacts" :key="fact.label" class="finishing-plan__fact" :class="`finishing-plan__fact--${fact.key}`" :title="fact.value">
@@ -68,6 +68,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import DocumentDeleteButton from "../../components/documents/DocumentDeleteButton.vue"
 import Toast from "primevue/toast"
 import Message from "primevue/message"

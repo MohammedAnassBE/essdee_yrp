@@ -7,7 +7,7 @@
 			</div>
 			<div class="ipd-identity__heading">
 				<h1 :id="headingId" class="erp-doc-title" :aria-label="[name || 'New IPD', itemName || item].filter(Boolean).join(' · ')">
-					<span class="ipd-identity__name">{{ name || "New IPD" }}</span>
+					<DocumentNameCopy class="ipd-identity__name" :name="name" fallback="New IPD" />
 					<template v-if="itemName || item"><span class="ipd-identity__separator" aria-hidden="true">·</span><span class="ipd-identity__item"><DocumentLink doctype="Item" :name="item" :label="itemName || item" /></span></template>
 				</h1>
 				<DocumentStatusBadge v-if="name" :label="status || 'Not Approved'" />
@@ -28,6 +28,7 @@ import { computed } from "vue"
 import { useRelativeTime } from "../../../composables/live/useRelativeTime.js"
 
 import DocumentLink from "../../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import DocumentStatusBadge from "../../../components/documents/DocumentStatusBadge.vue"
 
 const props = defineProps({

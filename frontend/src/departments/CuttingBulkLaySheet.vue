@@ -13,7 +13,7 @@
 						:navigation-disabled="loading || Boolean(busy) || editSetupOpen || activeEditorDirty"
 					/>
 					<div class="bulk-record-identity">
-						<div class="bulk-record-title"><h1 id="bulk-laysheets-title">Bulk LaySheets</h1><span>{{ bulkName }}</span></div>
+						<div class="bulk-record-title"><h1 id="bulk-laysheets-title">Bulk LaySheets</h1><DocumentNameCopy :name="bulkName" /></div>
 						<div class="bulk-record-meta">
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Setup'" />
 							<span class="bulk-header-fact bulk-header-fact--lot" :title="record.main_lot || 'No Main Lot'"><small>Main Lot</small><strong><DocumentLink doctype="SD YRP Lot" :name="record.main_lot" :label="record.main_lot || '—'" /></strong></span>
@@ -71,6 +71,7 @@
 
 <script setup>
 import DocumentLink from "../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../components/common/DocumentNameCopy.vue"
 import DocumentPrintButton from "../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"

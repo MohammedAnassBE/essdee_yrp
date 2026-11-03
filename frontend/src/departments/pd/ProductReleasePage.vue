@@ -26,7 +26,7 @@
 			<template v-else-if="hasWorkspace">
 				<header class="pd-product-workspace__header">
 					<div class="pd-product-workspace__identity">
-						<span class="pd-product-workspace__eyebrow">Product Release · {{ record.name }}</span>
+						<span class="pd-product-workspace__eyebrow">Product Release · <DocumentNameCopy :name="record.name" /></span>
 						<div class="pd-product-workspace__title-row">
 							<h1>{{ record.item_name || record.style_no || "Product Release" }}</h1>
 							<div class="pd-product-workspace__chips" aria-label="Product Release details">
@@ -158,6 +158,7 @@
 
 <script setup>
 import CustomPrintButtons from "../../components/documents/CustomPrintButtons.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import Skeleton from "primevue/skeleton"
 import Tab from "primevue/tab"
 import TabList from "primevue/tablist"

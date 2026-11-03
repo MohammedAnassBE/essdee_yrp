@@ -7,7 +7,7 @@
 						<div class="work-order-page__title-row">
 							<div class="work-order-page__title">
 								<div class="work-order-page__meta">
-									<span>Work order · {{ record.name }}</span>
+									<span>Work order · <DocumentNameCopy :name="record.name" /></span>
 									<span class="work-order-page__date"><span>WO date</span><strong>{{ woDate }}</strong></span>
 								</div>
 								<h1 :id="headingId" :aria-label="[record.lot, record.item || 'Work Order'].filter(Boolean).join(' · ')">
@@ -67,6 +67,7 @@
 
 <script setup>
 import DocumentLink from "../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../components/common/DocumentNameCopy.vue"
 import Button from "primevue/button"
 import Dialog from "primevue/dialog"
 import Message from "primevue/message"

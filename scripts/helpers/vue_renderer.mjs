@@ -26,6 +26,9 @@ const sharedModules = {
 		useTrackedJob: () => ({ isRunning: Vue.ref(false), run: (queue) => queue() }),
 	},
 	"useRelativeTime.js": { useRelativeTime: () => Vue.computed(() => "") },
+	"documentNameCopy.js": await import("../../frontend/src/components/common/documentNameCopy.js"),
+	// Copy feedback needs the PrimeVue toast service; DocumentNameCopy is covered by documentNameCopy.test.js.
+	"useCopyFeedback.js": { useCopyFeedback: () => ({ copying: Vue.ref(false), copied: Vue.ref(false), runCopy: async (copy) => { await copy(); return true } }) },
 	"useLiveDocument.js": {
 		useLiveDocument: () => ({ state: Vue.ref(""), remoteModified: Vue.ref(""), reloading: Vue.ref(false), refresh: async () => {}, handleSaveError: () => false, clear() {} }),
 	},

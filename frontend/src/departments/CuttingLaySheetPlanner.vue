@@ -6,7 +6,7 @@
 			<template v-else>
 				<header class="planner-record-header erp-card">
 					<div class="planner-record-identity">
-						<div class="planner-record-title"><h1>LaySheet Planner</h1><span>{{ plannerName }}</span></div>
+						<div class="planner-record-title"><h1>LaySheet Planner</h1><DocumentNameCopy :name="plannerName" /></div>
 						<div class="planner-record-meta">
 							<DocumentStatusBadge :label="record.optimization_status || 'Not Started'" />
 							<span class="planner-header-fact planner-header-fact--lot" :title="record.lot || 'No Lot'"><small>Lot</small><strong><DocumentLink doctype="SD YRP Lot" :name="record.lot" :label="record.lot || '—'" /></strong></span>
@@ -47,6 +47,7 @@
 
 <script setup>
 import DocumentLink from "../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../components/common/DocumentNameCopy.vue"
 import DocumentPrintButton from "../components/documents/DocumentPrintButton.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"

@@ -1,7 +1,7 @@
 <template>
 	<header class="lotwise-workspace__header">
 		<div class="lotwise-workspace__identity">
-			<span>Lotwise Item Profit · {{ name || "New" }}</span>
+			<span>Lotwise Item Profit · <DocumentNameCopy :name="name" fallback="New" /></span>
 			<h1><DocumentLink v-if="product" doctype="SD YRP Product" :name="product" :label="title" /><DocumentLink v-else-if="item" doctype="SD YRP FG Item Master" :name="item" :label="title" /><template v-else>{{ title }}</template></h1>
 		</div>
 		<div class="lotwise-workspace__header-actions">
@@ -14,6 +14,7 @@
 
 <script setup>
 import DocumentLink from "../../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"

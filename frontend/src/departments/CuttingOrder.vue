@@ -24,7 +24,7 @@
 						:navigation-disabled="workspaceLoading || Boolean(lifecycleBusy)"
 					/>
 					<div class="order-record-identity">
-						<div class="order-record-title"><h1 id="cutting-order-title">Cutting Order</h1><span>{{ cuttingOrderId }}</span></div>
+						<div class="order-record-title"><h1 id="cutting-order-title">Cutting Order</h1><DocumentNameCopy :name="cuttingOrderId" /></div>
 						<div class="order-record-meta">
 							<DocumentStatusBadge :docstatus="record.docstatus" :label="record.status || 'Draft'" />
 							<span class="order-header-fact order-header-fact--detail" :title="record.cutting_order_detail || 'No Cutting Order Detail'">
@@ -64,6 +64,7 @@
 
 <script setup>
 import DocumentLink from "../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../components/common/DocumentNameCopy.vue"
 import DocumentDeleteButton from "../components/documents/DocumentDeleteButton.vue"
 import Button from "primevue/button"
 import Message from "primevue/message"

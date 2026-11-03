@@ -6,7 +6,7 @@
 				<InlinePageNavigation title-target="purchase-item-title" show-document-navigation :current-name="itemId" document-label="Item" :navigation-disabled="loading || acting" />
 				<div class="purchase-record__identity">
 					<span>Purchase · Item</span>
-					<div><h1 class="erp-doc-title" id="purchase-item-title">{{ itemId }}</h1><DocumentStatusBadge :label="hasAttributes ? 'Variants' : 'Plain'" /><DocumentStatusBadge v-if="Number(values.disabled)" label="Disabled" /></div>
+					<div><h1 class="erp-doc-title" id="purchase-item-title"><DocumentNameCopy :name="itemId" /></h1><DocumentStatusBadge :label="hasAttributes ? 'Variants' : 'Plain'" /><DocumentStatusBadge v-if="Number(values.disabled)" label="Disabled" /></div>
 				</div>
 				<dl v-if="!loading && !loadError" class="purchase-record__facts">
 					<div v-if="values.name && values.name !== itemId"><dt>{{ fieldLabel("name", "Item Name") }}</dt><dd>{{ values.name }}</dd></div>
@@ -83,6 +83,7 @@ import DocumentActionStrip from "../../components/documents/DocumentActionStrip.
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { formatDisplayDate } from "../../utils/dateFormat.js"
 import ItemAttributeValues from "./item/ItemAttributeValues.vue"

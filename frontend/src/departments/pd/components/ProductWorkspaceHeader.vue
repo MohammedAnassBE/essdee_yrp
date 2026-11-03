@@ -1,7 +1,7 @@
 <template>
 	<header class="pd-product-workspace__header">
 		<div class="pd-product-workspace__identity">
-			<span class="pd-product-workspace__eyebrow">Product · {{ record.name || "New" }}</span>
+			<span class="pd-product-workspace__eyebrow">Product · <DocumentNameCopy :name="record.name" fallback="New" /></span>
 			<div class="pd-product-workspace__title-row">
 				<h1>{{ record.item_name || record.name || "New Product" }}</h1>
 				<div class="pd-product-workspace__chips" aria-label="Product details">
@@ -34,6 +34,7 @@
 
 <script setup>
 import CustomPrintButtons from "../../../components/documents/CustomPrintButtons.vue"
+import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import Button from "primevue/button"
 
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"

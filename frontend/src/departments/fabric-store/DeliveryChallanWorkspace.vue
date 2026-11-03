@@ -20,7 +20,7 @@
 		>
 			<template #header="{ record, headingId }">
 				<div class="delivery-challan-header__identity" :class="{ 'delivery-challan-header__identity--embedded': presentation === 'embedded' }">
-					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1 :id="headingId">Delivery Challan</h1><span>{{ record.name || duplicateLabel || (loading && name ? "Loading…" : error && name ? name : "New document") }}</span></div>
+					<div v-if="presentation !== 'embedded'" class="delivery-challan-header__title"><h1 :id="headingId">Delivery Challan</h1><DocumentNameCopy :name="record.name" :fallback="duplicateLabel || (loading && name ? 'Loading…' : error && name ? name : 'New document')" /></div>
 					<DocumentStatusBadge v-if="hasWorkspace && presentation !== 'embedded'" :docstatus="record.docstatus" :label="record.status || statusLabel(record.docstatus)" />
 					<div v-if="headerFacts.length" class="delivery-challan-header__facts" role="region" aria-label="Delivery Challan context" tabindex="0">
 						<div v-for="fact in headerFacts" :key="fact.label"><span>{{ fact.label }}</span><strong :title="String(fact.value)"><DocumentLink :doctype="fact.doctype" :name="fact.name" :label="fact.value" /></strong></div>
@@ -225,6 +225,7 @@
 
 <script setup>
 import DocumentLink from "../../components/common/DocumentLink.vue"
+import DocumentNameCopy from "../../components/common/DocumentNameCopy.vue"
 import { groupItemsForDisplay, setAggregatedCellQuantity, setAggregatedItemField } from "../../engine/stock/groupItemsForDisplay.js"
 import InputText from "primevue/inputtext"
 import Checkbox from "primevue/checkbox"

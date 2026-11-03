@@ -48,6 +48,7 @@ FABRIC_ENTRY_KEYS = (
 	"requirement",
 	"program",
 	"steps",
+	"additions",
 )
 CONVERSION_FIELDS = (
 	"production_detail",
@@ -231,6 +232,7 @@ def _fabric_card(doc, fabric, entry):
 			"production_detail": fabric.production_detail,
 			"plan_status": fabric.plan_status,
 			**{key: [] for key in ("dyed_yarn_colours", "requirement", "program", "steps")},
+			"additions": {},
 		}
 	return {
 		**{key: entry.get(key) for key in FABRIC_ENTRY_KEYS},

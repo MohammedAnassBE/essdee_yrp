@@ -2493,20 +2493,20 @@ class TestClothProgram(IntegrationTestCase):
 		self.assertEqual(flt(program.weight), 20)
 		self.assertEqual(result["manual_additional_weight"], 4)
 
-	def test_synced_added_weight_rejects_negative_routes(self):
-		with self.assertRaisesRegex(frappe.ValidationError, "cannot be negative"):
-			_synced_program_route_additions(
-				{
-					"routes": [
-						{
-							"cloth_item": self.cloth,
-							"dia": _attribute_value(self.dia),
-							"colour": self.red,
-							"additional_weight": -1,
-						}
-					],
-				}
-			)
+	def test_synced_added_weight_keeps_negative_routes(self):
+		additions = _synced_program_route_additions(
+			{
+				"routes": [
+					{
+						"cloth_item": self.cloth,
+						"dia": _attribute_value(self.dia),
+						"colour": self.red,
+						"additional_weight": -1,
+					}
+				],
+			}
+		)
+		self.assertEqual(additions, {(self.cloth, _attribute_value(self.dia), self.red): -1})
 
 	def test_accessory_fabric_type_is_split_from_main_fabric_at_the_same_dia(self):
 		# MRP F0826-38 shape: Folding accessory cloth gets its own Folding Fabric

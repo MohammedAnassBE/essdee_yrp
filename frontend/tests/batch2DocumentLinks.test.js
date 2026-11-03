@@ -48,7 +48,8 @@ const defaults = {
  './ClothProgramDialog.vue': control,
  '../../../components/documents/DocumentStatusBadge.vue': control,
  'primevue/column': column, 'primevue/datatable': table,
- ...Object.fromEntries(['button','select','checkbox','inputtext','message','tag','skeleton','dialog'].map(name => [`primevue/${name}`, control])),
+ 'primevue/usetoast': { useToast: () => ({ add() {} }) }, '../../../api/frappe.js': { callMethod: async () => ({}) },
+ ...Object.fromEntries(['button','select','checkbox','inputtext','inputnumber','message','tag','skeleton','dialog'].map(name => [`primevue/${name}`, control])),
 }
 function component(path, modules = {}) { return loadComponent(resolve(`frontend/src/${path}.vue`), { ...defaults, ...modules }) }
 function readable(fn, allowed = ['Item', 'Supplier', 'UOM', 'User', 'YRP Process', 'SD YRP Lot', 'YRP Process Cost', 'YRP Item Production Detail', 'Item Attribute', 'YRP Item Attribute Value']) {

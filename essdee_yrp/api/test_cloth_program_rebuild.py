@@ -1,5 +1,6 @@
 """Rebuilds preserve GRN actual-Dia receipts and synced excess ownership."""
 
+from unittest import TestCase
 from unittest.mock import call, patch
 
 import frappe
@@ -7,7 +8,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import flt
 from yrp.attribute_links import value as _attribute_value
 
-from essdee_yrp import fabric_tracking
+from essdee_yrp import fabric_program, fabric_tracking
 from essdee_yrp.api import cloth_program
 from essdee_yrp.api.test_cloth_program import (
 	_ensure_iav,
@@ -15,6 +16,8 @@ from essdee_yrp.api.test_cloth_program import (
 	_ensure_process,
 	_reset_cpd,
 )
+from essdee_yrp.fabric_program import allocate_added_weight
+from essdee_yrp.print_helpers import get_cloth_program_print_data
 
 
 class TestClothProgramRebuild(IntegrationTestCase):
@@ -219,3 +222,85 @@ class TestClothProgramRebuild(IntegrationTestCase):
 				call("SD YRP Lot Fabric Program", "no-reference", "weight", 360, update_modified=False),
 			],
 		)
+
+
+class TestClothProgramAddWeight(IntegrationTestCase):
+	"""Add Weight totals per fabric type + colour, spread over Dias like MRP."""
+
+	_rows = TestClothProgramRebuild._rows
+
+	def setUp(self):
+		TestClothProgramRebuild.setUp(self)
+		by_type = {
+			(self.cloth, self.dia14, self.white, "Main Fabric"): 496,
+			(self.cloth, self.dia19, self.white, "Main Fabric"): 327.6,
+		}
+		self.enterContext(patch.object(fabric_program, "compute_cloth_demand", return_value=by_type))
+
+	def _add_weight(self, weight):
+		return [
+			{
+				"cloth_item": self.cloth,
+				"fabric_type": "Main Fabric",
+				"colour": self.white,
+				"additional_weight": weight,
+			}
+		]
+
+	def _weights(self):
+		return {dia: flt(row.weight) for dia, row in self._rows().items()}
+
+	def test_positive_add_weight_spreads_by_dia_share_and_persists(self):
+		cloth_program.recalculate_cloth_program(self.lot.name, additions=self._add_weight(10))
+		# 10 * 496/824 = 6.02 -> 6; 10 * 328/824 = 3.98 -> 3 + the leftover kg.
+		self.assertEqual(self._weights(), {self.dia14: 502, self.dia19: 332})
+		self.lot.reload()
+		stored = frappe.parse_json(self.lot.cloth_program_additions)
+		self.assertEqual([row["additional_weight"] for row in stored["totals"]], [10])
+		self.assertEqual(sorted(row["additional_weight"] for row in stored["routes"]), [4, 6])
+		cloth_program.build_cloth_programs(self.lot.name, [self.selection])
+		self.assertEqual(self._weights(), {self.dia14: 502, self.dia19: 332})
+
+	def test_negative_add_weight_reduces_by_the_same_rule(self):
+		cloth_program.recalculate_cloth_program(self.lot.name, additions=self._add_weight(-10))
+		self.assertEqual(self._weights(), {self.dia14: 490, self.dia19: 324})
+		self.lot.reload()
+		self.assertEqual(
+			fabric_program.get_program_fabric_types(self.lot)[(self.cloth, self.dia19, self.white)][
+				"Main Fabric"
+			]["addition"],
+			-4,
+		)
+
+	def test_add_weight_is_shown_on_the_program_and_print(self):
+		cloth_program.recalculate_cloth_program(self.lot.name, additions=self._add_weight(-10))
+		self.lot.reload()
+		entry = fabric_program.fetch_fabric_program_details(self.lot)[0]
+		self.assertEqual(entry["additions"], {"Main Fabric": {self.white: -10}})
+		printed = get_cloth_program_print_data(self.lot.name)
+		group = printed["tables"][0]["fabric_groups"][0]
+		self.assertEqual((group["additions"], group["additional_total"]), ({self.white: -10}, -10))
+		self.assertEqual(printed["tables"][0]["total"], 814)
+
+	def test_reduction_below_zero_fails_loudly(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "below 0"):
+			cloth_program.recalculate_cloth_program(self.lot.name, additions=self._add_weight(-900))
+		self.assertEqual(self._weights(), {self.dia14: 496, self.dia19: 328})
+
+	def test_zero_add_weight_clears_the_stored_additions(self):
+		cloth_program.recalculate_cloth_program(self.lot.name, additions=self._add_weight(10))
+		cloth_program.recalculate_cloth_program(self.lot.name, additions=self._add_weight(0))
+		self.assertEqual(self._weights(), {self.dia14: 496, self.dia19: 328})
+		self.lot.reload()
+		self.assertEqual(frappe.parse_json(self.lot.cloth_program_additions)["routes"], [])
+
+
+class TestAllocateAddedWeight(TestCase):
+	def test_matches_mrp_largest_remainder_split(self):
+		self.assertEqual(allocate_added_weight(10, [("14", 496), ("19", 328)]), {"14": 6, "19": 4})
+
+	def test_ties_go_to_the_earlier_dia(self):
+		self.assertEqual(allocate_added_weight(1, [("13", 5), ("14", 5)]), {"13": 1, "14": 0})
+
+	def test_negative_total_takes_kg_off_the_same_way(self):
+		self.assertEqual(allocate_added_weight(-10, [("14", 496), ("19", 328)]), {"14": -6, "19": -4})

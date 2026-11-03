@@ -54,8 +54,8 @@
 								</th>
 							</tr>
 						</thead>
-						<tbody>
-							<tr v-for="line in program_lines(entry)" :key="line.fabric_type + line.dia">
+						<tbody v-for="group in fabric_groups(entry)" :key="group.fabric_type">
+							<tr v-for="line in group.lines" :key="line.fabric_type + line.dia">
 								<td class="fp-dia">{{ line.fabric_type }}</td>
 								<td class="fp-dia">{{ line.dia }}</td>
 								<td
@@ -76,6 +76,40 @@
 								</td>
 								<td class="fp-num fp-program">{{ line_total(entry, line) }}</td>
 							</tr>
+							<tr class="fp-subtotal">
+								<td colspan="2">{{ __("Total {0}", [group.fabric_type]) }}</td>
+								<td
+									v-for="colour in program_colour_columns(entry)"
+									:key="colour.key"
+									class="fp-num"
+								>
+									{{ group_colour_total(entry, group, colour.key) }}
+								</td>
+								<td class="fp-num">{{ group_total(entry, group) }}</td>
+							</tr>
+							<tr v-if="can_calculate || has_add_weight(entry, group)" class="fp-add-weight">
+								<td colspan="2">{{ __("Add Weight") }}</td>
+								<td
+									v-for="colour in program_colour_columns(entry)"
+									:key="colour.key"
+									class="fp-num"
+								>
+									<input
+										v-if="can_calculate"
+										:value="add_weight(entry, group, colour.key) || ''"
+										type="number"
+										step="1"
+										placeholder="0"
+										class="fp-input"
+										:aria-label="__('Add Weight {0} {1}', [group.fabric_type, colour.label])"
+										@change="set_add_weight(entry, group, colour.key, $event.target.value)"
+									/>
+									<span v-else>{{ signed_kg(add_weight(entry, group, colour.key)) }}</span>
+								</td>
+								<td class="fp-num">{{ signed_kg(add_weight_total(entry, group)) }}</td>
+							</tr>
+						</tbody>
+						<tbody>
 							<tr v-if="!program_dias(entry).length">
 								<td :colspan="program_colour_columns(entry).length + 3" class="fp-none">
 									{{ __("No knitting program yet") }}
@@ -98,6 +132,14 @@
 
 			</section>
 		</div>
+		<div v-if="can_calculate && entries.length" class="fp-calculate">
+			<span class="fp-help">
+				{{ __("The percentage and added weights are saved on this Lot; click Calculate again after editing Add Weight. Negative Kg reduces that colour.") }}
+			</span>
+			<button type="button" class="btn btn-sm btn-primary" @click="calculate">
+				{{ __("Calculate") }}
+			</button>
+		</div>
 	</div>
 </template>
 
@@ -116,9 +158,16 @@ const editable = computed(() => {
 	return (doc.status || "Open") === "Open";
 });
 
+const can_calculate = computed(() => {
+	const doc = cur_frm ? cur_frm.doc : {};
+	return editable.value && Boolean(doc.__onload?.can_manage_cloth_program)
+		&& !doc.is_transferred && doc.docstatus !== 2 && cur_frm.has_perm("write");
+});
+
 function load_data(data) {
 	entries.value = (data || []).map((entry) => ({
 		...entry,
+		additions: JSON.parse(JSON.stringify(entry.additions || {})),
 		program: entry.program || [],
 		requirement: entry.requirement || [],
 		steps: entry.steps || [],
@@ -247,6 +296,68 @@ function set_line_weight(entry, line, colour, value) {
 		row.weight = weight;
 	}
 	mark_dirty();
+}
+
+function fabric_groups(entry) {
+	const groups = new Map();
+	for (const line of program_lines(entry)) {
+		if (!groups.has(line.fabric_type)) groups.set(line.fabric_type, { fabric_type: line.fabric_type, lines: [] });
+		groups.get(line.fabric_type).lines.push(line);
+	}
+	return [...groups.values()];
+}
+
+function group_colour_total(entry, group, colour) {
+	return round_kg(group.lines.reduce(
+		(sum, line) => sum + (Number(fabric_share(entry, line, colour)?.weight) || 0), 0));
+}
+
+function group_total(entry, group) {
+	return round_kg(group.lines.reduce((sum, line) => sum + line_total(entry, line), 0));
+}
+
+// Add Weight: whole kg per fabric type + colour; Calculate spreads it over the Dias.
+function add_weight(entry, group, colour) {
+	return Number(entry.additions[group.fabric_type]?.[colour]) || 0;
+}
+
+function set_add_weight(entry, group, colour, value) {
+	entry.additions[group.fabric_type] = { ...entry.additions[group.fabric_type], [colour]: Number(value) || 0 };
+}
+
+function has_add_weight(entry, group) {
+	return program_colour_columns(entry).some((colour) => add_weight(entry, group, colour.key));
+}
+
+function add_weight_total(entry, group) {
+	return program_colour_columns(entry).reduce((sum, colour) => sum + add_weight(entry, group, colour.key), 0);
+}
+
+function signed_kg(value) {
+	return value > 0 ? `+${value}` : value ? String(value) : "—";
+}
+
+function calculate() {
+	if (cur_frm.is_dirty()) {
+		frappe.msgprint(__("Save the Lot before calculating the Cloth Program."));
+		return;
+	}
+	const additions = entries.value.flatMap((entry) => fabric_groups(entry).flatMap((group) =>
+		program_colour_columns(entry).map((colour) => ({
+			cloth_item: entry.cloth_item,
+			fabric_type: group.fabric_type,
+			colour: colour.key,
+			additional_weight: add_weight(entry, group, colour.key),
+		}))));
+	frappe.call({
+		method: "essdee_yrp.api.cloth_program.recalculate_cloth_program",
+		args: { lot: cur_frm.doc.name, modified: cur_frm.doc.modified, additions: JSON.stringify(additions) },
+		freeze: true,
+		freeze_message: __("Calculating Cloth Program..."),
+		callback: (r) => {
+			if (!r.exc) cur_frm.reload_doc();
+		},
+	});
 }
 
 function program_colour_total(entry, colour) {
@@ -389,6 +500,22 @@ defineExpose({ load_data, get_data, get_requirement });
 .fp-program {
 	background: var(--subtle-fg, transparent);
 	font-weight: 600;
+}
+.fp-subtotal td,
+.fp-add-weight td {
+	font-weight: 600;
+	background: var(--subtle-fg, transparent);
+}
+.fp-calculate {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.fp-help {
+	color: var(--text-muted);
+	font-size: 12px;
 }
 .fp-total td {
 	font-weight: 600;

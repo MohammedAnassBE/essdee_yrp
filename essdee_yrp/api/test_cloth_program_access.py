@@ -40,6 +40,24 @@ class TestLotDeskClothProgram(TestCase):
 		self.assertNotIn("/printview?doctype=Lot&", source)
 		self.assertIn('encodeURIComponent("Essdee Lot Cloth Program")', source)
 
+	def test_print_signs_added_and_reduced_weight(self):
+		html = frappe.get_doc("Print Format", "Essdee Lot Cloth Program").html
+		start = html.index('<tr class="addition-row">')
+		start = html.rindex("{% if", 0, start)
+		row = html[start : html.index("{% endif %}\n        {% endfor %}", start) + len("{% endif %}")]
+
+		def render(additions):
+			fabric = {"additional_total": sum(additions.values()), "additions": additions}
+			return frappe.render_template(row, {"fabric": fabric, "cloth": {"colours": ["Blue", "Red"]}})
+
+		rendered = render({"Red": 5, "Blue": -3})
+		self.assertIn(">-3<", rendered)
+		self.assertIn(">+5<", rendered)
+		self.assertIn(">+2<", rendered)
+		self.assertNotIn("+-", rendered)
+		self.assertIn(">-3<", render({"Red": 3, "Blue": -3}))
+		self.assertNotIn("addition-row", render({"Red": 0, "Blue": 0}))
+
 
 class TestClothProgramGuards(TestCase):
 	def setUp(self):

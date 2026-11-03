@@ -47,6 +47,7 @@ from essdee_yrp.fabric_program import (
 	get_greige_colour,
 	get_knitting_output_colour_map,
 	get_program_fabric_types,
+	resolve_program_additions,
 )
 from essdee_yrp.fabric_requirement import compute_cloth_demand, get_fabric_type
 
@@ -1170,7 +1171,7 @@ def _round_program_weight(value):
 
 
 def _synced_program_route_additions(value, by_fabric_type=False):
-	"""Return MRP's resolved per-route whole-kg additions keyed for this Lot.
+	"""Return the resolved per-route whole-kg additions (negative = reduction) keyed for this Lot.
 
 	``by_fabric_type`` adds MRP's Main/accessory fabric type to each key."""
 	if not value:
@@ -1182,21 +1183,21 @@ def _synced_program_route_additions(value, by_fabric_type=False):
 			frappe.throw(_("Synced Cloth Program Additions are not valid JSON."))
 	routes = (value.get("routes") or []) if isinstance(value, dict) else []
 	additions = {}
-	for index, row in enumerate(routes, 1):
+	for row in routes:
 		weight = flt(row.get("additional_weight"))
-		if weight < 0:
-			frappe.throw(
-				_("Synced Cloth Program Additions row {0}: Added Weight cannot be negative.").format(index)
-			)
 		key = (
 			row.get("cloth_item"),
 			_attribute_value(row.get("dia")),
 			_attribute_value(row.get("colour")) or None,
 		)
-		if not all(key[:2]) or weight <= 0:
+		if not all(key[:2]) or not weight:
 			continue
 		if by_fabric_type:
-			key = (*key, get_fabric_type(row.get("requirement_type"), row.get("accessory_name")))
+			key = (
+				*key,
+				row.get("fabric_type")
+				or get_fabric_type(row.get("requirement_type"), row.get("accessory_name")),
+			)
 		additions[key] = additions.get(key, 0) + _round_program_weight(weight)
 	return additions
 
@@ -1218,7 +1219,6 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 	excess_percentage = flt(excess_percentage)
 	if excess_percentage < 0:
 		frappe.throw(_("Knitting program excess percentage cannot be negative."))
-	route_additions = _synced_program_route_additions(lot_doc.get("cloth_program_additions"))
 
 	# Popup excess is authoritative for this build. Start from the exact
 	# garment demand so MRP Settings cloth allowance is not silently stacked
@@ -1381,6 +1381,7 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 		frappe.throw(_("No selected cloth matches the lot's cloth demand."))
 
 	lot_doc.cloth_excess_percentage = excess_percentage
+	route_additions = _store_program_additions(lot_doc, excess_percentage)
 	_update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_additions)
 	return {
 		"cloths_built": len(built),
@@ -1391,8 +1392,11 @@ def build_cloth_programs(lot, selections, modified=None, excess_percentage=0):
 
 
 @frappe.whitelist()
-def recalculate_cloth_program(lot, modified=None):
-	"""Recalculate saved Lot demand without creating or modifying cloth IPDs."""
+def recalculate_cloth_program(lot, modified=None, additions=None):
+	"""Recalculate saved Lot demand without creating or modifying cloth IPDs.
+
+	``additions`` replaces the Lot's Add Weight totals:
+	[{cloth_item, fabric_type, colour, additional_weight}]."""
 	attribute_db.get_value("SD YRP Lot", lot, "name", for_update=True)
 	lot_doc = frappe.get_doc("SD YRP Lot", lot)
 	lot_doc.check_permission("write")
@@ -1415,8 +1419,12 @@ def recalculate_cloth_program(lot, modified=None):
 			)
 		payload.setdefault(cloth, {})[(dia, colour)] = flt(kg)
 	excess = flt(lot_doc.get("cloth_excess_percentage"))
-	additions = _synced_program_route_additions(lot_doc.get("cloth_program_additions"))
-	_update_cloth_program_quantities(lot_doc, payload, excess, additions)
+	if additions is not None:
+		lot_doc.cloth_program_additions = frappe.as_json(
+			{"version": 1, "totals": frappe.parse_json(additions) or [], "routes": []}
+		)
+	route_additions = _store_program_additions(lot_doc, excess)
+	_update_cloth_program_quantities(lot_doc, payload, excess, route_additions)
 	lot_doc.reload()
 	errors = [
 		r.cloth_item
@@ -1426,6 +1434,13 @@ def recalculate_cloth_program(lot, modified=None):
 	if errors:
 		frappe.throw(_("Cloth Program could not be recalculated for: {0}").format(", ".join(errors)))
 	return {"cloths_recalculated": len(payload)}
+
+
+def _store_program_additions(lot_doc, excess_percentage):
+	"""Re-spread the Lot's Add Weight totals over its current Dias; return the route kg."""
+	if resolved := resolve_program_additions(lot_doc, excess_percentage):
+		lot_doc.cloth_program_additions = frappe.as_json(resolved)
+	return _synced_program_route_additions(lot_doc.get("cloth_program_additions"))
 
 
 def _update_cloth_program_quantities(lot_doc, payload, excess_percentage, route_additions):

@@ -60,3 +60,29 @@ export function serializeClothProgram(entries) {
 		})),
 	}))
 }
+
+export const addWeightKey = (clothItem, fabricType, colour) => [clothItem, fabricType, colour || ""].join("\u0000")
+
+// Add Weight: kg per cloth + fabric type + colour, spread over its Dias by the server on Calculate.
+export function addWeightDrafts(fabrics) {
+	const drafts = {}
+	for (const entry of fabrics) {
+		for (const [fabricType, colours] of Object.entries(entry.additions || {})) {
+			for (const [colour, weight] of Object.entries(colours)) drafts[addWeightKey(entry.cloth_item, fabricType, colour)] = Number(weight) || 0
+		}
+	}
+	return drafts
+}
+
+export function serializeAddWeight(fabrics, drafts) {
+	return fabrics.flatMap((entry) =>
+		programFabricTypes({ program: entry.program || [] }).flatMap(({ fabricType, rows }) =>
+			[...new Set(rows.map(programColour))].sort().map((colour) => ({
+				cloth_item: entry.cloth_item,
+				fabric_type: fabricType,
+				colour,
+				additional_weight: Number(drafts[addWeightKey(entry.cloth_item, fabricType, colour)]) || 0,
+			})),
+		),
+	)
+}

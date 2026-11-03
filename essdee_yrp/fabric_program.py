@@ -17,6 +17,8 @@ payloads never touch them.
 Spec: apps/essdee_yrp/docs/design/2026-07-04-lot-fabric-program-design.md
 """
 
+import math
+
 import frappe
 from frappe import _
 from frappe.utils import escape_html, flt
@@ -39,6 +41,7 @@ def fetch_fabric_program_details(lot_doc):
 	requirement_rows = lot_doc.get("lot_fabric_requirements") or []
 	ledger_rows = lot_doc.get("lot_fabric_step_ledger") or []
 	fabric_types = get_program_fabric_types(lot_doc) if program_rows else {}
+	additions = get_program_addition_totals(lot_doc)
 	for fabric in lot_doc.get("lot_fabric_details") or []:
 		if not fabric.production_detail:
 			continue
@@ -82,6 +85,7 @@ def fetch_fabric_program_details(lot_doc):
 				],
 				"steps": _ledger_steps(ipd, fabric.cloth_item, ledger_rows),
 				"program": current_program,
+				"additions": additions.get(fabric.cloth_item, {}),
 			}
 		)
 	return entries
@@ -193,6 +197,100 @@ def get_program_fabric_types(lot_doc):
 			"addition": addition,
 		}
 	return routes
+
+
+def _stored_addition_totals(lot_doc):
+	"""The Lot's saved Add Weight totals as [((cloth, fabric type, colour), kg)]."""
+	stored = lot_doc.get("cloth_program_additions") or {}
+	stored = frappe.parse_json(stored) if isinstance(stored, str) else stored
+	return [
+		(
+			(
+				row.get("cloth_item"),
+				row.get("fabric_type") or get_fabric_type(row.get("requirement_type"), row.get("accessory_name")),
+				_attribute_value(row.get("colour")) or None,
+			),
+			flt(row.get("additional_weight")),
+		)
+		for row in stored.get("totals") or []
+	]
+
+
+def get_program_addition_totals(lot_doc):
+	"""Saved Add Weight kg as {cloth: {fabric type: {colour: kg}}}."""
+	result = {}
+	for (cloth, fabric_type, colour), weight in _stored_addition_totals(lot_doc):
+		colours = result.setdefault(cloth, {}).setdefault(fabric_type, {})
+		colours[colour or ""] = colours.get(colour or "", 0) + weight
+	return result
+
+
+def allocate_added_weight(total_weight, eligible_rows):
+	"""Spread whole kg over ``(key, base kg)`` rows by their share, like MRP.
+
+	Largest remainders take the leftover kg (ties: heavier, then earlier row), so
+	the parts add back to the entered total. A negative total takes kg off the same way.
+	"""
+	sign = -1 if total_weight < 0 else 1
+	total_weight = abs(int(total_weight))
+	base_total = sum(base for _key, base in eligible_rows)
+	if not total_weight or base_total <= 0:
+		return {}
+	shares, allocated = [], {}
+	for position, (key, base) in enumerate(eligible_rows):
+		exact = total_weight * base / base_total
+		allocated[key] = math.floor(exact)
+		shares.append((exact - allocated[key], base, -position, key))
+	remainder = total_weight - sum(allocated.values())
+	for *_order, key in sorted(shares, reverse=True)[:remainder]:
+		allocated[key] += 1
+	return {key: sign * kg for key, kg in allocated.items()}
+
+
+def resolve_program_additions(lot_doc, excess_percentage):
+	"""Spread the Lot's Add Weight totals (cloth, fabric type, colour) over its Dias.
+
+	Returns the additions payload with fresh per-Dia ``routes``, or None when the
+	Lot has no totals, so routes synced without totals stay as they are.
+	"""
+	from essdee_yrp.api.cloth_program import _round_program_weight
+
+	totals = _stored_addition_totals(lot_doc)
+	if not totals:
+		return None
+	demand = compute_cloth_demand(lot_doc.name, apply_allowance=False, by_fabric_type=True)
+	excess_factor = 1 + flt(excess_percentage) / 100
+	eligible = {}
+	for (cloth, dia, colour, fabric_type), kg in sorted(demand.items(), key=lambda item: str(item[0][1])):
+		if (base := _round_program_weight(flt(kg) * excess_factor)) > 0:
+			eligible.setdefault((cloth, fabric_type, colour or None), []).append((dia, base))
+	requested = {}
+	for key, weight in totals:
+		requested[key] = requested.get(key, 0) + weight
+	resolved = {"version": 1, "totals": [], "routes": []}
+	for key, weight in requested.items():
+		weight = int(math.copysign(_round_program_weight(abs(weight)), weight))
+		if weight and (weight < 0 or eligible.get(key)):
+			_add_resolved_routes(resolved, key, weight, eligible.get(key) or [])
+	return resolved
+
+
+def _add_resolved_routes(resolved, key, weight, eligible_rows):
+	cloth, fabric_type, colour = key
+	route = {"cloth_item": cloth, "fabric_type": fabric_type, "colour": colour}
+	bases = dict(eligible_rows)
+	allocation = allocate_added_weight(weight, eligible_rows) or {None: weight}
+	for dia, kg in allocation.items():
+		if bases.get(dia, 0) + kg < 0:
+			frappe.throw(
+				_("Add Weight {0} Kg for {1} {2} of {3} takes {4} below 0 Kg.").format(
+					weight, colour or _("No Colour"), fabric_type, cloth, dia or _("every Dia")
+				)
+			)
+	resolved["totals"].append({**route, "additional_weight": weight})
+	resolved["routes"].extend(
+		{**route, "dia": dia, "additional_weight": kg} for dia, kg in allocation.items() if kg
+	)
 
 
 def split_program_weight(weight, fabric_types):

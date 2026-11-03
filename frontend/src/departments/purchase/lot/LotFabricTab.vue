@@ -1,8 +1,8 @@
 <template>
 	<div class="lot-tab-stack">
-		<Button v-if="lot && canWrite" label="Build Cloth Program" icon="pi pi-cog" @click="buildOpen = true" />
-		<ClothProgramBuildDialog v-if="lot" v-model:visible="buildOpen" :lot="lot" :modified="modified" @saved="emit('changed')" @setup="openSetup" />
-		<ClothProgramDialog v-if="lot" v-model:visible="builderOpen" :lot="lot" :modified="modified" @built="emit('changed')" />
+		<Button v-if="lot && canWrite" label="Build Cloth Program" icon="pi pi-cog" @click="builderOpen = true" />
+		<ClothProgramBuildDialog v-if="lot" v-model:visible="buildOpen" :lot="lot" :modified="modified" @saved="emit('changed')" />
+		<ClothProgramDialog v-if="lot" v-model:visible="builderOpen" :lot="lot" :modified="modified" @built="openBuild" />
 		<section
 			v-for="(entry, index) in cards"
 			:key="entry.cloth_item || index"
@@ -180,9 +180,10 @@ const buildOpen = ref(false)
 const builderOpen = ref(false)
 const drafts = computed(() => addWeightDrafts(props.fabrics))
 
-function openSetup() {
-	buildOpen.value = false
-	builderOpen.value = true
+// Setup builds the cloth IPDs first; the popup then adjusts and stores the program.
+function openBuild() {
+	emit("changed")
+	buildOpen.value = true
 }
 
 function hasAddWeight(entry, section) {

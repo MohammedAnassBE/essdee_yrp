@@ -84,18 +84,19 @@ test("Merch Lot hides PO link actions from readers", async () => {
 	assert.deepEqual(page.actions(), [])
 })
 
-test("Merch Build Cloth Program opens the preview popup; its Setup opens the colour and process setup", async () => {
+test("Merch Build Cloth Program opens setup first, builds, then opens the live popup", async () => {
 	const build = { label: "Build Cloth Program", allowed: true, visible: true }
 	const page = mountMerchLot({ name: "LOT-1", modified: "m1", permissions: { can_write: false }, capabilities: { build_cloth_programs: build } })
 	await tick()
 	const props = () => [page.find("cloth-build")[0].props, page.find("cloth")[0].props]
 	page.actions().find(row => row.key === "build_cloth_programs").command()
 	await tick()
+	assert.deepEqual(props().map(row => row.visible), [false, true])
+	assert.equal(props()[0].onSetup, undefined)
+	props()[1].onBuild({ selections: [], excess_percentage: 4.8 })
+	await tick()
 	assert.deepEqual(props().map(row => row.visible), [true, false])
 	assert.deepEqual([props()[0].lot, props()[0].modified], ["LOT-1", "m1"])
-	props()[0].onSetup()
-	await tick()
-	assert.deepEqual(props().map(row => row.visible), [false, true])
 	props()[0].onSaved()
 	await tick()
 	assert.deepEqual(page.loads, ["LOT-1", "LOT-1"])

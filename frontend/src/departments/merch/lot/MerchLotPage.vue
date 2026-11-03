@@ -101,7 +101,6 @@
 			:lot="lotId"
 			:modified="workspace.modified || ''"
 			@saved="load"
-			@setup="openClothSetup"
 		/>
 		<MerchClothProgramDialog
 			v-model:visible="clothVisible"
@@ -227,7 +226,7 @@ function selectAction(command) {
 		return
 	}
 	if (command === "build_cloth_programs") {
-		buildVisible.value = true
+		clothVisible.value = true
 		return
 	}
 	if (["link_po", "unlink_po"].includes(command)) {
@@ -237,10 +236,6 @@ function selectAction(command) {
 	}
 	pendingCommand.value = command
 	confirmationVisible.value = true
-}
-function openClothSetup() {
-	buildVisible.value = false
-	clothVisible.value = true
 }
 function confirmCommand() {
 	confirmationVisible.value = false
@@ -278,6 +273,7 @@ async function execute(command, payload = {}) {
 		)
 		if (request !== sequence) return
 		workspace.value = result
+		if (command === "build_cloth_programs") buildVisible.value = true
 		ppoVisible.value = false
 		clothVisible.value = false
 		toast.add(merchLotCommandSuccess(command, props.lotId))

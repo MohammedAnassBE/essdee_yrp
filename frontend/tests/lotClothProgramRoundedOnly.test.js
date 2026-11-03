@@ -26,3 +26,12 @@ test("Lot Cloth Program hides the Process Ledger with its Input/Output rows and 
 	assert.match(conversions, /aria-label="Conversion process"/)
 	assert.match(conversions, /lotConversionRows\(\{ fabrics: props\.fabrics, other_conversions: props\.otherConversions \}\)/)
 })
+
+test("Purchase Build Cloth Program runs setup first, then opens the live popup without remounting the tab", () => {
+	assert.match(source, /label="Build Cloth Program" icon="pi pi-cog" @click="builderOpen = true"/)
+	assert.match(source, /<ClothProgramDialog[^>]*@built="openBuild"/)
+	assert.match(source, /function openBuild\(\) \{\s*emit\("changed"\)\s*buildOpen\.value = true/)
+	assert.doesNotMatch(source, /@setup=/)
+	const page = readFileSync(new URL("../src/departments/purchase/lot/LotPage.vue", import.meta.url), "utf8")
+	assert.match(page, /<LotFabricTab[\s\S]*?@changed="refreshInBackground"/)
+})

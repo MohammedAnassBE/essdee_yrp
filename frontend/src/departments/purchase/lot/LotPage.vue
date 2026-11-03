@@ -45,7 +45,7 @@
 								<LotFabricTab
 									v-else
 									:fabrics="workspace.fabrics || []"
-									:lot="workspace.name" :modified="workspace.modified" :can-write="Boolean(workspace.permissions?.can_write)" @changed="load(true)"
+									:lot="workspace.name" :modified="workspace.modified" :can-write="Boolean(workspace.permissions?.can_write)" @changed="refreshInBackground"
 								/>
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">

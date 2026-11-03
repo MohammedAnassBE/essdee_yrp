@@ -21,6 +21,7 @@ const sections = ref({})
 const reports = computed(() => finishingReportTabs(sections.value.reports?.reports))
 const workspaces = [
 	{ key: "plans", label: "Finishing Plan", description: "Inward, packing, dispatch, OCR and audit for each lot.", icon: "pi pi-box", to: "/finishing/plans" },
+	{ key: "sewing_plans", label: "Sewing Plan", description: "Review plans and production for a Sewing Unit.", icon: "pi pi-sitemap", to: "/finishing/sewing-plans" },
 	{ key: "reports", label: "Reports", description: "Packing, dispatch, ironing, rejection, rework and stock reports.", icon: "pi pi-chart-bar", to: "/finishing/reports" },
 	{ key: "rework_details", label: "Rework Details", description: "Clear rework pieces into Accepted or Rejected stock per GRN.", icon: "pi pi-replay", to: "/finishing/rework-details" },
 	{ key: "dispatches", label: "Finishing Plan Dispatch", description: "Dispatch packed boxes from several Finishing Plans together.", icon: "pi pi-truck", to: "/finishing/dispatches" },

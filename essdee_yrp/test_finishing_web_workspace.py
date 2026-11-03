@@ -107,6 +107,7 @@ class TestFinishingWebWorkspace(TestCase):
 				"work_orders",
 				"delivery_challans",
 				"goods_received_notes",
+				"sewing_plans",
 			],
 		)
 		self.assertEqual(payload["sections"]["plans"]["doctype"], DOCTYPE)
@@ -143,6 +144,14 @@ class TestFinishingWebWorkspace(TestCase):
 			self.assertTrue(self._workspace().get_capabilities()["sections"]["work_orders"]["can_create"])
 		with self._permissions(denied={("YRP Work Order", "read")}):
 			self.assertNotIn("work_orders", self._workspace().get_capabilities()["sections"])
+
+	def test_sewing_plans_card_reuses_the_sewing_plan_capability(self):
+		with self._permissions(allowed={("SD YRP Sewing Plan", "read")}):
+			sections = self._workspace().get_capabilities()["sections"]
+		self.assertEqual(list(sections), ["sewing_plans"])
+		self.assertEqual((sections["sewing_plans"]["label"], sections["sewing_plans"]["can_read"]), ("Sewing Plan", True))
+		with self._permissions(denied={("SD YRP Sewing Plan", "read")}):
+			self.assertNotIn("sewing_plans", self._workspace().get_capabilities()["sections"])
 
 	def test_lot_cut_quantity_follows_finishing_report_access(self):
 		with self._permissions(denied={("SD YRP Cutting Plan", "read")}):

@@ -39,6 +39,7 @@ class TestSewingWebWorkspace(TestCase):
 				"stock_transfers": "Stock Transfers",
 				"reports": "Reports",
 				"attendance": "Attendance Report",
+				"finishing_plans": "Finishing Plan",
 			},
 		)
 		self.assertEqual(
@@ -119,8 +120,11 @@ class TestSewingWebWorkspace(TestCase):
 
 	def test_report_and_attendance_sections_require_plan_read_and_report(self):
 		for denied_permission, expected_sections in (
-			("read", {"work_orders", "delivery_challans", "goods_received_notes", "stock_transfers"}),
-			("report", {"plans", "work_orders", "delivery_challans", "goods_received_notes", "stock_transfers"}),
+			("read", {"work_orders", "delivery_challans", "goods_received_notes", "stock_transfers", "finishing_plans"}),
+			(
+				"report",
+				{"plans", "work_orders", "delivery_challans", "goods_received_notes", "stock_transfers", "finishing_plans"},
+			),
 		):
 			with self.subTest(denied_permission=denied_permission):
 				payload = self._capabilities(denied={("SD YRP Sewing Plan", denied_permission)})
@@ -143,6 +147,14 @@ class TestSewingWebWorkspace(TestCase):
 				"can_report": False,
 			},
 		)
+
+	def test_finishing_plans_card_follows_finishing_plan_read(self):
+		section = self._capabilities(allowed={("SD YRP Finishing Plan", "read")})["sections"]["finishing_plans"]
+		self.assertEqual(
+			(section["label"], section["doctype"], section["can_read"], section["can_write"]),
+			("Finishing Plan", "SD YRP Finishing Plan", True, False),
+		)
+		self.assertNotIn("finishing_plans", self._capabilities(denied={("SD YRP Finishing Plan", "read")})["sections"])
 
 	def test_stock_transfers_lists_only_readable_stock_operations(self):
 		payload = self._capabilities(allowed={("YRP Stock Update", "read"), ("SD YRP Lot Transfer", "read")})

@@ -241,10 +241,19 @@ const routes = [
 	{ path: "/sewing/reports", name: "sewing-reports", component: SewingReports },
 	{ path: "/sewing/attendance", name: "sewing-attendance", component: SewingAttendance },
 	{
+		path: "/sewing/finishing-plans", name: "sewing-finishing-plans", component: FinishingPlans,
+		props: { backTo: "/sewing", backLabel: "Sewing", viewRouteName: "sewing-finishing-plan" },
+	},
+	{
+		path: "/sewing/finishing-plans/:finishingPlanId", name: "sewing-finishing-plan", component: FinishingPlan,
+		props: { backTo: "/sewing/finishing-plans", backLabel: "Finishing Plans" },
+	},
+	{
 		path: "/sewing/stock-transfers", name: "sewing-stock-transfers", component: FabricStoreSection,
 		props: { section: "stock_transfers", storeName: "Sewing", basePath: "/sewing" },
 	},
 	{ path: "/finishing/plans", name: "finishing-plans", component: FinishingPlans },
+	{ path: "/finishing/sewing-plans", name: "finishing-sewing-plans", component: SewingPlans, props: { backTo: "/finishing", backLabel: "Finishing" } },
 	{
 		path: "/finishing/work-orders", name: "finishing-work-orders", component: FabricStoreSection,
 		props: { section: "work_orders", storeName: "Finishing", basePath: "/finishing", workOrderViewRouteName: "finishing-work-order", workOrderNewRouteName: "finishing-work-order-new" },

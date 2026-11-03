@@ -139,9 +139,9 @@ def get_capabilities() -> dict:
 	"""Return the Finishing launcher cards the session user can open."""
 
 	sections = {}
-	plans = _permission_flags(DOCTYPE)
-	if plans["can_read"]:
-		sections["plans"] = _section("Finishing Plan", DOCTYPE, plans)
+	plans = get_plan_section()
+	if plans:
+		sections["plans"] = plans
 	reports = _readable_reports()
 	if reports:
 		sections["reports"] = {
@@ -163,7 +163,19 @@ def get_capabilities() -> dict:
 		flags = _permission_flags(doctype, ("read", "create"))
 		if flags["can_read"]:
 			sections[key] = _section(label, doctype, flags)
+	from essdee_yrp.sewing import web_workspace as sewing_workspace
+
+	sewing_plans = sewing_workspace.get_capabilities()["sections"].get("plans")
+	if sewing_plans:
+		sections["sewing_plans"] = sewing_plans
 	return {"sections": sections}
+
+
+def get_plan_section() -> dict:
+	"""Finishing Plan card flags, or an empty dict when the user cannot read plans."""
+
+	plans = _permission_flags(DOCTYPE)
+	return _section("Finishing Plan", DOCTYPE, plans) if plans["can_read"] else {}
 
 
 def get_plan(name: str):

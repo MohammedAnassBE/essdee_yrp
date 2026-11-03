@@ -37,7 +37,7 @@ export const departments = [
 		label: "Sewing",
 		shortLabel: "SW",
 		path: "/sewing",
-		sections: { plans: "plans", work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", stock_transfers: "stock-transfers", reports: "reports", attendance: "attendance" },
+		sections: { plans: "plans", finishing_plans: "finishing-plans", work_orders: ["work-orders", "delivery-challans", "goods-received-notes"], delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", stock_transfers: "stock-transfers", reports: "reports", attendance: "attendance" },
 		component: () => import("./Sewing.vue"),
 	},
 	{
@@ -45,7 +45,7 @@ export const departments = [
 		label: "Finishing",
 		shortLabel: "FN",
 		path: "/finishing",
-		sections: { plans: "plans", reports: "reports", rework_details: "rework-details", dispatches: "dispatches", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes" },
+		sections: { plans: "plans", sewing_plans: "sewing-plans", reports: "reports", rework_details: "rework-details", dispatches: "dispatches", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes" },
 		component: () => import("./Finishing.vue"),
 	},
 	{

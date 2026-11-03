@@ -145,7 +145,7 @@
 				<label><span>Cloth Type *</span><Select v-model="clothForm.cloth_type" :options="editorAttributes.cloth_type" filter fluid @change="clothTypeChanged" /></label>
 				<label><span>Colour *</span><Select v-model="clothForm.colour" :options="editorAttributes.colour" filter fluid @change="loadSetFields()" /></label>
 				<label><span>Dia *</span><Select v-model="clothForm.dia" :options="clothDiaOptions" filter fluid @change="clothDiaChanged" /></label>
-				<label><span>Actual Dia *</span><Select v-model="clothForm.actual_dia" :options="clothDiaOptions" filter fluid /></label>
+				<label><span>Actual Dia *</span><Select v-model="clothForm.actual_dia" :options="editorAttributes.dia" filter fluid /></label>
 				<label><span>Shade *</span><InputText v-model="clothForm.shade" fluid /></label>
 				<label><span>Fabric Type *</span><Select v-model="clothForm.fabric_type" :options="['Open Width', 'Tubler']" fluid /></label>
 				<label><span>Weight (kg) *</span><InputNumber v-model="clothForm.weight" :min="0" :max-fraction-digits="3" fluid /></label>
@@ -168,7 +168,7 @@
 				<label><span>Cloth Type *</span><Select v-model="accessoryForm.cloth_type" :options="editorAttributes.cloth_type" filter fluid @change="accessoryClothTypeChanged" /></label>
 				<label><span>Colour *</span><Select v-model="accessoryForm.colour" :options="editorAttributes.colour" filter fluid /></label>
 				<label><span>Dia *</span><Select v-model="accessoryForm.dia" :options="accessoryDiaOptions" filter fluid @change="accessoryDiaChanged" /></label>
-				<label><span>Actual Dia *</span><Select v-model="accessoryForm.actual_dia" :options="accessoryDiaOptions" filter fluid /></label>
+				<label><span>Actual Dia *</span><Select v-model="accessoryForm.actual_dia" :options="editorAttributes.dia" filter fluid /></label>
 				<label><span>Shade *</span><InputText v-model="accessoryForm.shade" fluid /></label>
 				<label><span>Weight (kg) *</span><InputNumber v-model="accessoryForm.weight" :min="0" :max-fraction-digits="3" fluid /></label>
 				<label><span>No of Rolls *</span><InputNumber v-model="accessoryForm.no_of_rolls" :min="0" fluid /></label>
@@ -382,7 +382,6 @@ function diaOptions(clothType) {
 
 function clothTypeChanged() {
 	if (!clothDiaOptions.value.includes(clothForm.dia)) clothForm.dia = ""
-	if (!clothDiaOptions.value.includes(clothForm.actual_dia)) clothForm.actual_dia = ""
 }
 
 function clothDiaChanged() {
@@ -391,7 +390,6 @@ function clothDiaChanged() {
 
 function accessoryClothTypeChanged() {
 	if (!accessoryDiaOptions.value.includes(accessoryForm.dia)) accessoryForm.dia = ""
-	if (!accessoryDiaOptions.value.includes(accessoryForm.actual_dia)) accessoryForm.actual_dia = ""
 }
 
 function accessoryDiaChanged() {

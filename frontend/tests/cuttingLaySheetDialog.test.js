@@ -187,3 +187,10 @@ test("cloth details show Fabric Type and Tubler effective bits like MRP", () => 
 	assert.equal(cell("no_of_bits", { no_of_bits: 36, effective_bits: 72 }), "36 (72)")
 	assert.equal(cell("no_of_bits", { no_of_bits: 18, effective_bits: 18 }), 18)
 })
+
+test("Actual Dia offers every dia of the plan, not only the cloth type's mapped dia", () => {
+	const source = fs.readFileSync(new URL("../src/departments/cutting/CuttingLaySheetDialog.vue", import.meta.url), "utf8")
+	assert.match(source, /<Select v-model="clothForm\.actual_dia" :options="editorAttributes\.dia"/)
+	assert.match(source, /<Select v-model="accessoryForm\.actual_dia" :options="editorAttributes\.dia"/)
+	assert.doesNotMatch(source, /DiaOptions\.value\.includes\((cloth|accessory)Form\.actual_dia\)/)
+})

@@ -9,6 +9,8 @@ from frappe.utils import flt, getdate, now_datetime, nowtime
 from yrp.attribute_links import value as _attribute_value
 from yrp.yrp.doctype.yrp_item.yrp_item import get_parent_item
 
+from essdee_yrp.cutting.cloth_usage import get_actual_cloth_key, get_cloth_keys
+
 
 class SDYRPCuttingBulkLaySheets(Document):
 	def autoname(self):
@@ -889,17 +891,16 @@ def validate_bulk_print_prerequisites(laysheet_name):
 
 
 def validate_cutting_plan_stock(laysheet):
+	plan = frappe.get_doc("SD YRP Cutting Plan", laysheet.cutting_plan)
+	cloth_keys = get_cloth_keys(plan.cutting_plan_cloth_details)
 	required = defaultdict(float)
 	for row in laysheet.cutting_laysheet_details:
-		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(
-			row.weight
-		) - flt(row.balance_weight)
+		key = get_actual_cloth_key(cloth_keys, row.colour, row.cloth_type, row.actual_dia)
+		required[key] += flt(row.weight) - flt(row.balance_weight)
 	for row in laysheet.cutting_laysheet_accessory_details:
-		required[(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))] += flt(
-			row.weight
-		)
+		key = get_actual_cloth_key(cloth_keys, row.colour, row.cloth_type, row.actual_dia)
+		required[key] += flt(row.weight)
 
-	plan = frappe.get_doc("SD YRP Cutting Plan", laysheet.cutting_plan)
 	available = {
 		(_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia)): flt(row.weight)
 		- flt(row.used_weight)

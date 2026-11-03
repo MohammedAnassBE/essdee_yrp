@@ -23,7 +23,12 @@ from yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan import (
 )
 from yrp.yrp.doctype.yrp_item.yrp_item import get_or_create_variant, get_parent_item
 
-from essdee_yrp.cutting.cloth_usage import recompute_cutting_plan_cloth_usage
+from essdee_yrp.cutting.cloth_usage import (
+	get_actual_cloth_key,
+	get_cloth_keys,
+	get_plan_cloth_rows,
+	recompute_cutting_plan_cloth_usage,
+)
 from essdee_yrp.cutting.laysheet_manual_items import build_manual_item_details, get_web_manual_items
 from essdee_yrp.cutting.parent_adapter import (
 	get_completed_incomplete_json,
@@ -988,15 +993,16 @@ def get_web_manual_item_details(doc, manual_items, cutting_plan=None, cutting_or
 
 def validate_cutting_plan_cloth_balance(laysheet_doc, cutting_plan):
 	"""Check the plan can absorb this LaySheet's cloth; usage is persisted only at label print."""
+	cp_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
+	cloth_keys = get_cloth_keys(cp_doc.cutting_plan_cloth_details)
 	cloth = {}
 	for row in laysheet_doc.cutting_laysheet_details:
-		key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))
+		key = get_actual_cloth_key(cloth_keys, row.colour, row.cloth_type, row.actual_dia)
 		cloth[key] = cloth.get(key, 0) + flt(row.used_weight)
 	for row in laysheet_doc.cutting_laysheet_accessory_details:
-		key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.actual_dia))
+		key = get_actual_cloth_key(cloth_keys, row.colour, row.cloth_type, row.actual_dia)
 		cloth[key] = cloth.get(key, 0) + flt(row.weight)
 
-	cp_doc = frappe.get_doc("SD YRP Cutting Plan", cutting_plan)
 	for row in cp_doc.cutting_plan_cloth_details:
 		key = (_attribute_value(row.colour), row.cloth_type, _attribute_value(row.dia))
 		if key in cloth and flt(row.weight - row.used_weight - cloth[key], 3) < 0:
@@ -1812,8 +1818,10 @@ def apply_laysheet_to_parent(cls_doc, check_cp=False):
 			accessory = {}
 			cp_cloth = []
 			cp_accessory = []
+			cp_doc = frappe.get_doc("SD YRP Cutting Plan", parent_name)
+			cloth_keys = get_cloth_keys(cp_doc.cutting_plan_cloth_details)
 			for item in cls_doc.cutting_laysheet_details:
-				key = (_attribute_value(item.colour), item.cloth_type, _attribute_value(item.actual_dia))
+				key = get_actual_cloth_key(cloth_keys, item.colour, item.cloth_type, item.actual_dia)
 				cloth.setdefault(key, 0)
 				cloth[key] += item.weight - item.balance_weight
 			for item in cls_doc.cutting_laysheet_accessory_details:
@@ -1825,8 +1833,6 @@ def apply_laysheet_to_parent(cls_doc, check_cp=False):
 				)
 				accessory.setdefault(key, 0)
 				accessory[key] += item.weight
-
-			cp_doc = frappe.get_doc("SD YRP Cutting Plan", parent_name)
 
 			if check_cp:
 				for item in cp_doc.cutting_plan_cloth_details:
@@ -2438,30 +2444,40 @@ def update_cloth_stock(cls_doc, multiplier1, multiplier2):
 	ipd, supplier = frappe.get_value("YRP Work Order", work_order, ["production_detail", "supplier"])
 	warehouse = _get_warehouse_for_supplier(supplier)
 	ipd_doc = frappe.get_doc("YRP Item Production Detail", ipd)
-	table = cls_doc.cutting_laysheet_details
-	sl_entries = sl_entries + get_table_entries(
-		table, ipd_doc, warehouse, cls_doc.lot, cls_doc.name, received_type, multiplier1, multiplier2
-	)
-	table = cls_doc.cutting_laysheet_accessory_details
-	sl_entries = sl_entries + get_table_entries(
-		table, ipd_doc, warehouse, cls_doc.lot, cls_doc.name, received_type, multiplier1, multiplier2
-	)
+	cloth_keys = get_cloth_keys(get_plan_cloth_rows(cls_doc.cutting_plan))
+	for table in (cls_doc.cutting_laysheet_details, cls_doc.cutting_laysheet_accessory_details):
+		sl_entries += get_table_entries(
+			table,
+			ipd_doc,
+			warehouse,
+			cls_doc.lot,
+			cls_doc.name,
+			received_type,
+			multiplier1,
+			multiplier2,
+			cloth_keys,
+		)
 	# The outgoing Dia bucket must post before its paired incoming bucket so the
 	# actual FIFO value, not a guessed current rate, becomes the incoming value.
 	sl_entries.sort(key=lambda row: 0 if flt(row.get("qty")) < 0 else 1)
 	make_sl_entries(sl_entries, force_inline=True)
 
 
-def get_table_entries(cls_table, ipd_doc, warehouse, lot, doc_name, received_type, multiplier1, multiplier2):
+def get_table_entries(
+	cls_table, ipd_doc, warehouse, lot, doc_name, received_type, multiplier1, multiplier2, cloth_keys
+):
 	sl_entries = []
 	for item in cls_table:
 		if _attribute_value(item.dia) != _attribute_value(item.actual_dia):
+			colour, actual_cloth_type, actual_dia = get_actual_cloth_key(
+				cloth_keys, item.colour, item.cloth_type, item.actual_dia
+			)
 			attributes = {}
-			attributes[ipd_doc.packing_attribute] = _attribute_value(item.colour)
-			attributes[get_dia_attribute()] = _attribute_value(item.actual_dia)
+			attributes[ipd_doc.packing_attribute] = colour
+			attributes[get_dia_attribute()] = actual_dia
 			cloth_name = None
 			for cloth in ipd_doc.cloth_detail:
-				if cloth.name1 == item.cloth_type:
+				if cloth.name1 == actual_cloth_type:
 					cloth_name = cloth.cloth
 					break
 			uom = frappe.get_cached_value("Item", cloth_name, "stock_uom")

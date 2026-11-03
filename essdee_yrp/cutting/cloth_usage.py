@@ -9,14 +9,17 @@ def recompute_cutting_plan_cloth_usage(cutting_plan):
 	"""Set the plan's cloth and accessory used weight from its Label Printed LaySheets, each counted once.
 
 	Matching follows apply_laysheet_to_parent (MRP update_cutting_plan): V2/V3 match cloth on the
-	LaySheet's actual dia and accessory rows on (accessory, colour, cloth type, dia); V1 matches both
-	on (colour, cloth type, dia). Submitted Recut and Print Panels add to cloth rows, as calc() does.
+	LaySheet's actual dia (on the cloth type planned with that dia) and accessory rows on
+	(accessory, colour, cloth type, dia); V1 matches both on (colour, cloth type, dia). Submitted Recut and Print Panels add to cloth rows, as calc() does.
 	"""
 	is_v1 = frappe.db.get_value("SD YRP Cutting Plan", cutting_plan, "version") not in ("V2", "V3")
-	cloth_used = get_laysheet_cloth_usage(cutting_plan, dia_field="dia" if is_v1 else "actual_dia")
+	cloth_keys = set() if is_v1 else get_cloth_keys(get_plan_cloth_rows(cutting_plan))
+	cloth_used = get_laysheet_cloth_usage(cutting_plan, "dia" if is_v1 else "actual_dia", cloth_keys)
 	accessory_used = {}
 	for row in get_laysheet_accessory_usage(cutting_plan):
-		cloth_key = _key(row.colour, row.cloth_type, row.dia if is_v1 else row.actual_dia)
+		cloth_key = get_actual_cloth_key(
+			cloth_keys, row.colour, row.cloth_type, row.dia if is_v1 else row.actual_dia
+		)
 		accessory_key = cloth_key if is_v1 else (row.accessory, *_key(row.colour, row.cloth_type, row.dia))
 		cloth_used[cloth_key] = cloth_used.get(cloth_key, 0) + flt(row.weight)
 		accessory_used[accessory_key] = accessory_used.get(accessory_key, 0) + flt(row.weight)
@@ -38,7 +41,42 @@ def recompute_cutting_plan_cloth_usage(cutting_plan):
 		frappe.db.set_value(PLAN_CLOTH_DETAIL, row.name, values, update_modified=False)
 
 
-def get_laysheet_cloth_usage(cutting_plan, dia_field):
+def get_plan_cloth_rows(cutting_plan):
+	return frappe.get_all(
+		PLAN_CLOTH_DETAIL,
+		filters={
+			"parent": cutting_plan,
+			"parenttype": "SD YRP Cutting Plan",
+			"parentfield": "cutting_plan_cloth_details",
+		},
+		fields=["colour", "cloth_type", "dia"],
+	)
+
+
+def get_cloth_keys(plan_cloth_rows):
+	return {_key(row.colour, row.cloth_type, row.dia) for row in plan_cloth_rows}
+
+
+def get_actual_cloth_type(cloth_keys, colour, cloth_type, actual_dia):
+	"""Cloth type whose plan fabric an Actual Dia is cut from: the row's own, else the one holding that colour and dia."""
+	colour, actual_dia = _attribute_value(colour), _attribute_value(actual_dia)
+	if (colour, cloth_type, actual_dia) in cloth_keys:
+		return cloth_type
+	matches = sorted({key[1] for key in cloth_keys if key[0] == colour and key[2] == actual_dia})
+	if len(matches) > 1:
+		frappe.throw(
+			f"Actual Dia {actual_dia} for {colour} is planned on more than one cloth type: "
+			f"{', '.join(matches)}"
+		)
+	return matches[0] if matches else cloth_type
+
+
+def get_actual_cloth_key(cloth_keys, colour, cloth_type, actual_dia):
+	"""(colour, cloth type, dia) of the plan fabric an Actual Dia is cut from."""
+	return _key(colour, get_actual_cloth_type(cloth_keys, colour, cloth_type, actual_dia), actual_dia)
+
+
+def get_laysheet_cloth_usage(cutting_plan, dia_field, cloth_keys):
 	rows = frappe.db.sql(
 		f"""
 		SELECT detail.colour, detail.cloth_type, detail.`{dia_field}` AS dia,
@@ -55,7 +93,7 @@ def get_laysheet_cloth_usage(cutting_plan, dia_field):
 	)
 	usage = {}
 	for row in rows:
-		key = _key(row.colour, row.cloth_type, row.dia)
+		key = get_actual_cloth_key(cloth_keys, row.colour, row.cloth_type, row.dia)
 		usage[key] = usage.get(key, 0) + flt(row.weight)
 	return usage
 

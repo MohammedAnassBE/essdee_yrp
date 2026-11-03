@@ -245,11 +245,6 @@ function on_cloth_type_change(){
             cloth_dia.set_value("")
             cloth_dia.refresh()
         }
-        if(actual_dia){
-            actual_dia.df.options = dia_options
-            actual_dia.set_value("")
-            actual_dia.refresh()
-        }
     } else {
         // Reset to all dias
         let all_dias = frappe.yrp.attribute_value(select_attributes.value['dia']) || []
@@ -258,11 +253,6 @@ function on_cloth_type_change(){
             cloth_dia.df.options = dia_options
             cloth_dia.set_value("")
             cloth_dia.refresh()
-        }
-        if(actual_dia){
-            actual_dia.df.options = dia_options
-            actual_dia.set_value("")
-            actual_dia.refresh()
         }
     }
 }
@@ -379,8 +369,6 @@ async function add_cloth_item(index){
             let dia_options = [""].concat(valid_dias)
             cloth_dia.df.options = dia_options
             cloth_dia.refresh()
-            actual_dia.df.options = dia_options
-            actual_dia.refresh()
         }
         cloth_colour.set_value(frappe.yrp.attribute_value(items.value[index]['colour']))
         cloth_colour.refresh()

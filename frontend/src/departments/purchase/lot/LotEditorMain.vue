@@ -1,7 +1,7 @@
 <template>
 	<LotMainTab :sections="sections" :expanded="expanded" :scroll-to="scrollTo" @update:expanded="emit('update:expanded', $event)">
 		<template #header>
-			<LotEditorDetails :form="form" :derived="derived" :fields="fields" :attempted-save="attemptedSave" :disabled="disabled" @set-field="(fieldname, value) => emit('set-field', fieldname, value)" />
+			<LotEditorDetails :is-new="isNew" :form="form" :derived="derived" :fields="fields" :attempted-save="attemptedSave" :disabled="disabled" @set-field="(fieldname, value) => emit('set-field', fieldname, value)" />
 		</template>
 		<template #quantities><slot name="quantities" /></template>
 		<template #order-details>
@@ -37,6 +37,7 @@ const props = defineProps({
 	scrollTo: { type: String, default: "" },
 	attemptedSave: Boolean,
 	disabled: Boolean,
+	isNew: Boolean,
 })
 const emit = defineEmits(["set-field", "fabric-rows", "update:expanded"])
 const fabricErrors = computed(() => lotFabricErrors(props.form.lot_fabric_details, props.attemptedSave))

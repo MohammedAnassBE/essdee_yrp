@@ -48,6 +48,7 @@
 						<TabPanel v-if="activeTab === 'lot'" value="lot">
 							<LotEditorMain
 								v-model:expanded="expanded"
+								:is-new="!lotId"
 								:form="form"
 								:derived="derived"
 								:fields="fields"

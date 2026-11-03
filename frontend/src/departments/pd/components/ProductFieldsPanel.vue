@@ -10,7 +10,9 @@
 				:disabled="disabled || Boolean(field.read_only) || isFieldReadOnly(field.fieldname, isNew)"
 				:required="Boolean(field.reqd)"
 				@update:model-value="emit('update', field.fieldname, $event)"
-			/>
+			>
+				<template v-if="field.fieldname === 'style_no'" #hint="{ hintId }"><NameExistsHint :id="hintId" doctype="SD YRP Product" :name="existingProduct" /></template>
+			</FormField>
 		</div>
 		<ChildTableField
 			v-for="table in visibleTables"
@@ -29,6 +31,8 @@ import { computed } from "vue"
 
 import ChildTableField from "../../../components/common/ChildTableField.vue"
 import FormField from "../../../components/common/FormField.vue"
+import NameExistsHint from "../../../components/common/NameExistsHint.vue"
+import { useNameExists } from "../../../composables/useNameExists.js"
 import { isFieldReadOnly, visibleForSetItem } from "../pdViews.js"
 
 const props = defineProps({
@@ -42,6 +46,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(["update"])
+const existingProduct = useNameExists("SD YRP Product", () => props.form.style_no, {
+	enabled: () => props.isNew && visibleFields.value.some((field) => field.fieldname === "style_no"),
+})
 const productMeta = computed(() => props.metaByName["SD YRP Product"] || {})
 const fieldsByName = computed(() => Object.fromEntries(
 	(productMeta.value.fields || []).filter((field) => field.fieldname).map((field) => [field.fieldname, field]),

@@ -8,7 +8,7 @@
 					<TabList class="lot-tablist"><Tab v-for="tab in tabs" :key="tab.key" :value="tab.key">{{ tab.label }}</Tab></TabList>
 					<TabPanels ref="panels" class="lot-panels">
 						<TabPanel v-if="activeTab === 'lot'" value="lot">
-							<LotEditorMain v-model:expanded="expanded" :form="form" :derived="derived" :fields="fields" :fabric-meta="fabricMeta" :order-item-details="orderItemDetails" :scroll-to="scrollTo" :attempted-save="attemptedSave" :disabled="Boolean(acting)" @set-field="setField" @fabric-rows="form.lot_fabric_details = $event">
+							<LotEditorMain v-model:expanded="expanded" :is-new="!lotId" :form="form" :derived="derived" :fields="fields" :fabric-meta="fabricMeta" :order-item-details="orderItemDetails" :scroll-to="scrollTo" :attempted-save="attemptedSave" :disabled="Boolean(acting)" @set-field="setField" @fabric-rows="form.lot_fabric_details = $event">
 								<template #quantities><LotOrderItemsEditor v-model:item-details="itemDetails" v-model:composer-open="composerOpen" :production-order="form.production_order || ''" :has-order-details="Boolean(orderItemDetails.length)" :is-locked="locks.order_details" :disabled="Boolean(acting)" /></template>
 								<template #order-details><LotOrderDetailsEditor :groups="orderItemDetails" :colour-attribute="colourAttribute" :version="derived.version || ''" :is-locked="locks.order_details" :disabled="Boolean(acting)" /></template>
 							</LotEditorMain>

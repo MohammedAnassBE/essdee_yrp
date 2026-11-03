@@ -25,3 +25,10 @@ export function quickEntryPlan(meta, presets = {}, query = "") {
 	if (query && titleField) values[titleField.fieldname] = query
 	return { supported: true, fields, locked, values }
 }
+
+export function quickEntryNameField(meta) {
+	if (!meta) return ""
+	if (isPromptNamed(meta)) return "__newname"
+	const autoname = String(meta.autoname || "")
+	return autoname.startsWith("field:") ? autoname.slice("field:".length).trim() : ""
+}

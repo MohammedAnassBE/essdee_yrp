@@ -20,7 +20,9 @@
 				:show-open-button="false"
 				:input-id="`${formId}-${field.fieldname}`"
 				@update:model-value="values[field.fieldname] = $event"
-			/>
+			>
+				<template v-if="field.fieldname === nameField" #hint="{ hintId }"><NameExistsHint :id="hintId" :doctype="doctype" :name="existingName" /></template>
+			</FormField>
 			<Message v-if="!loading && !plan.supported" severity="info" :closable="false">
 				{{ doctype }} needs more details than a quick entry. <a :href="deskNewPath" target="_blank" rel="noopener">Open the full form</a>.
 			</Message>
@@ -41,8 +43,10 @@ import { computed, reactive, ref, useId, watch } from "vue"
 
 import { createDoc, getMeta } from "../../api/frappe.js"
 import { deskDocumentPath } from "../../utils/linkTarget.js"
-import { quickEntryPlan } from "../../utils/quickEntry.js"
+import { useNameExists } from "../../composables/useNameExists.js"
+import { quickEntryNameField, quickEntryPlan } from "../../utils/quickEntry.js"
 import FormField from "./FormField.vue"
+import NameExistsHint from "./NameExistsHint.vue"
 
 const props = defineProps({
 	visible: { type: Boolean, default: false },
@@ -60,6 +64,8 @@ const loading = ref(false)
 const busy = ref(false)
 const error = ref("")
 const deskNewPath = computed(() => deskDocumentPath(props.doctype, "new"))
+const nameField = computed(() => quickEntryNameField(meta.value))
+const existingName = useNameExists(() => props.doctype, () => values[nameField.value], { enabled: () => props.visible && Boolean(nameField.value) })
 
 async function load() {
 	loading.value = true

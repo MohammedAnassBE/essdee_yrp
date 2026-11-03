@@ -30,7 +30,7 @@
 								<label class="purchase-field"><span class="erp-field-label">{{ fieldLabel("item_group", "Item Group") }} <b>*</b></span><Select v-model="form.item_group" :options="editor.options?.item_groups || []" option-label="label" option-value="value" filter show-clear fluid :disabled="formDisabled" /></label>
 								<label class="purchase-field"><span class="erp-field-label">{{ fieldLabel("stock_uom", "Default Unit of Measure") }} <b>*</b></span><Select v-model="form.stock_uom" :options="editor.options?.uoms || []" option-label="label" option-value="value" filter show-clear fluid :disabled="formDisabled || Boolean(editor.fields?.stock_uom?.read_only)" /></label>
 								<LinkField v-model="form.gst_hsn_code" :label="fieldLabel('gst_hsn_code', 'HSN/SAC')" doctype="GST HSN Code" show-clear :show-open-button="false" :disabled="formDisabled" />
-								<p class="purchase-code-hint">Saved as: <code>{{ savedAs || "—" }}</code></p>
+								<p class="purchase-code-hint">Saved as: <code>{{ savedAs || "—" }}</code><NameExistsHint doctype="Item" :name="existingItem" /></p>
 						</div>
 						</div>
 					</section>
@@ -91,6 +91,7 @@ import DepartmentPage from "../../components/DepartmentPage.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import LinkField from "../../components/common/LinkField.vue"
+import NameExistsHint from "../../components/common/NameExistsHint.vue"
 import { useRowSelection } from "../../components/common/childGrid/rowSelection.js"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
@@ -103,6 +104,7 @@ import ItemMasterFields from "./item/ItemMasterFields.vue"
 import ItemUomConversions from "./item/ItemUomConversions.vue"
 import ItemYarnRatio from "./item/ItemYarnRatio.vue"
 import { itemAttributeEditing, itemTableProblems, itemTableWarnings, stockUomRows } from "./item/itemTables.js"
+import { useNameExists } from "../../composables/useNameExists.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
 import { PURCHASE_ROUTES, dependentDetailRows, itemCanSave, itemCodeHint, itemCombinationAttributes, itemDependentProblem, itemDependentValues, itemEditorValues, itemKindLabel, itemSaveValues, resetAttributeRow, storedAttributeMappings } from "./purchaseViews.js"
 
@@ -131,6 +133,7 @@ const backTo = computed(() => isEdit.value ? `/purchase/items/${encodeURICompone
 const backLabel = computed(() => isEdit.value ? "Item" : "Items")
 const attributesLocked = computed(() => Boolean(editor.value.attributes_locked))
 const savedAs = computed(() => itemCodeHint(form.name, form.brand))
+const existingItem = useNameExists("Item", savedAs, { enabled: () => !isEdit.value })
 const selectedNames = computed(() => new Set(form.attributes.map((row) => row.attribute).filter(Boolean)))
 const hasBlankAttribute = computed(() => form.attributes.some((row) => !row.attribute))
 const selectedAttributeOptions = computed(() => form.attributes.filter((row) => row.attribute).map((row) => ({ label: row.attribute, value: row.attribute })))
@@ -310,7 +313,7 @@ watch(() => [form.dependent_attribute, form.primary_attribute, form.stock_uom, [
 }
 
 .purchase-dependent-problem { margin: 0; }
-.purchase-code-hint { display: flex; min-width: 0; min-height: var(--erp-control-height); align-items: center; gap: 5px; margin: 0; padding: 0 11px; border-left: 3px solid var(--erp-accent); background: var(--erp-accent-soft); }
+.purchase-code-hint { display: flex; flex-wrap: wrap; min-width: 0; min-height: var(--erp-control-height); align-items: center; gap: 5px; margin: 0; padding: 0 11px; border-left: 3px solid var(--erp-accent); background: var(--erp-accent-soft); }
 .purchase-code-hint code { overflow-wrap: anywhere; color: var(--erp-accent-hover); font-family: inherit; font-weight: 750; }
 .attribute-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--erp-space-3); }
 .attribute-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); align-items: end; gap: var(--erp-space-2); }

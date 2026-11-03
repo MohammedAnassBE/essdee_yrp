@@ -137,6 +137,7 @@
 		<small v-if="field.description" :id="descriptionId" class="form-field__description">
 			{{ field.description }}
 		</small>
+		<slot name="hint" :hint-id="hintId" />
 		<small v-if="displayError" :id="errorId" class="form-field__error" role="alert">{{ displayError }}</small>
 	</div>
 </template>
@@ -147,7 +148,7 @@ import InputText from "primevue/inputtext"
 import Select from "primevue/select"
 import Textarea from "primevue/textarea"
 import ToggleSwitch from "primevue/toggleswitch"
-import { computed, ref } from "vue"
+import { computed, ref, useSlots } from "vue"
 
 import { plainTextFromHtml } from "../../utils/documentValues.js"
 
@@ -183,7 +184,9 @@ const labelId = computed(() => `${inputId.value}-label`)
 const accessibleLabel = computed(() => props.ariaLabel || props.field.label || props.field.fieldname)
 const descriptionId = computed(() => `${inputId.value}-description`)
 const errorId = computed(() => `${inputId.value}-error`)
-const describedBy = computed(() => [props.field.description ? descriptionId.value : "", displayError.value ? errorId.value : ""].filter(Boolean).join(" ") || undefined)
+const hintId = computed(() => `${inputId.value}-hint`)
+const slots = useSlots()
+const describedBy = computed(() => [props.field.description ? descriptionId.value : "", slots.hint ? hintId.value : "", displayError.value ? errorId.value : ""].filter(Boolean).join(" ") || undefined)
 const focusableControlAria = computed(() => ({
 	"aria-required": props.required ? "true" : undefined,
 	"aria-describedby": describedBy.value,

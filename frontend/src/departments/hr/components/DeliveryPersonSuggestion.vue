@@ -56,6 +56,7 @@
 			<label for="delivery-person-name"><span>Name</span><InputText id="delivery-person-name" v-model="personName" :disabled="saving" fluid /></label>
 			<label for="delivery-person-mobile"><span>Mobile</span><InputText id="delivery-person-mobile" v-model="mobileNumber" inputmode="numeric" :disabled="saving" fluid /></label>
 			<Button label="Create and apply" icon="pi pi-check" type="submit" :loading="saving" :disabled="disabled" />
+			<NameExistsHint class="delivery-person-suggestion__exists" doctype="YRP Vendor Bill Delivery Person" :name="existingMobile" />
 			<small v-if="createError" role="alert">{{ createError }}</small>
 		</form>
 	</section>
@@ -69,6 +70,8 @@ import { onBeforeUnmount, ref, watch } from "vue"
 
 import { getDeliveryPersonSuggestions } from "../../../api/hr.js"
 import { createDoc } from "../../../api/frappe.js"
+import NameExistsHint from "../../../components/common/NameExistsHint.vue"
+import { useNameExists } from "../../../composables/useNameExists.js"
 
 const props = defineProps({
 	modelValue: { type: String, default: "" },
@@ -85,6 +88,7 @@ const creating = ref(false)
 const saving = ref(false)
 const personName = ref("")
 const mobileNumber = ref("")
+const existingMobile = useNameExists("YRP Vendor Bill Delivery Person", mobileNumber, { enabled: creating })
 const createError = ref("")
 let searchTimer = null
 let loadSequence = 0
@@ -176,5 +180,6 @@ onBeforeUnmount(() => {
 .delivery-person-suggestion__create { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 10px; padding: 11px; border: 1px solid var(--erp-accent-border); border-radius: var(--erp-control-radius); background: var(--erp-accent-soft); }
 .delivery-person-suggestion__create label { display: grid; gap: 5px; color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .delivery-person-suggestion__create small { grid-column: 1 / -1; color: var(--erp-danger); }
+.delivery-person-suggestion__create .delivery-person-suggestion__exists { color: var(--erp-warning); }
 @media (max-width: 700px) { .delivery-person-suggestion__cards, .delivery-person-suggestion__create { grid-template-columns: 1fr; } .delivery-person-suggestion__create small { grid-column: auto; } }
 </style>

@@ -289,14 +289,7 @@ def get_supplier_notification_capabilities(
 			)
 			and _supplier_has_mobile(doc, whatsapp_supplier_key)
 		):
-			for name in frappe.get_all(
-				"YRP WhatsApp Template",
-				filters={"status": "APPROVED"},
-				pluck="name",
-			):
-				if frappe.get_doc("YRP WhatsApp Template", name).is_applicable_for(doctype):
-					available["whatsapp"] = True
-					break
+			available["whatsapp"] = True
 	except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError):
 		available["whatsapp"] = False
 	return available

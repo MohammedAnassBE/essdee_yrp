@@ -235,17 +235,11 @@ class TestFabricStoreDocumentContract(TestCase):
 		supplier.get_primary_contact_details.return_value = {"mobile": "9944405056"}
 		sms_settings = MagicMock(enabled=True)
 		sms_settings.get_templates_for_doctype.return_value = [frappe._dict(template_name="Receipt")]
-		whatsapp_template = MagicMock()
-		whatsapp_template.is_applicable_for.return_value = True
-
-		def get_doc(doctype, *_args, **_kwargs):
-			return supplier if doctype == "Supplier" else whatsapp_template
 
 		with (
 			patch("essdee_yrp.fabric_store.documents.common.frappe.has_permission", return_value=True),
-			patch("essdee_yrp.fabric_store.documents.common.frappe.get_doc", side_effect=get_doc),
+			patch("essdee_yrp.fabric_store.documents.common.frappe.get_doc", return_value=supplier),
 			patch("essdee_yrp.fabric_store.documents.common.frappe.get_cached_doc", return_value=sms_settings),
-			patch("essdee_yrp.fabric_store.documents.common.frappe.get_all", return_value=["WA-1"]),
 			patch("yrp.whatsapp_notification.get_enabled_whatsapp_doctypes", return_value={"doctypes": {"Purchase Order": "supplier"}}),
 		):
 			available = get_supplier_notification_capabilities(
@@ -296,7 +290,7 @@ class TestFabricStoreDocumentContract(TestCase):
 			supplier_key="supplier",
 		)
 
-	def test_whatsapp_uses_the_hub_configured_supplier_field_for_capability_prepare_and_send(self):
+	def test_whatsapp_uses_the_relay_action_supplier_field_for_capability_prepare_and_send(self):
 		doc = self.make_document(
 			docstatus=1,
 			status="To Receive",
@@ -305,16 +299,10 @@ class TestFabricStoreDocumentContract(TestCase):
 		)
 		supplier = MagicMock()
 		supplier.get_primary_contact_details.return_value = {"mobile": "9944405056"}
-		template = MagicMock()
-		template.is_applicable_for.return_value = True
-
-		def get_doc(doctype, *_args, **_kwargs):
-			return supplier if doctype == "Supplier" else template
 
 		with (
 			patch("essdee_yrp.fabric_store.documents.common.frappe.has_permission", return_value=True),
-			patch("essdee_yrp.fabric_store.documents.common.frappe.get_doc", side_effect=get_doc),
-			patch("essdee_yrp.fabric_store.documents.common.frappe.get_all", return_value=["WA-1"]),
+			patch("essdee_yrp.fabric_store.documents.common.frappe.get_doc", return_value=supplier),
 			patch(
 				"yrp.whatsapp_notification.get_enabled_whatsapp_doctypes",
 				return_value={"doctypes": {"Purchase Order": "alternate_supplier"}},

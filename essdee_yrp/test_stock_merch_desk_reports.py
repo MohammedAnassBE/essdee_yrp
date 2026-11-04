@@ -154,6 +154,35 @@ class TestStockMerchDeskReports(unittest.TestCase):
 		self.assertEqual(sum(row["stock_in_pcs"] for row in rows), 50)
 		self.assertEqual(sum(row["stock_price"] for row in rows), 500)
 
+	def fg_stock_detail(self, installed_apps, prices=None):
+		module = report("fg_stock_with_lot")
+		stock = [
+			{"item_variant": "A-M", "stock": 4, "item": "A"},
+			{"item_variant": "A-L", "stock": 2, "item": "A"},
+		]
+		factors = [frappe._dict(item_variant="A-M", uom="Box", conversion_factor=5)]
+		wholesale = MagicMock(return_value=prices or {})
+		with (
+			patch.object(frappe, "get_installed_apps", return_value=installed_apps),
+			patch("essdee_yrp_partner.masters.item_prices.get_wholesale_price_details", wholesale),
+			patch.object(frappe.db, "sql", return_value=factors),
+			patch("requests.get", side_effect=AssertionError("no HTTP call")),
+		):
+			return module.construct_item_wise_stock_detail(stock), wholesale
+
+	def test_fg_prices_come_from_the_partner_default_list(self):
+		detail, wholesale = self.fg_stock_detail(
+			["frappe", "essdee_yrp_partner"], {"A-M": {"price": 467.5, "uom": "Box"}}
+		)
+		wholesale.assert_called_once_with(["A-M", "A-L"])
+		self.assertEqual((detail["A-M"]["price"], detail["A-M"]["conversion_factor"]), (467.5, 5))
+		self.assertEqual((detail["A-L"]["price"], detail["A-L"]["uom"]), (0.0, "Box"))
+
+	def test_fg_prices_are_zero_without_the_partner_app(self):
+		detail, wholesale = self.fg_stock_detail(["frappe"])
+		wholesale.assert_not_called()
+		self.assertEqual([row["price"] for row in detail.values()], [0.0, 0.0])
+
 	def test_item_selectors_distinguish_parents_and_variants(self):
 		script = """
 		const fs = require('fs');

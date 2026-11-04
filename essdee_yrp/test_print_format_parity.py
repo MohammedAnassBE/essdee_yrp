@@ -77,7 +77,7 @@ class TestPrintFormatParity(IntegrationTestCase):
 
 	def test_all_formats_are_essdee_owned(self):
 		formats = list(self._formats())
-		self.assertEqual(len(formats), 34)
+		self.assertEqual(len(formats), 36)
 		for path, data in formats:
 			with self.subTest(format=path.parent.name):
 				self.assertEqual(data["module"], "Essdee YRP")

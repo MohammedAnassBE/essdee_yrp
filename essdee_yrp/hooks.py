@@ -356,6 +356,7 @@ jinja = {
 		"essdee_yrp.print_helpers.fetch_stock_entry_items",
 		"essdee_yrp.print_helpers.fetch_grn_purchase_item_details",
 		"essdee_yrp.print_helpers.get_dc_structure",
+		"essdee_yrp.print_helpers.get_work_order_challan_items",
 		"essdee_yrp.print_helpers.get_grn_structure",
 		"essdee_yrp.print_helpers.fetch_order_item_details",
 		"essdee_yrp.print_helpers.fetch_item_details",

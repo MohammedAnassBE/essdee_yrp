@@ -1,0 +1,242 @@
+{% macro challan_draft(docstatus) %}
+    {% if docstatus == 0 %}
+        <div style="position: fixed;bottom: 500px;left: 100px;z-index: 10000;font-size:200px;color:#A9A9A9;;transform:rotate(-50deg);opacity: 0.3;">
+            DRAFT
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro challan_items(items, quantity_label="Delivered Quantity") %}
+    <div class="border-style" style="text-align: center;">
+        Particulars
+    </div>
+    <div>
+        <table style="width:100%;">
+            {% for i in items %}
+                <tr>
+                    {% if i.primary_attribute %}
+                        <td>
+                            {% if i['items'] %}
+                                <div style="width: 100%;display:flex;height:15px;">
+                                    <div style="width: 50%;">Item name: <span class="font_weight">{{i['items'][0]['name']}}</span></div>
+                                    <div style="width: 50%;">Lot : <span class="font_weight">{{i.lot}}</span></div>
+                                </div>
+                                <table style="width:100%;">
+                                    {% set primary_values = {} %}
+                                    <tr>
+                                        <td class="font_weight">S.No.</td>
+                                        {% for attr in i.attributes %}
+                                            <td class="font_weight">{{attr}}</td>
+                                        {% endfor %}
+                                        {% for attr in i.primary_attribute_values %}
+                                            {% set _ = primary_values.update({attr: 0}) %}
+                                            <td class="font_weight">{{attr}}</td>
+                                        {% endfor %}
+                                        <td class="font_weight">Total</td>
+                                        <td class="font_weight">Comments</td>
+                                    </tr>
+                                    {% set rows = {"row_count": 0 } %}
+                                    {% for j in i['items'] %}
+                                        <tr>
+                                            {%if rows.update({"row_count":loop.index})%}{% endif %}
+                                            <td>{{loop.index}}</td>
+                                            {% for attr in i.attributes %}
+                                                <td>
+                                                    {% if j.attributes[attr]%}
+                                                        {{ j.attributes[attr] }}
+                                                    {% endif %}
+                                                </td>
+                                            {% endfor %}
+                                            {% set total = {"total":0} %}
+                                            {% for attr in j['values'] %}
+                                                {% if j['values'][attr]['delivered_quantity'] > 0 %}
+                                                    <td>
+                                                        {% set attr_qty = primary_values[attr] + j['values'][attr]['delivered_quantity'] %}
+                                                        {% if primary_values.update({attr:attr_qty })%}{% endif %}
+                                                        {% set qty = total["total"] + j['values'][attr]['delivered_quantity'] %}
+                                                        {% if total.update({"total":qty })%}{% endif %}
+                                                        {{j['values'][attr]['delivered_quantity'] | round(3)  }}
+                                                        {% if j.default_uom %}
+                                                            <span>{{ " " + j.default_uom }}</span>
+                                                        {% endif %}
+                                                        {% if j['values'][attr]['secondary_qty'] > 0 %}
+                                                            <br>
+                                                            ({{j['values'][attr]['secondary_qty'] | round(3)  }}
+                                                            {% if j.secondary_uom %}
+                                                                <span>{{ " " + j.secondary_uom }}</span>
+                                                            {% endif %}
+                                                            )
+                                                        {% endif %}    
+                                                    </td>
+                                                {% else %}
+                                                    <td>0</td>
+                                                {% endif %}
+                                            {% endfor %}
+                                            <td class="font_weight">{{total["total"] | round(3) }}</td>
+                                            <td class="font_weight">
+                                                {% if j['comments'] %}
+                                                    {{j['comments']}}
+                                                {% endif %}     
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                    {% if rows['row_count'] > 1 %}
+                                       {% set total_per_table = {"total": 0} %}
+                                        <tr>
+                                            <td class="font_weight">Total</td>
+                                            {% for attr in i.attributes %}
+                                                <td></td>
+                                            {% endfor %}
+                                            {% for attr in i.primary_attribute_values %}
+                                                <td class="font_weight">{{primary_values[attr] | round(3) }}</td>
+                                                {% set temp = primary_values[attr] + total_per_table["total"] %}
+                                                {% if total_per_table.update({"total": temp}) %}{% endif %}
+                                            {% endfor %}
+                                            <td class="font_weight">{{ total_per_table["total"] }}</td>
+                                            <td></td>
+                                        </tr>
+                                    {% endif %}
+                                </table>
+                            {% endif %}
+                        </td>
+                    {% else %}
+                        <td>
+                            {% if i['items'] %}
+                                <div>Lot: <span class="font_weight" style="width:100%;height:15px;">{{i.lot}}</span></div>
+                                <table style="width:100%;">
+                                    <tr>
+                                        <td class="font_weight">S.No.</td>
+                                        <td class="font_weight">Item</td>
+                                        {% for attr in i.attributes %}
+                                            <td class="font_weight">{{attr}}</td>
+                                        {% endfor %}
+                                        <td class="font_weight">{{ quantity_label }}</td>
+                                        <td class="font_weight">Secondary Qty</td>
+                                        <td class="font_weight">Comments</td>
+                                    </tr>
+                                    {% set total = {"total":0} %}
+                                    {% set total_secondary = {"total": 0} %}
+                                    {% set rows = {"row_count": 0 } %}
+                                    {% for j in i['items'] %}
+                                        <tr>
+                                            {%if rows.update({"row_count":loop.index})%}{% endif %}
+                                            <td>{{ loop.index }}</td>
+                                            <td>{{ j.name }}</td>
+                                            {% for attr in i.attributes %}
+                                                <td>{{ j.attributes[attr] }}</td>
+                                            {% endfor %}
+                                            <td>
+                                                {% if j['values']["default"]['delivered_quantity'] > 0 %}
+                                                    {% set _ = total["total"] + j['values']["default"]['delivered_quantity'] %}
+                                                    {% if total.update({ "total":_ }) %}{% endif %}
+                                                    {{ j['values']["default"]['delivered_quantity'] | round(3) }}
+                                                    {% if j.default_uom %}
+                                                        <span>{{ " " + j.default_uom }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    --
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if j['values']["default"]['secondary_qty'] > 0 %}
+                                                    {% set _ = total_secondary["total"] + j['values']["default"]['secondary_qty'] %}
+                                                    {% if total_secondary.update({ "total":_ }) %}{% endif %}
+                                                    {{ j['values']["default"]['secondary_qty'] | round(3) }}
+                                                    {% if j.secondary_uom %}
+                                                        <span>{{ " " + j.secondary_uom }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    --
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if j['values']["default"]['comments'] %}
+                                                    {{ j['values']["default"]['comments']}}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                    {%if rows['row_count'] > 1%}
+                                        <tr>
+                                            <td></td>
+                                            <td class="font_weight">Total</td>
+                                            {% for attr in i.attributes %}
+                                                <td></td>
+                                            {% endfor %}
+                                            <td class="font_weight">{{ total["total"] | round(3) }}</td>
+                                            <td class="font_weight">{{ total_secondary["total"] | round(3) }}</td>
+                                            <td></td>
+                                        </tr>
+                                    {% endif %}
+                                </table>
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+{% endmacro %}
+
+{% macro challan_comments(comments) %}
+    {% if comments %}
+        <div class="border-style" style="height:auto;width:100%">
+            <strong>Comments:</strong><br><span style="display:block;padding-left:20px;"> {{ comments.replace("\n", "<br>") | safe }}</span>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro challan_footer(terms_and_condition) %}
+    {% if terms_and_condition %}
+        {% set terms = frappe.get_all("YRP Terms and Condition Detail", filters={"parent": terms_and_condition, "parenttype": "YRP Terms and Condition"}, fields=["term"], order_by="idx asc") %}
+        {% if terms %}
+            <div class="border-style" style="height:auto;width:100%;padding:4px;">
+                <strong>Terms and Conditions:</strong>
+                <ol style="margin:4px 0 0 18px;padding:0;">
+                    {% for row in terms %}
+                        <li style="margin-bottom:2px;">{{ row.term }}</li>
+                    {% endfor %}
+                </ol>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <div style="height:90px;width:100%;display:flex;">
+        <div class="border-style font_weight" style="height:90px;width:50%">
+            <div style="text-align:center;height: 15px;">
+                Receiver's Signature
+            </div>
+            <div style="height:50px;">
+            </div>
+            <div class="font_weight" style="display:flex;height:15px;width:100%;">
+                <div style="height: 15px;width:50%;text-align: left;padding-left:5px;">
+                    Name:
+                </div>
+                <div style="height: 15px;width:50%;text-align: left;">
+                    Designation:
+                </div>
+            </div>
+        </div>
+        <div class="border-style font_weight" style="height:90px;width:50%">
+            <div style="text-align:right;height: 15px;padding-right: 15px;">
+                For Essdee Knitting Mills Private Limited
+            </div>
+            <div style="height:50px;">
+            </div>
+            <div style="height:15px;width:100%;text-align:right;padding-right: 15px;">
+                Authorised Signatory
+            </div>
+        </div>
+    </div>
+    {% set user_current_time = get_current_user_time() %}
+    {% set user = user_current_time[0] %}
+    {% set current_time = user_current_time[1] %}
+    <div class="border-style font_weight" style="display: flex;height: 20px;width: 100%;">
+        <div style="width: 50%;padding-left: 15px;">
+            Print Time: {{current_time}}
+        </div>
+        <div style="width: 50%;padding-left: 15px;">
+            Print User : {{user}}
+        </div>
+    </div>
+{% endmacro %}

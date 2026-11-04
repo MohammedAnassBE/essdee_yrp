@@ -399,6 +399,20 @@ def get_dc_structure(doc_name):
 	return items, expected_delivery_date
 
 
+WORK_ORDER_CHALLAN_TABLES = {
+	"deliverables": "YRP Work Order Deliverables",
+	"receivables": "YRP Work Order Receivables",
+}
+
+
+def get_work_order_challan_items(doc, table):
+	"""A Work Order's deliverables or receivables in the Delivery Challan print's grouped shape."""
+	if table not in WORK_ORDER_CHALLAN_TABLES:
+		frappe.throw(f"Work Order challan print cannot show {table}")
+	groups = _group_items(doc.get(table) or [], WORK_ORDER_CHALLAN_TABLES[table], lot=doc.get("lot"))
+	return sort_grouped_attributes(groups)
+
+
 def get_grn_structure(doc_name):
 	"""Group GRN rows like MRP's Work Order GRN print: one row per item and received type."""
 	doc = frappe.get_doc("YRP Goods Received Note", doc_name)

@@ -1,0 +1,36 @@
+{% from "essdee_yrp/templates/print_formats/essdee_challan.html" import challan_draft, challan_items, challan_comments, challan_footer %}
+
+{% macro work_order_challan(doc, table, title) %}
+<div>
+    {{ challan_draft(doc.docstatus) }}
+    <div class="border-style" style="height:50px;text-align:right;">
+        <div style="margin-right:10px;">
+            <p style="font-size:20px;">{{ title }}</p>
+            <div></div>
+            <p style="font-size:12px;">{{ doc.name }}</p>
+        </div>
+    </div>
+    <div style="width:100%;height:auto;display:flex;">
+        <div class="border-style" style="width:33%;padding:5px;">
+            From Location:<br>
+            <strong>{{ doc.delivery_location_name or doc.delivery_location or "" }}</strong><br>
+            {{ doc.delivery_address_details or "" }}
+        </div>
+        <div class="border-style" style="width:34%;padding:5px;">
+            Supplier:<br>
+            <strong>{{ doc.supplier_name or doc.supplier or "" }}</strong>
+            {% if doc.supplier_address_details %}<br>{{ doc.supplier_address_details }}{% endif %}
+        </div>
+        <div class="border-style" style="width:33%;">
+            <div class="border-group" style="height:15px;">Date : {{ get_created_date(doc.wo_date) }}</div>
+            <div class="border-group" style="height:15px;">Process: {{ doc.process_name or "" }}</div>
+            <div class="border-group" style="height:15px;">Lot: {{ doc.lot or "" }}</div>
+            <div class="border-group" style="height:15px;">Item: {{ doc.item or "" }}</div>
+            <div style="height:15px;text-align: center;">Expected Date: {{ get_created_date(doc.expected_delivery_date) }}</div>
+        </div>
+    </div>
+    {{ challan_items(get_work_order_challan_items(doc, table), "Quantity") }}
+    {{ challan_comments(doc.comments) }}
+    {{ challan_footer(doc.terms_and_condition) }}
+</div>
+{% endmacro %}

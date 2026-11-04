@@ -1,5 +1,8 @@
 import { INSPECTION_FIELDS } from "./inspectionFields.js"
 import { documentOverviewHasValue, formatDocumentOverviewValue } from "../../utils/documentOverview.js"
+import { QUALITY_ROUTES } from "./qualityRoutes.js"
+
+export { QUALITY_ROUTES }
 
 export const INSPECTION_DOCTYPE = "SD YRP Essdee Quality Inspection"
 export const INSPECTION_LIST_COLUMNS = [
@@ -251,4 +254,8 @@ const LINK_LABEL_FIELDS = { supplier: "supplier_name", third_party_supplier: "th
 /** Show the party name rather than its code on Supplier links. */
 export function linkLabel(fieldname, values = {}) {
 	return values[LINK_LABEL_FIELDS[fieldname]] || undefined
+}
+
+export function isCurrentRecordRequest(requestedName, currentName, sequence, currentSequence) {
+	return String(requestedName || "") === String(currentName || "") && sequence === currentSequence
 }

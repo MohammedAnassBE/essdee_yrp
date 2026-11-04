@@ -80,7 +80,7 @@
 
 <script setup>
 import Button from "primevue/button"
-import LotDocumentContext from "../../purchase/lot/LotDocumentContext.vue"
+import LotDocumentContext from "./LotDocumentContext.vue"
 import Skeleton from "primevue/skeleton"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
@@ -89,7 +89,7 @@ import {
 	countLabel,
 	lotDocumentQuantityLine,
 	lotDocumentSections,
-} from "../../purchase/lot/lotViews.js"
+} from "./lotViews.js"
 import { formatDisplayDate } from "../../../utils/dateFormat.js"
 
 const props = defineProps({

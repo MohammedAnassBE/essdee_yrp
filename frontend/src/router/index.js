@@ -9,6 +9,9 @@ import { PURCHASE_ROUTES } from "../departments/purchase/purchaseRoutes.js"
 import { PLANNING_ROUTES } from "../departments/planning/planningRoutes.js"
 import { MERCH_ROUTES } from "../departments/merch/merchRoutes.js"
 import { ACCOUNTS_ROUTES } from "../departments/accounts/accountsRoutes.js"
+import { MERCH_PD_ROUTES } from "../departments/merch-pd/merchPdRoutes.js"
+import { MERCH_PURCHASE_ROUTES } from "../departments/merch-purchase/merchPurchaseRoutes.js"
+import { QUALITY_ROUTES } from "../departments/quality/qualityRoutes.js"
 
 const AdministratorPage = () => import("../components/AdministratorPage.vue")
 const DocumentUnavailable = () => import("../components/documents/DocumentUnavailable.vue")
@@ -80,6 +83,18 @@ const IpdList = () => import("../departments/merch/ipd/IpdList.vue")
 const MerchLotsList = () => import("../departments/merch/lot/MerchLotsList.vue")
 const MerchLotPage = () => import("../departments/merch/lot/MerchLotPage.vue")
 const MerchLotEditorPage = () => import("../departments/merch/lot/MerchLotEditorPage.vue")
+const MerchPdLotsList = () => import("../departments/merch-pd/lot/MerchLotsList.vue")
+const MerchPdLotPage = () => import("../departments/merch-pd/lot/MerchLotPage.vue")
+const MerchPdLotEditorPage = () => import("../departments/merch-pd/lot/MerchLotEditorPage.vue")
+const MerchPurchaseLotsList = () => import("../departments/merch-purchase/lot/MerchLotsList.vue")
+const MerchPurchaseLotPage = () => import("../departments/merch-purchase/lot/MerchLotPage.vue")
+const MerchPurchaseLotEditorPage = () => import("../departments/merch-purchase/lot/MerchLotEditorPage.vue")
+const AccountsLotsList = () => import("../departments/accounts/lot/MerchLotsList.vue")
+const AccountsLotPage = () => import("../departments/accounts/lot/MerchLotPage.vue")
+const AccountsLotEditorPage = () => import("../departments/accounts/lot/MerchLotEditorPage.vue")
+const QualityLotsList = () => import("../departments/quality/lot/LotsList.vue")
+const QualityLotPage = () => import("../departments/quality/lot/LotPage.vue")
+const QualityLotEditorPage = () => import("../departments/quality/lot/LotEditorPage.vue")
 const MerchReports = () => import("../departments/merch/MerchReports.vue")
 const IpdPage = () => import("../departments/merch/ipd/IpdPage.vue")
 const IpdEditorPage = () => import("../departments/merch/ipd/IpdEditorPage.vue")
@@ -848,6 +863,21 @@ const routes = [
 	{ path: "/merch/lots/new", name: MERCH_ROUTES.lotNew, component: MerchLotEditorPage },
 	{ path: "/merch/lots/:lotId", name: MERCH_ROUTES.lot, component: MerchLotPage, props: true },
 	{ path: "/merch/lots/:lotId/edit", name: MERCH_ROUTES.lotEdit, component: MerchLotEditorPage, props: true },
+	{ path: "/merch-pd/lots", name: MERCH_PD_ROUTES.lots, component: MerchPdLotsList },
+	{ path: "/merch-pd/lots/new", name: MERCH_PD_ROUTES.lotNew, component: MerchPdLotEditorPage },
+	{ path: "/merch-pd/lots/:lotId", name: MERCH_PD_ROUTES.lot, component: MerchPdLotPage, props: true },
+	{ path: "/merch-pd/lots/:lotId/edit", name: MERCH_PD_ROUTES.lotEdit, component: MerchPdLotEditorPage, props: true },
+	{ path: "/merch-purchase/lots", name: MERCH_PURCHASE_ROUTES.lots, component: MerchPurchaseLotsList },
+	{ path: "/merch-purchase/lots/new", name: MERCH_PURCHASE_ROUTES.lotNew, component: MerchPurchaseLotEditorPage },
+	{ path: "/merch-purchase/lots/:lotId", name: MERCH_PURCHASE_ROUTES.lot, component: MerchPurchaseLotPage, props: true },
+	{ path: "/merch-purchase/lots/:lotId/edit", name: MERCH_PURCHASE_ROUTES.lotEdit, component: MerchPurchaseLotEditorPage, props: true },
+	{ path: "/accounts/lots", name: ACCOUNTS_ROUTES.lots, component: AccountsLotsList },
+	{ path: "/accounts/lots/new", name: ACCOUNTS_ROUTES.lotNew, component: AccountsLotEditorPage },
+	{ path: "/accounts/lots/:lotId", name: ACCOUNTS_ROUTES.lot, component: AccountsLotPage, props: true },
+	{ path: "/accounts/lots/:lotId/edit", name: ACCOUNTS_ROUTES.lotEdit, component: AccountsLotEditorPage, props: true },
+	{ path: "/quality/lots", name: QUALITY_ROUTES.lots, component: QualityLotsList },
+	{ path: "/quality/lots/:lotId", name: QUALITY_ROUTES.lot, component: QualityLotPage, props: true },
+	{ path: "/quality/lots/:lotId/edit", name: QUALITY_ROUTES.lotEdit, component: QualityLotEditorPage, props: true },
 	{ path: "/merch/reports", name: MERCH_ROUTES.reports, component: MerchReports },
 	{ path: "/merch-purchase/reports", name: "merch-purchase-reports", component: MerchReports, props: { department: "merch-purchase" } },
 	{ path: "/merch/item-production-details/new", name: MERCH_ROUTES.ipdNew, component: IpdEditorPage },

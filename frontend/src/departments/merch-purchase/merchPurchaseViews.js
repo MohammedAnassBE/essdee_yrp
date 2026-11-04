@@ -9,7 +9,7 @@ export function merchPurchaseLauncherItems() {
 	const purchaseStore = storeWorkspaces("/purchase", PURCHASE_REPORT_KEYS).filter((item) => PURCHASE_STORE_WORKSPACE_KEYS.includes(item.key))
 	const items = [...merchLauncherItems(), ...purchaseLauncherItems(), ...purchaseStore].filter((item) => item.key !== "reports")
 	return [
-		...items.filter((item, index) => items.findIndex((other) => other.key === item.key) === index),
+		...items.filter((item, index) => items.findIndex((other) => other.key === item.key) === index).map((item) => (item.key === "lots" ? { ...item, to: "/merch-purchase/lots" } : item)),
 		{
 			key: "reports",
 			label: "Reports",

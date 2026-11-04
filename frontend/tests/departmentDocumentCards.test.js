@@ -14,6 +14,9 @@ import { PLANNING_ROUTES, PLANNING_WORKSPACES, visiblePlanningWorkspaces } from 
 import * as qualityWorkspaces from "../src/departments/quality/qualityWorkspaces.js"
 import { PURCHASE_REPORT_KEYS, PURCHASE_ROUTES, PURCHASE_STORE_WORKSPACE_KEYS, purchaseLauncherItems } from "../src/departments/purchase/purchaseViews.js"
 import { departments } from "../src/departments/registry.js"
+import { MERCH_PD_ROUTES } from "../src/departments/merch-pd/merchPdRoutes.js"
+import { MERCH_PURCHASE_ROUTES } from "../src/departments/merch-purchase/merchPurchaseRoutes.js"
+import { QUALITY_ROUTES } from "../src/departments/quality/qualityRoutes.js"
 import { getLockedDepartment, getLockedRedirect, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
 import { webDocumentPath } from "../src/router/webDocumentRoutes.js"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
@@ -39,7 +42,7 @@ const DEPARTMENTS = {
 function loadRouter() {
 	const routerSource = source("../src/router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { ACCOUNTS_ROUTES: accountsViews.ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
+	const context = { ACCOUNTS_ROUTES: accountsViews.ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, MERCH_PD_ROUTES, MERCH_PURCHASE_ROUTES, QUALITY_ROUTES, LAYOUT_UNAVAILABLE_PATH,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined, getPermissionRedirect: () => undefined, NO_PERMISSION_PATH: "/no-permission" }
 	vm.runInNewContext(routerSource, context)
 	return context.router

@@ -14,7 +14,7 @@ test("Accounts shows the Merch Lot and PD Lotwise Item Profit cards before Repor
 		["debits", "/accounts/debits"],
 		["purchase_invoices", "/accounts/purchase-invoices"],
 		["bill_tracking", "/accounts/bill-tracking"],
-		["lots", "/merch/lots"],
+		["lots", "/accounts/lots"],
 		["lotwise_item_profits", "/pd/lotwise-item-profits"],
 		["reports", "/accounts/reports"],
 	])
@@ -24,7 +24,7 @@ test("Accounts shows the Merch Lot and PD Lotwise Item Profit cards before Repor
 test("the Accounts layout opens only the combined Lot and Lotwise Item Profit pages", () => {
 	const paths = getWorkspacePaths(departments.find((item) => item.key === "accounts"))
 
-	assert.deepEqual(paths.lots, ["/merch/lots"])
+	assert.deepEqual(paths.lots, ["/accounts/lots", "/merch/lots"])
 	assert.deepEqual(paths.lotwise_item_profits, ["/pd/lotwise-item-profits"])
 	assert.equal(paths.item_production_details, undefined)
 })

@@ -25,7 +25,7 @@ import LotFacts from "./LotFacts.vue"
 import LotMainTab from "./LotMainTab.vue"
 import { fabricColumnFilters, lotFabricErrors } from "./lotEditor.js"
 import { LOT_IPD_FIELDS, LOT_ORDER_DETAIL_FIELDS, LOT_TRANSFER_FIELDS, derivedFacts, hasLotTransfer, lotSections, orderDetailRowCount } from "./lotLayout.js"
-/** Editable Lot tab shared by the Purchase, Planning and Merch editors. */
+/** Editable Lot tab. */
 const props = defineProps({
 	form: { type: Object, required: true },
 	derived: { type: Object, required: true },

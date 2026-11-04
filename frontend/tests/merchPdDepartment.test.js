@@ -11,6 +11,9 @@ import { PD_ROUTES, pdLauncherItems } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
 import { PURCHASE_ROUTES } from "../src/departments/purchase/purchaseViews.js"
 import { departments, getWorkspacePaths } from "../src/departments/registry.js"
+import { MERCH_PD_ROUTES } from "../src/departments/merch-pd/merchPdRoutes.js"
+import { MERCH_PURCHASE_ROUTES } from "../src/departments/merch-purchase/merchPurchaseRoutes.js"
+import { QUALITY_ROUTES } from "../src/departments/quality/qualityRoutes.js"
 import { getLockedDepartment, getLockedRedirect, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
 import { canOpenList, NO_PERMISSION_PATH } from "../src/router/listPermission.js"
 import { webDocumentPath } from "../src/router/webDocumentRoutes.js"
@@ -25,7 +28,7 @@ const notInLayout = (from) => ({ path: LAYOUT_UNAVAILABLE_PATH, query: { from },
 function loadRouter() {
 	const routerSource = source("../src/router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
+	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, MERCH_PD_ROUTES, MERCH_PURCHASE_ROUTES, QUALITY_ROUTES, LAYOUT_UNAVAILABLE_PATH,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined, getPermissionRedirect: () => undefined, NO_PERMISSION_PATH }
 	vm.runInNewContext(routerSource, context)
 	return context.router
@@ -33,7 +36,7 @@ function loadRouter() {
 
 test("Merch PD shows Lot, Item Production Detail, Purchase Order, Vendor Bill Tracking and Lotwise Item Profit", () => {
 	assert.deepEqual(items.map((item) => [item.label, item.to]), [
-		["Lot", "/merch/lots"],
+		["Lot", "/merch-pd/lots"],
 		["Item Production Detail", "/merch/item-production-details"],
 		["Purchase Orders", "/purchase/purchase-orders"],
 		["Vendor Bill Tracking", "/merch/bill-tracking"],
@@ -51,7 +54,7 @@ test("the department combines Merch, Purchase and PD sections in the registry", 
 	assert.deepEqual(department.combines, ["merch", "purchase", "pd"])
 	const paths = getWorkspacePaths(department)
 	assert.deepEqual(paths, {
-		lots: ["/merch/lots", "/purchase/lots"],
+		lots: ["/merch-pd/lots", "/merch/lots", "/purchase/lots"],
 		item_production_details: ["/merch/item-production-details"],
 		purchase_orders: ["/purchase/purchase-orders"],
 		bill_tracking: ["/merch/bill-tracking", "/purchase/bill-tracking"],

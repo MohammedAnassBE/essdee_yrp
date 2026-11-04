@@ -41,7 +41,7 @@ import { computed } from "vue"
 import DocumentLink from "../../../components/common/DocumentLink.vue"
 import DocumentOverview from "../../../components/documents/DocumentOverview.vue"
 import { buildDocumentOverviewGroups } from "../../../utils/documentOverview.js"
-import LotOcrTable from "../../sales/LotOcrTable.vue"
+import LotOcrTable from "./LotOcrTable.vue"
 import LotEmptyState from "./LotEmptyState.vue"
 import LotFacts from "./LotFacts.vue"
 import LotMainTab from "./LotMainTab.vue"
@@ -51,7 +51,7 @@ import {
 	LOT_HEADER_GROUPS, LOT_IPD_FIELDS, LOT_ORDER_DETAIL_FIELDS, LOT_TRANSFER_FIELDS,
 	hasLotOcr, hasLotTransfer, lotSections, orderDetailRowCount, workspaceFacts, workspaceValues,
 } from "./lotLayout.js"
-/** Read-only Lot tab for the Purchase, Planning and Merch Lot pages. */
+/** Read-only Lot tab. */
 const props = defineProps({
 	workspace: { type: Object, required: true },
 	expanded: { type: Array, default: () => [] },

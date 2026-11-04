@@ -55,7 +55,7 @@ export const departments = [
 		path: "/quality",
 		combines: ["planning", "merch", "pd", "accounts"],
 		combinedSections: ["cutting_plans", "lots", "sewing_plans", "finishing_plans", "process_costs", "products", "lotwise_item_profits", "debits"],
-		sections: { inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
+		sections: { lots: "lots", inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
 		component: () => import("./Quality.vue"),
 	},
 	{
@@ -80,7 +80,7 @@ export const departments = [
 		shortLabel: "MP",
 		path: "/merch-purchase",
 		combines: ["merch", "purchase"],
-		sections: { reports: "reports" },
+		sections: { lots: "lots", reports: "reports" },
 		component: () => import("./MerchPurchase.vue"),
 	},
 	{
@@ -90,7 +90,7 @@ export const departments = [
 		path: "/merch-pd",
 		combines: ["merch", "purchase", "pd"],
 		combinedSections: ["lots", "item_production_details", "purchase_orders", "bill_tracking", "lotwise_item_profits"],
-		sections: {},
+		sections: { lots: "lots" },
 		component: () => import("./MerchPd.vue"),
 	},
 	{
@@ -124,7 +124,7 @@ export const departments = [
 		path: "/accounts",
 		combines: ["merch", "pd"],
 		combinedSections: ["lots", "lotwise_item_profits"],
-		sections: { debits: "debits", purchase_invoices: "purchase-invoices", bill_tracking: "bill-tracking", reports: "reports" },
+		sections: { lots: "lots", debits: "debits", purchase_invoices: "purchase-invoices", bill_tracking: "bill-tracking", reports: "reports" },
 		component: () => import("./Accounts.vue"),
 	},
 	{

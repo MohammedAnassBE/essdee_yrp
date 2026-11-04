@@ -14,7 +14,7 @@ export function qualityLauncherItems() {
 		{ key: "inspections", label: "Essdee Quality Inspection", icon: "pi pi-verified", to: "/quality/inspections", description: "Inspect delivered colours and sizes." },
 		{ key: "work_orders", label: "Work Orders", icon: "pi pi-briefcase", to: "/quality/work-orders", description: "Work Orders for quality checks." },
 		...documentWorkspaces("/quality"),
-		...QUALITY_COMBINED_KEYS.map((key) => borrowed.find((item) => item.key === key)),
+		...QUALITY_COMBINED_KEYS.map((key) => borrowed.find((item) => item.key === key)).map((item) => (item.key === "lots" ? { ...item, to: "/quality/lots" } : item)),
 		{ key: "reports", label: "Reports", icon: "pi pi-chart-bar", to: "/quality/reports", description: "Quality inspection and Lot Cut Quantity reports." },
 	]
 }

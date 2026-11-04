@@ -30,7 +30,35 @@ const documentRoutes = (basePath) => ({
 	"YRP Goods Received Note": (name) => `/web${basePath}/goods-received-notes/${encodeURIComponent(name)}`,
 })
 
+const PLANNING_RECORD_ROUTES = {
+	"SD YRP Lot": (name) => `/web/planning/lots/${encodeURIComponent(name)}`,
+	"YRP Work Order": (name) => `/web/planning/work-orders/${encodeURIComponent(name)}`,
+	"YRP Production Order": (name) => `/web/planning/production-orders/${encodeURIComponent(name)}`,
+	"SD YRP Cutting Plan": (name) => `/web/planning/cutting-plans/${encodeURIComponent(name)}`,
+	"SD YRP Finishing Plan": (name) => `/web/planning/finishing-plans/${encodeURIComponent(name)}`,
+	"SD YRP Finishing Plan Dispatch": (name) => `/web/planning/dispatches/${encodeURIComponent(name)}`,
+	...documentRoutes("/planning"),
+}
+
+const MERCH_RECORD_ROUTES = {
+	"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
+	"YRP Work Order": (name) => `/web/merch/work-orders/${encodeURIComponent(name)}`,
+	"YRP Production Order": (name) => `/web/merch/production-orders/${encodeURIComponent(name)}`,
+	"YRP Process Cost": (name) => `/web/merch/process-costs/${encodeURIComponent(name)}`,
+	"SD YRP Cutting Plan": (name) => `/web/merch/cutting-plans/${encodeURIComponent(name)}`,
+	"YRP Bill Tracking": (name) => `/web/merch/bill-tracking/${encodeURIComponent(name)}`,
+	"YRP Purchase Invoice": (name) => `/web/merch/purchase-invoices/${encodeURIComponent(name)}`,
+	"YRP Item Production Detail": (name) => `/web/merch/item-production-details/${encodeURIComponent(name)}`,
+	...documentRoutes("/merch"),
+}
+
+const lotRoute = (basePath) => (name) => `/web${basePath}/lots/${encodeURIComponent(name)}`
+
 export const DEPARTMENT_RECORD_ROUTES = {
+	"/merch-pd/lots": { ...MERCH_RECORD_ROUTES, "SD YRP Lot": lotRoute("/merch-pd") },
+	"/merch-purchase/lots": { ...MERCH_RECORD_ROUTES, "SD YRP Lot": lotRoute("/merch-purchase") },
+	"/accounts/lots": { ...MERCH_RECORD_ROUTES, "SD YRP Lot": lotRoute("/accounts") },
+	"/quality/lots": { ...PLANNING_RECORD_ROUTES, "SD YRP Lot": lotRoute("/quality") },
 	"/accounts": {
 		"YRP Bill Tracking": (name) => `/web/accounts/bill-tracking/${encodeURIComponent(name)}`,
 	},
@@ -61,15 +89,7 @@ export const DEPARTMENT_RECORD_ROUTES = {
 	"/sales": {
 		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
 	},
-	"/planning": {
-		"SD YRP Lot": (name) => `/web/planning/lots/${encodeURIComponent(name)}`,
-		"YRP Work Order": (name) => `/web/planning/work-orders/${encodeURIComponent(name)}`,
-		"YRP Production Order": (name) => `/web/planning/production-orders/${encodeURIComponent(name)}`,
-		"SD YRP Cutting Plan": (name) => `/web/planning/cutting-plans/${encodeURIComponent(name)}`,
-		"SD YRP Finishing Plan": (name) => `/web/planning/finishing-plans/${encodeURIComponent(name)}`,
-		"SD YRP Finishing Plan Dispatch": (name) => `/web/planning/dispatches/${encodeURIComponent(name)}`,
-		...documentRoutes("/planning"),
-	},
+	"/planning": PLANNING_RECORD_ROUTES,
 	"/purchase": {
 		"YRP Bill Tracking": (name) => `/web/purchase/bill-tracking/${encodeURIComponent(name)}`,
 		"YRP Goods Received Note": (name) => `/web/purchase/goods-received-notes/${encodeURIComponent(name)}`,
@@ -77,17 +97,7 @@ export const DEPARTMENT_RECORD_ROUTES = {
 	"/pd": {
 		"SD YRP Cutting Laysheet Planner": (name) => `/web/pd/lay-sheet-planner/${encodeURIComponent(name)}`,
 	},
-	"/merch": {
-		"SD YRP Lot": (name) => `/web/merch/lots/${encodeURIComponent(name)}`,
-		"YRP Work Order": (name) => `/web/merch/work-orders/${encodeURIComponent(name)}`,
-		"YRP Production Order": (name) => `/web/merch/production-orders/${encodeURIComponent(name)}`,
-		"YRP Process Cost": (name) => `/web/merch/process-costs/${encodeURIComponent(name)}`,
-		"SD YRP Cutting Plan": (name) => `/web/merch/cutting-plans/${encodeURIComponent(name)}`,
-		"YRP Bill Tracking": (name) => `/web/merch/bill-tracking/${encodeURIComponent(name)}`,
-		"YRP Purchase Invoice": (name) => `/web/merch/purchase-invoices/${encodeURIComponent(name)}`,
-		"YRP Item Production Detail": (name) => `/web/merch/item-production-details/${encodeURIComponent(name)}`,
-		...documentRoutes("/merch"),
-	},
+	"/merch": MERCH_RECORD_ROUTES,
 }
 
 function documentPage(doctype, currentPath = globalThis.location?.pathname) {

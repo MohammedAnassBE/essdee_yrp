@@ -245,32 +245,25 @@ def reject_purchase_order(name, reason=None):
 
 
 def ensure_purchase_order_approval_route():
+	"""Fill fixed values into the enabled Purchase Order route that has its own group chat."""
 	try:
 		settings = frappe.get_cached_doc(SETTINGS_DOCTYPE)
 	except frappe.DoesNotExistError:
 		return None
-	process_route = next(
+	po_route = next(
 		(
 			route
 			for route in (settings.routes or [])
 			if route.get("enabled")
-			and route.get("reference_doctype") == "YRP Process Cost"
+			and route.get("reference_doctype") == "Purchase Order"
 			and route.get("group_chat_id")
 		),
 		None,
 	)
-	if not process_route:
+	if not po_route:
 		return None
-	po_route = next(
-		(route for route in (settings.routes or []) if route.get("reference_doctype") == "Purchase Order"),
-		None,
-	)
-	created = po_route is None
-	if created:
-		po_route = settings.append("routes", {})
-	desired = {**PURCHASE_ORDER_ROUTE_VALUES, "group_chat_id": process_route.group_chat_id}
-	changed = created
-	for fieldname, value in desired.items():
+	changed = False
+	for fieldname, value in PURCHASE_ORDER_ROUTE_VALUES.items():
 		if po_route.get(fieldname) != value:
 			if isinstance(po_route, dict):
 				po_route[fieldname] = value
@@ -294,7 +287,7 @@ def send_purchase_order_request(name):
 		}
 	route_name = ensure_purchase_order_approval_route()
 	if not route_name:
-		frappe.throw("Configure an enabled YRP Process Cost Telegram approval route first")
+		frappe.throw("Configure an enabled Purchase Order Telegram approval route first")
 	settings = frappe.get_cached_doc(SETTINGS_DOCTYPE)
 	if not settings.enabled:
 		frappe.throw("Telegram approvals are not enabled")

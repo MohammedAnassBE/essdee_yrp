@@ -125,7 +125,7 @@ import Button from "primevue/button"
 import LinkField from "../../../components/common/LinkField.vue"
 import { callMethod } from "../../../api/frappe.js"
 import { useToast } from "primevue/usetoast"
-import { contextExcessPercentage } from "../../merch/lot/clothProgram.js"
+import { contextExcessPercentage } from "./clothProgram.js"
 
 const props = defineProps({
   visible: { type: Boolean, default: false },

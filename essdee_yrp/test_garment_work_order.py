@@ -262,3 +262,131 @@ class TestStitchingClothAccessoryRounding(TestCase):
 
 		self.assertEqual(outputs.call_args.kwargs, {"precision": None})
 		self.assertEqual([(row["item_variant"], row["qty"]) for row in result], [("FOLD-Red", 0.001)])
+
+
+def _set_item_ipd():
+	row = frappe._dict
+	combination = [
+		row(
+			index=0,
+			major_attribute_value="Denim",
+			set_item_attribute_value="Top Front",
+			attribute_value="Denim",
+		),
+		row(
+			index=0, major_attribute_value="Black", set_item_attribute_value="Pocket", attribute_value="Denim"
+		),
+		row(
+			index=0,
+			major_attribute_value="Black",
+			set_item_attribute_value="Bottom Front",
+			attribute_value="Black",
+		),
+		row(
+			index=1,
+			major_attribute_value="Peach",
+			set_item_attribute_value="Top Front",
+			attribute_value="Peach",
+		),
+		row(
+			index=1, major_attribute_value="Black", set_item_attribute_value="Pocket", attribute_value="Peach"
+		),
+		row(
+			index=1,
+			major_attribute_value="Black",
+			set_item_attribute_value="Bottom Front",
+			attribute_value="Black",
+		),
+	]
+	panels = [
+		row(stiching_attribute_value="Top Front", set_item_attribute_value="Top", quantity=1),
+		row(stiching_attribute_value="Pocket", set_item_attribute_value="Bottom", quantity=1),
+		row(stiching_attribute_value="Bottom Front", set_item_attribute_value="Bottom", quantity=1),
+	]
+	return frappe._dict(
+		name="IPD-SET",
+		item="SET",
+		is_set_item=1,
+		packing_attribute="Colour",
+		set_item_attribute="Part",
+		stiching_attribute="Panel",
+		dependent_attribute_mapping=None,
+		emblishment_details_json=None,
+		is_same_packing_attribute=0,
+		stiching_item_details=panels,
+		stiching_item_combination_details=combination,
+	)
+
+
+def _panel_colours(ipd, demands):
+	from essdee_yrp.garment_work_order import _panel_rows
+
+	module = "essdee_yrp.garment_work_order"
+	with (
+		patch(f"{module}.build_variant_attributes", side_effect=lambda attrs, _stage, _ipd: attrs),
+		patch(
+			f"{module}.get_or_create_variant",
+			side_effect=lambda _item, attrs, **_: (attrs["Panel"], attrs["Colour"]),
+		),
+	):
+		rows = _panel_rows(ipd, demands, "Cut")
+	return {(row["set_combination"], row["item_variant"][0]): row["item_variant"][1] for row in rows}
+
+
+def _demand(colour, part, major_colour):
+	return {
+		"attrs": {"Colour": colour, "Part": part, "Size": "S"},
+		"qty": 1,
+		"table_index": 0,
+		"row_index": 0,
+		"set_combination": frappe.as_json({"major_colour": major_colour, "major_part": "Top"}),
+	}
+
+
+class TestCuttingPanelColours(TestCase):
+	def test_set_item_panel_colour_follows_the_colour_set_like_production_api(self):
+		denim = frappe.as_json({"major_colour": "Denim", "major_part": "Top"})
+		peach = frappe.as_json({"major_colour": "Peach", "major_part": "Top"})
+		colours = _panel_colours(
+			_set_item_ipd(), [_demand("Black", "Bottom", "Denim"), _demand("Black", "Bottom", "Peach")]
+		)
+
+		self.assertEqual(colours[(denim, "Pocket")], "Denim")
+		self.assertEqual(colours[(peach, "Pocket")], "Peach")
+		self.assertEqual(colours[(denim, "Bottom Front")], "Black")
+
+	def test_non_set_item_panel_colour_uses_the_garment_colour_mapping(self):
+		row = frappe._dict
+		ipd = frappe._dict(
+			name="IPD-TEE",
+			item="TEE",
+			is_set_item=0,
+			packing_attribute="Colour",
+			stiching_attribute="Panel",
+			dependent_attribute_mapping=None,
+			emblishment_details_json=None,
+			is_same_packing_attribute=0,
+			stiching_item_details=[
+				row(stiching_attribute_value="Front", quantity=1),
+				row(stiching_attribute_value="Pocket", quantity=1),
+			],
+			stiching_item_combination_details=[
+				row(
+					index=0,
+					major_attribute_value="Navy",
+					set_item_attribute_value="Front",
+					attribute_value="Navy",
+				),
+				row(
+					index=0,
+					major_attribute_value="Navy",
+					set_item_attribute_value="Pocket",
+					attribute_value="Grey",
+				),
+			],
+		)
+		colours = _panel_colours(ipd, [_demand("Navy", None, "Navy")])
+
+		self.assertEqual(
+			{panel: colour for (_set, panel), colour in colours.items()}, {"Front": "Navy", "Pocket": "Grey"}
+		)

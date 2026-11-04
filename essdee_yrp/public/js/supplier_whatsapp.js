@@ -13,6 +13,8 @@ essdee_yrp.open_send_whatsapp_dialog = function (frm, supplier_key) {
 			const ctx = r.message;
 			if (!ctx) return;
 			const by_name = Object.fromEntries(ctx.templates.map((t) => [t.name, t]));
+			// One message per dialog: a double click sends once, a new dialog sends again.
+			const request_key = frappe.utils.get_random(20);
 			const d = new frappe.ui.Dialog({
 				// Dialog titles render as raw HTML.
 				title: __("Send WhatsApp to {0}", [frappe.utils.escape_html(ctx.supplier)]),
@@ -49,6 +51,7 @@ essdee_yrp.open_send_whatsapp_dialog = function (frm, supplier_key) {
 							supplier_key,
 							template_name: values.template,
 							mobile_no: values.mobile_no,
+							request_key,
 						},
 					});
 				},

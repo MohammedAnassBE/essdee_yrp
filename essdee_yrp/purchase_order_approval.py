@@ -50,18 +50,15 @@ PURCHASE_ORDER_ROUTE_VALUES = {
 
 
 def get_approval_item_groups() -> set[str]:
-	"""Configured approval Item Groups with their child groups; none configured means Purchase - Yarn."""
-	groups = frappe.get_all(
-		APPROVAL_ITEM_GROUP_DOCTYPE,
-		filters={"parenttype": MRP_SETTINGS_DOCTYPE, "parentfield": "approval_item_groups"},
-		pluck="item_group",
-	) or [DEFAULT_APPROVAL_ITEM_GROUP]
-	expanded = set(groups)
-	for bounds in frappe.get_all("Item Group", filters={"name": ["in", groups]}, fields=["lft", "rgt"]):
-		expanded.update(
-			frappe.get_all("Item Group", filters={"lft": [">=", bounds.lft], "rgt": ["<=", bounds.rgt]}, pluck="name")
+	"""Configured approval Item Groups, exact match only; none configured means Purchase - Yarn."""
+	return set(
+		frappe.get_all(
+			APPROVAL_ITEM_GROUP_DOCTYPE,
+			filters={"parenttype": MRP_SETTINGS_DOCTYPE, "parentfield": "approval_item_groups"},
+			pluck="item_group",
 		)
-	return expanded
+		or [DEFAULT_APPROVAL_ITEM_GROUP]
+	)
 
 
 def get_approval_item_codes(item_codes) -> set[str]:

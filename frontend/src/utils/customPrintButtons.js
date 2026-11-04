@@ -14,6 +14,10 @@ export function getCustomPrintButtons(doctype, record = {}, permissions = {}) {
 	if (doctype === "SD YRP Product") add("tech-pack", "Print Tech Pack", "Essdee Product Tech Pack")
 	if (doctype === "SD YRP Product Release") add("tech-pack", "Print Tech Pack", "Essdee Tech Pack")
 	if (doctype === "SD YRP Finishing Plan Dispatch" && Number(record.docstatus) === 1) add("dispatch", "Print Dispatch", "Essdee Finishing Plan Dispatch")
+	if (doctype === "YRP Work Order") {
+		add("deliverables", "Print Deliverables", "Essdee Work Order Deliverables", false)
+		add("receivables", "Print Receivables", "Essdee Work Order Receivables", false)
+	}
 	if (doctype === "SD YRP Lot" && record.has_cloth_program) add("cloth-program", "Cloth Program", "Essdee Lot Cloth Program")
 	return buttons
 }

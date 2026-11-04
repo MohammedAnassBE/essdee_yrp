@@ -19,6 +19,7 @@ from yrp.yrp.doctype.yrp_item.yrp_item import build_variant_attributes, get_or_c
 from yrp.yrp.utils.ipd_engine import calculate_major_deliverables
 
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_ipd_settings.sd_yrp_ipd_settings import get_dia_attribute
+from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot.sd_yrp_lot import get_panel_colour_combination
 from essdee_yrp.fabric_requirement import (
 	calculate_accessory,
 	get_cloth_combination,
@@ -578,13 +579,15 @@ def _panel_rows(ipd, demands, stage, process_name=None):
 			allowed_panels = set(embellishments[process_name])
 	rows = []
 	set_parts = get_stich_details(ipd) if ipd.get("is_set_item") else {}
+	set_panel_colours = get_panel_colour_combination(ipd) if ipd.get("is_set_item") else {}
 	for demand in demands:
 		attrs = dict(demand["attrs"])
 		major_colour = attrs.get(ipd.packing_attribute)
-		key = major_colour
 		if ipd.get("is_set_item"):
-			key = (major_colour, attrs.get(ipd.set_item_attribute))
-		mapped = panel_colours.get(key) or {}
+			set_combination = update_if_string_instance(demand["set_combination"])
+			mapped = set_panel_colours[set_combination["major_colour"]]
+		else:
+			mapped = panel_colours.get(major_colour) or {}
 		for panel, count in panel_counts.items():
 			if allowed_panels is not None and panel not in allowed_panels:
 				continue

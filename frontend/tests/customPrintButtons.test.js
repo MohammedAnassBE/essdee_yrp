@@ -27,6 +27,17 @@ for (const [doctype, fields, key, label, format, noLetterhead] of cases) {
 		if (doctype === "SD YRP Lot") assert.deepEqual(getCustomPrintButtons(doctype, { name: record.name }, { can_print: true }), [])
 	})
 }
+test("Work Order prints deliverables and receivables on the default letter head", () => {
+	const doctype = "YRP Work Order"
+	const record = { name: "YRP-WO/1 & 2" }
+	const url = (format) => `/printview?${new URLSearchParams({ doctype, name: record.name, trigger_print: "1", format, no_letterhead: "0" })}`
+	assert.deepEqual(getCustomPrintButtons(doctype, record, { can_print: true }), [
+		{ key: "deliverables", label: "Print Deliverables", url: url("Essdee Work Order Deliverables") },
+		{ key: "receivables", label: "Print Receivables", url: url("Essdee Work Order Receivables") },
+	])
+	assert.deepEqual(getCustomPrintButtons(doctype, record, { can_print: false }), [])
+	assert.deepEqual(getCustomPrintButtons(doctype, { name: "" }, { can_print: true }), [])
+})
 test("LaySheet uses separate permissions and selects movement chart at the nine-part boundary", () => {
 	const doctype = "SD YRP Cutting LaySheet"
 	for (const count of [0, 9, 10]) {

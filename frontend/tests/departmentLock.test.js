@@ -6,6 +6,9 @@ import { createMemoryHistory, createRouter } from "vue-router"
 import { ACCOUNTS_ROUTES } from "../src/departments/accounts/accountsViews.js"
 
 import { departments, getWorkspacePaths } from "../src/departments/registry.js"
+import { MERCH_PD_ROUTES } from "../src/departments/merch-pd/merchPdRoutes.js"
+import { MERCH_PURCHASE_ROUTES } from "../src/departments/merch-purchase/merchPurchaseRoutes.js"
+import { QUALITY_ROUTES } from "../src/departments/quality/qualityRoutes.js"
 import { MERCH_ROUTES } from "../src/departments/merch/merchViews.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
@@ -136,7 +139,7 @@ test("registry sections match the department layouts and real routes", () => {
 test("the real route table decides which pages are documents", () => {
 	const routerSource = source("../src/router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
+	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, MERCH_PD_ROUTES, MERCH_PURCHASE_ROUTES, QUALITY_ROUTES, LAYOUT_UNAVAILABLE_PATH,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined, getPermissionRedirect: () => undefined, NO_PERMISSION_PATH: "/no-permission" }
 	vm.runInNewContext(routerSource, context)
 	const guard = (path, department) => getLockedRedirect(context.router.resolve(path), department)

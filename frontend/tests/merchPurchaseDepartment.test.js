@@ -12,6 +12,9 @@ import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
 import { PURCHASE_ROUTES, PURCHASE_STORE_WORKSPACE_KEYS, purchaseLauncherItems } from "../src/departments/purchase/purchaseViews.js"
 import { departments, getWorkspacePaths } from "../src/departments/registry.js"
+import { MERCH_PD_ROUTES } from "../src/departments/merch-pd/merchPdRoutes.js"
+import { MERCH_PURCHASE_ROUTES } from "../src/departments/merch-purchase/merchPurchaseRoutes.js"
+import { QUALITY_ROUTES } from "../src/departments/quality/qualityRoutes.js"
 import { getLockedDepartment, getLockedRedirect, isLockedExit, isWorkspaceInLayout, LAYOUT_UNAVAILABLE_PATH } from "../src/router/departmentLock.js"
 import { canOpenList, getPermissionRedirect, NO_PERMISSION_PATH } from "../src/router/listPermission.js"
 import { webDocumentPath } from "../src/router/webDocumentRoutes.js"
@@ -26,7 +29,7 @@ const notInLayout = (from) => ({ path: LAYOUT_UNAVAILABLE_PATH, query: { from },
 function loadRouter() {
 	const routerSource = source("../src/router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, LAYOUT_UNAVAILABLE_PATH,
+	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, MERCH_PD_ROUTES, MERCH_PURCHASE_ROUTES, QUALITY_ROUTES, LAYOUT_UNAVAILABLE_PATH,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => undefined, getPermissionRedirect: () => undefined, NO_PERMISSION_PATH }
 	vm.runInNewContext(routerSource, context)
 	return context.router
@@ -37,7 +40,7 @@ test("Merch & Purchase combines every Merch and Purchase card once", () => {
 	assert.deepEqual(keys, ["lots", "item_production_details", "production_orders", "work_orders", "delivery_challans", "goods_received_notes", "cutting_plans", "process_costs", "bill_tracking", "purchase_invoices", "items", "item_prices", "purchase_orders", "stock_transfers", "item_conversions", "box_stickers", "excel_stickers", "reports"])
 	assert.equal(new Set(keys).size, keys.length)
 	for (const key of [...merchLauncherItems(), ...purchaseLauncherItems()].map((item) => item.key).concat(PURCHASE_STORE_WORKSPACE_KEYS)) assert.ok(keys.includes(key), key)
-	assert.deepEqual(items.filter((item) => item.label === "Lot").map((item) => item.to), ["/merch/lots"])
+	assert.deepEqual(items.filter((item) => item.label === "Lot").map((item) => item.to), ["/merch-purchase/lots"])
 	assert.equal(items.find((item) => item.key === "reports").to, "/merch-purchase/reports")
 	assert.equal(items.find((item) => item.key === "purchase_orders").to, "/purchase/purchase-orders")
 	assert.deepEqual(workspaces, keys, "the shipped layout lists every combined card")
@@ -48,7 +51,7 @@ test("the department combines Merch and Purchase sections in the registry", () =
 	assert.equal(department.label, "Merch & Purchase")
 	assert.deepEqual(department.combines, ["merch", "purchase"])
 	const paths = getWorkspacePaths(department)
-	assert.deepEqual(paths.lots, ["/merch/lots", "/purchase/lots"])
+	assert.deepEqual(paths.lots, ["/merch-purchase/lots", "/merch/lots", "/purchase/lots"])
 	assert.deepEqual(paths.reports, ["/merch-purchase/reports", "/merch/reports", "/purchase/reports"])
 	assert.deepEqual(locked.workspaces, workspaces)
 	assert.deepEqual(getLockedDepartment({ ui_config: { meta: { render_mode: "Registered Experience", experience_key: "merch-purchase" } } }).workspaces, Object.keys(paths))

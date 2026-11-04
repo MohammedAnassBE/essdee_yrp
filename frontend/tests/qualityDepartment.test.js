@@ -6,6 +6,9 @@ import vm from "node:vm"
 import { createMemoryHistory, createRouter } from "vue-router"
 import { ACCOUNTS_ROUTES } from "../src/departments/accounts/accountsViews.js"
 import { departments } from "../src/departments/registry.js"
+import { MERCH_PD_ROUTES } from "../src/departments/merch-pd/merchPdRoutes.js"
+import { MERCH_PURCHASE_ROUTES } from "../src/departments/merch-purchase/merchPurchaseRoutes.js"
+import { QUALITY_ROUTES } from "../src/departments/quality/qualityRoutes.js"
 import { PD_ROUTES } from "../src/departments/pd/pdViews.js"
 import { PURCHASE_ROUTES } from "../src/departments/purchase/purchaseViews.js"
 import { PLANNING_ROUTES } from "../src/departments/planning/planningViews.js"
@@ -41,7 +44,7 @@ test("Quality registry follows Finishing and automatically feeds the landing car
 		key: "quality", label: "Quality", shortLabel: "QA", path: "/quality", component: undefined,
 		combines: ["planning", "merch", "pd", "accounts"],
 		combinedSections: ["cutting_plans", "lots", "sewing_plans", "finishing_plans", "process_costs", "products", "lotwise_item_profits", "debits"],
-		sections: { inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
+		sections: { lots: "lots", inspections: "inspections", work_orders: "work-orders", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", reports: "reports" },
 	})
 	assert.match(read("components/AdministratorPage.vue"), /v-for="department in visibleDepartments"/)
 	assert.match(String(departments[index].component), /Quality.vue/)
@@ -50,7 +53,7 @@ test("Quality registry follows Finishing and automatically feeds the landing car
 test("actual router resolves the Quality launcher, list, create, edit and view", () => {
 	const source = read("router/index.js").replace(/^import .*\n/gm, "")
 		.replace(/export function /g, "function ").replace("export default router", "globalThis.router = router")
-	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES,
+	const context = { ACCOUNTS_ROUTES, departments, PD_ROUTES, PURCHASE_ROUTES, PLANNING_ROUTES, MERCH_ROUTES, MERCH_PD_ROUTES, MERCH_PURCHASE_ROUTES, QUALITY_ROUTES,
 		createRouter, createWebHistory: () => createMemoryHistory("/web/"), getLockedRedirect: () => null,
 		LAYOUT_UNAVAILABLE_PATH: "/not-in-your-layout", getPermissionRedirect: () => undefined, NO_PERMISSION_PATH: "/no-permission" }
 	vm.runInNewContext(source, context)

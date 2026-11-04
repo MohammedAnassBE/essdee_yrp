@@ -38,7 +38,8 @@ export function accountsLauncherItems() {
 	const borrowed = [...merchLauncherItems(), ...pdLauncherItems()]
 	const own = ACCOUNTS_WORKSPACES.filter((item) => item.key !== "reports")
 	const reports = ACCOUNTS_WORKSPACES.filter((item) => item.key === "reports")
-	return [...own, ...ACCOUNTS_COMBINED_KEYS.map((key) => borrowed.find((item) => item.key === key)), ...reports]
+	const combined = ACCOUNTS_COMBINED_KEYS.map((key) => borrowed.find((item) => item.key === key)).map((item) => (item.key === "lots" ? { ...item, to: "/accounts/lots" } : item))
+	return [...own, ...combined, ...reports]
 }
 
 export const ACCOUNTS_REPORTS = [

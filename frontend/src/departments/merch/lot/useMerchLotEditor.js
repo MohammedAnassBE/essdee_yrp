@@ -11,9 +11,9 @@ import {
 	clone,
 	lotEditorCleanSignature,
 	lotSavePayload,
-} from "../../purchase/lot/lotEditor.js"
-import { lotEditorTabs } from "../../purchase/lot/lotLayout.js"
-import { useLotLayout, useLotTabWorkspace } from "../../purchase/lot/useLotLayout.js"
+} from "./lotEditor.js"
+import { lotEditorTabs } from "./lotLayout.js"
+import { useLotLayout, useLotTabWorkspace } from "./useLotLayout.js"
 import { boxGridErrors } from "./merchLotViews.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 import { withSavedHandoff } from "../../../utils/documentLiveState.js"

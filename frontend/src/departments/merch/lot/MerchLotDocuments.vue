@@ -32,8 +32,8 @@
 import { onBeforeUnmount, ref } from "vue"
 import { useRouter } from "vue-router"
 import { getLotDocuments } from "../../../api/purchase.js"
-import LotDocumentDialog from "../../purchase/lot/LotDocumentDialog.vue"
-import LotDocumentsRail from "../../purchase/lot/LotDocumentsRail.vue"
+import LotDocumentDialog from "./LotDocumentDialog.vue"
+import LotDocumentsRail from "./LotDocumentsRail.vue"
 const props = defineProps({ lotId: { type: String, default: "" } })
 const router = useRouter()
 const rail = ref(null)

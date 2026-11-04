@@ -33,7 +33,7 @@ import Button from "primevue/button"
 import { computed, onMounted, ref, watch } from "vue"
 import { getMeta } from "../../../api/frappe.js"
 import ChildTableField from "../../../components/common/ChildTableField.vue"
-import LotBomTab from "../../purchase/lot/LotBomTab.vue"
+import LotBomTab from "./LotBomTab.vue"
 const props = defineProps({
 	bom: { type: Object, default: null },
 	additionalItems: { type: Array, default: () => [] },

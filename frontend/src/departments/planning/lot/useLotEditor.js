@@ -5,9 +5,9 @@ import { getMeta } from "../../../api/frappe.js"
 import { getLotForm, getLotProductionDetailContext, getLotProductionOrderItem, getLotWorkspace, saveLot } from "../../../api/planning.js"
 import { preserveListNavigationState } from "../../../router/listDocumentNavigation.js"
 import { PLANNING_ROUTES } from "../planningViews.js"
-import { clearedLotContext, clone, lotEditorCleanSignature, lotSavePayload } from "../../purchase/lot/lotEditor.js"
-import { lotEditorTabs } from "../../purchase/lot/lotLayout.js"
-import { useLotLayout, useLotTabWorkspace } from "../../purchase/lot/useLotLayout.js"
+import { clearedLotContext, clone, lotEditorCleanSignature, lotSavePayload } from "./lotEditor.js"
+import { lotEditorTabs } from "./lotLayout.js"
+import { useLotLayout, useLotTabWorkspace } from "./useLotLayout.js"
 import { withSavedHandoff } from "../../../utils/documentLiveState.js"
 
 export function useLotEditor(lotId) {

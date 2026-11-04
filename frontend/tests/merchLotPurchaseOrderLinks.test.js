@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Vue, findNodes, loadComponent, mountComponent } from "../../scripts/helpers/vue_renderer.mjs"
-import * as purchaseActions from "../src/departments/purchase/lot/lotPurchaseActions.js"
+import * as purchaseActions from "../src/departments/merch/lot/lotPurchaseActions.js"
 import * as duplicateAction from "../src/composables/useDuplicateAction.js"
 import * as merchViews from "../src/departments/merch/lot/merchLotViews.js"
-import * as lotLayout from "../src/departments/purchase/lot/lotLayout.js"
-import * as lotViews from "../src/departments/purchase/lot/lotViews.js"
+import * as lotLayout from "../src/departments/merch/lot/lotLayout.js"
+import * as lotViews from "../src/departments/merch/lot/lotViews.js"
 
 const tick = async () => { await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick() }
 const stub = type => (props, { slots }) => Vue.h(type, props, Object.values(slots || {}).map(slot => slot?.({ headingId: "h" })))
@@ -26,19 +26,19 @@ function mountMerchLot(workspace) {
 		"../../../components/documents/DocumentOverview.vue": stub("overview"),
 		"../../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({}) },
 		"../../fabric-store/FabricDocumentWorkspace.vue": stub("workspace"),
-		"../../purchase/lot/LotIdentity.vue": stub("identity"),
-		"../../purchase/lot/LotViewMain.vue": stub("lot-main"),
-		"../../purchase/lot/LotBomPanel.vue": stub("bom-panel"),
-		"../../purchase/lot/lotEditor.js": { editTabFor: tab => lotLayout.resolveLotTab(tab).tab },
-		"../../purchase/lot/lotLayout.js": lotLayout,
-		"../../purchase/lot/lotViews.js": lotViews,
-		"../../purchase/lot/useLotLayout.js": { useLotLayout: () => ({ activeTab: Vue.ref("lot"), expanded: Vue.ref([]), scrollTo: Vue.ref(""), openSection() {} }) },
-		"../../purchase/lot/ClothProgramBuildDialog.vue": stub("cloth-build"),
-		"../../purchase/lot/LotFabricTab.vue": stub("fabric"),
-		"../../purchase/lot/LotDiaConversionsTab.vue": stub("dia-conversions"),
-		"../../purchase/lot/LotEmptyState.vue": stub("empty"),
-		"../../purchase/lot/LotPurchaseOrderDialog.vue": stub("po-dialog"),
-		"../../purchase/lot/lotPurchaseActions.js": purchaseActions,
+		"./LotIdentity.vue": stub("identity"),
+		"./LotViewMain.vue": stub("lot-main"),
+		"./LotBomPanel.vue": stub("bom-panel"),
+		"./lotEditor.js": { editTabFor: tab => lotLayout.resolveLotTab(tab).tab },
+		"./lotLayout.js": lotLayout,
+		"./lotViews.js": lotViews,
+		"./useLotLayout.js": { useLotLayout: () => ({ activeTab: Vue.ref("lot"), expanded: Vue.ref([]), scrollTo: Vue.ref(""), openSection() {} }) },
+		"./ClothProgramBuildDialog.vue": stub("cloth-build"),
+		"./LotFabricTab.vue": stub("fabric"),
+		"./LotDiaConversionsTab.vue": stub("dia-conversions"),
+		"./LotEmptyState.vue": stub("empty"),
+		"./LotPurchaseOrderDialog.vue": stub("po-dialog"),
+		"./lotPurchaseActions.js": purchaseActions,
 		"../merchViews.js": { MERCH_ROUTES: { lotEdit: "merch-lot-edit", lotNew: "merch-lot-new" } },
 		"../../../composables/useDuplicateAction.js": duplicateAction,
 		"./merchLotViews.js": merchViews,

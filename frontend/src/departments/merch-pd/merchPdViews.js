@@ -8,5 +8,5 @@ export const MERCH_PD_WORKSPACE_KEYS = departments.find((department) => departme
 /** Lot, Item Production Detail and Vendor Bill Tracking from Merch, Purchase Orders from Purchase and Lotwise Item Profit from PD. */
 export function merchPdLauncherItems() {
 	const items = [...merchLauncherItems(), ...storeWorkspaces("/purchase"), ...pdLauncherItems()]
-	return MERCH_PD_WORKSPACE_KEYS.map((key) => items.find((item) => item.key === key))
+	return MERCH_PD_WORKSPACE_KEYS.map((key) => items.find((item) => item.key === key)).map((item) => (item.key === "lots" ? { ...item, to: "/merch-pd/lots" } : item))
 }

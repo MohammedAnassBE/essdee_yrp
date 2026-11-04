@@ -270,24 +270,73 @@ class TestPurchaseOrderRequestLifecycle(TestCase):
 		doc.get.side_effect = lambda key: getattr(doc, key)
 		return doc
 
+	def _settings(self, *routes):
+		settings = Mock()
+		settings.enabled = 1
+		settings.routes = [frappe._dict(route) for route in routes]
+		return settings
+
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
-	def test_route_reuses_migrated_process_cost_group_idempotently(self, get_settings):
+	def test_purchase_order_route_alone_enables_approval(self, get_settings):
 		from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
 
-		settings = Mock()
-		settings.routes = [frappe._dict({
-			"name": "PROCESS", "enabled": 1, "reference_doctype": "YRP Process Cost", "group_chat_id": "-100123",
-		})]
-		def append(_field, values):
-			row = frappe._dict({"name": "PO-ROUTE", **values})
-			settings.routes.append(row)
-			return row
-		settings.append.side_effect = append
+		get_settings.return_value = self._settings(
+			{"name": "PO-ROUTE", "enabled": 1, "reference_doctype": "Purchase Order", "group_chat_id": "-100999"}
+		)
+		self.assertEqual(ensure_purchase_order_approval_route(), "PO-ROUTE")
+		self.assertEqual(ensure_purchase_order_approval_route(), "PO-ROUTE")
+		get_settings.return_value.append.assert_not_called()
+		get_settings.return_value.save.assert_called_once()
+
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
+	def test_purchase_order_route_keeps_its_own_chat_id(self, get_settings):
+		from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
+
+		settings = self._settings(
+			{"name": "PROCESS", "enabled": 1, "reference_doctype": "YRP Process Cost", "group_chat_id": "-100123"},
+			{"name": "PO-ROUTE", "enabled": 1, "reference_doctype": "Purchase Order", "group_chat_id": "-100999"},
+		)
 		get_settings.return_value = settings
 		self.assertEqual(ensure_purchase_order_approval_route(), "PO-ROUTE")
-		self.assertEqual(ensure_purchase_order_approval_route(), "PO-ROUTE")
-		settings.append.assert_called_once()
-		self.assertEqual(settings.routes[-1].group_chat_id, "-100123")
+		self.assertEqual(settings.routes[1].group_chat_id, "-100999")
+		self.assertEqual(settings.routes[1].approve_action, "Approve PO")
+
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
+	def test_process_cost_route_alone_does_not_enable_purchase_order_approval(self, get_settings):
+		from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
+
+		settings = self._settings(
+			{"name": "PROCESS", "enabled": 1, "reference_doctype": "YRP Process Cost", "group_chat_id": "-100123"}
+		)
+		get_settings.return_value = settings
+		self.assertIsNone(ensure_purchase_order_approval_route())
+		settings.append.assert_not_called()
+		settings.save.assert_not_called()
+		self.assertEqual(len(settings.routes), 1)
+
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
+	def test_purchase_order_route_without_chat_id_or_disabled_is_ignored(self, get_settings):
+		from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
+
+		get_settings.return_value = self._settings(
+			{"name": "PO-OFF", "enabled": 0, "reference_doctype": "Purchase Order", "group_chat_id": "-100999"},
+			{"name": "PO-NOCHAT", "enabled": 1, "reference_doctype": "Purchase Order", "group_chat_id": ""},
+		)
+		self.assertIsNone(ensure_purchase_order_approval_route())
+		get_settings.return_value.save.assert_not_called()
+
+	@patch("essdee_yrp.purchase_order_approval.frappe.throw", side_effect=RuntimeError("thrown"))
+	@patch("essdee_yrp.purchase_order_approval.ensure_purchase_order_approval_route", return_value=None)
+	@patch("essdee_yrp.purchase_order_approval.get_live_request", return_value=None)
+	@patch("essdee_yrp.purchase_order_approval._prepare_purchase_order_request")
+	def test_send_without_purchase_order_route_asks_for_purchase_order_route(
+		self, prepare, get_live, ensure_route, throw
+	):
+		from essdee_yrp.purchase_order_approval import send_purchase_order_request
+
+		with self.assertRaisesRegex(RuntimeError, "thrown"):
+			self._call(send_purchase_order_request, "YRP-PO-0012")
+		throw.assert_called_once_with("Configure an enabled Purchase Order Telegram approval route first")
 
 	@patch("essdee_yrp.purchase_order_approval.frappe.get_doc")
 	@patch("essdee_yrp.purchase_order_approval.create_and_send_approval", side_effect=["REQ-ERR", "REQ-PENDING"])

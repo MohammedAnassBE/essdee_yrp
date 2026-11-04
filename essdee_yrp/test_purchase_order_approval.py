@@ -52,16 +52,11 @@ class TestPurchaseOrderApprovalState(TestCase):
 		"CLOTH": {"item_group": "Purchase - Fabric", "variant_of": None},
 		"SIMILAR": {"item_group": "Purchase Yarn", "variant_of": None},
 	}
-	GROUP_TREE = {"Purchase - Yarn": (10, 13), "Dyed Yarn": (11, 12), "M_Purchase - Yarn": (20, 21), "Purchase - Fabric": (30, 31)}
 
 	def fake_get_all(self, configured):
 		def get_all(doctype, filters=None, fields=None, pluck=None, **_kwargs):
 			if doctype == "SD YRP MRP Settings Approval Item Group":
 				return list(configured)
-			if doctype == "Item Group" and "name" in filters:
-				return [frappe._dict(lft=self.GROUP_TREE[name][0], rgt=self.GROUP_TREE[name][1]) for name in filters["name"][1] if name in self.GROUP_TREE]
-			if doctype == "Item Group":
-				return [name for name, (lft, rgt) in self.GROUP_TREE.items() if lft >= filters["lft"][1] and rgt <= filters["rgt"][1]]
 			names = [name for name in filters["name"][1] if name in self.ITEMS]
 			if "item_group" in filters:
 				return [name for name in names if self.ITEMS[name]["item_group"] in filters["item_group"][1]]
@@ -69,7 +64,7 @@ class TestPurchaseOrderApprovalState(TestCase):
 
 		return patch("essdee_yrp.purchase_order_approval.frappe.get_all", side_effect=get_all)
 
-	def test_listed_group_child_group_and_template_variant_need_approval(self):
+	def test_listed_group_items_and_template_variants_need_approval(self):
 		from essdee_yrp.purchase_order_approval import (
 			get_approval_item_codes,
 			is_approval_item,
@@ -77,12 +72,20 @@ class TestPurchaseOrderApprovalState(TestCase):
 		)
 
 		with self.fake_get_all(["Purchase - Yarn"]):
-			self.assertEqual(get_approval_item_codes(["YARN", "YARN-RED", "DYED", "CLOTH", "SIMILAR"]), {"YARN", "YARN-RED", "DYED"})
+			self.assertEqual(get_approval_item_codes(["YARN", "YARN-RED", "DYED", "CLOTH", "SIMILAR"]), {"YARN", "YARN-RED"})
 			self.assertTrue(requires_item_approval(self._doc("CLOTH", "YARN-RED")))
 			self.assertFalse(requires_item_approval(self._doc("CLOTH", "SIMILAR")))
 			self.assertFalse(requires_item_approval(self._doc("YARN", managed=False)))
-			self.assertTrue(is_approval_item("DYED"))
+			self.assertTrue(is_approval_item("YARN"))
+			self.assertTrue(is_approval_item("YARN-RED"))
 			self.assertFalse(is_approval_item("CLOTH"))
+
+	def test_child_group_of_configured_group_does_not_need_approval(self):
+		from essdee_yrp.purchase_order_approval import get_approval_item_groups, is_approval_item
+
+		with self.fake_get_all(["Purchase - Yarn"]):
+			self.assertEqual(get_approval_item_groups(), {"Purchase - Yarn"})
+			self.assertFalse(is_approval_item("DYED"))
 
 	def test_configured_groups_replace_the_default(self):
 		from essdee_yrp.purchase_order_approval import get_approval_item_codes, get_approval_item_groups
@@ -91,11 +94,11 @@ class TestPurchaseOrderApprovalState(TestCase):
 			self.assertEqual(get_approval_item_groups(), {"Purchase - Fabric", "M_Purchase - Yarn"})
 			self.assertEqual(get_approval_item_codes(["YARN", "YARN-RED", "CLOTH"]), {"YARN-RED", "CLOTH"})
 
-	def test_empty_list_falls_back_to_purchase_yarn(self):
+	def test_empty_list_falls_back_to_purchase_yarn_only(self):
 		from essdee_yrp.purchase_order_approval import get_approval_item_groups
 
 		with self.fake_get_all([]):
-			self.assertEqual(get_approval_item_groups(), {"Purchase - Yarn", "Dyed Yarn"})
+			self.assertEqual(get_approval_item_groups(), {"Purchase - Yarn"})
 
 	def test_empty_rows_do_not_query_items(self):
 		from essdee_yrp.purchase_order_approval import requires_item_approval

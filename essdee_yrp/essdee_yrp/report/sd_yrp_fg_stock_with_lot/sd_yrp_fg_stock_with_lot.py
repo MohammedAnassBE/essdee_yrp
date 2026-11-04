@@ -203,7 +203,7 @@ def execute(filters=None):
 
 def construct_item_wise_stock_detail(stock):
 	"""Load all UOM factors together rather than once per stock variant."""
-	prices = get_price_valuation_for_items()
+	prices = get_price_valuation_for_items([row["item_variant"] for row in stock])
 	conversions = frappe.db.sql(
 		"""SELECT iv.name AS item_variant, u.uom, u.conversion_factor
 		FROM `tabItem` iv JOIN `tabUOM Conversion Detail` u ON u.parent = iv.variant_of
@@ -225,24 +225,13 @@ def construct_item_wise_stock_detail(stock):
 	}
 
 
-def get_price_valuation_for_items():
-	"""Use the same configured sales service as the MRP report."""
-	import requests
+def get_price_valuation_for_items(items):
+	"""Wholesale prices from essdee_yrp_partner's default price list; none when the app is absent."""
+	if "essdee_yrp_partner" not in frappe.get_installed_apps():
+		return {}
+	from essdee_yrp_partner.masters.item_prices import get_wholesale_price_details
 
-	settings = frappe.get_single("SD YRP MRP Settings")
-	if not settings.sales_site_url or not settings.sales_api_key or not settings.sales_api_secret:
-		frappe.throw(_("Please Setup The Sales Credentials"))
-	response = requests.get(
-		settings.sales_site_url.rstrip("/")
-		+ "/api/method/essdee_sales.api.mrp.get_wholesales_price_details_for_items",
-		headers={
-			"Authorization": f"token {settings.sales_api_key}:{settings.get_password('sales_api_secret')}",
-			"Content-Type": "application/json",
-		},
-		timeout=30,
-	)
-	response.raise_for_status()
-	return response.json()["message"]
+	return get_wholesale_price_details(items)
 
 
 def get_old_connection():

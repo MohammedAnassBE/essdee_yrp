@@ -2074,6 +2074,7 @@ class TestEssdeeValuationContract(UnitTestCase):
 				return_value=plan,
 			),
 			patch("essdee_yrp.fabric_grn.populate_grn_deliverables"),
+			patch("essdee_yrp.fabric_grn.load_submitted_consumption_plan", return_value=plan),
 			patch.object(GoodsReceivedNote, "before_submit") as base_submit,
 		):
 			doc.before_submit()
@@ -2134,6 +2135,65 @@ class TestEssdeeValuationContract(UnitTestCase):
 		base_cancel_action.assert_called_once_with()
 		apply.assert_called_once_with("WO-1", persisted_plan, cancel=True)
 		enqueue.assert_called_once_with()
+
+	def test_cutting_submit_and_cancel_use_the_same_rounded_quantities(self):
+		doc = EssdeeGoodsReceivedNote(
+			{"doctype": "YRP Goods Received Note", "against": "YRP Work Order", "against_id": "WO-1"}
+		)
+		plan = [
+			{
+				"goods_received_note_item": f"OUT-{index}",
+				"received_item_variant": f"PANEL-{index}",
+				"item_variant": "CLOTH-1",
+				"quantity": 0.3333336,
+				"uom": "Kg",
+				"stock_qty": 0.3333336,
+				"stock_uom": "Kg",
+				"conversion_factor": 1,
+				"valuation_rate": 100,
+				"work_order_deliverable": "WO-INPUT-1",
+				"dimensions": {"lot": "LOT-1", "received_type": "Accepted"},
+			}
+			for index in range(9)
+		]
+		with (
+			patch("essdee_yrp.overrides.goods_received_note.validate_sewing_plan_quantity"),
+			patch("essdee_yrp.overrides.goods_received_note.validate_quality_inspection_passed"),
+			patch(
+				"essdee_yrp.overrides.goods_received_note._new_consumption_plan_kind",
+				return_value="cutting",
+			),
+			patch("essdee_yrp.overrides.goods_received_note._lock_work_order"),
+			patch(
+				"essdee_yrp.overrides.goods_received_note._calculate_new_consumption_plan",
+				return_value=plan,
+			),
+			patch(
+				"essdee_yrp.overrides.goods_received_note._has_complete_mapped_consumption",
+				return_value=False,
+			),
+			patch.object(GoodsReceivedNote, "before_submit"),
+		):
+			doc.before_submit()
+
+		deliverable = frappe._dict(name="WO-INPUT-1", stock_update=0)
+		work_order = frappe._dict(deliverables=[deliverable])
+
+		def set_stock_update(_doctype, _name, _field, value, **_kwargs):
+			deliverable.stock_update = value
+
+		from essdee_yrp.fabric_grn import apply_work_order_stock_update, load_submitted_consumption_plan
+
+		with (
+			patch("essdee_yrp.fabric_grn.frappe.db.set_value", side_effect=set_stock_update),
+			patch("yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._update_work_order_status"),
+		):
+			apply_work_order_stock_update("WO-1", doc.flags.essdee_mapped_consumption, work_order_doc=work_order)
+			apply_work_order_stock_update(
+				"WO-1", load_submitted_consumption_plan(doc), cancel=True, work_order_doc=work_order
+			)
+
+		self.assertLessEqual(abs(deliverable.stock_update), QTY_TOLERANCE)
 
 	def test_mapped_submit_retry_skips_base_and_work_order_side_effects(self):
 		doc = EssdeeGoodsReceivedNote({"doctype": "YRP Goods Received Note", "against_id": "WO-1"})

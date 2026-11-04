@@ -194,11 +194,12 @@ class EssdeeGoodsReceivedNote(GoodsReceivedNote):
 				flt(row.get("stock_qty") or row.get("quantity")) > 0 for row in self.get("items") or []
 			):
 				frappe.throw(_empty_consumption_plan_message(self, plan_kind))
-			from essdee_yrp.fabric_grn import populate_grn_deliverables
+			from essdee_yrp.fabric_grn import load_submitted_consumption_plan, populate_grn_deliverables
 
 			populate_grn_deliverables(self, plan)
 			self.mapped_stock_update_state = 0
-			self.flags.essdee_mapped_consumption = plan
+			# Cancel subtracts the rounded saved rows, so submit must add the same quantities.
+			self.flags.essdee_mapped_consumption = load_submitted_consumption_plan(self)
 		if _has_complete_mapped_consumption(self):
 			_validate_mapped_consumption_ownership(self)
 			if not self.flags.get("essdee_mapped_consumption"):

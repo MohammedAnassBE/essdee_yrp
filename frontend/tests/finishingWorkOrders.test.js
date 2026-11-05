@@ -57,6 +57,7 @@ function workOrderSection(capabilities) {
 	const requests = []
 	const workOrders = loadComponent(resolve("frontend/src/departments/fabric-store/FabricWorkOrders.vue"), {
 		"primevue/button": stub("button"), "vue-router": { useRouter: () => ({}) },
+		"../../api/planning.js": { getWorkOrderClosePermission: async () => ({}), approveCloseRequests: async () => ({}) },
 		"../../components/common/ListView.vue": (props, { slots }) => Vue.h("list", props, slots["toolbar-actions"]?.()),
 		"../../components/documents/DocumentStatusBadge.vue": stub("badge"),
 		"../../router/listDocumentNavigation.js": {},

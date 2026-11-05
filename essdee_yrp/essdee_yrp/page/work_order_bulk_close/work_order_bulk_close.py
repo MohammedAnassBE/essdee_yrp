@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, getdate, strip_html_tags
 from yrp.stock.save_stock_items import group_items_for_ui
+from yrp.yrp.doctype.yrp_work_order.yrp_work_order import _get_wo_close_approver_role, _is_wo_close_manager
 
 from essdee_yrp.api.work_order import fetch_summary_details
 from essdee_yrp.work_order_close import close_work_order
@@ -84,30 +85,26 @@ def close_work_orders(
 	close_other_reason=None,
 	close_remarks=None,
 ):
+	"""Close each Work Order directly, with no Close Request; needs Work Order write permission."""
 	names = _as_list(work_orders)
 	if not names:
 		frappe.throw(_("Select at least one Work Order to close."))
+	frappe.has_permission("YRP Work Order", "write", throw=True)
 
-	results, failed = [], []
 	previous_flags = (
 		frappe.flags.get("work_order_bulk_close"),
 		frappe.flags.get("suppress_work_order_close_alert"),
 	)
 	frappe.flags.work_order_bulk_close = frappe.flags.suppress_work_order_close_alert = True
 	try:
-		for index, name in enumerate(names, start=1):
-			savepoint = f"work_order_bulk_close_{index}"
-			frappe.db.savepoint(savepoint)
-			try:
-				status = _close_one(name, close_reason, close_other_reason, close_remarks)
-				results.append({"work_order": name, "open_status": status})
-			except Exception as error:
-				frappe.db.rollback(save_point=savepoint)
-				frappe.clear_messages()
-				message = strip_html_tags(cstr(error)).strip() or _("The Work Order could not be closed.")
-				failed.append({"work_order": name, "error": message})
+		closed, failed = _for_each_work_order(
+			names,
+			"work_order_bulk_close",
+			lambda name: _close_one(name, close_reason, close_other_reason, close_remarks),
+		)
 	finally:
 		frappe.flags.work_order_bulk_close, frappe.flags.suppress_work_order_close_alert = previous_flags
+	results = [{"work_order": name, "open_status": status} for name, status in closed]
 	return {"results": results, "failed": failed}
 
 
@@ -123,6 +120,54 @@ def _close_one(name, close_reason, close_other_reason, close_remarks):
 		close_remarks=close_remarks,
 	)
 	return result.get("status")
+
+
+@frappe.whitelist()
+def approve_close_requests(work_orders):
+	"""Approve each selected Work Order's pending Close Request; only the closing approver role may."""
+	names = _as_list(work_orders)
+	if not names:
+		frappe.throw(_("Select at least one Work Order to approve."))
+	if not _is_wo_close_manager(throw_if_missing=True):
+		frappe.throw(
+			_("Only users with role {0} can approve Work Order close requests.").format(
+				frappe.bold(_get_wo_close_approver_role())
+			),
+			frappe.PermissionError,
+		)
+	approved, failed = _for_each_work_order(names, "work_order_approve_close", _approve_one)
+	return {"approved": [name for name, _status in approved], "failed": failed}
+
+
+def _approve_one(name):
+	doc = frappe.get_doc("YRP Work Order", name, for_update=True)
+	doc.check_permission("write")
+	if doc.docstatus != 1 or doc.open_status != "Close Request":
+		frappe.throw(_("Work Order {0} does not have a pending Close Request.").format(frappe.bold(name)))
+	result = close_work_order(
+		name,
+		sd_close_reason=doc.get("sd_close_reason"),
+		close_reason=doc.get("close_reason"),
+		close_other_reason=doc.get("close_other_reason"),
+		close_remarks=doc.get("close_remarks"),
+	)
+	return result.get("status")
+
+
+def _for_each_work_order(names, savepoint_prefix, action):
+	"""Run `action` per Work Order in its own savepoint; a failure rolls back only that order."""
+	done, failed = [], []
+	for index, name in enumerate(names, start=1):
+		savepoint = f"{savepoint_prefix}_{index}"
+		frappe.db.savepoint(savepoint)
+		try:
+			done.append((name, action(name)))
+		except Exception as error:
+			frappe.db.rollback(save_point=savepoint)
+			frappe.clear_messages()
+			message = strip_html_tags(cstr(error)).strip() or _("The Work Order could not be processed.")
+			failed.append({"work_order": name, "error": message})
+	return done, failed
 
 
 @frappe.whitelist()

@@ -20,7 +20,7 @@ const ROWS = [
 	{ name: "DC-3", docstatus: 1, modified: "m3" },
 ]
 
-async function mountList({ user = "Administrator", boot = {}, calls = [], failures = {}, workflow = null } = {}) {
+async function mountList({ user = "Administrator", boot = {}, calls = [], failures = {}, workflow = null, customBulkActions = [] } = {}) {
 	const previousWindow = globalThis.window
 	globalThis.window = { sessionStorage: { getItem: () => null }, frappe: { session: { user }, boot: { user: boot } } }
 	let listLoads = 0
@@ -53,7 +53,7 @@ async function mountList({ user = "Administrator", boot = {}, calls = [], failur
 	}
 	for (const name of ["button", "column", "datatable", "inputtext", "menu", "message", "paginator", "select", "dialog"]) modules[`primevue/${name}`] = stub(name)
 	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
-	const root = mountComponent(loadComponent("frontend/src/components/common/ListView.vue", modules), Vue.reactive({ doctype: "YRP Delivery Challan", title: "Delivery Challans", navigationEnabled: false }))
+	const root = mountComponent(loadComponent("frontend/src/components/common/ListView.vue", modules), Vue.reactive({ doctype: "YRP Delivery Challan", title: "Delivery Challans", navigationEnabled: false, customBulkActions }))
 	await tick()
 	const find = (type) => findNodes(root, (node) => node.type === type)[0]
 	return {
@@ -132,4 +132,39 @@ test("workflow doctypes offer no direct Submit or Cancel", async () => {
 
 test("related-record dialogs such as Delivery Challans on a Work Order allow bulk actions", () => {
 	assert.doesNotMatch(source("../src/components/documents/RelatedRecordsDialog.vue"), /allow-bulk-actions/)
+})
+
+test("a page's custom bulk action runs once on the whole selection and lists server failures", async () => {
+	const runs = []
+	const approve = {
+		action: "approve_close", label: "Approve Close", icon: "pi pi-check", severity: "primary", done: "closed",
+		run: async (rows) => { runs.push(rows.map((row) => row.name)); return { done: ["DC-2"], failed: [{ name: "DC-3", error: "No pending Close Request" }] } },
+	}
+	const list = await mountList({ user: "clerk@example.com", boot: { can_write: [], can_cancel: [], can_delete: [] }, customBulkActions: [approve] })
+	try {
+		await list.select([ROWS[1], ROWS[2]])
+		assert.deepEqual(list.menuLabels(), ["Approve Close (2)"])
+		await list.runMenu("Approve Close")
+		const confirm = list.find("confirm-dialog")
+		assert.equal(confirm.props.message, "Approve Close 2 Delivery Challans?")
+		await confirm.props.onConfirm()
+		await tick()
+		assert.deepEqual(runs, [["DC-2", "DC-3"]])
+		const result = list.find("result-dialog")
+		assert.equal(result.props.visible, true)
+		assert.equal(result.props.outcome.summary, "1 document closed; 1 document failed.")
+		assert.deepEqual(result.props.outcome.failed, [{ name: "DC-3", error: "No pending Close Request" }])
+	} finally { list.restore() }
+})
+
+test("a custom bulk action that is rejected outright reports every selected row", async () => {
+	const approve = { action: "approve_close", label: "Approve Close", done: "closed", run: async () => { throw new Error("Only approvers can approve") } }
+	const list = await mountList({ customBulkActions: [approve] })
+	try {
+		await list.select([ROWS[1]])
+		await list.runMenu("Approve Close")
+		await list.find("confirm-dialog").props.onConfirm()
+		await tick()
+		assert.deepEqual(list.find("result-dialog").props.outcome.failed, [{ name: "DC-2", error: "Only approvers can approve" }])
+	} finally { list.restore() }
 })

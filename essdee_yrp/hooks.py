@@ -312,6 +312,7 @@ doctype_list_js = {
 	"SD YRP Cutting Plan": "public/js/cutting_plan_list.js",
 	"YRP Item Production Detail": "public/js/item_production_detail_list.js",
 	"YRP Production Order": "public/js/production_order_list.js",
+	"YRP Work Order": "public/js/work_order_list.js",
 }
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}

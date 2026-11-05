@@ -22,14 +22,15 @@ export function availableBulkActions(rows, { isSubmittable = false, hasWorkflow 
 	})
 }
 
-export function bulkConfirmation(action, rows, title) {
-	const { label } = BULK_ACTIONS[action]
+/** `definition` lets a page pass its own action (label, severity, done) instead of a standard one. */
+export function bulkConfirmation(action, rows, title, definition = BULK_ACTIONS[action]) {
+	const { label } = definition
 	const subject = rows.length === 1 ? rows[0].name : `${rows.length} ${title}`
 	return {
 		title: `${label} ${rows.length === 1 ? "Document" : "Documents"}`,
 		message: `${label} ${subject}?`,
 		confirmLabel: label,
-		severity: BULK_ACTIONS[action].severity,
+		severity: definition.severity,
 	}
 }
 
@@ -49,8 +50,8 @@ export async function runBulkRows(rows, perform, onProgress = () => {}) {
 	return { done, failed }
 }
 
-export function bulkOutcome(action, { done, failed }) {
-	const { label = "Edit", done: verb = "updated" } = BULK_ACTIONS[action] || {}
+export function bulkOutcome(action, { done, failed }, definition = BULK_ACTIONS[action]) {
+	const { label = "Edit", done: verb = "updated" } = definition || {}
 	const documents = (count) => `${count} document${count === 1 ? "" : "s"}`
 	return {
 		title: `${label} ${done.length ? "partially completed" : "failed"}`,

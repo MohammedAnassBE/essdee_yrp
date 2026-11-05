@@ -876,21 +876,11 @@ class WorkOrderBulkClose {
         dialog.hide();
         const results = response.message?.results || [];
         const failed = response.message?.failed || [];
-        const closed_count = results.filter(
-          (result) => result.open_status === "Close"
-        ).length;
-        const request_count = results.filter(
-          (result) => result.open_status === "Close Request"
-        ).length;
+        const closed_message =
+          results.length === 1
+            ? __("1 Work Order closed.")
+            : __("{0} Work Orders closed.", [results.length]);
         if (failed.length) {
-          const closed_message =
-            closed_count === 1
-              ? __("1 Work Order closed")
-              : __("{0} Work Orders closed", [closed_count]);
-          const request_message =
-            request_count === 1
-              ? __("1 close request submitted")
-              : __("{0} close requests submitted", [request_count]);
           const failed_message =
             failed.length === 1
               ? __("1 Work Order failed:")
@@ -906,25 +896,11 @@ class WorkOrderBulkClose {
           frappe.msgprint({
             title: __("Bulk Close Result"),
             indicator: results.length ? "orange" : "red",
-            message: `<p>${closed_message}; ${request_message}.</p><p>${failed_message}</p><ul>${failures}</ul>`,
+            message: `<p>${closed_message}</p><p>${failed_message}</p><ul>${failures}</ul>`,
             wide: true,
           });
         } else {
-          let message;
-          if (work_orders.length === 1) {
-            message = request_count
-              ? __("Close Request submitted for {0}.", [work_orders[0].name])
-              : __("Work Order {0} closed successfully.", [work_orders[0].name]);
-          } else {
-            message = __("{0} Work Orders closed; {1} close requests submitted.", [
-              closed_count,
-              request_count,
-            ]);
-          }
-          frappe.show_alert({
-            message,
-            indicator: request_count ? "orange" : "green",
-          });
+          frappe.show_alert({ message: closed_message, indicator: "green" });
         }
         this.selected_work_orders.clear();
         this.load_work_orders();

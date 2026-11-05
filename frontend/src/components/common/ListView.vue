@@ -575,6 +575,8 @@ const props = defineProps({
 	initialStatus: { type: [String, Number], default: "" },
 	viewportBounded: { type: Boolean, default: false },
 	allowBulkActions: { type: Boolean, default: true },
+	/** Page actions for the Actions menu: { action, label, icon, severity, done, run(rows) → { done, failed: [{ name, error }] } }. */
+	customBulkActions: { type: Array, default: () => [] },
 	selectable: { type: Boolean, default: false },
 	navigationEnabled: { type: Boolean, default: true },
 	/** False while the page's read permission is unknown: data loads, only a skeleton renders. */
@@ -793,7 +795,7 @@ const canBulkLifecycle = computed(() => workflowReady.value && !activeWorkflow.v
 	&& isSubmittable.value && (hasDoctypePermission("submit") || hasDoctypePermission("cancel")))
 const showBulkSelection = computed(
 	() => props.selectable || (props.allowBulkActions
-		&& (canBulkEdit.value || canBulkLifecycle.value || hasDoctypePermission("delete"))),
+		&& (canBulkEdit.value || canBulkLifecycle.value || hasDoctypePermission("delete") || props.customBulkActions.length > 0)),
 )
 const bulkActions = computed(() => availableBulkActions(selectedRows.value, {
 	isSubmittable: isSubmittable.value,
@@ -807,7 +809,13 @@ const bulkMenuItems = computed(() => [
 		icon,
 		command: () => requestBulkAction(action, candidates),
 	})),
+	...props.customBulkActions.map(({ action, label, icon }) => ({
+		label: `${label} (${selectedRows.value.length})`,
+		icon,
+		command: () => requestBulkAction(action, selectedRows.value),
+	})),
 ])
+const customBulkAction = (action) => props.customBulkActions.find((definition) => definition.action === action)
 const showBulkBar = computed(() => props.allowBulkActions && showBulkSelection.value && selectedRows.value.length > 0)
 const selectedDraftRows = computed(() =>
 	selectedRows.value.filter((row) => Number(row.docstatus) === 0),
@@ -822,7 +830,7 @@ const isEmptyBulkValue = computed(
 	() => bulkEditValue.value === null || bulkEditValue.value === undefined || bulkEditValue.value === "",
 )
 const bulkConfirm = computed(() => pendingBulkAction.value
-	? bulkConfirmation(pendingBulkAction.value, pendingBulkRows.value, titleForMessage())
+	? bulkConfirmation(pendingBulkAction.value, pendingBulkRows.value, titleForMessage(), customBulkAction(pendingBulkAction.value))
 	: {})
 
 const columnOptions = computed(() =>
@@ -1557,7 +1565,7 @@ function performBulkAction(action, row) {
 }
 
 function showBulkOutcome(action, result) {
-	const outcome = bulkOutcome(action, result)
+	const outcome = bulkOutcome(action, result, customBulkAction(action))
 	if (!result.failed.length) {
 		bulkNotice.value = outcome.notice
 		return
@@ -1566,15 +1574,27 @@ function showBulkOutcome(action, result) {
 	showBulkResult.value = true
 }
 
+async function runCustomBulkAction(definition, candidates) {
+	bulkProgress.value = `Processing ${candidates.length}…`
+	try {
+		return await definition.run(candidates)
+	} catch (reason) {
+		return { done: [], failed: candidates.map((row) => ({ name: row.name, error: reason?.message || "Failed" })) }
+	}
+}
+
 async function runBulkAction(action, candidates) {
 	if (!candidates.length) return
 	bulkActing.value = action
 	bulkError.value = null
 	bulkNotice.value = ""
 	try {
-		const result = await runBulkRows(candidates, (row) => performBulkAction(action, row), (index, count) => {
-			bulkProgress.value = `Processing ${index} of ${count}…`
-		})
+		const custom = customBulkAction(action)
+		const result = custom
+			? await runCustomBulkAction(custom, candidates)
+			: await runBulkRows(candidates, (row) => performBulkAction(action, row), (index, count) => {
+				bulkProgress.value = `Processing ${index} of ${count}…`
+			})
 		await refreshAfterBulk()
 		showBulkOutcome(action, result)
 	} finally {

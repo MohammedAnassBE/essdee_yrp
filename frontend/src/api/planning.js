@@ -15,6 +15,14 @@ export function closeWorkOrders(workOrders, values) {
 	return callMethod(`${BULK_CLOSE_METHOD}.close_work_orders`, { work_orders: workOrders, ...values })
 }
 
+export function approveCloseRequests(workOrders) {
+	return callMethod(`${BULK_CLOSE_METHOD}.approve_close_requests`, { work_orders: workOrders })
+}
+
+export function getWorkOrderClosePermission() {
+	return callRead("yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_close_permission")
+}
+
 export function getSupplierPendingReport(supplier, process) {
 	return callMethod("essdee_yrp.planning.reports.supplier_pending.get_supplier_pending_report", { supplier, process })
 }

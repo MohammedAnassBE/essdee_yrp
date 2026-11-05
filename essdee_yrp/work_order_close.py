@@ -60,8 +60,9 @@ def close_work_order(
 	if doc.open_status == "Close":
 		return _close_result(doc.name, "Close")
 
-	is_internal_bulk_close = frappe.flags.get("work_order_bulk_close") and flt(doc.get("is_internal_unit"))
-	if not is_internal_bulk_close and not _is_wo_close_manager(throw_if_missing=True):
+	# Bulk Close closes directly; its endpoint owns the permission check.
+	is_bulk_close = bool(frappe.flags.get("work_order_bulk_close"))
+	if not is_bulk_close and not _is_wo_close_manager(throw_if_missing=True):
 		if doc.open_status == "Close Request":
 			approver_role = _get_wo_close_approver_role()
 			frappe.throw(_("Only users with role {0} can approve close requests.").format(approver_role))

@@ -9,6 +9,7 @@
  "field_order": [
   "section_break_eswq",
   "naming_series",
+  "customer",
   "stock_entry",
   "finishing_plan_dispatch_html",
   "finishing_items",
@@ -54,6 +55,13 @@
    "read_only": 1
   },
   {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "in_list_view": 1,
@@ -97,7 +105,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-23 12:00:00.000000",
+ "modified": "2026-11-05 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Finishing Plan Dispatch",

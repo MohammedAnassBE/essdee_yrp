@@ -31,6 +31,9 @@
 					</template>
 				</div>
 			</header>
+			<div class="finishing-dispatch__fields">
+				<LinkField v-model="customer" doctype="Customer" label="Customer" :disabled="!draft || busy || !permissions.can_write" />
+			</div>
 			<p v-if="!rows.length" class="finishing-empty">{{ draft ? "No Finishing Plans have packed boxes waiting for dispatch." : "This dispatch has no Finishing Plan rows." }}</p>
 			<section v-for="row in rows" :key="`${row.doc_name}-${rowsVersion}`" class="finishing-section" :aria-label="`${row.lot} ${row.item}`">
 				<h2 class="finishing-dispatch__plan">
@@ -54,8 +57,8 @@
 			<form class="finishing-dispatch__form" @submit.prevent="dispatchStock">
 				<LinkField :model-value="stock.from_supplier" doctype="Supplier" label="From Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('from', value)" />
 				<LinkField v-model="stock.from_warehouse" doctype="Warehouse" label="From Warehouse" required :filters="warehouseFilters(stock.from_supplier)" :show-open-button="false" :disabled="busy" />
-				<LinkField :model-value="stock.to_supplier" doctype="Supplier" label="To Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('to', value)" />
-				<LinkField v-model="stock.to_warehouse" doctype="Warehouse" label="To Warehouse" required :filters="warehouseFilters(stock.to_supplier)" :show-open-button="false" :disabled="busy" />
+				<LinkField v-if="!record.customer" :model-value="stock.to_supplier" doctype="Supplier" label="To Supplier" required :show-open-button="false" :disabled="busy" @update:model-value="(value) => setSupplier('to', value)" />
+				<LinkField v-if="!record.customer" v-model="stock.to_warehouse" doctype="Warehouse" label="To Warehouse" required :filters="warehouseFilters(stock.to_supplier)" :show-open-button="false" :disabled="busy" />
 				<label class="common-field"><span class="finishing-field-label">Goods Value</span><InputNumber input-id="dispatch-goods-value" aria-label="Goods Value" v-model="stock.goods_value" :max-fraction-digits="2" fluid :disabled="busy" /></label>
 				<label class="common-field"><span class="finishing-field-label">Vehicle No</span><InputText id="dispatch-vehicle-no" aria-label="Vehicle No" v-model="stock.vehicle_no" fluid :disabled="busy" /></label>
 			</form>
@@ -124,8 +127,9 @@ const stockEntryOpen = ref(false)
 const stockEntryName = ref("")
 const stock = reactive({ from_supplier: "", from_warehouse: "", to_supplier: "", to_warehouse: "", goods_value: null, vehicle_no: "" })
 const entries = reactive(new Map())
+const customer = ref("")
 const cleanSignature = ref("")
-const signature = computed(() => JSON.stringify(collectItems()))
+const signature = computed(() => JSON.stringify({ items: collectItems(), customer: customer.value }))
 const dirty = computed(() => !loading.value && signature.value !== cleanSignature.value)
 const rowsVersion = ref(0)
 const record = computed(() => workspace.value.record || {})
@@ -145,6 +149,7 @@ function setEntry(planName, component) {
 
 function applyWorkspace(data) {
 	workspace.value = data || {}
+	customer.value = data?.record?.customer || ""
 	rows.value = data?.items || []
 	rowsVersion.value += 1
 	ready.value = true
@@ -195,7 +200,7 @@ async function run(request, message, after = null) {
 }
 
 function save(submit) {
-	run(() => saveDispatch(collectItems(), dispatchId.value, submit, record.value.modified), submit ? "Finishing Plan Dispatch submitted" : "Finishing Plan Dispatch saved", async (data) => {
+	run(() => saveDispatch(collectItems(), dispatchId.value, submit, record.value.modified, customer.value), submit ? "Finishing Plan Dispatch submitted" : "Finishing Plan Dispatch saved", async (data) => {
 		applyWorkspace(data)
 		if (!dispatchId.value && data?.record?.name) await router.replace({ name: props.viewRouteName, params: { dispatchId: data.record.name }, state: preserveListNavigationState(data.record.name, data.record.modified) })
 	})
@@ -216,7 +221,7 @@ function openDispatch() {
 }
 
 function dispatchStock() {
-	const missing = [["from_supplier", "From Supplier"], ["from_warehouse", "From Warehouse"], ["to_supplier", "To Supplier"], ["to_warehouse", "To Warehouse"], ["goods_value", "Goods Value"], ["vehicle_no", "Vehicle No"]].filter(([field]) => stock[field] === null || stock[field] === "").map(([, label]) => label)
+	const missing = [["from_supplier", "From Supplier"], ["from_warehouse", "From Warehouse"], ["to_supplier", "To Supplier"], ["to_warehouse", "To Warehouse"], ["goods_value", "Goods Value"], ["vehicle_no", "Vehicle No"]].filter(([field]) => !record.value.customer || !field.startsWith("to_")).filter(([field]) => stock[field] === null || stock[field] === "").map(([, label]) => label)
 	if (missing.length) {
 		actionError.value = `Enter ${missing.join(", ")}.`
 		return
@@ -259,6 +264,7 @@ watch(dispatchId, () => {
 .finishing-field-label { color: var(--erp-text); font-size: var(--erp-font-size-caption); font-weight: 680; }
 .finishing-dispatch__form .common-field { display: grid; gap: 6px; }
 .finishing-dispatch__form { display: grid; gap: 12px; }
+.finishing-dispatch__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 12px; }
 .finishing-plan__probe { display: grid; gap: var(--erp-space-3); }
 .finishing-plan__fact { display: grid; gap: 2px; padding-left: 12px; border-left: 1px solid var(--erp-border); }
 .finishing-plan__fact small { color: var(--erp-text-muted); font-size: var(--erp-font-size-label); font-weight: 720; letter-spacing: .035em; text-transform: uppercase; }

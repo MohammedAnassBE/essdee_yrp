@@ -12,10 +12,16 @@ def get_supplier_warehouses(supplier: str) -> list[str]:
 	)
 
 
-def get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse):
-	"""Validate both dispatch ends and return their YRP Stock Entry header fields."""
+def get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse, customer=None):
+	"""Validate the dispatch ends and return their YRP Stock Entry header fields.
+
+	A dispatch to a Customer has no destination Supplier or Warehouse.
+	"""
 	validate_supplier_warehouse(_("From"), from_supplier, from_warehouse)
-	validate_supplier_warehouse(_("To"), to_supplier, to_warehouse)
+	if customer:
+		to_supplier = to_warehouse = None
+	else:
+		validate_supplier_warehouse(_("To"), to_supplier, to_warehouse)
 	return {
 		"from_supplier": from_supplier,
 		"from_warehouse": from_warehouse,

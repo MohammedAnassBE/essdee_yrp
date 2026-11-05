@@ -43,6 +43,29 @@ class TestFinishingDispatchLocations(IntegrationTestCase):
 		self.assertEqual(populate_rates.call_args.args[1], self.from_warehouse)
 		stock_entry.submit.assert_called_once_with()
 
+	def test_customer_plan_dispatch_needs_no_to_supplier(self):
+		locations = self.locations(to_supplier=None, to_warehouse=None)
+		header, _populate_rates, stock_entry = _plan_dispatch(locations, customer="CUST-TEST")
+
+		self.assertEqual(header["customer"], "CUST-TEST")
+		self.assertEqual(header["from_warehouse"], self.from_warehouse)
+		for field in ("to_supplier", "to_warehouse", "transfer_supplier"):
+			self.assertIsNone(header[field], field)
+		stock_entry.submit.assert_called_once_with()
+
+	def test_plan_dispatch_without_customer_still_requires_to_supplier(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Select To Supplier and To Warehouse"):
+			_plan_dispatch(self.locations(to_supplier=None, to_warehouse=None))
+
+	def test_customer_material_issue_passes_yrp_warehouse_validation(self):
+		doc = frappe.new_doc(
+			"YRP Stock Entry",
+			purpose="Material Issue",
+			from_warehouse=self.from_warehouse,
+			customer="CUST-TEST",
+		)
+		doc.validate_warehouses()
+
 	def test_rejects_warehouse_not_linked_to_its_supplier(self):
 		for dispatch in (_box_dispatch, _plan_dispatch):
 			with self.subTest(dispatch=dispatch.__name__):
@@ -130,10 +153,11 @@ def _box_dispatch(locations):
 	return stock_entry.update.call_args.args[0], populate_rates, stock_entry
 
 
-def _plan_dispatch(locations):
+def _plan_dispatch(locations, customer=None):
 	dispatch = SimpleNamespace(
 		docstatus=1,
 		stock_entry=None,
+		customer=customer,
 		packing_batch_dispatch_json=None,
 		dispatch_colour_details=None,
 		finishing_plan_dispatch_items=[

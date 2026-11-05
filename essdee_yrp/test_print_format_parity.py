@@ -38,6 +38,7 @@ PRINT_ALIASES = {
 		"supplier_name",
 		"total_tax",
 	},
+	"YRP Stock Entry": {"to_address_details", "to_location_name"},
 	"YRP Work Order": {
 		"delivery_address_details",
 		"supplier_address_details",

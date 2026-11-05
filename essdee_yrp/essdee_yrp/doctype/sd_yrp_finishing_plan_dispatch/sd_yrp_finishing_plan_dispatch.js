@@ -113,7 +113,10 @@ function show_dispatch_dialog(frm) {
 	const dialog = new frappe.ui.Dialog({
 		title: __("Dispatch Stock"),
 		fields: [
-			...essdee_yrp.dispatch_location_fields(() => dialog),
+			// A Customer dispatch has no destination Supplier or Warehouse.
+			...essdee_yrp
+				.dispatch_location_fields(() => dialog)
+				.filter((field) => !frm.doc.customer || !field.fieldname.startsWith("to_")),
 			{
 				fieldname: "goods_value",
 				fieldtype: "Currency",

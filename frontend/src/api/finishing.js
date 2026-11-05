@@ -56,8 +56,8 @@ export const updateReworkPartial = (rows, lot) => callMethod(`${REWORK_METHOD}.u
 
 export const getDispatchWorkspace = (name = "") => callMethod(`${DISPATCH_METHOD}.get_dispatch_workspace`, { name: name || null })
 export const fetchDispatchItems = () => callMethod(`${DISPATCH_METHOD}.fetch_dispatch_items`)
-export function saveDispatch(items, name = "", submit = false, expectedModified = "") {
-	return callMethod(`${DISPATCH_METHOD}.save_dispatch`, { items, name: name || null, submit: submit ? 1 : 0, expected_modified: expectedModified || null })
+export function saveDispatch(items, name = "", submit = false, expectedModified = "", customer = "") {
+	return callMethod(`${DISPATCH_METHOD}.save_dispatch`, { items, name: name || null, submit: submit ? 1 : 0, expected_modified: expectedModified || null, customer: customer || null })
 }
 export function executeDispatchCommand(name, command, payload = {}, expectedModified = "") {
 	return callMethod(`${DISPATCH_METHOD}.execute_dispatch_command`, { name, command, payload, expected_modified: expectedModified })

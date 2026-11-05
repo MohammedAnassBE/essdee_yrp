@@ -151,6 +151,52 @@ class TestFinishingWebDispatch(TestCase):
 		doc.save.assert_called_once()
 		doc.submit.assert_called_once()
 
+	def test_save_sets_customer_and_workspace_returns_it(self):
+		module = self._dispatch()
+		doc = dispatch()
+		posted = copy.deepcopy(FRESH[:1])
+		posted[0]["values"]["S"]["dispatch_qty"] = 1
+		with (
+			self._fresh(),
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(module, "get_dispatch_workspace", return_value={}),
+		):
+			module.save_dispatch(posted, doc.name, 0, doc.modified, customer="CUST-1")
+			self.assertEqual(doc.customer, "CUST-1")
+			module.save_dispatch(posted, doc.name, 0, doc.modified, customer="")
+		self.assertIsNone(doc.customer)
+		self.assertIn("customer", module.RECORD_FIELDS)
+
+	def test_customer_dispatch_stock_asks_only_for_the_source_goods_value_and_vehicle(self):
+		module = self._dispatch()
+		doc = dispatch(docstatus=1, customer="CUST-1")
+		values = {
+			"from_supplier": "S-FROM",
+			"from_warehouse": "WH-FROM",
+			"goods_value": 100,
+			"vehicle_no": "TN01",
+		}
+		with patch(f"{SERVICE}.create_stock_dispatch", return_value="STE-9") as create:
+			module.dispatch_stock(doc, values)
+		self.assertIsNone(create.call_args.kwargs["to_supplier"])
+		self.assertIsNone(create.call_args.kwargs["to_warehouse"])
+
+	def test_dispatch_stock_without_customer_still_requires_to_supplier(self):
+		module = self._dispatch()
+		values = {
+			"from_supplier": "S-FROM",
+			"from_warehouse": "WH-FROM",
+			"goods_value": 100,
+			"vehicle_no": "TN01",
+		}
+		with (
+			patch(f"{SERVICE}.create_stock_dispatch") as create,
+			self.assertRaisesRegex(frappe.ValidationError, "To Supplier, To Warehouse"),
+		):
+			module.dispatch_stock(dispatch(docstatus=1), values)
+		create.assert_not_called()
+
 	def test_submitted_dispatch_cannot_be_saved(self):
 		module = self._dispatch()
 		with (

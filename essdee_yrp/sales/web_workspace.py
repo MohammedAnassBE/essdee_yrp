@@ -465,7 +465,7 @@ def get_production_order_workspace(production_order: str) -> dict:
 			"matrix": matrix,
 			"ordered": ordered,
 			"linked_lots": onload.get("linked_lots") or [],
-			"purchase_orders": get_purchase_orders_against(DOCTYPE, doc.name),
+			"purchase_orders": get_purchase_orders_against(doc.name),
 			"pending_request": _pending_production_order_request(doc, onload),
 			"histories": {
 				"dates": [_serialize_child_row(row) for row in doc.get("date_change_history") or []],

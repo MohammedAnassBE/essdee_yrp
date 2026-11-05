@@ -25,9 +25,10 @@ function mountDialog(props) {
 }
 const tick = () => Vue.nextTick()
 
-test("source prefills Against and Against ID only for a Production Order", () => {
-	assert.deepEqual(purchaseOrderSource.purchaseOrderSourceFor("PPO-1"), { against: "YRP Production Order", against_id: "PPO-1" })
-	assert.deepEqual(purchaseOrderSource.purchaseOrderSourceFor(""), {})
+test("source lists the Production Orders the new Purchase Order is raised against", () => {
+	assert.deepEqual(purchaseOrderSource.purchaseOrderSourceFor(["PPO-1"]), { production_orders: ["PPO-1"] })
+	assert.deepEqual(purchaseOrderSource.purchaseOrderSourceFor(["PPO-1", "", "PPO-2"]), { production_orders: ["PPO-1", "PPO-2"] })
+	assert.deepEqual(purchaseOrderSource.purchaseOrderSourceFor([]), {})
 })
 
 test("Create PO opens the editor prefilled from the Production Order", () => {
@@ -35,8 +36,14 @@ test("Create PO opens the editor prefilled from the Production Order", () => {
 	assert.equal(dialog().props.header, "New Purchase Order · PPO-1")
 	assert.equal(dialog().props.closable, false)
 	assert.equal(editor().props.name, "")
-	assert.deepEqual(editor().props.source, { against: "YRP Production Order", against_id: "PPO-1" })
+	assert.deepEqual(editor().props.source, { production_orders: ["PPO-1"] })
 	assert.equal(page(), undefined)
+})
+
+test("Create PO from several selected Production Orders opens one editor for all of them", () => {
+	const { dialog, editor } = mountDialog({ productionOrders: ["PPO-1", "PPO-2"] })
+	assert.equal(dialog().props.header, "New Purchase Order · PPO-1, PPO-2")
+	assert.deepEqual(editor().props.source, { production_orders: ["PPO-1", "PPO-2"] })
 })
 
 test("saving stays in the pop-up and shows the saved Purchase Order embedded", async () => {
@@ -98,14 +105,36 @@ test("Create PO is driven by the server capability and refreshes the page in the
 	assert.match(workspace, /actions\["create_purchase_order"\] = _action\(\s*can_create_purchase_order_against\(doc\)/)
 })
 
-test("editor shows Against fields read-only and the PO page and list show them", () => {
+test("Production Orders table renders read-only links with Item Name and no Against column", () => {
+	const component = loadComponent(new URL("../src/departments/fabric-store/PurchaseOrderProductionOrders.vue", import.meta.url).pathname, {
+		"../../components/common/DocumentLink.vue": (linkProps) => Vue.h("document-link", linkProps),
+	})
+	const root = mountComponent(component, { rows: [{ production_order: "PPO-1", item_name: "VEST" }, { production_order: "PPO-2", item_name: "SET" }] })
+	const headers = findNodes(root, (node) => node.type === "th").map((node) => node.text)
+	assert.deepEqual(headers, ["Production Order", "Item Name"])
+	const links = findNodes(root, (node) => node.type === "document-link")
+	assert.deepEqual(links.map((link) => [link.props.doctype, link.props.name]), [["YRP Production Order", "PPO-1"], ["YRP Production Order", "PPO-2"]])
+	assert.equal(findNodes(root, (node) => ["input", "button"].includes(node.type)).length, 0)
+	assert.equal(findNodes(mountComponent(component, { rows: [] }), (node) => node.type === "table").length, 0)
+})
+
+test("editor and PO page show the Production Orders table instead of Against fields", () => {
 	const editor = source("../src/departments/fabric-store/PurchaseOrderEditor.vue")
-	assert.match(editor, /<template v-if="form\.against_id">/)
-	assert.match(editor, /<InputText id="po-against" :model-value="form\.against" disabled fluid \/>/)
-	assert.match(editor, /<InputText id="po-against-id" :model-value="form\.against_id" disabled fluid \/>/)
-	assert.match(editor, /against: "", against_id: "" \}\)/)
-	assert.match(source("../src/departments/FabricPurchaseOrder.vue"), /"approved_by", "against", "against_id"\]/)
-	assert.match(source("../src/departments/fabric-store/FabricPurchaseOrders.vue"), /"grand_total", "against", "against_id"\]/)
+	assert.match(editor, /<PurchaseOrderProductionOrders :rows="form\.production_orders" \/>/)
+	assert.match(editor, /production_orders: \[\] \}\)/)
+	const page = source("../src/departments/FabricPurchaseOrder.vue")
+	assert.match(page, /<PurchaseOrderProductionOrders :rows="workspace\.production_orders \|\| \[\]" \/>/)
+	assert.doesNotMatch(editor, /against/)
+	assert.doesNotMatch(page, /"approved_by", "against"/)
+	assert.doesNotMatch(source("../src/departments/fabric-store/FabricPurchaseOrders.vue"), /against/)
+})
+
+test("PPO list selects rows and creates one Purchase Order for the selection", () => {
+	const list = source("../src/departments/sales/ProductionOrders.vue")
+	assert.match(list, /selectable/)
+	assert.match(list, /@selection-change="selectedRows = \$event"/)
+	assert.match(list, /<Button v-if="selectedNames\.length" :label="`Create Purchase Order \(\$\{selectedNames\.length\}\)`" icon="pi pi-shopping-cart" severity="secondary" outlined @click="purchaseOrderVisible = true" \/>/)
+	assert.match(list, /<ProductionOrderPurchaseOrderDialog v-model:visible="purchaseOrderVisible" :production-orders="selectedNames" \/>/)
 })
 
 test("the /web Purchase Order page embeds without routing away", () => {

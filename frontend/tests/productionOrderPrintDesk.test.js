@@ -23,7 +23,7 @@ function desk(docstatus = 1, { status = "Open", canCreatePurchaseOrder = false }
 		model: {
 			can_create: doctype => doctype === "Purchase Order" && canCreatePurchaseOrder,
 			with_doctype: (_doctype, callback) => callback(),
-			get_new_doc: doctype => { const doc = { doctype, name: "new-purchase-order-1" }; newDocs.push(doc); return doc },
+			sync: doc => { newDocs.push(doc); return [doc] },
 		},
 		user: { has_role: () => false },
 		set_route: (...args) => routes.push(args),
@@ -91,13 +91,44 @@ test("Desk standard print (printer icon / menu / Ctrl+P) asks for pieces per box
 	}
 })
 
-test("Desk Create > Purchase Order opens a new PO against an open submitted PPO for PO creators only", () => {
+const NEW_PURCHASE_ORDER = { doctype: "Purchase Order", name: "new-purchase-order-1", production_orders: [{ production_order: "PPO/1 & 2#x", item_name: "ITEM" }] }
+
+test("Desk Create > Purchase Order opens the server-built PO for one open submitted PPO for PO creators only", () => {
 	const createButton = state => state.buttons.find(button => button.label === "Purchase Order" && button.group === "Create")
 	const state = desk(1, { canCreatePurchaseOrder: true })
 	createButton(state).click()
-	assert.deepEqual(state.newDocs, [{ doctype: "Purchase Order", name: "new-purchase-order-1", is_yrp_managed: 1, naming_series: "YRP-PO-.YYYY.-", against: "YRP Production Order", against_id: "PPO/1 & 2#x" }])
+	assert.equal(state.calls[0].method, "essdee_yrp.purchase_order_against.make_purchase_order")
+	assert.deepEqual(JSON.parse(JSON.stringify(state.calls[0].args)), { production_orders: ["PPO/1 & 2#x"] })
+	state.calls[0].callback({ message: NEW_PURCHASE_ORDER })
+	assert.deepEqual(state.newDocs, [NEW_PURCHASE_ORDER])
 	assert.deepEqual(state.routes, [["Form", "Purchase Order", "new-purchase-order-1"]])
 	assert.equal(createButton(desk(1)), undefined)
 	assert.equal(createButton(desk(0, { canCreatePurchaseOrder: true })), undefined)
 	assert.equal(createButton(desk(1, { status: "Closed", canCreatePurchaseOrder: true })), undefined)
+})
+
+function deskList(canCreatePurchaseOrder = true) {
+	const calls = [], routes = [], menu = []
+	const frappe = {
+		listview_settings: {},
+		call: options => calls.push(options),
+		model: { can_create: doctype => doctype === "Purchase Order" && canCreatePurchaseOrder, sync: doc => [doc] },
+		set_route: (...args) => routes.push(args),
+	}
+	vm.runInContext(readFileSync(new URL("../../essdee_yrp/public/js/production_order_list.js", import.meta.url), "utf8"), vm.createContext({ frappe, __: text => text }))
+	const listview = { get_checked_items: names => names && ["PPO-1", "PPO-2"], page: { add_actions_menu_item: (label, click) => menu.push({ label, click }) } }
+	frappe.listview_settings["YRP Production Order"].onload(listview)
+	return { calls, routes, menu }
+}
+
+test("Desk list action creates one Purchase Order from the selected PPOs for PO creators only", () => {
+	const state = deskList()
+	assert.deepEqual(state.menu.map(item => item.label), ["Create Purchase Order"])
+	state.menu[0].click()
+	assert.equal(state.calls[0].method, "essdee_yrp.purchase_order_against.make_purchase_order")
+	assert.deepEqual(JSON.parse(JSON.stringify(state.calls[0].args)), { production_orders: ["PPO-1", "PPO-2"] })
+	assert.equal(state.calls[0].freeze, true)
+	state.calls[0].callback({ message: { doctype: "Purchase Order", name: "new-purchase-order-2" } })
+	assert.deepEqual(state.routes, [["Form", "Purchase Order", "new-purchase-order-2"]])
+	assert.deepEqual(deskList(false).menu, [])
 })

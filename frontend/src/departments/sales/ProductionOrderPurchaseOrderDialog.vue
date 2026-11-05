@@ -9,7 +9,7 @@
 		class="production-order-purchase-order-dialog erp-entity-dialog erp-dialog--xl"
 		@update:visible="(value) => { if (!value) close() }"
 	>
-		<template v-if="visible && productionOrder">
+		<template v-if="visible && productionOrderNames.length">
 			<PurchaseOrderEditor v-if="editing" :key="`edit-${currentName || 'new'}`" :name="currentName" :source="currentName ? {} : source" @saved="saved" @cancel="cancelEdit" />
 			<FabricPurchaseOrder v-else :key="`view-${currentName}`" presentation="embedded" :name="currentName" @changed="emit('changed', $event)" @edit="editing = true" @open="currentName = $event" @closed="close" />
 		</template>
@@ -27,13 +27,15 @@ import { purchaseOrderSourceFor } from "./productionOrderPurchaseOrder.js"
 const props = defineProps({
 	visible: { type: Boolean, default: false },
 	productionOrder: { type: String, default: "" },
+	productionOrders: { type: Array, default: () => [] },
 	purchaseOrder: { type: String, default: "" },
 })
 const emit = defineEmits(["update:visible", "changed"])
-const source = computed(() => purchaseOrderSourceFor(props.productionOrder))
+const productionOrderNames = computed(() => props.productionOrders.length ? props.productionOrders : [props.productionOrder].filter(Boolean))
+const source = computed(() => purchaseOrderSourceFor(productionOrderNames.value))
 const currentName = ref("")
 const editing = ref(true)
-const header = computed(() => `${currentName.value ? `Purchase Order · ${currentName.value}` : "New Purchase Order"} · ${props.productionOrder}`)
+const header = computed(() => `${currentName.value ? `Purchase Order · ${currentName.value}` : "New Purchase Order"} · ${productionOrderNames.value.join(", ")}`)
 
 watch(() => [props.visible, props.purchaseOrder], ([visible]) => {
 	if (!visible) return

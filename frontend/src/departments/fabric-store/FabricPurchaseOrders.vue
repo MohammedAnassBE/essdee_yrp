@@ -49,7 +49,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const defaultColumns = ["supplier", "transaction_date", "yrp_fulfillment_status", "grand_total", "against", "against_id"]
+const defaultColumns = ["supplier", "transaction_date", "yrp_fulfillment_status", "grand_total"]
 
 function purchaseOrderStatusBadgeProps(row) {
 	const label = purchaseOrderStatusLabel(row)

@@ -1,6 +1,7 @@
 export const PRODUCTION_ORDER_DOCTYPE = "YRP Production Order"
 
-/** Editor source that prefills a new Purchase Order's Against / Against ID. */
-export function purchaseOrderSourceFor(productionOrder) {
-	return productionOrder ? { against: PRODUCTION_ORDER_DOCTYPE, against_id: productionOrder } : {}
+/** Editor source for a new Purchase Order raised against one or more Production Orders. */
+export function purchaseOrderSourceFor(productionOrders = []) {
+	const names = productionOrders.filter(Boolean)
+	return names.length ? { production_orders: names } : {}
 }

@@ -1,6 +1,20 @@
 frappe.listview_settings["YRP Production Order"] = {
 	add_fields: ["price_approval_status", "status"],
 	has_indicator_for_draft: true,
+	onload(listview) {
+		if (!frappe.model.can_create("Purchase Order")) return;
+		listview.page.add_actions_menu_item(__("Create Purchase Order"), () => {
+			frappe.call({
+				method: "essdee_yrp.purchase_order_against.make_purchase_order",
+				args: { production_orders: listview.get_checked_items(true) },
+				freeze: true,
+				callback: (response) => {
+					const purchase_order = frappe.model.sync(response.message)[0];
+					frappe.set_route("Form", purchase_order.doctype, purchase_order.name);
+				},
+			});
+		});
+	},
 	get_indicator(doc) {
 		if (doc.price_approval_status === "Pending Approval") {
 			return [

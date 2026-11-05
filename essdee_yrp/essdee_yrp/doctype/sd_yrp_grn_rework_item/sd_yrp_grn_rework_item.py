@@ -121,7 +121,8 @@ def before_grn_cancel(doc, method=None):
 	del method
 	for name in frappe.get_all("SD YRP GRN Rework Item", filters={"grn_number": doc.name}, pluck="name"):
 		rework = frappe.get_doc("SD YRP GRN Rework Item", name)
-		if rework.get("grn_reworked_item_details") or rework.get("grn_rejected_item_details"):
+		has_conversions = rework.get("grn_reworked_item_details") or rework.get("grn_rejected_item_details")
+		if has_conversions or get_conversion_entries(name):
 			frappe.throw(
 				_(
 					"Goods Received Note {0} has cleared rework in {1}; "
@@ -133,7 +134,9 @@ def before_grn_cancel(doc, method=None):
 def on_grn_cancel(doc, method=None):
 	del method
 	for name in frappe.get_all("SD YRP GRN Rework Item", filters={"grn_number": doc.name}, pluck="name"):
-		frappe.delete_doc("SD YRP GRN Rework Item", name, ignore_permissions=True)
+		# before_grn_cancel proved no active conversion remains; only cancelled
+		# (reverted) ledger rows still reference the Rework Item, so skip link checks.
+		frappe.delete_doc("SD YRP GRN Rework Item", name, ignore_permissions=True, force=True)
 
 
 def _page_permissions():

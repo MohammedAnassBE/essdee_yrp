@@ -94,3 +94,29 @@ class TestReworkInternalTransfer(FrappeTestCase):
 		before = self.balances(grn)
 		self.clear(rework, 1)
 		self.assertEqual(self.balances(grn), self.shifted(before, 1))
+
+	def complete(self, rework):
+		row_name = rework.grn_rework_item_details[0].name
+		rework_item.update_rejected_quantity(
+			frappe.as_json([{"row_name": row_name, "rejected": 1}]), completed=1
+		)
+
+	def test_grn_cancels_after_completed_rework_is_reverted(self):
+		grn, rework = self.submit_rework_grn(_non_company_supplier("_T_Rework_Supplier"))
+		self.complete(rework)
+		rework_item.revert_reworked_item(rework.name)
+
+		grn.reload()
+		grn.cancel()
+
+		self.assertFalse(frappe.db.exists("SD YRP GRN Rework Item", rework.name))
+		self.assertEqual(self.balances(grn), {self.rework_type: 0, self.accepted: 0})
+
+	def test_grn_cancel_is_blocked_while_completed_rework_stands(self):
+		grn, rework = self.submit_rework_grn(_non_company_supplier("_T_Rework_Supplier"))
+		self.complete(rework)
+
+		grn.reload()
+		with self.assertRaisesRegex(frappe.ValidationError, "reverse that rework"):
+			grn.cancel()
+		self.assertTrue(frappe.db.exists("SD YRP GRN Rework Item", rework.name))

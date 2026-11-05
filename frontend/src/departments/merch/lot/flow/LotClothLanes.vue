@@ -44,7 +44,7 @@
 <script setup>
 import DocumentStatusBadge from "../../../../components/documents/DocumentStatusBadge.vue"
 import LotFlowStatus from "./LotFlowStatus.vue"
-import { STATUS_LABELS, colourSwatch, documentHref, fabricSummary, formatNumber, percent } from "./processFlow.js"
+import { STATUS_LABELS, colourSwatch, documentHref, fabricSummary, formatNumber, percent } from "../../../../utils/lotProcessFlow.js"
 /** One row per cloth item: Cloth Program facts and a tile per fabric IPD process. */
 const props = defineProps({
 	lanes: { type: Array, required: true },

@@ -15,7 +15,7 @@
 					</p>
 				</div>
 				<div class="pf-modal__actions">
-					<LotFlowReports :reports="reports" :lot="lot" :process="isStep ? view.node.process : view.workOrder.process_name" />
+					<LotFlowReports :reports="reports" :context="reportContext" />
 					<a v-if="target" class="pf-modal__open" :href="workOrderHref(target)" target="_blank" rel="noopener">Open {{ target.target.label }} <i class="pi pi-external-link" aria-hidden="true" /></a>
 				</div>
 			</div>
@@ -72,13 +72,14 @@ import LotFlowReports from "./LotFlowReports.vue"
 import LotFlowStatus from "./LotFlowStatus.vue"
 import LotStepTables from "./LotStepTables.vue"
 import LotWorkOrderBreakdown from "./LotWorkOrderBreakdown.vue"
-import { formatNumber, statusTone, workOrderHref } from "./processFlow.js"
+import { formatNumber, statusTone, stepReportContext, workOrderHref } from "../../../../utils/lotProcessFlow.js"
 /** Centred step or Work Order detail; `view` is `{ node }` for a step or `{ workOrder }` for a Work Order. */
 const props = defineProps({
 	visible: Boolean,
 	view: { type: Object, default: null },
 	lot: { type: String, required: true },
 	item: { type: String, default: "" },
+	lotDate: { type: String, default: "" },
 	reports: { type: Array, default: () => [] },
 })
 const emit = defineEmits(["update:visible", "open-work-order"])
@@ -100,6 +101,9 @@ const target = computed(() => {
 	if (!isStep.value) return props.view?.workOrder
 	return props.view.node.work_orders.length === 1 ? props.view.node.work_orders[0] : null
 })
+const reportContext = computed(() => isStep.value
+	? stepReportContext(props.lot, props.item, props.view.node.process, props.view.node.work_orders, props.lotDate)
+	: stepReportContext(props.lot, props.view?.workOrder.item, props.view?.workOrder.process_name, [props.view?.workOrder], props.lotDate))
 const stepDates = computed(() => {
 	const rows = detail.value?.work_orders || []
 	const firstDc = rows.map((row) => row.first_dc).filter(Boolean).sort()[0]

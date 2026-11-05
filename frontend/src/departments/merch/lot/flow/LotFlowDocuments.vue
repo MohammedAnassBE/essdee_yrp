@@ -40,7 +40,7 @@
 </template>
 <script setup>
 import { formatDisplayDate } from "../../../../utils/dateFormat.js"
-import { documentHref, formatNumber } from "./processFlow.js"
+import { documentHref, formatNumber } from "../../../../utils/lotProcessFlow.js"
 /** Delivery Challans and GRNs per supplier; packing adds the Finishing Plan and its dispatches. */
 defineProps({
 	groups: { type: Array, default: () => [] },

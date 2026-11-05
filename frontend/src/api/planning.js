@@ -27,6 +27,18 @@ export function getLotWorkspace(name) {
 	return callMethod(`${LOT_METHOD}.get_lot_workspace`, { name })
 }
 
+export function getLotProcessFlow(lot) {
+	return callRead(`${LOT_METHOD}.get_lot_process_flow`, { lot })
+}
+
+export function getLotStepDetail(lot, key) {
+	return callRead(`${LOT_METHOD}.get_lot_step_detail`, { lot, key })
+}
+
+export function getLotWorkOrderDetail(workOrder) {
+	return callRead(`${LOT_METHOD}.get_lot_work_order_detail`, { work_order: workOrder })
+}
+
 export function getLotDocuments(lot) {
 	return callMethod(`${LOT_METHOD}.get_lot_documents`, { lot })
 }

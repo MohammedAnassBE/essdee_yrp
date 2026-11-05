@@ -14,7 +14,7 @@
 					<button type="button" class="pf-toggle" :aria-expanded="open.includes(step.key)" @click="toggle(step)">
 						<i :class="open.includes(step.key) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" aria-hidden="true" /><span>Size-wise detail</span>
 					</button>
-					<LotFlowReports :reports="reports" :lot="lot" :process="step.process" />
+					<LotFlowReports :reports="reports" :context="stepReportContext(lot, item, step.process, step.work_orders, lotDate)" />
 				</header>
 				<div class="pf-card__body">
 					<div>
@@ -62,11 +62,13 @@ import { formatDisplayDate } from "../../../../utils/dateFormat.js"
 import LotFlowReports from "./LotFlowReports.vue"
 import LotFlowStatus from "./LotFlowStatus.vue"
 import LotStepTables from "./LotStepTables.vue"
-import { formatNumber, percent } from "./processFlow.js"
+import { formatNumber, percent, stepReportContext } from "../../../../utils/lotProcessFlow.js"
 /** Item process timeline: one card per step with Work Orders, meters and a lazy size-wise detail. */
 const props = defineProps({
 	steps: { type: Array, required: true },
 	lot: { type: String, required: true },
+	item: { type: String, default: "" },
+	lotDate: { type: String, default: "" },
 	reports: { type: Array, default: () => [] },
 	flash: { type: String, default: "" },
 })

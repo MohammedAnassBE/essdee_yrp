@@ -65,6 +65,7 @@ test("Supplier Pending Report renders lot rows, totals and DD-MM-YYYY dates", as
 	const calls = []
 	const component = loadComponent(new URL("../src/departments/planning/reports/SupplierPendingReport.vue", import.meta.url).pathname, {
 		"./supplierPending.js": { differenceTone, supplierPendingHint },
+		"../../../composables/useReportQueryPrefill.js": { useReportQueryPrefill() {} },
 		"../../../api/planning.js": { getSupplierPendingReport: async (...args) => { calls.push(args); return payload } },
 		"../../../components/common/LinkField.vue": (props) => Vue.h("link", props),
 		"../../../components/reports/ReportShell.vue": (props, { slots, attrs }) => { shell = { props, attrs }; return Vue.h("shell", props, [slots.filters?.(), slots.default?.()]) },

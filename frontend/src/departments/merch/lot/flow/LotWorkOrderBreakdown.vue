@@ -25,7 +25,7 @@
 import { computed } from "vue"
 import DocumentStatusBadge from "../../../../components/documents/DocumentStatusBadge.vue"
 import { formatDisplayDate } from "../../../../utils/dateFormat.js"
-import { formatNumber, statusTone } from "./processFlow.js"
+import { formatNumber, statusTone } from "../../../../utils/lotProcessFlow.js"
 /** One row per Work Order of a step; cutting shows delivered cloth in its own UOM. */
 const props = defineProps({
 	workOrders: { type: Array, required: true },

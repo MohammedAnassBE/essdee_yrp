@@ -36,7 +36,7 @@
 	</div>
 </template>
 <script setup>
-import { formatNumber } from "./processFlow.js"
+import { formatNumber } from "../../../../utils/lotProcessFlow.js"
 /** Toned colour × size table built by `sizeTable()`. */
 defineProps({
 	table: { type: Object, required: true },

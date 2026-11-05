@@ -27,14 +27,14 @@
 				<template #matrix>
 					<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
 						<TabList ref="tabList" class="lot-tablist">
-							<Tab v-for="tab in LOT_TABS" :key="tab.key" :value="tab.key">
+							<Tab v-for="tab in LOT_VIEW_TABS" :key="tab.key" :value="tab.key">
 								{{ tab.label }}
 								<span v-if="lotTabCount(workspace, tab.key) !== null">{{ lotTabCount(workspace, tab.key) }}</span>
 							</Tab>
 						</TabList>
 						<TabPanels ref="tabPanels" class="lot-panels">
 							<TabPanel v-if="activeTab === 'lot'" value="lot">
-								<LotViewMain v-model:expanded="expanded" :workspace="workspace" :scroll-to="scrollTo" />
+								<LotViewMain v-model:expanded="expanded" :workspace="workspace" :scroll-to="scrollTo" include-empty />
 							</TabPanel>
 							<TabPanel v-else-if="activeTab === 'fabric'" value="fabric">
 								<LotEmptyState
@@ -99,7 +99,7 @@ import LotDiaConversionsTab from "./LotDiaConversionsTab.vue"
 import LotIdentity from "./LotIdentity.vue"
 import LotViewMain from "./LotViewMain.vue"
 import { editTabFor } from "./lotEditor.js"
-import { LOT_TABS } from "./lotLayout.js"
+import { LOT_TABS, LOT_VIEW_TABS } from "./lotLayout.js"
 import { lotTabCount } from "./lotViews.js"
 import { useLotLayout } from "./useLotLayout.js"
 import "./lot.css"
@@ -144,6 +144,7 @@ const headerValues = computed(
 const item = computed(() => headerValues.value.get("item"))
 const deliveryDate = computed(() => headerValues.value.get("expected_delivery_date"))
 const { activeTab, expanded, scrollTo } = useLotLayout(LOT_TABS, useRoute(), router)
+if (!expanded.value.includes("process-flow")) expanded.value = [...expanded.value, "process-flow"]
 
 const lotActions = computed(() => workspace.value.permissions?.can_write ? [{
  key: "edit", label: "Edit", icon: "pi pi-pencil", primary: true,

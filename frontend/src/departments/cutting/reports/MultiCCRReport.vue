@@ -75,6 +75,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import { computed, reactive, ref } from "vue"
 
 import { getMultiCcrReport } from "../../../api/cuttingReports.js"
@@ -124,6 +125,8 @@ function reset() {
 	generated.value = false
 	error.value = ""
 }
+// A Lot link clears the default category so the chosen Lot is not filtered out.
+useReportQueryPrefill(filters, ["lots", "items"], () => { filters.category = ""; generate() })
 </script>
 
 <style scoped>

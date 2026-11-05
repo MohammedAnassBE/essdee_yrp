@@ -169,8 +169,14 @@ class TestLotWorkspace(TestCase):
 		from essdee_yrp.planning import lot_workspace as planning_workspace
 
 		payload = {"header": [{"fieldtype": "Link", "options": "Item", "value": "Item-1"}]}
-		with patch.object(workspace, "get_lot_workspace", return_value=payload) as get_workspace:
-			self.assertEqual(planning_workspace.get_lot_workspace("LOT-1"), payload)
+		with (
+			patch.object(workspace, "get_lot_workspace", return_value=payload) as get_workspace,
+			patch.object(planning_workspace, "LotFlowData") as flow,
+			patch.object(planning_workspace.merch_lot_workspace, "get_record_facts", return_value=payload["header"]) as facts,
+		):
+			flow.return_value.order_pieces.return_value = {"total": 0}
+			self.assertEqual(planning_workspace.get_lot_workspace("LOT-1"), {**payload, "order_pieces": {"total": 0}})
+			facts.assert_called_once_with(flow.return_value.doc, workspace.HEADER_FIELDS)
 		get_workspace.assert_called_once_with("LOT-1")
 
 	def _stage_group(self, small, large):

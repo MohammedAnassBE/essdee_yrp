@@ -90,7 +90,7 @@ test("Purchase and Planning Lot page and editor use the shared Lot layout", () =
 	for (const department of ["purchase", "planning"]) {
 		const page = source(`${department}/lot/LotPage.vue`)
 		assert.match(page, /<LotViewMain /)
-		assert.match(page, /v-for="tab in LOT_TABS"/)
+		assert.match(page, department === "planning" ? /v-for="tab in LOT_VIEW_TABS"/ : /v-for="tab in LOT_TABS"/)
 		assert.match(page, /<LotBomPanel /)
 		assert.match(page, /<TabPanel v-else-if="activeTab === 'dia-conversions'" value="dia-conversions">\s*<LotDiaConversionsTab /)
 		const editor = source(`${department}/lot/LotEditor.vue`)

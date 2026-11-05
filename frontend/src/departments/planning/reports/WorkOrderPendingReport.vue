@@ -22,6 +22,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import Select from "primevue/select"
 import { computed, reactive, watch } from "vue"
 import DateField from "../../../components/common/DateField.vue"
@@ -55,5 +56,6 @@ function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request) }, { flush: "sync" })
 
+useReportQueryPrefill(filters, ["lot", "item", "process", "supplier"], generate)
 </script>
 

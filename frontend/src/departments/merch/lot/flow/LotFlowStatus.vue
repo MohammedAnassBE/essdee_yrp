@@ -12,7 +12,7 @@
 	</svg>
 </template>
 <script setup>
-import { STATUS_LABELS } from "./processFlow.js"
+import { STATUS_LABELS } from "../../../../utils/lotProcessFlow.js"
 /** Step status icon (done / partial / idle), or a labelled chip. */
 defineProps({ status: { type: String, default: "idle" }, chip: Boolean })
 </script>

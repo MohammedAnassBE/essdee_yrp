@@ -21,7 +21,7 @@
 							</button>
 						</template>
 					</nav>
-					<LotItemSteps :steps="flow.items" :lot="lot" :reports="reports" :flash="flash" @open-step="openStep" @open-work-order="openWorkOrder" />
+					<LotItemSteps :steps="flow.items" :lot="lot" :item="item" :lot-date="flow.lot_date" :reports="reports" :flash="flash" @open-step="openStep" @open-work-order="openWorkOrder" />
 					<div class="pf-legend">
 						<span><LotFlowStatus status="done" /> Completed</span><span><LotFlowStatus status="partial" /> Partially completed</span><span><LotFlowStatus status="idle" /> Not started</span>
 						<span><i class="pf-bar pf-fill--delivered" /> Delivered</span><span><i class="pf-bar pf-fill--partial" /> Received (colour = step status)</span><span><i class="pf-bar pf-fill--dispatch" /> Dispatch</span>
@@ -30,7 +30,7 @@
 				<p v-else class="pf-empty-note">Choose an Item Production Detail to see the item process.</p>
 			</section>
 		</template>
-		<LotFlowModal v-model:visible="modalVisible" :view="view" :lot="lot" :item="item" :reports="reports" @open-work-order="openWorkOrder" />
+		<LotFlowModal v-model:visible="modalVisible" :view="view" :lot="lot" :item="item" :lot-date="flow?.lot_date || ''" :reports="reports" @open-work-order="openWorkOrder" />
 	</div>
 </template>
 <script setup>
@@ -43,8 +43,8 @@ import LotClothLanes from "./LotClothLanes.vue"
 import LotFlowModal from "./LotFlowModal.vue"
 import LotFlowStatus from "./LotFlowStatus.vue"
 import LotItemSteps from "./LotItemSteps.vue"
-import { STATUS_LABELS, clothHeadline, itemHeadline, receivedShare } from "./processFlow.js"
-import "./processFlow.css"
+import { STATUS_LABELS, clothHeadline, itemHeadline, receivedShare } from "../../../../utils/lotProcessFlow.js"
+import "../../../../styles/lotProcessFlow.css"
 /** Summary tab process flow: cloth lanes, item steps and the shared detail modal. */
 const props = defineProps({
 	lot: { type: String, required: true },

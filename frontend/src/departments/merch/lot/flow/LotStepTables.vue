@@ -32,7 +32,7 @@
 import { computed } from "vue"
 import LotSizeTable from "./LotSizeTable.vue"
 import LotToneLegend from "./LotToneLegend.vue"
-import { diffTone, formatNumber, sizeTable, statusTone } from "./processFlow.js"
+import { diffTone, formatNumber, sizeTable, statusTone } from "../../../../utils/lotProcessFlow.js"
 /** Size-wise detail of an item step or Work Order: cutting cloth, in-house sizes or packing quantities. */
 const props = defineProps({
 	kind: { type: String, default: "inhouse" },

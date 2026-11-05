@@ -52,7 +52,7 @@
 import { computed } from "vue"
 import { formatDisplayDate } from "../../../../utils/dateFormat.js"
 import LotToneLegend from "./LotToneLegend.vue"
-import { colourSwatch, diffTone, formatNumber, percent, statusTone } from "./processFlow.js"
+import { colourSwatch, diffTone, formatNumber, percent, statusTone } from "../../../../utils/lotProcessFlow.js"
 /** Cloth Work Order: totals, yarn deliverables and colour × dia planned / delivered / received. */
 const props = defineProps({
 	cloth: { type: Object, required: true },

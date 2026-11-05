@@ -7,5 +7,5 @@
 	</p>
 </template>
 <script setup>
-import { DIFFERENCE_LEGEND, TONE_LEGEND } from "./processFlow.js"
+import { DIFFERENCE_LEGEND, TONE_LEGEND } from "../../../../utils/lotProcessFlow.js"
 </script>

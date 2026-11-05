@@ -38,6 +38,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 
 import { cellTypeClass } from "../../../composables/reportColumns.js"
@@ -142,6 +143,7 @@ onMounted(() => {
 	loadLayout()
 })
 onBeforeUnmount(() => window.removeEventListener("resize", measureFrozen))
+useReportQueryPrefill(filters, ["lot", "item"], generate)
 </script>
 
 <style scoped>

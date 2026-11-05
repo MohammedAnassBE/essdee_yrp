@@ -1,6 +1,9 @@
 import frappe
 from frappe import _
 
+from essdee_yrp.merch import lot_process_flow
+from essdee_yrp.merch import lot_workspace as merch_lot_workspace
+from essdee_yrp.merch.lot_process_data import LotFlowData
 from essdee_yrp.purchase import lot_documents, lot_editor
 from essdee_yrp.purchase import lot_workspace as purchase_lot_workspace
 
@@ -12,7 +15,27 @@ def _require_existing(name):
 
 @frappe.whitelist()
 def get_lot_workspace(name: str):
-	return purchase_lot_workspace.get_lot_workspace(name)
+	flow = LotFlowData(name)
+	return {
+		**purchase_lot_workspace.get_lot_workspace(name),
+		"header": merch_lot_workspace.get_record_facts(flow.doc, purchase_lot_workspace.HEADER_FIELDS),
+		"order_pieces": flow.order_pieces(),
+	}
+
+
+@frappe.whitelist()
+def get_lot_process_flow(lot: str):
+	return lot_process_flow.get_process_flow(lot)
+
+
+@frappe.whitelist()
+def get_lot_step_detail(lot: str, key: str):
+	return lot_process_flow.get_step_detail(lot, key)
+
+
+@frappe.whitelist()
+def get_lot_work_order_detail(work_order: str):
+	return lot_process_flow.get_work_order_detail(work_order)
 
 
 @frappe.whitelist()

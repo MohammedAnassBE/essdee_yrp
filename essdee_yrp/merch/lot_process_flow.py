@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate
 
 from essdee_yrp.merch import lot_process_rules as rules
 from essdee_yrp.merch.lot_process_data import (
@@ -22,6 +22,7 @@ def get_process_flow(lot: str) -> dict:
 		"lot": data.doc.name,
 		"item": data.doc.item,
 		"order_quantity": flt(data.doc.total_order_quantity),
+		"lot_date": str(getdate(data.doc.creation)),
 		"cloth": cloth_lanes(data),
 		"items": [item_node(node, data) for node in data.item_nodes],
 	}

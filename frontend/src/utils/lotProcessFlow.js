@@ -1,4 +1,4 @@
-import { webDocumentPath } from "../../../../router/webDocumentRoutes.js"
+import { webDocumentPath } from "../router/webDocumentRoutes.js"
 
 export const STATUS_LABELS = { done: "Completed", partial: "Partially completed", idle: "Not started" }
 export const TONE_LEGEND = [
@@ -95,13 +95,53 @@ export function workOrderHref(workOrder, currentPath) {
 	return documentHref(workOrder.target.doctype, workOrder.target.name, currentPath)
 }
 
-export function reportHref(report, lot, process) {
+/** Context key → the report's own filter name, per report key. Only filters the report has are listed. */
+export const REPORT_PREFILL = {
+	work_in_progress: { lot: "lot", item: "item", process: "process_list" },
+	planning_work_in_progress: { lot: "lot", item: "item", process: "process_list" },
+	size_wise_stock: { lot: "lot", item: "item", process: "process_list" },
+	inward_quantity: { lot: "lot", process: "process" },
+	inhouse_quantity: { lot: "lot", process: "process" },
+	work_order: { lot: "lot", process: "process_name", supplier: "supplier", item: "item", based_on: "based_on" },
+	work_order_pending: { lot: "lot", item: "item", process: "process", supplier: "supplier" },
+	process_pending: { lot: "lot", item: "item", process: "process" },
+	colour_wise_diff: { lot: "lot", process: "process_list" },
+	supplier_pending: { supplier: "supplier", process: "process" },
+	dispatch_percentage: { lot: "lot", item: "item" },
+	month_wise_detail: { lot: "lot", item: "item" },
+	finishing_plan: { lot: "lot", item: "item" },
+	multi_ccr: { lot: "lots", item: "items" },
+	ppo_report: { item: "items" },
+	grn_report: { lot: "lot", supplier: "supplier", from_date: "from_date" },
+	grn_summary: { lot: "lot", lot_date: "from_date" },
+	dc_report: { lot: "lot", supplier: "supplier", from_date: "from_date" },
+	stock_entry_report: { lot: "lot", item: "item", lot_date: "from_date" },
+	stock_reconciliation_report: { lot: "lot", lot_date: "from_date" },
+	stock_update_report: { lot: "lot", lot_date: "from_date" },
+}
+const CONTEXT_LABELS = { lot: "Lot", process: "Process", supplier: "Supplier", item: "Item", from_date: "From", lot_date: "From", based_on: "Based on" }
+// Lot-scoped Work Order report lists every WO of the Lot instead of the last month's.
+const FIXED_CONTEXT = { based_on: "WO Status" }
+
+/** Filters a report gets from the step context: `[{ key, label, param, value }]`. */
+export function reportPrefill(report, context = {}) {
+	const values = { ...context, ...FIXED_CONTEXT }
+	return Object.entries(REPORT_PREFILL[report.key] || {})
+		.filter(([key]) => values[key])
+		.map(([key, param]) => ({ key, label: CONTEXT_LABELS[key], param, value: values[key] }))
+}
+
+export function reportHref(reportsPath, report, context = {}) {
 	const query = new URLSearchParams({ report: report.value })
-	if (report.key === "inhouse_quantity") {
-		query.set("lot", lot)
-		query.set("process", process)
-	}
-	return `/web/merch/reports?${query.toString()}`
+	for (const filter of reportPrefill(report, context)) query.set(filter.param, filter.value)
+	return `${reportsPath}?${query.toString()}`
+}
+
+/** Report context of one step: one supplier only when every Work Order shares it; earliest WO date; Lot date for stock reports. */
+export function stepReportContext(lot, item, process, workOrders = [], lotDate = "") {
+	const suppliers = [...new Set(workOrders.map((row) => row.supplier).filter(Boolean))]
+	const dates = workOrders.map((row) => row.wo_date).filter(Boolean).sort()
+	return { lot, item, process, supplier: suppliers.length === 1 ? suppliers[0] : "", from_date: dates[0] || "", lot_date: lotDate }
 }
 
 /** Received meter share, used by the stage strip pills. */
@@ -130,4 +170,16 @@ export function fabricSummary(fabric = {}) {
 		colours: [...new Set(program.map((row) => row.colour).filter(Boolean))],
 		uses: Object.entries(uses).map(([use, colours]) => `${use} · ${colours.join(", ")}`).join(" · "),
 	}
+}
+
+/** Reports whose name or group contains `query`, ignoring case. */
+export function filterReports(reports = [], query = "") {
+	const needle = query.trim().toLowerCase()
+	if (!needle) return reports
+	return reports.filter((report) => `${report.label} ${report.group || ""}`.toLowerCase().includes(needle))
+}
+
+/** Popover list height: 70% of the viewport, capped by the larger space above or below the trigger. */
+export function reportsListHeight(rect, viewportHeight, margin = 96) {
+	return Math.round(Math.max(160, Math.min(viewportHeight * 0.7, Math.max(viewportHeight - rect.bottom, rect.top) - margin)))
 }

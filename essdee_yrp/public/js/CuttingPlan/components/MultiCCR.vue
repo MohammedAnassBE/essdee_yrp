@@ -58,6 +58,8 @@
                                         {{ j }}
                                     </th>
                                     <th>Total</th>
+                                    <th>Average Piece Weight</th>
+                                    <th>Average Reqd Weight</th>
                                     <th v-if="i.is_set_item">Panels</th>
                                 </tr>
                                 <tr v-for="(j, item1_index) in i.items" :key="item1_index">
@@ -72,6 +74,8 @@
                                         <div v-else>--</div>
                                     </td>
                                     <th>{{ j.total_qty }}</th>
+                                    <th>{{ get_colour_piece_weight(item_name, j) }}</th>
+                                    <th>{{ get_colour_required_weight(item_name, j) }}</th>
                                     <th v-if='i.is_set_item'>
                                         <div v-for="panel in i[i.stiching_attr][j.attributes[i.set_item_attr]]" :key="panel">
                                             {{panel}}
@@ -83,6 +87,9 @@
                                     <th v-for="(j, idx) in i.attributes" :key="idx"></th>
                                     <th v-for="(k, idx) in i.primary_attribute_values" :key="idx">{{ i.total_qty[k] ? i.total_qty[k] : 0 }}</th>
                                     <th>{{ item_data[item_name]['total_qty'] }}</th>
+                                    <th></th>
+                                    <th></th>
+                                    <th v-if="i.is_set_item"></th>
                                 </tr>
                             </table>
                         </td>
@@ -128,6 +135,91 @@
         <div v-if="items && Object.keys(items).length > 0">
             <div v-for="lot in Object.keys(items)">
                 <h3>{{ lot }} - {{ items[lot]['item'] }}</h3>
+                <div v-for="(group, group_index) in items[lot]['panel_groups']" :key="`${group.cutting_plan}-${group.panels}-${group_index}`" class="panel-group">
+                    <h4>{{ group.panels }}</h4>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>S.No.</th>
+                                    <th>Colour</th>
+                                    <th>Cloth Type</th>
+                                    <th>Received Weight</th>
+                                    <th>Used Weight</th>
+                                    <th>Balance Weight</th>
+                                    <th v-for="size in group.sizes" :key="size">{{ size }}</th>
+                                    <th>Total</th>
+                                    <th>Piece Weight</th>
+                                    <th>Required Weight</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, row_index) in group.rows" :key="`${row.colour}-${row.cloth_type}-${row_index}`">
+                                    <td>{{ row_index + 1 }}</td>
+                                    <td>{{ row.colour }}</td>
+                                    <td>{{ row.cloth_type }}</td>
+                                    <td>{{ get_round(row.received_weight, 3) }}</td>
+                                    <td>{{ get_round(row.used_weight, 3) }}</td>
+                                    <td>{{ get_round(row.balance_weight, 3) }}</td>
+                                    <td v-for="size in group.sizes" :key="size">{{ get_quantity(row.sizes[size]) }}</td>
+                                    <td>{{ get_quantity(row.total_pieces) }}</td>
+                                    <td>{{ get_round(row.piece_weight, 4) }}</td>
+                                    <td>{{ get_round(row.required_weight, 4) }}</td>
+                                </tr>
+                                <tr class="font-weight-bold">
+                                    <th></th>
+                                    <th>Total</th>
+                                    <th></th>
+                                    <th>{{ get_round(group.totals.received_weight, 3) }}</th>
+                                    <th>{{ get_round(group.totals.used_weight, 3) }}</th>
+                                    <th>{{ get_round(group.totals.balance_weight, 3) }}</th>
+                                    <th v-for="size in group.sizes" :key="size">{{ get_quantity(group.totals.sizes[size]) }}</th>
+                                    <th>{{ get_quantity(group.totals.total_pieces) }}</th>
+                                    <th>{{ get_round(group.totals.piece_weight, 4) }}</th>
+                                    <th>{{ get_round(group.totals.required_weight, 4) }}</th>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div v-if="items[lot]['recut_summary'] && items[lot]['recut_summary'].rows.length" class="panel-group">
+                    <h4>Recut Summary</h4>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>S.No.</th>
+                                    <th>Cloth Type</th>
+                                    <th>Colour</th>
+                                    <th>Dia</th>
+                                    <th>Shade</th>
+                                    <th>Weight in Kg's</th>
+                                    <th>No. of Rolls</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, row_index) in items[lot]['recut_summary'].rows" :key="`${row.cloth_type}-${row.colour}-${row.dia}-${row.shade}-${row_index}`">
+                                    <td>{{ row_index + 1 }}</td>
+                                    <td>{{ row.cloth_type }}</td>
+                                    <td>{{ row.colour }}</td>
+                                    <td>{{ row.dia }}</td>
+                                    <td>{{ row.shade }}</td>
+                                    <td>{{ get_round(row.weight, 3) }}</td>
+                                    <td>{{ get_quantity(row.no_of_rolls) }}</td>
+                                </tr>
+                                <tr class="font-weight-bold">
+                                    <th></th>
+                                    <th>Total</th>
+                                    <th></th>
+                                    <th></th>
+                                    <th></th>
+                                    <th>{{ get_round(items[lot]['recut_summary'].totals.weight, 3) }}</th>
+                                    <th>{{ get_quantity(items[lot]['recut_summary'].totals.no_of_rolls) }}</th>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
                 <table class="table table-sm table-bordered">
                     <tr v-for="(i, item_index) in items[lot]['completed_json']" :key="item_index">
                         <template v-if="!i.is_set_item">
@@ -321,7 +413,30 @@ onMounted(()=> {
 })
 
 function get_round(value, precision){
-    return parseFloat(value).toFixed(precision)
+    let number = parseFloat(value)
+    return Number.isFinite(number) ? number.toFixed(precision) : (0).toFixed(precision)
+}
+
+function get_quantity(value){
+    let number = parseFloat(value)
+    if(!Number.isFinite(number) || number === 0){
+        return "--"
+    }
+    return Number.isInteger(number) ? number : number.toFixed(2)
+}
+
+function get_row_colour(row){
+    return row.attributes?.[colour_attribute] || row.item_keys?.major_colour
+}
+
+function get_colour_piece_weight(item_name, row){
+    let value = item_data.value[item_name]?.average_piece_weight_by_colour?.[get_row_colour(row)]
+    return value == null ? "--" : get_round(value, 4)
+}
+
+function get_colour_required_weight(item_name, row){
+    let value = item_data.value[item_name]?.average_required_weight_by_colour?.[get_row_colour(row)]
+    return value == null ? "--" : get_round(value, 4)
 }
 function get_list_items(){
     let d = new frappe.ui.Dialog({
@@ -399,5 +514,9 @@ function get_multiccr(){
 <style scoped>
 .panel-column {
     display: inline;
+}
+
+.panel-group {
+    margin-bottom: 20px;
 }
 </style>

@@ -132,6 +132,7 @@ const ESSDEE_WORK_ORDER_ACTIONS = [
 	"Create Sewing Plan",
 	"Open Sewing Plan",
 	"Calculate Pieces",
+	"Reopen",
 ];
 
 function clear_essdee_work_order_actions(frm) {
@@ -148,6 +149,9 @@ function setup_essdee_work_order_actions(frm) {
 	frm._essdee_action_request = request;
 	if (frm.is_new() || frm.doc.docstatus !== 1) {
 		return;
+	}
+	if (frm.doc.open_status === "Close" && frappe.user.has_role("System Manager")) {
+		frm.add_custom_button(__("Reopen"), () => reopen_work_order(frm));
 	}
 	frappe.call({
 		method: "essdee_yrp.work_order_actions.get_work_order_action_context",
@@ -185,6 +189,27 @@ function setup_essdee_work_order_actions(frm) {
 				});
 			}
 		},
+	});
+}
+
+function reopen_work_order(frm) {
+	frappe.confirm(__("Are you sure you want to reopen this Work Order?"), () => {
+		frappe.call({
+			method: "essdee_yrp.work_order_reopen.reopen_work_order",
+			args: { work_order: frm.doc.name },
+			freeze: true,
+			freeze_message: __("Reopening Work Order..."),
+			callback(r) {
+				const result = r.message || {};
+				frappe.show_alert({
+					message: result.stock_entry
+						? __("Work Order reopened. Stock restored via {0}.", [result.stock_entry])
+						: __("Work Order reopened."),
+					indicator: "green",
+				});
+				frm.reload_doc();
+			},
+		});
 	});
 }
 

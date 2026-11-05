@@ -170,11 +170,22 @@ def _assert_expected_modified(doc, expected_modified=None) -> None:
 		)
 
 
+def _item_prices_section() -> dict:
+	return {
+		"label": _("Sales Item Price"),
+		**{
+			f"can_{permission}": bool(frappe.has_permission("SD YRP Sales Item Price", ptype=permission))
+			for permission in ("read", "write", "create")
+		},
+	}
+
+
 @frappe.whitelist()
 def get_capabilities() -> dict:
+	item_prices = _item_prices_section()
 	permissions = _permission_flags()
 	if not permissions["can_read"]:
-		return {"sections": {}, "reports": {}}
+		return {"sections": {"item_prices": item_prices} if item_prices["can_read"] else {}, "reports": {}}
 
 	sections = {
 		"production_orders": {
@@ -183,6 +194,8 @@ def get_capabilities() -> dict:
 			**permissions,
 		}
 	}
+	if item_prices["can_read"]:
+		sections["item_prices"] = item_prices
 	reports = {}
 	if permissions["can_report"]:
 		reports["ppo_report"] = {

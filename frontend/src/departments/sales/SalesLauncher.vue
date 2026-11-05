@@ -33,6 +33,13 @@ const items = [
 		to: "/sales/production-orders",
 	},
 	{
+		key: "item_prices",
+		label: "Sales Item Price",
+		description: "Update MRP, Distributor and Retail rates per piece for each Item size.",
+		icon: "pi pi-tag",
+		to: "/sales/item-prices",
+	},
+	{
 		key: "reports",
 		label: "Reports",
 		description: "Review Production Orders by delivery period, status, category and size.",

@@ -50,6 +50,7 @@ const SalesSection = () => import("../departments/sales/SalesSection.vue")
 const ProductionOrder = () => import("../departments/sales/ProductionOrder.vue")
 const ProductionOrderEditorPage = () => import("../departments/sales/ProductionOrderEditorPage.vue")
 const SalesReports = () => import("../departments/sales/SalesReports.vue")
+const SalesItemPricePage = () => import("../departments/sales/SalesItemPrice.vue")
 const PdSection = () => import("../departments/pd/PdSection.vue")
 const ProductPage = () => import("../departments/pd/ProductPage.vue")
 const ProductReleasePage = () => import("../departments/pd/ProductReleasePage.vue")
@@ -73,6 +74,7 @@ const PlanningLotsList = () => import("../departments/planning/lot/LotsList.vue"
 const PlanningLotPage = () => import("../departments/planning/lot/LotPage.vue")
 const PlanningLotEditorPage = () => import("../departments/planning/lot/LotEditorPage.vue")
 const PlanningReports = () => import("../departments/planning/PlanningReports.vue")
+const PlanningBulkClose = () => import("../departments/planning/PlanningBulkClose.vue")
 const ItemsList = () => import("../departments/purchase/ItemsList.vue")
 const ItemPage = () => import("../departments/purchase/ItemPage.vue")
 const ItemEditorPage = () => import("../departments/purchase/ItemEditorPage.vue")
@@ -299,6 +301,7 @@ const routes = [
 	{ path: "/sales/production-orders/new", name: "sales-production-order-new", component: ProductionOrderEditorPage },
 	{ path: "/sales/production-orders/:productionOrderId/edit", name: "sales-production-order-edit", component: ProductionOrderEditorPage, props: true },
 	{ path: "/sales/production-orders/:productionOrderId", name: "sales-production-order", component: ProductionOrder, props: true },
+	{ path: "/sales/item-prices", name: "sales-item-prices", component: SalesItemPricePage },
 	{ path: "/sales/reports", name: "sales-reports", component: SalesReports },
 	{ path: "/pd/products", name: PD_ROUTES.products, component: PdSection, props: { section: "products" } },
 	{ path: "/pd/products/new", name: PD_ROUTES.productNew, component: ProductPage },
@@ -857,6 +860,7 @@ const routes = [
 		props: { section: "box_stickers", backTo: "/planning", backLabel: "Planning", ...PLANNING_BOX_STICKER_PAGES },
 	},
 	...boxStickerPrintPages("/planning/box-sticker-prints", PLANNING_BOX_STICKER_PAGES),
+	{ path: "/planning/bulk-close", name: PLANNING_ROUTES.bulkClose, component: PlanningBulkClose },
 	{ path: "/planning/reports", name: PLANNING_ROUTES.reports, component: PlanningReports },
 	{ path: "/merch/item-production-details", name: MERCH_ROUTES.ipds, component: IpdList },
 	{ path: "/merch/lots", name: MERCH_ROUTES.lots, component: MerchLotsList },

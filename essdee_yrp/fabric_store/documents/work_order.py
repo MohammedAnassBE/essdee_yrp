@@ -52,6 +52,7 @@ from essdee_yrp.work_order_actions import (
 )
 from essdee_yrp.work_order_close import SD_CLOSE_REASONS, close_work_order
 from essdee_yrp.work_order_piece_tracking import calculate_completed_pieces
+from essdee_yrp.work_order_reopen import reopen_work_order
 
 WORK_ORDER_FIELDS = (
 	"status",
@@ -400,6 +401,14 @@ def _capability_candidates(
 		"approve_close": {
 			"label": _("Approve Close"),
 			"eligible": bool(is_close_request and is_close_manager),
+		},
+		"reopen": {
+			"label": _("Reopen"),
+			"eligible": bool(
+				docstatus == 1
+				and doc.get("open_status") == "Close"
+				and "System Manager" in frappe.get_roles(frappe.session.user)
+			),
 		},
 		"create_debit": {"label": _("Create Debit"), "eligible": can_create_debit},
 		"create_rework": {"label": _("Create Rework"), "eligible": can_create_rework},
@@ -798,6 +807,7 @@ def execute_work_order_command(
 		"close",
 		"request_close",
 		"approve_close",
+		"reopen",
 		"create_debit",
 		"approve_debit",
 		"get_rework_context",
@@ -898,6 +908,8 @@ def execute_work_order_command(
 			close_other_reason=payload.get("close_other_reason"),
 			close_remarks=payload.get("close_remarks"),
 		)
+	elif command == "reopen":
+		reopen_work_order(name)
 	elif command == "create_debit":
 		create_debit(
 			name,

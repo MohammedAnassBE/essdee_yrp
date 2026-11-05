@@ -10,7 +10,7 @@
 				<small v-if="filterHint" class="erp-help-text" role="status">{{ filterHint }}</small>
 			</template>
 			<template #actions>
-				<Button v-if="permissions.can_write" :label="`Close Selected (${selectedNames.length})`" icon="pi pi-lock" :disabled="!selectedNames.length || loading || busy" @click="openCloseDialog" />
+				<Button v-if="permissions.can_write" :label="`Close Selected (${selectedNames.length})`" icon="pi pi-lock" :disabled="!selectedNames.length || loading || busy" @click="openCloseDialog(selectedNames)" />
 			</template>
 			<div class="finishing-scroll bulk-close-scroll" role="region" aria-label="Open Work Orders" tabindex="0">
 				<table class="finishing-table report-table">
@@ -24,7 +24,7 @@
 						<td class="report-cell--text bulk-close-id"><RouterLink :to="'/planning/work-orders/' + encodeURIComponent(row.name)">{{ row.name }}</RouterLink></td>
 						<td class="report-cell--date">{{ formatDisplayDate(row.wo_date, "") }}</td><td class="report-cell--text">{{ row.item }}</td><td class="report-cell--text">{{ row.lot }}</td><td class="report-cell--text">{{ row.process_name }}</td>
 						<td class="report-cell--num report-align-right">{{ quantity(row.total_delivered) }}</td><td class="report-cell--num report-align-right">{{ quantity(row.total_received) }}</td><td class="report-cell--num report-align-right">{{ quantity(row.difference) }}</td>
-						<td class="report-cell--last-column"><Button label="View" text size="small" @click="viewDetails(row.name)" /></td>
+						<td class="report-cell--last-column bulk-close-actions"><Button label="View" text size="small" @click="viewDetails(row.name)" /><Button v-if="permissions.can_write" label="Close" text size="small" :disabled="loading || busy" @click="openCloseDialog([row.name])" /></td>
 					</tr></tbody>
 				</table>
 			</div>
@@ -60,6 +60,14 @@
 		</Dialog>
 		<DocumentConfirmationDialog v-model:visible="confirmVisible" title="Confirm Work Order close" :message="`Submit close for ${closeNames.join(', ')}? Depending on your role, this may create a Close Request for approval.`" confirm-label="Close Selected" cancel-label="Keep reviewing" :busy="busy" @confirm="confirmClose" />
 		<DocumentErrorDialog :message="actionError" @dismiss="actionError = ''" />
+		<Dialog v-model:visible="outcomeVisible" modal header="Bulk Close Result" class="erp-dialog--md">
+			<div v-if="outcome" class="bulk-close-details" role="alert">
+				<p>{{ outcome.summary }}</p>
+				<p><strong>{{ outcome.failedLabel }}</strong></p>
+				<ul class="bulk-close-failures"><li v-for="failure in outcome.failed" :key="failure.work_order"><strong>{{ failure.work_order }}</strong> — {{ formatDatesInText(failure.error) }}</li></ul>
+			</div>
+			<template #footer><Button label="OK" autofocus @click="outcomeVisible = false" /></template>
+		</Dialog>
 	</section>
 </template>
 
@@ -83,10 +91,10 @@ import DocumentErrorDialog from "../../../components/documents/DocumentErrorDial
 import ReportFilterRow from "../../../components/reports/ReportFilterRow.vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import { useInlineFilters } from "../../../composables/useInlineFilters.js"
-import { formatDisplayDate } from "../../../utils/dateFormat.js"
+import { formatDatesInText, formatDisplayDate } from "../../../utils/dateFormat.js"
 import AsyncLinkMultiSelect from "../../cutting/reports/AsyncLinkMultiSelect.vue"
 import WorkOrderItemMatrix from "../../fabric-store/WorkOrderItemMatrix.vue"
-import { CLOSE_REASONS, bulkCloseFilterHint, closeReasonHint, pendingSummary, sortedWorkOrders } from "./workOrderBulkClose.js"
+import { CLOSE_REASONS, bulkCloseFilterHint, bulkCloseOutcome, closeReasonHint, pendingSummary, sortedWorkOrders } from "./workOrderBulkClose.js"
 
 const props = defineProps({ permissions: { type: Object, default: () => ({}) } })
 const toast = useToast()
@@ -116,6 +124,8 @@ const generated = ref(false)
 const loadError = ref("")
 const busy = ref(false)
 const actionError = ref("")
+const outcome = ref(null)
+const outcomeVisible = ref(false)
 const detailsVisible = ref(false)
 const detailsLoading = ref(false)
 const detailsError = ref("")
@@ -184,9 +194,9 @@ async function viewDetails(name) {
 	}
 }
 
-function openCloseDialog() {
-	if (!props.permissions.can_write || !selectedNames.value.length || loading.value || busy.value) return
-	closeNames.value = [...selectedNames.value]
+function openCloseDialog(names) {
+	if (!props.permissions.can_write || !names.length || loading.value || busy.value) return
+	closeNames.value = [...names]
 	Object.assign(closeValues, { close_reason: "", close_other_reason: "", close_remarks: "" })
 	closeVisible.value = true
 }
@@ -201,7 +211,13 @@ async function confirmClose() {
 	actionError.value = ""
 	try {
 		const response = await closeWorkOrders([...closeNames.value], { ...closeValues, close_other_reason: closeValues.close_reason === "Others" ? closeValues.close_other_reason.trim() : "" })
-		for (const result of response.results || []) toast.add({ severity: "success", summary: result.work_order, detail: result.open_status, life: 8000 })
+		const result = bulkCloseOutcome(response.results || [], response.failed || [])
+		if (result.failed.length) {
+			outcome.value = result
+			outcomeVisible.value = true
+		} else {
+			toast.add({ severity: result.requested ? "warn" : "success", summary: "Bulk Close", detail: result.summary, life: 8000 })
+		}
 		closeVisible.value = false
 		confirmVisible.value = false
 		selection.value = []
@@ -224,5 +240,7 @@ onBeforeUnmount(() => { ++listRequest; ++detailRequest })
 .bulk-close-details { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .bulk-close-details :is(h3, h4, p) { margin: 0; }
 .bulk-close-details p { overflow-wrap: anywhere; }
+.bulk-close-failures { display: grid; gap: var(--erp-space-2); max-height: 50vh; margin: 0; padding-left: var(--erp-space-4); overflow-y: auto; overflow-wrap: anywhere; }
+.finishing-table td.bulk-close-actions { white-space: nowrap; }
 input[type="checkbox"] { accent-color: var(--erp-accent); }
 </style>

@@ -2,7 +2,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cstr, flt, getdate
+from frappe.utils import cstr, flt, getdate, strip_html_tags
 from yrp.stock.save_stock_items import group_items_for_ui
 
 from essdee_yrp.api.work_order import fetch_summary_details
@@ -88,22 +88,41 @@ def close_work_orders(
 	if not names:
 		frappe.throw(_("Select at least one Work Order to close."))
 
-	for name in names:
-		doc = frappe.get_doc("YRP Work Order", name, for_update=True)
-		doc.check_permission("write")
-		if doc.docstatus != 1 or doc.open_status != "Open":
-			frappe.throw(_("Work Order {0} is no longer open.").format(frappe.bold(name)))
+	results, failed = [], []
+	previous_flags = (
+		frappe.flags.get("work_order_bulk_close"),
+		frappe.flags.get("suppress_work_order_close_alert"),
+	)
+	frappe.flags.work_order_bulk_close = frappe.flags.suppress_work_order_close_alert = True
+	try:
+		for index, name in enumerate(names, start=1):
+			savepoint = f"work_order_bulk_close_{index}"
+			frappe.db.savepoint(savepoint)
+			try:
+				status = _close_one(name, close_reason, close_other_reason, close_remarks)
+				results.append({"work_order": name, "open_status": status})
+			except Exception as error:
+				frappe.db.rollback(save_point=savepoint)
+				frappe.clear_messages()
+				message = strip_html_tags(cstr(error)).strip() or _("The Work Order could not be closed.")
+				failed.append({"work_order": name, "error": message})
+	finally:
+		frappe.flags.work_order_bulk_close, frappe.flags.suppress_work_order_close_alert = previous_flags
+	return {"results": results, "failed": failed}
 
-	results = []
-	for name in names:
-		result = close_work_order(
-			name,
-			sd_close_reason=close_reason,
-			close_other_reason=close_other_reason,
-			close_remarks=close_remarks,
-		)
-		results.append({"work_order": name, "open_status": result.get("status")})
-	return {"results": results}
+
+def _close_one(name, close_reason, close_other_reason, close_remarks):
+	doc = frappe.get_doc("YRP Work Order", name, for_update=True)
+	doc.check_permission("write")
+	if doc.docstatus != 1 or doc.open_status != "Open":
+		frappe.throw(_("Work Order {0} is no longer open.").format(frappe.bold(name)))
+	result = close_work_order(
+		name,
+		sd_close_reason=close_reason,
+		close_other_reason=close_other_reason,
+		close_remarks=close_remarks,
+	)
+	return result.get("status")
 
 
 @frappe.whitelist()

@@ -28,3 +28,16 @@ export function pendingSummary(groups = []) {
 		}).filter((item) => item.total_delivered - item.total_received > 0),
 	})).filter((group) => group.items.length)
 }
+
+const plural = (count, one, many) => count === 1 ? `1 ${one}` : `${count} ${many}`
+
+/** Counts and messages for the Bulk Close result dialog, mirroring production_api. */
+export function bulkCloseOutcome(results = [], failed = []) {
+	const closed = results.filter((result) => result.open_status === "Close").length
+	const requested = results.filter((result) => result.open_status === "Close Request").length
+	return {
+		closed, requested, failed,
+		summary: `${plural(closed, "Work Order closed", "Work Orders closed")}; ${plural(requested, "close request submitted", "close requests submitted")}.`,
+		failedLabel: `${plural(failed.length, "Work Order failed:", "Work Orders failed:")}`,
+	}
+}

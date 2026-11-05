@@ -58,3 +58,11 @@ export function getPpoDispatchSummaryBulk(productionOrders) {
 export function downloadPpoReport(filters = {}) {
 	return downloadMethodFile(`${METHOD}.download_ppo_report`, filters, "PPO_Report.xlsx")
 }
+
+export function getSalesItemPriceGrid(item = null) {
+	return callRead("essdee_yrp.sales.item_prices.get_item_price_grid", { item: item || null })
+}
+
+export function saveSalesItemPrices(priceType, prices) {
+	return callMethod("essdee_yrp.sales.item_prices.save_item_prices", { price_type: priceType, prices })
+}

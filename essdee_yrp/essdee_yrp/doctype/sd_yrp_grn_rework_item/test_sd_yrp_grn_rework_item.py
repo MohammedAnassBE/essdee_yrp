@@ -109,6 +109,17 @@ class TestGRNReworkItem(IntegrationTestCase):
 		self.assertEqual(entries[0]["_transfer_key"], entries[1]["_transfer_key"])
 		make_entries.assert_called_once_with(entries, force_inline=True)
 
+	def test_grn_cancel_guard_reads_active_ledger_rows(self):
+		rework = frappe._dict(grn_reworked_item_details=[], grn_rejected_item_details=[])
+		grn = frappe._dict(name="GRN-1")
+		with (
+			patch.object(grn_rework_item.frappe, "get_all", return_value=["RW-1"]),
+			patch.object(grn_rework_item.frappe, "get_doc", return_value=rework),
+			patch.object(grn_rework_item, "get_conversion_entries", return_value=[{"qty": 1}]),
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "reverse that rework"):
+				grn_rework_item.before_grn_cancel(grn)
+
 	def test_finishing_ignores_provisional_rejection(self):
 		row = frappe._dict(
 			item_variant="Variant-1",

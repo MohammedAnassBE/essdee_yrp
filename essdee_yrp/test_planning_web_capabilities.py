@@ -17,7 +17,7 @@ class TestPlanningWebCapabilities(TestCase):
 			self.sources[alias] = patcher.start()
 			self.addCleanup(patcher.stop)
 			self.sources[alias].return_value = {"sections": {}}
-		patcher = patch.object(web_workspace.cutting_reports, "get_report_permissions", return_value={})
+		patcher = patch.object(web_workspace.cutting_reports, "get_report_permissions", return_value={"multi-ccr": False})
 		self.report_permissions = patcher.start()
 		self.addCleanup(patcher.stop)
 		patcher = patch.object(
@@ -29,7 +29,7 @@ class TestPlanningWebCapabilities(TestCase):
 		patcher = patch.object(web_workspace.frappe, "has_permission", return_value=False)
 		self.work_order_permissions = patcher.start()
 		self.addCleanup(patcher.stop)
-		for key in ("inward_quantity", "inhouse_quantity", "month_wise_detail", "process_pending", "size_wise_stock", "colour_wise_diff", "work_in_progress"):
+		for key in ("inward_quantity", "inhouse_quantity", "month_wise_detail", "process_pending", "size_wise_stock", "colour_wise_diff", "work_in_progress", "supplier_pending"):
 			patcher = patch.object(getattr(web_workspace, key), "can_view", return_value=False)
 			self.callable_reports[key] = patcher.start()
 			self.addCleanup(patcher.stop)
@@ -54,13 +54,13 @@ class TestPlanningWebCapabilities(TestCase):
 			"sections": {"work_orders": {"label": "Work Orders", "can_read": True}},
 		}
 		self.report_permissions.return_value = {
-			"cutting-plans": True, "daily-production": False, "stock-balance": True,
+			"cutting-plans": True, "daily-production": False, "stock-balance": True, "multi-ccr": False,
 		}
 		self.lot_permissions.return_value = {"can_read": True, "can_write": False}
 		sections = web_workspace.get_capabilities()["sections"]
 		self.assertEqual(set(sections), {
 			"cutting_plans", "sewing_plans", "finishing_plans", "lots",
-			"production_orders", "work_orders", "reports",
+			"production_orders", "work_orders", "box_stickers", "reports",
 		})
 		self.assertEqual(sections["reports"]["groups"], {
 			"cutting": True, "sewing": True, "finishing": True, "production": False,
@@ -68,8 +68,8 @@ class TestPlanningWebCapabilities(TestCase):
 		self.assertEqual(sections["lots"], {"label": "Lot", "can_read": True, "can_write": False})
 		for source in self.sources.values():
 			source.assert_called_once_with()
-		self.report_permissions.assert_called_once_with()
-		self.lot_permissions.assert_called_once_with("SD YRP Lot", ("read", "write"))
+		self.report_permissions.assert_called_with()
+		self.lot_permissions.assert_any_call("SD YRP Lot", ("read", "write"))
 
 	def test_nothing_readable(self):
 		self.sources["cutting_capabilities"].return_value = {"cutting-plans": {"can_read": False}}
@@ -87,7 +87,7 @@ class TestPlanningWebCapabilities(TestCase):
 		self.assertNotIn("dispatches", web_workspace.get_capabilities()["sections"])
 
 	def test_cutting_plans_alone_does_not_grant_reports(self):
-		self.report_permissions.return_value = {"cutting-plans": True, "daily-production": False}
+		self.report_permissions.return_value = {"cutting-plans": True, "daily-production": False, "multi-ccr": False}
 		self.assertNotIn("reports", web_workspace.get_capabilities()["sections"])
 
 	def test_production_reports_follow_endpoint_access(self):
@@ -103,21 +103,20 @@ class TestPlanningWebCapabilities(TestCase):
 				self.assertEqual(set(section["production"]), {key})
 				self.assertTrue(section["production"][key]["can_read"])
 
-	def test_bulk_close_follows_work_order_read_and_write(self):
+	def test_bulk_close_card_follows_work_order_read_and_write(self):
 		for can_read, can_write in ((False, False), (False, True), (True, False), (True, True)):
 			with self.subTest(can_read=can_read, can_write=can_write):
 				self.work_order_permissions.side_effect = lambda doctype, permission: (
 					doctype == "YRP Work Order" and {"read": can_read, "write": can_write}[permission]
 				)
-				reports = web_workspace.get_capabilities()["sections"].get("reports", {})
-				self.assertEqual(reports.get("groups", {}).get("production", False), can_read)
-				production = reports.get("production", {})
+				sections = web_workspace.get_capabilities()["sections"]
+				self.assertNotIn("reports", sections)
 				if can_read:
-					self.assertEqual(production["work_order_bulk_close"], {
-						"label": "Work Order Bulk Close", "can_read": True, "can_write": can_write,
+					self.assertEqual(sections["bulk_close"], {
+						"label": "Bulk Close", "can_read": True, "can_write": can_write,
 					})
 				else:
-					self.assertNotIn("work_order_bulk_close", production)
+					self.assertNotIn("bulk_close", sections)
 
 	def test_b2_capability_and_require_access_share_can_view(self):
 		for key, gate in self.callable_reports.items():

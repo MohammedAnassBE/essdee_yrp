@@ -12,6 +12,7 @@ from essdee_yrp.planning.reports import (
 	month_wise_detail,
 	process_pending,
 	size_wise_stock,
+	supplier_pending,
 	work_in_progress,
 )
 from essdee_yrp.planning.reports.desk_adapters import can_run_desk_report
@@ -44,6 +45,7 @@ def _reports_section(sewing_sections, finishing_sections):
 		("size_wise_stock", "Size-wise Stock", size_wise_stock),
 		("colour_wise_diff", "Colour-wise Diff", colour_wise_diff),
 		("work_in_progress", "Work In Progress", work_in_progress),
+		("supplier_pending", "Supplier Pending Report", supplier_pending),
 	):
 		if report.can_view():
 			production[key] = {"label": _(label), "can_read": True}
@@ -51,11 +53,6 @@ def _reports_section(sewing_sections, finishing_sections):
 		production["multi_ccr"] = {"label": _("Multi CCR"), "can_read": True}
 	if frappe.has_permission("YRP Production Order", "report"):
 		production["ppo_report"] = {"label": _("PPO Report"), "can_read": True, "can_export": True}
-	if frappe.has_permission("YRP Work Order", "read"):
-		production["work_order_bulk_close"] = {
-			"label": _("Work Order Bulk Close"), "can_read": True,
-			"can_write": bool(frappe.has_permission("YRP Work Order", "write")),
-		}
 	groups = {
 		"cutting": any(
 			value for key, value in cutting_reports.get_report_permissions().items()
@@ -66,6 +63,14 @@ def _reports_section(sewing_sections, finishing_sections):
 		"production": bool(production),
 	}
 	return {"label": _("Reports"), "can_read": any(groups.values()), "groups": groups, "production": production}
+
+
+def _bulk_close_section():
+	return {
+		"label": _("Bulk Close"),
+		"can_read": bool(frappe.has_permission("YRP Work Order", "read")),
+		"can_write": bool(frappe.has_permission("YRP Work Order", "write")),
+	}
 
 
 @frappe.whitelist()
@@ -95,6 +100,7 @@ def get_capabilities() -> dict:
 			"Box Sticker Print",
 			permission_flags("SD YRP Box Sticker Print", ("read", "create", "write", "submit")),
 		),
+		"bulk_close": _bulk_close_section(),
 		"reports": _reports_section(sewing_sections, finishing_sections),
 	}
 	return {"sections": {key: flags for key, flags in sections.items() if flags.get("can_read")}}

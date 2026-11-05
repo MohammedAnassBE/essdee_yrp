@@ -60,7 +60,8 @@ def close_work_order(
 	if doc.open_status == "Close":
 		return _close_result(doc.name, "Close")
 
-	if not _is_wo_close_manager(throw_if_missing=True):
+	is_internal_bulk_close = frappe.flags.get("work_order_bulk_close") and flt(doc.get("is_internal_unit"))
+	if not is_internal_bulk_close and not _is_wo_close_manager(throw_if_missing=True):
 		if doc.open_status == "Close Request":
 			approver_role = _get_wo_close_approver_role()
 			frappe.throw(_("Only users with role {0} can approve close requests.").format(approver_role))
@@ -73,10 +74,12 @@ def close_work_order(
 		)
 		doc.sd_close_reason = selected_reason
 		doc.save(ignore_permissions=True)
-		frappe.msgprint(_("Close Request has been submitted for approval."), alert=True)
+		if not frappe.flags.get("suppress_work_order_close_alert"):
+			frappe.msgprint(_("Close Request has been submitted for approval."), alert=True)
 		return {"status": "Close Request", "deducted_qty": 0.0}
 
 	_validate_wo_close(doc)
+	_validate_internal_transfers_complete(doc.name)
 	warehouse = _get_warehouse_for_supplier(doc.supplier)
 	if not warehouse:
 		frappe.throw(_("No active Warehouse found for supplier {0}.").format(doc.supplier))
@@ -247,6 +250,7 @@ def close_work_order(
 				}
 			)
 
+	close_key = adjustment_allocations[0]["source_sle"] if adjustment_allocations else 1
 	register_production_links(doc.doctype, doc.name, production_links)
 	create_adjustment(
 		adjustment_type="Work Order Excess Usage",
@@ -254,7 +258,8 @@ def close_work_order(
 		source_name=doc.name,
 		effective_date=posting_date,
 		allocations=adjustment_allocations,
-		idempotency_key=f"{doc.doctype}:{doc.name}:close:1",
+		# Keyed by this close's own ledger so a close after a reopen gets a fresh adjustment.
+		idempotency_key=f"{doc.doctype}:{doc.name}:close:{close_key}",
 	)
 	close_voucher_reservations("YRP Work Order", doc.name)
 	enqueue_voucher_repost(
@@ -269,6 +274,32 @@ def close_work_order(
 		"status": "Close",
 		"deducted_qty": round(sum(flt(plan["stock_quantity"]) for plan in excess_plans), 3),
 	}
+
+
+def _validate_internal_transfers_complete(work_order):
+	"""Internal-unit DCs and GRNs must finish their transfer before the Work Order closes."""
+	for doctype, filters, message in (
+		(
+			"YRP Delivery Challan",
+			{"work_order": work_order},
+			_(
+				"Delivery Challan {0} is not completed. Please complete the Delivery Challan before Close Work Order."
+			),
+		),
+		(
+			"YRP Goods Received Note",
+			{"against": "YRP Work Order", "against_id": work_order},
+			_("GRN {0} is not completed. Please complete the GRN before Close Work Order."),
+		),
+	):
+		pending = frappe.get_all(
+			doctype,
+			filters={**filters, "docstatus": 1, "is_internal_unit": 1, "transfer_complete": 0},
+			pluck="name",
+			limit=1,
+		)
+		if pending:
+			frappe.throw(message.format(pending[0]))
 
 
 def _validate_close_reason(selected_reason, close_other_reason):

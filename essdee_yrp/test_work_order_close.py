@@ -7,6 +7,7 @@ from frappe.tests import UnitTestCase
 from essdee_yrp.work_order_close import (
 	_get_excess_output_allocations,
 	_get_owned_output_sle,
+	_validate_internal_transfers_complete,
 	close_work_order,
 )
 
@@ -91,6 +92,58 @@ class TestWorkOrderClose(UnitTestCase):
 
 		self.assertEqual(doc.sd_close_reason, "Sewing Shortage")
 
+	def _request_doc(self, is_internal_unit=0):
+		doc = frappe._dict(
+			name="WO-1", docstatus=1, open_status="Open", sd_close_reason=None,
+			is_internal_unit=is_internal_unit, supplier="SUPPLIER-1",
+		)
+		doc.save = MagicMock()
+		doc.check_permission = MagicMock()
+		return doc
+
+	def test_bulk_close_closes_internal_unit_orders_without_approver_role(self):
+		doc = self._request_doc(is_internal_unit=1)
+		frappe.flags.work_order_bulk_close = True
+		self.addCleanup(setattr, frappe.flags, "work_order_bulk_close", None)
+		with (
+			patch.object(frappe.db, "sql"),
+			patch.object(frappe, "get_doc", return_value=doc),
+			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=False) as manager,
+			patch("essdee_yrp.work_order_close._validate_wo_close", side_effect=frappe.ValidationError("No GRN")),
+		):
+			with self.assertRaisesRegex(frappe.ValidationError, "No GRN"):
+				close_work_order("WO-1", sd_close_reason="NA")
+		manager.assert_not_called()
+		doc.save.assert_not_called()
+
+	def test_bulk_close_of_external_orders_still_needs_the_approver_role(self):
+		for bulk, internal in ((True, 0), (False, 1)):
+			with self.subTest(bulk=bulk, internal=internal):
+				doc = self._request_doc(is_internal_unit=internal)
+				frappe.flags.work_order_bulk_close = bulk
+				frappe.flags.suppress_work_order_close_alert = bulk
+				self.addCleanup(setattr, frappe.flags, "work_order_bulk_close", None)
+				self.addCleanup(setattr, frappe.flags, "suppress_work_order_close_alert", None)
+				with (
+					patch.object(frappe.db, "sql"),
+					patch.object(frappe, "get_doc", return_value=doc),
+					patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=False),
+					patch.object(frappe, "msgprint") as message,
+				):
+					result = close_work_order("WO-1", sd_close_reason="NA")
+				self.assertEqual(result["status"], "Close Request")
+				self.assertEqual(message.called, not bulk)
+
+	def test_close_requires_internal_transfers_to_be_complete(self):
+		for doctype, label in (("YRP Delivery Challan", "Delivery Challan DC-1"), ("YRP Goods Received Note", "GRN DC-1")):
+			with self.subTest(doctype=doctype):
+				def get_all(name, filters=None, **kwargs):
+					return ["DC-1"] if name == doctype and filters.get("transfer_complete") == 0 else []
+
+				with patch.object(frappe, "get_all", side_effect=get_all):
+					with self.assertRaisesRegex(frappe.ValidationError, label):
+						_validate_internal_transfers_complete("WO-1")
+
 	def test_invalid_fixed_reason_is_rejected(self):
 		with self.assertRaises(frappe.ValidationError):
 			close_work_order("WO-1", sd_close_reason="Arbitrary free text")
@@ -133,6 +186,7 @@ class TestWorkOrderClose(UnitTestCase):
 			),
 			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 			patch("essdee_yrp.work_order_close._validate_wo_close"),
+			patch("essdee_yrp.work_order_close._validate_internal_transfers_complete"),
 			patch("essdee_yrp.work_order_close._apply_close_details"),
 			patch("essdee_yrp.work_order_close._has_mapped_output_lineage", return_value=True),
 			patch(
@@ -209,6 +263,7 @@ class TestWorkOrderClose(UnitTestCase):
 			patch.object(frappe, "get_doc", return_value=doc),
 			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 			patch("essdee_yrp.work_order_close._validate_wo_close"),
+			patch("essdee_yrp.work_order_close._validate_internal_transfers_complete"),
 			patch(
 				"essdee_yrp.work_order_close._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
@@ -313,6 +368,7 @@ class TestWorkOrderClose(UnitTestCase):
 			for target, kwargs in (
 				("essdee_yrp.work_order_close._is_wo_close_manager", {"return_value": True}),
 				("essdee_yrp.work_order_close._validate_wo_close", {}),
+				("essdee_yrp.work_order_close._validate_internal_transfers_complete", {}),
 				("essdee_yrp.work_order_close._apply_close_details", {}),
 				("essdee_yrp.work_order_close._has_mapped_output_lineage", {"return_value": False}),
 				(
@@ -370,6 +426,7 @@ class TestWorkOrderClose(UnitTestCase):
 			for target, kwargs in (
 				("essdee_yrp.work_order_close._is_wo_close_manager", {"return_value": True}),
 				("essdee_yrp.work_order_close._validate_wo_close", {}),
+				("essdee_yrp.work_order_close._validate_internal_transfers_complete", {}),
 				("essdee_yrp.work_order_close._apply_close_details", {}),
 				(
 					"essdee_yrp.work_order_close._stock_dimension_values",
@@ -415,6 +472,7 @@ class TestWorkOrderClose(UnitTestCase):
 			patch.object(frappe, "get_doc", return_value=doc),
 			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 			patch("essdee_yrp.work_order_close._validate_wo_close"),
+			patch("essdee_yrp.work_order_close._validate_internal_transfers_complete"),
 			patch("essdee_yrp.work_order_close._apply_close_details"),
 			patch(
 				"essdee_yrp.work_order_close.get_job_worker_stock_variant",
@@ -491,6 +549,7 @@ class TestWorkOrderClose(UnitTestCase):
 			patch.object(frappe, "get_doc", return_value=doc),
 			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 			patch("essdee_yrp.work_order_close._validate_wo_close"),
+			patch("essdee_yrp.work_order_close._validate_internal_transfers_complete"),
 			patch(
 				"essdee_yrp.work_order_close._stock_dimension_values",
 				return_value={"lot": "LOT-1", "received_type": "Accepted"},
@@ -561,6 +620,7 @@ def _close_patches(doc, *, balance=(20, 20)):
 		patch("essdee_yrp.work_order_close.frappe.get_doc", return_value=doc),
 		patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=True),
 		patch("essdee_yrp.work_order_close._validate_wo_close"),
+		patch("essdee_yrp.work_order_close._validate_internal_transfers_complete"),
 		patch("essdee_yrp.work_order_close._apply_close_details"),
 		patch(
 			"yrp.yrp.doctype.yrp_delivery_challan.yrp_delivery_challan._get_warehouse_for_supplier",
@@ -694,3 +754,7 @@ class TestEssdeeWorkOrderClose(UnitTestCase):
 		allocation = create_adjustment.call_args.kwargs["allocations"][0]
 		self.assertEqual(allocation["source_sle"], "SLE-EXCESS-1")
 		self.assertEqual(allocation["difference"], 352)
+		# A close after a reopen must not reuse the reversed adjustment's key.
+		self.assertEqual(
+			create_adjustment.call_args.kwargs["idempotency_key"], "YRP Work Order:WO-TEST:close:SLE-EXCESS-1"
+		)

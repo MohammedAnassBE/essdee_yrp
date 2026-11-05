@@ -35,7 +35,7 @@ const items = [
 	{
 		key: "item_prices",
 		label: "Sales Item Price",
-		description: "Update MRP, Distributor and Wholesale Price rates per piece for each Item size.",
+		description: "Update MRP, Distributor and Retail rates per piece for each Item size.",
 		icon: "pi pi-tag",
 		to: "/sales/item-prices",
 	},

@@ -12,7 +12,7 @@ PIECE_UOM = "Piece"
 PRICE_TYPES = (
 	{"value": "mrp_rate", "label": _("MRP Rate")},
 	{"value": "rate", "label": _("Distributor Rate")},
-	{"value": "retail_rate", "label": _("Wholesale Price Rate")},
+	{"value": "retail_rate", "label": _("Retail Rate")},
 )
 PRICE_FIELDS = tuple(row["value"] for row in PRICE_TYPES)
 

@@ -20,7 +20,7 @@ class TestSalesItemPriceGrid(TestCase):
 	def test_price_types_map_to_doctype_fields_with_mrp_first(self):
 		self.assertEqual(
 			[(row["value"], row["label"]) for row in item_prices.PRICE_TYPES],
-			[("mrp_rate", "MRP Rate"), ("rate", "Distributor Rate"), ("retail_rate", "Wholesale Price Rate")],
+			[("mrp_rate", "MRP Rate"), ("rate", "Distributor Rate"), ("retail_rate", "Retail Rate")],
 		)
 
 	def test_build_items_groups_variants_by_template_in_size_range_order(self):

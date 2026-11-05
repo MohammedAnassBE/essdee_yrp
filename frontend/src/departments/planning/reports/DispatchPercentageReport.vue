@@ -23,6 +23,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import Button from "primevue/button"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
@@ -67,5 +68,6 @@ function applyPaste() {
 	filters[key] = mergePastedValues(filters[key], pastedText.value)
 	pasteVisible.value = false
 }
+useReportQueryPrefill(filters, ["lot", "item"], generate)
 </script>
 

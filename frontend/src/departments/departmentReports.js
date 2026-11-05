@@ -21,6 +21,7 @@ export function cuttingReportTabs(permissions = {}) {
 export const MERCH_REPORTS = [
 	{ key: "work_in_progress", value: "work-in-progress", label: "Work In Progress", icon: "pi pi-chart-bar" },
 	{ key: "inward_quantity", value: "inward-quantity", label: "Inward Quantity", icon: "pi pi-sign-in" },
+	{ key: "inhouse_quantity", value: "inhouse-quantity", label: "In-house Quantity", icon: "pi pi-building" },
 	{ key: "work_order", value: "work-order", label: "Work Order", icon: "pi pi-briefcase" },
 	{ key: "planning_work_in_progress", value: "planning-work-in-progress", label: "Work In Progress", icon: "pi pi-chart-line" },
 	{ key: "size_wise_stock", value: "size-wise-stock", label: "Size-wise Stock", icon: "pi pi-th-large" },

@@ -12,6 +12,7 @@
 			:default-columns="defaultColumns"
 			:column-labels="columnLabels"
 			:filters="filters"
+			:custom-bulk-actions="bulkActions"
 			viewport-bounded
 			clickable
 			@row-click="openWorkOrder"
@@ -28,8 +29,10 @@
 
 <script setup>
 import Button from "primevue/button"
+import { computed, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 
+import { approveCloseRequests, getWorkOrderClosePermission } from "../../api/planning.js"
 import ListView from "../../components/common/ListView.vue"
 import DocumentStatusBadge from "../../components/documents/DocumentStatusBadge.vue"
 import { openListDocument } from "../../router/listDocumentNavigation.js"
@@ -57,6 +60,29 @@ const statusOptions = [
 	"Closed",
 	"Cancelled",
 ]
+
+/** Approves pending Close Requests; the server reports orders that are not pending as failures. */
+const APPROVE_CLOSE = {
+	action: "approve_close",
+	label: "Approve Close",
+	icon: "pi pi-check-circle",
+	severity: "primary",
+	done: "closed",
+	async run(rows) {
+		const { approved = [], failed = [] } = await approveCloseRequests(rows.map((row) => row.name))
+		return { done: approved, failed: failed.map(({ work_order, error }) => ({ name: work_order, error })) }
+	},
+}
+const canApproveClose = ref(false)
+const bulkActions = computed(() => (canApproveClose.value ? [APPROVE_CLOSE] : []))
+
+onMounted(async () => {
+	try {
+		canApproveClose.value = Boolean((await getWorkOrderClosePermission())?.is_close_manager)
+	} catch {
+		canApproveClose.value = false
+	}
+})
 
 function openWorkOrder(row, snapshot) {
 	return openListDocument(router, row, snapshot, { routeName: props.viewRouteName, paramName: "workOrderId" })

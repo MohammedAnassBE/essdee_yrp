@@ -16,6 +16,8 @@
   "shade",
   "is_cancelled",
   "is_collapsed",
+  "collapsed_voucher_type",
+  "collapsed_voucher_no",
   "collapsed_bundle",
   "transformed",
   "posting_datetime",
@@ -136,6 +138,20 @@
    "label": "Is Collapsed"
   },
   {
+   "fieldname": "collapsed_voucher_type",
+   "fieldtype": "Link",
+   "label": "Collapsed Voucher Type",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "collapsed_voucher_no",
+   "fieldtype": "Dynamic Link",
+   "label": "Collapsed Voucher No",
+   "options": "collapsed_voucher_type",
+   "read_only": 1
+  },
+  {
    "default": "0",
    "fieldname": "is_cancelled",
    "fieldtype": "Check",
@@ -202,7 +218,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-21 00:34:54.303732",
+ "modified": "2026-11-05 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Essdee YRP",
  "name": "SD YRP Cut Bundle Movement Ledger",

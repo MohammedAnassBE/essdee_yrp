@@ -48,6 +48,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import { computed, reactive, ref, watch } from "vue"
 import { getSupplierPendingReport } from "../../../api/planning.js"
 import LinkField from "../../../components/common/LinkField.vue"
@@ -91,6 +92,7 @@ function cellClass(kind, value) {
 	const tone = kind.key === "difference" ? ` supplier-pending__tone--${differenceTone(value?.received, value?.delivered)}` : ""
 	return `report-cell--num report-align-right${tone}`
 }
+useReportQueryPrefill(filters, ["supplier", "process"], load)
 </script>
 
 <style scoped>

@@ -8,6 +8,7 @@ from essdee_yrp.api import cloth_program
 from essdee_yrp.cloth_program_access import has_cloth_program_role
 from essdee_yrp.essdee_yrp.doctype.sd_yrp_lot import sd_yrp_lot
 from essdee_yrp.garment_bom_matrix import is_on_demand_garment_ipd
+from essdee_yrp.merch.lot_process_data import LotFlowData
 from essdee_yrp.purchase import lot_editor, lot_workspace
 from essdee_yrp.web_common import action, assert_expected_modified, parse_mapping, permission_flags
 
@@ -144,6 +145,7 @@ def get_merch_lot_workspace(name: str) -> dict:
 		"details": get_record_facts(doc, lot_workspace.ORDER_DETAIL_FACTS + lot_workspace.BOM_FACTS),
 		"ipd_facts": get_record_facts(doc, IPD_FACTS),
 		"locks": {"order_details": is_order_locked(doc)},
+		"order_pieces": LotFlowData(name).order_pieces(),
 		"bom_additional_items": [
 			{field: row.get(field) for field in BOM_FIELDS} for row in doc.get("bom_additional_items") or []
 		],

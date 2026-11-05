@@ -50,7 +50,7 @@ async function mountList() {
 		"./listStatusFilters.js": listStatusFilters,
 		"./listItemFilters.js": listItemFilters,
 	}
-	for (const name of ["button", "column", "dialog", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
+	for (const name of ["button", "column", "dialog", "inputtext", "menu", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
 	modules["primevue/datatable"] = dataTable
 	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue"]) modules[path] = stub(path)
 	modules["./asyncListParts.js"] = { FormField: stub("./FormField.vue"), UserListviewColumns: stub("./UserListviewColumns.vue"), ListviewFilters: stub("advanced-filters") }

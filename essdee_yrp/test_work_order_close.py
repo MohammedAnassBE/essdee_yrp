@@ -101,29 +101,31 @@ class TestWorkOrderClose(UnitTestCase):
 		doc.check_permission = MagicMock()
 		return doc
 
-	def test_bulk_close_closes_internal_unit_orders_without_approver_role(self):
-		doc = self._request_doc(is_internal_unit=1)
-		frappe.flags.work_order_bulk_close = True
-		self.addCleanup(setattr, frappe.flags, "work_order_bulk_close", None)
-		with (
-			patch.object(frappe.db, "sql"),
-			patch.object(frappe, "get_doc", return_value=doc),
-			patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=False) as manager,
-			patch("essdee_yrp.work_order_close._validate_wo_close", side_effect=frappe.ValidationError("No GRN")),
-		):
-			with self.assertRaisesRegex(frappe.ValidationError, "No GRN"):
-				close_work_order("WO-1", sd_close_reason="NA")
-		manager.assert_not_called()
-		doc.save.assert_not_called()
-
-	def test_bulk_close_of_external_orders_still_needs_the_approver_role(self):
-		for bulk, internal in ((True, 0), (False, 1)):
-			with self.subTest(bulk=bulk, internal=internal):
+	def test_bulk_close_closes_every_order_directly_without_approver_role(self):
+		for internal in (0, 1):
+			with self.subTest(internal=internal):
 				doc = self._request_doc(is_internal_unit=internal)
-				frappe.flags.work_order_bulk_close = bulk
-				frappe.flags.suppress_work_order_close_alert = bulk
+				frappe.flags.work_order_bulk_close = True
 				self.addCleanup(setattr, frappe.flags, "work_order_bulk_close", None)
-				self.addCleanup(setattr, frappe.flags, "suppress_work_order_close_alert", None)
+				with (
+					patch.object(frappe.db, "sql"),
+					patch.object(frappe, "get_doc", return_value=doc),
+					patch("essdee_yrp.work_order_close._is_wo_close_manager", return_value=False) as manager,
+					patch(
+						"essdee_yrp.work_order_close._validate_wo_close",
+						side_effect=frappe.ValidationError("No GRN"),
+					),
+				):
+					with self.assertRaisesRegex(frappe.ValidationError, "No GRN"):
+						close_work_order("WO-1", sd_close_reason="NA")
+				manager.assert_not_called()
+				doc.save.assert_not_called()
+
+	def test_single_close_without_approver_role_creates_a_close_request(self):
+		for internal in (0, 1):
+			with self.subTest(internal=internal):
+				doc = self._request_doc(is_internal_unit=internal)
+				frappe.flags.work_order_bulk_close = None
 				with (
 					patch.object(frappe.db, "sql"),
 					patch.object(frappe, "get_doc", return_value=doc),
@@ -132,7 +134,7 @@ class TestWorkOrderClose(UnitTestCase):
 				):
 					result = close_work_order("WO-1", sd_close_reason="NA")
 				self.assertEqual(result["status"], "Close Request")
-				self.assertEqual(message.called, not bulk)
+				self.assertTrue(message.called)
 
 	def test_close_requires_internal_transfers_to_be_complete(self):
 		for doctype, label in (("YRP Delivery Challan", "Delivery Challan DC-1"), ("YRP Goods Received Note", "GRN DC-1")):

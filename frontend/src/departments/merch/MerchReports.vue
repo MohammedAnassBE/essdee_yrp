@@ -23,6 +23,7 @@ import { departments } from "../registry.js"
 const COMPONENTS = {
 	work_in_progress: defineAsyncComponent(() => import("./reports/WorkInProgressReport.vue")),
 	inward_quantity: defineAsyncComponent(() => import("../planning/reports/InwardQuantityReport.vue")),
+	inhouse_quantity: defineAsyncComponent(() => import("../planning/reports/InhouseQuantityReport.vue")),
 	work_order: defineAsyncComponent(() => import("../planning/reports/WorkOrderReport.vue")),
 	planning_work_in_progress: defineAsyncComponent(() => import("../planning/reports/WorkInProgressReport.vue")),
 	size_wise_stock: defineAsyncComponent(() => import("../planning/reports/SizeWiseStockReport.vue")),

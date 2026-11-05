@@ -22,6 +22,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
 import LinkField from "../../../components/common/LinkField.vue"
@@ -52,6 +53,7 @@ function paste({ target, names }) { filters[target] = mergeNames(filters[target]
 function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request, { process_list: typeof request.process_list === "string" ? JSON.parse(request.process_list) : request.process_list || [] }) }, { flush: "sync" })
+useReportQueryPrefill(filters, ["lot", "item", "process_list"], generate)
 </script>
 
 <style scoped>

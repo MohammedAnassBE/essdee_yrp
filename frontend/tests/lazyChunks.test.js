@@ -215,9 +215,9 @@ async function mountListView({ loadFormField = async () => ({}), bulkUpdates = [
 		"./listItemFilters.js": listItemFilters,
 		"./asyncListParts.js": { FormField: stub("form-field"), loadFormField, UserListviewColumns: stub("columns-dialog"), ListviewFilters: stub("filters-dialog") },
 	}
-	for (const name of ["button", "column", "datatable", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
+	for (const name of ["button", "column", "datatable", "inputtext", "menu", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
 	modules["primevue/dialog"] = dialogStub
-	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
+	for (const path of ["../documents/DocumentConfirmationDialog.vue", "./ListBulkResultDialog.vue", "../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue", "./ListviewQuickFilters.vue"]) modules[path] = stub(path)
 	const root = mountComponent(loadComponent("frontend/src/components/common/ListView.vue", modules), Vue.reactive({ doctype: "Entry", navigationEnabled: false }))
 	for (let index = 0; index < 4; index += 1) await tick()
 	return {
@@ -256,9 +256,9 @@ test("bulk Update stays disabled and inert until the lazy value editor has loade
 	try {
 		list.find("datatable").props["onUpdate:selection"]([{ name: "ENT-1", lot: "L1" }])
 		await tick()
-		const edit = list.button("Edit")
-		assert.ok(edit, "bulk Edit button")
-		edit.props.onClick()
+		const edit = list.find("menu").props.model.find((item) => item.label === "Edit")
+		assert.ok(edit, "bulk Edit action")
+		edit.command()
 		for (let index = 0; index < 3; index += 1) await tick()
 		const update = () => list.button("Update 1 record")
 		assert.equal(update().props.disabled, true)

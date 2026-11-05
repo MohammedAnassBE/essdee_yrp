@@ -23,6 +23,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import Select from "primevue/select"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { callMethod } from "../../../api/frappe.js"
@@ -65,6 +66,7 @@ async function loadDefaults() {
 	catch (error) { defaultsError.value = error.message || "Unable to load the default process." }
 }
 onMounted(loadDefaults)
+useReportQueryPrefill(filters, ["lot", "item", "process"], generate)
 </script>
 
 <style scoped>

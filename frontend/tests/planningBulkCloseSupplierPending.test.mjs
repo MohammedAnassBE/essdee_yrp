@@ -32,13 +32,13 @@ test("Supplier Pending Report sits under Planning reports and Bulk Close leaves 
 })
 
 test("bulk close outcome lists every failed Work Order for the result dialog", () => {
-	const results = [{ work_order: "WO-1", open_status: "Close" }, { work_order: "WO-2", open_status: "Close Request" }]
+	const results = [{ work_order: "WO-1", open_status: "Close" }]
 	assert.deepEqual(bulkCloseOutcome(results, [{ work_order: "WO-3", error: "No GRN" }]), {
-		closed: 1, requested: 1, failed: [{ work_order: "WO-3", error: "No GRN" }],
-		summary: "1 Work Order closed; 1 close request submitted.", failedLabel: "1 Work Order failed:",
+		closed: 1, failed: [{ work_order: "WO-3", error: "No GRN" }],
+		summary: "1 Work Order closed.", failedLabel: "1 Work Order failed:",
 	})
 	const clean = bulkCloseOutcome([results[0], { work_order: "WO-4", open_status: "Close" }], [])
-	assert.equal(clean.summary, "2 Work Orders closed; 0 close requests submitted.")
+	assert.equal(clean.summary, "2 Work Orders closed.")
 	assert.equal(clean.failed.length, 0)
 	assert.equal(bulkCloseOutcome([], [{}, {}]).failedLabel, "2 Work Orders failed:")
 })
@@ -65,6 +65,7 @@ test("Supplier Pending Report renders lot rows, totals and DD-MM-YYYY dates", as
 	const calls = []
 	const component = loadComponent(new URL("../src/departments/planning/reports/SupplierPendingReport.vue", import.meta.url).pathname, {
 		"./supplierPending.js": { differenceTone, supplierPendingHint },
+		"../../../composables/useReportQueryPrefill.js": { useReportQueryPrefill() {} },
 		"../../../api/planning.js": { getSupplierPendingReport: async (...args) => { calls.push(args); return payload } },
 		"../../../components/common/LinkField.vue": (props) => Vue.h("link", props),
 		"../../../components/reports/ReportShell.vue": (props, { slots, attrs }) => { shell = { props, attrs }; return Vue.h("shell", props, [slots.filters?.(), slots.default?.()]) },

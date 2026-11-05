@@ -16,6 +16,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import Button from "primevue/button"
 import { computed, reactive, watch } from "vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
@@ -42,4 +43,5 @@ function rebuild() { if (!hint.value) return generateReport(requestFilters(), { 
 function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request) }, { flush: "sync" })
+useReportQueryPrefill(filters, ["lot", "process"], generate)
 </script>

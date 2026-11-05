@@ -101,9 +101,12 @@ class TestMerchLotWorkspace(TestCase):
 				f"{MODULE}.lot_workspace.get_facts",
 				side_effect=lambda doc, fields: [{"fieldname": field, "value": 10} for field in fields],
 			),
+			patch(f"{MODULE}.LotFlowData") as flow,
 		):
+			flow.return_value.order_pieces.return_value = {"values": {"S": 5}, "total": 5}
 			self.permissions.return_value = False
 			payload = self.original_workspace(self.doc.name)
+			self.assertEqual(payload["order_pieces"]["total"], 5)
 			self.assertFalse(payload["permissions"]["can_write"])
 			self.assertTrue(payload["has_cloth_program"])
 			self.assertFalse(payload["capabilities"]["edit"]["allowed"])

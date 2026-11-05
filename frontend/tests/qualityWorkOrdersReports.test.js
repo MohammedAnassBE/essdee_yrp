@@ -28,6 +28,7 @@ function workOrderList(basePath, { processes = async () => ["Stitching", "Finish
 	const requests = [], navigations = []
 	const workOrders = loadComponent(resolve("frontend/src/departments/fabric-store/FabricWorkOrders.vue"), {
 		"primevue/button": Button, "vue-router": { useRouter: () => ({ push: (to) => navigations.push(to) }) },
+		"../../api/planning.js": { getWorkOrderClosePermission: async () => ({}), approveCloseRequests: async () => ({}) },
 		"../../components/common/ListView.vue": (props, { slots }) => Vue.h("list", props, slots["toolbar-actions"]?.()),
 		"../../components/documents/DocumentStatusBadge.vue": stub("badge"),
 		"../../router/listDocumentNavigation.js": { openListDocument: (_router, row, _snapshot, options) => navigations.push({ name: options.routeName, params: { [options.paramName]: row.name } }) },

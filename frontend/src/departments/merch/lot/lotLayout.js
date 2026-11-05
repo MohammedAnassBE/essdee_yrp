@@ -8,12 +8,14 @@ export const LOT_TABS = [
 	{ key: "bom", label: "BOM" },
 ]
 
+export const LOT_VIEW_TABS = LOT_TABS.map((tab) => (tab.key === "lot" ? { ...tab, label: "Summary" } : tab))
+
 const LEGACY_LOT_TABS = {
 	details: { tab: "lot" },
 	"order-items": { tab: "lot" },
 	"order-details": { tab: "lot", section: "order-details" },
 	ppo: { tab: "lot", section: "ppo" },
-	ocr: { tab: "lot", section: "ocr" },
+	ocr: { tab: "lot", section: "process-flow" },
 }
 
 export const LOT_SECTIONS = [
@@ -23,6 +25,7 @@ export const LOT_SECTIONS = [
 	{ key: "ppo", eyebrow: "PPO", label: "Linked Production Order" },
 	{ key: "transfer", eyebrow: "Transfer", label: "Lot Transfer" },
 	{ key: "ocr", eyebrow: "OCR", label: "OCR Detail" },
+	{ key: "process-flow", eyebrow: "Process flow", label: "Where this lot is" },
 ]
 
 export const LOT_HEADER_GROUPS = [
@@ -32,13 +35,6 @@ export const LOT_HEADER_GROUPS = [
 		icon: "pi pi-shopping-bag",
 		description: "Order, item and ownership",
 		fields: ["production_order", "item", "production_detail", "season", "assigned_person", "expected_delivery_date"],
-	},
-	{
-		key: "production",
-		label: "Production settings",
-		icon: "pi pi-cog",
-		description: "Sizes, version and capacity",
-		fields: ["size_set_colour", "primary_item_attribute", "version", "capacity_planning"],
 	},
 ]
 export const LOT_ORDER_DETAIL_FIELDS = ["pack_in_stage", "packing_uom", "total_order_quantity"]
@@ -63,10 +59,6 @@ export function resolveLotTab(key, tabs = LOT_TABS) {
 /** Ordered collapsible sections whose `visible[key]` is truthy, with optional counts. */
 export function lotSections(visible = {}, counts = {}) {
 	return LOT_SECTIONS.filter((section) => visible[section.key]).map((section) => ({ ...section, count: counts[section.key] ?? null }))
-}
-
-export function hasLotOcr(ocr) {
-	return Boolean(ocr) && (Object.keys(ocr.processes || {}).length > 0 || Number(ocr.total_dispatch) > 0)
 }
 
 export function hasLotTransfer(values = {}) {

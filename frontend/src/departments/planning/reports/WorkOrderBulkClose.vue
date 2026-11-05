@@ -58,7 +58,7 @@
 			</div>
 			<template #footer><Button label="Cancel" text severity="secondary" :disabled="busy" @click="closeVisible = false" /><Button label="Review and confirm" :disabled="Boolean(reasonHint) || busy" @click="requestConfirmation" /></template>
 		</Dialog>
-		<DocumentConfirmationDialog v-model:visible="confirmVisible" title="Confirm Work Order close" :message="`Submit close for ${closeNames.join(', ')}? Depending on your role, this may create a Close Request for approval.`" confirm-label="Close Selected" cancel-label="Keep reviewing" :busy="busy" @confirm="confirmClose" />
+		<DocumentConfirmationDialog v-model:visible="confirmVisible" title="Confirm Work Order close" :message="`Close ${closeNames.join(', ')} now? Leftover stock is written off; no Close Request is created.`" confirm-label="Close Selected" cancel-label="Keep reviewing" :busy="busy" @confirm="confirmClose" />
 		<DocumentErrorDialog :message="actionError" @dismiss="actionError = ''" />
 		<Dialog v-model:visible="outcomeVisible" modal header="Bulk Close Result" class="erp-dialog--md">
 			<div v-if="outcome" class="bulk-close-details" role="alert">
@@ -216,7 +216,7 @@ async function confirmClose() {
 			outcome.value = result
 			outcomeVisible.value = true
 		} else {
-			toast.add({ severity: result.requested ? "warn" : "success", summary: "Bulk Close", detail: result.summary, life: 8000 })
+			toast.add({ severity: "success", summary: "Bulk Close", detail: result.summary, life: 8000 })
 		}
 		closeVisible.value = false
 		confirmVisible.value = false

@@ -15,6 +15,14 @@ export function closeWorkOrders(workOrders, values) {
 	return callMethod(`${BULK_CLOSE_METHOD}.close_work_orders`, { work_orders: workOrders, ...values })
 }
 
+export function approveCloseRequests(workOrders) {
+	return callMethod(`${BULK_CLOSE_METHOD}.approve_close_requests`, { work_orders: workOrders })
+}
+
+export function getWorkOrderClosePermission() {
+	return callRead("yrp.yrp.doctype.yrp_work_order.yrp_work_order.get_close_permission")
+}
+
 export function getSupplierPendingReport(supplier, process) {
 	return callMethod("essdee_yrp.planning.reports.supplier_pending.get_supplier_pending_report", { supplier, process })
 }
@@ -25,6 +33,18 @@ export function getPlanningCapabilities() {
 
 export function getLotWorkspace(name) {
 	return callMethod(`${LOT_METHOD}.get_lot_workspace`, { name })
+}
+
+export function getLotProcessFlow(lot) {
+	return callRead(`${LOT_METHOD}.get_lot_process_flow`, { lot })
+}
+
+export function getLotStepDetail(lot, key) {
+	return callRead(`${LOT_METHOD}.get_lot_step_detail`, { lot, key })
+}
+
+export function getLotWorkOrderDetail(workOrder) {
+	return callRead(`${LOT_METHOD}.get_lot_work_order_detail`, { work_order: workOrder })
 }
 
 export function getLotDocuments(lot) {

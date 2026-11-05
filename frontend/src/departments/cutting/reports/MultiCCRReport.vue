@@ -12,7 +12,7 @@
 			<AsyncLinkMultiSelect v-model="filters.lots" doctype="SD YRP Lot" label="Lots" placeholder="Search lots…" />
 			<AsyncLinkMultiSelect v-model="filters.items" doctype="Item" label="Items" placeholder="Search items…" />
 			<label><span class="erp-field-label">Status</span><select class="erp-native-select" v-model="filters.status"><option value="">All statuses</option><option value="Open">Open</option><option value="Closed">Closed</option></select></label>
-			<LinkField v-model="filters.category" doctype="Product Category" label="Product category" placeholder="Search category…" :show-open-button="false" show-clear />
+			<LinkField v-model="filters.category" doctype="SD YRP Product Category" label="Product category" placeholder="Search category…" :show-open-button="false" show-clear />
 		</template>
 
 		<template #metrics>
@@ -75,6 +75,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import { computed, reactive, ref } from "vue"
 
 import { getMultiCcrReport } from "../../../api/cuttingReports.js"
@@ -124,6 +125,8 @@ function reset() {
 	generated.value = false
 	error.value = ""
 }
+// A Lot link clears the default category so the chosen Lot is not filtered out.
+useReportQueryPrefill(filters, ["lots", "items"], () => { filters.category = ""; generate() })
 </script>
 
 <style scoped>

@@ -27,6 +27,7 @@ test("Merch Work In Progress renders a report-table with typed cells and a shade
 		"../../../components/reports/PasteListDialog.vue": stub(),
 		"../../../components/reports/ReportFilterRow.vue": () => null,
 		"../../../components/reports/pasteValues.js": { mergeNames: (left) => left },
+		"../../../composables/useReportQueryPrefill.js": { useReportQueryPrefill() {} },
 		"../../../composables/useWebReport.js": { useWebReport: () => report },
 		"../../../composables/useInlineFilters.js": inlineFilters,
 		"./WipLinkMultiSelect.vue": stub(),

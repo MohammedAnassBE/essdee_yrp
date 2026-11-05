@@ -840,3 +840,8 @@
 .lot-facts dd { overflow: hidden; margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-md); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 /* No rowspan: equal cell counts per row keep v-entry-table's up/down arrows in the same size column. */
 .lot-order-quantities tbody tr:not(:last-child) .lot-order-quantities__lead { border-bottom-color: transparent; }
+.planning-lot-frame .lot-main .document-overview { grid-template-columns: 1fr; }
+.planning-lot-frame .lot-main .document-overview__facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .planning-lot-frame .lot-main .document-overview__facts { grid-template-columns: 1fr; } }
+.planning-lot-frame .lot-pieces td { background: var(--erp-surface-soft); font-weight: 600; }
+.planning-lot-frame .lot-pieces-note { margin: 0; padding: 7px 13px 9px; color: var(--erp-text-muted); font-size: 11px; }

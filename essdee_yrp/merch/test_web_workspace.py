@@ -38,7 +38,8 @@ class TestMerchWebWorkspace(TestCase):
 
 	def test_shared_reports_reuse_source_department_access(self):
 		self.assertEqual({key: label for key, (label, _access) in web_workspace.REPORTS.items()}, {
-			"work_in_progress": "Work In Progress", "inward_quantity": "Inward Quantity", "work_order": "Work Order",
+			"work_in_progress": "Work In Progress", "inward_quantity": "Inward Quantity",
+			"inhouse_quantity": "In-house Quantity", "work_order": "Work Order",
 			"planning_work_in_progress": "Work In Progress", "size_wise_stock": "Size-wise Stock",
 			"multi_ccr": "Multi CCR", "ppo_report": "PPO Report",
 		})

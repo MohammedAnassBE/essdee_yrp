@@ -43,6 +43,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import Select from "primevue/select"
 import { computed, reactive, ref, watch } from "vue"
 import DateField from "../../../components/common/DateField.vue"
@@ -75,6 +76,7 @@ function generate() {
 }
 function reset() { Object.assign(filters, defaults()); errors.value = {}; report.clear() }
 function paste({ target, names }) { filters[target] = mergeNames(filters[target], names) }
+useReportQueryPrefill(filters, ["lot", "item", "process_list"], generate)
 </script>
 
 <style scoped>

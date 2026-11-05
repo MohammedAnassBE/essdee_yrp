@@ -48,3 +48,8 @@
 	}
 }
 .lot-main__action { justify-self: start; }
+.merch-lot-frame .lot-main .document-overview { grid-template-columns: 1fr; }
+.merch-lot-frame .lot-main .document-overview__facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .merch-lot-frame .lot-main .document-overview__facts { grid-template-columns: 1fr; } }
+.lot-pieces td { background: var(--erp-surface-soft); font-weight: 600; }
+.lot-pieces-note { margin: 0; padding: 7px 13px 9px; color: var(--erp-text-muted); font-size: 11px; }

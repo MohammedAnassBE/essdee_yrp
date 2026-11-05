@@ -19,6 +19,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../../composables/useReportQueryPrefill.js"
 import { computed, reactive, ref, watch } from "vue"
 import ReportShell from "../../../components/reports/ReportShell.vue"
 import ReportRunStatus from "../../../components/reports/ReportRunStatus.vue"
@@ -50,4 +51,5 @@ function reset() { Object.assign(filters, defaultFilters()); clear() }
 watch(filters, () => filtersChanged(requestFilters()), { deep: true })
 watch(activeFilters, (request) => { if (request) Object.assign(filters, defaultFilters(), request) }, { flush: "sync" })
 const itemGroups = computed(() => [...new Set(rows.value.map((row) => row.item))].map((item) => ({ item, rows: rows.value.filter((row) => row.item === item) })))
+useReportQueryPrefill(filters, ["lot", "item"], generate)
 </script>

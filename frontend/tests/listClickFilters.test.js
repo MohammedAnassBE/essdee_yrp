@@ -58,7 +58,7 @@ async function mountList(props = {}) {
 		"./listStatusFilters.js": listStatusFilters,
 		"./listItemFilters.js": listItemFilters,
 	}
-	for (const name of ["button", "dialog", "inputtext", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
+	for (const name of ["button", "dialog", "inputtext", "menu", "message", "paginator", "select"]) modules[`primevue/${name}`] = stub(name)
 	modules["primevue/column"] = stub("column")
 	modules["primevue/datatable"] = dataTable
 	for (const path of ["../documents/DocumentStatusBadge.vue", "../navigation/InlinePageNavigation.vue"]) modules[path] = stub(path)

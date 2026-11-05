@@ -171,9 +171,28 @@ class TestPlanningLotWrappers(TestCase):
 			save.assert_not_called()
 
 	def test_workspace_delegates(self):
-		with patch.object(lot_workspace.purchase_lot_workspace, "get_lot_workspace", return_value={"name": "LOT-1"}) as source:
-			self.assertEqual(lot_workspace.get_lot_workspace("LOT-1"), {"name": "LOT-1"})
+		with (
+			patch.object(lot_workspace.purchase_lot_workspace, "get_lot_workspace", return_value={"name": "LOT-1"}) as source,
+			patch.object(lot_workspace, "LotFlowData") as flow,
+			patch.object(lot_workspace.merch_lot_workspace, "get_record_facts", return_value=[{"fieldname": "season", "value": None}]),
+		):
+			flow.return_value.order_pieces.return_value = {"values": {"S": 5}, "total": 5}
+			self.assertEqual(lot_workspace.get_lot_workspace("LOT-1"), {
+				"name": "LOT-1", "header": [{"fieldname": "season", "value": None}], "order_pieces": {"values": {"S": 5}, "total": 5},
+			})
 			source.assert_called_once_with("LOT-1")
+			flow.assert_called_once_with("LOT-1")
+
+	def test_process_flow_wrappers_delegate_to_shared_endpoints(self):
+		cases = (
+			("get_lot_process_flow", "get_process_flow", ("LOT-1",)),
+			("get_lot_step_detail", "get_step_detail", ("LOT-1", "Cutting")),
+			("get_lot_work_order_detail", "get_work_order_detail", ("WO-1",)),
+		)
+		for wrapper, method, arguments in cases:
+			with self.subTest(wrapper=wrapper), patch.object(lot_workspace.lot_process_flow, method, return_value={"ok": True}) as source:
+				self.assertEqual(getattr(lot_workspace, wrapper)(*arguments), {"ok": True})
+				source.assert_called_once_with(*arguments)
 
 	def test_save_delegates_with_modified_timestamp(self):
 		values = {"status": "Open"}

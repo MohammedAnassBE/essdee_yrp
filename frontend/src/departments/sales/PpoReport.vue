@@ -114,6 +114,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../composables/useReportQueryPrefill.js"
 import Button from "primevue/button"
 import Checkbox from "primevue/checkbox"
 import Select from "primevue/select"
@@ -264,6 +265,7 @@ function reset() {
 	Object.keys(dispatchByOrder).forEach((key) => delete dispatchByOrder[key])
 	error.value = ""
 }
+useReportQueryPrefill(filters, ["items"], generate)
 </script>
 
 <style scoped>

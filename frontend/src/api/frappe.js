@@ -354,7 +354,8 @@ export async function getList(
 		limit_page_length: pageLength,
 	}
 	const url = `/api/resource/${encodeURIComponent(doctype)}${queryString(params)}`
-	if (url.length > 6000) return await callRead("frappe.client.get_list", { doctype, ...params }) || []
+	// gunicorn rejects request lines over 4094 bytes with 400
+	if (url.length > 3500) return await callRead("frappe.client.get_list", { doctype, ...params }) || []
 	const payload = await request(url, { method: "GET" })
 	return payload.data || []
 }

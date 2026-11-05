@@ -21,6 +21,21 @@ test("getList keeps short GETs and posts large variant filters with identical ar
 	} finally { globalThis.window = previousWindow; globalThis.fetch = previousFetch }
 })
 
+test("getList posts filters whose GET line would exceed gunicorn's 4094-byte limit", async () => {
+	const previousWindow = globalThis.window, previousFetch = globalThis.fetch
+	globalThis.window = { csrf_token: "token" }
+	const requests = []
+	globalThis.fetch = async (url, options) => {
+		requests.push({ url, options })
+		return { ok: true, status: 200, json: async () => ({ message: [] }) }
+	}
+	try {
+		const variants = Array.from({ length: 73 }, (_, i) => `Premium Black Thermal Pyjama Mens 12900-Bottom Left-Black-${i}`)
+		await getList("SD YRP Cutting Plan", { filters: [["SD YRP Cutting Plan", "item", "in", variants]] })
+		assert.equal(requests[0].options.method, "POST")
+	} finally { globalThis.window = previousWindow; globalThis.fetch = previousFetch }
+})
+
 test("getList groups by parent name and getCount counts distinct parents when asked", async () => {
 	const previousWindow = globalThis.window, previousFetch = globalThis.fetch
 	globalThis.window = { csrf_token: "token" }

@@ -22,6 +22,7 @@ const lotCutCapability = { label: "Lot Cut Quantity", can_read: true, can_report
 test("Lot Cut Quantity offers Copy Report", async () => {
 	const shellProps = []
 	const component = loadComponent(new URL("../src/components/reports/LotCutQuantityReport.vue", import.meta.url).pathname, {
+		"../../composables/useReportQueryPrefill.js": { useReportQueryPrefill() {} },
 		"../../api/purchaseReports.js": { getLotCutQuantity: async () => ({ lots: [] }) },
 		"../../departments/cutting/CuttingCompletedReport.vue": () => null,
 		"../../departments/cutting/cuttingCompletedReport.js": { normaliseCompletedGroups: () => [] },

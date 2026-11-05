@@ -66,6 +66,7 @@
 </template>
 
 <script setup>
+import { useReportQueryPrefill } from "../../composables/useReportQueryPrefill.js"
 import Button from "primevue/button"
 import { FilterService } from "@primevue/core/api"
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue"
@@ -192,6 +193,7 @@ async function loadDimensions() {
 		dimensions.value = await callMethod("yrp.yrp_stock.report.yrp_stock_balance.yrp_stock_balance.get_filter_dimensions") || []
 		restoreFilters(activeFilters.value)
 		dimensionsLoaded.value = true
+		applyLinkedLot()
 	} catch (error) { filterError.value = error.message || "Could not load stock dimensions." }
 }
 
@@ -201,6 +203,14 @@ watch(filters, () => {
 watch(activeFilters, restoreFilters, { flush: "sync" })
 onMounted(loadLayout)
 onMounted(loadDimensions)
+// A Lot link filters the "lot" stock dimension once the dimensions have loaded.
+const linkedLot = reactive({ lot: [] })
+function applyLinkedLot() {
+	if (!linkedLot.lot.length || !dimensions.value.some((dimension) => dimension.fieldname === "lot")) return
+	filters.dimensions = { ...filters.dimensions, lot: [...linkedLot.lot] }
+	generate()
+}
+useReportQueryPrefill(linkedLot, ["lot"], () => { if (dimensionsLoaded.value) applyLinkedLot() })
 </script>
 
 <style scoped>

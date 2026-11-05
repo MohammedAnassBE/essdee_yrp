@@ -42,7 +42,7 @@ const active = ref(0)
 const listHeight = ref(420)
 const matches = computed(() => filterReports(props.reports, query.value))
 const href = (report) => reportHref(REPORTS_PATH, report, props.context)
-const prefillText = (report) => reportPrefill(report, props.context).map((filter) => `${filter.label} ${filter.value}`).join(" · ") || "No filters from this step"
+const prefillText = (report) => reportPrefill(report, props.context).map((filter) => `${filter.label} ${filter.value || "any"}`).join(" · ") || "No filters from this step"
 watch(query, () => { active.value = 0 })
 function toggle(event) {
 	listHeight.value = reportsListHeight(trigger.value.getBoundingClientRect(), window.innerHeight)

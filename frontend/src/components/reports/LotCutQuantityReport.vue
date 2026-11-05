@@ -67,7 +67,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue"
+import { useReportQueryPrefill } from "../../composables/useReportQueryPrefill.js"
+import { computed, reactive, ref } from "vue"
 
 import { getLotCutQuantity } from "../../api/purchaseReports.js"
 import CuttingCompletedReport from "../../departments/cutting/CuttingCompletedReport.vue"
@@ -141,6 +142,8 @@ function firstPlanItem(lot) {
 function planDoc(lot, plan) {
 	return { name: plan.name, lot: lot.lot, item: plan.item, version: plan.version }
 }
+const linkedLot = reactive({ lot: [] })
+useReportQueryPrefill(linkedLot, ["lot"], () => { selectedLots.value = [...linkedLot.lot]; generate() })
 </script>
 
 <style scoped>

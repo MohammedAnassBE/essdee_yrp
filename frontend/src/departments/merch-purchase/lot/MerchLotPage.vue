@@ -42,23 +42,20 @@
 					</Message>
 					<Tabs v-model:value="activeTab" scrollable class="lot-tabs erp-tabs">
 						<TabList class="lot-tablist">
-							<Tab v-for="tab in LOT_TABS" :key="tab.key" :value="tab.key">
+							<Tab v-for="tab in LOT_VIEW_TABS" :key="tab.key" :value="tab.key">
 								{{ tab.label }}
 								<span v-if="lotTabCount(workspace, tab.key) !== null">{{ lotTabCount(workspace, tab.key) }}</span>
 							</Tab>
 						</TabList>
 						<TabPanels class="lot-panels">
 							<TabPanel v-if="activeTab === 'lot'" value="lot">
-								<LotViewMain v-model:expanded="expanded" :workspace="workspace" :scroll-to="scrollTo" :has-ppo="Boolean(workspace.ppo)" include-empty>
+								<LotViewMain v-model:expanded="expanded" :workspace="workspace" :scroll-to="scrollTo" include-empty>
 									<template #quantities-actions>
 										<Message v-if="workspace.locks?.order_details" severity="warn" :closable="false">Locked: Time &amp; Action exists or the Lot was transferred.</Message>
 										<Button v-if="workspace.permissions?.can_write" class="lot-main__action" label="Change box quantity" icon="pi pi-pencil" severity="secondary" text @click="openEditor('lot')" />
 									</template>
 									<template #order-details-actions>
 										<Button v-if="workspace.permissions?.can_write" class="lot-main__action" label="Edit Lot Order Details" icon="pi pi-pencil" severity="secondary" text @click="openEditor('order-details')" />
-									</template>
-									<template #ppo>
-										<MerchLotPpoPanel :ppo="workspace.ppo" :item="header.item" :capability="workspace.capabilities?.change_ppo" :acting="Boolean(acting)" show-panel @update:visible="ppoVisible = $event" />
 									</template>
 								</LotViewMain>
 							</TabPanel>
@@ -153,7 +150,7 @@ import LotIdentity from "./LotIdentity.vue"
 import LotBomPanel from "./LotBomPanel.vue"
 import LotViewMain from "./LotViewMain.vue"
 import { editTabFor } from "./lotEditor.js"
-import { LOT_TABS } from "./lotLayout.js"
+import { LOT_TABS, LOT_VIEW_TABS } from "./lotLayout.js"
 import { lotTabCount } from "./lotViews.js"
 import { useLotLayout } from "./useLotLayout.js"
 import ClothProgramBuildDialog from "./ClothProgramBuildDialog.vue"
@@ -196,6 +193,7 @@ const shellWorkspace = computed(() =>
 	workspace.value.name ? { record: { ...workspace.value, doctype: "SD YRP Lot" } } : {},
 )
 const { activeTab, expanded, scrollTo } = useLotLayout(LOT_TABS, useRoute(), router)
+if (!expanded.value.includes("process-flow")) expanded.value = [...expanded.value, "process-flow"]
 const duplicateAction = useDuplicateAction({
 	canCreate: () => workspace.value.permissions?.can_create,
 	newRouteName: MERCH_PURCHASE_ROUTES.lotNew,

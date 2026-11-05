@@ -192,14 +192,14 @@
   "render_mode": "Registered Experience"
  },
  {
-  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"production_orders\",\n   \"reports\"\n  ]\n }\n}",
-  "description": "/web Sales department workspace only: production_orders, reports.",
+  "config": "{\n \"schema_version\": 1,\n \"experience_props\": {\n  \"workspaces\": [\n   \"production_orders\",\n   \"item_prices\",\n   \"reports\"\n  ]\n }\n}",
+  "description": "/web Sales department workspace only: production_orders, item_prices, reports.",
   "disabled": 0,
   "docstatus": 0,
   "doctype": "YRP UI Layout",
   "experience_key": "sales",
   "layout_name": "Sales",
-  "modified": "2026-10-15 10:10:21.284330",
+  "modified": "2026-11-05 15:00:00.000000",
   "name": "Sales",
   "render_mode": "Registered Experience"
  },

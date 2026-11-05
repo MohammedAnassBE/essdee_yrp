@@ -50,6 +50,7 @@ const SalesSection = () => import("../departments/sales/SalesSection.vue")
 const ProductionOrder = () => import("../departments/sales/ProductionOrder.vue")
 const ProductionOrderEditorPage = () => import("../departments/sales/ProductionOrderEditorPage.vue")
 const SalesReports = () => import("../departments/sales/SalesReports.vue")
+const SalesItemPricePage = () => import("../departments/sales/SalesItemPrice.vue")
 const PdSection = () => import("../departments/pd/PdSection.vue")
 const ProductPage = () => import("../departments/pd/ProductPage.vue")
 const ProductReleasePage = () => import("../departments/pd/ProductReleasePage.vue")
@@ -300,6 +301,7 @@ const routes = [
 	{ path: "/sales/production-orders/new", name: "sales-production-order-new", component: ProductionOrderEditorPage },
 	{ path: "/sales/production-orders/:productionOrderId/edit", name: "sales-production-order-edit", component: ProductionOrderEditorPage, props: true },
 	{ path: "/sales/production-orders/:productionOrderId", name: "sales-production-order", component: ProductionOrder, props: true },
+	{ path: "/sales/item-prices", name: "sales-item-prices", component: SalesItemPricePage },
 	{ path: "/sales/reports", name: "sales-reports", component: SalesReports },
 	{ path: "/pd/products", name: PD_ROUTES.products, component: PdSection, props: { section: "products" } },
 	{ path: "/pd/products/new", name: PD_ROUTES.productNew, component: ProductPage },

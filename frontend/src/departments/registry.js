@@ -98,7 +98,7 @@ export const departments = [
 		label: "Sales",
 		shortLabel: "SA",
 		path: "/sales",
-		sections: { production_orders: "production-orders", reports: "reports" },
+		sections: { production_orders: "production-orders", item_prices: "item-prices", reports: "reports" },
 		component: () => import("./Sales.vue"),
 	},
 	{

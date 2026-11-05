@@ -268,6 +268,17 @@ class TestSalesWebWorkspace(TestCase):
 			},
 		)
 
+	def test_item_prices_section_follows_sales_item_price_permissions(self):
+		price = "SD YRP Sales Item Price"
+		payload = self._capabilities({("YRP Production Order", "read"), (price, "read"), (price, "write")})
+		self.assertEqual(
+			payload["sections"]["item_prices"],
+			{"label": "Sales Item Price", "can_read": True, "can_write": True, "can_create": False},
+		)
+		payload = self._capabilities({(price, "read")})
+		self.assertEqual(set(payload["sections"]), {"item_prices"})
+		self.assertNotIn("item_prices", self._capabilities({("YRP Production Order", "read")})["sections"])
+
 	def test_report_permission_is_independent_from_document_write_permissions(self):
 		payload = self._capabilities({("YRP Production Order", "read"), ("YRP Production Order", "report")})
 		self.assertEqual(set(payload["sections"]), {"production_orders", "reports"})

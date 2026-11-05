@@ -626,6 +626,35 @@ class TestFabricStoreWorkOrder(TestCase):
 				capabilities = _capability_candidates(doc, {}, {}, {})
 				self.assertEqual(capabilities["create_debit"]["eligible"], expected)
 
+	def test_reopen_capability_is_for_system_managers_on_closed_orders(self):
+		from essdee_yrp.fabric_store.documents.work_order import _capability_candidates
+
+		for docstatus, open_status, roles, expected in (
+			(1, "Close", ["System Manager"], True),
+			(1, "Close", ["Merch Manager"], False),
+			(1, "Open", ["System Manager"], False),
+			(1, "Close Request", ["System Manager"], False),
+			(2, "Close", ["System Manager"], False),
+		):
+			with self.subTest(docstatus=docstatus, open_status=open_status, roles=roles), patch(
+				"essdee_yrp.fabric_store.documents.work_order.frappe.get_roles", return_value=roles
+			):
+				doc = self.make_document(docstatus=docstatus, open_status=open_status)
+				capabilities = _capability_candidates(doc, {}, {}, {})
+				self.assertEqual(capabilities["reopen"]["eligible"], expected)
+
+	def test_reopen_command_delegates_to_owner_service(self):
+		doc = self.make_document(docstatus=1, open_status="Close")
+		refreshed = {"record": {"name": doc.name}}
+		with (
+			patch("essdee_yrp.fabric_store.documents.work_order._get_work_order", return_value=doc),
+			patch("essdee_yrp.fabric_store.documents.work_order.reopen_work_order") as reopen,
+			patch("essdee_yrp.fabric_store.documents.work_order.get_work_order_workspace", return_value=refreshed),
+		):
+			result = execute_work_order_command(doc.name, "reopen", expected_modified=doc.modified)
+		self.assertEqual(result, refreshed)
+		reopen.assert_called_once_with(doc.name)
+
 	def test_create_debit_forwards_attachment_and_refreshes_workspace(self):
 		doc = self.make_document(docstatus=1)
 		refreshed = {"record": {"name": doc.name}}

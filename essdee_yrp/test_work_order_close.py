@@ -754,3 +754,7 @@ class TestEssdeeWorkOrderClose(UnitTestCase):
 		allocation = create_adjustment.call_args.kwargs["allocations"][0]
 		self.assertEqual(allocation["source_sle"], "SLE-EXCESS-1")
 		self.assertEqual(allocation["difference"], 352)
+		# A close after a reopen must not reuse the reversed adjustment's key.
+		self.assertEqual(
+			create_adjustment.call_args.kwargs["idempotency_key"], "YRP Work Order:WO-TEST:close:SLE-EXCESS-1"
+		)

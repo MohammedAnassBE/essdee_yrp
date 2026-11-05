@@ -220,6 +220,7 @@ const workOrderActions = computed(() => {
 	add("request_close", "Request Close", "pi pi-lock", () => openAction("request_close"), { menuOnly: true })
 	add("close", "Close", "pi pi-lock", () => openAction("close"), { menuOnly: true })
 	add("approve_close", "Approve Close", "pi pi-check-circle", () => openAction("approve_close"), { menuOnly: true })
+	add("reopen", "Reopen", "pi pi-lock-open", () => requestLifecycleAction("reopen"), { menuOnly: true })
 	add("create_material_issue", "Material Issue", "pi pi-sign-out", openMaterialIssue, { menuOnly: true })
 	add("create_recut", "Create Recut", "pi pi-clone", () => openAction("create_recut"), { menuOnly: true })
 	add("create_sewing_plan", "Create Sewing Plan", "pi pi-plus", () => openAction("create_sewing_plan"), { menuOnly: true })
@@ -304,10 +305,10 @@ function formatNumber(value) { return Number(value || 0).toLocaleString("en-IN",
 function itemCount(groups) { return groups.reduce((count, group) => count + (group.items?.length || 0), 0) }
 function editWorkOrder() { router.push({ name: props.editRouteName, params: { workOrderId: workspace.value.record.name }, state: preserveListNavigationState(workspace.value.record.name, workspace.value.record.modified) }) }
 function duplicateWorkOrder() { router.push({ name: props.newRouteName, query: { duplicate_from: workspace.value.record.name } }) }
-const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit Work Order?" : pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order?" : "Amend Work Order?")
-const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit" : pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order" : "Create Amendment")
-const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "submit" ? `Permanently submit ${workspace.value.record?.name}?` : pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
-async function runWorkspaceAction(action) { if (action === "save") return editWorkOrder(); if (["submit", "cancel", "amend"].includes(action)) return requestLifecycleAction(action); return openAction(action) }
+const lifecycleConfirmTitle = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit Work Order?" : pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order?" : pendingLifecycleCommand.value === "reopen" ? "Reopen Work Order?" : "Amend Work Order?")
+const lifecycleConfirmLabel = computed(() => pendingLifecycleCommand.value === "submit" ? "Submit" : pendingLifecycleCommand.value === "cancel" ? "Cancel Work Order" : pendingLifecycleCommand.value === "reopen" ? "Reopen" : "Create Amendment")
+const lifecycleConfirmMessage = computed(() => pendingLifecycleCommand.value === "submit" ? `Permanently submit ${workspace.value.record?.name}?` : pendingLifecycleCommand.value === "reopen" ? "Are you sure you want to reopen this Work Order?" : pendingLifecycleCommand.value === "cancel" ? `Cancel ${workspace.value.record?.name}? This keeps the document for audit but stops further processing.` : `Create a new draft amendment from ${workspace.value.record?.name}?`)
+async function runWorkspaceAction(action) { if (action === "save") return editWorkOrder(); if (["submit", "cancel", "amend", "reopen"].includes(action)) return requestLifecycleAction(action); return openAction(action) }
 function requestLifecycleAction(command) { pendingLifecycleCommand.value = command; lifecycleConfirmVisible.value = true }
 async function confirmLifecycleAction() { const command = pendingLifecycleCommand.value; lifecycleConfirmVisible.value = false; pendingLifecycleCommand.value = ""; if (command) await runLifecycleAction(command) }
 async function runLifecycleAction(command) {

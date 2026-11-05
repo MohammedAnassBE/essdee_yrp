@@ -250,6 +250,7 @@ def close_work_order(
 				}
 			)
 
+	close_key = adjustment_allocations[0]["source_sle"] if adjustment_allocations else 1
 	register_production_links(doc.doctype, doc.name, production_links)
 	create_adjustment(
 		adjustment_type="Work Order Excess Usage",
@@ -257,7 +258,8 @@ def close_work_order(
 		source_name=doc.name,
 		effective_date=posting_date,
 		allocations=adjustment_allocations,
-		idempotency_key=f"{doc.doctype}:{doc.name}:close:1",
+		# Keyed by this close's own ledger so a close after a reopen gets a fresh adjustment.
+		idempotency_key=f"{doc.doctype}:{doc.name}:close:{close_key}",
 	)
 	close_voucher_reservations("YRP Work Order", doc.name)
 	enqueue_voucher_repost(

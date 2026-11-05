@@ -88,3 +88,15 @@ test("CPM transaction Submit confirms identity and only submits on accept", asyn
 	assert.equal(confirmations[1].acceptLabel, "Cancel Document")
 	assert.equal(calls.length, 1)
 })
+
+test("Work Order Reopen waits for confirmation before calling the command", async () => {
+	const state = workspace("departments/FabricWorkOrder.vue", false)
+	await state.runWorkspaceAction("reopen")
+	assert.equal(state.lifecycleConfirmVisible.value, true)
+	assert.equal(state.lifecycleConfirmTitle.value, "Reopen Work Order?")
+	assert.equal(state.lifecycleConfirmMessage.value, "Are you sure you want to reopen this Work Order?")
+	assert.equal(state.lifecycleConfirmLabel.value, "Reopen")
+	assert.deepEqual(state.calls, [])
+	await state.confirmLifecycleAction()
+	assert.deepEqual(state.calls, ["reopen"])
+})

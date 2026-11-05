@@ -7,6 +7,20 @@ export function getMerchLotWorkspace(name) {
 	return callMethod(`${LOT_METHOD}.get_merch_lot_workspace`, { name })
 }
 
+const FLOW_METHOD = "essdee_yrp.merch.lot_process_flow"
+
+export function getLotProcessFlow(lot) {
+	return callRead(`${FLOW_METHOD}.get_process_flow`, { lot })
+}
+
+export function getLotStepDetail(lot, key) {
+	return callRead(`${FLOW_METHOD}.get_step_detail`, { lot, key })
+}
+
+export function getLotWorkOrderDetail(workOrder) {
+	return callRead(`${FLOW_METHOD}.get_work_order_detail`, { work_order: workOrder })
+}
+
 export function getMerchLotEditor(name = null, duplicateFrom = null) {
 	return callMethod(`${LOT_METHOD}.get_merch_lot_editor`, { name, duplicate_from: duplicateFrom })
 }

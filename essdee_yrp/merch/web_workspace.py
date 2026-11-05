@@ -4,7 +4,7 @@ from frappe import _
 from essdee_yrp.cutting.reports import get_report_permissions as get_cutting_report_permissions
 from essdee_yrp.merch.ipd_workspace import DOCTYPE
 from essdee_yrp.merch.reports import can_view_work_in_progress
-from essdee_yrp.planning.reports import inward_quantity, size_wise_stock, work_in_progress
+from essdee_yrp.planning.reports import inhouse_quantity, inward_quantity, size_wise_stock, work_in_progress
 from essdee_yrp.planning.reports.desk_adapters import can_run_desk_report
 from essdee_yrp.web_common import permission_flags, report_access_scope
 
@@ -24,6 +24,7 @@ SECTIONS = {
 REPORTS = {
 	"work_in_progress": ("Work In Progress", can_view_work_in_progress),
 	"inward_quantity": ("Inward Quantity", inward_quantity.can_view),
+	"inhouse_quantity": ("In-house Quantity", inhouse_quantity.can_view),
 	"work_order": ("Work Order", lambda: can_run_desk_report("SD YRP Work Order Report")),
 	"planning_work_in_progress": ("Work In Progress", work_in_progress.can_view),
 	"size_wise_stock": ("Size-wise Stock", size_wise_stock.can_view),

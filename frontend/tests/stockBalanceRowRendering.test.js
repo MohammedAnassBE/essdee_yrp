@@ -27,6 +27,7 @@ function mountReport(sourceRows, reportColumns = columns) {
 		"./reportUtils.js": { number: (value) => String(value), oneMonthAgoIso: () => "2026-09-22", todayIso: () => "2026-10-22", stockCellValue: (value) => value },
 		"../../api/frappe.js": { callMethod: async () => [], searchLink: async () => [] },
 		"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
+		"../../composables/useReportQueryPrefill.js": { useReportQueryPrefill() {} },
 		"../../composables/useWebReport.js": { useWebReport: () => ({ state: Vue.ref("ready"), sourceColumns, sourceRows, job: Vue.ref(null), activeFilters: Vue.ref(null), generate: async () => {}, filtersChanged() {}, clear() {} }) },
 		"../../composables/useReportColumns.js": { useReportColumns: () => {
 			const displayColumns = Vue.computed(() => reconcileReportLayout(sourceColumns.value, null))

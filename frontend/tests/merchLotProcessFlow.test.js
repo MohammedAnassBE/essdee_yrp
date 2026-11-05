@@ -107,9 +107,12 @@ test("report prefill maps the step context to each report's own filter names", (
 test("desk report prefill params are real desk filter fieldnames", async () => {
 	const { deskReportConfig } = await import("../src/components/reports/deskReportConfig.js")
 	const { REPORT_PREFILL } = await import("../src/utils/lotProcessFlow.js")
-	for (const key of ["grn_report", "grn_summary", "dc_report", "stock_entry_report", "stock_reconciliation_report", "stock_update_report"]) {
+	for (const key of ["grn_report", "grn_summary", "dc_report", "stock_entry_report", "stock_reconciliation_report", "stock_update_report",
+		"jobwork_issued_items", "non_jobwork_issued_items", "non_grn_received_items", "item_conversion_report", "lot_consumption_report",
+		"lot_wise_stock_ageing", "lot_purchase_summary", "purchase_order_itemwise"]) {
 		const fieldnames = deskReportConfig[key.replaceAll("_", "-")].filters.map((field) => field.fieldname)
 		for (const param of Object.values(REPORT_PREFILL[key])) assert.ok(fieldnames.includes(param), `${key}.${param}`)
+		for (const param of Object.keys((await import("../src/utils/lotProcessFlow.js")).REPORT_FIXED[key] || {})) assert.ok(fieldnames.includes(param), `${key}.${param}`)
 	}
 })
 
@@ -130,13 +133,13 @@ test("every prefilled Vue report reads the same filter names from the URL", () =
 		"departments/cutting/reports/MultiCCRReport.vue": ["multi_ccr", ["lots", "items"]],
 		"departments/sales/PpoReport.vue": ["ppo_report", ["items"]],
 	}
-	return import("../src/utils/lotProcessFlow.js").then(({ REPORT_PREFILL }) => {
+	return import("../src/utils/lotProcessFlow.js").then(({ REPORT_PREFILL, REPORT_FIXED }) => {
 		for (const [path, [key, fields]] of Object.entries(reports)) {
 			const text = readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8")
 			const call = text.match(/useReportQueryPrefill\(filters, \[([^\]]*)\]/)
 			assert.ok(call, path)
 			assert.deepEqual(JSON.parse(`[${call[1]}]`), fields, path)
-			assert.deepEqual(Object.values(REPORT_PREFILL[key]), fields, key)
+			assert.deepEqual([...Object.values(REPORT_PREFILL[key]), ...Object.keys(REPORT_FIXED[key] || {})], fields, key)
 		}
 	})
 })

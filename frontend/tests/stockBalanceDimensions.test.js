@@ -72,6 +72,7 @@ for (const configured of [dimensions, []]) {
 			"./reportUtils.js": { number: String, oneMonthAgoIso: () => "2026-09-20", todayIso: () => "2026-10-20", stockCellValue: String },
 			"../../api/frappe.js": { callMethod: async (method) => { if (method.endsWith("get_item_filter_options")) return [{ value: "EC-11400", description: "Tank Top" }]; calls.push(method); return configured }, searchLink: async (...args) => { lookups.push(args); return [{ name: "A", label: "Alpha", description: "Maze Capri" }] } },
 			"../../composables/useIncrementalRows.js": incrementalRows, "../../composables/useInlineFilters.js": inlineFilters,
+			"../../composables/useReportQueryPrefill.js": { useReportQueryPrefill() {} },
 			"../../composables/useWebReport.js": { useWebReport: () => ({ state: ref("idle"), sourceColumns: ref([]), sourceRows: ref([]), job: ref(null), activeFilters, generate: async (filters) => requests.push(JSON.parse(JSON.stringify(filters))), filtersChanged: (filters) => changes.push(filters), clear() {} }) },
 			"../../composables/useReportColumns.js": { useReportColumns: () => ({ columns: ref([]), displayColumns: ref([]), rows: ref([]), linkSources: ref({}), fieldsBySource: ref({}), loadLayout() {} }) },
 		})

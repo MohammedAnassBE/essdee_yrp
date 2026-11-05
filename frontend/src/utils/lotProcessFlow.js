@@ -102,7 +102,7 @@ export const REPORT_PREFILL = {
 	size_wise_stock: { lot: "lot", item: "item", process: "process_list" },
 	inward_quantity: { lot: "lot", process: "process" },
 	inhouse_quantity: { lot: "lot", process: "process" },
-	work_order: { lot: "lot", process: "process_name", supplier: "supplier", item: "item", based_on: "based_on" },
+	work_order: { lot: "lot", process: "process_name", supplier: "supplier", item: "item" },
 	work_order_pending: { lot: "lot", item: "item", process: "process", supplier: "supplier" },
 	process_pending: { lot: "lot", item: "item", process: "process" },
 	colour_wise_diff: { lot: "lot", process: "process_list" },
@@ -112,23 +112,37 @@ export const REPORT_PREFILL = {
 	finishing_plan: { lot: "lot", item: "item" },
 	multi_ccr: { lot: "lots", item: "items" },
 	ppo_report: { item: "items" },
+	stock_balance: { lot: "lot" },
+	lot_cut_quantity: { lot: "lot" },
 	grn_report: { lot: "lot", supplier: "supplier", from_date: "from_date" },
 	grn_summary: { lot: "lot", lot_date: "from_date" },
 	dc_report: { lot: "lot", supplier: "supplier", from_date: "from_date" },
 	stock_entry_report: { lot: "lot", item: "item", lot_date: "from_date" },
 	stock_reconciliation_report: { lot: "lot", lot_date: "from_date" },
 	stock_update_report: { lot: "lot", lot_date: "from_date" },
+	jobwork_issued_items: { lot: "lot", lot_date: "from_date" },
+	non_jobwork_issued_items: { lot: "lot", lot_date: "from_date" },
+	non_grn_received_items: { lot: "lot", lot_date: "from_date" },
+	item_conversion_report: { lot: "lot", lot_date: "from_date" },
+	lot_consumption_report: { lot: "lot", lot_date: "start_date" },
+	lot_wise_stock_ageing: { lot: "lot" },
+	lot_purchase_summary: { lot: "lot" },
+	purchase_order_itemwise: { lot: "lot" },
 }
-const CONTEXT_LABELS = { lot: "Lot", process: "Process", supplier: "Supplier", item: "Item", from_date: "From", lot_date: "From", based_on: "Based on" }
-// Lot-scoped Work Order report lists every WO of the Lot instead of the last month's.
-const FIXED_CONTEXT = { based_on: "WO Status" }
+/** Fixed filter values a Lot link sets so the report's defaults don't hide the Lot's older or closed documents. */
+export const REPORT_FIXED = {
+	work_order: { based_on: { label: "Based on", value: "WO Status" } },
+	purchase_order_itemwise: { open_status: { label: "Open Status", value: "" } },
+}
+const CONTEXT_LABELS = { lot: "Lot", process: "Process", supplier: "Supplier", item: "Item", from_date: "From", lot_date: "From" }
 
-/** Filters a report gets from the step context: `[{ key, label, param, value }]`. */
+/** Filters a report gets from the step context, then its fixed values: `[{ key, label, param, value }]`. */
 export function reportPrefill(report, context = {}) {
-	const values = { ...context, ...FIXED_CONTEXT }
-	return Object.entries(REPORT_PREFILL[report.key] || {})
-		.filter(([key]) => values[key])
-		.map(([key, param]) => ({ key, label: CONTEXT_LABELS[key], param, value: values[key] }))
+	const mapped = Object.entries(REPORT_PREFILL[report.key] || {})
+		.filter(([key]) => context[key])
+		.map(([key, param]) => ({ key, label: CONTEXT_LABELS[key], param, value: context[key] }))
+	const fixed = Object.entries(REPORT_FIXED[report.key] || {}).map(([param, { label, value }]) => ({ key: param, label, param, value }))
+	return [...mapped, ...fixed]
 }
 
 export function reportHref(reportsPath, report, context = {}) {

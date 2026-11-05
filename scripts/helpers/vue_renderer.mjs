@@ -9,6 +9,7 @@ const { parse, compileScript } = require("@vue/compiler-sfc")
 const { resolveGridColumns } = await import("../../frontend/src/components/common/childGrid/childGridColumns.js")
 const sharedModules = {
 	"dateFormat.js": await import("../../frontend/src/utils/dateFormat.js"),
+	"listBulkActions.js": await import("../../frontend/src/components/common/listBulkActions.js"),
 	"listClickFilters.js": await import("../../frontend/src/components/common/listClickFilters.js"),
 	"listDateRangeFilters.js": await import("../../frontend/src/components/common/listDateRangeFilters.js"),
 	"listScrollState.js": await import("../../frontend/src/components/common/listScrollState.js"),

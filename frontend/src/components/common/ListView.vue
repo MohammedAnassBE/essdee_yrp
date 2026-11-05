@@ -182,41 +182,28 @@
 		<div v-if="showBulkBar" class="bulk-bar">
 			<div class="bulk-bar__summary">
 				<strong>{{ selectedRows.length }} selected</strong>
-				<span v-if="selectedDraftRows.length">{{ selectedDraftRows.length }} draft</span>
-				<span v-if="selectedSubmittedRows.length">{{ selectedSubmittedRows.length }} submitted</span>
+				<span v-if="bulkProgress">{{ bulkProgress }}</span>
+				<template v-else>
+					<span v-if="selectedDraftRows.length">{{ selectedDraftRows.length }} draft</span>
+					<span v-if="selectedSubmittedRows.length">{{ selectedSubmittedRows.length }} submitted</span>
+				</template>
 			</div>
 			<div class="bulk-bar__actions">
 				<Button
-					v-if="canBulkEdit"
-					label="Edit"
-					icon="pi pi-pencil"
+					v-if="bulkMenuItems.length"
+					label="Actions"
+					icon="pi pi-chevron-down"
+					icon-pos="right"
 					severity="secondary"
 					outlined
 					size="small"
+					aria-haspopup="menu"
+					:aria-controls="bulkMenuId"
+					:loading="Boolean(bulkActing) || bulkEditLoading"
 					:disabled="Boolean(bulkActing)"
-					:loading="bulkActing === 'edit' || bulkEditLoading"
-					@click="openBulkEditDialog"
+					@click="bulkMenu?.toggle($event)"
 				/>
-				<Button
-					v-if="isSubmittable && canBulkSubmit"
-					:label="`Submit (${selectedDraftRows.length})`"
-					icon="pi pi-arrow-right"
-					size="small"
-					:disabled="!selectedDraftRows.length || Boolean(bulkActing)"
-					:loading="bulkActing === 'submit'"
-					@click="requestBulkAction('submit')"
-				/>
-				<Button
-					v-if="isSubmittable && canBulkCancel"
-					:label="`Cancel (${selectedSubmittedRows.length})`"
-					icon="pi pi-ban"
-					severity="danger"
-					outlined
-					size="small"
-					:disabled="!selectedSubmittedRows.length || Boolean(bulkActing)"
-					:loading="bulkActing === 'cancel'"
-					@click="requestBulkAction('cancel')"
-				/>
+				<Menu :id="bulkMenuId" ref="bulkMenu" :model="bulkMenuItems" popup :base-z-index="5000" class="list-bulk-menu" />
 				<Button
 					icon="pi pi-times"
 					severity="secondary"
@@ -485,27 +472,16 @@
 			</template>
 		</Dialog>
 
-		<Dialog
+		<DocumentConfirmationDialog
 			v-model:visible="showBulkConfirm"
-			:header="bulkConfirmTitle"
-			modal
-			class="erp-dialog--sm"
-		>
-			<p class="bulk-confirm-copy">{{ bulkConfirmMessage }}</p>
-			<template #footer>
-				<Button
-					label="Keep"
-					severity="secondary"
-					text
-					@click="showBulkConfirm = false"
-				/>
-				<Button
-					:label="pendingBulkAction === 'submit' ? 'Submit' : 'Cancel Documents'"
-					:severity="pendingBulkAction === 'cancel' ? 'danger' : undefined"
-					@click="confirmBulkAction"
-				/>
-			</template>
-		</Dialog>
+			:title="bulkConfirm.title"
+			:message="bulkConfirm.message"
+			:confirm-label="bulkConfirm.confirmLabel"
+			:severity="bulkConfirm.severity"
+			cancel-label="Keep"
+			@confirm="confirmBulkAction"
+		/>
+		<ListBulkResultDialog v-model:visible="showBulkResult" :outcome="bulkResult" />
 	</section>
 </template>
 
@@ -515,6 +491,7 @@ import Column from "primevue/column"
 import DataTable from "primevue/datatable"
 import Dialog from "primevue/dialog"
 import InputText from "primevue/inputtext"
+import Menu from "primevue/menu"
 import Message from "primevue/message"
 import Select from "primevue/select"
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
@@ -523,6 +500,7 @@ import { useRoute } from "vue-router"
 import {
 	bulkUpdateField,
 	cancelDoc,
+	deleteDoc,
 	getBulkEditFields,
 	getCount,
 	getCounts,
@@ -533,6 +511,7 @@ import {
 	getUserListview,
 	submitDoc,
 } from "../../api/frappe.js"
+import DocumentConfirmationDialog from "../documents/DocumentConfirmationDialog.vue"
 import DocumentStatusBadge from "../documents/DocumentStatusBadge.vue"
 import InlinePageNavigation from "../navigation/InlinePageNavigation.vue"
 import ListPageSkeleton from "./ListPageSkeleton.vue"
@@ -553,6 +532,8 @@ import {
 } from "./listItemFilters.js"
 import { changedRowNames, keepSelection, mergeChangedRows, useListLiveRefresh, useRowHighlight } from "./listLiveRefresh.js"
 import ListviewQuickFilters from "./ListviewQuickFilters.vue"
+import ListBulkResultDialog from "./ListBulkResultDialog.vue"
+import { availableBulkActions, bulkConfirmation, bulkOutcome, runBulkRows } from "./listBulkActions.js"
 import { FormField, ListviewFilters, loadFormField, UserListviewColumns } from "./asyncListParts.js"
 import {
 	createListNavigationState,
@@ -671,6 +652,11 @@ const bulkEditValue = ref("")
 const showBulkConfirm = ref(false)
 const pendingBulkAction = ref("")
 const pendingBulkRows = ref([])
+const bulkProgress = ref("")
+const showBulkResult = ref(false)
+const bulkResult = ref(null)
+const bulkMenu = ref(null)
+const bulkMenuId = `list-bulk-actions-${Math.random().toString(36).slice(2, 8)}`
 const manualRefreshing = ref(false)
 const liveRefreshError = ref("")
 let loadSequence = 0
@@ -803,12 +789,25 @@ const isEmptyResult = computed(() =>
 )
 
 const canBulkEdit = computed(() => hasDoctypePermission("write"))
-const canBulkSubmit = computed(() => workflowReady.value && !activeWorkflow.value && hasDoctypePermission("submit"))
-const canBulkCancel = computed(() => workflowReady.value && !activeWorkflow.value && hasDoctypePermission("cancel"))
+const canBulkLifecycle = computed(() => workflowReady.value && !activeWorkflow.value
+	&& isSubmittable.value && (hasDoctypePermission("submit") || hasDoctypePermission("cancel")))
 const showBulkSelection = computed(
 	() => props.selectable || (props.allowBulkActions
-		&& (canBulkEdit.value || (isSubmittable.value && (canBulkSubmit.value || canBulkCancel.value)))),
+		&& (canBulkEdit.value || canBulkLifecycle.value || hasDoctypePermission("delete"))),
 )
+const bulkActions = computed(() => availableBulkActions(selectedRows.value, {
+	isSubmittable: isSubmittable.value,
+	hasWorkflow: !workflowReady.value || Boolean(activeWorkflow.value),
+	can: hasDoctypePermission,
+}))
+const bulkMenuItems = computed(() => [
+	...(canBulkEdit.value ? [{ label: "Edit", icon: "pi pi-pencil", command: openBulkEditDialog }] : []),
+	...bulkActions.value.map(({ action, label, icon, rows: candidates }) => ({
+		label: `${label} (${candidates.length})`,
+		icon,
+		command: () => requestBulkAction(action, candidates),
+	})),
+])
 const showBulkBar = computed(() => props.allowBulkActions && showBulkSelection.value && selectedRows.value.length > 0)
 const selectedDraftRows = computed(() =>
 	selectedRows.value.filter((row) => Number(row.docstatus) === 0),
@@ -822,18 +821,9 @@ const bulkEditField = computed(
 const isEmptyBulkValue = computed(
 	() => bulkEditValue.value === null || bulkEditValue.value === undefined || bulkEditValue.value === "",
 )
-const bulkConfirmTitle = computed(() => {
-	const count = pendingBulkRows.value.length
-	return `${pendingBulkAction.value === "submit" ? "Submit" : "Cancel"} ${count} document${count === 1 ? "" : "s"}`
-})
-const bulkConfirmMessage = computed(() => {
-	const count = pendingBulkRows.value.length
-	const action = pendingBulkAction.value === "submit" ? "Submit" : "Cancel"
-	const effect = pendingBulkAction.value === "submit"
-		? "All normal validations will run."
-		: "This can reverse submitted effects."
-	return `${action} ${count} selected ${titleForMessage()} document${count === 1 ? "" : "s"}? ${effect}`
-})
+const bulkConfirm = computed(() => pendingBulkAction.value
+	? bulkConfirmation(pendingBulkAction.value, pendingBulkRows.value, titleForMessage())
+	: {})
 
 const columnOptions = computed(() =>
 	buildColumnOptions(eligibleFields.value, userColumns.value, props.defaultColumns)
@@ -1472,15 +1462,6 @@ function defaultBulkValue(field) {
 	return ""
 }
 
-function bulkFailureLines(failures) {
-	const lines = failures.slice(0, 8).map((failure) => {
-		const message = failure.message || failure.error?.message || "Failed"
-		return `${failure.name}: ${message}`
-	})
-	if (failures.length > 8) lines.push(`${failures.length - 8} more failed`)
-	return lines
-}
-
 async function loadBulkFields() {
 	if (bulkEditFieldsFor.value === props.doctype && bulkEditFields.value.length) {
 		return bulkEditFields.value
@@ -1543,10 +1524,7 @@ async function applyBulkEdit() {
 		showBulkEdit.value = false
 		await refreshAfterBulk()
 		if (failures.length) {
-			bulkError.value = {
-				title: updated.length ? "Bulk edit partially completed" : "Bulk edit failed",
-				lines: bulkFailureLines(failures),
-			}
+			showBulkOutcome("edit", { done: updated, failed: failures.map(({ name, message }) => ({ name, error: message || "Failed" })) })
 		} else {
 			bulkNotice.value = `${updated.length} record${updated.length === 1 ? "" : "s"} updated.`
 		}
@@ -1558,9 +1536,7 @@ async function applyBulkEdit() {
 	}
 }
 
-function requestBulkAction(action) {
-	if (!workflowReady.value || activeWorkflow.value) return
-	const candidates = action === "submit" ? selectedDraftRows.value : selectedSubmittedRows.value
+function requestBulkAction(action, candidates) {
 	if (!candidates.length) return
 	pendingBulkAction.value = action
 	pendingBulkRows.value = [...candidates]
@@ -1574,38 +1550,36 @@ async function confirmBulkAction() {
 	await runBulkAction(action, candidates)
 }
 
+function performBulkAction(action, row) {
+	if (action === "submit") return submitDoc(props.doctype, row.name, row.modified)
+	if (action === "cancel") return cancelDoc(props.doctype, row.name, row.modified)
+	return deleteDoc(props.doctype, row.name)
+}
+
+function showBulkOutcome(action, result) {
+	const outcome = bulkOutcome(action, result)
+	if (!result.failed.length) {
+		bulkNotice.value = outcome.notice
+		return
+	}
+	bulkResult.value = outcome
+	showBulkResult.value = true
+}
+
 async function runBulkAction(action, candidates) {
-	if (!workflowReady.value || activeWorkflow.value) return
 	if (!candidates.length) return
 	bulkActing.value = action
 	bulkError.value = null
 	bulkNotice.value = ""
-	let completed = 0
-	const failures = []
 	try {
-		for (const row of candidates) {
-			try {
-				if (action === "submit") await submitDoc(props.doctype, row.name, row.modified)
-				else await cancelDoc(props.doctype, row.name, row.modified)
-				completed += 1
-			} catch (reason) {
-				failures.push({ name: row.name, message: reason.message || "Failed" })
-			}
-		}
+		const result = await runBulkRows(candidates, (row) => performBulkAction(action, row), (index, count) => {
+			bulkProgress.value = `Processing ${index} of ${count}…`
+		})
 		await refreshAfterBulk()
-		if (failures.length) {
-			bulkError.value = {
-				title: completed
-					? `Bulk ${action} partially completed`
-					: `Bulk ${action} failed`,
-				lines: bulkFailureLines(failures),
-			}
-		} else {
-			const result = action === "submit" ? "submitted" : "cancelled"
-			bulkNotice.value = `${completed} document${completed === 1 ? "" : "s"} ${result}.`
-		}
+		showBulkOutcome(action, result)
 	} finally {
 		bulkActing.value = ""
+		bulkProgress.value = ""
 		pendingBulkAction.value = ""
 		pendingBulkRows.value = []
 	}
@@ -2105,6 +2079,12 @@ defineExpose({ refresh, clearSelection })
 	border-radius: var(--erp-control-radius);
 }
 
+:global(.list-bulk-menu.p-menu) { min-width: 196px; padding: 6px; font-family: var(--erp-font-family); font-size: var(--erp-font-size-caption); background: var(--erp-surface); border: 1px solid var(--erp-border-strong); border-radius: var(--erp-panel-radius); box-shadow: var(--erp-shadow-dialog); }
+:global(.list-bulk-menu .p-menu-item-content) { border-radius: 7px; }
+:global(.list-bulk-menu .p-menu-item-link) { gap: 9px; padding: 9px 10px; color: var(--erp-text); }
+:global(.list-bulk-menu .p-menu-item-icon) { color: var(--erp-text-muted); font-size: 0.82rem; }
+:global(.list-bulk-menu .p-menu-item-content:hover) { background: var(--erp-accent-soft); }
+
 .bulk-bar__summary,
 .bulk-bar__actions {
 	display: flex;
@@ -2155,13 +2135,6 @@ defineExpose({ refresh, clearSelection })
 	margin-top: -8px;
 	color: var(--list-muted);
 	font-size: var(--erp-font-size-min);
-}
-
-.bulk-confirm-copy {
-	margin: 0;
-	color: var(--erp-text-secondary);
-	font-size: var(--erp-font-size-body);
-	line-height: 1.55;
 }
 
 .list-status-tabs {

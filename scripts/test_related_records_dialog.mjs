@@ -27,13 +27,13 @@ for (const contract of [
 	'v-model:visible',
 	':initial-advanced-filters="filters"',
 	':navigation-enabled="false"',
-	':allow-bulk-actions="false"',
 	'@row-click="openRow"',
 	'related-records-dialog--suspended',
 ]) {
 	assert(dialog.includes(contract), `RelatedRecordsDialog omits ${contract}`)
 }
 
+assert(!dialog.includes("allow-bulk-actions"), "RelatedRecordsDialog must keep the list's bulk actions")
 assert(list.includes('initialAdvancedFilters'), "ListView has no controlled advanced-filter input")
 assert(list.includes('update:advancedFilters'), "ListView does not emit applied advanced filters")
 assert(list.includes('v-if="navigationEnabled"'), "ListView cannot suppress page navigation inside a dialog")

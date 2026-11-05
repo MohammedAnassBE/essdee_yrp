@@ -22,7 +22,6 @@
 				:status-options="statusOptions"
 				:row-mark="rowMark"
 				:navigation-enabled="false"
-				:allow-bulk-actions="false"
 				viewport-bounded
 				@update:advanced-filters="filters = $event"
 				@row-click="openRow"

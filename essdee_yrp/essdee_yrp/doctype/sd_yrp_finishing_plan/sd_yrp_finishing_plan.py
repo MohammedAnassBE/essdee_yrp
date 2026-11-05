@@ -107,6 +107,7 @@ class SDYRPFinishingPlan(Document):
 				"primary_values": views["primary_values"],
 				"data": views["finishing_qty"],
 				"rework_details": views["rework_details"],
+				"box_packing": views["box_packing"],
 				"is_set_item": views["is_set_item"],
 				"set_attr": views["set_attr"],
 			},

@@ -477,10 +477,10 @@ def create_stock_dispatch(
 	doc_name,
 	from_supplier,
 	from_warehouse,
-	to_supplier,
-	to_warehouse,
-	vehicle_no,
-	goods_value,
+	to_supplier=None,
+	to_warehouse=None,
+	vehicle_no=None,
+	goods_value=None,
 ):
 	dispatch_doc = frappe.get_doc("SD YRP Finishing Plan Dispatch", doc_name)
 	# Dispatching posts stock and updates the submitted FPD.  A user who can
@@ -492,7 +492,9 @@ def create_stock_dispatch(
 		existing_status = frappe.db.get_value("YRP Stock Entry", dispatch_doc.stock_entry, "docstatus")
 		if existing_status != 2:
 			frappe.throw(f"Stock Entry {dispatch_doc.stock_entry} already exists")
-	locations = get_dispatch_locations(from_supplier, from_warehouse, to_supplier, to_warehouse)
+	locations = get_dispatch_locations(
+		from_supplier, from_warehouse, to_supplier, to_warehouse, dispatch_doc.customer
+	)
 
 	batch_requests = {}
 	for batch in update_if_string_instance(dispatch_doc.packing_batch_dispatch_json) or []:
@@ -523,6 +525,7 @@ def create_stock_dispatch(
 			"against": "SD YRP Finishing Plan Dispatch",
 			"against_id": doc_name,
 			**locations,
+			"customer": dispatch_doc.customer,
 			"vehicle_no": vehicle_no,
 			"additional_amount": goods_value,
 			"packing_batch_dispatch_json": (

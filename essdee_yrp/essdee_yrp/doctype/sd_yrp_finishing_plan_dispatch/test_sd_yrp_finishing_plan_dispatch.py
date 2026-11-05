@@ -85,6 +85,7 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		dispatch = SimpleNamespace(
 			docstatus=1,
 			stock_entry=None,
+			customer=None,
 			packing_batch_dispatch_json=None,
 			dispatch_colour_details=None,
 			finishing_plan_dispatch_items=[
@@ -118,6 +119,17 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		populate_rates.assert_called_once_with(stock_entry, "WH-FROM")
 		stock_entry.insert.assert_called_once_with()
 		stock_entry.submit.assert_called_once_with()
+
+	def test_stock_dispatch_copies_customer_to_stock_entry(self):
+		self.assertEqual(_dispatched_stock_entry_values(customer="CUST-TEST")["customer"], "CUST-TEST")
+
+	def test_stock_dispatch_without_customer_leaves_stock_entry_customer_empty(self):
+		self.assertIsNone(_dispatched_stock_entry_values(customer=None)["customer"])
+
+	def test_customer_is_an_optional_customer_link(self):
+		field = frappe.get_meta("SD YRP Finishing Plan Dispatch", cached=False).get_field("customer")
+		self.assertEqual((field.fieldtype, field.options, field.label), ("Link", "Customer", "Customer"))
+		self.assertFalse(field.reqd)
 
 	def test_draft_merge_keeps_valid_batch_selection_only(self):
 		fresh = _item_row("FP-1")
@@ -202,6 +214,28 @@ class TestFinishingPlanDispatch(IntegrationTestCase):
 		doc = frappe.get_doc({"doctype": "SD YRP Finishing Plan Dispatch"})
 		with self.assertRaisesRegex(frappe.ValidationError, "Select at least one Finishing Plan"):
 			doc.before_submit()
+
+
+def _dispatched_stock_entry_values(customer):
+	dispatch = SimpleNamespace(
+		docstatus=1,
+		stock_entry=None,
+		customer=customer,
+		packing_batch_dispatch_json=None,
+		dispatch_colour_details=None,
+		finishing_plan_dispatch_items=[],
+		check_permission=MagicMock(),
+	)
+	stock_entry = MagicMock()
+	with (
+		patch.object(finishing_plan_dispatch.frappe, "get_doc", return_value=dispatch),
+		patch.object(finishing_plan_dispatch.frappe, "new_doc", return_value=stock_entry),
+		patch.object(finishing_plan_dispatch.frappe.db, "get_single_value", return_value="Accepted"),
+		patch.object(finishing_plan_dispatch, "get_dispatch_locations", return_value={}),
+		patch.object(finishing_plan_dispatch, "populate_stock_rates"),
+	):
+		finishing_plan_dispatch.create_stock_dispatch(*DISPATCH_ARGS)
+	return stock_entry.update.call_args.args[0]
 
 
 def _item_row(finishing_plan):

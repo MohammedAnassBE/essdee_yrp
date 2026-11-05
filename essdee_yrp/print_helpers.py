@@ -659,6 +659,17 @@ def prepare_stock_entry_print(doc):
 		name = frappe.db.get_value("Supplier", location, "supplier_name") if location else ""
 		doc.set(f"{side}_location_name", name)
 		doc.set(f"{side}_address_details", get_supplier_address_display(location))
+	if doc.get("customer"):
+		doc.to_location = doc.customer
+		doc.to_location_name, doc.to_address_details = get_customer_print_party(doc.customer)
+
+
+def get_customer_print_party(customer):
+	"""The Customer's name and primary address, printed in place of the transfer supplier."""
+	from frappe.contacts.doctype.address.address import get_default_address
+
+	customer_name = frappe.db.get_value("Customer", customer, "customer_name") or customer
+	return customer_name, _address_display(get_default_address("Customer", customer))
 
 
 def prepare_print_document(doc, method=None, settings=None):

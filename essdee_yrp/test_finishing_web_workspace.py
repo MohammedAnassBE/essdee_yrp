@@ -371,6 +371,7 @@ class TestFinishingWebWorkspace(TestCase):
 	def _tab(self, tab, plan=None, roles=("Stock User",)):
 		"""Load a tab with every view builder stubbed; return the payload and the builders called."""
 		context = {"primary_values": ["S", "M"], "is_set_item": 0, "set_attr": None}
+		context["ipd_doc"] = frappe._dict(packing_combo=6)
 		quantity = {key: {"key": key} for key in ("finishing_inward", "finishing_qty", "finishing_ironing", "pack_return")}
 		results = {
 			"get_ipd_context": context,
@@ -445,6 +446,8 @@ class TestFinishingWebWorkspace(TestCase):
 
 	def test_tab_payloads_keep_the_desk_keys(self):
 		self.assertEqual(self._tab("item_details")[0]["rework_details"], {"key": "rework_details"})
+		box_packing = self._tab("item_details")[0]["box_packing"]
+		self.assertEqual(box_packing, {"pieces_per_box": 6, "colour_ratio": {}})
 		self.assertEqual(self._tab("inward")[0]["data"], {"key": "inward_details"})
 		self.assertEqual(self._tab("ironing_excess")[0]["data"], {"key": "finishing_ironing"})
 		self.assertEqual(self._tab("ironing_excess")[0]["entries"], [])

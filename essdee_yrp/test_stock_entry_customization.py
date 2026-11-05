@@ -35,6 +35,7 @@ class TestStockEntryCustomization(FrappeTestCase):
 			"packing_batch_dispatch_json": ("JSON", None),
 			"packing_slip": ("Data", None),
 			"transfer_supplier": ("Link", "Supplier"),
+			"customer": ("Link", "Customer"),
 		}
 
 		for fieldname, definition in expected.items():
@@ -81,6 +82,12 @@ class TestStockEntryCustomization(FrappeTestCase):
 			"YRP Stock Entry-purpose-options",
 		):
 			self.assertTrue(frappe.db.exists("Property Setter", name))
+
+	def test_customer_is_optional_and_read_only_when_copied_from_a_dispatch(self):
+		field = frappe.get_meta("YRP Stock Entry", cached=False).get_field("customer")
+		self.assertEqual(field.label, "Customer")
+		self.assertFalse(field.reqd)
+		self.assertEqual(field.read_only_depends_on, "eval:doc.against == 'SD YRP Finishing Plan Dispatch'")
 
 	def test_base_terms_and_condition_behavior_is_unchanged(self):
 		field = frappe.get_meta("YRP Stock Entry", cached=False).get_field("terms_and_condition")

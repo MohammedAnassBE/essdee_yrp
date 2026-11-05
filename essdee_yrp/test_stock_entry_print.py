@@ -78,7 +78,7 @@ class TestStockEntryPrint(UnitTestCase):
 		self.assertNotIn("---", format_data)
 
 
-def render_stock_transfer(groups):
+def render_stock_transfer(groups, doc=None):
 	from essdee_yrp.test_delivery_challan_print import print_format_data
 
 	html = next(
@@ -86,8 +86,9 @@ def render_stock_transfer(groups):
 		for field in json.loads(print_format_data("essdee_stock_transfer"))
 		if field.get("fieldname") == "_custom_html"
 	)
-	doc = frappe.new_doc("YRP Stock Entry", purpose="Send to Warehouse", posting_date="2026-10-26")
-	doc.docstatus = 1
+	if not doc:
+		doc = frappe.new_doc("YRP Stock Entry", purpose="Send to Warehouse", posting_date="2026-10-26")
+		doc.docstatus = 1
 	return (
 		frappe.get_jenv()
 		.from_string(html)
@@ -155,3 +156,98 @@ class TestStockEntryPrintAddresses(IntegrationTestCase):
 		self.assertEqual(doc.to_location_name, supplier.supplier_name)
 		self.assertIn("12 Mill Road", doc.to_address_details)
 		self.assertIn("Tiruppur", doc.to_address_details)
+
+
+def _address(title, line1, link_doctype, link_name, is_primary):
+	return frappe.get_doc(
+		{
+			"doctype": "Address",
+			"address_title": title,
+			"address_type": "Billing",
+			"address_line1": line1,
+			"city": "Tiruppur",
+			"state": "Tamil Nadu",
+			"country": "India",
+			"is_primary_address": is_primary,
+			"links": [{"link_doctype": link_doctype, "link_name": link_name}],
+		}
+	).insert(ignore_permissions=True)
+
+
+def _supplier():
+	group = frappe.get_all("Supplier Group", filters={"is_group": 0}, pluck="name", limit=1)[0]
+	supplier = frappe.get_doc(
+		{
+			"doctype": "Supplier",
+			"supplier_name": f"STE Print Supplier {frappe.generate_hash(length=8)}",
+			"supplier_group": group,
+		}
+	).insert(ignore_permissions=True)
+	_address(supplier.supplier_name, "7 Supplier Street", "Supplier", supplier.name, 1)
+	return supplier
+
+
+def _customer():
+	customer = frappe.get_doc(
+		{
+			"doctype": "Customer",
+			"customer_name": f"STE Print Customer {frappe.generate_hash(length=8)}",
+			"customer_type": "Company",
+		}
+	).insert(ignore_permissions=True)
+	_address(customer.customer_name, "9 Other Lane", "Customer", customer.name, 0)
+	_address(customer.customer_name, "3 Customer Road", "Customer", customer.name, 1)
+	return customer
+
+
+def render_dispatch_colour_slip(doc):
+	slip = "essdee_dispatch_colour_slip"
+	path = frappe.get_app_path("essdee_yrp", "essdee_yrp", "print_format", slip, f"{slip}.json")
+	with open(path) as handle:
+		html = json.load(handle)["html"]
+	return frappe.render_template(html, {"doc": doc, "json": json})
+
+
+class TestStockEntryPrintCustomer(IntegrationTestCase):
+	def _issue(self, **values):
+		self.supplier = _supplier()
+		doc = frappe.new_doc(
+			"YRP Stock Entry",
+			purpose="Material Issue",
+			posting_date="2026-10-26",
+			to_supplier=self.supplier.name,
+			transfer_supplier=self.supplier.name,
+			**values,
+		)
+		print_helpers.prepare_print_document(doc)
+		return doc
+
+	def test_without_customer_the_transfer_supplier_is_printed(self):
+		doc = self._issue()
+		self.assertEqual(doc.to_location_name, self.supplier.supplier_name)
+		self.assertIn("7 Supplier Street", doc.to_address_details)
+		html = render_dispatch_colour_slip(doc)
+		self.assertIn(self.supplier.supplier_name, html)
+		self.assertIn("7 Supplier Street", html)
+
+	def test_customer_name_and_primary_address_replace_the_transfer_supplier(self):
+		customer = _customer()
+		doc = self._issue(customer=customer.name)
+		self.assertEqual(doc.to_location_name, customer.customer_name)
+		self.assertIn("3 Customer Road", doc.to_address_details)
+		self.assertNotIn("9 Other Lane", doc.to_address_details)
+		html = render_dispatch_colour_slip(doc)
+		self.assertIn(customer.customer_name, html)
+		self.assertIn("3 Customer Road", html)
+		self.assertNotIn(self.supplier.supplier_name, html)
+		self.assertNotIn("7 Supplier Street", html)
+
+	def test_customer_dispatch_without_any_supplier_prints_the_customer(self):
+		customer = _customer()
+		doc = frappe.new_doc(
+			"YRP Stock Entry", purpose="Material Issue", posting_date="2026-10-26", customer=customer.name
+		)
+		print_helpers.prepare_print_document(doc)
+		for html in (render_dispatch_colour_slip(doc), render_stock_transfer([], doc)):
+			self.assertIn(customer.customer_name, html)
+			self.assertIn("3 Customer Road", html)

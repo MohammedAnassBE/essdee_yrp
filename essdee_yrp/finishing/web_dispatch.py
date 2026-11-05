@@ -20,6 +20,7 @@ RECORD_FIELDS = (
 	"name",
 	"docstatus",
 	"naming_series",
+	"customer",
 	"stock_entry",
 	"fp_total_dispatched",
 	"modified",
@@ -27,6 +28,7 @@ RECORD_FIELDS = (
 	"creation",
 )
 STOCK_FIELDS = (*DISPATCH_LOCATION_FIELDS, "goods_value", "vehicle_no")
+CUSTOMER_SKIPPED_FIELDS = ("to_supplier", "to_warehouse")
 
 
 def quantity(value, label):
@@ -183,7 +185,8 @@ def get_dispatch_workspace(name: str | None = None) -> dict:
 	}
 
 
-def save_values(doc, items, submit):
+def save_values(doc, items, submit, customer):
+	doc.customer = customer or None
 	doc.finishing_items = frappe.as_json(authoritative_items(items))
 	if doc.is_new():
 		doc.insert()
@@ -195,7 +198,13 @@ def save_values(doc, items, submit):
 
 
 @frappe.whitelist()
-def save_dispatch(items, name: str | None = None, submit=0, expected_modified: str | None = None) -> dict:
+def save_dispatch(
+	items,
+	name: str | None = None,
+	submit=0,
+	expected_modified: str | None = None,
+	customer: str | None = None,
+) -> dict:
 	"""Create or update a draft dispatch from server-rebuilt rows, optionally submitting it."""
 
 	if name:
@@ -209,16 +218,17 @@ def save_dispatch(items, name: str | None = None, submit=0, expected_modified: s
 			frappe.throw(_("Not permitted to create Finishing Plan Dispatch."), frappe.PermissionError)
 		doc = frappe.new_doc(DOCTYPE)
 		doc.naming_series = dispatch_service.get_current_fiscal_naming_series()
-	save_values(doc, items, submit)
+	save_values(doc, items, submit, customer)
 	return get_dispatch_workspace(doc.name)
 
 
 def dispatch_stock(doc, values):
-	missing = [field for field in STOCK_FIELDS if values.get(field) in (None, "")]
+	required = [field for field in STOCK_FIELDS if not (doc.customer and field in CUSTOMER_SKIPPED_FIELDS)]
+	missing = [field for field in required if values.get(field) in (None, "")]
 	if missing:
 		frappe.throw(_("Enter {0}.").format(", ".join(field.replace("_", " ").title() for field in missing)))
 	name = dispatch_service.create_stock_dispatch(
-		doc_name=doc.name, **{field: values[field] for field in STOCK_FIELDS}
+		doc_name=doc.name, **{field: values.get(field) for field in STOCK_FIELDS}
 	)
 	return {"doctype": "YRP Stock Entry", "name": name}
 

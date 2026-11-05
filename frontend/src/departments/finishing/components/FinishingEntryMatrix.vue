@@ -11,6 +11,26 @@
 					<th class="erp-number">Total</th>
 				</tr>
 			</thead>
+			<tbody v-if="boxQuantities">
+				<tr class="finishing-entry-matrix__input-row finishing-entry-matrix__box-row">
+					<td :colspan="labelSpan"></td>
+					<td class="finishing-table__type"><strong>Box Qty</strong></td>
+					<td v-for="size in sizes" :key="size" class="finishing-entry-matrix__cell">
+						<input
+							:value="boxQuantities[size] ?? ''"
+							type="number"
+							min="0"
+							step="any"
+							inputmode="decimal"
+							class="finishing-entry-input"
+							:aria-label="`${size} Box Qty`"
+							:disabled="disabled"
+							@input="emit('box-change', size, $event.target.value)"
+						/>
+					</td>
+					<td></td>
+				</tr>
+			</tbody>
 			<tbody v-for="(colour, index) in colours" :key="colour">
 				<tr v-for="(reference, referenceIndex) in references" :key="reference.key">
 					<template v-if="referenceIndex === 0">
@@ -86,7 +106,9 @@ const props = defineProps({
 	inputLabel: { type: String, default: "Quantity" },
 	checkable: { type: Boolean, default: false },
 	disabled: { type: Boolean, default: false },
+	boxQuantities: { type: Object, default: null },
 })
+const emit = defineEmits(["box-change"])
 const rows = computed(() => props.payload.data?.data || {})
 const colours = computed(() => Object.keys(rows.value).filter((colour) => props.modelValue[colour]))
 const sizes = computed(() => props.payload.primary_values || [])
@@ -117,6 +139,7 @@ function invalid(value) {
 .finishing-entry-matrix .finishing-table__index { white-space: nowrap; }
 .finishing-entry-matrix .finishing-table__index span { display: block; }
 .finishing-entry-matrix__input-row > td { background: color-mix(in srgb, var(--erp-accent-soft) 45%, var(--erp-surface)); }
+.finishing-entry-matrix__box-row > td { border-bottom: 2px solid var(--erp-border-strong); }
 .finishing-entry-matrix__cell { padding: 4px 6px !important; }
 .finishing-entry-input[aria-invalid="true"] { border-color: var(--erp-danger); }
 .finishing-entry-matrix tfoot th { text-align: left; }

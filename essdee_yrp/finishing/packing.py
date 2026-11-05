@@ -136,6 +136,19 @@ def get_ipd_packing_config(lot):
 	}
 
 
+def get_box_packing(ipd_doc):
+	"""Pieces per box and per-colour box quantities for the alternative plan Box Qty helper."""
+	size_ratio = ipd_doc.based_on_other_attribute_mapping and ipd_doc.packing_mode == "Size Ratio Packing"
+	return {
+		"pieces_per_box": 0 if size_ratio else cint(ipd_doc.packing_combo),
+		"colour_ratio": {
+			_attribute_value(row.attribute_value): flt(row.quantity)
+			for row in ipd_doc.get("packing_attribute_details") or []
+			if flt(row.quantity) > 0
+		},
+	}
+
+
 def prepare_dynamic_batch_dispatch(finishing_doc, dispatches):
 	"""Lock, validate, and expand physical boxes to size-wise stock quantities."""
 	dispatches = update_if_string_instance(dispatches) or []

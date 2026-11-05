@@ -23,6 +23,9 @@
 					<LinkField v-else-if="field === 'target_lot'" v-model="form.target_lot" doctype="SD YRP Lot" label="Target Lot" placeholder="Select lot" required :filters="{ name: ['in', options.alternate_lots || []] }" :allow-create="false" :show-open-button="false" :disabled="busy" />
 				</template>
 			</div>
+			<div v-if="definition.boxEntry" class="finishing-entry-dialog__fields">
+				<label class="common-field"><span class="finishing-entry-dialog__label">Pieces per Box</span><InputNumber :model-value="boxes.piecesPerBox" :min="0" :use-grouping="false" input-id="finishing-pieces-per-box" aria-label="Pieces per Box" fluid :disabled="busy" @update:model-value="setPiecesPerBox" /></label>
+			</div>
 			<div v-if="definition.typeSelect" class="finishing-entry-dialog__type">
 				<label class="common-field"><span class="finishing-entry-dialog__label">Choose Type</span><Select v-model="form.selected_type" :options="deliveryTypes" option-label="label" option-value="value" :disabled="busy" @change="resetQuantities" /></label>
 				<Button label="Fill" icon="pi pi-download" severity="secondary" outlined :disabled="busy" @click="fill" />
@@ -30,7 +33,7 @@
 			<p v-if="sourceEntry" class="finishing-entry-dialog__source">Quantities from <strong>{{ sourceEntry }}</strong></p>
 			<FinishingPackingEntry v-if="definition.component === 'packing'" ref="custom" :sizes="source.primary_values || []" :config="source.packing_config || {}" :disabled="busy" />
 			<FinishingDispatchEntry v-else-if="definition.component === 'dispatch'" ref="custom" :label="name" :sizes="source.primary_values || []" :packed="source.packed || {}" :config="source.packing_config || {}" :disabled="busy" />
-			<FinishingEntryMatrix v-else :payload="matrixPayload" :model-value="entry" :references="references" :input-label="definition.inputLabel" :checkable="Boolean(definition.checkable)" :disabled="busy" />
+			<FinishingEntryMatrix v-else :payload="matrixPayload" :model-value="entry" :references="references" :input-label="definition.inputLabel" :checkable="Boolean(definition.checkable)" :disabled="busy" :box-quantities="definition.boxEntry ? boxes.sizes : null" @box-change="setBoxQuantity" />
 		</form>
 		<template #footer>
 			<Button label="Close" severity="secondary" text :disabled="busy" @click="close" />
@@ -60,6 +63,7 @@ import FinishingEntryMatrix from "./components/FinishingEntryMatrix.vue"
 import FinishingPackingEntry from "./components/FinishingPackingEntry.vue"
 import { ENTRY_DEFINITIONS, entryPayload, missingFields } from "./finishingEntryDefinitions.js"
 import { fillEntry, initialEntry } from "./finishingEntries.js"
+import { applyBoxQuantity } from "./plan/finishingBoxQuantities.js"
 import { prefilledEntry } from "./plan/finishingSourceEntries.js"
 import { setDispatchSupplier, warehouseFilters } from "./supplierWarehouse.js"
 
@@ -88,6 +92,7 @@ const source = ref(null)
 const custom = ref(null)
 const entry = ref({})
 const form = reactive({})
+const boxes = reactive({ piecesPerBox: null, sizes: {} })
 let requestId = ""
 let loadToken = 0
 const matrixPayload = computed(() => ({ ...source.value, data: source.value?.data || {} }))
@@ -129,6 +134,7 @@ async function load() {
 		if (token !== loadToken) return
 		source.value = data || {}
 		resetQuantities()
+		resetBoxes()
 	} catch (reason) {
 		if (token === loadToken) loadError.value = reason?.message || "Unable to load this entry."
 	} finally {
@@ -149,6 +155,26 @@ function setAlternativeItem(item) {
 
 function resetQuantities() {
 	entry.value = props.prefill ? prefilledEntry(source.value, props.prefill) : initialEntry(source.value)
+}
+
+function resetBoxes() {
+	boxes.piecesPerBox = Number(source.value?.box_packing?.pieces_per_box) || null
+	boxes.sizes = {}
+}
+
+function applyBox(size) {
+	const ratio = source.value?.box_packing?.colour_ratio
+	applyBoxQuantity({ payload: matrixPayload.value, entry: entry.value, size, boxes: boxes.sizes[size], piecesPerBox: boxes.piecesPerBox, ratio, checkable: Boolean(definition.value.checkable) })
+}
+
+function setBoxQuantity(size, value) {
+	boxes.sizes[size] = value
+	applyBox(size)
+}
+
+function setPiecesPerBox(value) {
+	boxes.piecesPerBox = value
+	Object.keys(boxes.sizes).forEach(applyBox)
 }
 
 function fill() {

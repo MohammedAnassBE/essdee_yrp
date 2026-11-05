@@ -12,8 +12,8 @@ export const ENTRY_DEFINITIONS = {
 	dispatch_box: { label: "Dispatch Box", title: "Dispatch Box", submit: "Dispatch", source: "grn", fields: ["from_supplier", "from_warehouse", "to_supplier", "to_warehouse", "goods_value", "vehicle_no"], component: "dispatch" },
 	add_ironing_excess: { label: "Add Ironing Excess Qty", title: "Add Ironing Excess Pieces", submit: "Create", source: "ironing_excess", fields: [], references: [], inputLabel: "Ironing Excess" },
 	return_pack: { label: "Return Pack", title: "Add Pack Return Pieces", submit: "Create", source: "pack_return", fields: [], references: [], inputLabel: "Pack Return" },
-	create_alternative_plan: { label: "Create Alternative Plan", title: "Select Alternative Item and IPD", submit: "Next", source: "item_details", fields: ["lot_source", "lot_name", "existing_lot", "alternative_item", "production_detail"], references: qtyReference, inputLabel: "Conversion Qty", checkable: true },
-	update_alternative_quantity: { label: "Update Quantity", title: "Update Alternate Lot Quantity", submit: "Update", source: "item_details", fields: ["target_lot"], references: qtyReference, inputLabel: "Conversion Qty", checkable: true },
+	create_alternative_plan: { label: "Create Alternative Plan", title: "Select Alternative Item and IPD", submit: "Next", source: "item_details", fields: ["lot_source", "lot_name", "existing_lot", "alternative_item", "production_detail"], references: qtyReference, inputLabel: "Conversion Qty", checkable: true, boxEntry: true },
+	update_alternative_quantity: { label: "Update Quantity", title: "Update Alternate Lot Quantity", submit: "Update", source: "item_details", fields: ["target_lot"], references: qtyReference, inputLabel: "Conversion Qty", checkable: true, boxEntry: true },
 }
 
 const FIELD_LABELS = {

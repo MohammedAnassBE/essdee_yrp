@@ -303,7 +303,12 @@ def _details_tab(doc):
 def _item_details_tab(doc):
 	context = views.get_ipd_context(doc)
 	data = views.build_quantity_views(doc, context)["finishing_qty"]
-	return _matrix_payload(context, data, rework_details=views.build_rework_details(doc, context))
+	return _matrix_payload(
+		context,
+		data,
+		rework_details=views.build_rework_details(doc, context),
+		box_packing=packing.get_box_packing(context["ipd_doc"]),
+	)
 
 
 def _grn_tab(doc):

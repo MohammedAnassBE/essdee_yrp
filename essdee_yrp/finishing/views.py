@@ -15,7 +15,7 @@ from essdee_yrp.finishing.old_lot_history import (
 	active_old_lot_transfer_rows,
 	get_old_lot_received_rows,
 )
-from essdee_yrp.finishing.packing import get_dynamic_packed_qty
+from essdee_yrp.finishing.packing import get_box_packing, get_dynamic_packed_qty
 from essdee_yrp.finishing.parsing import json_object
 
 
@@ -31,6 +31,7 @@ def build_plan_views(doc):
 	views = build_quantity_views(doc, context)
 	views["inward_details"] = build_inward_details(doc, context)
 	views["rework_details"] = build_rework_details(doc, context)
+	views["box_packing"] = get_box_packing(context["ipd_doc"])
 	views["rejection_details"] = build_rejection_details(doc, context)
 	views["packed_qty"] = get_packed_qty(doc)
 	# Available balances are recalculated on demand and never persisted.

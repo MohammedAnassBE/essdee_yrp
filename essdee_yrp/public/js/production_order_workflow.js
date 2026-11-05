@@ -1328,14 +1328,13 @@ function render_production_order_editor(frm) {
 }
 
 function create_purchase_order_against(frm) {
-  // no_copy source fields are dropped by route_options, so set them on the new doc.
-  frappe.model.with_doctype("Purchase Order", () => {
-    const purchase_order = frappe.model.get_new_doc("Purchase Order");
-    // Match the /web editor: YRP managed, named by the YRP PO series.
-    purchase_order.is_yrp_managed = 1;
-    purchase_order.naming_series = "YRP-PO-.YYYY.-";
-    purchase_order.against = frm.doc.doctype;
-    purchase_order.against_id = frm.doc.name;
-    frappe.set_route("Form", "Purchase Order", purchase_order.name);
+  frappe.call({
+    method: "essdee_yrp.purchase_order_against.make_purchase_order",
+    args: { production_orders: [frm.doc.name] },
+    freeze: true,
+    callback: (response) => {
+      const purchase_order = frappe.model.sync(response.message)[0];
+      frappe.set_route("Form", purchase_order.doctype, purchase_order.name);
+    },
   });
 }

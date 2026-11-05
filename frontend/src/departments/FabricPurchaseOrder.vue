@@ -36,6 +36,7 @@
 						<TabList><Tab value="overview">Overview</Tab><Tab value="items">Items <span v-if="workspace.item_row_count">{{ workspace.item_row_count }}</span></Tab></TabList>
 						<TabPanels>
 							<TabPanel value="overview">
+								<PurchaseOrderProductionOrders :rows="workspace.production_orders || []" />
 								<DocumentOverview :fields="overviewFields" :definitions="overviewDefinitions" include-unclaimed :unclaimed-definition="overviewAdditionalDefinition" aria-label="Purchase Order overview" id-prefix="purchase-order-overview" />
 							</TabPanel>
 							<TabPanel value="items">
@@ -134,6 +135,7 @@ import { preserveListNavigationState } from "../router/listDocumentNavigation.js
 import { formatDisplayDate } from "../utils/dateFormat.js"
 import { purchaseOrderStatusLabel, purchaseOrderStatusTone } from "../utils/purchaseOrderStatus.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
+import PurchaseOrderProductionOrders from "./fabric-store/PurchaseOrderProductionOrders.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 
 const props = defineProps({
@@ -181,7 +183,7 @@ const activeTab = ref("overview")
 let loadSequence = 0
 let actionSequence = 0
 const overviewDefinitions = [
-	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by", "against", "against_id"] },
+	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by"] },
 	{ key: "delivery", label: "Supplier & delivery", description: "Supplier and material destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "deliver_to_supplier", "default_delivery_location", "set_warehouse"] },
 	{ key: "schedule", label: "Schedule", description: "Ordering and required dates", icon: "pi pi-calendar", fields: ["transaction_date", "schedule_date"] },
 	{ key: "status", label: "Status & notes", description: "Fulfilment state and instructions", icon: "pi pi-clipboard", fields: ["status", "open_status", "terms_and_condition", "comments"] },

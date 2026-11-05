@@ -48,6 +48,13 @@ export const PLANNING_WORKSPACES = [
 	},
 	...documentWorkspaces("/planning"),
 	{
+		key: "bulk_close",
+		label: "Bulk Close",
+		description: "Close a supplier's open Work Orders together.",
+		icon: "pi pi-lock",
+		to: "/planning/bulk-close",
+	},
+	{
 		key: "dispatches",
 		label: "Finishing Plan Dispatch",
 		description: "Dispatch packed boxes from several Finishing Plans together.",
@@ -109,7 +116,7 @@ export const PLANNING_PRODUCTION_REPORTS = [
 	{ key: "work_in_progress", value: "work-in-progress", label: "Work In Progress", icon: "pi pi-chart-line" },
 	{ key: "multi_ccr", value: "multi-ccr", label: "Multi CCR", icon: "pi pi-chart-scatter" },
 	{ key: "ppo_report", value: "ppo-report", label: "PPO Report", icon: "pi pi-file" },
-	{ key: "work_order_bulk_close", value: "work-order-bulk-close", label: "Work Order Bulk Close", icon: "pi pi-lock" },
+	{ key: "supplier_pending", value: "supplier-pending", label: "Supplier Pending Report", icon: "pi pi-hourglass" },
 ]
 
 export function visibleProductionReports(reports = {}) {

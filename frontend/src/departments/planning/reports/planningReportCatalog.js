@@ -56,7 +56,7 @@ const PRODUCTION_COMPONENTS = {
 	work_in_progress: lazy(() => import("./WorkInProgressReport.vue")),
 	multi_ccr: MultiCCRReport,
 	ppo_report: lazy(() => import("../../sales/PpoReport.vue")),
-	work_order_bulk_close: lazy(() => import("./WorkOrderBulkClose.vue")),
+	supplier_pending: lazy(() => import("./SupplierPendingReport.vue")),
 }
 
 export const PLANNING_REPORT_GROUPS = { cutting: "Cutting", sewing: "Sewing", finishing: "Finishing", production: "Production / WIP" }
@@ -82,7 +82,7 @@ function finishingReports(capabilities = {}) {
 }
 
 function productionReports(reports = {}) {
-	const props = { work_order_bulk_close: { permissions: reports.work_order_bulk_close }, ppo_report: { canExport: Boolean(reports.ppo_report?.can_export) } }
+	const props = { ppo_report: { canExport: Boolean(reports.ppo_report?.can_export) } }
 	return visibleProductionReports(reports).map(report => ({ ...report, group: PLANNING_REPORT_GROUPS.production, component: PRODUCTION_COMPONENTS[report.key], props: props[report.key] }))
 }
 

@@ -16,6 +16,7 @@ export const PLANNING_ROUTES = {
 	workOrderNew: "planning-work-order-new",
 	workOrder: "planning-work-order",
 	workOrderEdit: "planning-work-order-edit",
+	bulkClose: "planning-bulk-close",
 	stockTransfers: "planning-stock-transfers",
 	reworkDetails: "planning-rework-details",
 	purchaseOrders: "planning-purchase-orders",

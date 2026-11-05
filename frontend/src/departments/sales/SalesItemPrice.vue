@@ -96,7 +96,7 @@ async function load() {
 		uom.value = payload.uom || "Piece"
 		permissions.value = payload.permissions || {}
 		original.value = payload.items || []
-		items.value = structuredClone(original.value)
+		items.value = structuredClone(payload.items || [])
 	} catch (reason) {
 		if (current === loadId) loadError.value = reason?.message || "Unable to load Sales Item Price."
 	} finally {

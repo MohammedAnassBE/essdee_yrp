@@ -7,7 +7,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt, nowdate, nowtime
+from frappe.utils import cint, flt, get_datetime, nowdate, nowtime
 from yrp import attribute_links as attribute_db
 from yrp.attribute_links import value as _attribute_value
 from yrp.stock.utils import get_combine_datetime
@@ -619,7 +619,7 @@ def update_collapsed_bundle(doctype, docname, event, non_stich_process=False, co
 		)
 
 
-def _mark_exact_bundle_history_collapsed(cbm_doc):
+def _mark_exact_bundle_history_collapsed(cbm_doc, voucher):
 	target_combination = _collapsed_set_combination_key(cbm_doc.set_combination)
 	for row in attribute_db.get_all(
 		"SD YRP Cut Bundle Movement Ledger",
@@ -627,17 +627,91 @@ def _mark_exact_bundle_history_collapsed(cbm_doc):
 			"cbm_key": cbm_doc.cbm_key,
 			"collapsed_bundle": 0,
 			"is_cancelled": 0,
+			"is_collapsed": 0,
 		},
 		fields=["name", "set_combination"],
 	):
 		if _collapsed_set_combination_key(row.set_combination) == target_combination:
-			attribute_db.set_value(
+			frappe.db.set_value(
 				"SD YRP Cut Bundle Movement Ledger",
 				row.name,
-				"is_collapsed",
-				1,
+				{
+					"is_collapsed": 1,
+					"collapsed_voucher_type": voucher.doctype,
+					"collapsed_voucher_no": voucher.name,
+				},
 				update_modified=False,
 			)
+
+
+def _collapsed_bundle_key(lot, item, size, colour, panel, set_combination):
+	set_combination_string = frappe.json.dumps(sorted(set_combination.items()))
+	return "|".join([str(lot), str(item), str(size), str(colour), str(panel), set_combination_string])
+
+
+def get_collapsed_chain(doc, location, variant, lot, set_combination):
+	"""Return the collapsed rows at or before, and after, the voucher's posting time."""
+	previous = get_collapsed_previous_cbm_list(
+		doc.posting_date, doc.posting_time, location, variant, lot=lot, set_combination=set_combination
+	)
+	future = get_collapsed_future_cbm_list(
+		doc.posting_date,
+		doc.posting_time,
+		location,
+		variant,
+		limit=False,
+		lot=lot,
+		set_combination=set_combination,
+	)
+	return previous, future
+
+
+def apply_collapsed_change(doc, previous, future, change):
+	for entry in future:
+		future_balance = flt(entry["quantity_after_transaction"], 3) + change
+		if future_balance < 0:
+			frappe.throw(_("This movement would make a later collapsed-bundle balance negative."))
+		update_future_entries_qty_after_transaction(entry["name"], future_balance)
+	create_inter_cbml_doc(
+		previous[0]["name"], doc.doctype, doc.name, change, 1, doc.posting_date, doc.posting_time
+	)
+
+
+def fold_exact_bundles(doc, location, lot, item, d, attrs, set_combination, bundles_dict):
+	"""Fold exact bundles held at a location by the voucher's posting time into collapsed stock.
+
+	Bundles with a ledger row after the voucher stay exact. Each folded panel joins its
+	existing collapsed balance, or opens one through ``bundles_dict``.
+	"""
+	cutoff = get_datetime(get_combine_datetime(doc.posting_date, doc.posting_time))
+	combination_key = _collapsed_set_combination_key(set_combination)
+	folded = defaultdict(float)
+	size, colour = d[attrs["primary"]], d[attrs["pack"]]
+	for bundle in get_latest_cbml_for_variant(location, lot, size, colour, d[attrs["stich"]], item):
+		cbm_doc = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", bundle["name"])
+		if _collapsed_set_combination_key(cbm_doc.set_combination) != combination_key:
+			continue
+		if get_datetime(cbm_doc.posting_datetime) > cutoff:
+			continue
+		for panel in (value.strip() for value in _attribute_value(cbm_doc.panel).split(",") if value.strip()):
+			folded[panel] += flt(cbm_doc.quantity_after_transaction)
+		_mark_exact_bundle_history_collapsed(cbm_doc, doc)
+	if not folded:
+		return bundles_dict
+	ipd_doc = frappe.get_doc(
+		"YRP Item Production Detail", frappe.get_value("SD YRP Lot", lot, "production_detail")
+	)
+	for panel, quantity in folded.items():
+		variant = get_collapsed_variant(item, ipd_doc, attrs, size, colour, panel)
+		previous, future = get_collapsed_chain(doc, location, variant, lot, set_combination)
+		if not previous and future:
+			frappe.throw(_("Move {0} after its first collapsed-bundle transaction.").format(variant))
+		if not previous:
+			key = _collapsed_bundle_key(lot, item, size, colour, panel, set_combination)
+			bundles_dict.setdefault(key, {"qty": 0, "bundle_qty": 0})["bundle_qty"] += quantity
+		elif quantity:
+			apply_collapsed_change(doc, previous, future, quantity * get_panel_quantity(ipd_doc, panel))
+	return bundles_dict
 
 
 def on_submit_collapsed_bundles(
@@ -655,95 +729,31 @@ def on_submit_collapsed_bundles(
 	lot_value,
 	add=False,
 ):
+	del doctype, docname
 	set_combination = _collapsed_set_combination(set_combination)
-	previous = get_collapsed_previous_cbm_list(
-		doc.posting_date,
-		doc.posting_time,
-		location,
-		item_variant,
-		lot=lot_value,
-		set_combination=set_combination,
-	)
-	future = get_collapsed_future_cbm_list(
-		doc.posting_date,
-		doc.posting_time,
-		location,
-		item_variant,
-		limit=False,
-		lot=lot_value,
-		set_combination=set_combination,
-	)
+	previous, future = get_collapsed_chain(doc, location, item_variant, lot_value, set_combination)
 	delta = flt(quantity, 3) * (1 if add else -1)
 	if not previous and not future:
-		row_panel = d[attrs["stich"]]
-		set_combination_list = sorted(set_combination.items())
-		set_combination_string = frappe.json.dumps(set_combination_list)
-		for bundle in get_latest_cbml_for_variant(
-			location,
-			lot_value,
-			d[attrs["primary"]],
-			d[attrs["pack"]],
-			row_panel,
-			item,
-		):
-			cbm_doc = frappe.get_doc("SD YRP Cut Bundle Movement Ledger", bundle["name"])
-			if _collapsed_set_combination_key(cbm_doc.set_combination) != _collapsed_set_combination_key(
-				set_combination
-			):
-				continue
-			for panel in (
-				value.strip() for value in _attribute_value(cbm_doc.panel).split(",") if value.strip()
-			):
-				key = "|".join(
-					[
-						str(cbm_doc.lot),
-						str(cbm_doc.item),
-						str(_attribute_value(cbm_doc.size)),
-						str(_attribute_value(cbm_doc.colour)),
-						str(panel),
-						set_combination_string,
-					]
-				)
-				values = bundles_dict.setdefault(key, {"qty": 0, "bundle_qty": 0})
-				values["bundle_qty"] += flt(cbm_doc.quantity_after_transaction)
-			_mark_exact_bundle_history_collapsed(cbm_doc)
-
-		key = "|".join(
-			[
-				str(lot_value),
-				str(item),
-				str(d[attrs["primary"]]),
-				str(d[attrs["pack"]]),
-				str(row_panel),
-				set_combination_string,
-			]
+		fold_exact_bundles(doc, location, lot_value, item, d, attrs, set_combination, bundles_dict)
+		key = _collapsed_bundle_key(
+			lot_value, item, d[attrs["primary"]], d[attrs["pack"]], d[attrs["stich"]], set_combination
 		)
-		values = bundles_dict.setdefault(key, {"qty": 0, "bundle_qty": 0})
-		values["qty"] += delta
+		bundles_dict.setdefault(key, {"qty": 0, "bundle_qty": 0})["qty"] += delta
 		return bundles_dict
 
 	if not previous:
 		frappe.throw(_("Move {0} after its first collapsed-bundle transaction.").format(item_variant))
 
+	if not add:
+		# Exact bundles that arrived after the first collapse join the balance before it is taken.
+		fold_exact_bundles(doc, location, lot_value, item, d, attrs, set_combination, bundles_dict)
+		previous, future = get_collapsed_chain(doc, location, item_variant, lot_value, set_combination)
 	new_balance = flt(previous[0]["quantity_after_transaction"], 3) + delta
 	if new_balance < 0:
 		frappe.throw(
 			_("Collapsed-bundle stock is not available for {0} at {1}.").format(item_variant, location)
 		)
-	for entry in future:
-		future_balance = flt(entry["quantity_after_transaction"], 3) + delta
-		if future_balance < 0:
-			frappe.throw(_("This movement would make a later collapsed-bundle balance negative."))
-		update_future_entries_qty_after_transaction(entry["name"], future_balance)
-	create_inter_cbml_doc(
-		previous[0]["name"],
-		doctype,
-		docname,
-		quantity,
-		1 if add else -1,
-		doc.posting_date,
-		doc.posting_time,
-	)
+	apply_collapsed_change(doc, previous, future, delta)
 	return bundles_dict
 
 
@@ -771,26 +781,27 @@ def cancel_collapse_bundles(
 	]
 	if not current_indexes:
 		return
-	current_index = current_indexes[-1]
-	current = entries[current_index]
-	if current_index < len(entries) - 1:
-		later = entries[current_index + 1]
-		frappe.throw(
-			_("Cancel the later collapsed-bundle movement {0} {1} first.").format(
-				later.voucher_type, later.voucher_no
+	first_index = current_indexes[0]
+	for later in entries[first_index:]:
+		if later.voucher_type != doc.doctype or later.voucher_no != doc.name:
+			frappe.throw(
+				_("Cancel the later collapsed-bundle movement {0} {1} first.").format(
+					later.voucher_type, later.voucher_no
+				)
 			)
-		)
-	update_is_cancelled_cbml(current.name)
-	if current_index == 0:
-		update_uncollapsed(
-			location,
-			set_combination,
-			lot_value,
-			d[attrs["primary"]],
-			d[attrs["pack"]],
-			d[attrs["stich"]],
-			item,
-		)
+	for index in current_indexes:
+		update_is_cancelled_cbml(entries[index].name)
+	update_uncollapsed(
+		location,
+		set_combination,
+		lot_value,
+		d[attrs["primary"]],
+		d[attrs["pack"]],
+		d[attrs["stich"]],
+		item,
+		# The voucher that opened the balance releases every bundle; later ones only their own fold.
+		voucher=None if first_index == 0 else doc,
+	)
 
 
 def create_new_collapsed_bundle(
@@ -801,11 +812,7 @@ def create_new_collapsed_bundle(
 	set_combination = frappe.json.loads(set_combination)
 	ipd = frappe.get_value("SD YRP Lot", lot, "production_detail")
 	ipd_doc = frappe.get_doc("YRP Item Production Detail", ipd)
-	panel_qty_dict = {}
-	for row in ipd_doc.stiching_item_details:
-		panel_qty_dict[_attribute_value(row.stiching_attribute_value)] = row.quantity
-
-	panel_qty = panel_qty_dict[panel]
+	panel_qty = get_panel_quantity(ipd_doc, panel)
 	stock_moved_qty = flt(stock_moved_qty) / panel_qty
 	bundle_qty = flt(bundle_total_qty) + stock_moved_qty
 
@@ -815,15 +822,7 @@ def create_new_collapsed_bundle(
 		)
 
 	lay_no = bundle_no = 0
-	# Let the IPD mapping decide which attributes the stiching stage needs (don't hand-pick keys).
-	my_attributes = {
-		attrs["primary"]: size,
-		attrs["pack"]: colour,
-		attrs["stich"]: panel,
-	}
-	variant = get_or_create_variant(
-		item, build_variant_attributes(my_attributes, attrs["stich_stage"], ipd_doc)
-	)
+	variant = get_collapsed_variant(item, ipd_doc, attrs, size, colour, panel)
 	set_combination = _get_tuple_attributes(set_combination)
 	d = {
 		"lot": lot,
@@ -834,7 +833,7 @@ def create_new_collapsed_bundle(
 		"panel": panel,
 		"lay_no": lay_no,
 		"bundle_no": bundle_no,
-		"quantity": bundle_qty * panel_qty_dict[panel],
+		"quantity": bundle_qty * panel_qty,
 		"supplier": from_location,
 		"posting_date": doc.posting_date,
 		"posting_time": doc.posting_time,
@@ -842,7 +841,7 @@ def create_new_collapsed_bundle(
 		"voucher_no": doc.name,
 		"collapsed_bundle": 1,
 		"shade": "NA",
-		"quantity_after_transaction": bundle_qty * panel_qty_dict[panel],
+		"quantity_after_transaction": bundle_qty * panel_qty,
 		"set_combination": frappe.json.dumps(set_combination),
 	}
 	d["doctype"] = "SD YRP Cut Bundle Movement Ledger"
@@ -851,6 +850,24 @@ def create_new_collapsed_bundle(
 	new_doc.set_posting_datetime()
 	new_doc.set_key()
 	new_doc.submit()
+
+
+def get_panel_quantity(ipd_doc, panel):
+	for row in ipd_doc.stiching_item_details:
+		if _attribute_value(row.stiching_attribute_value) == panel:
+			return row.quantity
+	frappe.throw(_("Panel {0} is not configured in {1}.").format(panel, ipd_doc.name))
+
+
+def get_collapsed_variant(item, ipd_doc, attrs, size, colour, panel):
+	"""Return the stitching-stage variant a collapsed balance is kept under."""
+	# Let the IPD mapping decide which attributes the stiching stage needs (don't hand-pick keys).
+	my_attributes = {
+		attrs["primary"]: size,
+		attrs["pack"]: colour,
+		attrs["stich"]: panel,
+	}
+	return get_or_create_variant(item, build_variant_attributes(my_attributes, attrs["stich_stage"], ipd_doc))
 
 
 def _filter_set_combination(rows, set_combination):
@@ -943,14 +960,21 @@ def update_is_cancelled_cbml(docname):
 	)
 
 
-def update_uncollapsed(from_location, set_combination, lot, primary_val, pack_val, stich_val, item):
+def update_uncollapsed(
+	from_location, set_combination, lot, primary_val, pack_val, stich_val, item, voucher=None
+):
 	row_set_comb = _collapsed_set_combination_key(set_combination)
+	voucher_condition = ""
+	if voucher:
+		voucher_condition = (
+			"AND collapsed_voucher_type = %(voucher_type)s AND collapsed_voucher_no = %(voucher_no)s"
+		)
 	cbm_list = attribute_db.business_values(
 		frappe.db.sql(
-			"""
+			f"""
 			SELECT name, set_combination FROM `tabSD YRP Cut Bundle Movement Ledger` WHERE size = %(size)s AND supplier = %(supplier)s
 			AND colour = %(colour)s AND item = %(item)s AND lot = %(lot)s AND transformed = 0
-			AND is_cancelled = 0 AND is_collapsed = 1
+			AND is_cancelled = 0 AND is_collapsed = 1 {voucher_condition}
 		""",
 			{
 				"supplier": from_location,
@@ -958,6 +982,8 @@ def update_uncollapsed(from_location, set_combination, lot, primary_val, pack_va
 				"size": attribute_db.link(primary_val),
 				"colour": attribute_db.link(pack_val),
 				"item": item,
+				"voucher_type": voucher and voucher.doctype,
+				"voucher_no": voucher and voucher.name,
 			},
 			as_dict=True,
 		)
@@ -968,7 +994,9 @@ def update_uncollapsed(from_location, set_combination, lot, primary_val, pack_va
 		if stich_val in panels and _collapsed_set_combination_key(cbm_doc.set_combination) == row_set_comb:
 			frappe.db.sql(
 				"""
-					UPDATE `tabSD YRP Cut Bundle Movement Ledger` SET is_collapsed = 0 WHERE name = %(cbml_name)s
+					UPDATE `tabSD YRP Cut Bundle Movement Ledger`
+					SET is_collapsed = 0, collapsed_voucher_type = NULL, collapsed_voucher_no = NULL
+					WHERE name = %(cbml_name)s
 				""",
 				{"cbml_name": bundle["name"]},
 			)

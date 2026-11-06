@@ -5,6 +5,7 @@ from essdee_yrp.cutting import reports as cutting_reports
 from essdee_yrp.cutting import web_capabilities as cutting_capabilities
 from essdee_yrp.fabric_store import web_workspace as fabric_store_workspace
 from essdee_yrp.finishing import web_workspace as finishing_workspace
+from essdee_yrp.planning.dashboard_workspace import has_dashboard_access
 from essdee_yrp.planning.reports import (
 	colour_wise_diff,
 	inhouse_quantity,
@@ -81,6 +82,7 @@ def get_capabilities() -> dict:
 	sales_sections = sales_workspace.get_capabilities()["sections"]
 	fabric_store_sections = fabric_store_workspace.get_capabilities()["sections"]
 	sections = {
+		"dashboard": {"label": _("Dashboard"), "can_read": has_dashboard_access()},
 		"cutting_plans": _with_label(
 			"Cutting Plan", cutting_capabilities.get_capabilities().get("cutting-plans")
 		),

@@ -106,7 +106,7 @@ export const departments = [
 		label: "Planning",
 		shortLabel: "PL",
 		path: "/planning",
-		sections: { cutting_plans: "cutting-plans", sewing_plans: "sewing-plans", finishing_plans: "finishing-plans", lots: "lots", production_orders: "production-orders", work_orders: "work-orders", bulk_close: "bulk-close", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", dispatches: "dispatches", stock_transfers: "stock-transfers", rework_details: "rework-details", purchase_orders: "purchase-orders", box_stickers: "box-sticker-prints", reports: "reports" },
+		sections: { dashboard: "dashboard", cutting_plans: "cutting-plans", sewing_plans: "sewing-plans", finishing_plans: "finishing-plans", lots: "lots", production_orders: "production-orders", work_orders: "work-orders", bulk_close: "bulk-close", delivery_challans: "delivery-challans", goods_received_notes: "goods-received-notes", dispatches: "dispatches", stock_transfers: "stock-transfers", rework_details: "rework-details", purchase_orders: "purchase-orders", box_stickers: "box-sticker-prints", reports: "reports" },
 		component: () => import("./Planning.vue"),
 	},
 	{

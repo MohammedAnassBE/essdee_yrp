@@ -1,15 +1,11 @@
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
-
-from essdee_yrp.purchase_order_approval import MRP_SETTINGS_DOCTYPE, get_approval_item_codes
+from frappe.utils import cint
 
 PRODUCTION_ORDER_DOCTYPE = "YRP Production Order"
 PRODUCTION_ORDERS_FIELD = "production_orders"
 PRODUCTION_ORDER_ROW_DOCTYPE = "SD YRP Purchase Order Production Order"
 YRP_PURCHASE_ORDER_SERIES = "YRP-PO-.YYYY.-"
-DEFAULT_APPROVAL_ITEM_LIMIT_KG = 500
-KG_UOM = "Kg"
 
 
 def is_open_production_order(production_order) -> bool:
@@ -128,47 +124,3 @@ def get_purchase_orders_against(production_order: str) -> list[dict]:
 	)
 	return [row for row in rows if frappe.has_permission("Purchase Order", ptype="read", doc=row.name)]
 
-
-def get_approval_item_limit_kg() -> float:
-	"""The settings limit; an unset single Float reads as 0, so 0 means the default."""
-	value = flt(frappe.db.get_single_value(MRP_SETTINGS_DOCTYPE, "max_approval_item_kg_without_production_order"))
-	return value if value > 0 else DEFAULT_APPROVAL_ITEM_LIMIT_KG
-
-
-def get_row_quantity_in_kg(row) -> float:
-	"""Row quantity in Kg from its stock UOM; a UOM with no Kg conversion fails loudly."""
-	stock_qty = flt(row.get("stock_qty")) or flt(row.get("qty")) * (flt(row.get("conversion_factor")) or 1)
-	stock_uom = row.get("stock_uom") or row.get("uom")
-	if stock_uom == KG_UOM:
-		return stock_qty
-	to_kg = frappe.db.get_value("UOM Conversion Factor", {"from_uom": stock_uom, "to_uom": KG_UOM}, "value")
-	if to_kg:
-		return stock_qty * flt(to_kg)
-	from_kg = frappe.db.get_value("UOM Conversion Factor", {"from_uom": KG_UOM, "to_uom": stock_uom}, "value")
-	if from_kg:
-		return stock_qty / flt(from_kg)
-	frappe.throw(
-		_("Row #{0}: approval Item {1} is in UOM {2}, which cannot be converted to Kg.").format(
-			row.get("idx"), frappe.bold(row.get("item_code")), frappe.bold(stock_uom)
-		)
-	)
-
-
-def get_approval_item_quantity_in_kg(doc) -> float:
-	rows = doc.get("items") or []
-	approval_items = get_approval_item_codes(row.get("item_code") for row in rows)
-	return sum(get_row_quantity_in_kg(row) for row in rows if row.get("item_code") in approval_items)
-
-
-def validate_approval_item_limit_without_production_order(doc, method=None) -> None:
-	"""validate: a draft not raised against a Production Order may order at most the approval item limit."""
-	if cint(doc.docstatus) != 0 or doc.get(PRODUCTION_ORDERS_FIELD):
-		return
-	limit = get_approval_item_limit_kg()
-	quantity = round(get_approval_item_quantity_in_kg(doc), 3)
-	if quantity > limit:
-		frappe.throw(
-			_("{0} kg of approval items exceeds the {1} kg limit for a Purchase Order not raised against a Production Order.").format(
-				f"{quantity:g}", f"{limit:g}"
-			)
-		)

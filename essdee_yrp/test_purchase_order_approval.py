@@ -325,6 +325,90 @@ class TestPurchaseOrderRequestLifecycle(TestCase):
 		self.assertIsNone(ensure_purchase_order_approval_route())
 		get_settings.return_value.save.assert_not_called()
 
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
+	def test_purchase_order_route_keeps_custom_message_template(self, get_settings):
+		from essdee_yrp.purchase_order_approval import (
+			PURCHASE_ORDER_ROUTE_VALUES,
+			ensure_purchase_order_approval_route,
+		)
+
+		route = {"name": "PO-ROUTE", "enabled": 1, "reference_doctype": "Purchase Order", "group_chat_id": "-100999"}
+		route.update(PURCHASE_ORDER_ROUTE_VALUES)
+		route["message_template"] = "Custom {{ doc.name }}"
+		settings = self._settings(route)
+		get_settings.return_value = settings
+		self.assertEqual(ensure_purchase_order_approval_route(), "PO-ROUTE")
+		self.assertEqual(settings.routes[0].message_template, "Custom {{ doc.name }}")
+		settings.save.assert_not_called()
+
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
+	def test_purchase_order_route_fills_empty_message_template(self, get_settings):
+		from essdee_yrp.purchase_order_approval import (
+			PURCHASE_ORDER_MESSAGE_TEMPLATE,
+			ensure_purchase_order_approval_route,
+		)
+
+		settings = self._settings(
+			{
+				"name": "PO-ROUTE",
+				"enabled": 1,
+				"reference_doctype": "Purchase Order",
+				"group_chat_id": "-100999",
+				"message_template": "",
+			}
+		)
+		get_settings.return_value = settings
+		self.assertEqual(ensure_purchase_order_approval_route(), "PO-ROUTE")
+		self.assertEqual(settings.routes[0].message_template, PURCHASE_ORDER_MESSAGE_TEMPLATE)
+		settings.save.assert_called_once()
+
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_cached_doc")
+	def test_purchase_order_route_resets_fixed_fields_but_not_template(self, get_settings):
+		from essdee_yrp.purchase_order_approval import ensure_purchase_order_approval_route
+
+		settings = self._settings(
+			{
+				"name": "PO-ROUTE",
+				"enabled": 1,
+				"reference_doctype": "Purchase Order",
+				"group_chat_id": "-100999",
+				"trigger_value": "Draft",
+				"approve_value": "Cancelled",
+				"reject_action": "Nope",
+				"target_field": "docstatus",
+				"message_template": "Custom {{ doc.name }}",
+			}
+		)
+		get_settings.return_value = settings
+		ensure_purchase_order_approval_route()
+		route = settings.routes[0]
+		self.assertEqual(route.trigger_value, "Pending Approval")
+		self.assertEqual(route.approve_value, "Ordered")
+		self.assertEqual(route.reject_action, "Reject PO")
+		self.assertEqual(route.target_field, "status")
+		self.assertEqual(route.message_template, "Custom {{ doc.name }}")
+		settings.save.assert_called_once()
+
+	def test_default_message_template_lists_production_orders(self):
+		from essdee_yrp.purchase_order_approval import PURCHASE_ORDER_MESSAGE_TEMPLATE
+
+		block = (
+			"{% if doc.production_orders %}\n"
+			"PRODUCTION ORDERS ({{ doc.production_orders | length }})\n"
+			"───────────────────────\n"
+			"{% for row in doc.production_orders -%}\n"
+			"{{ loop.index }}. {{ row.production_order }} · {{ row.item_name }}\n"
+			"{% endfor %}\n"
+			"{% endif %}\n"
+		)
+		self.assertIn(block, PURCHASE_ORDER_MESSAGE_TEMPLATE)
+		self.assertLess(
+			PURCHASE_ORDER_MESSAGE_TEMPLATE.index("PO Date:"), PURCHASE_ORDER_MESSAGE_TEMPLATE.index(block)
+		)
+		self.assertLess(
+			PURCHASE_ORDER_MESSAGE_TEMPLATE.index(block), PURCHASE_ORDER_MESSAGE_TEMPLATE.index("ITEMS (")
+		)
+
 	@patch("essdee_yrp.purchase_order_approval.frappe.throw", side_effect=RuntimeError("thrown"))
 	@patch("essdee_yrp.purchase_order_approval.ensure_purchase_order_approval_route", return_value=None)
 	@patch("essdee_yrp.purchase_order_approval.get_live_request", return_value=None)

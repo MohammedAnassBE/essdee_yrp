@@ -5,6 +5,13 @@ export { PLANNING_ROUTES }
 
 export const PLANNING_WORKSPACES = [
 	{
+		key: "dashboard",
+		label: "Dashboard",
+		description: "Open PPOs and lots by status; PPO Tracking by process.",
+		icon: "pi pi-gauge",
+		to: "/planning/dashboard",
+	},
+	{
 		key: "cutting_plans",
 		label: "Cutting Plan",
 		description: "Plans, markers, lay sheets and production movements.",

@@ -90,3 +90,29 @@ class TestPlanningReworkAndPurchaseOrderSections(TestCase):
 			{"rework_details": rework, "purchase_orders": purchase_orders},
 		)
 		self.assertEqual(self.sections({}, {}), {})
+
+
+class TestPlanningDashboardSection(TestCase):
+	def sections(self, readable):
+		empty = {"sections": {}}
+		with (
+			patch.object(web_workspace.sewing_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.finishing_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.sales_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.fabric_store_workspace, "get_capabilities", return_value=empty),
+			patch.object(web_workspace.cutting_capabilities, "get_capabilities", return_value={}),
+			patch.object(web_workspace, "_reports_section", return_value={"can_read": False}),
+			patch.object(
+				web_workspace.frappe, "has_permission",
+				side_effect=lambda doctype, ptype="read", doc=None: ptype == "read" and doctype in readable,
+			),
+		):
+			return web_workspace.get_capabilities()["sections"]
+
+	def test_dashboard_is_the_first_card_when_lots_ppos_work_and_finishing_plans_are_readable(self):
+		sections = self.sections({"SD YRP Lot", "YRP Production Order", "YRP Work Order", "SD YRP Finishing Plan"})
+		self.assertEqual(next(iter(sections)), "dashboard")
+		self.assertEqual(sections["dashboard"], {"label": "Dashboard", "can_read": True})
+
+	def test_dashboard_is_hidden_without_work_order_read(self):
+		self.assertNotIn("dashboard", self.sections({"SD YRP Lot", "YRP Production Order"}))

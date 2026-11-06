@@ -25,4 +25,5 @@ export const PLANNING_ROUTES = {
 	boxStickerNew: "planning-box-sticker-print-new",
 	boxSticker: "planning-box-sticker-print",
 	reports: "planning-reports",
+	dashboard: "planning-dashboard",
 }

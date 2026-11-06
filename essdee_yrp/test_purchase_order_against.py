@@ -333,106 +333,26 @@ class TestPurchaseOrderProductionOrdersSiteData(TestCase):
 		self.assertEqual(doc.production_orders[0].doctype, ROW_DOCTYPE)
 
 
-class TestApprovalItemLimitWithoutProductionOrder(TestCase):
-	def purchase_order(self, *rows, docstatus=0, production_order=None):
-		items = [frappe._dict(idx=index, **row) for index, row in enumerate(rows, start=1)]
-		return frappe._dict(docstatus=docstatus, production_orders=table(production_order) if production_order else [], items=items)
-
-	def check(self, doc, limit=None, conversions=None):
-		conversions = conversions or {}
-
-		def conversion(_doctype, filters, _field):
-			return conversions.get((filters["from_uom"], filters["to_uom"]))
-
-		with (
-			patch(f"{MODULE}.frappe.db.get_single_value", return_value=limit),
-			patch(f"{MODULE}.get_approval_item_codes", return_value={"YARN-1", "YARN-2"}) as get_all,
-			patch(f"{MODULE}.frappe.db.get_value", side_effect=conversion),
-		):
-			against.validate_approval_item_limit_without_production_order(doc)
-		return get_all
-
-	def test_yarn_up_to_the_limit_is_allowed_and_only_yarn_counts(self):
-		get_all = self.check(self.purchase_order(
-			{"item_code": "YARN-1", "stock_qty": 300, "stock_uom": "Kg"},
-			{"item_code": "YARN-2", "qty": 2, "conversion_factor": 100, "stock_uom": "Kg"},
-			{"item_code": "BUTTON", "stock_qty": 5000, "stock_uom": "Kg"},
-		))
-		self.assertEqual(set(get_all.call_args.args[0]), {"YARN-1", "YARN-2", "BUTTON"})
-
-	def test_approval_rules_with_and_without_production_order(self):
+class TestApprovalItemsWithoutProductionOrder(TestCase):
+	def test_yarn_over_500_kg_without_production_order_passes_validation_and_needs_approval(self):
 		from essdee_yrp.purchase_order_approval import apply_draft_approval_status
 
-		row = {"item_code": "YARN-1", "stock_qty": 900, "stock_uom": "Kg"}
-		for production_order_name, over_limit in (("PPO-1", False), (None, True)):
-			doc = self.purchase_order(row, production_order=production_order_name)
-			doc.update(is_yrp_managed=1, status="Draft", name="PO-1", flags=frappe._dict())
-			with (
-				self.subTest(production_order=production_order_name),
-				patch("essdee_yrp.purchase_order_approval.get_approval_item_codes", return_value={"YARN-1"}),
-				patch("essdee_yrp.purchase_order_approval._validate_not_locked_for_edit"),
-			):
-				apply_draft_approval_status(doc)
-				self.assertEqual(doc.status, "Pending Approval")
-				if over_limit:
-					with self.assertRaises(frappe.ValidationError):
-						self.check(doc)
-				else:
-					self.check(doc)
-
-	def test_yarn_over_the_limit_without_production_order_is_rejected(self):
-		doc = self.purchase_order({"item_code": "YARN-1", "stock_qty": 620, "stock_uom": "Kg"})
-		with self.assertRaises(frappe.ValidationError) as raised:
-			self.check(doc)
-		self.assertIn(
-			"620 kg of approval items exceeds the 500 kg limit for a Purchase Order not raised against a Production Order",
-			str(raised.exception),
-		)
-
-	def test_production_order_purchase_orders_and_submitted_documents_are_exempt(self):
-		row = {"item_code": "YARN-1", "stock_qty": 5000, "stock_uom": "Kg"}
-		self.check(self.purchase_order(row, production_order="PPO-1"))
-		self.check(self.purchase_order(row, docstatus=1))
-		self.check(self.purchase_order(row, docstatus=2))
-
-	def test_settings_override_the_default_limit(self):
-		row = {"item_code": "YARN-1", "stock_qty": 150, "stock_uom": "Kg"}
-		self.check(self.purchase_order(row), limit=500)
-		with self.assertRaises(frappe.ValidationError):
-			self.check(self.purchase_order(row), limit=100)
-		for unset in (None, 0, ""):
-			with patch(f"{MODULE}.frappe.db.get_single_value", return_value=unset):
-				self.assertEqual(against.get_approval_item_limit_kg(), 500)
-
-	def test_weight_uoms_convert_to_kg_and_other_uoms_fail_loudly(self):
-		grams = {"item_code": "YARN-1", "stock_qty": 600000, "stock_uom": "Gram"}
-		with self.assertRaises(frappe.ValidationError):
-			self.check(self.purchase_order(grams), conversions={("Kg", "Gram"): 1000})
-		self.check(self.purchase_order({**grams, "stock_qty": 400000}), conversions={("Kg", "Gram"): 1000})
-		self.check(self.purchase_order({"item_code": "YARN-1", "stock_qty": 0.4, "stock_uom": "Tonne"}), conversions={("Tonne", "Kg"): 1000})
-		with self.assertRaises(frappe.ValidationError) as raised:
-			self.check(self.purchase_order({"item_code": "YARN-1", "stock_qty": 3, "stock_uom": "Cone"}))
-		self.assertIn("cannot be converted to Kg", str(raised.exception))
-
-	def test_limit_hook_and_setting_are_registered(self):
-		self.assertIn(
-			f"{MODULE}.validate_approval_item_limit_without_production_order",
-			frappe.get_hooks("doc_events")["Purchase Order"]["validate"],
-		)
-		field = frappe.get_meta("SD YRP MRP Settings").get_field("max_approval_item_kg_without_production_order")
-		self.assertEqual((field.fieldtype, field.default), ("Float", "500"))
-		self.assertEqual(against.DEFAULT_APPROVAL_ITEM_LIMIT_KG, 500)
-
-	def test_real_yarn_item_document_is_checked_without_saving(self):
 		yarn_item = frappe.db.get_value("Item", {"item_group": "Purchase - Yarn", "stock_uom": "Kg", "disabled": 0})
 		if not yarn_item:
 			self.skipTest("Site has no Kg yarn Item.")
 		doc = frappe.new_doc("Purchase Order")
-		doc.append("items", {"item_code": yarn_item, "qty": 600, "uom": "Kg", "stock_uom": "Kg", "conversion_factor": 1})
-		with self.assertRaises(frappe.ValidationError):
-			against.validate_approval_item_limit_without_production_order(doc)
-		doc.items[0].qty = 500
-		against.validate_approval_item_limit_without_production_order(doc)
-		doc.items[0].qty = 600
-		doc.append("production_orders", {"production_order": "PPO-1", "item_name": "ITEM"})
-		against.validate_approval_item_limit_without_production_order(doc)
+		doc.update({"is_yrp_managed": 1, "status": "Draft"})
+		doc.append("items", {"item_code": yarn_item, "qty": 900, "uom": "Kg", "stock_uom": "Kg", "conversion_factor": 1})
+		hooks = [hook for hook in frappe.get_hooks("doc_events")["Purchase Order"]["validate"] if hook.startswith("essdee_yrp.")]
+		self.assertEqual(hooks, [f"{MODULE}.validate_purchase_order_against_unchanged"])
+		for hook in hooks:
+			frappe.get_attr(hook)(doc)
+		with patch("essdee_yrp.purchase_order_approval._validate_not_locked_for_edit"):
+			apply_draft_approval_status(doc)
+		self.assertEqual(doc.status, "Pending Approval")
+		self.assertFalse(doc.production_orders)
+
+	def test_weight_limit_helpers_and_setting_are_gone(self):
+		for name in ("validate_approval_item_limit_without_production_order", "get_approval_item_limit_kg", "DEFAULT_APPROVAL_ITEM_LIMIT_KG"):
+			self.assertFalse(hasattr(against, name), name)
+		self.assertIsNone(frappe.get_meta("SD YRP MRP Settings").get_field("max_approval_item_kg_without_production_order"))

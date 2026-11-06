@@ -7,14 +7,16 @@
 		<div class="lotwise-totals__items">
 			<div v-for="metric in metrics" :key="metric.fieldname" class="lotwise-totals__metric">
 				<span>{{ metric.label }}</span>
-				<strong>{{ formatValue(values[metric.fieldname], metric.type) }}</strong>
+				<strong>{{ formatLotwiseValue(values[metric.fieldname], metric.type) }}</strong>
 			</div>
 		</div>
 	</aside>
 </template>
 
 <script setup>
-const props = defineProps({
+import { formatLotwiseValue } from "../lotwiseTotals.js"
+
+defineProps({
 	values: { type: Object, default: () => ({}) },
 })
 
@@ -36,16 +38,6 @@ const metrics = [
 	{ fieldname: "profit_percent", label: "Profit % (Markup)", type: "percent" },
 	{ fieldname: "profit_percent_markdown", label: "Profit % (Markdown)", type: "percent" },
 ]
-
-function formatValue(value, type) {
-	const number = Number(value)
-	const formatted = (Number.isFinite(number) ? number : 0).toLocaleString("en-IN", {
-		maximumFractionDigits: 2,
-	})
-	if (type === "currency") return `₹${formatted}`
-	if (type === "percent") return `${formatted}%`
-	return formatted
-}
 </script>
 
 <style scoped>

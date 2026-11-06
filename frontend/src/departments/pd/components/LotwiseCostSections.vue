@@ -23,10 +23,11 @@
 					:field="fieldByName('qty_rate_chart')"
 					:model-value="form.qty_rate_chart || []"
 					:child-meta="childMetaFor('qty_rate_chart')"
+					:totals="totalsFor('qty_rate_chart')"
 					:disabled="fieldsDisabled"
 					@update:model-value="emit('update-table', 'qty_rate_chart', $event)"
 				/>
-				<div class="lotwise-section__inline-action">
+				<div class="lotwise-section__inline-action" @keydown="addRateOnEnter">
 					<FormField
 						:field="fieldByName('additional_rate')"
 						:model-value="form.additional_rate"
@@ -53,6 +54,7 @@
 					:field="fieldByName('cloth_value')"
 					:model-value="form.cloth_value || []"
 					:child-meta="childMetaFor('cloth_value')"
+					:totals="totalsFor('cloth_value')"
 					:disabled="fieldsDisabled"
 					@update:model-value="emit('update-table', 'cloth_value', $event)"
 				/>
@@ -80,6 +82,7 @@
 					:field="fieldByName('piece_cloth_weight')"
 					:model-value="form.piece_cloth_weight || []"
 					:child-meta="childMetaFor('piece_cloth_weight')"
+					:totals="totalsFor('piece_cloth_weight')"
 					:disabled="fieldsDisabled"
 					@update:model-value="emit('update-table', 'piece_cloth_weight', $event)"
 				/>
@@ -112,6 +115,7 @@
 					:field="fieldByName(table)"
 					:model-value="form[table] || []"
 					:child-meta="childMetaFor(table)"
+					:totals="totalsFor(table)"
 					:disabled="fieldsDisabled"
 					@update:model-value="emit('update-table', table, $event)"
 				/>
@@ -142,6 +146,7 @@
 					:field="fieldByName(section.table)"
 					:model-value="form[section.table] || []"
 					:child-meta="childMetaFor(section.table)"
+					:totals="totalsFor(section.table)"
 					:disabled="fieldsDisabled"
 					@update:model-value="emit('update-table', section.table, $event)"
 				/>
@@ -171,6 +176,8 @@ import { computed } from "vue"
 
 import ChildTableField from "../../../components/common/ChildTableField.vue"
 import FormField from "../../../components/common/FormField.vue"
+import { isFormSubmitEnter } from "../../../utils/documentShortcuts.js"
+import { lotwiseTableTotals } from "../lotwiseTotals.js"
 import { LOTWISE_SECTIONS, LOTWISE_TABLE_COLUMNS, lotwiseChildMeta } from "../pdViews.js"
 import LotwiseTotalsRail from "./LotwiseTotalsRail.vue"
 
@@ -202,6 +209,23 @@ const childMetas = computed(() => Object.fromEntries(Object.keys(LOTWISE_TABLE_C
 
 function childMetaFor(fieldname) {
 	return childMetas.value[fieldname]
+}
+
+const tableTotals = computed(() => Object.fromEntries(Object.keys(LOTWISE_TABLE_COLUMNS).map((table) => [
+	table,
+	lotwiseTableTotals(table, props.form[table]),
+])))
+
+function totalsFor(table) {
+	return tableTotals.value[table]
+}
+
+/** Enter in the Additional Rate field runs Add Rate, like clicking it. */
+function addRateOnEnter(event) {
+	if (!props.canEdit || !isFormSubmitEnter(event)) return
+	event.preventDefault()
+	if (event.repeat || props.pageBusy) return
+	emit("command", "add_rate")
 }
 </script>
 

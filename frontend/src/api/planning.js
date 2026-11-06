@@ -1,6 +1,7 @@
 import { callMethod, callRead } from "./frappe.js"
 
 const LOT_METHOD = "essdee_yrp.planning.lot_workspace"
+const DASHBOARD_METHOD = "essdee_yrp.planning.dashboard_workspace"
 const BULK_CLOSE_METHOD = "essdee_yrp.essdee_yrp.page.work_order_bulk_close.work_order_bulk_close"
 
 export function getOpenWorkOrders(filters) {
@@ -75,4 +76,20 @@ export function saveLot(values, { name, expectedModified }) {
 	return callMethod(`${LOT_METHOD}.save_lot`, {
 		values, name: name || null, expected_modified: expectedModified || null,
 	})
+}
+
+export function getPlanningDashboard() {
+	return callRead(`${DASHBOARD_METHOD}.get_dashboard`)
+}
+
+export function getPpoTrackingOptions() {
+	return callRead(`${DASHBOARD_METHOD}.get_tracking_options`)
+}
+
+export function getPpoTracking(ppos, lots) {
+	return callRead(`${DASHBOARD_METHOD}.get_tracking`, { ppos: ppos || [], lots: lots || [] })
+}
+
+export function getPpoProcessDetail(lot, process) {
+	return callRead(`${DASHBOARD_METHOD}.get_process_detail`, { lot, process })
 }

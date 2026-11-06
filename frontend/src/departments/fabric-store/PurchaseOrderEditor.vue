@@ -25,6 +25,7 @@
 					<DateField v-model="form.transaction_date" class="purchase-order-editor__date" :label="fieldLabel('transaction_date', 'Order date', false)" :required="isRequired('transaction_date', true)" :disabled="busy || isReadOnly('transaction_date')" @update:model-value="markDirty" />
 					<LinkField v-model="form.company" :label="fieldLabel('company', 'Company', false)" doctype="Company" :required="isRequired('company')" show-clear :disabled="busy || isReadOnly('company')" @update:model-value="markDirty" />
 					<LinkField v-model="form.currency" :label="fieldLabel('currency', 'Currency', false)" doctype="Currency" :required="isRequired('currency')" show-clear :disabled="busy || isReadOnly('currency')" @update:model-value="markDirty" />
+					<label class="purchase-order-editor__check"><Checkbox v-model="isDevelopment" binary input-id="po-is-development" :disabled="busy || isReadOnly('is_development')" @change="markDirty" /><span>{{ fieldLabel('is_development', 'Development', false) }}</span></label>
 				</div>
 				<PurchaseOrderProductionOrders :rows="form.production_orders" />
 			</section>
@@ -158,7 +159,7 @@ const previewPending = ref(false)
 const error = ref("")
 const loadFailed = ref(false)
 const editor = ref({})
-const form = reactive({ naming_series: "", supplier: "", transaction_date: "", schedule_date: "", company: "", set_warehouse: "", default_delivery_location: "", deliver_to_supplier: 0, currency: "", terms_and_condition: "", comments: "", production_orders: [] })
+const form = reactive({ naming_series: "", supplier: "", transaction_date: "", schedule_date: "", company: "", set_warehouse: "", default_delivery_location: "", deliver_to_supplier: 0, currency: "", terms_and_condition: "", comments: "", is_development: 0, production_orders: [] })
 const itemGroups = ref([])
 const dirty = ref(false)
 const sourceRevision = ref(0)
@@ -184,6 +185,7 @@ const live = useLiveDocument({
 })
 const duplicateFrom = computed(() => String(props.source?.duplicate_from || ""))
 const deliverToSupplier = computed({ get: () => Boolean(Number(form.deliver_to_supplier)), set: (value) => { form.deliver_to_supplier = value ? 1 : 0 } })
+const isDevelopment = computed({ get: () => Boolean(Number(form.is_development)), set: (value) => { form.is_development = value ? 1 : 0 } })
 const deliveryLocationFilters = computed(() => ({ is_company_location: deliverToSupplier.value ? 0 : 1 }))
 const deliveryWarehouseFilters = computed(() => ({ disabled: 0, supplier: form.default_delivery_location || "__unselected__" }))
 const composerEditor = computed(() => ({

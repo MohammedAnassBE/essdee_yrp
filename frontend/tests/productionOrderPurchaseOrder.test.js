@@ -129,6 +129,14 @@ test("editor and PO page show the Production Orders table instead of Against fie
 	assert.doesNotMatch(source("../src/departments/fabric-store/FabricPurchaseOrders.vue"), /against/)
 })
 
+test("editor edits and PO page shows the Development check", () => {
+	const editor = source("../src/departments/fabric-store/PurchaseOrderEditor.vue")
+	assert.match(editor, /is_development: 0, production_orders: \[\] \}\)/)
+	assert.match(editor, /<Checkbox v-model="isDevelopment" binary input-id="po-is-development" :disabled="busy \|\| isReadOnly\('is_development'\)" @change="markDirty" \/><span>\{\{ fieldLabel\('is_development', 'Development', false\) \}\}<\/span>/)
+	const page = source("../src/departments/FabricPurchaseOrder.vue")
+	assert.match(page, /fields: \["company", "naming_series", "is_yrp_managed", "is_development", "approved_by"\]/)
+})
+
 test("PPO list selects rows and creates one Purchase Order for the selection", () => {
 	const list = source("../src/departments/sales/ProductionOrders.vue")
 	assert.match(list, /selectable/)

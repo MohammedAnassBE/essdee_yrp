@@ -409,6 +409,42 @@ class TestPurchaseOrderRequestLifecycle(TestCase):
 			PURCHASE_ORDER_MESSAGE_TEMPLATE.index(block), PURCHASE_ORDER_MESSAGE_TEMPLATE.index("ITEMS (")
 		)
 
+	def _sendable_doc(self, production_orders=(), is_development=0):
+		doc = self._doc()
+		doc.production_orders = list(production_orders)
+		doc.is_development = is_development
+		return doc
+
+	@patch("essdee_yrp.purchase_order_approval._require_send_permissions")
+	@patch("essdee_yrp.purchase_order_approval._get_locked_purchase_order")
+	@patch("essdee_yrp.purchase_order_approval.requires_item_approval", return_value=True)
+	def test_send_needs_linked_production_order_or_development(self, requires, get_locked, permissions):
+		from essdee_yrp.purchase_order_approval import SEND_BLOCKED_REASON, _prepare_purchase_order_request
+
+		for doc in (
+			self._sendable_doc(production_orders=[frappe._dict(production_order="PPO-1")]),
+			self._sendable_doc(is_development=1),
+		):
+			get_locked.return_value = doc
+			self.assertIs(_prepare_purchase_order_request(doc.name), doc)
+		get_locked.return_value = self._sendable_doc()
+		with self.assertRaisesRegex(frappe.ValidationError, SEND_BLOCKED_REASON):
+			_prepare_purchase_order_request("YRP-PO-0012")
+
+	@patch("essdee_yrp.purchase_order_approval.get_live_request", return_value=None)
+	@patch("essdee_yrp.purchase_order_approval.frappe.get_doc")
+	def test_approval_state_reports_send_eligibility(self, get_doc, get_live):
+		from essdee_yrp.purchase_order_approval import SEND_BLOCKED_REASON, get_purchase_order_approval_state
+
+		get_doc.return_value = self._sendable_doc()
+		state = self._call(get_purchase_order_approval_state, "YRP-PO-0012")
+		self.assertFalse(state["can_send_request"])
+		self.assertEqual(state["send_blocked_reason"], SEND_BLOCKED_REASON)
+		get_doc.return_value = self._sendable_doc(is_development=1)
+		state = self._call(get_purchase_order_approval_state, "YRP-PO-0012")
+		self.assertTrue(state["can_send_request"])
+		self.assertEqual(state["send_blocked_reason"], "")
+
 	@patch("essdee_yrp.purchase_order_approval.frappe.throw", side_effect=RuntimeError("thrown"))
 	@patch("essdee_yrp.purchase_order_approval.ensure_purchase_order_approval_route", return_value=None)
 	@patch("essdee_yrp.purchase_order_approval.get_live_request", return_value=None)

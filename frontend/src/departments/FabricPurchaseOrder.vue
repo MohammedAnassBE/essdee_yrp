@@ -90,6 +90,10 @@
 			<template #footer><Button label="Cancel" severity="secondary" text @click="lotEditorVisible = false" /><Button label="Save Changes" icon="pi pi-save" :disabled="!lotChanged || !lotReason.trim()" :loading="acting === 'update_linked_lots'" @click="saveLinkedLots" /></template>
 		</Dialog>
 
+		<PurchaseOrderAttributeDialog v-model:visible="attributeEditorVisible" :purchase-order="workspace.record?.name || ''" @saved="attributeValuesSaved" />
+
+		<PurchaseOrderProductionOrderDialog v-model:visible="productionOrderEditorVisible" :rows="workspace.production_orders || []" :busy="acting === 'update_production_orders'" :can-remove="Boolean(capabilities.update_production_orders?.can_remove)" :error="productionOrderEditorVisible ? actionError : ''" @save="saveProductionOrders" />
+
 		<Dialog v-model:visible="deliverySourceVisible" modal header="Create Delivery Challan" class="fabric-action-dialog erp-dialog--sm">
 			<div class="purchase-order-dc-source"><LinkField v-model="deliveryWorkOrder" label="Work Order *" doctype="YRP Work Order" :filters="{ docstatus: 1 }" :show-open-button="false" help-text="The Purchase Order remains the traceability source." /></div>
 			<template #footer><Button label="Cancel" severity="secondary" text @click="deliverySourceVisible = false" /><Button label="Continue" icon="pi pi-arrow-right" :disabled="!deliveryWorkOrder" @click="openDeliveryChallan" /></template>
@@ -135,7 +139,9 @@ import { preserveListNavigationState } from "../router/listDocumentNavigation.js
 import { formatDisplayDate } from "../utils/dateFormat.js"
 import { purchaseOrderStatusLabel, purchaseOrderStatusTone } from "../utils/purchaseOrderStatus.js"
 import FabricDocumentWorkspace from "./fabric-store/FabricDocumentWorkspace.vue"
+import PurchaseOrderAttributeDialog from "./fabric-store/PurchaseOrderAttributeDialog.vue"
 import PurchaseOrderProductionOrders from "./fabric-store/PurchaseOrderProductionOrders.vue"
+import PurchaseOrderProductionOrderDialog from "./fabric-store/PurchaseOrderProductionOrderDialog.vue"
 import RelatedDocumentWorkspaceDialog from "./fabric-store/RelatedDocumentWorkspaceDialog.vue"
 
 const props = defineProps({
@@ -173,8 +179,10 @@ const lotOriginal = ref([])
 const lotDraft = ref([])
 const lotCandidate = ref("")
 const lotReason = ref("")
+const attributeEditorVisible = ref(false)
 const deliverySourceVisible = ref(false)
 const deliveryWorkOrder = ref("")
+const productionOrderEditorVisible = ref(false)
 const rejectVisible = ref(false)
 const rejectReason = ref("")
 const lifecycleConfirmVisible = ref(false)
@@ -203,6 +211,7 @@ const approvalMessage = computed(() => {
 	const approval = workspace.value.approval
 	if (!approval?.pending_approval) return ""
 	if (approval.live_request) return `Approval request ${String(approval.live_request.status || "sent").toLowerCase()}. Waiting for approval before this Purchase Order can be submitted.`
+	if (approval.send_blocked_reason) return `This Purchase Order contains yarn and needs approval. ${approval.send_blocked_reason}.`
 	return "This Purchase Order contains yarn and needs approval. Send the approval request before it can be submitted."
 })
 const itemGroups = computed(() => workspace.value.matrices?.items || workspace.value.item_groups || [])
@@ -229,6 +238,8 @@ const purchaseOrderActions = computed(() => {
 	add("close", "Close", "pi pi-lock", () => requestLifecycleAction("close"))
 	add("reopen", "Reopen", "pi pi-lock-open", () => runDomainCommand("reopen"))
 	add("update_linked_lots", "Manage Linked Lots", "pi pi-link", openLotEditor)
+	add("update_production_orders", "Add PPO", "pi pi-sitemap", () => { actionError.value = ""; productionOrderEditorVisible.value = true })
+	add("update_attribute_values", "Update Attribute Values", "pi pi-sliders-h", () => { attributeEditorVisible.value = true })
 	add("save", "Edit", "pi pi-pencil", editPurchaseOrder)
 	add("submit", "Submit", "pi pi-check", () => changeStatus("submit"), { shortcut: "submit", confirms: false })
 	add("cancel", "Cancel Document", "pi pi-ban", () => requestLifecycleAction("cancel"), { menuOnly: true, shortcut: "cancel" })
@@ -261,12 +272,14 @@ async function loadWorkspace(isRefresh = false) {
 		relatedName.value = ""
 		relatedSourceContext.value = {}
 		lotEditorVisible.value = false
+		attributeEditorVisible.value = false
 		lotOriginal.value = []
 		lotDraft.value = []
 		lotCandidate.value = ""
 		lotReason.value = ""
 		deliverySourceVisible.value = false
 		deliveryWorkOrder.value = ""
+		productionOrderEditorVisible.value = false
 		rejectVisible.value = false
 		rejectReason.value = ""
 		activeTab.value = "overview"
@@ -387,6 +400,10 @@ async function saveLinkedLots() {
 		comment: lotReason.value,
 	})
 	if (!actionError.value) lotEditorVisible.value = false
+}
+async function attributeValuesSaved(payload) { await loadWorkspace(true); emit("changed", payload) }
+async function saveProductionOrders(productionOrders) {
+	if (await runDomainCommand("update_production_orders", { production_orders: productionOrders })) productionOrderEditorVisible.value = false
 }
 function beginDeliveryChallan() { deliveryWorkOrder.value = ""; deliverySourceVisible.value = true }
 function openDeliveryChallan() {

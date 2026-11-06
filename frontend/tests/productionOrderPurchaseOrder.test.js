@@ -159,4 +159,5 @@ test("the /web Purchase Order page embeds without routing away", () => {
 	assert.match(page, /<DocumentStatusBadge v-if="approvalMessage" :label="workspace\.approval\.live_request \? 'Approval Requested' : 'Pending Approval'" tone="warning" \/>/)
 	assert.match(page, /<Message v-if="approvalMessage" severity="warn" :closable="false">\{\{ approvalMessage \}\}<\/Message>/)
 	assert.match(page, /if \(!approval\?\.pending_approval\) return ""/)
+	assert.match(page, /if \(approval\.send_blocked_reason\) return `This Purchase Order contains yarn and needs approval\. \$\{approval\.send_blocked_reason\}\.`/)
 })

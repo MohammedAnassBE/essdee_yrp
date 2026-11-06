@@ -15,6 +15,7 @@ PENDING_APPROVAL_STATUS = "Pending Approval"
 SYSTEM_MANAGER_ROLE = "System Manager"
 REJECTION_FLAG = "purchase_order_approval_rejection"
 ACTION_FLAG = "purchase_order_approval_action"
+SEND_BLOCKED_REASON = "Link a Production Order or tick Development to send this Purchase Order for approval"
 PURCHASE_ORDER_MESSAGE_TEMPLATE = """\
 PURCHASE ORDER APPROVAL
 ───────────────────────
@@ -115,6 +116,13 @@ def apply_draft_approval_status(doc, method=None):
 		doc.status = "Draft"
 
 
+def get_send_blocked_reason(doc) -> str:
+	"""Why the approval request cannot be sent: needs a linked Production Order or Development ticked."""
+	if doc.get("production_orders") or doc.get("is_development"):
+		return ""
+	return SEND_BLOCKED_REASON
+
+
 def _require_system_manager():
 	if SYSTEM_MANAGER_ROLE not in frappe.get_roles():
 		frappe.throw(
@@ -190,6 +198,9 @@ def _prepare_purchase_order_request(name):
 	doc = _get_locked_purchase_order(name)
 	_require_send_permissions(doc)
 	_validate_pending_approval_purchase_order(doc)
+	blocked_reason = get_send_blocked_reason(doc)
+	if blocked_reason:
+		frappe.throw(blocked_reason)
 	return doc
 
 
@@ -325,6 +336,7 @@ def get_purchase_order_approval_state(name):
 	doc = frappe.get_doc("Purchase Order", name)
 	doc.check_permission("read")
 	live_request = get_live_request(name)
+	send_blocked_reason = get_send_blocked_reason(doc)
 	return {
 		"pending_approval": bool(
 			doc.get("is_yrp_managed")
@@ -332,4 +344,6 @@ def get_purchase_order_approval_state(name):
 			and doc.status == PENDING_APPROVAL_STATUS
 		),
 		"live_request": dict(live_request) if live_request else None,
+		"can_send_request": not live_request and not send_blocked_reason,
+		"send_blocked_reason": send_blocked_reason,
 	}

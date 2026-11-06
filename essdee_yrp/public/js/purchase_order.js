@@ -20,7 +20,7 @@ function setup_purchase_order_approval_actions(frm) {
 			const state = response.message || {};
 			if (
 				frappe.perm.has_perm("Purchase Order", 0, "create") &&
-				!state.live_request
+				state.can_send_request
 			) {
 				frm.add_custom_button(__("Send Request"), () => {
 					frappe.call({
@@ -91,6 +91,7 @@ frappe.ui.form.on("Purchase Order", {
 			return;
 		}
 		setup_purchase_order_approval_actions(frm);
+		setup_purchase_order_production_order_actions(frm);
 		if (frm.fields_dict.sd_lot) {
 			frm.set_df_property("sd_lot", "read_only", frm.doc.docstatus === 1 ? 1 : 0);
 		}
@@ -159,6 +160,81 @@ function manage_linked_lots(frm) {
 			dialog.fields_dict.lots.df.data = current.map((lot) => ({ lot }));
 			dialog.show();
 			dialog.fields_dict.lots.grid.refresh();
+		},
+	});
+}
+
+const PURCHASE_ORDER_PPO_METHOD = "essdee_yrp.purchase_order_against";
+
+/** Add PPO: the server decides (Draft, or submitted Development PO without PPOs) for submit-permitted users. */
+function setup_purchase_order_production_order_actions(frm) {
+	if (frm.is_new() || frm.doc.docstatus === 2 || !(frm.doc.__onload || {}).can_manage_production_orders) return;
+	frm.add_custom_button(__("Add PPO"), () => edit_purchase_order_production_orders(frm));
+}
+
+function edit_purchase_order_production_orders(frm) {
+	const dialog = new frappe.ui.Dialog({
+		title: __("Production Orders"),
+		size: "large",
+		fields: [
+			{
+				fieldname: "production_orders",
+				fieldtype: "Table",
+				label: __("Production Orders"),
+				cannot_delete_rows: !frm.doc.__onload.can_remove_production_orders,
+				data: (frm.doc.production_orders || []).map((row) => ({
+					production_order: row.production_order,
+					item_name: row.item_name,
+				})),
+				fields: [
+					{
+						fieldname: "production_order",
+						fieldtype: "Link",
+						options: "YRP Production Order",
+						label: __("PPO"),
+						in_list_view: 1,
+						reqd: 1,
+						get_query: () => ({ query: `${PURCHASE_ORDER_PPO_METHOD}.production_order_query` }),
+						onchange() {
+							fill_production_order_item(dialog, this.doc);
+						},
+					},
+					{ fieldname: "item_name", fieldtype: "Data", label: __("Item Name"), in_list_view: 1, read_only: 1 },
+				],
+			},
+		],
+		primary_action_label: __("Save"),
+		primary_action(values) {
+			frappe.call({
+				method: `${PURCHASE_ORDER_PPO_METHOD}.update_purchase_order_production_orders`,
+				args: {
+					name: frm.doc.name,
+					production_orders: (values.production_orders || []).map((row) => row.production_order).filter(Boolean),
+				},
+				freeze: true,
+				callback() {
+					dialog.hide();
+					frm.reload_doc();
+				},
+			});
+		},
+	});
+	dialog.show();
+}
+
+function fill_production_order_item(dialog, row) {
+	if (!row) return;
+	if (!row.production_order) {
+		row.item_name = "";
+		dialog.fields_dict.production_orders.grid.refresh();
+		return;
+	}
+	frappe.call({
+		method: `${PURCHASE_ORDER_PPO_METHOD}.get_purchase_order_production_order`,
+		args: { production_order: row.production_order },
+		callback(response) {
+			row.item_name = (response.message || {}).item_name || "";
+			dialog.fields_dict.production_orders.grid.refresh();
 		},
 	});
 }

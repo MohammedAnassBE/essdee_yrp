@@ -291,7 +291,10 @@ doctype_js = {
 		"public/js/production_order_workflow.js",
 	],
 	"YRP Work Order": "public/js/work_order.js",
-	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Order": [
+		"public/js/purchase_order.js",
+		"public/js/purchase_order_attribute_values.js",
+	],
 	"Purchase Invoice": "public/js/erp_purchase_invoice.js",
 	"Supplier": "public/js/supplier.js",
 	"YRP Delivery Challan": "public/js/delivery_challan.js",
@@ -485,6 +488,7 @@ doc_events = {
 		"before_validate": "essdee_yrp.time_and_action.work_station.validate_default_action_work_station",
 	},
 	"Purchase Order": {
+		"onload": "essdee_yrp.purchase_order_against.set_production_order_onload",
 		"before_insert": "essdee_yrp.purchase_order_against.validate_new_purchase_order_against",
 		"before_validate": "essdee_yrp.purchase_order_lots.sync_linked_lots",
 		"validate": "essdee_yrp.purchase_order_against.validate_purchase_order_against_unchanged",

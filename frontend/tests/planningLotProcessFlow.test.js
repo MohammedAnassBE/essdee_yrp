@@ -29,3 +29,8 @@ test("Planning flow components use Planning APIs, Planning reports and nothing f
 	assert.match(container, /visibleProductionReports\(capabilities\?\.sections\?\.reports\?\.production/)
 	assert.match(source("flow/LotFlowReports.vue"), /const REPORTS_PATH = "\/web\/planning\/reports"/)
 })
+
+test("step cards show the progress ring tile instead of bars", () => {
+	assert.match(source("flow/LotItemSteps.vue"), /<LotStepRing :meters="step.meters" :status="step.status" \/>/)
+	assert.doesNotMatch(source("flow/LotItemSteps.vue"), /pf-meters/)
+})

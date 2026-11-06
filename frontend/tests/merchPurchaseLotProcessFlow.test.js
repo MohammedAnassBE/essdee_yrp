@@ -56,3 +56,8 @@ test("Stock Balance and Lot Cut Quantity take the Lot from a Lot link", () => {
 	assert.match(stock, /dimensionsLoaded\.value = true\n\t\tapplyLinkedLot\(\)/)
 	assert.match(readFileSync(new URL("LotCutQuantityReport.vue", reports), "utf8"), /useReportQueryPrefill\(linkedLot, \["lot"\], \(\) => \{ selectedLots\.value = \[\.\.\.linkedLot\.lot\]; generate\(\) \}\)/)
 })
+
+test("step cards show the progress ring tile instead of bars", () => {
+	assert.match(source("flow/LotItemSteps.vue"), /<LotStepRing :meters="step.meters" :status="step.status" \/>/)
+	assert.doesNotMatch(source("flow/LotItemSteps.vue"), /pf-meters/)
+})

@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="LaySheet Planner" :back-to="backTo" back-label="LaySheet Planner" :show-title="false" flat full-width>
 		<section class="planner-new erp-workspace erp-card erp-editor-shell">
-			<header class="erp-editor-header"><div><span>New document</span><h1>New LaySheet Plan</h1></div><div class="planner-new__actions erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="router.push(backTo)" /><Button v-if="payload.actions?.can_edit_inputs" label="Save" icon="pi pi-save" :loading="saving" :disabled="saving || !plannerInputs?.canSave" @click="plannerInputs?.save()" /></div></header>
+			<header class="planner-new__header erp-editor-header"><div class="planner-new__leading"><InlinePageNavigation /><div class="planner-new__identity"><span>New document</span><h1>New LaySheet Plan</h1></div></div><div class="planner-new__actions erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="router.push(backTo)" /><Button v-if="payload.actions?.can_edit_inputs" label="Save" icon="pi pi-save" :loading="saving" :disabled="saving || !plannerInputs?.canSave" @click="plannerInputs?.save()" /></div></header>
 			<WorkspaceLoadError v-if="loadFailed" title="LaySheet Planner unavailable" :message="error" :loading="loading" @retry="load" />
 			<div v-if="loading" class="planner-new__loading"><Skeleton height="480px" /></div>
 			<PlannerInputs v-else-if="!loadFailed" ref="plannerInputs" :record="payload.record" :editable="payload.actions?.can_edit_inputs" :saving="saving" @save="save" />
@@ -20,6 +20,7 @@ import { getLaySheetPlannerEditor, saveLaySheetPlanner } from "../api/cuttingLay
 import DepartmentPage from "../components/DepartmentPage.vue"
 import WorkspaceLoadError from "../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../components/documents/DocumentErrorDialog.vue"
+import InlinePageNavigation from "../components/navigation/InlinePageNavigation.vue"
 import PlannerInputs from "./cutting/planner/PlannerInputs.vue"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../utils/newDocumentDefaults.js"
 
@@ -58,5 +59,6 @@ async function save(values) {
 </script>
 
 <style scoped>
-.planner-new { width: 100%; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); }.planner-new > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }.planner-new h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); }.planner-new__actions { display: flex; align-items: center; gap: 6px; }.planner-new > :deep(.p-message) { margin-top: 10px; }.planner-new__loading { padding-block: var(--erp-space-4); }
+.planner-new { width: 100%; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); }.planner-new > header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .04em; text-transform: uppercase; }.planner-new h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); }.planner-new__header > .planner-new__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }.planner-new__identity { display: grid; min-width: 0; gap: 2px; }.planner-new__actions { display: flex; align-items: center; gap: 6px; }.planner-new > :deep(.p-message) { margin-top: 10px; }.planner-new__loading { padding-block: var(--erp-space-4); }
+@media (max-width: 620px) { .planner-new__identity > span { display: none; } }
 </style>

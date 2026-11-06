@@ -1,7 +1,7 @@
 <template>
 	<DepartmentPage title="Quality Inspection" :back-to="backTo" back-label="Inspections" :show-title="false" flat full-width>
 		<section class="quality-page quality-editor" :aria-busy="busy" aria-label="Quality Inspection editor">
-			<header class="quality-page__header"><h1 class="erp-doc-title">{{ currentName ? `Edit ${currentName}` : amendFrom ? `Amend ${amendFrom}` : 'New Quality Inspection' }}</h1></header>
+			<header class="quality-page__header"><div class="quality-editor__title-line"><InlinePageNavigation title-target="quality-inspection-editor-title" /><h1 id="quality-inspection-editor-title" class="erp-doc-title">{{ currentName ? `Edit ${currentName}` : amendFrom ? `Amend ${amendFrom}` : 'New Quality Inspection' }}</h1></div></header>
 			<ListPageSkeleton v-if="loading" />
 			<WorkspaceLoadError v-else-if="loadError" :message="loadError" :loading="loading" @retry="load" />
 			<template v-else>
@@ -61,6 +61,7 @@ import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
 import { formatDocumentOverviewValue } from "../../utils/documentOverview.js"
 import InspectionColourSizePicker from "./components/InspectionColourSizePicker.vue"
@@ -286,3 +287,7 @@ onBeforeUnmount(() => {
 	window.removeEventListener("beforeunload", beforeUnload)
 })
 </script>
+
+<style scoped>
+.quality-editor__title-line { display: flex; min-width: 0; align-items: center; gap: 10px; }
+</style>

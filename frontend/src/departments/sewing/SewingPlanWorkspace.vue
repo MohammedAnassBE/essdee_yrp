@@ -13,6 +13,7 @@
 					<SewingDashboard v-if="active === 'dashboard'" />
 					<SewingDataEntry v-else-if="active === 'data-entry'" :state="entryState" :filters="entryFilters" :actions="capabilities.plan_actions" :mutate="saveDataEntry" />
 					<SewingEntries v-else-if="active === 'entries'" :state="entriesState" :mutate="cancelEntry" />
+					<SewingPending v-else-if="active === 'pending'" :state="pendingState" />
 					<SewingConsumption v-else-if="active === 'consumption'" :state="consumptionState" :actions="capabilities.plan_actions" :mutate="saveConsumption" />
 					<SewingClosedWorkOrderGrn v-else-if="active === 'closed-work-order-grn'" :state="closedGrnState" :actions="capabilities.plan_actions" :mutate="createClosedGrn" />
 					<SewingFiUpdates v-else-if="active === 'fi-updates'" />
@@ -39,6 +40,7 @@ import { useSewingContext } from "./useSewingContext.js"
 const SewingDashboard = defineAsyncComponent(() => import("./plan/SewingDashboard.vue"))
 const SewingDataEntry = defineAsyncComponent(() => import("./plan/SewingDataEntry.vue"))
 const SewingEntries = defineAsyncComponent(() => import("./plan/SewingEntries.vue"))
+const SewingPending = defineAsyncComponent(() => import("./plan/SewingPending.vue"))
 const SewingConsumption = defineAsyncComponent(() => import("./plan/SewingConsumption.vue"))
 const SewingClosedWorkOrderGrn = defineAsyncComponent(() => import("./plan/SewingClosedWorkOrderGrn.vue"))
 const SewingFiUpdates = defineAsyncComponent(() => import("./plan/SewingFiUpdates.vue"))
@@ -49,6 +51,7 @@ const tabs = computed(() => [
 	{ value: "dashboard", label: "Dashboard" },
 	{ value: "data-entry", label: "Data Entry" },
 	{ value: "entries", label: "Entries" },
+	{ value: "pending", label: "Pending" },
 	{ value: "consumption", label: "Consumption" },
 	{ value: "closed-work-order-grn", label: "Closed Work Order GRN" },
 	...(canShowFiUpdates(route.name, props.capabilities) ? [{ value: "fi-updates", label: "FI Updates" }] : []),
@@ -63,6 +66,7 @@ const entryState = reactive({ response: {}, loaded: false, entryDrafts: {}, insp
 // The Supplier-keyed shell retains local filters and consumption drafts without
 // mounting inactive tabs. Mutation locks and recovery survive a tab switch too.
 const entriesState = reactive({ filters: { workStation: "", inputType: "", lot: routeLot }, busy: false, refreshRequired: false, operationVersion: 0, operation: null })
+const pendingState = reactive({ filters: { fromType: "", toType: "", lots: routeLot ? [routeLot] : [], items: [], workStation: "" }, expanded: {} })
 const consumptionState = reactive({ lot: routeLot, data: null, busy: false, refreshRequired: false, loadError: "", operationVersion: 0, operation: null })
 const closedGrnState = reactive({ workOrder: "", data: null, values: {}, namingField: null, busy: false, refreshRequired: false, loadError: "", result: null, operationVersion: 0, operation: null })
 // A same-unit link to another Lot reuses this workspace; follow the URL Lot.
@@ -70,6 +74,7 @@ watch(() => route.query.lot, (lot) => {
 	const next = typeof lot === "string" ? lot : ""
 	entryFilters.lot = next
 	entriesState.filters.lot = next
+	pendingState.filters.lots = next ? [next] : []
 	consumptionState.lot = next
 })
 

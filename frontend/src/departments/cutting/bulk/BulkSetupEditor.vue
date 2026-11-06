@@ -1,7 +1,7 @@
 <template>
 	<section class="bulk-setup-editor erp-card erp-editor-shell" aria-label="Bulk LaySheets setup editor">
 		<header class="bulk-setup-editor__header erp-editor-header">
-			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Bulk LaySheets" : "New Bulk LaySheets" }}</h1></div>
+			<div class="bulk-setup-editor__leading"><InlinePageNavigation v-if="!inDialog" /><div class="bulk-setup-editor__identity"><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Bulk LaySheets" : "New Bulk LaySheets" }}</h1></div></div>
 			<div class="bulk-setup-editor__actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 				<Button label="Save Setup" icon="pi pi-save" :loading="saving" :disabled="busy || !canSave" @click="saveSetup" />
@@ -48,19 +48,21 @@ import Button from "primevue/button"
 import Message from "primevue/message"
 import Skeleton from "primevue/skeleton"
 import Tag from "primevue/tag"
-import { computed, reactive, ref, watch } from "vue"
+import { computed, inject, reactive, ref, watch } from "vue"
 
 import { getBulkLaySheetsEditor, saveBulkLaySheets } from "../../../api/cuttingBulkLaySheets.js"
 import DateField from "../../../components/common/DateField.vue"
 import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 import { vEntryTable } from "../../../components/common/childGrid/entryTable.js"
 import { useRowSelection } from "../../../components/common/childGrid/rowSelection.js"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 
 const props = defineProps({ name: { type: String, default: "" }, initialPayload: { type: Object, default: null } })
 const emit = defineEmits(["saved", "cancel", "loaded"])
+const inDialog = Boolean(inject("$pcDialog", null))
 const form = reactive({ main_lot: "", from_location: "", posting_date: "", cutting_spreader: "", cutter: "", lot_details: [] })
 const permissions = reactive({ can_create: false, can_write: false })
 const stagedDefaults = takeNewDocumentDefaults("SD YRP Cutting Bulk Lay Sheets")
@@ -132,6 +134,8 @@ watch(() => props.name, load, { immediate: true })
 <style scoped>
 .bulk-setup-editor { display: flex; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); flex-direction: column; gap: var(--erp-space-3); }
 .bulk-setup-card > header, .bulk-lots-card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--erp-space-3); }
+.bulk-setup-editor__header > .bulk-setup-editor__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.bulk-setup-editor__identity { display: grid; min-width: 0; gap: 2px; }
 .bulk-setup-editor__header span, .section-kicker { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: .045em; text-transform: uppercase; }
 .bulk-setup-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -.025em; }
 .bulk-setup-editor__loading, .bulk-setup-editor__body { display: grid; gap: var(--erp-space-3); }
@@ -149,5 +153,5 @@ watch(() => props.name, load, { immediate: true })
 .bulk-lots-selection { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); }
 .bulk-lots-empty { display: grid; min-height: 190px; margin-top: var(--erp-space-3); place-content: center; justify-items: center; gap: 7px; color: var(--erp-text-muted); border: 1px dashed var(--erp-border-strong); border-radius: var(--erp-control-radius); }.bulk-lots-empty i { color: var(--erp-accent); font-size: 1.5rem; }.bulk-lots-empty strong { color: var(--erp-text); }
 @media (max-width: 900px) { .bulk-setup-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .bulk-setup-card, .bulk-lots-card { padding: var(--erp-space-3); }.bulk-setup-fields { grid-template-columns: 1fr; }.bulk-lots-table-wrap { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
+@media (max-width: 620px) { .bulk-setup-editor__identity > span { display: none; }.bulk-setup-card, .bulk-lots-card { padding: var(--erp-space-3); }.bulk-setup-fields { grid-template-columns: 1fr; }.bulk-lots-table-wrap { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%); } }
 </style>

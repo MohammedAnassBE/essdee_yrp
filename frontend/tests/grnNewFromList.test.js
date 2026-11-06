@@ -82,6 +82,7 @@ function picker(workOrders = {}) {
 		"primevue/select": stub("select"),
 		"../../api/frappe.js": { getList: async (doctype, options) => { calls.push([doctype, options]); return [workOrders[options.filters[0][2]]].filter(Boolean) } },
 		"../../components/common/LinkField.vue": stub("link"),
+		"../../components/navigation/InlinePageNavigation.vue": stub("navigation"),
 		"./grnSource.js": { goodsReceivedNoteSource },
 	})
 	const selected = []

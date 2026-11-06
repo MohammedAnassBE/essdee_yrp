@@ -2,9 +2,12 @@
 	<div class="pd-view">
 		<section class="pd-panel pd-head" aria-labelledby="pd-dashboard-title">
 			<div class="pd-head__row">
-				<div>
-					<h1 id="pd-dashboard-title">Dashboard</h1>
-					<p>All {{ formatQuantity(ppoTotal) }} open PPOs and their lots. Filters narrow every section; click a figure, PPO or Lot to open it in PPO Tracking.</p>
+				<div class="pd-head__title">
+					<InlinePageNavigation title-target="pd-dashboard-title" />
+					<div>
+						<h1 id="pd-dashboard-title">Dashboard</h1>
+						<p>All {{ formatQuantity(ppoTotal) }} open PPOs and their lots. Filters narrow every section; click a figure, PPO or Lot to open it in PPO Tracking.</p>
+					</div>
 				</div>
 				<div class="pd-head__end">
 					<span v-if="data" class="pd-sync"><i aria-hidden="true" />Live · {{ formatDisplayDate(data.as_of) }}</span>
@@ -33,6 +36,7 @@ import { computed, onMounted, reactive, ref } from "vue"
 
 import { getPlanningDashboard } from "../../../api/planning.js"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 import { formatDisplayDate } from "../../../utils/dateFormat.js"
 import DashboardStatusCards from "./DashboardStatusCards.vue"
 import DashboardTable from "./DashboardTable.vue"
@@ -92,3 +96,8 @@ function toggleStatus(status) {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.pd-head__title { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.pd-head__title > div { min-width: 0; }
+</style>

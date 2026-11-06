@@ -9,9 +9,12 @@
 	>
 		<section class="bill-tracking-editor erp-card erp-editor-shell" aria-label="Bill Tracking editor" :aria-busy="loading">
 			<header class="bill-tracking-editor__header erp-editor-header">
-				<div>
-					<span>{{ currentName || "New document" }}</span>
-					<h1 class="erp-doc-title">{{ currentName ? "Edit Bill Tracking" : "New Bill Tracking" }}</h1>
+				<div class="bill-tracking-editor__leading">
+					<InlinePageNavigation title-target="bill-tracking-editor-title" />
+					<div class="bill-tracking-editor__identity">
+						<span>{{ currentName || "New document" }}</span>
+						<h1 id="bill-tracking-editor-title" class="erp-doc-title">{{ currentName ? "Edit Bill Tracking" : "New Bill Tracking" }}</h1>
+					</div>
 				</div>
 				<div class="erp-editor-actions">
 					<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestExit" />
@@ -103,6 +106,7 @@ import FormField from "../../components/common/FormField.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import DocumentFieldGroupGrid from "../../components/documents/DocumentFieldGroupGrid.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import { preserveListNavigationState } from "../../router/listDocumentNavigation.js"
@@ -408,4 +412,8 @@ watch(() => form.supplier, fetchSupplierTaxIds)
 .bill-tracking-editor__loading, .bill-tracking-editor__body { display: grid; min-width: 0; gap: var(--erp-space-3); }
 .bill-tracking-editor__body { width: 100%; }
 .bill-tracking-editor__fields { align-items: end; }
+.erp-editor-header > .bill-tracking-editor__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.bill-tracking-editor__identity { display: grid; min-width: 0; gap: 2px; }
+.bill-tracking-editor__identity > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-semibold); letter-spacing: .06em; text-transform: uppercase; }
+@media (max-width: 620px) { .bill-tracking-editor__identity > span { display: none; } }
 </style>

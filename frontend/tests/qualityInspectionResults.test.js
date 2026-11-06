@@ -150,6 +150,7 @@ function modules(record, api = {}) {
 		result[`../../components/documents/${name}.vue`] = () => null
 	}
 	for (const name of ["ListPageSkeleton", "WorkspaceLoadError"]) result[`../../components/common/${name}.vue`] = () => null
+	result["../../components/navigation/InlinePageNavigation.vue"] = () => null
 	return result
 }
 

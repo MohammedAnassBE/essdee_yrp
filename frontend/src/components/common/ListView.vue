@@ -42,6 +42,17 @@
 						@click="showFilters = true"
 					/>
 					<Button
+						v-if="hasActiveQuery"
+						class="list-clear-filter-action"
+						icon="pi pi-times"
+						severity="secondary"
+						text
+						title="Clear Filters"
+						aria-label="Clear Filters"
+						@click="clearFilters"
+					/>
+					<Button
+						class="list-columns-action"
 						icon="pi pi-sliders-h"
 						label="Columns"
 						severity="secondary"
@@ -49,24 +60,26 @@
 						:disabled="!allowedFieldsReady"
 						@click="openColumnsDialog"
 					/>
-					<Select
-						class="list-sort-field"
-						:model-value="sortField"
-						:options="SORT_OPTIONS"
-						option-label="label"
-						option-value="value"
-						placeholder="Sort"
-						aria-label="Sort by"
-						@update:model-value="sortChanged({ sortField: $event, sortOrder })"
-					/>
-					<Button
-						:icon="sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down'"
-						severity="secondary"
-						outlined
-						:title="sortOrder === 1 ? 'Ascending' : 'Descending'"
-						:aria-label="sortOrder === 1 ? 'Sort ascending' : 'Sort descending'"
-						@click="sortChanged({ sortField, sortOrder: -sortOrder })"
-					/>
+					<div class="list-sort-group" role="group" aria-label="Sort">
+						<Select
+							class="list-sort-field"
+							:model-value="sortField"
+							:options="SORT_OPTIONS"
+							option-label="label"
+							option-value="value"
+							placeholder="Sort"
+							aria-label="Sort by"
+							@update:model-value="sortChanged({ sortField: $event, sortOrder })"
+						/>
+						<Button
+							:icon="sortOrder === 1 ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down'"
+							severity="secondary"
+							outlined
+							:title="sortOrder === 1 ? 'Ascending' : 'Descending'"
+							:aria-label="sortOrder === 1 ? 'Sort ascending' : 'Sort descending'"
+							@click="sortChanged({ sortField, sortOrder: -sortOrder })"
+						/>
+					</div>
 					<Button
 						icon="pi pi-refresh"
 						severity="secondary"
@@ -75,16 +88,6 @@
 						aria-label="Refresh"
 						:loading="loading || manualRefreshing"
 						@click="refresh"
-					/>
-					<Button
-						class="list-clear-filter-action"
-						:class="{ 'list-clear-filter-action--active': hasActiveQuery }"
-						icon="pi pi-filter-slash"
-						label="Clear Filters"
-						severity="secondary"
-						text
-						:disabled="!hasActiveQuery"
-						@click="clearFilters"
 					/>
 				</div>
 				<div class="list-toolbar__primary" @click.capture="stageFilterDefaults"><slot name="toolbar-actions"></slot></div>
@@ -1972,9 +1975,35 @@ defineExpose({ refresh, clearSelection })
 	border-color: var(--erp-accent-border);
 }
 
+.list-sort-group {
+	display: inline-flex;
+	flex: 0 0 auto;
+	height: var(--erp-control-height);
+	overflow: hidden;
+	background: var(--erp-surface);
+	border: 1px solid var(--erp-border);
+	border-radius: var(--erp-control-radius);
+	transition: border-color var(--erp-transition-fast);
+}
+
+.list-sort-group:hover,
+.list-sort-group:focus-within {
+	border-color: var(--erp-accent-border);
+}
+
 .list-sort-field {
 	min-width: 9.5rem;
-	height: var(--erp-control-height);
+	height: 100%;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.list-sort-field :deep(.p-select-label) {
+	color: var(--erp-text-secondary);
+	font-size: var(--erp-font-size-table);
+	font-weight: 600;
 }
 
 .list-toolbar__secondary :deep(.p-button[aria-label^="Sort "]),
@@ -1984,15 +2013,29 @@ defineExpose({ refresh, clearSelection })
 	flex: 0 0 auto;
 }
 
+.list-sort-group :deep(.p-button[aria-label^="Sort "]),
+.list-sort-group :deep(.p-button[aria-label^="Sort "]:not(:disabled):hover) {
+	width: calc(var(--erp-control-height) - 2px);
+	height: 100%;
+	min-height: 0;
+	border: 0;
+	border-left: 1px solid var(--erp-border);
+	border-radius: 0;
+}
+
 .list-toolbar__actions :deep(.p-button.list-clear-filter-action) {
-	color: var(--erp-text-muted);
+	width: var(--erp-control-height);
+	margin-left: -4px;
+	padding: 0;
+	flex: 0 0 auto;
+	color: var(--erp-accent-ink);
 	background: transparent;
 	border-color: transparent;
 }
 
 .list-toolbar__actions :deep(.p-button.list-clear-filter-action:not(:disabled):hover) {
-	color: var(--erp-text-secondary);
-	background: var(--erp-surface-hover);
+	color: var(--erp-accent-ink);
+	background: var(--erp-accent-soft);
 	border-color: transparent;
 }
 
@@ -2854,8 +2897,28 @@ defineExpose({ refresh, clearSelection })
 		display: grid;
 		grid-column: 1 / -1;
 		grid-row: 3;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px 44px;
+		grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr) 44px;
+		grid-auto-flow: dense;
 		gap: 6px;
+	}
+
+	.list-toolbar__secondary :deep(.list-filter-action) { grid-column: 1; }
+	.list-toolbar__secondary :deep(.list-clear-filter-action) { grid-column: 2; margin-left: 0; }
+	.list-toolbar__secondary :deep(.list-columns-action) { grid-column: 3; }
+	.list-toolbar__secondary :deep(.p-button[aria-label="Refresh"]) { grid-column: 4; }
+
+	.list-sort-group {
+		grid-column: 1 / -1;
+		height: 44px;
+	}
+
+	.list-sort-field {
+		flex: 1;
+	}
+
+	.list-sort-group :deep(.p-button[aria-label^="Sort "]) {
+		width: 44px;
+		flex: 0 0 auto;
 	}
 
 	.list-search :deep(input) {
@@ -2875,17 +2938,6 @@ defineExpose({ refresh, clearSelection })
 		padding-inline: 0;
 	}
 
-	.list-toolbar__secondary :deep(.list-clear-filter-action .p-button-label) {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
-	}
 
 	.list-search {
 		grid-column: 1;

@@ -25,12 +25,15 @@
 			/>
 			<template v-else-if="hasWorkspace">
 				<header class="pd-product-workspace__header">
-					<div class="pd-product-workspace__identity">
-						<span class="pd-product-workspace__eyebrow">Product Release · <DocumentNameCopy :name="record.name" /></span>
-						<div class="pd-product-workspace__title-row">
-							<h1>{{ record.item_name || record.style_no || "Product Release" }}</h1>
-							<div class="pd-product-workspace__chips" aria-label="Product Release details">
-								<span class="pd-product-workspace__chip">Tech Pack #{{ record.tech_pack_no || 0 }}</span>
+					<div class="pd-product-workspace__leading">
+						<InlinePageNavigation title-target="pd-release-title" />
+						<div class="pd-product-workspace__identity">
+							<span class="pd-product-workspace__eyebrow">Product Release · <DocumentNameCopy :name="record.name" /></span>
+							<div class="pd-product-workspace__title-row">
+								<h1 id="pd-release-title">{{ record.item_name || record.style_no || "Product Release" }}</h1>
+								<div class="pd-product-workspace__chips" aria-label="Product Release details">
+									<span class="pd-product-workspace__chip">Tech Pack #{{ record.tech_pack_no || 0 }}</span>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -176,6 +179,7 @@ import DocumentActionStrip from "../../components/documents/DocumentActionStrip.
 import DocumentConfirmationDialog from "../../components/documents/DocumentConfirmationDialog.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentPrintButton from "../../components/documents/DocumentPrintButton.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import ProductFieldsPanel from "./components/ProductFieldsPanel.vue"
 import ProductGraphics from "./components/ProductGraphics.vue"
 import ProductImagePicker from "./components/ProductImagePicker.vue"
@@ -298,6 +302,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.pd-product-workspace__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .pd-release-product-link { display: inline-flex; align-items: center; min-height: var(--erp-control-height); gap: 7px; padding: 0 13px; color: var(--erp-text); border: 1px solid var(--erp-border-strong); border-radius: var(--erp-control-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-xs); font-size: var(--erp-font-size-caption); font-weight: 680; text-decoration: none; }
 .pd-release-product-link:hover { color: var(--erp-accent-hover); border-color: color-mix(in srgb, var(--erp-accent) 28%, var(--erp-border)); background: var(--erp-accent-soft); }
 .pd-release-product-link:focus-visible { outline: 3px solid color-mix(in srgb, var(--erp-accent) 16%, transparent); outline-offset: 1px; }

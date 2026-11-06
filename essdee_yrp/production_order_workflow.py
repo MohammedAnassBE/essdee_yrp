@@ -322,8 +322,9 @@ def _validate_quantity_workflow_lock(doc):
 	if not previous:
 		return
 	quantity_ratio_changed = get_quantity_ratio_snapshot(doc) != get_quantity_ratio_snapshot(previous)
+	closing_or_reopening = doc.flags.get(AUTO_AUDIT_CLOSE_FLAG) or doc.flags.get(REOPEN_PRODUCTION_ORDER_FLAG)
 	if previous.get(TRANSFER_MARKER_FIELD):
-		if doc.status != previous.status:
+		if doc.status != previous.status and not closing_or_reopening:
 			frappe.throw("Status cannot be changed after quantity has been transferred")
 		if quantity_ratio_changed:
 			frappe.throw("Quantity or Ratio cannot be changed after quantity has been transferred")
@@ -343,7 +344,7 @@ def _validate_quantity_workflow_lock(doc):
 				"allow_status_change_approval",
 				"allow_quantity_transfer_approval",
 			)
-		)
+		) or closing_or_reopening
 		if not approval_allowed and (quantity_ratio_changed or request_changed or status_changed):
 			frappe.throw("Use the appropriate Approve button to complete the pending request")
 	if (

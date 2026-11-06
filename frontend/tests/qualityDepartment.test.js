@@ -173,6 +173,7 @@ async function editor(api = {}, props = {}, query = {}) {
 		"../../components/documents/DocumentSaveButton.vue": (props) => Vue.h("save-control", props),
 		"../../components/documents/DocumentConfirmationDialog.vue": (props) => Vue.h("confirmation", props),
 		"../../components/documents/DocumentErrorDialog.vue": (props) => Vue.h("error-dialog", props),
+		"../../components/navigation/InlinePageNavigation.vue": () => null,
 		"../../components/documents/DocumentStatusBadge.vue": (props) => Vue.h("badge", props),
 		"../../router/listDocumentNavigation.js": { preserveListNavigationState: () => ({}) },
 		"./components/InspectionColourSizePicker.vue": (props) => Vue.h("picker", props),

@@ -1,7 +1,7 @@
 <template>
 	<section class="cutting-order-editor erp-card erp-editor-shell" aria-label="Cutting Order editor">
 		<header class="order-editor-header erp-editor-header">
-			<div><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Cutting Order" : "New Cutting Order" }}</h1></div>
+			<div class="order-editor-leading"><InlinePageNavigation /><div class="order-editor-identity"><span>{{ name || "New document" }}</span><h1>{{ name ? "Edit Cutting Order" : "New Cutting Order" }}</h1></div></div>
 			<div class="order-editor-actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" />
 				<slot name="document-actions" :busy="busy" :dirty="dirty" />
@@ -59,6 +59,7 @@ import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 import CuttingOrderDetailDialog from "./CuttingOrderDetailDialog.vue"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
@@ -228,6 +229,8 @@ watch(() => [props.name, props.duplicateFrom], load)
 
 <style scoped>
 .cutting-order-editor { display: flex; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); flex-direction: column; gap: var(--erp-space-3); }
+.order-editor-header > .order-editor-leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.order-editor-identity { display: grid; min-width: 0; gap: 2px; }
 .order-editor-header span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 700; letter-spacing: 0.035em; text-transform: uppercase; }
 .order-editor-header h1 { margin: 0; color: var(--erp-text); font-size: var(--erp-font-size-title); letter-spacing: -0.025em; }
 .order-editor-loading, .order-editor-body { display: grid; gap: var(--erp-space-3); min-width: 0; }
@@ -241,5 +244,6 @@ watch(() => [props.name, props.duplicateFrom], load)
 .order-editor-field > label span { color: var(--p-red-500); }
 .detail-selector { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 8px; }
 .discard-copy { margin: 0; color: var(--erp-text-muted); }
+@media (max-width: 620px) { .order-editor-identity > span { display: none; } }
 @media (max-width: 760px) { .order-editor-fields { grid-template-columns: 1fr; } .detail-selector { grid-template-columns: 1fr; } }
 </style>

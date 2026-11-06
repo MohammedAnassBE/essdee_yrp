@@ -6,10 +6,10 @@
 		:class="{
 			'department-page--flat': flat,
 			'department-page--full-width': fullWidth,
-			'department-page--inline-navigation': inlineNavigation,
+			'department-page--inline-navigation': isInline,
 		}"
 	>
-		<nav v-if="!inlineNavigation && !hideNavigation && !isLockedExit(backTo)" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
+		<nav v-if="!isInline && !hideNavigation && !isLockedExit(backTo)" class="department-page__nav erp-page-nav" :aria-label="`Back to ${backLabel}`">
 			<BackLink :to="backTo" :label="backLabel" />
 		</nav>
 		<Card
@@ -18,7 +18,7 @@
 		>
 			<template #content>
 				<h1 v-if="showTitle">{{ title }}</h1>
-				<div class="department-page__content" :class="{ 'department-page__content--inline-navigation': inlineNavigation }">
+				<div class="department-page__content" :class="{ 'department-page__content--inline-navigation': isInline }">
 					<slot />
 					<DocumentActivity v-if="activityDoctype" :doctype="activityDoctype" :name="activityName" :record="activityRecord" />
 				</div>
@@ -29,7 +29,7 @@
 
 <script setup>
 import Card from "primevue/card"
-import { computed, provide } from "vue"
+import { computed, provide, ref } from "vue"
 
 import DocumentActivity from "./documents/DocumentActivity.vue"
 import BackLink from "./navigation/BackLink.vue"
@@ -75,10 +75,18 @@ const props = defineProps({
 	activityRecord: { type: Object, default: null },
 })
 
+// Pages whose content renders InlinePageNavigation (list and form title rows) get the back button beside their title.
+const inlineClaims = ref(0)
+const isInline = computed(() => !props.embedded && (props.inlineNavigation || (inlineClaims.value > 0 && !props.hideNavigation)))
+
 provide(pageNavigationKey, {
 	backTo: computed(() => props.backTo),
 	backLabel: computed(() => props.backLabel),
-	inline: computed(() => props.inlineNavigation && !props.embedded),
+	inline: isInline,
+	claimInline: () => {
+		inlineClaims.value += 1
+		return () => { inlineClaims.value -= 1 }
+	},
 })
 </script>
 

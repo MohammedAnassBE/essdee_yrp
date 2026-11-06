@@ -1,9 +1,12 @@
 <template>
 	<section class="cutting-plan-editor erp-card erp-editor-shell" aria-label="Cutting Plan editor">
 		<header class="cutting-plan-editor__header erp-editor-header">
-			<div>
-				<span class="cutting-plan-editor__eyebrow">{{ name ? name : "New document" }}</span>
-				<h1 class="erp-doc-title">{{ name ? "Edit Cutting Plan" : "New Cutting Plan" }}</h1>
+			<div class="cutting-plan-editor__leading">
+				<InlinePageNavigation />
+				<div class="cutting-plan-editor__identity">
+					<span class="cutting-plan-editor__eyebrow">{{ name ? name : "New document" }}</span>
+					<h1 class="erp-doc-title">{{ name ? "Edit Cutting Plan" : "New Cutting Plan" }}</h1>
+				</div>
 			</div>
 			<div class="cutting-plan-editor__actions erp-editor-actions">
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="saving" @click="emit('cancel')" />
@@ -105,6 +108,7 @@ import LinkField from "../../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
 import DocumentErrorDialog from "../../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 import { takeNewDocumentDefaults, withNewDocumentDefaults } from "../../../utils/newDocumentDefaults.js"
 import CuttingQuantityMatrix from "../shared/CuttingQuantityMatrix.vue"
 
@@ -316,6 +320,8 @@ watch(() => [props.name, props.duplicateFrom], () => load())
 	gap: var(--erp-space-3);
 }
 
+.cutting-plan-editor__header > .cutting-plan-editor__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.cutting-plan-editor__identity { display: grid; min-width: 0; gap: 2px; }
 .cutting-plan-editor__eyebrow { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: 0.04em; text-transform: uppercase; }
 .cutting-plan-editor__header h1 { margin: 3px 0 0; color: var(--erp-text); }
 .cutting-plan-editor__body { display: grid; gap: var(--erp-space-3); min-width: 0; }

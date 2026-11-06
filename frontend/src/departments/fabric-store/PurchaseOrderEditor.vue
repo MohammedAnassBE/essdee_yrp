@@ -1,7 +1,7 @@
 <template>
 	<section class="purchase-order-editor erp-card erp-editor-shell" aria-label="Purchase Order editor" :aria-busy="loading">
 		<header class="purchase-order-editor__header erp-editor-header">
-			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Purchase Order" : "New Purchase Order" }}</h1></div>
+			<div class="purchase-order-editor__leading"><InlinePageNavigation v-if="!inDialog" /><div class="purchase-order-editor__identity"><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Purchase Order" : "New Purchase Order" }}</h1></div></div>
 			<div class="erp-editor-actions">
 				<DocumentSaveState :saving="saving === 'draft'" :dirty="dirty" />
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
@@ -132,7 +132,7 @@ import Select from "primevue/select"
 import Skeleton from "primevue/skeleton"
 import Textarea from "primevue/textarea"
 import { useToast } from "primevue/usetoast"
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { onBeforeRouteLeave, RouterLink } from "vue-router"
 
 import { getPurchaseOrderEditor, getPurchaseOrderItemSchema, previewPurchaseOrderPrices, savePurchaseOrder, searchPurchaseOrderAdditionalParameterValues } from "../../api/fabricStore.js"
@@ -142,6 +142,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentLiveBar from "../../components/documents/DocumentLiveBar.vue"
 import DocumentSaveState from "../../components/documents/DocumentSaveState.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { useLiveDocument } from "../../composables/useLiveDocument.js"
 import StockItemComposer from "../../components/stock/StockItemComposer.vue"
 import { withNewDocumentDefaults } from "../../utils/newDocumentDefaults.js"
@@ -151,6 +152,7 @@ import { applyPurchaseOrderPricePreview, applyPurchaseOrderPriceSchedule, create
 
 const props = defineProps({ name: { type: String, default: "" }, source: { type: Object, default: () => ({}) }, newDefaults: { type: Object, default: () => ({}) } })
 const emit = defineEmits(["saved", "cancel"])
+const inDialog = Boolean(inject("$pcDialog", null))
 const toast = useToast()
 const loading = ref(true)
 const saving = ref("")
@@ -452,6 +454,9 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
+.purchase-order-editor__header > .purchase-order-editor__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.purchase-order-editor__identity { display: grid; min-width: 0; gap: 2px; }
+.purchase-order-editor__identity > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-semibold); letter-spacing: .06em; text-transform: uppercase; }
 .purchase-order-editor {
 	display: flex;
 	width: 100%;
@@ -515,6 +520,7 @@ watch(() => props.name, load)
 @media (max-width: 1100px) { .purchase-order-editor__document-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .purchase-order-editor__card-grid { grid-template-columns: 1fr; } .purchase-order-editor__notes-card { grid-column: auto; } }
 @media (max-width: 900px) { .purchase-order-editor__delivery-fields, .purchase-order-editor__item-details { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) {
+	.purchase-order-editor__identity > span { display: none; }
 	.purchase-order-editor__section {
 		padding: var(--erp-space-3);
 	}

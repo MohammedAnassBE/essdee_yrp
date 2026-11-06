@@ -1,12 +1,15 @@
 <template>
 	<header class="pd-product-workspace__header">
-		<div class="pd-product-workspace__identity">
-			<span class="pd-product-workspace__eyebrow">Product · <DocumentNameCopy :name="record.name" fallback="New" /></span>
-			<div class="pd-product-workspace__title-row">
-				<h1>{{ record.item_name || record.name || "New Product" }}</h1>
-				<div class="pd-product-workspace__chips" aria-label="Product details">
-					<span class="pd-product-workspace__chip">Tech Pack {{ record.tech_pack_no || 0 }}</span>
-					<span class="pd-product-workspace__chip">{{ isSetItem ? "Set item" : "Single item" }}</span>
+		<div class="pd-product-workspace__leading">
+			<InlinePageNavigation title-target="pd-product-title" />
+			<div class="pd-product-workspace__identity">
+				<span class="pd-product-workspace__eyebrow">Product · <DocumentNameCopy :name="record.name" fallback="New" /></span>
+				<div class="pd-product-workspace__title-row">
+					<h1 id="pd-product-title">{{ record.item_name || record.name || "New Product" }}</h1>
+					<div class="pd-product-workspace__chips" aria-label="Product details">
+						<span class="pd-product-workspace__chip">Tech Pack {{ record.tech_pack_no || 0 }}</span>
+						<span class="pd-product-workspace__chip">{{ isSetItem ? "Set item" : "Single item" }}</span>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -40,6 +43,7 @@ import Button from "primevue/button"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 
 defineProps({
 	record: { type: Object, required: true },
@@ -54,3 +58,7 @@ defineProps({
 })
 const emit = defineEmits(["cancel", "save"])
 </script>
+
+<style scoped>
+.pd-product-workspace__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+</style>

@@ -120,6 +120,20 @@ class TestProductionOrderBusinessLogic(IntegrationTestCase):
 		self.assertTrue(doc.flags.allow_production_order_reopen)
 		doc.save.assert_called_once_with(ignore_permissions=True)
 
+	def test_auto_close_and_reopen_pass_the_quantity_workflow_lock(self):
+		previous = _dict(status="Open", transferred_to_ppo="PPO-OTHER", status_change_request="Hold")
+		for flag in ("allow_auto_audit_close", "allow_production_order_reopen"):
+			doc = _dict(docstatus=1, status="Closed", status_change_request="Hold", flags=_dict({flag: True}))
+			doc.get_doc_before_save = lambda: previous
+			with patch.object(production_order_workflow, "get_quantity_ratio_snapshot", return_value={}):
+				production_order_workflow._validate_quantity_workflow_lock(doc)
+			doc.flags = _dict()
+			with (
+				patch.object(production_order_workflow, "get_quantity_ratio_snapshot", return_value={}),
+				self.assertRaises(frappe.ValidationError),
+			):
+				production_order_workflow._validate_quantity_workflow_lock(doc)
+
 	def _submitted_order(self):
 		names = frappe.get_all(
 			"YRP Production Order",

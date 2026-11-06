@@ -1,8 +1,11 @@
 <template>
 	<section class="grn-source-picker" aria-labelledby="grn-source-picker-title">
-		<header>
-			<h1 id="grn-source-picker-title">New Goods Received Note</h1>
-			<p>Choose what is being received. The receivable items, supplier and locations are filled from it.</p>
+		<header class="grn-source-picker__header">
+			<InlinePageNavigation title-target="grn-source-picker-title" />
+			<div>
+				<h1 id="grn-source-picker-title">New Goods Received Note</h1>
+				<p>Choose what is being received. The receivable items, supplier and locations are filled from it.</p>
+			</div>
 		</header>
 		<div class="grn-source-picker__fields">
 			<label class="common-field">
@@ -43,6 +46,7 @@ import { computed, ref } from "vue"
 
 import { getList } from "../../api/frappe.js"
 import LinkField from "../../components/common/LinkField.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { goodsReceivedNoteSource } from "./grnSource.js"
 
 const props = defineProps({ initialSource: { type: Object, default: () => ({}) } })
@@ -98,6 +102,8 @@ preselectSource(props.initialSource)
 
 <style scoped>
 .grn-source-picker { display: grid; max-width: 720px; gap: var(--erp-space-3); margin: var(--erp-space-3) 0; padding: var(--erp-space-4); border: 1px solid var(--erp-border); border-radius: var(--erp-radius, 8px); background: var(--erp-surface); }
+.grn-source-picker__header { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.grn-source-picker__header > div { min-width: 0; }
 .grn-source-picker h1 { margin: 0; font-size: 20px; }
 .grn-source-picker p { margin: 4px 0 0; color: var(--erp-text-muted); }
 .grn-source-picker__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--erp-space-3); }

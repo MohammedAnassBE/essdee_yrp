@@ -1,13 +1,16 @@
 <template>
 	<header class="purchase-invoice-editor__header erp-editor-header">
-		<div class="purchase-invoice-editor__identity">
-			<span>{{ currentName || "New document" }}</span>
-			<div>
-				<h1 class="erp-doc-title">{{ currentName ? "Edit Purchase Invoice" : "New Purchase Invoice" }}</h1>
-				<span v-if="billTracking" class="purchase-invoice-editor__fact">
-					<i class="pi pi-link" aria-hidden="true" />
-					From Bill Tracking <DocumentLink doctype="YRP Bill Tracking" :name="billTracking" :label="billTracking" />
-				</span>
+		<div class="purchase-invoice-editor__leading">
+			<InlinePageNavigation title-target="purchase-invoice-editor-title" />
+			<div class="purchase-invoice-editor__identity">
+				<span>{{ currentName || "New document" }}</span>
+				<div>
+					<h1 id="purchase-invoice-editor-title" class="erp-doc-title">{{ currentName ? "Edit Purchase Invoice" : "New Purchase Invoice" }}</h1>
+					<span v-if="billTracking" class="purchase-invoice-editor__fact">
+						<i class="pi pi-link" aria-hidden="true" />
+						From Bill Tracking <DocumentLink doctype="YRP Bill Tracking" :name="billTracking" :label="billTracking" />
+					</span>
+				</div>
 			</div>
 		</div>
 		<div class="erp-editor-actions">
@@ -32,6 +35,7 @@ import DocumentLink from "../../../components/common/DocumentLink.vue"
 import Button from "primevue/button"
 
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 
 defineProps({
 	saved: { type: Boolean, default: false },
@@ -48,6 +52,12 @@ const emit = defineEmits(["cancel", "save"])
 </script>
 
 <style scoped>
+.erp-editor-header > .purchase-invoice-editor__leading {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 10px;
+}
 .purchase-invoice-editor__identity {
 	display: grid;
 	min-width: 0;
@@ -79,6 +89,11 @@ const emit = defineEmits(["cancel", "save"])
 		flex: 1 1 auto;
 	}
 	.purchase-invoice-editor__fact {
+		display: none;
+	}
+}
+@media (max-width: 620px) {
+	.purchase-invoice-editor__identity > span {
 		display: none;
 	}
 }

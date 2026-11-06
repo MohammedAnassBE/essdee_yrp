@@ -1,7 +1,7 @@
 <template>
 	<section class="work-order-editor erp-card erp-editor-shell" aria-label="Work Order editor" :aria-busy="loading">
 		<header class="work-order-editor__header erp-editor-header">
-			<div><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Work Order" : "New Work Order" }}</h1></div>
+			<div class="work-order-editor__leading"><InlinePageNavigation /><div class="work-order-editor__identity"><span>{{ name || (duplicateFrom ? `Duplicate of ${duplicateFrom}` : "New document") }}</span><h1 class="erp-doc-title">{{ name ? "Edit Work Order" : "New Work Order" }}</h1></div></div>
 			<div class="erp-editor-actions">
 				<DocumentSaveState :saving="saving === 'draft'" :dirty="dirty" />
 				<Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="requestCancel" />
@@ -122,6 +122,7 @@ import DocumentConfirmationDialog from "../../components/documents/DocumentConfi
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentLiveBar from "../../components/documents/DocumentLiveBar.vue"
 import DocumentSaveState from "../../components/documents/DocumentSaveState.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import { useLiveDocument } from "../../composables/useLiveDocument.js"
 import WorkOrderActionPanel from "./WorkOrderActionPanel.vue"
 import WorkOrderItemMatrix from "./WorkOrderItemMatrix.vue"
@@ -392,6 +393,9 @@ watch(() => props.name, load)
 </script>
 
 <style scoped>
+.work-order-editor__header > .work-order-editor__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.work-order-editor__identity { display: grid; min-width: 0; gap: 2px; }
+.work-order-editor__identity > span { color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: var(--erp-font-weight-semibold); letter-spacing: .06em; text-transform: uppercase; }
 .work-order-editor {
 	display: flex;
 	width: 100%;
@@ -441,5 +445,5 @@ watch(() => props.name, load)
 .work-order-editor__discard-copy { margin: 0; color: var(--erp-text-muted); line-height: 1.5; }
 @media (max-width: 1180px) { .work-order-editor__document-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__card-grid { grid-template-columns: 1fr; } .work-order-editor__rework-card, .work-order-editor__dimensions-card { grid-column: auto; } }
 @media (max-width: 900px) { .work-order-editor__dimensions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__section > header small { display: none; } .work-order-editor__document-fields { grid-template-columns: 1fr 1fr; gap: 10px; } .work-order-editor__document-fields > .work-order-editor__control, .work-order-editor__document-fields > .work-order-editor__date-field { grid-column: 1 / -1; } .work-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__fields > :not(.work-order-editor__schedule-field) { grid-column: 1 / -1; } .work-order-editor__schedule-field :deep(.p-datepicker-input) { min-width: 0; padding-inline: 8px; } .work-order-editor__schedule-field :deep(.p-datepicker-dropdown) { width: 40px; min-width: 40px; } .work-order-editor__dimensions, .work-order-editor__calculated, .work-order-editor__facts { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } }
+@media (max-width: 620px) { .work-order-editor__identity > span { display: none; } .work-order-editor__section { padding: var(--erp-space-3); } .work-order-editor__section > header small { display: none; } .work-order-editor__document-fields { grid-template-columns: 1fr 1fr; gap: 10px; } .work-order-editor__document-fields > .work-order-editor__control, .work-order-editor__document-fields > .work-order-editor__date-field { grid-column: 1 / -1; } .work-order-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-order-editor__fields > :not(.work-order-editor__schedule-field) { grid-column: 1 / -1; } .work-order-editor__schedule-field :deep(.p-datepicker-input) { min-width: 0; padding-inline: 8px; } .work-order-editor__schedule-field :deep(.p-datepicker-dropdown) { width: 40px; min-width: 40px; } .work-order-editor__dimensions, .work-order-editor__calculated, .work-order-editor__facts { grid-template-columns: 1fr; } .work-order-editor__comments { grid-column: auto; } }
 </style>

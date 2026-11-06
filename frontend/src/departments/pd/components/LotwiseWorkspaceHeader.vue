@@ -1,8 +1,11 @@
 <template>
 	<header class="lotwise-workspace__header">
-		<div class="lotwise-workspace__identity">
-			<span>Lotwise Item Profit · <DocumentNameCopy :name="name" fallback="New" /></span>
-			<h1><DocumentLink v-if="product" doctype="SD YRP Product" :name="product" :label="title" /><DocumentLink v-else-if="item" doctype="SD YRP FG Item Master" :name="item" :label="title" /><template v-else>{{ title }}</template></h1>
+		<div class="lotwise-workspace__leading">
+			<InlinePageNavigation title-target="lotwise-workspace-title" />
+			<div class="lotwise-workspace__identity">
+				<span>Lotwise Item Profit · <DocumentNameCopy :name="name" fallback="New" /></span>
+				<h1 id="lotwise-workspace-title"><DocumentLink v-if="product" doctype="SD YRP Product" :name="product" :label="title" /><DocumentLink v-else-if="item" doctype="SD YRP FG Item Master" :name="item" :label="title" /><template v-else>{{ title }}</template></h1>
+			</div>
 		</div>
 		<div class="lotwise-workspace__header-actions">
 			<DocumentPrintButton v-if="name" doctype="SD YRP Lotwise Item Profit" :name="name" :disabled="busy" />
@@ -18,6 +21,7 @@ import DocumentNameCopy from "../../../components/common/DocumentNameCopy.vue"
 import DocumentPrintButton from "../../../components/documents/DocumentPrintButton.vue"
 import DocumentActionStrip from "../../../components/documents/DocumentActionStrip.vue"
 import DocumentSaveButton from "../../../components/documents/DocumentSaveButton.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 
 defineProps({
 	name: { type: String, default: "" },
@@ -34,6 +38,7 @@ const emit = defineEmits(["save"])
 
 <style scoped>
 .lotwise-workspace__header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--erp-space-3); padding: var(--erp-space-3) var(--erp-space-4); border-bottom: 1px solid var(--erp-border); border-radius: var(--erp-panel-radius); background: var(--erp-surface); box-shadow: var(--erp-shadow-sm); }
+.lotwise-workspace__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .lotwise-workspace__identity { display: grid; min-width: 0; gap: 3px; }
 .lotwise-workspace__identity span { overflow: hidden; color: var(--erp-text-muted); font-size: var(--erp-font-size-min); font-weight: 720; letter-spacing: 0.04em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .lotwise-workspace__identity h1 { margin: 0; overflow: hidden; color: var(--erp-text); font-size: var(--erp-font-size-title); font-weight: 780; letter-spacing: -0.025em; text-overflow: ellipsis; white-space: nowrap; }

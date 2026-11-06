@@ -199,6 +199,7 @@ test("Product header hides document actions for the new form", () => {
 		"../../../components/documents/DocumentPrintButton.vue": () => null,
 		"../../../components/documents/DocumentSaveButton.vue": () => null,
 		"../../../components/documents/DocumentActionStrip.vue": () => Vue.h("actions"),
+		"../../../components/navigation/InlinePageNavigation.vue": () => null,
 	})
 	for (const mode of ["edit", "view"]) {
 		const root = mountComponent(header, { record: {}, actions: [{ key: "duplicate" }], printFormats: [], mode })

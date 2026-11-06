@@ -1,6 +1,6 @@
 <template>
 	<section class="ppo-editor erp-card erp-editor-shell" aria-label="Production Order editor">
-		<header class="erp-editor-header ppo-editor__header"><div><span>{{ name || "New document" }}</span><h1 class="erp-doc-title">{{ name ? "Edit Production Order" : "New Production Order" }}</h1></div><div class="erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" /><DocumentSaveButton :saved="Boolean(record.name || name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Production Order ${record.name || name}`.trim()" :loading="Boolean(saving)" :disabled="busy || !canSave" show-submit submit-label="Request Approval" @save="save(false)" @submit="save(true)" /></div></header>
+		<header class="erp-editor-header ppo-editor__header"><div class="ppo-editor__leading"><InlinePageNavigation title-target="ppo-editor-title" /><div class="ppo-editor__identity"><span>{{ name || "New document" }}</span><h1 id="ppo-editor-title" class="erp-doc-title">{{ name ? "Edit Production Order" : "New Production Order" }}</h1></div></div><div class="erp-editor-actions"><Button label="Cancel" icon="pi pi-times" severity="secondary" text :disabled="busy" @click="emit('cancel')" /><DocumentSaveButton :saved="Boolean(record.name || name)" :dirty="dirty" :docstatus="Number(record.docstatus || 0)" :document-label="`Production Order ${record.name || name}`.trim()" :loading="Boolean(saving)" :disabled="busy || !canSave" show-submit submit-label="Request Approval" @save="save(false)" @submit="save(true)" /></div></header>
 		<p v-if="!loading && !loadFailed && saveBlockers.length" class="ppo-editor__notice" role="status">To save or request approval, add: {{ saveBlockers.join('; ') }}.</p>
 		<DocumentErrorDialog :message="loadFailed ? '' : error" title="Production Order could not be saved" @dismiss="error = ''" />
 		<div v-if="loading" class="ppo-editor__loading"><Skeleton height="180px" /><Skeleton height="300px" /></div>
@@ -39,6 +39,7 @@ import { getProductionOrderEditor, saveProductionOrder } from "../../api/sales.j
 import DateField from "../../components/common/DateField.vue"
 import LinkField from "../../components/common/LinkField.vue"
 import WorkspaceLoadError from "../../components/common/WorkspaceLoadError.vue"
+import InlinePageNavigation from "../../components/navigation/InlinePageNavigation.vue"
 import DocumentErrorDialog from "../../components/documents/DocumentErrorDialog.vue"
 import DocumentSaveButton from "../../components/documents/DocumentSaveButton.vue"
 import ProductionOrderMatrix from "./ProductionOrderMatrix.vue"
@@ -101,7 +102,9 @@ watch(() => [props.name, props.duplicateFrom], load)
 
 <style scoped>
 .ppo-editor { display: flex; min-width: 0; min-height: calc(100dvh - var(--erp-shell-header-height) - 98px); flex-direction: column; gap: var(--erp-space-3); }
-.ppo-editor__header > div:first-child span {
+.erp-editor-header > .ppo-editor__leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.ppo-editor__identity { display: grid; min-width: 0; gap: 2px; }
+.ppo-editor__identity > span {
 	color: var(--erp-text-muted);
 	font-size: var(--erp-font-size-min);
 	font-weight: 700;
@@ -148,7 +151,7 @@ watch(() => [props.name, props.duplicateFrom], load)
 	font-weight: var(--erp-font-weight-medium);
 }
 @media (max-width: 900px) { .ppo-editor__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .ppo-editor__fields { grid-template-columns: 1fr; } .ppo-editor__field--wide { grid-column: auto; } }
+@media (max-width: 620px) { .ppo-editor__fields { grid-template-columns: 1fr; } .ppo-editor__field--wide { grid-column: auto; } .ppo-editor__identity > span { display: none; } }
 @media (max-width: 620px) {
 	.ppo-editor__section > header,
 	.ppo-editor__fields {

@@ -2,9 +2,12 @@
 	<div class="pd-view">
 		<section class="pd-panel pd-head" aria-labelledby="pd-tracking-title">
 			<div class="pd-head__row">
-				<div>
-					<h1 id="pd-tracking-title">PPO Tracking</h1>
-					<p>Lot-wise progress by process. PPO sizes are boxes; production is pieces.</p>
+				<div class="pd-head__title">
+					<InlinePageNavigation title-target="pd-tracking-title" />
+					<div>
+						<h1 id="pd-tracking-title">PPO Tracking</h1>
+						<p>Lot-wise progress by process. PPO sizes are boxes; production is pieces.</p>
+					</div>
 				</div>
 				<div class="pd-head__end">
 					<span v-if="data" class="pd-sync"><i aria-hidden="true" />Live · {{ formatDisplayDate(data.as_of) }}</span>
@@ -48,6 +51,7 @@ import { computed, onMounted, ref, watch } from "vue"
 
 import { getPpoTracking, getPpoTrackingOptions } from "../../../api/planning.js"
 import WorkspaceLoadError from "../../../components/common/WorkspaceLoadError.vue"
+import InlinePageNavigation from "../../../components/navigation/InlinePageNavigation.vue"
 import { formatDisplayDate } from "../../../utils/dateFormat.js"
 import FilterMultiSelect from "./FilterMultiSelect.vue"
 import SummaryTiles from "./SummaryTiles.vue"
@@ -140,3 +144,8 @@ onMounted(() => {
 	load()
 })
 </script>
+
+<style scoped>
+.pd-head__title { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.pd-head__title > div { min-width: 0; }
+</style>

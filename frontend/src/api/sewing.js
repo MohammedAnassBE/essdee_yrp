@@ -71,6 +71,10 @@ export function getSewingEntries(supplier, filters = {}, start = 0, pageLength =
 	})
 }
 
+export function getSewingPending(args) {
+	return callMethod(`${PLAN_METHOD}.get_sewing_pending_data`, args)
+}
+
 export function cancelSewingEntry(docId) {
 	return callMethod(`${PLAN_METHOD}.cancel_sewing_plan_entry`, { doc_id: docId })
 }

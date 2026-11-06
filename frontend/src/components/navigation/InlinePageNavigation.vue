@@ -16,7 +16,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, toRef } from "vue"
+import { computed, nextTick, onBeforeUnmount, toRef } from "vue"
 import BackLink from "./BackLink.vue"
 import DocumentStepButtons from "./DocumentStepButtons.vue"
 import { useDocumentListNavigation } from "../../composables/useDocumentListNavigation.js"
@@ -31,6 +31,7 @@ const props = defineProps({
 })
 
 const context = usePageNavigation()
+onBeforeUnmount(context?.claimInline?.() || (() => {}))
 const inline = computed(() => Boolean(context?.inline?.value))
 const backTo = computed(() => context?.backTo?.value || "/")
 const backLabel = computed(() => context?.backLabel?.value || "Workspaces")

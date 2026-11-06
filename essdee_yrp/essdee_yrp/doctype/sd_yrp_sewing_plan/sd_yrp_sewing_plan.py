@@ -10,6 +10,7 @@ from essdee_yrp.sewing.entry import (
 	update_sewing_plan_data,
 )
 from essdee_yrp.sewing.fi_dates import get_fi_updates_data, update_fi_dates
+from essdee_yrp.sewing.pending import get_sewing_pending_data
 from essdee_yrp.sewing.plan import create_sewing_plan
 from essdee_yrp.sewing.read_models import (
 	get_consumption_mapping_data,
@@ -50,6 +51,7 @@ __all__ = [
 	"get_monthly_summary_print_data",
 	"get_scr_data",
 	"get_sewing_consumption_print_data",
+	"get_sewing_pending_data",
 	"get_sewing_plan_dpr_data",
 	"get_sewing_plan_dpr_summary",
 	"get_sewing_plan_entries",

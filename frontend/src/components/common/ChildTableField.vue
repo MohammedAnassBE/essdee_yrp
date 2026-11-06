@@ -26,6 +26,7 @@
 			:add="addRow"
 			:remove-row="isDisabled ? null : removeRow"
 			show-index
+			:footer="totals"
 			class="child-table-field__table"
 		>
 			<template v-for="column in columns" :key="column.fieldname" #[`cell-${column.fieldname}`]="{ data, index }">
@@ -75,6 +76,7 @@ const props = defineProps({
 	disabled: { type: Boolean, default: false },
 	errors: { type: Object, default: () => ({}) },
 	parentDoctype: { type: String, default: "" },
+	totals: { type: Object, default: null },
 })
 
 const emit = defineEmits(["update:modelValue", "change"])

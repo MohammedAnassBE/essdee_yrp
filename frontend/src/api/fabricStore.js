@@ -244,6 +244,16 @@ export function executePurchaseOrderCommand(name, command, payload = {}, expecte
 	})
 }
 
+const PURCHASE_ORDER_ATTRIBUTE_METHOD = "essdee_yrp.purchase_order_attribute_values"
+
+export function getPurchaseOrderAttributeRows(name) {
+	return callMethod(`${PURCHASE_ORDER_ATTRIBUTE_METHOD}.get_purchase_order_attribute_rows`, { name })
+}
+
+export function updatePurchaseOrderAttributeValues(name, rows) {
+	return callMethod(`${PURCHASE_ORDER_ATTRIBUTE_METHOD}.update_purchase_order_attribute_values`, { name, rows })
+}
+
 export function getFabricStockOperationEditor(operation, options = {}) {
 	return callMethod(`${WORKSPACE_METHOD}.get_stock_operation_editor`, { operation, name: options.name || undefined, source_context: options.sourceContext || undefined })
 }

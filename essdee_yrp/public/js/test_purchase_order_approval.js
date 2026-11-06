@@ -4,7 +4,7 @@ const vm = require("node:vm");
 
 const scriptPath = __dirname + "/purchase_order.js";
 
-function loadScript({ roles = [], canCreate = false, liveRequest = null } = {}) {
+function loadScript({ roles = [], canCreate = false, liveRequest = null, blockedReason = "" } = {}) {
 	let handlers;
 	const calls = [];
 	const confirmations = [];
@@ -24,7 +24,13 @@ function loadScript({ roles = [], canCreate = false, liveRequest = null } = {}) 
 				calls.push(options);
 				if (!options.callback) return;
 				if (options.method.endsWith("get_purchase_order_approval_state")) {
-					options.callback({ message: { live_request: liveRequest } });
+					options.callback({
+						message: {
+							live_request: liveRequest,
+							can_send_request: !liveRequest && !blockedReason,
+							send_blocked_reason: blockedReason,
+						},
+					});
 				} else {
 					options.callback({ message: { status: "Pending" } });
 				}
@@ -91,6 +97,13 @@ function render(runtimeOptions, formOptions) {
 	);
 	assert.equal(frm.primaryHidden, 1);
 	assert.deepEqual([...frm.buttons.keys()], []);
+}
+
+{
+	const { frm } = render(
+		{ roles: ["System Manager"], canCreate: true, blockedReason: "Link a Production Order or tick Development" },
+	);
+	assert.deepEqual([...frm.buttons.keys()], ["Approve PO", "Reject PO"]);
 }
 
 {

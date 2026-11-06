@@ -22,6 +22,14 @@
 			<Column v-if="grid.canConfigure.value" column-key="__settings" :style="widthStyle(`${SETTINGS_WIDTH}px`)" class="child-grid-table__trailing">
 				<template #header><ChildGridSettings :title="title" :columns="columns" :visible-columns="visibleColumns" :save="grid.save" :reset="grid.reset" /></template>
 			</Column>
+			<ColumnGroup v-if="hasFooter" type="footer">
+				<Row>
+					<Column v-if="isSelectable" footer="" />
+					<Column v-if="showIndex" footer="" />
+					<Column v-for="column in visibleColumns" :key="column.key" :footer="footerFor(column.key)" />
+					<Column v-if="grid.canConfigure.value" footer="" />
+				</Row>
+			</ColumnGroup>
 			<template #empty><slot name="empty">No rows.</slot></template>
 		</DataTable>
 		<footer v-if="selection.selected.value.length" class="child-grid-table__footer">
@@ -34,7 +42,9 @@
 <script setup>
 import Button from "primevue/button"
 import Column from "primevue/column"
+import ColumnGroup from "primevue/columngroup"
 import DataTable from "primevue/datatable"
+import Row from "primevue/row"
 import { computed, ref } from "vue"
 
 import ChildGridSettings from "./ChildGridSettings.vue"
@@ -58,6 +68,7 @@ const props = defineProps({
 	showIndex: { type: Boolean, default: false },
 	removeRow: { type: Function, default: null },
 	canRemoveRow: { type: Function, default: () => true },
+	footer: { type: Object, default: null },
 })
 
 const grid = useGridColumns(() => props.columns, { parentDoctype: () => props.parentDoctype, childDoctype: () => props.childDoctype })
@@ -76,6 +87,13 @@ const widthVariables = computed(() => Object.fromEntries(columnWidths.value.map(
 
 function widthStyle(width) {
 	return { width, minWidth: width, maxWidth: width }
+}
+
+// A boolean, not the footer object: DataTable rebuilds its body columns, remounting every cell editor, when this changes.
+const hasFooter = computed(() => Boolean(props.footer))
+
+function footerFor(key) {
+	return props.footer?.[key] ?? ""
 }
 
 function deleteSelected() {
@@ -99,5 +117,6 @@ function rowIsBlank(index) {
 .child-grid-table__checkbox { width: 15px; height: 15px; margin: 0; vertical-align: middle; accent-color: var(--erp-accent); cursor: pointer; }
 .child-grid-table__checkbox:disabled { cursor: not-allowed; opacity: .45; }
 .child-grid-table__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 10px; color: var(--erp-text-muted); font-size: var(--erp-font-size-caption); border-top: 1px solid var(--erp-border-subtle); }
+.child-grid-table__table :deep(.p-datatable-tfoot > tr > td) { color: var(--erp-text); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; background: var(--erp-surface-soft); border-top: 1px solid var(--erp-border); }
 .child-grid-table__table :deep(.child-grid-table__index) { color: var(--erp-text-muted); text-align: right; }
 </style>

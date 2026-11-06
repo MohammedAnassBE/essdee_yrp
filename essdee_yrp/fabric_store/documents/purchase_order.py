@@ -33,8 +33,11 @@ from essdee_yrp.fabric_store.documents.common import (
 from essdee_yrp.print_registry import get_document_print_formats
 from essdee_yrp.purchase_order_against import (
 	PRODUCTION_ORDERS_FIELD,
+	can_manage_production_orders,
+	can_remove_production_orders,
 	get_production_order_rows,
 	get_production_order_table,
+	update_purchase_order_production_orders,
 )
 from essdee_yrp.purchase_order_approval import (
 	PENDING_APPROVAL_STATUS,
@@ -42,10 +45,12 @@ from essdee_yrp.purchase_order_approval import (
 	_validate_not_locked_for_edit,
 	approve_purchase_order,
 	get_live_request,
+	get_send_blocked_reason,
 	reject_purchase_order,
 	send_purchase_order_request,
 	validate_approval_submit,
 )
+from essdee_yrp.purchase_order_attribute_values import has_goods_receipt
 from essdee_yrp.purchase_order_lots import update_po_lot_links
 
 # Keeping the controller type explicit documents the authority used by doc.insert,
@@ -193,6 +198,7 @@ def _approval_state(doc) -> dict:
 	return {
 		"pending_approval": pending,
 		"live_request": dict(live_request) if live_request else None,
+		"send_blocked_reason": get_send_blocked_reason(doc) if pending else "",
 	}
 
 
@@ -245,6 +251,7 @@ def _capability_candidates(doc, approval: Mapping, grn: Mapping, adapter=None) -
 	can_send_request = bool(
 		pending_approval
 		and not has_live_request
+		and not approval.get("send_blocked_reason")
 		and (
 			adapter._permission_flags("Purchase Order").get("can_create")
 			if adapter is not None
@@ -280,6 +287,15 @@ def _capability_candidates(doc, approval: Mapping, grn: Mapping, adapter=None) -
 		"approve": {"label": _("Approve PO"), "eligible": pending_approval and is_approver},
 		"reject": {"label": _("Reject PO"), "eligible": pending_approval and is_approver},
 		"update_linked_lots": {"label": _("Manage Linked Lots"), "eligible": is_managed and docstatus == 1 and is_open and can_update_submitted},
+		"update_attribute_values": {
+			"label": _("Update Attribute Values"),
+			"eligible": is_approver and is_managed and docstatus == 1 and not has_goods_receipt(doc.name),
+		},
+		"update_production_orders": {
+			"label": _("Add PPO"),
+			"eligible": can_manage_production_orders(doc),
+			"can_remove": can_remove_production_orders(doc),
+		},
 		"create_delivery_challan": {
 			"label": _("Create Delivery Challan"),
 			"eligible": docstatus == 1 and _target_create_permission("YRP Delivery Challan", adapter),
@@ -590,6 +606,7 @@ def execute_purchase_order_command(
 		"approve",
 		"reject",
 		"update_linked_lots",
+		"update_production_orders",
 		"prepare_sms",
 		"prepare_whatsapp",
 		"send_sms",
@@ -634,6 +651,8 @@ def execute_purchase_order_command(
 		if not reason:
 			frappe.throw(_("Enter a reason before rejecting this Purchase Order."))
 		reject_purchase_order(name, reason=reason)
+	elif command == "update_production_orders":
+		update_purchase_order_production_orders(name, payload.get(PRODUCTION_ORDERS_FIELD))
 	elif command == "update_linked_lots":
 		update_po_lot_links(
 			name,

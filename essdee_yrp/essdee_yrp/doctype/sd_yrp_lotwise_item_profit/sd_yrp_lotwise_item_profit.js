@@ -21,6 +21,7 @@ frappe.ui.form.on('SD YRP Lotwise Item Profit', {
 	},
 
 	refresh: function(frm) {
+		bind_add_rate_on_enter(frm);
 		frm.add_custom_button(__('Recalculate'), function() {
 			calculate_all(frm);
 		});
@@ -485,6 +486,22 @@ function refresh_fields(frm, fields) {
 	fields.forEach(field => {
 		frm.refresh_field(field)
 	})
+}
+
+// Enter in Additional Rate commits the typed value and runs Add Rate, like clicking the button.
+function bind_add_rate_on_enter(frm) {
+	let control = frm.fields_dict.additional_rate;
+	if (!control || !control.$input) return;
+	control.$input.off('keydown.add_rate').on('keydown.add_rate', (event) => {
+		if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+		if (event.originalEvent && event.originalEvent.isComposing) return;
+		event.preventDefault();
+		if (frm.adding_rate || !frm.fields_dict.add_rate || frm.fields_dict.add_rate.df.hidden) return;
+		frm.adding_rate = true;
+		Promise.resolve(control.parse_validate_and_set_in_model(control.get_input_value()))
+			.then(() => frm.script_manager.trigger('add_rate'))
+			.finally(() => { frm.adding_rate = false; });
+	});
 }
 
 function calculate_all(frm) {

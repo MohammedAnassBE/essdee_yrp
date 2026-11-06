@@ -48,7 +48,7 @@ const defaults = {
  './ClothProgramDialog.vue': control,
  './ClothProgramBuildDialog.vue': control,
  '../../../components/documents/DocumentStatusBadge.vue': control,
- 'primevue/column': column, 'primevue/datatable': table,
+ 'primevue/column': column, 'primevue/datatable': table, 'primevue/columngroup': control, 'primevue/row': control,
  'primevue/usetoast': { useToast: () => ({ add() {} }) }, '../../../api/frappe.js': { callMethod: async () => ({}) },
  ...Object.fromEntries(['button','select','checkbox','inputtext','inputnumber','message','tag','skeleton','dialog'].map(name => [`primevue/${name}`, control])),
 }

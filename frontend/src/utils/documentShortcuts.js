@@ -65,6 +65,15 @@ function runCancel(candidates, activeElement) {
 	if (canceller) confirmThen(canceller, "cancelConfirms", "Cancel this document?", "Cancel Document", canceller.cancel)
 }
 
+/** Plain Enter that should submit a small form: not in a textarea or button, and not picking an open suggestion list. */
+export function isFormSubmitEnter(event) {
+	if (event.key !== "Enter" || event.isComposing || event.defaultPrevented) return false
+	if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false
+	const target = event.target
+	if (!target || ["TEXTAREA", "BUTTON"].includes(target.tagName)) return false
+	return target.getAttribute?.("aria-expanded") !== "true"
+}
+
 /** Blurs the focused field so v-model, blur and change handlers commit its value. */
 export function commitFocusedField(activeElement) {
 	if (!activeElement?.blur) return false

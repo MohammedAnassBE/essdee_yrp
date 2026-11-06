@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 
 from essdee_yrp.fabric_store.documents.purchase_order import (
+	_approval_state,
 	_capability_candidates,
 	_related_documents,
 	execute_purchase_order_command,
@@ -238,6 +239,7 @@ class TestFabricStorePurchaseOrder(TestCase):
 
 	def test_approval_capabilities_follow_pending_state_role_and_live_request(self):
 		doc = self.make_document(docstatus=0, status="Pending Approval")
+		doc.is_development = 1
 		with (
 			patch("essdee_yrp.fabric_store.documents.purchase_order._get_purchase_order", return_value=doc),
 			patch("essdee_yrp.fabric_store.documents.purchase_order.get_workspace_base") as base,
@@ -262,6 +264,23 @@ class TestFabricStorePurchaseOrder(TestCase):
 		self.assertTrue(workspace["approval"]["pending_approval"])
 		for capability in ["send_approval_request", "approve", "reject"]:
 			self.assertIn(capability, workspace["capabilities"])
+
+	def test_send_request_hidden_without_production_order_or_development(self):
+		doc = self.make_document(docstatus=0, status="Pending Approval")
+		with (
+			patch("essdee_yrp.fabric_store.documents.purchase_order.get_live_request", return_value=None),
+			patch("essdee_yrp.fabric_store.documents.purchase_order.frappe.get_roles", return_value=["System Manager"]),
+			patch("essdee_yrp.fabric_store.documents.purchase_order.frappe.has_permission", return_value=True),
+		):
+			blocked = _approval_state(doc)
+			blocked_capabilities = _capability_candidates(doc, blocked, {"can_create": False})
+			doc.production_orders = [frappe._dict(production_order="PPO-1")]
+			linked_capabilities = _capability_candidates(doc, _approval_state(doc), {"can_create": False})
+
+		self.assertIn("Development", blocked["send_blocked_reason"])
+		self.assertFalse(blocked_capabilities["send_approval_request"]["eligible"])
+		self.assertTrue(blocked_capabilities["approve"]["eligible"])
+		self.assertTrue(linked_capabilities["send_approval_request"]["eligible"])
 
 	def test_close_capability_follows_configured_manager_role(self):
 		doc = self.make_document()

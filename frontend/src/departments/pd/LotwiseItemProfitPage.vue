@@ -134,6 +134,7 @@ let previewSequence = 0
 let commandSequence = 0
 let mutationSequence = 0
 let isUnmounted = false
+let userCommandPending = false
 
 const isNew = computed(() => route.name === PD_ROUTES.lotwiseNew)
 const takenDefaults = takeNewDocumentDefaults(LOTWISE_DOCTYPE)
@@ -311,8 +312,14 @@ async function commitFocusedInput() {
 }
 
 async function runUserCommand(command, payload = null) {
-	if (!canEdit.value || pageBusy.value) return
-	await commitFocusedInput()
+	if (!canEdit.value || pageBusy.value || userCommandPending) return
+	// The blur before a command lets a second Enter or click slip in before activeCommand is set.
+	userCommandPending = true
+	try {
+		await commitFocusedInput()
+	} finally {
+		userCommandPending = false
+	}
 	return runCommand(command, payload)
 }
 

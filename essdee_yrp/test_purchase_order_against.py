@@ -6,6 +6,7 @@ import frappe
 
 from essdee_yrp import purchase_order_against as against
 from essdee_yrp.fabric_store.documents.purchase_order import (
+	PURCHASE_ORDER_EDITOR_FIELDS,
 	PURCHASE_ORDER_FIELDS,
 	get_purchase_order_editor,
 	save_purchase_order_document,
@@ -70,6 +71,17 @@ class TestPurchaseOrderProductionOrders(TestCase):
 		self.assertEqual(row_meta.get_field("production_order").options, "YRP Production Order")
 		self.assertEqual(row_meta.get_field("item_name").label, "Item Name")
 		self.assertTrue(all(df.read_only for df in row_meta.fields))
+
+	def test_development_check_follows_production_orders_on_desk_and_web(self):
+		meta = frappe.get_meta("Purchase Order")
+		field = meta.get_field("is_development")
+		self.assertEqual((field.fieldtype, field.label, field.default), ("Check", "Development", "0"))
+		self.assertFalse(field.allow_on_submit)
+		self.assertFalse(field.read_only)
+		fieldnames = [df.fieldname for df in meta.fields]
+		self.assertEqual(fieldnames.index("is_development"), fieldnames.index("production_orders") + 1)
+		self.assertIn("is_development", PURCHASE_ORDER_EDITOR_FIELDS)
+		self.assertIn("is_development", PURCHASE_ORDER_FIELDS)
 
 	def test_single_production_order_gives_one_row(self):
 		ppo = production_order()

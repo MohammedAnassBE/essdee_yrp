@@ -183,7 +183,7 @@ const activeTab = ref("overview")
 let loadSequence = 0
 let actionSequence = 0
 const overviewDefinitions = [
-	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "approved_by"] },
+	{ key: "identity", label: "Order identity", description: "Company and procurement references", icon: "pi pi-id-card", fields: ["company", "naming_series", "is_yrp_managed", "is_development", "approved_by"] },
 	{ key: "delivery", label: "Supplier & delivery", description: "Supplier and material destination", icon: "pi pi-truck", fields: ["supplier", "supplier_name", "deliver_to_supplier", "default_delivery_location", "set_warehouse"] },
 	{ key: "schedule", label: "Schedule", description: "Ordering and required dates", icon: "pi pi-calendar", fields: ["transaction_date", "schedule_date"] },
 	{ key: "status", label: "Status & notes", description: "Fulfilment state and instructions", icon: "pi pi-clipboard", fields: ["status", "open_status", "terms_and_condition", "comments"] },

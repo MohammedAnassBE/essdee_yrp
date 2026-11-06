@@ -65,6 +65,7 @@ PURCHASE_ORDER_FIELDS = (
 	"currency",
 	"terms_and_condition",
 	"comments",
+	"is_development",
 	"open_status",
 	"yrp_fulfillment_status",
 	"approved_by",
@@ -107,6 +108,7 @@ PURCHASE_ORDER_EDITOR_FIELDS = (
 	"currency",
 	"terms_and_condition",
 	"comments",
+	"is_development",
 )
 
 PURCHASE_ORDER_NOTIFICATION_HIDDEN_STATUSES = {

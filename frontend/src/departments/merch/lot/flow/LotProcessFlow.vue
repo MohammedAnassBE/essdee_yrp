@@ -24,7 +24,7 @@
 					<LotItemSteps :steps="flow.items" :lot="lot" :item="item" :lot-date="flow.lot_date" :reports="reports" :flash="flash" @open-step="openStep" @open-work-order="openWorkOrder" />
 					<div class="pf-legend">
 						<span><LotFlowStatus status="done" /> Completed</span><span><LotFlowStatus status="partial" /> Partially completed</span><span><LotFlowStatus status="idle" /> Not started</span>
-						<span><i class="pf-bar pf-fill--delivered" /> Delivered</span><span><i class="pf-bar pf-fill--partial" /> Received (colour = step status)</span><span><i class="pf-bar pf-fill--dispatch" /> Dispatch</span>
+						<span><i class="pf-bar pf-fill--delivered" /> Delivered (outer ring)</span><span><i class="pf-bar pf-fill--partial" /> Received (inner ring, colour = step status)</span><span><i class="pf-bar pf-fill--dispatch" /> Dispatch (innermost ring)</span>
 					</div>
 				</template>
 				<p v-else class="pf-empty-note">Choose an Item Production Detail to see the item process.</p>

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import test from "node:test"
 
 import {
-	clothHeadline, colourSwatch, filterReports, reportsListHeight, diffTone, fabricSummary, itemHeadline, reportPrefill, stepReportContext, percent, reportHref, sizeTable, statusTone, workOrderHref,
+	clothHeadline, colourSwatch, meterRings, filterReports, reportsListHeight, diffTone, fabricSummary, itemHeadline, reportPrefill, stepReportContext, percent, reportHref, sizeTable, statusTone, workOrderHref,
 } from "../src/utils/lotProcessFlow.js"
 
 const source = (path) => readFileSync(new URL(`../src/departments/merch/lot/${path}`, import.meta.url), "utf8")
@@ -185,4 +185,15 @@ test("both Reports popovers search, bound their height and handle the keyboard",
 	const css = readFileSync(new URL("../src/styles/lotProcessFlow.css", import.meta.url), "utf8")
 	assert.match(css, /\.pf-reports ul \{[^}]*min-height: 0;[^}]*overflow-y: auto;/)
 	assert.match(css, /\.pf-reports \{[^}]*flex-direction: column;[^}]*max-height: var\(--pf-reports-height/)
+})
+
+test("meter rings: one ring per kind, outermost first, averaging and capping each kind at 100%", () => {
+	const meters = [
+		{ kind: "Received", value: 3000, total: 10000 },
+		{ kind: "Delivered", value: 3051.3, total: 2739 },
+		{ kind: "Delivered", value: 0, total: 3380 },
+	]
+	assert.deepEqual(meterRings(meters), [{ kind: "Delivered", share: 50 }, { kind: "Received", share: 30 }])
+	assert.deepEqual(meterRings([{ kind: "Dispatch", value: 5, total: 0 }]), [{ kind: "Dispatch", share: 0 }])
+	assert.match(source("flow/LotItemSteps.vue"), /<LotStepRing :meters="step.meters" :status="step.status" \/>/)
 })

@@ -137,6 +137,27 @@
 .pf-meter__num em { margin-left: 8px; color: var(--erp-text); font-style: normal; font-weight: 600; }
 .pf-meter__over { margin-left: 6px; padding: 0 5px; color: var(--erp-text-secondary); font-size: 10px; font-weight: 700; border-radius: 4px; background: var(--erp-surface-muted); }
 .pf-node--idle .pf-meter { opacity: .75; }
+.pf-ring-tile { display: grid; align-content: start; gap: 10px; padding: 12px; border: 1px solid var(--erp-border); border-radius: 10px; background: var(--erp-surface); }
+.pf-ring-tile__head { display: flex; align-items: center; gap: 14px; }
+.pf-ring { flex: none; width: 64px; height: 64px; transform: rotate(-90deg); }
+.pf-ring__track, .pf-ring__arc { fill: none; stroke-width: 7; }
+.pf-ring__track { stroke: var(--pf-track); }
+.pf-ring__arc { stroke-linecap: round; }
+.pf-ring__arc--delivered { stroke: var(--pf-delivered); }
+.pf-ring__arc--dispatch { stroke: var(--pf-dispatch); }
+.pf-ring__arc--done { stroke: var(--pf-done); }
+.pf-ring__arc--partial { stroke: var(--pf-partial); }
+.pf-ring__arc--idle { stroke: var(--pf-idle); }
+.pf-ring-tile__big { color: var(--erp-text); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pf-ring-tile__cap { color: var(--erp-text-muted); font-size: 12px; }
+.pf-ring-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin: 0; font-size: 12px; }
+.pf-ring-rows dt { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--erp-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.pf-ring-rows dt small { min-width: 0; overflow: hidden; color: var(--erp-text-secondary); font-size: 12px; font-weight: 400; letter-spacing: 0; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+.pf-ring-rows dd { margin: 0; color: var(--erp-text-muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-ring-rows dd strong { color: var(--erp-text); font-weight: 700; }
+.pf-ring-rows dd em { margin-left: 8px; color: var(--erp-text); font-style: normal; font-weight: 600; }
+.pf-ring-key { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 2px; }
+.pf-node--idle .pf-ring-tile { opacity: .75; }
 .pf-detail { display: grid; gap: 14px; padding: 12px 14px 14px; border-top: 1px solid var(--erp-border); border-radius: 0 0 10px 10px; background: var(--erp-surface-soft); }
 @media (max-width: 1180px) { .pf-card__body { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .pf-lane { grid-template-columns: 1fr; } .pf-lane__steps { flex-direction: column; } .pf-lane-step { max-width: none; } .pf-lane__arrow { transform: rotate(90deg); } }

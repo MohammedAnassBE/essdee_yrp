@@ -164,6 +164,14 @@ export function receivedShare(step) {
 	return received ? percent(received.value, received.total) : 0
 }
 
+/** One ring per meter kind, outermost first; share is the mean of that kind's percents, capped at 100. */
+export function meterRings(meters) {
+	return ["Delivered", "Received", "Dispatch"].flatMap((kind) => {
+		const shares = meters.filter((meter) => meter.kind === kind).map((meter) => Math.min(percent(meter.value, meter.total), 100))
+		return shares.length ? [{ kind, share: Math.round((shares.reduce((sum, share) => sum + share, 0) / shares.length) * 10) / 10 }] : []
+	})
+}
+
 /** CSS colour from a colour name; unknown names fall back to the swatch default. */
 export function colourSwatch(name) {
 	return String(name || "").toLowerCase().replace(/\s+/g, "")

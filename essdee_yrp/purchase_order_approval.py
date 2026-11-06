@@ -22,6 +22,14 @@ PO: {{ doc.name }}
 Supplier: {{ doc.supplier_name or doc.supplier or "-" }}
 PO Date: {% if doc.po_date or doc.transaction_date %}{{ format_date(doc.po_date or doc.transaction_date) }}{% else %}-{% endif %}
 
+{% if doc.production_orders %}
+PRODUCTION ORDERS ({{ doc.production_orders | length }})
+───────────────────────
+{% for row in doc.production_orders -%}
+{{ loop.index }}. {{ row.production_order }} · {{ row.item_name }}
+{% endfor %}
+{% endif %}
+
 ITEMS ({{ purchase_order_items | length }})
 ───────────────────────
 {% for row in purchase_order_items %}
@@ -38,7 +46,6 @@ PURCHASE_ORDER_ROUTE_VALUES = {
 	"process_type": "Field State",
 	"trigger_field": "status",
 	"trigger_value": PENDING_APPROVAL_STATUS,
-	"message_template": PURCHASE_ORDER_MESSAGE_TEMPLATE,
 	"approve_action": "Approve PO",
 	"reject_action": "Reject PO",
 	"target_field": "status",
@@ -245,7 +252,7 @@ def reject_purchase_order(name, reason=None):
 
 
 def ensure_purchase_order_approval_route():
-	"""Fill fixed values into the enabled Purchase Order route that has its own group chat."""
+	"""Force fixed values on the enabled Purchase Order route with its own group chat; fill an empty message template."""
 	try:
 		settings = frappe.get_cached_doc(SETTINGS_DOCTYPE)
 	except frappe.DoesNotExistError:
@@ -262,8 +269,11 @@ def ensure_purchase_order_approval_route():
 	)
 	if not po_route:
 		return None
+	values = dict(PURCHASE_ORDER_ROUTE_VALUES)
+	if not po_route.get("message_template"):
+		values["message_template"] = PURCHASE_ORDER_MESSAGE_TEMPLATE
 	changed = False
-	for fieldname, value in PURCHASE_ORDER_ROUTE_VALUES.items():
+	for fieldname, value in values.items():
 		if po_route.get(fieldname) != value:
 			if isinstance(po_route, dict):
 				po_route[fieldname] = value
